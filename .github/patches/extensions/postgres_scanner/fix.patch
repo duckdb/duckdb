@@ -1,11 +1,15 @@
 diff --git a/src/include/storage/postgres_catalog.hpp b/src/include/storage/postgres_catalog.hpp
-index 2935c56..b6224d2 100644
+index 2935c56..cc28503 100644
 --- a/src/include/storage/postgres_catalog.hpp
 +++ b/src/include/storage/postgres_catalog.hpp
-@@ -44,14 +44,11 @@ public:
- 	                                           OnEntryNotFound if_not_found,
- 	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+@@ -40,18 +40,14 @@ public:
  
+ 	void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
+ 
+-	optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
+-	                                           OnEntryNotFound if_not_found,
+-	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+-
 -	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
 -	                                        unique_ptr<PhysicalOperator> plan) override;
 -	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
@@ -14,6 +18,9 @@ index 2935c56..b6224d2 100644
 -	                                        unique_ptr<PhysicalOperator> plan) override;
 -	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 -	                                        unique_ptr<PhysicalOperator> plan) override;
++	optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++	                                           OnEntryNotFound if_not_found) override;
++
 +    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
 +    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
 +    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
@@ -22,6 +29,44 @@ index 2935c56..b6224d2 100644
  	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
  	                                            unique_ptr<LogicalOperator> plan) override;
  
+diff --git a/src/include/storage/postgres_schema_entry.hpp b/src/include/storage/postgres_schema_entry.hpp
+index 0615c9d..75e2364 100644
+--- a/src/include/storage/postgres_schema_entry.hpp
++++ b/src/include/storage/postgres_schema_entry.hpp
+@@ -42,7 +42,7 @@ public:
+ 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
+-	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
++	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
+ 
+ 	static bool SchemaIsInternal(const string &name);
+ 
+diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
+index 2e62556..b7e482b 100644
+--- a/src/storage/postgres_catalog.cpp
++++ b/src/storage/postgres_catalog.cpp
+@@ -138,15 +138,15 @@ void PostgresCatalog::ScanSchemas(ClientContext &context, std::function<void(Sch
+ 	schemas.Scan(context, [&](CatalogEntry &schema) { callback(schema.Cast<PostgresSchemaEntry>()); });
+ }
+ 
+-optional_ptr<SchemaCatalogEntry> PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
+-                                                            OnEntryNotFound if_not_found,
+-                                                            QueryErrorContext error_context) {
++optional_ptr<SchemaCatalogEntry> PostgresCatalog::LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++                                                            OnEntryNotFound if_not_found) {
++    auto schema_name = schema_lookup.GetEntryName();
+ 	if (schema_name == DEFAULT_SCHEMA) {
+-		return GetSchema(transaction, default_schema, if_not_found, error_context);
++		schema_name = default_schema;
+ 	}
+ 	auto &postgres_transaction = PostgresTransaction::Get(transaction.GetContext(), *this);
+ 	if (schema_name == "pg_temp") {
+-		return GetSchema(transaction, postgres_transaction.GetTemporarySchema(), if_not_found, error_context);
++		schema_name = postgres_transaction.GetTemporarySchema();
+ 	}
+ 	auto entry = schemas.GetEntry(transaction.GetContext(), schema_name);
+ 	if (!entry && if_not_found != OnEntryNotFound::RETURN_NULL) {
 diff --git a/src/storage/postgres_delete.cpp b/src/storage/postgres_delete.cpp
 index 97c0f8c..88dec2c 100644
 --- a/src/storage/postgres_delete.cpp
@@ -187,6 +232,27 @@ index f6d5193..dd616df 100644
  }
  
  } // namespace duckdb
+diff --git a/src/storage/postgres_schema_entry.cpp b/src/storage/postgres_schema_entry.cpp
+index 32e2f90..a56d295 100644
+--- a/src/storage/postgres_schema_entry.cpp
++++ b/src/storage/postgres_schema_entry.cpp
+@@ -183,12 +183,12 @@ void PostgresSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ 	GetCatalogSet(info.type).DropEntry(context, info);
+ }
+ 
+-optional_ptr<CatalogEntry> PostgresSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
+-                                                         const string &name) {
+-	if (!CatalogTypeIsSupported(type)) {
++optional_ptr<CatalogEntry> PostgresSchemaEntry::LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
++	auto catalog_type = lookup_info.GetCatalogType();
++	if (!CatalogTypeIsSupported(catalog_type)) {
+ 		return nullptr;
+ 	}
+-	return GetCatalogSet(type).GetEntry(transaction.GetContext(), name);
++	return GetCatalogSet(type).GetEntry(transaction.GetContext(), lookup_info.GetEntryName());
+ }
+ 
+ PostgresCatalogSet &PostgresSchemaEntry::GetCatalogSet(CatalogType type) {
 diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
 index 4f0aefa..8fa4d69 100644
 --- a/src/storage/postgres_update.cpp

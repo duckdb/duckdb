@@ -50,6 +50,11 @@ SELECT list_reduce(['Once', 'upon', 'a', 'time'], (x, y) -> x || ' ' || y);
 ----
 Once upon a time
 
+query I
+SELECT list_reduce(['a', 'b', 'c', 'd'], (x, y, i) -> x || ' - ' || CAST(i AS VARCHAR) || ' - ' ||  y);
+----
+a - 2 - b - 3 - c - 4 - d
+
 #errors on simple reduce
 
 statement error

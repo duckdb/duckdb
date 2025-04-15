@@ -94,28 +94,28 @@ SELECT quantile_disc(r, []) FROM quantiles
 query I
 SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, [0.1, 0.5, 0.9]) FROM quantiles
 ----
-[2021-02-11 15:00:00, 2021-07-28 07:00:00, 2022-01-10 23:00:00]
+['2021-02-11 15:00:00', '2021-07-28 07:00:00', '2022-01-10 23:00:00']
 
 query I
 SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, [0.1, 0.5, 0.9]) FROM quantiles
 ----
-[1992-09-26 00:00:00, 2003-09-09 00:00:00, 2014-08-22 00:00:00]
+['1992-09-26 00:00:00', '2003-09-09 00:00:00', '2014-08-22 00:00:00']
 
 query I
 SELECT quantile_disc('00:00:00'::TIME + interval (r) second, [0.1, 0.5, 0.9]) FROM quantiles
 ----
-[00:16:39, 01:23:19, 02:29:59]
+['00:16:39', '01:23:19', '02:29:59']
 
 query I
 SELECT quantile_disc(interval (r) second, [0.1, 0.5, 0.9]) FROM quantiles
 ----
-[00:16:39, 01:23:19, 02:29:59]
+['00:16:39', '01:23:19', '02:29:59']
 
 # WITH TIME ZONE
 query I
 SELECT quantile_disc(('2021-01-01'::TIMESTAMP + interval (r) hour)::TIMESTAMPTZ, [0.1, 0.5, 0.9]) FROM quantiles
 ----
-[2021-02-11 15:00:00+00, 2021-07-28 07:00:00+00, 2022-01-10 23:00:00+00]
+['2021-02-11 15:00:00+00', '2021-07-28 07:00:00+00', '2022-01-10 23:00:00+00']
 
 statement ok
 pragma threads=4

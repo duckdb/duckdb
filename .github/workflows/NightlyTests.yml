@@ -101,6 +101,80 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
+  release-assert-osx:
+    name: Release Assertions OSX
+    runs-on: macos-latest
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      run: brew install ninja
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+
+  release-assert-osx-storage:
+    name: Release Assertions OSX Storage
+    runs-on: macos-latest
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      run: brew install ninja
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200 --force-storage
+
   smaller-binary:
     name: Smaller Binary
     runs-on: ubuntu-24.04
@@ -109,7 +183,6 @@ jobs:
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
-      SMALLER_BINARY: 1
     steps:
     - uses: actions/checkout@v3
       with:
@@ -127,7 +200,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make
+      run: SMALLER_BINARY=1 make
 
     - name: Measure Size
       shell: bash
@@ -179,28 +252,6 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
-
-  old-gcc:
-    name: GCC 4.8
-    needs: linux-memory-leaks
-    runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Test
-      shell: bash
-      run: |
-        docker run                                                             \
-          -v.:/duckdb                                                          \
-          -e CC=/usr/bin/gcc                                                   \
-          -e CXX=/usr/bin/g++                                                  \
-          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
-          quay.io/pypa/manylinux2014_x86_64                                    \
-          bash -c "yum install -y gcc-c++ && make -C /duckdb unit"
-
 
   linux-compile-32:
     name: Linux (32 Bit)
@@ -413,127 +464,6 @@ jobs:
         run: |
           ./scripts/run_extension_medata_tests.sh
 
-  no-string-inline:
-    name: No String Inline / Destroy Unpinned Blocks
-    runs-on: ubuntu-24.04
-    needs: linux-memory-leaks
-    env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      DISABLE_STRING_INLINE: 1
-      DESTROY_UNPINNED_BLOCKS: 1
-      ALTERNATIVE_VERIFY: 1
-      DISABLE_POINTER_SALT: 1
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: build/relassert/test/unittest
-
-  latest-storage:
-    name: Latest Storage
-    runs-on: ubuntu-22.04
-    needs: linux-memory-leaks
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
-      DEBUG_STACKTRACE: 1
-      LATEST_STORAGE: 1
-      BLOCK_VERIFICATION: 1
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
-      - name: Build
-        shell: bash
-        run: make reldebug
-
-      - name: Test
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
-
-  vector-verification:
-    name: Vector Verification Tests (${{ matrix.vector_type }})
-    runs-on: ubuntu-22.04
-    needs: linux-memory-leaks
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - vector_type: "dictionary_expression"
-            test_parameter: '"*"'
-          - vector_type: "dictionary_operator"
-            test_parameter: '' # skip running all tests here because it is too slow
-          - vector_type: "constant_operator"
-            test_parameter: '' # skip running all tests here because it is too slow
-          - vector_type: "sequence_operator"
-            test_parameter: '' # skip running all tests here because it is too slow
-          - vector_type: "nested_shuffle"
-            test_parameter: '' # skip running all tests here because it is too slow
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      VERIFY_VECTOR: ${{ matrix.vector_type }}
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
-      - name: Build
-        shell: bash
-        run: make reldebug
-
-      - name: Test
-        shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
-
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04
@@ -647,91 +577,12 @@ jobs:
        run: |
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
-
-  threadsan:
-    name: Thread Sanitizer
-    runs-on: ubuntu-24.04
-    needs: linux-memory-leaks
-    env:
-      CC: clang
-      CXX: clang++
-      GEN: ninja
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Build
-      shell: bash
-      run: THREADSAN=1 make reldebug
-
-    - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
-
-
-  vector-sizes:
-    name: Vector Sizes
-    runs-on: ubuntu-22.04
-    needs: linux-memory-leaks
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      STANDARD_VECTOR_SIZE: 2
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
-
   block-sizes:
     name: Block Sizes
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      BLOCK_ALLOC_SIZE: 16384
       CORE_EXTENSIONS: "json;parquet"
 
     steps:
@@ -751,7 +602,7 @@ jobs:
 
       - name: Build with standard vector size
         shell: bash
-        run: make relassert
+        run: BLOCK_ALLOC_SIZE=16384 make relassert
 
       - name: Fast and storage tests
         shell: bash
@@ -761,7 +612,7 @@ jobs:
 
       - name: Build with vector size of 512
         shell: bash
-        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && STANDARD_VECTOR_SIZE=512 make relassert
+        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && BLOCK_ALLOC_SIZE=16384 STANDARD_VECTOR_SIZE=512 make relassert
 
       - name: Fast and storage tests
         shell: bash

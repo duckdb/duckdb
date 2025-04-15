@@ -204,7 +204,11 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 		}
 		// first check the chunk for conflicts
 		if (deleted[rows[i]] != NOT_DELETED_ID) {
-			// tuple was already deleted by another transaction
+			// tuple was already deleted by another transaction - conflict
+			// unset any deleted tuples we set in this loop
+			for (idx_t k = 0; k < i; k++) {
+				deleted[rows[k]] = NOT_DELETED_ID;
+			}
 			throw TransactionException("Conflict on tuple deletion!");
 		}
 		// after verifying that there are no conflicts we mark the tuple as deleted

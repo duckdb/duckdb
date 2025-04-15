@@ -228,8 +228,8 @@ endif
 ifeq (${BLOCK_VERIFICATION}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
 endif
-ifneq (${VERIFY_VECTOR}, )
-	CMAKE_VARS:=${CMAKE_VARS} -DVERIFY_VECTOR=${VERIFY_VECTOR}
+ifneq (${DISABLE_CPP_UNITTESTS}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_UNITTEST_CPP_TESTS=0
 endif
 ifeq (${DEBUG_MOVE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_MOVE=1
@@ -267,6 +267,9 @@ ifdef DEBUG_STACKTRACE
 endif
 ifeq (${NATIVE_ARCH}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
+endif
+ifeq (${OVERRIDE_NEW_DELETE}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
 endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 0)
         CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
@@ -524,3 +527,11 @@ bundle-library-obj: bundle-setup
 
 bundle-library: release
 	make bundle-library-o
+
+gather-libs: release
+	cd build/release && \
+	rm -rf libs && \
+	mkdir -p libs && \
+	cp src/libduckdb_static.a libs/. && \
+	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/*/lib*_extension.a libs/.

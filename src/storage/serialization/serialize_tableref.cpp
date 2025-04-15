@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
 
 namespace duckdb {
 
@@ -59,12 +60,25 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void AtClause::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(1, "unit", unit);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(2, "expr", expr);
+}
+
+unique_ptr<AtClause> AtClause::Deserialize(Deserializer &deserializer) {
+	auto unit = deserializer.ReadPropertyWithDefault<string>(1, "unit");
+	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(2, "expr");
+	auto result = duckdb::unique_ptr<AtClause>(new AtClause(std::move(unit), std::move(expr)));
+	return result;
+}
+
 void BaseTableRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "schema_name", schema_name);
 	serializer.WritePropertyWithDefault<string>(201, "table_name", table_name);
 	serializer.WritePropertyWithDefault<vector<string>>(202, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<string>(203, "catalog_name", catalog_name);
+	serializer.WritePropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", at_clause);
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
@@ -73,6 +87,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(201, "table_name", result->table_name);
 	deserializer.ReadPropertyWithDefault<vector<string>>(202, "column_name_alias", result->column_name_alias);
 	deserializer.ReadPropertyWithDefault<string>(203, "catalog_name", result->catalog_name);
+	deserializer.ReadPropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", result->at_clause);
 	return std::move(result);
 }
 

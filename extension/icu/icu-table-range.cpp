@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "unicode/calendar.h"
+#include "tz_calendar.hpp"
 
 namespace duckdb {
 
@@ -151,8 +152,7 @@ struct ICUTableRange {
 	                                                DataChunk &input, DataChunk &output) {
 		auto &bind_data = data_p.bind_data->Cast<ICURangeBindData>();
 		auto &state = data_p.local_state->Cast<ICURangeLocalState>();
-		CalendarPtr calendar_ptr(bind_data.calendar->clone());
-		auto calendar = calendar_ptr.get();
+		TZCalendar calendar(*bind_data.calendar, bind_data.cal_setting);
 		while (true) {
 			if (!state.initialized_row) {
 				// initialize for the current input row

@@ -1,0 +1,19 @@
+# name: test/sql/alter/alter_table_set_sorted_by.test
+# description: Test ALTER TABLE SET SORTED BY
+# group: [alter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement error
+ALTER TABLE tbl SET SORTED BY (i DESC NULLS FIRST)
+----
+not supported
+
+statement error
+ALTER TABLE tbl RESET SORTED BY;
+----
+not supported

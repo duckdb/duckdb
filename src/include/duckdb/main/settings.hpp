@@ -367,6 +367,16 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugVerifyVectorSetting {
+	using RETURN_TYPE = DebugVectorVerification;
+	static constexpr const char *Name = "debug_verify_vector";
+	static constexpr const char *Description = "DEBUG SETTING: enable vector verification";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DebugWindowModeSetting {
 	using RETURN_TYPE = WindowAggregationMode;
 	static constexpr const char *Name = "debug_window_mode";
@@ -1109,6 +1119,17 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct SchedulerProcessPartialSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "scheduler_process_partial";
+	static constexpr const char *Description =
+	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 

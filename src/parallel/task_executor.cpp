@@ -63,8 +63,6 @@ BaseExecutorTask::BaseExecutorTask(TaskExecutor &executor) : executor(executor) 
 }
 
 TaskExecutionResult BaseExecutorTask::Execute(TaskExecutionMode mode) {
-	(void)mode;
-	D_ASSERT(mode == TaskExecutionMode::PROCESS_ALL);
 	if (executor.HasError()) {
 		// another task encountered an error - bailout
 		executor.FinishTask();
