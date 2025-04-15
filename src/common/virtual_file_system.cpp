@@ -9,19 +9,19 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenFlags flags,
-                                                   optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+                                                           optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
-		auto lower_path = StringUtil::Lower(path);
+		auto lower_path = StringUtil::Lower(file.path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		if (IsFileCompressed(path, FileCompressionType::GZIP)) {
+		if (IsFileCompressed(file.path, FileCompressionType::GZIP)) {
 			compression = FileCompressionType::GZIP;
-		} else if (IsFileCompressed(path, FileCompressionType::ZSTD)) {
+		} else if (IsFileCompressed(file.path, FileCompressionType::ZSTD)) {
 			compression = FileCompressionType::ZSTD;
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
@@ -29,7 +29,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
 	}
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
-	auto file_handle = FindFileSystem(path).OpenFile(path, flags, opener);
+	auto file_handle = FindFileSystem(file.path).OpenFile(file, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
