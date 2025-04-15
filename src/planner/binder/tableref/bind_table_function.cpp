@@ -21,8 +21,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
-#include <duckdb/planner/expression/bound_window_expression.hpp>
-#include <duckdb/planner/operator/logical_window.hpp>
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
