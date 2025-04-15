@@ -21,9 +21,10 @@ namespace duckdb {
 struct DBConfig;
 
 class EncodingFunction;
+
+struct CSVEncoderBuffer;
 //! Decode function, basically takes information about the decoded and the encoded buffers.
-typedef void (*encode_t)(const char *encoded_buffer, idx_t &encoded_buffer_current_position,
-                         const idx_t encoded_buffer_size, char *decoded_buffer, idx_t &decoded_buffer_current_position,
+typedef void (*encode_t)(CSVEncoderBuffer& encoded_buffer, char *decoded_buffer, idx_t &decoded_buffer_current_position,
                          const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function);
 
 class EncodingFunction {

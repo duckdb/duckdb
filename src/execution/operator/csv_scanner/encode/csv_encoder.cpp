@@ -76,7 +76,7 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 	// 2. remaining encoded buffer
 	if (encoded_buffer.HasDataToRead()) {
 		encoding_function->GetFunction()(
-		   encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
+		   encoded_buffer, output_buffer, output_buffer_pos,
 		   decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size, encoding_function.get());
 	}
 	// 3. a new encoded buffer from the file
@@ -93,11 +93,27 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 		for (idx_t i = 0; i < pass_on_buffer.size(); i++) {
 			encoded_buffer.Ptr()[i] = pass_on_buffer[i];
 		}
+		if (has_pass_on_byte) {
+			encoded_buffer.Ptr()[pass_on_buffer.size()] = pass_on_byte;
+		}
 		auto actual_encoded_bytes =
-		    static_cast<idx_t>(file_handle_input.Read(encoded_buffer.Ptr() + pass_on_buffer.size(), encoded_buffer.GetCapacity() - pass_on_buffer.size()));
-		encoded_buffer.SetSize(actual_encoded_bytes);
+		    static_cast<idx_t>(file_handle_input.Read(encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte, encoded_buffer.GetCapacity() - pass_on_buffer.size() - has_pass_on_byte));
+		encoded_buffer.SetSize(actual_encoded_bytes + pass_on_buffer.size() + has_pass_on_byte);
+		if (actual_encoded_bytes < encoded_buffer.GetCapacity() - pass_on_buffer.size()) {
+			encoded_buffer.last_buffer = true;
+			has_pass_on_byte = false;
+		} else {
+			auto bytes_read =
+				static_cast<idx_t>(file_handle_input.Read(&pass_on_byte, 1));
+			if (bytes_read == 0) {
+				encoded_buffer.last_buffer = true;
+				has_pass_on_byte = false;
+			} else {
+				has_pass_on_byte = true;
+			}
+		}
 		encoding_function->GetFunction()(
-		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
+		    encoded_buffer, output_buffer, output_buffer_pos,
 		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size, encoding_function.get());
 		if (output_buffer_pos == current_decoded_buffer_start) {
 			return output_buffer_pos;
