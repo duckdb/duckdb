@@ -5,21 +5,21 @@
 namespace duckdb {
 
 template <class T, bool RETURN_POSITION, bool FIND_NULLS = false>
-idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result, idx_t count) {
+idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, idx_t count) {
 	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, int8_t>::type;
 
-	const auto source_count = ListVector::GetListSize(list_vec);
+	const auto input_count = ListVector::GetListSize(input_list);
 
 	UnifiedVectorFormat list_format;
-	list_vec.ToUnifiedFormat(count, list_format);
+	input_list.ToUnifiedFormat(count, list_format);
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_format);
 
-	UnifiedVectorFormat source_format;
-	source_vec.ToUnifiedFormat(source_count, source_format);
-	const auto source_data = UnifiedVectorFormat::GetData<T>(source_format);
+	UnifiedVectorFormat child_format;
+	list_child.ToUnifiedFormat(input_count, child_format);
+	const auto child_data = UnifiedVectorFormat::GetData<T>(child_format);
 
 	UnifiedVectorFormat target_format;
-	target_vec.ToUnifiedFormat(count, target_format);
+	target.ToUnifiedFormat(count, target_format);
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -31,7 +31,7 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
 		const auto target_entry_idx = target_format.sel->get_index(row_idx);
 		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
-		const auto source_list_idx = source_format.sel->get_index(row_idx);
+		const auto source_list_idx = child_format.sel->get_index(row_idx);
 
 		const auto invalid_res = !FIND_NULLS && !target_valid;
 		if (invalid_res || list_entries[source_list_idx].length == 0) {
@@ -49,11 +49,11 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 		bool found = false;
 
 		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset && !found; list_idx++) {
-			const auto source_entry_idx = source_format.sel->get_index(list_idx);
-			const bool source_valid = source_format.validity.RowIsValid(source_entry_idx);
+			const auto source_entry_idx = child_format.sel->get_index(list_idx);
+			const bool source_valid = child_format.validity.RowIsValid(source_entry_idx);
 
 			if ((FIND_NULLS && !source_valid && !target_valid) ||
-			    (source_valid && Equals::Operation<T>(source_data[source_entry_idx], target_data[target_entry_idx]))) {
+			    (source_valid && Equals::Operation<T>(child_data[source_entry_idx], target_data[target_entry_idx]))) {
 				found = true;
 				total_matches++;
 				result_data[row_idx] =

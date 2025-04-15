@@ -15,11 +15,11 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 	}
 
 	auto target_count = input.size();
-	auto &list_vec = input.data[0];
-	auto &source_vec = ListVector::GetEntry(list_vec);
-	auto &target_vec = input.data[1];
+	auto &input_list = input.data[0];
+	auto &list_child = ListVector::GetEntry(input_list);
+	auto &target = input.data[1];
 
-	ListSearchOp<RETURN_POSITION, FIND_NULLS>(list_vec, source_vec, target_vec, result, target_count);
+	ListSearchOp<RETURN_POSITION, FIND_NULLS>(input_list, list_child, target, result, target_count);
 
 	if (target_count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
