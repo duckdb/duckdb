@@ -443,13 +443,14 @@ void TopNHeap::Reduce() {
 
 void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
 	auto heap_copy = heap;
-	// traverse the rest of the heap
 	state.scan_order.resize(heap_copy.size());
-	while (!heap_copy.empty()) {
-		std::pop_heap(heap_copy.begin(), heap_copy.end());
-		state.scan_order[heap_copy.size() - 1] = UnsafeNumericCast<sel_t>(heap_copy.back().index);
-		heap_copy.pop_back();
+
+	// sorting the heap is more efficient than popping one by one
+	std::sort(heap_copy.begin(), heap_copy.end());
+	for (idx_t i = 0; i < heap_copy.size(); i++) {
+		state.scan_order[i] = heap_copy[i].index;
 	}
+
 	state.pos = exclude_offset ? offset : 0;
 }
 
