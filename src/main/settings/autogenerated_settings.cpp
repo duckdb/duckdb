@@ -374,6 +374,23 @@ Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verify Vector
+//===----------------------------------------------------------------------===//
+void DebugVerifyVectorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(str_input);
+}
+
+void DebugVerifyVectorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_verify_vector = DBConfig().options.debug_verify_vector;
+}
+
+Value DebugVerifyVectorSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_verify_vector)));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Window Mode
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

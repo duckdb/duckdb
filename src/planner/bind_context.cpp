@@ -694,7 +694,7 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
-                                const vector<LogicalType> &types) {
+                                const vector<LogicalType> &types, bool using_key) {
 	auto binding = make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
@@ -702,6 +702,13 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 	}
 	cte_bindings[alias] = std::move(binding);
 	cte_references[alias] = make_shared_ptr<idx_t>(0);
+
+	if (using_key) {
+		auto recurring_alias = "recurring." + alias;
+		cte_bindings[recurring_alias] =
+		    make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(recurring_alias), types, names, index);
+		cte_references[recurring_alias] = make_shared_ptr<idx_t>(0);
+	}
 }
 
 void BindContext::AddContext(BindContext other) {

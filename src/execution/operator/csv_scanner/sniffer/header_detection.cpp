@@ -103,7 +103,7 @@ static string NormalizeColumnName(const string &col_name) {
 
 static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
                          unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                         CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+                         CSVReaderOptions &options, const MultiFileOptions &file_options,
                          const vector<HeaderValue> &best_header_row, CSVErrorHandler &error_handler) {
 	auto &dialect_options = state_machine.dialect_options;
 	if (!options.columns_set) {
@@ -219,7 +219,7 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 vector<string> CSVSniffer::DetectHeaderInternal(
     ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
     const SetColumns &set_columns, unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-    CSVReaderOptions &options, const MultiFileReaderOptions &file_options, CSVErrorHandler &error_handler) {
+    CSVReaderOptions &options, const MultiFileOptions &file_options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
 	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();

@@ -219,6 +219,13 @@
         "scope": "global"
     },
     {
+        "name": "debug_verify_vector",
+        "description": "DEBUG SETTING: enable vector verification",
+        "type": "VARCHAR",
+        "return_type": "DebugVectorVerification",
+        "scope": "global"
+    },
+    {
         "name": "debug_window_mode",
         "description": "DEBUG SETTING: switch window mode to use",
         "type": "VARCHAR",
