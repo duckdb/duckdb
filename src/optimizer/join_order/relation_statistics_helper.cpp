@@ -372,7 +372,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		// Estimate using the "Occupancy Problem",
 		// where "product" is number of bins, and "child_stats.cardinality" is number of balls
 		new_card = product * (1.0 - pow(EPSILON, -static_cast<double>(child_stats.cardinality) / product));
-		D_ASSERT(new_card <= static_cast<double>(child_stats.cardinality));
+		D_ASSERT(LossyNumericCast<idx_t>(new_card) <= child_stats.cardinality);
 	}
 
 	// an ungrouped aggregate has 1 row
