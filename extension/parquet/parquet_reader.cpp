@@ -46,9 +46,9 @@ using duckdb_parquet::SchemaElement;
 using duckdb_parquet::Statistics;
 using duckdb_parquet::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
-	auto transport = std::make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFileProtocol(CachingFileHandle &file_handle,
+                                                                                       bool prefetch_mode) {
+	auto transport = std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -77,16 +77,16 @@ void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_s
 }
 
 static shared_ptr<ParquetFileMetadataCache>
-LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_handle,
+LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
              optional_idx footer_size) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto file_proto = CreateThriftFileProtocol(allocator, file_handle, false);
+	auto file_proto = CreateThriftFileProtocol(file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
-		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
+		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
 	}
 
 	bool footer_encrypted;
@@ -96,11 +96,12 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		buf.resize(allocator, 8);
 		buf.zero();
 
+		transport.Prefetch(file_size - 8, 8);
 		transport.SetLocation(file_size - 8);
 		transport.read(buf.ptr, 8);
 
 		uint32_t footer_len;
-		ParseParquetFooter(buf.ptr, file_handle.path, file_size, encryption_config, footer_len, footer_encrypted);
+		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
 
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
@@ -108,7 +109,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 	} else {
 		auto footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
 		if (footer_len == 0 || file_size < 12 + footer_len) {
-			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.path);
+			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
 		}
 
 		idx_t total_footer_len = footer_len + 8;
@@ -117,10 +118,10 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		transport.Prefetch(metadata_pos, total_footer_len);
 
 		auto read_head = transport.GetReadHead(metadata_pos);
-		auto data_ptr = read_head->data.get();
+		auto data_ptr = read_head->buffer_ptr;
 
 		uint32_t read_footer_len;
-		ParseParquetFooter(data_ptr + footer_len, file_handle.path, file_size, encryption_config, read_footer_len,
+		ParseParquetFooter(data_ptr + footer_len, file_handle.GetPath(), file_size, encryption_config, read_footer_len,
 		                   footer_encrypted);
 		if (read_footer_len != footer_len) {
 			throw InvalidInputException("Parquet footer length stored in file is not equal to footer length provided");
@@ -133,7 +134,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		crypto_metadata->read(file_proto.get());
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_handle.path);
+			                            file_handle.GetPath());
 		}
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
 	} else {
@@ -718,7 +719,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(std::move(file_p)), fs(FileSystem::GetFileSystem(context_p)),
+    : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
 	file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
@@ -759,7 +760,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 			                        *encryption_util, footer_size);
 		} else {
-			auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
+			auto last_modify_time = file_handle->GetLastModifiedTime();
 			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file.path);
 			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
@@ -778,7 +779,7 @@ ParquetUnionData::~ParquetUnionData() {
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(string()), fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
+    : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	InitializeSchema(context_p);
 }
@@ -1068,11 +1069,16 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.offset_in_group = 0;
 	state.group_idx_list = std::move(groups_to_read);
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-	if (!state.file_handle || state.file_handle->path != file_handle->path) {
+	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
 		Value disable_prefetch = false;
-		Value prefetch_all_files = false;
+		Value prefetch_all_files =
+#ifdef DUCKDB_PREFETCH_ALL_PARQUET_FILES
+		    true; // For debugging purposes we can toggle this to always enable
+#else
+		    false; // Defaults to false
+#endif
 		context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 		context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
 		bool should_prefetch = !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>();
@@ -1080,12 +1086,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		if (should_prefetch && can_prefetch) {
 			state.prefetch_mode = true;
-			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			if (file_handle->IsRemoteFile()) {
+				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			}
 		} else {
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = fs.OpenFile(file_handle->path, flags);
+		state.file_handle = fs.OpenFile(file_handle->GetPath(), flags);
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
@@ -1096,7 +1104,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(*state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
