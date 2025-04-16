@@ -100,6 +100,10 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+if (DUCKDB_EXPLICIT_PLATFORM)
+    add_definitions(-DDUCKDB_CUSTOM_PLATFORM=${DUCKDB_EXPLICIT_PLATFORM})
+endif()
+
 option (WASM_ENABLED "Are DuckDB-Wasm extensions build enabled" FALSE)
 if (DEFINED ENV{WASM_EXTENSIONS})
      set(WASM_ENABLED "$ENV{WASM_EXTENSIONS}")
