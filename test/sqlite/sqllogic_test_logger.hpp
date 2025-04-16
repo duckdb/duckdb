@@ -31,14 +31,16 @@ public:
 	void PrintSQL(std::ostringstream &oss);
 	void PrintSQLFormatted();
 	void PrintErrorHeader(const string &description, std::ostringstream &oss);
-	static void PrintErrorHeader(const string &file_name, idx_t query_line, const string &description, std::ostringstream &oss);
+	static void PrintErrorHeader(const string &file_name, idx_t query_line, const string &description,
+	                             std::ostringstream &oss);
 	void PrintResultError(const vector<string> &result_values, const vector<string> &values,
-	                                   idx_t expected_column_count, bool row_wise, std::ostringstream &oss);
-	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
-	                                   idx_t expected_column_count, bool row_wise, std::ostringstream &oss);
+	                      idx_t expected_column_count, bool row_wise, std::ostringstream &oss);
+	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
+	                      bool row_wise, std::ostringstream &oss);
 	void PrintResultString(MaterializedQueryResult &result, std::ostringstream &oss);
 	void UnexpectedFailure(MaterializedQueryResult &result, std::ostringstream &oss);
-	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string, std::ostringstream &oss);
+	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string,
+	                  std::ostringstream &oss);
 	void OutputHash(const string &hash_value, std::ostringstream &oss);
 	void ColumnCountMismatch(MaterializedQueryResult &result, const vector<string> &result_values_string,
 	                         idx_t expected_column_count, bool row_wise, std::ostringstream &oss);

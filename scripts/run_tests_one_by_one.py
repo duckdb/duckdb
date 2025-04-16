@@ -118,12 +118,15 @@ def parse_assertions(stdout):
 
     return "ERROR"
 
+
 is_active = False
+
 
 def get_test_name_from(text):
     match = re.findall(r'\((.*?)\)\!', text)
     if match:
         return match
+
 
 def print_interval_background(interval):
     global is_active
@@ -134,6 +137,7 @@ def print_interval_background(interval):
         if current_ticker >= interval:
             print("Still running...")
             current_ticker = 0
+
 
 def launch_test(test, list_of_tests=False):
     global is_active

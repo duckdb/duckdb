@@ -510,8 +510,8 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		logger.PrintSQL(oss);
 		logger.PrintLineSep(oss);
 		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		            << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-		            << termcolor::reset;
+		    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
+		    << termcolor::reset;
 		oss << lvalue_str << " <> " << rvalue_str << std::endl;
 		logger.PrintLineSep(oss);
 		logger.PrintResultError(result_values, values, expected_column_count, row_wise, oss);
@@ -533,7 +533,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 		logger.PrintErrorHeader("Test error!", oss);
 		logger.PrintLineSep(oss);
 		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
-		            << std::endl;
+		    << std::endl;
 		logger.PrintLineSep(oss);
 		std::cerr << oss.str();
 		return false;
