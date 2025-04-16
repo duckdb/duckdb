@@ -39,8 +39,10 @@ public:
 	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
 	// Reserved field id used for the "_pos" field according to the iceberg spec (used for file_row_number)
 	static constexpr int32_t FILENAME_FIELD_ID = 2147483646;
-	// Reserved field id used for the "_row_id" field according to the iceberg spec (used for file_row_number)
+	// Reserved field id used for the "_row_id" field according to the iceberg spec
 	static constexpr int32_t ROW_ID_FIELD_ID = 2147483540;
+	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
+	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
 
 public:
 	virtual ~MultiFileReader();

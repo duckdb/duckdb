@@ -22,6 +22,7 @@ constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX;
 constexpr int32_t MultiFileReader::ORDINAL_FIELD_ID;
 constexpr int32_t MultiFileReader::FILENAME_FIELD_ID;
 constexpr int32_t MultiFileReader::ROW_ID_FIELD_ID;
+constexpr int32_t MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID;
 
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }
