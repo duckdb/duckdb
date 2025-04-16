@@ -12,14 +12,16 @@
 
 namespace duckdb {
 
-MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileReaderData &reader_data,
+MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileReader &multi_file_reader,
+                                             MultiFileReaderData &reader_data,
                                              const vector<MultiFileColumnDefinition> &global_columns,
                                              const vector<ColumnIndex> &global_column_ids,
                                              optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
                                              const MultiFileReaderBindData &bind_data,
                                              const virtual_column_map_t &virtual_columns)
-    : context(context), reader_data(reader_data), global_columns(global_columns), global_column_ids(global_column_ids),
-      global_filters(filters), initial_file(initial_file), bind_data(bind_data), virtual_columns(virtual_columns) {
+    : context(context), multi_file_reader(multi_file_reader), reader_data(reader_data), global_columns(global_columns),
+      global_column_ids(global_column_ids), global_filters(filters), initial_file(initial_file), bind_data(bind_data),
+      virtual_columns(virtual_columns) {
 }
 
 struct MultiFileIndexMapping {
@@ -32,21 +34,25 @@ public:
 	unordered_map<idx_t, unique_ptr<MultiFileIndexMapping>> child_mapping;
 };
 
+//! The local to global conversion required for table filters on this column
+enum class FilterConversionType { COPY_DIRECTLY, CAST_FILTER, CANNOT_CONVERT };
+
 struct MultiFileColumnMap {
 	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type)
 	    : mapping(index), local_type(local_type), global_type(global_type),
-	      require_filter_cast(local_type != global_type) {
+	      filter_conversion(local_type == global_type ? FilterConversionType::COPY_DIRECTLY
+	                                                  : FilterConversionType::CAST_FILTER) {
 	}
 	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type, const LogicalType &global_type,
-	                   bool require_filter_cast)
+	                   FilterConversionType filter_conversion)
 	    : mapping(std::move(mapping_p)), local_type(local_type), global_type(global_type),
-	      require_filter_cast(require_filter_cast) {
+	      filter_conversion(filter_conversion) {
 	}
 
 	MultiFileIndexMapping mapping;
 	const LogicalType &local_type;
 	const LogicalType &global_type;
-	bool require_filter_cast;
+	FilterConversionType filter_conversion;
 };
 
 struct ResultColumnMapping {
@@ -365,13 +371,6 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 	                                          std::move(bind_data));
 }
 
-bool VirtualColumnIsConstant(column_t column_id) {
-	if (column_id == COLUMN_IDENTIFIER_EMPTY || column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
-		return true;
-	}
-	return false;
-}
-
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {
 	auto &reader = *reader_data.reader;
 	auto &local_columns = reader.GetColumns();
@@ -403,6 +402,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		// Handle any generate columns that are not in the schema (currently only file_row_number)
 		auto &global_id = global_column_ids[i];
 		auto global_column_id = global_id.GetPrimaryIndex();
+		optional_ptr<MultiFileColumnDefinition> global_column_reference;
 
 		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
 		if (IsVirtualColumn(global_column_id)) {
@@ -412,32 +412,44 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				throw InternalException("Virtual column id %d not found in virtual columns map", global_column_id);
 			}
 			auto &virtual_column_type = virtual_entry->second.type;
-			// check if this column is constant for the file
-			if (VirtualColumnIsConstant(global_column_id)) {
-				// the column is constant (e.g. filename or empty) - no need to project from the file
-				expressions.push_back(make_uniq<BoundConstantExpression>(Value(virtual_column_type)));
+			// check if this column is constant for the entire file
+			auto constant_expr =
+			    multi_file_reader.GetConstantVirtualColumn(reader_data, global_column_id, virtual_column_type);
+			if (constant_expr) {
+				// the column is constant for the entire file - handle it
+				expressions.push_back(std::move(constant_expr));
 				continue;
 			}
-			// the column is not constant for the file - need to push into the projection list
-			auto expr = make_uniq<BoundReferenceExpression>(virtual_column_type, local_idx.GetIndex());
-			reader_data.expressions.push_back(std::move(expr));
+			// the column is not constant for the file
+			// get the expression to evaluate the column OR the global column to read into
+			auto expr =
+			    multi_file_reader.GetVirtualColumnExpression(context, reader_data, local_columns, global_column_id,
+			                                                 virtual_column_type, local_idx, global_column_reference);
+			if (!global_column_reference) {
+				auto is_reference = expr->type == ExpressionType::BOUND_REF;
+				expressions.push_back(std::move(expr));
 
-			MultiFileLocalColumnId local_id(reader.columns.size());
-			ColumnIndex local_index(local_id.GetId());
+				MultiFileLocalColumnId local_id(reader.columns.size());
+				ColumnIndex local_index(local_id.GetId());
 
-			// add the virtual column to the reader
-			reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
-			reader.AddVirtualColumn(global_column_id);
+				// add the virtual column to the reader
+				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
+				reader.AddVirtualColumn(global_column_id);
 
-			// set it as being projected in this spot
-			MultiFileColumnMap index_mapping(local_idx, virtual_column_type, virtual_column_type);
-			result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
-			reader.column_ids.push_back(local_id);
-			reader.column_indexes.push_back(std::move(local_index));
-			continue;
+				// set it as being projected in this spot
+				MultiFileColumnMap index_mapping(local_idx, virtual_column_type, virtual_column_type);
+				if (!is_reference) {
+					index_mapping.filter_conversion = FilterConversionType::CANNOT_CONVERT;
+				}
+				result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
+				reader.column_ids.push_back(local_id);
+				reader.column_indexes.push_back(std::move(local_index));
+				continue;
+			}
 		}
 
-		const auto &global_column = global_columns[global_column_id];
+		const auto &global_column =
+		    global_column_reference ? *global_column_reference : global_columns[global_column_id];
 		if (reader.UseCastMap()) {
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
@@ -476,10 +488,10 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto &local_type = local_columns[local_id].type;
 		auto expr = ConstructMapExpression(context, local_idx.GetIndex(), column_map, global_column, trivial_map);
 		reader_data.expressions.push_back(std::move(expr));
-		bool require_filter_cast = !trivial_map;
+		auto filter_conversion = trivial_map ? FilterConversionType::COPY_DIRECTLY : FilterConversionType::CAST_FILTER;
 
 		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_type, global_column.type,
-		                                 require_filter_cast);
+		                                 filter_conversion);
 		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
 		reader.column_ids.emplace_back(local_id);
 		reader.column_indexes.push_back(std::move(*local_index));
@@ -823,12 +835,18 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 		auto &global_type = map_entry.global_type;
 
 		unique_ptr<TableFilter> local_filter;
-		if (!map_entry.require_filter_cast) {
+		switch (map_entry.filter_conversion) {
+		case FilterConversionType::COPY_DIRECTLY:
 			// no conversion required - just copy the filter
 			local_filter = global_filter.Copy();
-		} else {
+			break;
+		case FilterConversionType::CAST_FILTER:
 			// types are different - try to convert
 			local_filter = TryCastTableFilter(global_filter, map_entry.mapping, local_type);
+			break;
+		default:
+			// we need to execute the filter globally
+			break;
 		}
 		if (local_filter) {
 			// succeeded in casting - push the local filter
