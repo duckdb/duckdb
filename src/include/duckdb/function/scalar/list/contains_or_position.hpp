@@ -31,6 +31,11 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
 		const auto list_entry_idx = list_format.sel->get_index(row_idx);
 
+		if (!list_format.validity.RowIsValid(list_entry_idx)) {
+			result_validity.SetInvalid(row_idx);
+			continue;
+		}
+
 		const auto target_entry_idx = target_format.sel->get_index(row_idx);
 		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
 
