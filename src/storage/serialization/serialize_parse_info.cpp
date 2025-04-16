@@ -20,6 +20,7 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/parser/parsed_data/refresh_matview_info.hpp"
 
 namespace duckdb {
 
@@ -66,6 +67,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::VACUUM_INFO:
 		result = VacuumInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::REFRESH_MATVIEW_INFO:
+		result = RefreshMatViewInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ParseInfo!");
@@ -237,7 +241,8 @@ void AttachInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WritePropertyWithDefault<string>(201, "path", path);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(202, "options", options);
-	serializer.WritePropertyWithDefault<OnCreateConflict>(203, "on_conflict", on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	serializer.WritePropertyWithDefault<OnCreateConflict>(203, "on_conflict", on_conflict,
+	                                                      OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
@@ -245,7 +250,8 @@ unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<string>(201, "path", result->path);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(202, "options", result->options);
-	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict,
+	                                                               OnCreateConflict::ERROR_ON_CONFLICT);
 	return std::move(result);
 }
 
@@ -402,14 +408,16 @@ void PragmaInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "parameters", parameters);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters", named_parameters);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters",
+	                                                                                          named_parameters);
 }
 
 unique_ptr<ParseInfo> PragmaInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<PragmaInfo>(new PragmaInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "parameters", result->parameters);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "named_parameters", result->named_parameters);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
+	    202, "named_parameters", result->named_parameters);
 	return std::move(result);
 }
 
@@ -522,7 +530,8 @@ void SetPartitionedByInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<AlterTableInfo> SetPartitionedByInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetPartitionedByInfo>(new SetPartitionedByInfo());
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(400, "partition_keys", result->partition_keys);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(400, "partition_keys",
+	                                                                           result->partition_keys);
 	return std::move(result);
 }
 
@@ -575,6 +584,17 @@ unique_ptr<ParseInfo> VacuumInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(201, "has_table", result->has_table);
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(202, "ref", result->ref);
 	deserializer.ReadPropertyWithDefault<vector<string>>(203, "columns", result->columns);
+	return std::move(result);
+}
+
+void RefreshMatViewInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(202, "name", name);
+}
+
+unique_ptr<ParseInfo> RefreshMatViewInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<RefreshMatViewInfo>(new RefreshMatViewInfo());
+	deserializer.ReadPropertyWithDefault<string>(202, "name", result->name);
 	return std::move(result);
 }
 

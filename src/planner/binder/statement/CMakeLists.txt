@@ -26,7 +26,9 @@ add_library_unity(
   bind_summarize.cpp
   bind_update.cpp
   bind_update_extensions.cpp
-  bind_vacuum.cpp)
+  bind_vacuum.cpp
+  bind_refresh_matview.cpp
+)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_statement>
     PARENT_SCOPE)

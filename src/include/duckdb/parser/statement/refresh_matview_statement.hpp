@@ -19,8 +19,7 @@ public:
 
 public:
 	RefreshMatViewStatement();
-
-	unique_ptr<CreateInfo> info;
+	unique_ptr<TableRef> table;
 
 protected:
 	RefreshMatViewStatement(const RefreshMatViewStatement &other);
