@@ -44,7 +44,6 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 			continue;
 		}
 
-
 		const auto entry_length = list_entries[list_entry_idx].length;
 		const auto entry_offset = list_entries[list_entry_idx].offset;
 
