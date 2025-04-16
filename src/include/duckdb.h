@@ -242,6 +242,9 @@ typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } du
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! Type used for the selection vector
+typedef uint32_t sel_t;
+
 //! The callback that will be called to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
@@ -385,11 +388,20 @@ typedef struct {
 	void *internal_data;
 } duckdb_column;
 
-//! A vector to a specified column in a data chunk. Lives as long as the
-//! data chunk lives, i.e., must not be destroyed.
+//! Either a vector to a specified column in a data chunk, or a allocated vector.
+//! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.
+//! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`.
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
+
+typedef struct _duckdb_selection_vector {
+	void *internal_ptr;
+} * duckdb_selection_vector;
+
+typedef struct _duckdb_vector_buffer {
+	void *ptr;
+} * duckdb_vector_buffer;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
@@ -522,6 +534,10 @@ typedef struct _duckdb_value {
 typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
+
+typedef struct _duckdb_base_statistic {
+	void *internal_ptr;
+} * duckdb_base_statistic;
 
 //===--------------------------------------------------------------------===//
 // C API Extension info
@@ -677,6 +693,15 @@ struct duckdb_extension_access {
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+//===--------------------------------------------------------------------===//
+// External Buffers
+//===--------------------------------------------------------------------===//
+
+//! A opaque buffer which can be interpreted as a data buffer
+typedef struct _external_buffer *external_buffer;
+
+typedef void (*external_buffer_free)(external_buffer buffer);
 
 #ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
@@ -2893,8 +2918,41 @@ Sets the current number of tuples in a data chunk.
 DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size);
 
 //===--------------------------------------------------------------------===//
+// Vector Buffer Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is
+no long required by duckdb.
+* @param buffer The buffer which should used as a vector buffer.
+
+* @param free_fn A function which will be called once duckdb is finished with the buffer.
+
+* @return A ptr to the duckdb wrapped buffer.
+
+*/
+DUCKDB_C_API duckdb_vector_buffer duckdb_wrap_external_vector_buffer(external_buffer buffer,
+                                                                     external_buffer_free free_fn);
+
+/*!
+Free the reference to the buffer created from `duckdb_wrap_external_vector_buffer`*/
+DUCKDB_C_API void duckdb_free_vector_buffer(duckdb_vector_buffer *buffer);
+
+//===--------------------------------------------------------------------===//
 // Vector Interface
 //===--------------------------------------------------------------------===//
+
+/*!
+Creates a flat vector.
+
+*/
+DUCKDB_C_API duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity);
+
+/*!
+Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.
+
+*/
+DUCKDB_C_API void duckdb_destroy_vector(duckdb_vector *vector);
 
 /*!
 Retrieves the column type of the specified vector.
@@ -3029,6 +3087,70 @@ The resulting vector has the size of the parent vector multiplied by the array s
 * @return The child vector
 */
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
+
+/*!
+Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.
+
+* @param dict_size The size of the `dict_values`
+* @param selection The selection vector
+* @param len The length of the selection vector
+*/
+DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection,
+                                      idx_t len);
+
+/*!
+Copies the value from `value` to `vector`.*/
+DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
+
+/*!
+References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer
+
+*/
+DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
+
+/*!
+Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.
+* @param dict The dictionary vector
+* @param id The id
+* @param id_len The string length of the id
+*/
+DUCKDB_C_API void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len);
+
+/*!
+Returns the debug string from the data chunk.
+The string returned must be freed.
+*/
+DUCKDB_C_API const char *duckdb_data_chunk_to_string(duckdb_data_chunk chunk);
+
+/*!
+Verifies the data chunk is a valid chunk.
+*/
+DUCKDB_C_API void duckdb_data_chunk_verify(duckdb_data_chunk chunk);
+
+/*!
+Sets the data buffer of a vector.
+* @param vector The vector which will have its buffer set.
+
+* @param buffer The vector buffer which will be referenced.
+
+*/
+DUCKDB_C_API void duckdb_assign_buffer_to_vector(duckdb_vector vector, duckdb_vector_buffer buffer);
+
+//===--------------------------------------------------------------------===//
+// Selection Vector Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+todo*/
+DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
+
+/*!
+todo*/
+DUCKDB_C_API void duckdb_destroy_selection_vector(duckdb_selection_vector vector);
+
+/*!
+todo*/
+DUCKDB_C_API sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
@@ -3234,6 +3356,48 @@ If the set is incomplete or a function with this name already exists DuckDBError
 * @return Whether or not the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
+
+//===--------------------------------------------------------------------===//
+// Statistics Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Returns a statistic for the type of the value passed.
+*/
+DUCKDB_C_API duckdb_base_statistic duckdb_create_base_statistic(duckdb_logical_type type);
+
+/*!
+Destroys a statistic
+*/
+DUCKDB_C_API void duckdb_destroy_base_statistic(duckdb_base_statistic *statistic);
+
+/*!
+Sets the min value for a numeric statistic (if null is passed this signifies no value).
+*/
+DUCKDB_C_API void duckdb_statistic_set_min(duckdb_base_statistic statistic, duckdb_value min, bool is_truncated);
+
+/*!
+Sets the maximum value for the given statistics object.
+
+This function updates the maximum value stored in the statistics object based on the provided `max` value.
+For numeric statistics, it directly sets the maximum value.
+For string statistics, it updates the maximum value by comparing the provided string to the current maximum.
+If the provided string is longer than the maximum string length allowed, the maximum string length is reset.
+
+* @param statistic The statistics object to update.
+* @param max The new maximum value to set, if the value is null this unsets the statistic.
+* @param is_truncated If the value truncated, ignored for non-variable length values (e.g. ints)
+*/
+DUCKDB_C_API void duckdb_statistic_set_max(duckdb_base_statistic statistic, duckdb_value max, bool is_truncated);
+
+/*!
+Sets if the segment can contain NULL values*/
+DUCKDB_C_API void duckdb_statistic_set_has_nulls(duckdb_base_statistic statistic);
+
+/*!
+Set if the segment can contain values that are not null.
+*/
+DUCKDB_C_API void duckdb_statistic_set_has_no_nulls(duckdb_base_statistic statistic);
 
 //===--------------------------------------------------------------------===//
 // Aggregate Functions

@@ -239,6 +239,9 @@ typedef enum duckdb_cast_mode {
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! Type used for the selection vector
+typedef uint32_t sel_t;
+
 //! The callback that will be called to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
@@ -382,11 +385,20 @@ typedef struct {
 	void *internal_data;
 } duckdb_column;
 
-//! A vector to a specified column in a data chunk. Lives as long as the
-//! data chunk lives, i.e., must not be destroyed.
+//! Either a vector to a specified column in a data chunk, or a allocated vector.
+//! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.
+//! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`.
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
+
+typedef struct _duckdb_selection_vector {
+	void *internal_ptr;
+} * duckdb_selection_vector;
+
+typedef struct _duckdb_vector_buffer {
+	void *ptr;
+} * duckdb_vector_buffer;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
@@ -519,6 +531,10 @@ typedef struct _duckdb_value {
 typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
+
+typedef struct _duckdb_base_statistic {
+	void *internal_ptr;
+} * duckdb_base_statistic;
 
 //===--------------------------------------------------------------------===//
 // C API Extension info
@@ -673,6 +689,15 @@ struct duckdb_extension_access {
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+//===--------------------------------------------------------------------===//
+// External Buffers
+//===--------------------------------------------------------------------===//
+
+//! A opaque buffer which can be interpreted as a data buffer
+typedef struct _external_buffer * external_buffer;
+
+typedef void (*external_buffer_free)(external_buffer buffer);
 
 // FILE_CONTENT_SECTION
 

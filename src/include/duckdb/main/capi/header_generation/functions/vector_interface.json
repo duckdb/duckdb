@@ -3,6 +3,36 @@
     "deprecated": false,
     "entries": [
         {
+            "name": "duckdb_create_vector",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "capacity"
+                }
+            ],
+            "comment": {
+                "description": "Creates a flat vector.\n\n"
+            }
+        },
+        {
+            "name": "duckdb_destroy_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector *",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.\n\n"
+            }
+        },
+        {
             "name": "duckdb_vector_get_column_type",
             "return_type": "duckdb_logical_type",
             "params": [
@@ -241,6 +271,144 @@
                     "vector": "The vector"
                 },
                 "return_value": "The child vector"
+            }
+        },
+        {
+            "name": "duckdb_slice_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "dict_size"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "selection"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "len"
+                }
+            ],
+            "comment": {
+                "description": "Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.\n\n",
+                "param_comments": {
+                    "dict_values": "The vector which will become the values of the dictionary.",
+                    "dict_size": "The size of the `dict_values`",
+                    "selection": "The selection vector",
+                    "len": "The length of the selection vector"
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_reference_value",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Copies the value from `value` to `vector`."
+            }
+        },
+        {
+            "name": "duckdb_vector_reference_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "to_vector"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "from_vector"
+                }
+            ],
+            "comment": {
+                "description": "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer \n\n"
+            }
+        },
+        {
+            "name": "duckdb_set_dictionary_vector_id",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "dict"
+                },
+                {
+                    "type": "const char *",
+                    "name": "id"
+                },
+                {
+                    "type": "unsigned int",
+                    "name": "id_len"
+                }
+            ],
+            "comment": {
+                "description": "Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.\n",
+                "param_comments": {
+                    "dict": "The dictionary vector",
+                    "id": "The id",
+                    "id_len": "The string length of the id"
+                }
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_to_string",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Returns the debug string from the data chunk.\nThe string returned must be freed.\n"
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_verify",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Verifies the data chunk is a valid chunk.\n"
+            }
+        },
+        {
+            "name": "duckdb_assign_buffer_to_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "duckdb_vector_buffer",
+                    "name": "buffer"
+                }
+            ],
+            "comment": {
+                "description": "Sets the data buffer of a vector.\n",
+                "param_comments": {
+                    "vector": "The vector which will have its buffer set.\n",
+                    "buffer": "The vector buffer which will be referenced.\n"
+                }
             }
         }
     ]

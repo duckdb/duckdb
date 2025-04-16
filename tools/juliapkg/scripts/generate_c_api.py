@@ -7,12 +7,10 @@ from packaging.version import Version
 from functools import reduce
 from pathlib import Path
 
-
 EXT_API_DEFINITION_PATTERN = "src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json"
 
 # The JSON files that define all available CAPI functions
 CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
-
 
 # The original order of the function groups in the duckdb.h files. We maintain this for easier PR reviews.
 # TODO: replace this with alphabetical ordering in a separate PR
@@ -35,9 +33,12 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'value_interface',
     'logical_type_interface',
     'data_chunk_interface',
+    'vector_buffer_interface',
     'vector_interface',
+    'selection_vector_interface',
     'validity_mask_functions',
     'scalar_functions',
+    'statistics_interface',
     'aggregate_functions',
     'table_functions',
     'table_function_bind',

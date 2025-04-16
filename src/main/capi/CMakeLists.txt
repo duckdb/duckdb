@@ -6,6 +6,7 @@ add_library_unity(
   aggregate_function-c.cpp
   appender-c.cpp
   arrow-c.cpp
+  buffer-c.cpp
   cast_function-c.cpp
   config-c.cpp
   data_chunk-c.cpp
@@ -21,6 +22,7 @@ add_library_unity(
   replacement_scan-c.cpp
   result-c.cpp
   scalar_function-c.cpp
+  statistic-c.cpp
   stream-c.cpp
   table_function-c.cpp
   table_description-c.cpp

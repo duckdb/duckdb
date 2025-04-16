@@ -1,0 +1,12 @@
+{
+    "version": "unstable_new_statistics_interface",
+    "description": "Create and return statistics",
+    "entries": [
+        "duckdb_create_base_statistic",
+        "duckdb_destroy_base_statistic",
+        "duckdb_statistic_set_min",
+        "duckdb_statistic_set_max",
+        "duckdb_statistic_set_has_nulls",
+        "duckdb_statistic_set_has_no_nulls"
+    ]
+}
