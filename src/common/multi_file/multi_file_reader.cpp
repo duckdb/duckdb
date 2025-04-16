@@ -335,13 +335,11 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileOp
 	return nullptr;
 }
 
-ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
-                                                    const vector<MultiFileColumnDefinition> &global_columns,
-                                                    const vector<ColumnIndex> &global_column_ids,
-                                                    optional_ptr<TableFilterSet> filters,
-                                                    const OpenFileInfo &initial_file,
-                                                    const MultiFileReaderBindData &bind_data,
-                                                    const virtual_column_map_t &virtual_columns) {
+ReaderInitializeType MultiFileReader::CreateMapping(
+    ClientContext &context, MultiFileReaderData &reader_data, const vector<MultiFileColumnDefinition> &global_columns,
+    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
+    const OpenFileInfo &initial_file, const MultiFileReaderBindData &bind_data,
+    const virtual_column_map_t &virtual_columns, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
 	                                    initial_file, bind_data, virtual_columns);
 	return column_mapper.CreateMapping();

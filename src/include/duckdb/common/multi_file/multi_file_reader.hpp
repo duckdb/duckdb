@@ -109,7 +109,8 @@ public:
 	CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
 	              const vector<MultiFileColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
 	              optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
-	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns);
+	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns,
+	              optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileBindData &bind_data,
@@ -182,7 +183,8 @@ public:
 		FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids,
 		             context, global_state);
 		return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
-		                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
+		                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns,
+		                     global_state);
 	}
 
 	template <class BIND_DATA>
