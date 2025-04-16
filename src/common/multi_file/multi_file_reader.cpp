@@ -18,6 +18,7 @@ namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX;
 constexpr int32_t MultiFileReader::ORDINAL_FIELD_ID;
 constexpr int32_t MultiFileReader::FILENAME_FIELD_ID;
 constexpr int32_t MultiFileReader::ROW_ID_FIELD_ID;
@@ -261,6 +262,7 @@ void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderB
 		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
 		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
 	}
+	result.insert(make_pair(COLUMN_IDENTIFIER_FILE_INDEX, TableColumn("file_index", LogicalType::UBIGINT)));
 }
 
 void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,
@@ -284,9 +286,14 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
 		if ((options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) ||
-		    column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
+		    column_id == COLUMN_IDENTIFIER_FILENAME) {
 			// filename
 			reader_data.constant_map.Add(global_idx, Value(filename));
+			continue;
+		}
+		if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
+			// filename
+			reader_data.constant_map.Add(global_idx, Value::UBIGINT(reader_data.reader->file_list_idx.GetIndex()));
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {

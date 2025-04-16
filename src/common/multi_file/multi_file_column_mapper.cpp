@@ -647,11 +647,13 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 		//! FIXME: this does not check for filters against struct fields that are not present in the file
 		auto global_column_id = global_column_ids[global_index].GetPrimaryIndex();
 		Value constant_value;
-		auto virtual_it = virtual_columns.find(global_column_ids[global_index].GetPrimaryIndex());
+		auto virtual_it = virtual_columns.find(global_column_id);
 		if (virtual_it != virtual_columns.end()) {
 			auto &virtual_column = virtual_it->second;
 			if (virtual_column.name == "filename") {
 				constant_value = Value(reader_data.reader->GetFileName());
+			} else if (global_column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX) {
+				constant_value = Value::UBIGINT(reader_data.reader->file_list_idx.GetIndex());
 			} else {
 				throw InternalException("Unrecognized virtual column found: %s", virtual_column.name);
 			}
