@@ -354,25 +354,22 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	if (distinct_counts.empty()) {
 		// We have no good statistics on distinct count.
 		// most likely we are running on parquet files. Therefore we divide by 2.
-		new_card = (double)child_stats.cardinality / 2;
+		new_card = static_cast<double>(child_stats.cardinality) / 2.0;
 	} else {
-		// Euler's number
-		static constexpr double EPSILON = 2.718281828459045;
-
 		// Multiply distinct counts
 		double product = 1;
 		for (const auto &distinct_count : distinct_counts) {
 			product *= distinct_count;
 		}
 
-		// Assume slight correlation
+		// Assume slight correlation for each grouping column
 		const auto correction = pow(0.95, static_cast<double>(distinct_counts.size() - 1));
 		product *= correction;
 
 		// Estimate using the "Occupancy Problem",
 		// where "product" is number of bins, and "child_stats.cardinality" is number of balls
-		new_card = product * (1.0 - pow(EPSILON, -static_cast<double>(child_stats.cardinality) / product));
-		D_ASSERT(LossyNumericCast<idx_t>(new_card) <= child_stats.cardinality);
+		new_card = product * (1.0 - exp(-static_cast<double>(child_stats.cardinality) / product));
+		new_card = MinValue(new_card, static_cast<double>(child_stats.cardinality));
 	}
 
 	// an ungrouped aggregate has 1 row
