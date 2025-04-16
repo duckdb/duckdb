@@ -13,6 +13,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Type";
 	case CatalogType::TABLE_ENTRY:
 		return "Table";
+	case CatalogType::MATVIEW_ENTRY:
+		return "Materialized View";
 	case CatalogType::SCHEMA_ENTRY:
 		return "Schema";
 	case CatalogType::DATABASE_ENTRY:

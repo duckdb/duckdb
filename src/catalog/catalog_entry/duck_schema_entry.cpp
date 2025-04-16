@@ -10,6 +10,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -164,6 +165,18 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 		return nullptr;
 	}
 
+	return entry;
+}
+
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateMatView(CatalogTransaction transaction, BoundCreateTableInfo &info) {
+	auto table = make_uniq<MatViewCatalogEntry>(catalog, *this, info);
+	for (auto &dep : info.dependencies.Set()) {
+		table->dependencies.AddDependency(dep);
+	}
+	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
+	if (!entry) {
+		return nullptr;
+	}
 	return entry;
 }
 
@@ -365,6 +378,7 @@ SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transact
 
 CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
+	case CatalogType::MATVIEW_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 		return tables;

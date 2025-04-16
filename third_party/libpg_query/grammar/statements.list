@@ -12,6 +12,7 @@ CreateTypeStmt
 CreateFunctionStmt
 CreateSchemaStmt
 CreateSeqStmt
+CreateMatViewStmt
 CreateStmt
 CommentOnStmt
 DeallocateStmt

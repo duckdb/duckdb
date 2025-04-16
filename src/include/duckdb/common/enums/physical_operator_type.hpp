@@ -85,6 +85,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	CREATE_TABLE,
 	CREATE_TABLE_AS,
+	CREATE_MATVIEW,
 	BATCH_CREATE_TABLE_AS,
 	CREATE_INDEX,
 	ALTER,

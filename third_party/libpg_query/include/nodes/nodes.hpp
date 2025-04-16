@@ -327,6 +327,7 @@ typedef enum PGNodeTag {
 	T_PGCopyStmt,
 	T_PGCopyDatabaseStmt,
 	T_PGCreateStmt,
+	T_PGCreateMatViewStmt,
 	T_PGDefineStmt,
 	T_PGDropStmt,
 	T_PGTruncateStmt,

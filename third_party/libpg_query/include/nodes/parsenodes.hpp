@@ -1989,6 +1989,13 @@ typedef struct PGCreateTableAsStmt {
 } PGCreateTableAsStmt;
 
 /* ----------------------
+ * CREATE MATERIALIZED VIEW Statement
+ * ----------------------
+ */
+typedef struct PGCreateMatViewStmt : PGCreateTableAsStmt {
+} PGCreateMatViewStmt;
+
+/* ----------------------
  * Checkpoint Statement
  * ----------------------
  */

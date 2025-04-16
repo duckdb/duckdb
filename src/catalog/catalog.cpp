@@ -147,6 +147,30 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 }
 
 //===--------------------------------------------------------------------===//
+// Materialized View
+//===--------------------------------------------------------------------===//
+
+optional_ptr<CatalogEntry> Catalog::CreateMatView(ClientContext &context, BoundCreateTableInfo &info) {
+	return CreateTable(GetCatalogTransaction(context), info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateMatView(ClientContext &context, unique_ptr<CreateMatViewInfo> info) {
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info));
+	return CreateMatView(context, *bound_info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateMatView(CatalogTransaction &transaction, SchemaCatalogEntry &schema,
+                                                  BoundCreateTableInfo &info) {
+	return schema.CreateMatView(transaction, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateMatView(CatalogTransaction &transaction, BoundCreateTableInfo &info) {
+	auto &schema = GetSchema(transaction, info.base->schema);
+	return CreateMatView(transaction, schema, info);
+}
+
+//===--------------------------------------------------------------------===//
 // View
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {

@@ -27,6 +27,7 @@ struct CreateIndexInfo;
 struct CreateFunctionInfo;
 struct CreateCollationInfo;
 struct CreateViewInfo;
+struct CreateMatViewInfo;
 struct BoundCreateTableInfo;
 struct CreatePragmaFunctionInfo;
 struct CreateSequenceInfo;
@@ -65,6 +66,8 @@ public:
 	virtual optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) = 0;
 	//! Creates a table with the given name in the schema
 	virtual optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) = 0;
+	//! Creates a matview with the given name in the schema
+	virtual optional_ptr<CatalogEntry> CreateMatView(CatalogTransaction transaction, BoundCreateTableInfo &info) = 0;
 	//! Creates a view with the given name in the schema
 	virtual optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) = 0;
 	//! Creates a sequence with the given name in the schema
