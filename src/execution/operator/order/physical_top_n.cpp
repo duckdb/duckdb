@@ -112,7 +112,7 @@ public:
 
 public:
 	void Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> boundary_value = nullptr);
-	void Combine(mutex &lock, TopNHeap &other);
+	void Combine(TopNHeap &other);
 	void Reduce();
 	void Finalize();
 
@@ -374,10 +374,8 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 	}
 }
 
-void TopNHeap::Combine(mutex &lock, TopNHeap &other) {
+void TopNHeap::Combine(TopNHeap &other) {
 	// "other" is sorted at this point
-
-	lock_guard<mutex> guard(lock);
 	idx_t match_count = 0;
 	// merge the heap of other into this
 	for (idx_t i = 0; i < other.heap.size(); i++) {
@@ -520,7 +518,8 @@ SinkCombineResultType PhysicalTopN::Combine(ExecutionContext &context, OperatorS
 
 	// scan the local top N and append it to the global heap
 	lstate.heap.Finalize();
-	gstate.heap.Combine(gstate.lock, lstate.heap);
+	lock_guard<mutex> guard(gstate.lock);
+	gstate.heap.Combine(lstate.heap);
 
 	return SinkCombineResultType::FINISHED;
 }
