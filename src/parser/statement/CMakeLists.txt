@@ -20,6 +20,7 @@ add_library_unity(
   pragma_statement.cpp
   prepare_statement.cpp
   relation_statement.cpp
+        refresh_matview_statement.cpp
   select_statement.cpp
   set_statement.cpp
   transaction_statement.cpp

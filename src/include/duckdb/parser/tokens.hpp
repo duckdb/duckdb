@@ -36,6 +36,7 @@ class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
+class RefreshMatViewStatement;
 class SetStatement;
 class SetVariableStatement;
 class ResetVariableStatement;

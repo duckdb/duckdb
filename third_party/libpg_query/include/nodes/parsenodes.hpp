@@ -1995,6 +1995,12 @@ typedef struct PGCreateTableAsStmt {
 typedef struct PGCreateMatViewStmt : PGCreateTableAsStmt {
 } PGCreateMatViewStmt;
 
+typedef struct PGRefreshMatViewStmt {
+	PGNodeTag type;
+	PGRangeVar *matView;           /* target materialized view name */
+	PGObjectType removeType; /* object type */
+} PGRefreshMatViewStmt;
+
 /* ----------------------
  * Checkpoint Statement
  * ----------------------
