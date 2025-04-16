@@ -365,7 +365,6 @@ void DataTable::VerifyIndexBuffers() {
 	});
 }
 
-// Lock?
 void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
 	row_groups->CleanupAppend(lowest_transaction, start, count);
 }

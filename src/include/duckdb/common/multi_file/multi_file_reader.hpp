@@ -34,6 +34,12 @@ struct MultiFileReader {
 public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
 	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_NUMBER = UINT64_C(9223372036854775809);
+	// Reserved field id used for the "_file" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
+	// Reserved field id used for the "_pos" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t FILENAME_FIELD_ID = 2147483646;
+	// Reserved field id used for the "_row_id" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ROW_ID_FIELD_ID = 2147483540;
 
 public:
 	virtual ~MultiFileReader();
@@ -219,6 +225,18 @@ public:
 	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,
 	                                                       const MultiFileReaderBindData &bind_data,
 	                                                       TableFunctionPartitionInput &input);
+
+	//! Get a constant expression for the given virtual column, if this can be handled by the MultiFileReader
+	//! This expression is constant for the entire file
+	DUCKDB_API virtual unique_ptr<Expression> GetConstantVirtualColumn(MultiFileReaderData &reader_data,
+	                                                                   idx_t column_id, const LogicalType &type);
+
+	//! Gets an expression to evaluate the given virtual column
+	DUCKDB_API virtual unique_ptr<Expression>
+	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
+	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
+	                           const LogicalType &type, MultiFileLocalIndex local_index,
+	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference);
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader
