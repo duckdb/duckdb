@@ -44,6 +44,9 @@ public:
 	time_t GetLastModifiedTime(FileHandle &handle) override {
 		return GetFileSystem().GetLastModifiedTime(handle);
 	}
+	string GetVersionTag(FileHandle &handle) override {
+		return GetFileSystem().GetVersionTag(handle);
+	}
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
 	}
