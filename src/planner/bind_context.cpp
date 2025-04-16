@@ -212,7 +212,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (!catalog_entry) {
 		return false;
 	}
-	if (index == COLUMN_IDENTIFIER_ROW_ID) {
+	if (IsVirtualColumn(index)) {
 		return false;
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
