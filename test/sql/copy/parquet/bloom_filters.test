@@ -256,3 +256,29 @@ copy (select (r1.range*10)::VARCHAR r,
 from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 4294967295);
 ----
 Binder Error
+
+# cannot be 0
+statement error
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 0);
+----
+Binder Error
+
+# test some repeated large strings
+# this should give dictionary
+statement ok
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet';
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/my.parquet');
+----
+RLE_DICTIONARY
+
+# this cannot do dictionary because the strings exceed the limit
+statement ok
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet' (STRING_DICTIONARY_PAGE_SIZE_LIMIT 4_000_000);
+
+query I
+select encodings = 'RLE_DICTIONARY' from parquet_metadata('__TEST_DIR__/my.parquet');
+----
+false

@@ -1001,6 +1001,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"prefetch_all_parquet_files", "parquet"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
+    {"s3_kms_key_id", "httpfs"},
     {"s3_region", "httpfs"},
     {"s3_secret_access_key", "httpfs"},
     {"s3_session_token", "httpfs"},

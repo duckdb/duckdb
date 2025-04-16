@@ -16,6 +16,7 @@
 #include "parquet_writer.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
+#include "writer/primitive_column_writer.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -107,9 +108,9 @@ struct ParquetMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-	                                               const string &filename, idx_t file_idx,
+	                                               const OpenFileInfo &file, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
 	                                               ParquetOptions &options, const MultiFileOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
@@ -188,7 +189,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
 	if (options.file_row_number) {
 		MultiFileColumnDefinition res("file_row_number", LogicalType::BIGINT);
-		res.identifier = Value::INTEGER(ParquetReader::ORDINAL_FIELD_ID);
+		res.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		schema_col_names.push_back(res.name);
 		schema_col_types.push_back(res.type);
 		reader_bind.schema.emplace_back(std::move(res));
@@ -306,7 +307,11 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
 
-		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
+		vector<string> files;
+		for (auto &file : bind_data.file_list->GetAllFiles()) {
+			files.emplace_back(file.path);
+		}
+		serializer.WriteProperty(100, "files", files);
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		ParquetOptionsSerialization serialization(parquet_data.parquet_options, bind_data.file_options);
@@ -508,24 +513,24 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               BaseUnionData &union_data_p,
                                                               const MultiFileBindData &bind_data_p) {
 	auto &union_data = union_data_p.Cast<ParquetUnionData>();
-	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
+	return make_shared_ptr<ParquetReader>(context, union_data.file, union_data.options, union_data.metadata);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
-                                                              const string &filename, idx_t file_idx,
+                                                              const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, filename, bind_data.parquet_options);
+	return make_shared_ptr<ParquetReader>(context, file, bind_data.parquet_options);
 }
 
-shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                               ParquetOptions &options, const MultiFileOptions &) {
-	return make_shared_ptr<ParquetReader>(context, filename, options);
+	return make_shared_ptr<ParquetReader>(context, file, options);
 }
 
 shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
 	auto &scan = scan_p->Cast<ParquetReader>();
-	auto result = make_uniq<ParquetUnionData>(scan.file_name);
+	auto result = make_uniq<ParquetUnionData>(scan.file);
 	if (file_idx == 0) {
 		for (auto &column : scan.columns) {
 			result->names.push_back(column.name);
@@ -763,7 +768,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 		dictionary_size_limit = row_group_size / 20;
 	}
 
-	idx_t string_dictionary_page_size_limit = 1048576;
+	//! This is huge but we grow it starting from 1 MB
+	idx_t string_dictionary_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
@@ -892,9 +898,10 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			dictionary_size_limit_set = true;
 		} else if (loption == "string_dictionary_page_size_limit") {
 			auto val = option.second[0].GetValue<uint64_t>();
-			if (val > PrimitiveDictionary<uint32_t>::MAXIMUM_POSSIBLE_SIZE) {
-				throw BinderException("string_dictionary_page_size_limit must be less than or equal to %llu",
-				                      PrimitiveDictionary<uint32_t>::MAXIMUM_POSSIBLE_SIZE);
+			if (val > PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE || val == 0) {
+				throw BinderException(
+				    "string_dictionary_page_size_limit cannot be 0 and must be less than or equal to %llu",
+				    PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE);
 			}
 			bind_data->string_dictionary_page_size_limit = val;
 		} else if (loption == "bloom_filter_false_positive_ratio") {
