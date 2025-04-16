@@ -117,7 +117,7 @@ public:
 	}
 
 	GlobalSortedTable &table;
-
+	
 public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
