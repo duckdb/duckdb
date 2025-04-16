@@ -1462,7 +1462,7 @@ string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
-	return UUID::FromString(input.GetString(), result);
+	return UUID::FromString(input.GetString(), result, parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//

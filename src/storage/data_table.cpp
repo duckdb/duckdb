@@ -580,7 +580,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Local constraint verification.
 	if (local_verification) {
-		auto &local_indexes = local_storage.GetIndexes(data_table);
+		auto &local_indexes = local_storage.GetIndexes(context, data_table);
 		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflicts);
 		local_conflicts.Finalize();
 		auto &local_matches = local_conflicts.Conflicts();
@@ -601,7 +601,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
 	index = data_table.info->indexes.FindForeignKeyIndex(dst_keys_ptr, fk_type);
 	if (local_verification) {
-		auto &transact_index = local_storage.GetIndexes(data_table);
+		auto &transact_index = local_storage.GetIndexes(context, data_table);
 		// check whether or not the chunk can be inserted or deleted into the referenced table' storage
 		transaction_index = transact_index.FindForeignKeyIndex(dst_keys_ptr, fk_type);
 	}
@@ -876,6 +876,14 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 
 	// Append to the transaction-local data.
 	LocalStorage::Append(state, chunk);
+}
+
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	LocalAppendState append_state;
+	InitializeLocalAppend(append_state, table, context, bound_constraints);
+	LocalAppend(append_state, context, chunk, false);
+	FinalizeLocalAppend(append_state);
 }
 
 void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
