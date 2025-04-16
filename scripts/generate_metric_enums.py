@@ -26,6 +26,8 @@ metrics = [
     "LATENCY",
     "ROWS_RETURNED",
     "OPERATOR_NAME",
+    "SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE",
+    "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE",
 ]
 
 phase_timing_metrics = [

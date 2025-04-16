@@ -14,6 +14,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
 
 #include <algorithm>
@@ -174,16 +175,31 @@ void QueryProfiler::StartExplainAnalyze() {
 }
 
 template <class METRIC_TYPE>
-static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, MetricsType child_metric,
+                            const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
 	auto &info = node.GetProfilingInfo();
-	info.metrics[cumulative_metric] = info.metrics[child_metric];
+	info.metrics[aggregated_metric] = info.metrics[child_metric];
 
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
 		auto child = node.GetChild(i);
-		GetCumulativeMetric<METRIC_TYPE>(*child, cumulative_metric, child_metric);
-		auto value = child->GetProfilingInfo().metrics[cumulative_metric].GetValue<METRIC_TYPE>();
-		info.AddToMetric(cumulative_metric, value);
+		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
+		auto value = child->GetProfilingInfo().metrics[aggregated_metric].GetValue<METRIC_TYPE>();
+		info.UpdateMetricValue<METRIC_TYPE>(aggregated_metric, value, update_fun);
 	}
+}
+
+template <class METRIC_TYPE>
+static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+	AggregateMetric<METRIC_TYPE>(
+	    node, cumulative_metric, child_metric,
+	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
+}
+
+template <class METRIC_TYPE>
+static void GetMaxOfMetric(ProfilingNode &node, MetricsType max_of_metric, MetricsType child_metric) {
+	AggregateMetric<METRIC_TYPE>(
+	    node, max_of_metric, child_metric,
+	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return MaxValue(old_value, new_value); });
 }
 
 Value GetCumulativeOptimizers(ProfilingNode &node) {
@@ -246,6 +262,14 @@ void QueryProfiler::EndQuery() {
 			}
 			if (info.Enabled(settings, MetricsType::RESULT_SET_SIZE)) {
 				info.metrics[MetricsType::RESULT_SET_SIZE] = child_info.metrics[MetricsType::RESULT_SET_SIZE];
+			}
+			if (info.Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE)) {
+				GetMaxOfMetric<idx_t>(*root, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE,
+				                      MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE);
+			}
+			if (info.Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
+				GetMaxOfMetric<idx_t>(*root, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE,
+				                      MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE);
 			}
 
 			MoveOptimizerPhasesToRoot();
@@ -411,6 +435,14 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
 			info.AddResultSetSize(result_set_size);
 		}
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE)) {
+			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
+			info.UpdateSystemPeakBufferManagerMemoryUsage(used_memory);
+		}
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
+			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
+			info.UpdateSystemPeakTempDirectorySize(used_swap);
+		}
 	}
 	active_operator = nullptr;
 }
@@ -504,6 +536,14 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::EXTRA_INFO)) {
 			info.extra_info = node.second.extra_info;
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE)) {
+			info.MaxOfMetric<idx_t>(MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE,
+			                        node.second.system_peak_buffer_manager_memory_usage);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
+			info.MaxOfMetric<idx_t>(MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE,
+			                        node.second.system_peak_temp_directory_size);
 		}
 	}
 	profiler.operator_infos.clear();

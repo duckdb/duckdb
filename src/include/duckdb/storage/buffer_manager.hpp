@@ -47,7 +47,7 @@ public:
 	//! Returns the maximum available memory
 	virtual idx_t GetMaxMemory() const = 0;
 	//! Returns the currently used swap space
-	virtual idx_t GetUsedSwap() = 0;
+	virtual idx_t GetUsedSwap() const = 0;
 	//! Returns the maximum swap space that can be used
 	virtual optional_idx GetMaxSwap() const = 0;
 	//! Returns the block allocation size for buffer-managed blocks.

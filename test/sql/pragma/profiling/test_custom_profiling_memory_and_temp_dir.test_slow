@@ -1,0 +1,44 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow
+# description: Test SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE and SYSTEM_PEAK_TEMP_DIRECTORY_SIZE metrics
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE": "true", "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE": "true"}';
+
+statement ok
+SET memory_limit = '0.7gb';
+
+statement ok
+CREATE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+statement ok
+CREATE TYPE Result AS UNION (
+    Ok BOOLEAN,
+    Err BIGINT
+);
+
+query II
+SELECT
+    system_peak_buffer_manager_memory_usage,
+    system_peak_temp_directory_size,
+    *
+FROM metrics_output;
+----
+0	0

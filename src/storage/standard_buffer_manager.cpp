@@ -88,7 +88,7 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
 }
 
-idx_t StandardBufferManager::GetUsedSwap() {
+idx_t StandardBufferManager::GetUsedSwap() const {
 	lock_guard<mutex> guard(temporary_directory.lock);
 	if (!temporary_directory.handle) {
 		return 0;

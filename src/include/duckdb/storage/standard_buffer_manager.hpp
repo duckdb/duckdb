@@ -53,7 +53,7 @@ public:
 
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
-	idx_t GetUsedSwap() final;
+	idx_t GetUsedSwap() const final;
 	optional_idx GetMaxSwap() const final;
 	//! Returns the block allocation size for buffer-managed blocks.
 	idx_t GetBlockAllocSize() const final;

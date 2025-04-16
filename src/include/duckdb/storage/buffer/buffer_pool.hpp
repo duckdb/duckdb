@@ -54,7 +54,7 @@ public:
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
-	idx_t GetUsedMemory() const;
+	idx_t GetUsedMemory(bool flush = true) const;
 
 	idx_t GetMaxMemory() const;
 
