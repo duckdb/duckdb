@@ -445,7 +445,8 @@ void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
 	auto heap_copy = heap;
 	state.scan_order.resize(heap_copy.size());
 
-	// sorting the heap is more efficient than popping one by one
+	// we sorted the heap in Finalize(), so we can sequentially here
+	// we do this because sorting the heap is much more efficient than popping one by one
 	for (idx_t i = 0; i < heap_copy.size(); i++) {
 		state.scan_order[i] = UnsafeNumericCast<sel_t>(heap_copy[i].index);
 	}
@@ -547,7 +548,8 @@ public:
 
 class TopNGlobalSourceState : public GlobalSourceState {
 public:
-	explicit TopNGlobalSourceState(TopNGlobalSinkState &sink_p) : initialized(false), sink(sink_p), batch_index(0) {
+	explicit TopNGlobalSourceState(TopNGlobalSinkState &sink_p) : sink(sink_p), batch_index(0) {
+		sink.heap.InitializeScan(state, true);
 	}
 
 	idx_t MaxThreads() override {
@@ -558,7 +560,6 @@ public:
 	static constexpr idx_t CHUNKS_PER_BATCH = 60;
 	static constexpr idx_t TUPLES_PER_BATCH = CHUNKS_PER_BATCH * STANDARD_VECTOR_SIZE;
 
-	atomic<bool> initialized;
 	TopNGlobalSinkState &sink;
 	TopNScanState state;
 	idx_t batch_index;
@@ -580,14 +581,6 @@ SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chu
 	auto &sink = sink_state->Cast<TopNGlobalSinkState>();
 	auto &gstate = input.global_state.Cast<TopNGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<TopNLocalSourceState>();
-
-	if (!gstate.initialized) {
-		auto guard = gstate.Lock();
-		if (!gstate.initialized) {
-			sink.heap.InitializeScan(gstate.state, true);
-			gstate.initialized = true;
-		}
-	}
 
 	if (lstate.pos == lstate.end) {
 		// Obtain new scan indices from the global state
