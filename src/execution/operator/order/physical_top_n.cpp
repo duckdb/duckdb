@@ -449,7 +449,7 @@ void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
 
 	// sorting the heap is more efficient than popping one by one
 	for (idx_t i = 0; i < heap_copy.size(); i++) {
-		state.scan_order[i] = heap_copy[i].index;
+		state.scan_order[i] = UnsafeNumericCast<sel_t>(heap_copy[i].index);
 	}
 
 	state.pos = exclude_offset ? offset : 0;
