@@ -33,10 +33,9 @@ bool TestForceReload();
 bool TestMemoryLeaks();
 void RegisterSqllogictests();
 bool SummarizeFailures();
-std::stringstream &GetSummary();
+std::ostringstream &GetSummary();
 size_t GetSummaryCounter();
 
-// std::stringstream GetSummary();
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);

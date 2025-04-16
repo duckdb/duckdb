@@ -351,18 +351,19 @@ bool LoopCommand::SupportsConcurrent() const {
 
 void Query::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
+	std::ostringstream &oss = GetSummary();
 
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
-			logger.PrintLineSep();
-			logger.PrintFileHeader();
+			logger.PrintLineSep(oss);
+			logger.PrintFileHeader(oss);
 			logger.PrintSQLFormatted();
-			logger.PrintLineSep();
+			logger.PrintLineSep(oss);
 		}
 
 		if (runner.output_sql) {
-			logger.PrintSQL();
+			logger.PrintSQL(oss);
 			return;
 		}
 	}
@@ -466,19 +467,19 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-
+	std::ostringstream &oss = GetSummary();
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
-			logger.PrintLineSep();
-			logger.PrintFileHeader();
+			logger.PrintLineSep(oss);
+			logger.PrintFileHeader(oss);
 			logger.PrintSQLFormatted();
-			logger.PrintLineSep();
+			logger.PrintLineSep(oss);
 		}
 
 		query_break(query_line);
 		if (runner.output_sql) {
-			logger.PrintSQL();
+			logger.PrintSQL(oss);
 			return;
 		}
 	}

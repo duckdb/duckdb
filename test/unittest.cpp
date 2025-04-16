@@ -36,8 +36,8 @@ size_t GetSummaryCounter() {
 	return ++failures_summary_counter;
 }
 
-std::stringstream &GetSummary() {
-	static std::stringstream summary;
+std::ostringstream &GetSummary() {
+	static std::ostringstream summary;
 	return summary;
 }
 

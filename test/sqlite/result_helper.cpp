@@ -22,10 +22,11 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	auto sort_style = query.sort_style;
 	auto query_has_label = query.query_has_label;
 	auto &query_label = query.query_label;
+	auto &oss = GetSummary();
 
 	SQLLogicTestLogger logger(context, query);
 	if (result.HasError()) {
-		logger.UnexpectedFailure(result);
+		logger.UnexpectedFailure(result, oss);
 		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
@@ -47,7 +48,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	vector<string> result_values_string;
 	DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
 	if (runner.output_result_mode) {
-		logger.OutputResult(result, result_values_string);
+		logger.OutputResult(result, result_values_string, oss);
 	}
 
 	// perform any required query sorts
@@ -92,10 +93,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
-			string log_message;
-			log_message += logger.PrintErrorHeader(csv_error);
-			std::cerr << log_message;
-			GetSummary() << log_message;
+			logger.PrintErrorHeader(csv_error, oss);
+			std::cerr << oss.str();
 			return false;
 		}
 	} else {
@@ -113,7 +112,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		string digest = context.FinishHex();
 		hash_value = to_string(total_value_count) + " values hashing to " + digest;
 		if (runner.output_hash_mode) {
-			logger.OutputHash(hash_value);
+			logger.OutputHash(hash_value, oss);
 			return true;
 		}
 	}
@@ -153,17 +152,17 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			row_wise = true;
 		} else if (comparison_values.size() % expected_column_count != 0) {
 			if (column_count_mismatch) {
-				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise, oss);
 			} else {
-				logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
+				logger.NotCleanlyDivisible(expected_column_count, comparison_values.size(), oss);
 			}
 			return false;
 		}
 		if (expected_rows != result.RowCount()) {
 			if (column_count_mismatch) {
-				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise, oss);
 			} else {
-				logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
+				logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise, oss);
 			}
 			return false;
 		}
@@ -175,9 +174,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
 					if (column_count_mismatch) {
-						logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+						logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise, oss);
 					}
-					logger.SplitMismatch(i + 1, expected_column_count, splits.size());
+					logger.SplitMismatch(i + 1, expected_column_count, splits.size(), oss);
 					return false;
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
@@ -216,7 +215,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			}
 		}
 		if (column_count_mismatch) {
-			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result, oss);
 			return false;
 		}
 	} else {
@@ -241,7 +240,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
 				expected_result = runner.result_label_map[query_label].get();
 			}
-			logger.WrongResultHash(expected_result, result);
+			logger.WrongResultHash(expected_result, result, oss);
 			return false;
 		}
 		REQUIRE(!hash_compare_error);
@@ -253,6 +252,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
                                             duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
+	auto &oss = GetSummary();
 
 	SQLLogicTestLogger logger(context, statement);
 	if (runner.output_result_mode || runner.debug_mode) {
@@ -267,7 +267,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		// neither are "unoptimized result differs from original result" errors
 
 		if (result.HasError() && TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
-			logger.InternalException(result);
+			logger.InternalException(result, oss);
 			return false;
 		}
 		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
@@ -283,7 +283,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
-					logger.ExpectedErrorMismatch(statement.expected_error, result);
+					logger.ExpectedErrorMismatch(statement.expected_error, result, oss);
 					return false;
 				}
 				string success_log =
@@ -296,7 +296,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result, oss);
 		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
@@ -504,21 +504,18 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
-		string log_message;
-		std::ostringstream oss;
-		log_message += logger.PrintErrorHeader("Wrong result in query!");
-		log_message += logger.PrintLineSep();
-		log_message += logger.PrintSQL();
-		log_message += logger.PrintLineSep();
+		std::ostringstream &oss = GetSummary();
+		logger.PrintErrorHeader("Wrong result in query!", oss);
+		logger.PrintLineSep(oss);
+		logger.PrintSQL(oss);
+		logger.PrintLineSep(oss);
 		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		            << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		            << termcolor::reset;
 		oss << lvalue_str << " <> " << rvalue_str << std::endl;
-		log_message += oss.str();
-		log_message += logger.PrintLineSep();
-		log_message += logger.PrintResultError(result_values, values, expected_column_count, row_wise);
-		std::cerr << log_message;
-		GetSummary() << log_message;
+		logger.PrintLineSep(oss);
+		logger.PrintResultError(result_values, values, expected_column_count, row_wise, oss);
+		std::cerr << oss.str();
 		return false;
 	}
 	return true;
@@ -527,21 +524,18 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
+	std::ostringstream &oss = GetSummary();
 
 	RE2::Options options;
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
-		string log_message;
-		std::ostringstream oss;
-		log_message += logger.PrintErrorHeader("Test error!");
-		log_message += logger.PrintLineSep();
+		logger.PrintErrorHeader("Test error!", oss);
+		logger.PrintLineSep(oss);
 		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		            << std::endl;
-		log_message += oss.str();
-		log_message += logger.PrintLineSep();
-		std::cerr << log_message;
-		GetSummary() << log_message;
+		logger.PrintLineSep(oss);
+		std::cerr << oss.str();
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);
