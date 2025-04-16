@@ -24,18 +24,19 @@ class EncodingFunction;
 
 struct CSVEncoderBuffer;
 //! Decode function, basically takes information about the decoded and the encoded buffers.
-typedef void (*encode_t)(CSVEncoderBuffer& encoded_buffer, char *decoded_buffer, idx_t &decoded_buffer_current_position,
-                         const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function);
+typedef void (*encode_t)(CSVEncoderBuffer &encoded_buffer, char *decoded_buffer, idx_t &decoded_buffer_current_position,
+                         const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                         EncodingFunction *encoding_function);
 
 class EncodingFunction {
 public:
 	EncodingFunction() : encode_function(nullptr), max_bytes_per_iteration(0) {
 	}
 
-	EncodingFunction(const string &encode_name, encode_t encode_function,
-	                 const idx_t bytes_per_iteration, const idx_t lookup_bytes)
-	    : name(encode_name), encode_function(encode_function),
-	      max_bytes_per_iteration(bytes_per_iteration), lookup_bytes(lookup_bytes) {
+	EncodingFunction(const string &encode_name, encode_t encode_function, const idx_t bytes_per_iteration,
+	                 const idx_t lookup_bytes)
+	    : name(encode_name), encode_function(encode_function), max_bytes_per_iteration(bytes_per_iteration),
+	      lookup_bytes(lookup_bytes) {
 		D_ASSERT(encode_function);
 		D_ASSERT(bytes_per_iteration > 0);
 		D_ASSERT(lookup_bytes > 0);

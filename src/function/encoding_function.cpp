@@ -12,9 +12,9 @@ struct DefaultEncodeMethod {
 	idx_t bytes_per_iteration;
 };
 
-void DecodeUTF16ToUTF8(CSVEncoderBuffer& encoded_buffer,
-                       char *target_buffer, idx_t &target_buffer_current_position, const idx_t target_buffer_size,
-                       char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function) {
+void DecodeUTF16ToUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+                       const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                       EncodingFunction *encoding_function) {
 	auto encoded_ptr = encoded_buffer.Ptr();
 	for (; encoded_buffer.cur_pos < encoded_buffer.actual_encoded_buffer_size; encoded_buffer.cur_pos += 2) {
 		if (target_buffer_current_position == target_buffer_size) {
@@ -65,8 +65,9 @@ void DecodeUTF16ToUTF8(CSVEncoderBuffer& encoded_buffer,
 	}
 }
 
-void DecodeLatin1ToUTF8(CSVEncoderBuffer& encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
-                        const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function) {
+void DecodeLatin1ToUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+                        const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                        EncodingFunction *encoding_function) {
 	auto encoded_ptr = encoded_buffer.Ptr();
 	for (; encoded_buffer.cur_pos < encoded_buffer.actual_encoded_buffer_size; encoded_buffer.cur_pos++) {
 		if (target_buffer_current_position == target_buffer_size) {
@@ -95,15 +96,16 @@ void DecodeLatin1ToUTF8(CSVEncoderBuffer& encoded_buffer, char *target_buffer, i
 	}
 }
 
-void DecodeUTF8(CSVEncoderBuffer& encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position, const idx_t target_buffer_size,
-                char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function) {
+void DecodeUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+                const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                EncodingFunction *encoding_function) {
 	throw InternalException("Decode UTF8 is not a valid function, and should be verified one level up.");
 }
 
 void EncodingFunctionSet::Initialize(DBConfig &config) {
-	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1,1});
-	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2,1});
-	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2,2});
+	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1, 1});
+	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2, 1});
+	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2, 2});
 }
 
 void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
