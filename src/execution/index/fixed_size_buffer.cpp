@@ -36,8 +36,8 @@ constexpr idx_t FixedSizeBuffer::BASE[];
 constexpr uint8_t FixedSizeBuffer::SHIFT[];
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
-    : block_manager(block_manager), segment_count(0), allocation_size(0), dirty(false), vacuum(false), block_pointer(),
-      block_handle(nullptr) {
+    : block_manager(block_manager), segment_count(0), allocation_size(0), dirty(false), vacuum(false), loaded(false),
+      block_pointer(), block_handle(nullptr), readers(0) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
 	auto block_size = block_manager.GetBlockSize();
@@ -51,7 +51,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
                                  const BlockPointer &block_pointer)
     : block_manager(block_manager), segment_count(segment_count), allocation_size(allocation_size), dirty(false),
-      vacuum(false), block_pointer(block_pointer) {
+      vacuum(false), loaded(false), block_pointer(block_pointer), readers(0) {
 
 	D_ASSERT(block_pointer.IsValid());
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
@@ -133,7 +133,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	dirty = false;
 }
 
-void FixedSizeBuffer::Pin() {
+void FixedSizeBuffer::LoadFromDisk() {
 	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(block_pointer.IsValid());
 	D_ASSERT(block_handle && block_handle->BlockId() < MAXIMUM_BLOCK);
@@ -153,10 +153,14 @@ void FixedSizeBuffer::Pin() {
 
 uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count, const idx_t available_segments) {
 
-	// get the bitmask data
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
+	// Get a pointer handle into the buffer data (no offset)
+	SegmentHandle handle(*this, 0);
+
+	// Because the validity bitmask is always at offset 0 in the fixed size buffer, we can just call .Get() here.
+	const auto bitmask_ptr = handle.GetPtr<validity_t>();
+
 	ValidityMask mask(bitmask_ptr, available_segments);
-	auto data = mask.GetData();
+	const auto data = mask.GetData();
 
 	// fills up a buffer sequentially before searching for free bits
 	if (mask.RowIsValid(segment_count)) {
@@ -208,8 +212,11 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 
 	// We traverse from the back. A binary search would be faster.
 	// However, buffers are often (almost) full, so the overhead is acceptable.
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
-	ValidityMask mask(bitmask_ptr, available_segments);
+	SegmentHandle handle(*this, 0);
+
+	// Get a pointer handle into the buffer data (no offset)
+	const auto bitmask_ptr = handle.GetPtr<validity_t>();
+	const ValidityMask mask(bitmask_ptr, available_segments);
 
 	auto max_offset = available_segments;
 	for (idx_t i = available_segments; i > 0; i--) {

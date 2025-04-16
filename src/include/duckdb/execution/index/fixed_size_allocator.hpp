@@ -43,42 +43,37 @@ public:
 	//! Free the segment of the IndexPointer
 	void Free(const IndexPointer ptr);
 
-	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
-	template <class T>
-	inline unsafe_optional_ptr<T> Get(const IndexPointer ptr, const bool dirty = true) {
-		return (T *)Get(ptr, dirty);
-	}
-
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
-	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
+	inline SegmentHandle Get(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
 		auto buffer_it = buffers.find(ptr.GetBufferId());
-		D_ASSERT(buffer_it != buffers.end());
-		auto buffer_ptr = buffer_it->second->Get(dirty);
-		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+
+		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
+		auto &buffer = *buffer_it->second;
+
+		SegmentHandle res(buffer, offset);
+		return std::move(res);
 	}
 
-	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
-	template <class T>
-	inline unsafe_optional_ptr<T> GetIfLoaded(const IndexPointer ptr) {
-		return (T *)GetIfLoaded(ptr);
-	}
-
-	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
-	inline data_ptr_t GetIfLoaded(const IndexPointer ptr) {
+	// Fetches a segment handle, unless it exists solely in persistent storage.
+	// I.e. it has not been loaded, created in memory, or evicted.
+	inline bool GetIfNotOnDisk(SegmentHandle &result, const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
-		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		if (!buffer->InMemory()) {
-			return nullptr;
+		auto &buffer_it = buffers.find(ptr.GetBufferId())->second;
+		auto &buffer = *buffer_it;
+
+		if (!buffer.InMemory() && !buffer.loaded) {
+			return false;
 		}
 
-		auto buffer_ptr = buffer->Get();
-		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
-		return raw_ptr;
+		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
+
+		result = SegmentHandle(buffer, offset);
+		return true;
 	}
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
