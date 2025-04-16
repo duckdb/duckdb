@@ -33,9 +33,9 @@ static void FillFunctionParameters(FunctionDescription &function_description, co
 static vector<string> GetExamplesForFunctionAlias(const string &function_name, const string &alias_of,
                                                   vector<string> &all_examples) {
 	vector<string> filtered_examples;
-	bool is_operator = (function_name.size() > 0 && !(function_name[0] >= 'a' && function_name[0] <= 'z') &&
+	bool is_operator = (!function_name.empty() && !(function_name[0] >= 'a' && function_name[0] <= 'z') &&
 	                    !(function_name[0] >= 'A' && function_name[0] <= 'Z'));
-	bool alias_of_is_operator = (alias_of.size() > 0 && !(alias_of[0] >= 'a' && alias_of[0] <= 'z') &&
+	bool alias_of_is_operator = (!alias_of.empty() && !(alias_of[0] >= 'a' && alias_of[0] <= 'z') &&
 	                             !(alias_of[0] >= 'A' && alias_of[0] <= 'Z'));
 	// select examples with matching function name
 	for (string &example : all_examples) {
@@ -45,7 +45,7 @@ static vector<string> GetExamplesForFunctionAlias(const string &function_name, c
 		}
 	}
 	// fallback 1: create fitting examples by replacing canonical name by function_name
-	if (filtered_examples.size() == 0 && alias_of != "" && !alias_of_is_operator && !is_operator) {
+	if (filtered_examples.empty() && alias_of != "" && !alias_of_is_operator && !is_operator) {
 		for (string &example : all_examples) {
 			if (example.compare(0, alias_of.size(), alias_of) == 0) {
 				filtered_examples.emplace_back(function_name +
@@ -54,7 +54,7 @@ static vector<string> GetExamplesForFunctionAlias(const string &function_name, c
 		}
 	}
 	// fallback 2: use available examples anyway
-	if (filtered_examples.size() == 0) {
+	if (filtered_examples.empty()) {
 		filtered_examples = all_examples;
 	}
 	return filtered_examples;
