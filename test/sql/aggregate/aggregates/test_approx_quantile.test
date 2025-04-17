@@ -112,6 +112,12 @@ SELECT CASE
 ----
 1
 
+# TIMETZ Support. Note this is not exact because we use DOUBLEs internally.
+query I
+SELECT approx_quantile('1:02:03.000000+05:30'::TIMETZ, 0.5);
+----
+01:02:42+05:30:39
+
 # List versions
 query I
 SELECT [
