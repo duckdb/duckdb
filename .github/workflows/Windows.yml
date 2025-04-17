@@ -20,7 +20,6 @@ on:
         type: string
       run_all:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -34,6 +33,7 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
 
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -328,7 +328,7 @@ jobs:
 
      - uses: actions/upload-artifact@v4
        with:
-         name: windows_amd64-extensions
+         name: duckdb-extensions-windows_amd64
          path: |
            build/release/extension/*/*.duckdb_extension
 
@@ -338,7 +338,7 @@ jobs:
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
-      extension_artifact_name: windows_amd64-extensions
+      extension_artifact_name: duckdb-extensions-windows_amd64
       duckdb_arch: windows_amd64
       duckdb_sha: ${{ github.sha }}
 

@@ -1,12 +1,30 @@
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include <utility>
 
 namespace duckdb {
 
@@ -79,6 +97,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	}
 	// now check the set of filters
+	vector<unique_ptr<Filter>> remaining_filters;
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
@@ -108,9 +127,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				for (auto &left_filter : left_pushdown.filters) {
 					filters.push_back(std::move(left_filter));
 				}
+				for (auto &filter : remaining_filters) {
+					filters.push_back(std::move(filter));
+				}
 				// now push down the inner join
 				return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 			}
+			// we should keep the filters which do not remove NULL values
+			remaining_filters.push_back(std::move(filters[i]));
+			filters.erase_at(i);
+			i--;
 		}
 	}
 	// finally we check the FilterCombiner to see if there are any predicates we can push into the RHS
@@ -126,7 +152,53 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	});
 	right_pushdown.GenerateFilters();
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+
+	bool rewrite_right = true;
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &any_join = join.Cast<LogicalAnyJoin>();
+		if (AddFilter(any_join.condition->Copy()) == FilterResult::UNSATISFIABLE) {
+			// filter statically evaluates to false, turns it to the cross product join with 1 row NULLs
+			if (any_join.join_type == JoinType::LEFT) {
+				unordered_map<idx_t, vector<unique_ptr<Expression>>> projections_groups;
+				auto column_bindings = op->children[1]->GetColumnBindings();
+				op->children[1]->ResolveOperatorTypes();
+				auto &types = op->children[1]->types;
+				for (idx_t i = 0; i < column_bindings.size(); i++) {
+					projections_groups[column_bindings[i].table_index].emplace_back(
+					    make_uniq<BoundConstantExpression>(Value(types[i])));
+				}
+
+				auto create_proj_dummy_scan = [&](idx_t table_index) {
+					auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
+					auto proj = make_uniq<LogicalProjection>(table_index, std::move(projections_groups[table_index]));
+					proj->AddChild(std::move(dummy_scan));
+					return proj;
+				};
+				// make cross products on the RHS first
+				auto begin = projections_groups.begin();
+				D_ASSERT(begin != projections_groups.end());
+				unique_ptr<LogicalOperator> left = create_proj_dummy_scan(begin->first);
+				projections_groups.erase(begin);
+				for (auto &group : projections_groups) {
+					auto proj = create_proj_dummy_scan(group.first);
+					auto op = LogicalCrossProduct::Create(std::move(left), std::move(proj));
+					left = std::move(op);
+				}
+				// then make cross product with the LHS
+				op = LogicalCrossProduct::Create(std::move(op->children[0]), std::move(left));
+				rewrite_right = false;
+			}
+		}
+	}
+
+	if (rewrite_right) {
+		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	}
+
+	for (auto &filter : remaining_filters) {
+		filters.push_back(std::move(filter));
+	}
+
 	return PushFinalFilters(std::move(op));
 }
 

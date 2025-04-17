@@ -4,8 +4,8 @@
 #include "duckdb/execution/operator/helper/physical_pragma.hpp"
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPragma &op) {
-	return make_uniq<PhysicalPragma>(std::move(op.info), op.estimated_cardinality);
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPragma &op) {
+	return Make<PhysicalPragma>(std::move(op.info), op.estimated_cardinality);
 }
 
 } // namespace duckdb

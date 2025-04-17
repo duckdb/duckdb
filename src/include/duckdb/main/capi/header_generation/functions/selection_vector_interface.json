@@ -1,0 +1,45 @@
+{
+  "group": "selection_vector_interface",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_create_selection_vector",
+      "return_type": "duckdb_selection_vector",
+      "params": [
+        {
+          "type": "idx_t",
+          "name": "size"
+        }
+      ],
+      "comment": {
+        "description": "Creates a new selection vector of size `size`.\n"
+      }
+    },
+    {
+      "name": "duckdb_destroy_selection_vector",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_selection_vector",
+          "name": "vector"
+        }
+      ],
+      "comment": {
+        "description": "Destroys a selection vector.\n"
+      }
+    },
+    {
+      "name": "duckdb_selection_vector_get_data_ptr",
+      "return_type": "sel_t *",
+      "params": [
+        {
+          "type": "duckdb_selection_vector",
+          "name": "vector"
+        }
+      ],
+      "comment": {
+        "description": "Access the data pointer of a selection vector.\n"
+      }
+    }
+  ]
+}

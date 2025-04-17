@@ -17,6 +17,7 @@
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -304,10 +305,6 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 
 		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
-		// owning references
-		vector<py::object> python_objects;
-		vector<PyObject *> python_results;
-		python_results.resize(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
@@ -324,8 +321,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			}
 			if (contains_null) {
 				// Immediately insert None, no need to call the function
-				python_objects.push_back(py::none());
-				python_results[row] = py::none().ptr();
+				FlatVector::SetNull(result, row, true);
 				continue;
 			}
 
@@ -338,18 +334,17 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					                            exception.what());
 				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
 					PyErr_Clear();
-					ret = Py_None;
+					FlatVector::SetNull(result, row, true);
+					continue;
 				} else {
 					throw NotImplementedException("Exception handling type not implemented");
 				}
 			} else if ((!ret || ret == Py_None) && default_null_handling) {
 				throw InvalidInputException(NullHandlingError());
 			}
-			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
-			python_results[row] = ret;
+			TransformPythonObject(ret, result, row);
 		}
 
-		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
 		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}

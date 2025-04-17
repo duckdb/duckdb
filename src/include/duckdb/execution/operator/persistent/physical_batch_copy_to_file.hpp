@@ -30,6 +30,7 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	CopyFunctionReturnType return_type;
+	bool write_empty_file;
 
 public:
 	// Source interface

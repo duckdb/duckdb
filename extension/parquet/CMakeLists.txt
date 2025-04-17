@@ -7,11 +7,16 @@ include_directories(
   ../../third_party/thrift ../../third_party/snappy
   ../../third_party/brotli/include)
 
+add_subdirectory(decoder)
+add_subdirectory(reader)
+add_subdirectory(writer)
 set(PARQUET_EXTENSION_FILES
+    ${PARQUET_EXTENSION_FILES}
     column_reader.cpp
     column_writer.cpp
     parquet_crypto.cpp
     parquet_extension.cpp
+    parquet_float16.cpp
     parquet_metadata.cpp
     parquet_reader.cpp
     parquet_statistics.cpp

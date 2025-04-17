@@ -26,6 +26,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
 
@@ -79,6 +80,8 @@ DatabaseInstance::~DatabaseInstance() {
 
 	// stop the log manager, after this point Logger calls are unsafe.
 	log_manager.reset();
+
+	external_file_cache.reset();
 
 	buffer_manager.reset();
 
@@ -201,16 +204,14 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.path = config.options.database_path;
 
 	optional_ptr<AttachedDatabase> initial_database;
-	{
-		Connection con(*this);
-		con.BeginTransaction();
-		AttachOptions options(config.options);
-		initial_database = db_manager->AttachDatabase(*con.context, info, options);
-		con.Commit();
-	}
+	Connection con(*this);
+	con.BeginTransaction();
+	AttachOptions options(config.options);
+	initial_database = db_manager->AttachDatabase(*con.context, info, options);
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize();
+	initial_database->Initialize(*con.context);
+	con.Commit();
 }
 
 static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
@@ -295,6 +296,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
+	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -378,6 +381,10 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 
 FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
+}
+
+ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
+	return *external_file_cache;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {

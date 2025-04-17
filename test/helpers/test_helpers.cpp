@@ -25,6 +25,7 @@ static string custom_test_directory;
 static int debug_initialize_value = -1;
 static bool single_threaded = false;
 static case_insensitive_set_t required_requires;
+static bool delete_test_path = true;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -124,6 +125,35 @@ string TestDirectoryPath() {
 		fs->CreateDirectory(path);
 	}
 	return path;
+}
+
+void SetDeleteTestPath(bool delete_path) {
+	delete_test_path = delete_path;
+}
+
+bool DeleteTestPath() {
+	return delete_test_path;
+}
+
+void ClearTestDirectory() {
+	if (!DeleteTestPath()) {
+		return;
+	}
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto test_dir = TestDirectoryPath();
+	// try to clear any files we created in the test directory
+	fs->ListFiles(test_dir, [&](const string &file, bool is_dir) {
+		auto full_path = fs->JoinPath(test_dir, file);
+		try {
+			if (is_dir) {
+				fs->RemoveDirectory(full_path);
+			} else {
+				fs->RemoveFile(full_path);
+			}
+		} catch (...) {
+			// skip
+		}
+	});
 }
 
 string TestCreatePath(string suffix) {
@@ -348,7 +378,8 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	DuckDB db;
 	Connection con(db);
-	auto scanner_ptr = StringValueScanner::GetCSVScanner(*con.context, options);
+	MultiFileOptions file_options;
+	auto scanner_ptr = StringValueScanner::GetCSVScanner(*con.context, options, file_options);
 	auto &scanner = *scanner_ptr;
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
 	while (!scanner.FinishedIterator()) {

@@ -333,7 +333,8 @@
         "id": 205,
         "name": "unpacked",
         "type": "bool",
-        "default": "false"
+        "default": "false",
+        "status": "read_only"
       },
       {
         "id": 206,
@@ -349,7 +350,7 @@
         "default": "qualified_column_map_t<string>()"
       }
     ],
-    "constructor": ["exclude_list", "qualified_exclude_list"]
+    "constructor_method": "StarExpression::DeserializeStarExpression"
   },
   {
     "class": "SubqueryExpression",

@@ -1,9 +1,6 @@
 #include "duckdb/execution/operator/join/physical_asof_join.hpp"
 
-#include "duckdb/common/fast_mem.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -13,12 +10,9 @@
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
-#include <thread>
-
 namespace duckdb {
 
-PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right)
+PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID) {
@@ -60,13 +54,13 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 	D_ASSERT(!lhs_orders.empty());
 	D_ASSERT(!rhs_orders.empty());
 
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1]->types.size();
+		const auto right_count = children[1].get().GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -80,7 +74,8 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 class AsOfGlobalSinkState : public GlobalSinkState {
 public:
 	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op)
-	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1]->types, {}, op.estimated_cardinality),
+	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1].get().GetTypes(), {},
+	               op.estimated_cardinality),
 	      is_outer(IsRightOuterJoin(op.join_type)), has_null(false) {
 	}
 
@@ -158,8 +153,8 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
-	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0]->types,
-	                                                      partitions_stats, 0U);
+	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders,
+	                                                      children[0].get().GetTypes(), partitions_stats, 0U);
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort
@@ -207,7 +202,7 @@ public:
 			lhs_executor.AddExpression(*cond.left);
 		}
 
-		lhs_payload.Initialize(allocator, op.children[0]->types);
+		lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
 		lhs_sel.Initialize();
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
@@ -348,7 +343,7 @@ public:
 	}
 	void BeginLeftScan(hash_t scan_bin);
 	bool NextLeft();
-	void EndScan();
+	void EndLeftScan();
 
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk);
@@ -375,6 +370,7 @@ public:
 	unique_ptr<SBIterator> left_itr;
 	unique_ptr<PayloadScanner> lhs_scanner;
 	DataChunk lhs_payload;
+	idx_t left_group = 0;
 
 	//	RHS scanning
 	optional_ptr<PartitionGlobalHashGroup> right_hash;
@@ -382,6 +378,7 @@ public:
 	unique_ptr<SBIterator> right_itr;
 	unique_ptr<PayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
+	idx_t right_group = 0;
 
 	idx_t lhs_match_count;
 	bool fetch_next_left;
@@ -398,8 +395,8 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 	                                            partition_stats);
 
 	//	We sort the row numbers of the incoming block, not the rows
-	lhs_payload.Initialize(allocator, op.children[0]->types);
-	rhs_payload.Initialize(allocator, op.children[1]->types);
+	lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
+	rhs_payload.Initialize(allocator, op.children[1].get().GetTypes());
 
 	lhs_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
@@ -407,8 +404,18 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 
 void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+
 	auto &lhs_sink = *gsink.lhs_sink;
-	const auto left_group = lhs_sink.bin_groups[scan_bin];
+	left_group = lhs_sink.bin_groups[scan_bin];
+
+	//	Always set right_group too for memory management
+	auto &rhs_sink = gsink.rhs_sink;
+	if (scan_bin < rhs_sink.bin_groups.size()) {
+		right_group = rhs_sink.bin_groups[scan_bin];
+	} else {
+		right_group = rhs_sink.bin_groups.size();
+	}
+
 	if (left_group >= lhs_sink.bin_groups.size()) {
 		return;
 	}
@@ -441,8 +448,6 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 
 	// We are only probing the corresponding right side bin, which may be empty
 	// If they are empty, we leave the iterator as null so we can emit left matches
-	auto &rhs_sink = gsink.rhs_sink;
-	const auto right_group = rhs_sink.bin_groups[scan_bin];
 	if (right_group < rhs_sink.bin_groups.size()) {
 		right_hash = rhs_sink.hash_groups[right_group].get();
 		right_outer = gsink.right_outers.data() + right_group;
@@ -465,15 +470,27 @@ bool AsOfProbeBuffer::NextLeft() {
 	return true;
 }
 
-void AsOfProbeBuffer::EndScan() {
+void AsOfProbeBuffer::EndLeftScan() {
+	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+
 	right_hash = nullptr;
 	right_itr.reset();
 	rhs_scanner.reset();
 	right_outer = nullptr;
 
+	auto &rhs_sink = gsink.rhs_sink;
+	if (!gsink.is_outer && right_group < rhs_sink.bin_groups.size()) {
+		rhs_sink.hash_groups[right_group].reset();
+	}
+
 	left_hash = nullptr;
 	left_itr.reset();
 	lhs_scanner.reset();
+
+	auto &lhs_sink = *gsink.lhs_sink;
+	if (left_group < lhs_sink.bin_groups.size()) {
+		lhs_sink.hash_groups[left_group].reset();
+	}
 }
 
 void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
@@ -803,7 +820,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 			//	Join the next partition
 			continue;
 		} else {
-			lsource.probe_buffer.EndScan();
+			lsource.probe_buffer.EndLeftScan();
 			gsource.flushed++;
 		}
 	}
@@ -856,7 +873,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0]->types.size();
+			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
 				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(chunk.data[col_idx], true);

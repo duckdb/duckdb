@@ -26,6 +26,12 @@ CREATE TABLE probe0 AS
 	FROM range(0,10)
 ;
 
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 # INNER ON inequality only
 query II
 SELECT p.begin, e.value
@@ -131,3 +137,5 @@ ORDER BY ALL
 9	3
 NULL	-1
 NULL	9
+
+endloop

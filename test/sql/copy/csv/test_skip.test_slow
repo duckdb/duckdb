@@ -63,13 +63,13 @@ endloop
 query IIIIIIIIIII
 SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=3000)
 ----
-,	\0	\0	\n	\0	3000	0	[{'name': column0, 'type': BIGINT}]	NULL	NULL	skip=3000
+,	(empty)	(empty)	\n	(empty)	3000	0	[{'name': column0, 'type': BIGINT}]	NULL	NULL	skip=3000
 
 # If we don't encounter a value, we use skip
 query IIIIIIIIIII
 SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=11000)
 ----
-,	\0	\0	\n	\0	11000	0	[{'name': column0, 'type': VARCHAR}]	NULL	NULL	skip=11000
+,	(empty)	(empty)	\n	(empty)	11000	0	[{'name': column0, 'type': VARCHAR}]	NULL	NULL	skip=11000
 
 # Test with different buffer sizes
 
@@ -154,7 +154,7 @@ from read_csv('__TEST_DIR__/skip_2.csv',skip=10000, buffer_size = 26)
 query IIIIIIIIIII
 SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip_2.csv',skip=10000)
 ----
-,	\0	\0	\n	\0	10000	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}]	NULL	NULL	skip=10000
+,	(empty)	(empty)	\n	(empty)	10000	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}]	NULL	NULL	skip=10000
 
 query III
 from read_csv('__TEST_DIR__/skip_2.csv',skip=10000)
