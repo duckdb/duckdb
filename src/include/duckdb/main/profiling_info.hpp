@@ -68,7 +68,6 @@ public:
 	template <class METRIC_TYPE>
 	void UpdateMetricValue(const MetricsType type, const Value &value,
 	                       const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
-		D_ASSERT(!metrics[type].IsNull());
 		if (metrics.find(type) == metrics.end()) {
 			metrics[type] = value;
 			return;
@@ -103,11 +102,11 @@ public:
 			return MaxValue(old_value, new_value);
 		});
 	}
-
 	template <class METRIC_TYPE>
 	void MaxOfMetric(const MetricsType type, const METRIC_TYPE &value) {
 		auto new_value = Value::CreateValue(value);
 		return MaxOfMetric<METRIC_TYPE>(type, new_value);
 	}
 };
+
 } // namespace duckdb

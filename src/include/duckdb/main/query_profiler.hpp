@@ -35,17 +35,17 @@ class SQLStatement;
 
 struct OperatorInformation {
 	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t result_set_size_p = 0,
-	                             idx_t system_peak_buffer_manager_memory_usage_p = 0,
+	                             idx_t system_peak_buffer_manager_memory_p = 0,
 	                             idx_t system_peak_temp_directory_size_p = 0)
 	    : time(time_p), elements_returned(elements_returned_p), result_set_size(result_set_size_p),
-	      system_peak_buffer_manager_memory_usage(system_peak_buffer_manager_memory_usage_p),
+	      system_peak_buffer_manager_memory(system_peak_buffer_manager_memory_p),
 	      system_peak_temp_directory_size(system_peak_temp_directory_size_p) {
 	}
 
 	double time;
 	idx_t elements_returned;
 	idx_t result_set_size;
-	idx_t system_peak_buffer_manager_memory_usage;
+	idx_t system_peak_buffer_manager_memory;
 	idx_t system_peak_temp_directory_size;
 	string name;
 	InsertionOrderPreservingMap<string> extra_info;
@@ -62,9 +62,9 @@ struct OperatorInformation {
 		result_set_size += n_result_set_size;
 	}
 
-	void UpdateSystemPeakBufferManagerMemoryUsage(idx_t used_memory) {
-		if (used_memory > system_peak_buffer_manager_memory_usage) {
-			system_peak_buffer_manager_memory_usage = used_memory;
+	void UpdateSystemPeakBufferManagerMemory(idx_t used_memory) {
+		if (used_memory > system_peak_buffer_manager_memory) {
+			system_peak_buffer_manager_memory = used_memory;
 		}
 	}
 
@@ -114,10 +114,10 @@ private:
 };
 
 struct QueryInfo {
-	QueryInfo() : blocked_thread_time(0) {
+	QueryInfo() {
 	}
 	string query_name;
-	double blocked_thread_time;
+	ProfilingInfo query_global_info;
 };
 
 //! The QueryProfiler can be used to measure timings of queries

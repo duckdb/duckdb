@@ -1,5 +1,5 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow
-# description: Test SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE and SYSTEM_PEAK_TEMP_DIRECTORY_SIZE metrics
+# description: Test SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE and SYSTEM_PEAK_TEMP_DIRECTORY_SIZE metrics.
 # group: [profiling]
 
 require json
@@ -14,7 +14,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE": "true", "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE": "true"}';
+PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MANAGER_MEMORY": "true", "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE": "true"}';
 
 statement ok
 SET memory_limit = '0.7gb';
@@ -28,17 +28,12 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
 
-statement ok
-CREATE TYPE Result AS UNION (
-    Ok BOOLEAN,
-    Err BIGINT
-);
-
-query II
+# should both be non-zero, and sum up to ~1 GB
+query III
 SELECT
-    system_peak_buffer_manager_memory_usage,
-    system_peak_temp_directory_size,
-    *
+    system_peak_buffer_manager_memory != 0,
+    system_peak_temp_directory_size != 0,
+    round((system_peak_buffer_manager_memory + system_peak_temp_directory_size) / 1e9),
 FROM metrics_output;
 ----
-0	0
+true	true	1.0

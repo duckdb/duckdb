@@ -414,8 +414,9 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 //===--------------------------------------------------------------------===//
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
-TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(0), max_swap_space(0) {
+TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
+                                           atomic<idx_t> &size_on_disk_p)
+    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -642,8 +643,10 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
-TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
+TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
+                                                   optional_idx max_swap_space)
+    : db(db), temp_directory(std::move(path_p)),
+      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {

@@ -2440,7 +2440,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_NAME), "OPERATOR_NAME" },
-		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE), "SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE" },
+		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY), "SYSTEM_PEAK_BUFFER_MANAGER_MEMORY" },
 		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE), "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE" },
 		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },

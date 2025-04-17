@@ -161,6 +161,8 @@ protected:
 		string path;
 		//! Lock for creating the temp handle (marked mutable so 'GetMaxSwap' can be const)
 		mutable mutex lock;
+		//! Size of temp file on disk
+		atomic<idx_t> size_on_disk = {0};
 		//! Handle for the temporary directory
 		unique_ptr<TemporaryDirectoryHandle> handle;
 		//! The maximum swap space that can be used

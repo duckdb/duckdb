@@ -183,7 +183,9 @@ static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, 
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
 		auto child = node.GetChild(i);
 		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
-		auto value = child->GetProfilingInfo().metrics[aggregated_metric].GetValue<METRIC_TYPE>();
+
+		auto &child_info = child->GetProfilingInfo();
+		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
 		info.UpdateMetricValue<METRIC_TYPE>(aggregated_metric, value, update_fun);
 	}
 }
@@ -193,13 +195,6 @@ static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metr
 	AggregateMetric<METRIC_TYPE>(
 	    node, cumulative_metric, child_metric,
 	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
-}
-
-template <class METRIC_TYPE>
-static void GetMaxOfMetric(ProfilingNode &node, MetricsType max_of_metric, MetricsType child_metric) {
-	AggregateMetric<METRIC_TYPE>(
-	    node, max_of_metric, child_metric,
-	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return MaxValue(old_value, new_value); });
 }
 
 Value GetCumulativeOptimizers(ProfilingNode &node) {
@@ -240,8 +235,8 @@ void QueryProfiler::EndQuery() {
 			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
 
 			auto &settings = info.expanded_settings;
-			if (info.Enabled(settings, MetricsType::BLOCKED_THREAD_TIME)) {
-				info.metrics[MetricsType::BLOCKED_THREAD_TIME] = query_info.blocked_thread_time;
+			for (const auto &global_info_entry : query_info.query_global_info.metrics) {
+				info.metrics[global_info_entry.first] = global_info_entry.second;
 			}
 			if (info.Enabled(settings, MetricsType::LATENCY)) {
 				info.metrics[MetricsType::LATENCY] = main_query.Elapsed();
@@ -262,14 +257,6 @@ void QueryProfiler::EndQuery() {
 			}
 			if (info.Enabled(settings, MetricsType::RESULT_SET_SIZE)) {
 				info.metrics[MetricsType::RESULT_SET_SIZE] = child_info.metrics[MetricsType::RESULT_SET_SIZE];
-			}
-			if (info.Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE)) {
-				GetMaxOfMetric<idx_t>(*root, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE,
-				                      MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE);
-			}
-			if (info.Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
-				GetMaxOfMetric<idx_t>(*root, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE,
-				                      MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE);
 			}
 
 			MoveOptimizerPhasesToRoot();
@@ -435,9 +422,9 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
 			info.AddResultSetSize(result_set_size);
 		}
-		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE)) {
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY)) {
 			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
-			info.UpdateSystemPeakBufferManagerMemoryUsage(used_memory);
+			info.UpdateSystemPeakBufferManagerMemory(used_memory);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
 			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
@@ -537,13 +524,13 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::EXTRA_INFO)) {
 			info.extra_info = node.second.extra_info;
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE)) {
-			info.MaxOfMetric<idx_t>(MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY_USAGE,
-			                        node.second.system_peak_buffer_manager_memory_usage);
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY)) {
+			query_info.query_global_info.MaxOfMetric(MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY,
+			                                         node.second.system_peak_buffer_manager_memory);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
-			info.MaxOfMetric<idx_t>(MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE,
-			                        node.second.system_peak_temp_directory_size);
+			query_info.query_global_info.MaxOfMetric(MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE,
+			                                         node.second.system_peak_temp_directory_size);
 		}
 	}
 	profiler.operator_infos.clear();
@@ -556,11 +543,9 @@ void QueryProfiler::SetInfo(const double &blocked_thread_time) {
 	}
 
 	auto &info = root->GetProfilingInfo();
-	auto metric_enabled = info.Enabled(info.expanded_settings, MetricsType::BLOCKED_THREAD_TIME);
-	if (!metric_enabled) {
-		return;
+	if (info.Enabled(info.expanded_settings, MetricsType::BLOCKED_THREAD_TIME)) {
+		query_info.query_global_info.metrics[MetricsType::BLOCKED_THREAD_TIME] = blocked_thread_time;
 	}
-	query_info.blocked_thread_time = blocked_thread_time;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -819,7 +804,7 @@ profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {
 
 	for (auto &setting : settings) {
 		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting) ||
-		    setting == MetricsType::BLOCKED_THREAD_TIME) {
+		    MetricsUtils::IsQueryGlobalMetric(setting)) {
 			phase_timing_settings_to_erase.insert(setting);
 		}
 	}
