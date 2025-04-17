@@ -10,7 +10,7 @@
         "name": "arg_min",
         "parameters": "arg,val",
         "description": "Finds the row with the minimum val. Calculates the non-NULL arg expression at that row.",
-        "example": "arg_min(A,B)",
+        "example": "arg_min(A, B)",
         "type": "aggregate_function_set",
         "aliases": ["argmin", "min_by"]
     },
@@ -18,14 +18,14 @@
         "name": "arg_min_null",
         "parameters": "arg,val",
         "description": "Finds the row with the minimum val. Calculates the arg expression at that row.",
-        "example": "arg_min_null(A,B)",
+        "example": "arg_min_null(A, B)",
         "type": "aggregate_function_set"
     },
     {
         "name": "arg_max",
         "parameters": "arg,val",
         "description": "Finds the row with the maximum val. Calculates the non-NULL arg expression at that row.",
-        "example": "arg_max(A,B)",
+        "example": "arg_max(A, B)",
         "type": "aggregate_function_set",
         "aliases": ["argmax", "max_by"]
     },
@@ -33,7 +33,7 @@
         "name": "arg_max_null",
         "parameters": "arg,val",
         "description": "Finds the row with the maximum val. Calculates the arg expression at that row.",
-        "example": "arg_max_null(A,B)",
+        "example": "arg_max_null(A, B)",
         "type": "aggregate_function_set"
     },
     {

@@ -212,7 +212,7 @@
         "name": "make_timestamp_ns",
         "parameters": "nanos",
         "description": "The timestamp for the given nanoseconds since epoch",
-        "example": "make_timestamp(1732117793000000000)",
+        "example": "make_timestamp_ns(1732117793000000000)",
         "type": "scalar_function_set"
     },
     {
