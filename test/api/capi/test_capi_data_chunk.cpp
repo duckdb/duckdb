@@ -553,6 +553,10 @@ TEST_CASE("Test DataChunk to string", "[capi]") {
 	types.push_back(duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER));
 	auto chunk = duckdb_create_data_chunk(types.data(), types.size());
 
-	REQUIRE(strcmp(duckdb_data_chunk_to_string(chunk), "Chunk - [1 Columns]\n- FLAT INTEGER: 0 = [ ]\n") == 0);
+	auto data_chunk_str = duckdb_data_chunk_to_string(chunk);
+
+	REQUIRE(strcmp(data_chunk_str, "Chunk - [1 Columns]\n- FLAT INTEGER: 0 = [ ]\n") == 0);
 	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&types[0]);
+	free((void*)data_chunk_str);
 }
