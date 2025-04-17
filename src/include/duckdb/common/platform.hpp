@@ -37,7 +37,7 @@ namespace duckdb {
 std::string DuckDBPlatform() { // NOLINT: allow definition in header
 #if defined(DUCKDB_CUSTOM_PLATFORM)
 	return DUCKDB_QUOTE_DEFINE(DUCKDB_CUSTOM_PLATFORM);
-#endif
+#else
 #if defined(DUCKDB_WASM_VERSION)
 	// DuckDB-Wasm requires CUSTOM_PLATFORM to be defined
 	static_assert(0, "DUCKDB_WASM_VERSION should rely on CUSTOM_PLATFORM being provided");
@@ -84,6 +84,7 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 	postfix = "_mingw";
 #endif
 	return os + "_" + arch + postfix;
+#endif
 }
 
 } // namespace duckdb
