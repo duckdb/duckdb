@@ -18,7 +18,7 @@ static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 }
 
 void LoadInternal(DuckDB &db) {
-	auto functions = StaticFunctionDefinition::GetFunctionList();
+	auto functions = CoreFunctionList::GetFunctionList();
 	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];
 		if (function.get_function || function.get_function_set) {
