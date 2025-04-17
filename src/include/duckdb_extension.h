@@ -551,10 +551,12 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
-	void (*duckdb_slice_vector)(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_vector_slice_dictionary)(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection,
+	                                       idx_t len);
 	void (*duckdb_vector_reference_value)(duckdb_vector vector, duckdb_value value);
 	void (*duckdb_vector_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
-	void (*duckdb_set_dictionary_vector_id)(duckdb_vector dict, const char *id, unsigned int id_len);
+	void (*duckdb_set_dictionary_vector_id)(duckdb_vector dict, const char *id, idx_t id_len);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
@@ -989,6 +991,7 @@ typedef struct {
 #define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector
 #define duckdb_destroy_vector                duckdb_ext_api.duckdb_destroy_vector
 #define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_vector_slice_dictionary       duckdb_ext_api.duckdb_vector_slice_dictionary
 #define duckdb_vector_reference_value        duckdb_ext_api.duckdb_vector_reference_value
 #define duckdb_vector_reference_vector       duckdb_ext_api.duckdb_vector_reference_vector
 #define duckdb_set_dictionary_vector_id      duckdb_ext_api.duckdb_set_dictionary_vector_id

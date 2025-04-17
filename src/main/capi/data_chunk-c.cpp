@@ -235,13 +235,19 @@ sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector) {
 	return reinterpret_cast<duckdb::SelectionVector *>(vector)->data();
 }
 
-void duckdb_slice_vector(duckdb_vector dict_values, idx_t dict_size, duckdb_selection_vector selection, idx_t len) {
+void duckdb_slice_vector(duckdb_vector dict_values, duckdb_selection_vector selection, idx_t len) {
+	auto ddict = reinterpret_cast<duckdb::Vector *>(dict_values);
+	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
+	ddict->Slice(*dselection, len);
+}
+
+void duckdb_vector_slice_dictionary(duckdb_vector dict_values, idx_t dict_size, duckdb_selection_vector selection, idx_t len) {
 	auto ddict = reinterpret_cast<duckdb::Vector *>(dict_values);
 	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
 	ddict->Dictionary(dict_size, *dselection, len);
 }
 
-void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len) {
+void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, idx_t id_len) {
 	auto ddict = reinterpret_cast<duckdb::Vector *>(dict);
 	duckdb::DictionaryVector::SetDictionaryId(*ddict, std::string(id, id_len));
 }

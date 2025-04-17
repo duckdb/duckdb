@@ -5,6 +5,7 @@
         "duckdb_create_vector",
         "duckdb_destroy_vector",
         "duckdb_slice_vector",
+        "duckdb_vector_slice_dictionary",
         "duckdb_vector_reference_value",
         "duckdb_vector_reference_vector",
         "duckdb_set_dictionary_vector_id",

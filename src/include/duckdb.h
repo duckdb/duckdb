@@ -3060,14 +3060,27 @@ The resulting vector has the size of the parent vector multiplied by the array s
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 /*!
+Slice a vector with a selection vector.
+
+The max value in the selection vector must be less than the length of the vector
+
+The resulting vector happens to be a dictionary vector.
+
+* @param vector The vector which is to become a dictionary
+* @param selection The selection vector
+* @param len The length of the selection vector
+*/
+DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+
+/*!
 Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.
 
 * @param dict_size The size of the `dict_values`
 * @param selection The selection vector
 * @param len The length of the selection vector
 */
-DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection,
-                                      idx_t len);
+DUCKDB_C_API void duckdb_vector_slice_dictionary(duckdb_vector vector, idx_t dict_size,
+                                                 duckdb_selection_vector selection, idx_t len);
 
 /*!
 Copies the value from `value` to `vector`.
@@ -3086,7 +3099,7 @@ Sets an id on the values of a dictionary, if two ids are equal then the value ve
 * @param id The id
 * @param id_len The string length of the id
 */
-DUCKDB_C_API void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len);
+DUCKDB_C_API void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, idx_t id_len);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
