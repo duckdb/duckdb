@@ -558,5 +558,5 @@ TEST_CASE("Test DataChunk to string", "[capi]") {
 	REQUIRE(strcmp(data_chunk_str, "Chunk - [1 Columns]\n- FLAT INTEGER: 0 = [ ]\n") == 0);
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&types[0]);
-	free((void*)data_chunk_str);
+	duckdb_free((void*)data_chunk_str);
 }
