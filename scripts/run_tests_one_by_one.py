@@ -268,6 +268,11 @@ if len(error_container):
 '''
     )
     for i, error in enumerate(error_container, start=1):
-        print(f"{i}:", error["test"][0])
-        print(error["stderr"])
+        # breakpoint()
+        if no_exit:
+            _, rest = error["stderr"].split('. ', 1)
+            print(f"{i}:", rest)
+        else:
+            print(f"{i}:", error["test"][0])
+            print(error["stderr"])
 exit(1)
