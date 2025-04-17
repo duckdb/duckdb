@@ -16,7 +16,7 @@ struct ColumnMapper;
 
 class MultiFileColumnMapper {
 public:
-	MultiFileColumnMapper(ClientContext &context, MultiFileReaderData &reader_data,
+	MultiFileColumnMapper(ClientContext &context, MultiFileReader &multi_file_reader, MultiFileReaderData &reader_data,
 	                      const vector<MultiFileColumnDefinition> &global_columns,
 	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
 	                      const OpenFileInfo &initial_file, const MultiFileReaderBindData &bind_data,
@@ -37,6 +37,7 @@ private:
 
 private:
 	ClientContext &context;
+	MultiFileReader &multi_file_reader;
 	MultiFileReaderData &reader_data;
 	const vector<MultiFileColumnDefinition> &global_columns;
 	const vector<ColumnIndex> &global_column_ids;

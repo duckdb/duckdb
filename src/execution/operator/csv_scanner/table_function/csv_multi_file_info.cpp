@@ -288,6 +288,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
 		options.auto_detect = false;
 	}
+
 	shared_ptr<CSVBufferManager> buffer_manager;
 	if (file_idx == 0) {
 		buffer_manager = csv_data.buffer_manager;
@@ -295,7 +296,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 			buffer_manager.reset();
 		}
 	}
-	return make_shared_ptr<CSVFileScan>(context, file.path, std::move(options), bind_data.file_options, bind_data.names,
+	return make_shared_ptr<CSVFileScan>(context, file, std::move(options), bind_data.file_options, bind_data.names,
 	                                    bind_data.types, csv_data.csv_schema, gstate.SingleThreadedRead(),
 	                                    std::move(buffer_manager), false);
 }
@@ -303,12 +304,12 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                           CSVReaderOptions &options,
                                                           const MultiFileOptions &file_options) {
-	return make_shared_ptr<CSVFileScan>(context, file.path, options, file_options);
+	return make_shared_ptr<CSVFileScan>(context, file, options, file_options);
 }
 
 shared_ptr<BaseUnionData> CSVMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
 	auto &scan = scan_p->Cast<CSVFileScan>();
-	auto data = make_shared_ptr<CSVUnionData>(scan_p->GetFileName());
+	auto data = make_shared_ptr<CSVUnionData>(scan_p->file);
 	if (file_idx == 0) {
 		data->options = scan.options;
 		data->names = scan.GetNames();

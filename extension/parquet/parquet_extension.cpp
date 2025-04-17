@@ -189,7 +189,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
 	if (options.file_row_number) {
 		MultiFileColumnDefinition res("file_row_number", LogicalType::BIGINT);
-		res.identifier = Value::INTEGER(ParquetReader::ORDINAL_FIELD_ID);
+		res.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		schema_col_names.push_back(res.name);
 		schema_col_types.push_back(res.type);
 		reader_bind.schema.emplace_back(std::move(res));
@@ -520,12 +520,12 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, file.path, bind_data.parquet_options);
+	return make_shared_ptr<ParquetReader>(context, file, bind_data.parquet_options);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                               ParquetOptions &options, const MultiFileOptions &) {
-	return make_shared_ptr<ParquetReader>(context, file.path, options);
+	return make_shared_ptr<ParquetReader>(context, file, options);
 }
 
 shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {

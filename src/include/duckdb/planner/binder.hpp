@@ -315,6 +315,7 @@ private:
 	BoundStatement Bind(CopyDatabaseStatement &stmt);
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 
+	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator, BoundStatement result);
