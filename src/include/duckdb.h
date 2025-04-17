@@ -400,6 +400,10 @@ typedef struct _duckdb_selection_vector {
 	void *internal_ptr;
 } * duckdb_selection_vector;
 
+typedef struct _duckdb_vector_buffer {
+	void *ptr;
+} * duckdb_vector_buffer;
+
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
 //===--------------------------------------------------------------------===//
@@ -686,6 +690,17 @@ struct duckdb_extension_access {
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+//===--------------------------------------------------------------------===//
+// Opaque Buffers
+//===--------------------------------------------------------------------===//
+
+//! A opaque buffer which can be interpreted as a data buffer
+typedef struct _opaque_buffer {
+	void *internal_ptr;
+} * opaque_buffer;
+
+typedef void (*opaque_buffer_free)(opaque_buffer buffer);
 
 #ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
@@ -3082,6 +3097,36 @@ References the `from` vector in the `to` vector, this makes take shared ownershi
 
 */
 DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
+
+/*!
+Sets the data buffer of a vector.
+* @param vector The vector which will have its buffer set.
+
+* @param buffer The vector buffer which will be referenced.
+
+*/
+DUCKDB_C_API void duckdb_assign_buffer_to_vector(duckdb_vector vector, duckdb_vector_buffer buffer);
+
+//===--------------------------------------------------------------------===//
+// Vector Buffer Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Create a new duckdb vector buffer wrapping an opaque buffer with a function to specify that the memory is no long
+required by duckdb. This must be freed with `duckdb_free_opaque_vector_buffer`.
+* @param buffer The buffer which should used as a vector buffer.
+
+* @param free_fn A function which will be called once duckdb is finished with the buffer.
+
+* @return A ptr to the duckdb wrapped buffer.
+
+*/
+DUCKDB_C_API duckdb_vector_buffer duckdb_wrap_opaque_buffer_as_vector_buffer(opaque_buffer buffer,
+                                                                             opaque_buffer_free free_fn);
+
+/*!
+Free the reference to the buffer created from `duckdb_wrap_opaque_buffer_as_vector_buffer`*/
+DUCKDB_C_API void duckdb_free_vector_buffer(duckdb_vector_buffer *buffer);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

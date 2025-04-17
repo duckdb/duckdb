@@ -1,0 +1,8 @@
+{
+    "version": "unstable_new_vector_buffer",
+    "description": "An API to create duckdb vector buffers",
+    "entries": [
+        "duckdb_wrap_opaque_buffer_as_vector_buffer",
+        "duckdb_free_vector_buffer"
+    ]
+}

@@ -332,6 +332,27 @@
             "comment": {
                 "description": "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer \n\n"
             }
+        },
+        {
+            "name": "duckdb_assign_buffer_to_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "duckdb_vector_buffer",
+                    "name": "buffer"
+                }
+            ],
+            "comment": {
+                "description": "Sets the data buffer of a vector.\n",
+                "param_comments": {
+                    "vector": "The vector which will have its buffer set.\n",
+                    "buffer": "The vector buffer which will be referenced.\n"
+                }
+            }
         }
     ]
 }
