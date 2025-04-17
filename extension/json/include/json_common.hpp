@@ -205,12 +205,15 @@ public:
 
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
+		// Go to blob so we can have a better error message for weird strings
+		auto blob = Value::BLOB(string(data, length));
 		// Truncate, so we don't print megabytes worth of JSON
-		string input = length > 50 ? string(data, 47) + "..." : string(data, length);
+		string input = blob.ToString();
+		input = input.length() > 50 ? string(input.c_str(), 47) + "..." : input;
 		// Have to replace \r, otherwise output is unreadable
 		input = StringUtil::Replace(input, "\r", "\\r");
-		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: %s", error.pos, error.msg, extra,
-		                          input);
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: \"%s\"", error.pos, error.msg,
+		                          extra, input);
 	}
 	static void ThrowParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		throw InvalidInputException(FormatParseError(data, length, error, extra));

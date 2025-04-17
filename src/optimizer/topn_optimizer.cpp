@@ -29,6 +29,15 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 
 		auto child_op = op.children[0].get();
 
+		auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
+		auto child_card = static_cast<double>(child_op->estimated_cardinality);
+
+		// if the child cardinality is not 98 times more than the
+		bool limit_is_large = constant_limit > 5000;
+		if (constant_limit > child_card * 0.007 && limit_is_large) {
+			return false;
+		}
+
 		while (child_op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			D_ASSERT(!child_op->children.empty());
 			child_op = child_op->children[0].get();
