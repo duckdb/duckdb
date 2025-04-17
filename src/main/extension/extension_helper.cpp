@@ -116,6 +116,7 @@ static const DefaultExtension internal_extensions[] = {
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
+	{"encodings", "All unicode encodings to UTF-8", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
     {"delta", "Adds support for Delta Lake", false},
