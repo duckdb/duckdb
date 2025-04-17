@@ -1,4 +1,4 @@
-# name: test/sql/function/list/list_value.test
+# name: test/sql/function/list/list_value_nested_lists.test
 # description: Test the list_value function
 # group: [list]
 

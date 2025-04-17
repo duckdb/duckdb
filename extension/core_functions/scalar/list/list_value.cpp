@@ -105,6 +105,55 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 	ListVector::SetListSize(result_list, offset_sum);
 }
 
+static void ListValueStructFunction(DataChunk &args, Vector &result) {
+	const idx_t list_size = args.ColumnCount();
+	const idx_t rows = args.size();
+	const idx_t new_size = list_size * rows;
+
+	ListVector::Reserve(result, new_size);
+
+	// The length of the child vector is the number of structs * the number
+	auto &result_list = ListVector::GetEntry(result);
+	auto &result_entries = StructVector::GetEntries(result_list);
+
+	for (idx_t entry_idx = 0; entry_idx < result_entries.size(); entry_idx++) {
+		idx_t offset = 0;
+		for (idx_t c = 0; c < list_size; c++) {
+			auto list = args.data[c];
+			auto &list_entries = StructVector::GetEntries(list);
+
+			VectorOperations::Copy(*list_entries[entry_idx], *result_entries[entry_idx], rows, 0, offset);
+			offset += rows;
+		}
+	}
+
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto &result_list_validity = FlatVector::Validity(result_list);
+
+	const auto args_unified_format = args.ToUnifiedFormat();
+
+	SelectionVector sel(new_size);
+	for (idx_t r = 0; r < rows; r++) {
+		for (idx_t c = 0; c < list_size; c++) {
+			const auto result_idx = r * list_size + c;
+			sel.set_index(result_idx, c * rows + r);
+
+			const auto input_idx = args_unified_format[c].sel->get_index(r);
+			if (!args_unified_format[c].validity.RowIsValid(input_idx)) {
+				result_list_validity.SetInvalid(result_idx);
+			}
+		}
+		result_data[r].offset = r * list_size;
+		result_data[r].length = list_size;
+	}
+
+	for (idx_t c = 0; c < result_entries.size(); c++) {
+		result_entries[c]->Slice(sel, new_size);
+	}
+
+	ListVector::SetListSize(result, new_size);
+}
+
 static void TemplatedListValueFunctionFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -180,6 +229,9 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		break;
 	case PhysicalType::LIST:
 		ListValueListFunction(args, result);
+		break;
+	case PhysicalType::STRUCT:
+		ListValueStructFunction(args, result);
 		break;
 	default: {
 		TemplatedListValueFunctionFallback(args, result);
