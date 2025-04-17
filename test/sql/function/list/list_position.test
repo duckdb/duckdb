@@ -60,6 +60,22 @@ statement ok
 DROP table TEST;
 
 statement ok
+CREATE TABLE NULL_TABLE (n int[], i int);
+
+statement ok
+INSERT INTO NULL_TABLE VALUES (NULL, 1), (NULL, 2), (NULL, 3);
+
+query I
+SELECT list_contains(n, i) FROM NULL_TABLE;
+----
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE NULL_TABLE;
+
+statement ok
 create table STR_TEST (i string[]);
 
 statement ok
