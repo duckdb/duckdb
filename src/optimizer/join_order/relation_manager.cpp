@@ -65,19 +65,14 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
 		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_UNNEST) {
-		// logical unnest has a logical_unnest index, but other bindings can refer to
-		// columns that are not unnested.
-		auto bindings = op.GetColumnBindings();
-		for (auto &binding : bindings) {
-			relation_mapping[binding.table_index] = relation_id;
-		}
 	} else {
 		// Relations should never return more than 1 table index
-		D_ASSERT(table_indexes.size() == 1);
-		idx_t table_index = table_indexes.at(0);
-		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
-		relation_mapping[table_index] = relation_id;
+		auto bindings = op.GetColumnBindings();
+		for (auto &binding : bindings) {
+			if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
+				relation_mapping[binding.table_index] = relation_id;
+			}
+		}
 	}
 	relations.push_back(std::move(relation));
 	op.estimated_cardinality = stats.cardinality;
