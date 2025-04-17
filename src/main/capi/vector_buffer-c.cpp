@@ -25,7 +25,7 @@ struct COpaqueVectorBuffer {
 	explicit COpaqueVectorBuffer(duckdb::buffer_ptr<duckdb::VectorBuffer> buffer) : buffer(buffer) {
 	}
 };
-} // namespace duckd
+} // namespace duckdb
 
 duckdb_vector_buffer duckdb_wrap_opaque_buffer_as_vector_buffer(opaque_buffer buffer, opaque_buffer_free free_fn) {
 	auto opaque_buffer = duckdb::make_shared_ptr<duckdb::OpaqueVectorBuffer>(buffer, free_fn);
