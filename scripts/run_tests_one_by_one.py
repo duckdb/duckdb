@@ -155,8 +155,12 @@ def launch_test(test, list_of_tests=False):
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
         # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
+        if list_of_tests or no_exit:
+            env = {'SUMMARIZE_FAILURES': '0', 'NO_DUPLICATING_HEADERS': '1'}
+        else:
+            env = {'SUMMARIZE_FAILURES': '0'}
         res = subprocess.run(
-            test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env={'SUMMARIZE_FAILURES': '0'}
+            test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env
         )
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
@@ -268,11 +272,6 @@ if len(error_container):
 '''
     )
     for i, error in enumerate(error_container, start=1):
-        # breakpoint()
-        if no_exit:
-            _, rest = error["stderr"].split('. ', 1)
-            print(f"{i}:", rest)
-        else:
-            print(f"{i}:", error["test"][0])
-            print(error["stderr"])
+        print(f"{i}:", error["test"][0])
+        print(error["stderr"])
 exit(1)

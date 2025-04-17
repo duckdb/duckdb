@@ -113,7 +113,10 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description,
                                           std::ostringstream &oss) {
-	PrintSummaryHeader(file_name, oss);
+	const char *no_duplicating_headers = std::getenv("NO_DUPLICATING_HEADERS");
+	if (no_duplicating_headers == nullptr || std::string(no_duplicating_headers) == "0") {
+		PrintSummaryHeader(file_name, oss);
+	}
 	oss << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	if (!file_name.empty()) {
 		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
