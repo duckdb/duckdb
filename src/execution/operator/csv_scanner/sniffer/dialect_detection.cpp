@@ -238,9 +238,15 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t dirty_notes = 0;
 	idx_t dirty_notes_minus_comments = 0;
 	if (sniffed_column_counts.error) {
+		if (!scanner->error_handler->HasError(MAXIMUM_LINE_SIZE)) {
+			all_fail_max_line_size = false;
+		} else {
+			line_error = scanner->error_handler->GetFirstError(MAXIMUM_LINE_SIZE);
+		}
 		// This candidate has an error (i.e., over maximum line size or never unquoting quoted values)
 		return;
 	}
+	all_fail_max_line_size = false;
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	const bool ignore_errors = options.ignore_errors.GetValue();
@@ -259,6 +265,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, ignore_errors,
 	                                        sniffed_column_counts[0].last_value_always_empty)) {
+		max_columns_found_error = num_cols > max_columns_found_error ? num_cols : max_columns_found_error;
 		// Not acceptable
 		return;
 	}
@@ -266,6 +273,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	for (idx_t row = 0; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row].number_of_columns, options.null_padding,
 		                                        ignore_errors, sniffed_column_counts[row].last_value_always_empty)) {
+			max_columns_found_error = sniffed_column_counts[row].number_of_columns > max_columns_found_error
+			                              ? sniffed_column_counts[row].number_of_columns
+			                              : max_columns_found_error;
 			// Not acceptable
 			return;
 		}
@@ -360,6 +370,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    num_cols == set_columns.Size() ||
 	    (num_cols == set_columns.Size() + 1 && sniffed_column_counts[0].last_value_always_empty) ||
 	    !set_columns.IsSet();
+
+	max_columns_found_error = num_cols > max_columns_found_error ? num_cols : max_columns_found_error;
 
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
@@ -602,7 +614,12 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
+		CSVError error;
+		if (all_fail_max_line_size) {
+			error = line_error;
+		} else {
+			error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
+		}
 		error_handler->Error(error, true);
 	}
 }

@@ -4,15 +4,25 @@
 
 require noforcestorage
 
-query IIIIIIII
+query IIIIIIIII
 from duckdb_logs
 ----
 
 statement ok
-set enable_logging=true;
+pragma enable_logging;
 
 statement ok
 set logging_level='info';
+
+# We use these to offet the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
+statement ok
+set variable base_connection_id = current_connection_id()
+
+statement ok
+set variable base_transaction_id = current_transaction_id() + 2
+
+statement ok
+set variable base_query_id = current_query_id() + 1
 
 statement ok
 SELECT write_log('hello from the global log scope', level := 'info', scope := 'database', log_type := 'global_type' ) from range(0,3);
@@ -27,14 +37,32 @@ statement ok
 from duckdb_logs
 
 query IIII
-SELECT * EXCLUDE (timestamp, client_context, transaction_id, thread) FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
 ----
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
 client_context_type	INFO	hello from the connection log scope	CONNECTION
 client_context_type	INFO	hello from the connection log scope	CONNECTION
 client_context_type	INFO	hello from the connection log scope	CONNECTION
 opener_type	INFO	hello from the file_opener log scope	CONNECTION
 opener_type	INFO	hello from the file_opener log scope	CONNECTION
 opener_type	INFO	hello from the file_opener log scope	CONNECTION
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+
+query IIII
+SELECT
+    type,
+    connection_id - getvariable('base_connection_id'),
+    transaction_id - getvariable('base_transaction_id'),
+    query_id - getvariable('base_query_id')
+FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
+----
+client_context_type	0	1	1
+client_context_type	0	1	1
+client_context_type	0	1	1
+opener_type	0	2	2
+opener_type	0	2	2
+opener_type	0	2	2
+global_type	NULL	NULL	NULL
+global_type	NULL	NULL	NULL
+global_type	NULL	NULL	NULL

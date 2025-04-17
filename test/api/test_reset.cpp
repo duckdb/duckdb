@@ -87,6 +87,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
+	    {"debug_verify_vector", {"dictionary_expression"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
@@ -114,7 +115,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"http_proxy_password", {"doe"}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
-	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}}};
+	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
+	    {"enable_external_file_cache", {false}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -166,6 +168,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
+	    "scheduler_process_partial",
 	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }

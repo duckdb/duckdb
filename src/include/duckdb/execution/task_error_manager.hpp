@@ -10,15 +10,20 @@
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class TaskErrorManager {
 public:
+	TaskErrorManager() : has_error(false) {
+	}
+
 	void PushError(ErrorData error) {
 		lock_guard<mutex> elock(error_lock);
 		this->exceptions.push_back(std::move(error));
+		has_error = true;
 	}
 
 	ErrorData GetError() {
@@ -33,8 +38,7 @@ public:
 	}
 
 	bool HasError() {
-		lock_guard<mutex> elock(error_lock);
-		return !exceptions.empty();
+		return has_error;
 	}
 
 	void ThrowException() {
@@ -47,11 +51,14 @@ public:
 	void Reset() {
 		lock_guard<mutex> elock(error_lock);
 		exceptions.clear();
+		has_error = false;
 	}
 
 private:
 	mutex error_lock;
 	//! Exceptions that occurred during the execution of the current query
 	vector<ErrorData> exceptions;
+	//! Lock-free error flag
+	atomic<bool> has_error;
 };
 } // namespace duckdb

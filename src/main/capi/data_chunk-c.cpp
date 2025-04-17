@@ -46,6 +46,20 @@ void duckdb_data_chunk_reset(duckdb_data_chunk chunk) {
 	dchunk->Reset();
 }
 
+duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity) {
+	auto dtype = reinterpret_cast<duckdb::LogicalType *>(type);
+	auto vector = new duckdb::Vector(*dtype, capacity);
+	return reinterpret_cast<duckdb_vector>(vector);
+}
+
+void duckdb_destroy_vector(duckdb_vector *vector) {
+	if (vector && *vector) {
+		auto dvector = reinterpret_cast<duckdb::Vector *>(*vector);
+		delete dvector;
+		*vector = nullptr;
+	}
+}
+
 idx_t duckdb_data_chunk_get_column_count(duckdb_data_chunk chunk) {
 	if (!chunk) {
 		return 0;
@@ -207,4 +221,34 @@ void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row) {
 	idx_t entry_idx = row / 64;
 	idx_t idx_in_entry = row % 64;
 	validity[entry_idx] |= (uint64_t)1 << idx_in_entry;
+}
+
+duckdb_selection_vector duckdb_create_selection_vector(idx_t size) {
+	return reinterpret_cast<duckdb_selection_vector>(new duckdb::SelectionVector(size));
+}
+
+void duckdb_destroy_selection_vector(duckdb_selection_vector vector) {
+	delete reinterpret_cast<duckdb::SelectionVector *>(vector);
+}
+
+sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector) {
+	return reinterpret_cast<duckdb::SelectionVector *>(vector)->data();
+}
+
+void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector selection, idx_t len) {
+	auto ddict = reinterpret_cast<duckdb::Vector *>(dict);
+	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
+	ddict->Slice(*dselection, len);
+}
+
+void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {
+	auto dvector = reinterpret_cast<duckdb::Vector *>(vector);
+	auto dvalue = reinterpret_cast<duckdb::Value *>(value);
+	dvector->Reference(*dvalue);
+}
+
+void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector) {
+	auto dto_vector = reinterpret_cast<duckdb::Vector *>(to_vector);
+	auto dfrom_vector = reinterpret_cast<duckdb::Vector *>(from_vector);
+	dto_vector->Reference(*dfrom_vector);
 }

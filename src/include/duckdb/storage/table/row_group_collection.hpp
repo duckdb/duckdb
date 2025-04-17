@@ -60,7 +60,7 @@ public:
 	void Verify();
 
 	void InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
-	                    TableFilterSet *table_filters);
+	                    optional_ptr<TableFilterSet> table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<StorageIndex> &column_ids, idx_t start_row,
 	                              idx_t end_row);
@@ -108,7 +108,7 @@ public:
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
-	void CommitDropColumn(idx_t index);
+	void CommitDropColumn(const idx_t column_index);
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;

@@ -1,4 +1,7 @@
 #include "duckdb_python/python_replacement_scan.hpp"
+
+#include "duckdb/main/db_instance_cache.hpp"
+
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
@@ -16,32 +19,64 @@ namespace duckdb {
 
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
-                            PyArrowObjectType type, DBConfig &config) {
-
-	if (type == PyArrowObjectType::PyCapsuleInterface) {
-		entry = entry.attr("__arrow_c_stream__")();
-		type = PyArrowObjectType::PyCapsule;
-	}
-
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
-	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory.get()))));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
-
-	if (type == PyArrowObjectType::PyCapsule) {
-		// Disable projection+filter pushdown
-		table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
+                            PyArrowObjectType type, DBConfig &config, DatabaseInstance &db) {
+	shared_ptr<ExternalDependency> external_dependency = make_shared_ptr<ExternalDependency>();
+	if (type == PyArrowObjectType::MessageReader) {
+		if (!db.ExtensionIsLoaded("nanoarrow")) {
+			throw MissingExtensionException(
+			    "The nanoarrow community extension is needed to read the Arrow IPC protocol. \n You can install it "
+			    "with \"INSTALL nanoarrow FROM community;\". \n Then you can load it with \"LOAD nanoarrow;\"");
+		}
+		vector<Value> values;
+		py::list stream_messages;
+		while (true) {
+			try {
+				py::object message = entry.attr("read_next_message")();
+				if (message.is_none()) {
+					break;
+				}
+				stream_messages.append(message.attr("serialize")());
+				const auto buffer_address = stream_messages[stream_messages.size() - 1].attr("address").cast<int64_t>();
+				const auto buffer_size = stream_messages[stream_messages.size() - 1].attr("size").cast<uint32_t>();
+				child_list_t<Value> buffer_values;
+				buffer_values.push_back({"ptr", Value::POINTER(buffer_address)});
+				buffer_values.push_back({"size", Value::UBIGINT(buffer_size)});
+				values.push_back(Value::STRUCT(buffer_values));
+			} catch (const py::error_already_set &e) {
+				break;
+			}
+		}
+		auto list_value = Value::LIST(values);
+		children.push_back(make_uniq<ConstantExpression>(list_value));
+		table_function.function = make_uniq<FunctionExpression>("scan_arrow_ipc", std::move(children));
+		auto dependency_item = PythonDependencyItem::Create(stream_messages);
+		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
 	} else {
-		table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
-	}
+		if (type == PyArrowObjectType::PyCapsuleInterface) {
+			entry = entry.attr("__arrow_c_stream__")();
+			type = PyArrowObjectType::PyCapsule;
+		}
 
-	auto dependency = make_uniq<ExternalDependency>();
-	auto dependency_item = PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
-	dependency->AddDependency("replacement_cache", std::move(dependency_item));
-	table_function.external_dependency = std::move(dependency);
+		auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
+		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory.get()))));
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
+		children.push_back(
+		    make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
+
+		if (type == PyArrowObjectType::PyCapsule) {
+			// Disable projection+filter pushdown
+			table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
+		} else {
+			table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
+		}
+		auto dependency_item =
+		    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
+		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
+	}
+	table_function.external_dependency = std::move(external_dependency);
 }
 
 static void ThrowScanFailureError(const py::object &entry, const string &name, const string &location = "") {
@@ -60,8 +95,8 @@ static void ThrowScanFailureError(const py::object &entry, const string &name, c
 }
 
 unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &entry, const string &name,
-                                                              ClientContext &context) {
-	auto replacement = TryReplacementObject(entry, name, context);
+                                                              ClientContext &context, bool relation) {
+	auto replacement = TryReplacementObject(entry, name, context, relation);
 	if (!replacement) {
 		ThrowScanFailureError(entry, name);
 	}
@@ -69,7 +104,7 @@ unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &
 }
 
 unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::object &entry, const string &name,
-                                                                 ClientContext &context) {
+                                                                 ClientContext &context, bool relation) {
 	auto client_properties = context.GetClientProperties();
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
@@ -79,7 +114,7 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		if (PandasDataFrame::IsPyArrowBacked(entry)) {
 			auto table = PandasDataFrame::ToArrowTable(entry);
 			CreateArrowScan(name, table, *table_function, children, client_properties, PyArrowObjectType::Table,
-			                DBConfig::GetConfig(context));
+			                DBConfig::GetConfig(context), *context.db);
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -109,17 +144,20 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context));
+		                DBConfig::GetConfig(context), *context.db);
 	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context));
-	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
+		                DBConfig::GetConfig(context), *context.db);
+	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid &&
+	           !(DuckDBPyConnection::GetArrowType(entry) == PyArrowObjectType::MessageReader && !relation)) {
+		arrow_type = DuckDBPyConnection::GetArrowType(entry);
 		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
-		                DBConfig::GetConfig(context));
-	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
-		string name = "np_" + StringUtil::GenerateRandomName();
+		                DBConfig::GetConfig(context), *context.db);
+	} else if (DuckDBPyConnection::IsAcceptedNumpyObject(entry) != NumpyObjectType::INVALID) {
+		numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry);
+		string np_name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
 		size_t idx = 0;
 		switch (numpytype) {

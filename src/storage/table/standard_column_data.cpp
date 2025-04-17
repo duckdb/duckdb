@@ -73,14 +73,15 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
 	return scan_count;
 }
 
-idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	auto scan_count = ColumnData::ScanCount(state, result, count);
-	validity.ScanCount(state.child_states[0], result, count);
+idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
+	auto scan_count = ColumnData::ScanCount(state, result, count, result_offset);
+	validity.ScanCount(state.child_states[0], result, count, result_offset);
 	return scan_count;
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+                                SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                                TableFilterState &filter_state) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
@@ -93,11 +94,11 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
 	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
-		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter);
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
-	FilterVector(state, result, target_count, sel, count, filter);
-	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter);
+	FilterVector(state, result, target_count, sel, count, filter, filter_state);
+	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

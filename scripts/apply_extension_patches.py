@@ -34,11 +34,28 @@ if not patches:
     )
     raise_error(error_message)
 
+
+current_dir = os.getcwd()
+print(f"Applying patches at '{current_dir}'")
 print(f"Resetting patches in {directory}\n")
-subprocess.run(["git", "log"], check=True)
 subprocess.run(["git", "clean", "-f"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
 # Apply each patch file using patch
+ARGUMENTS = ["patch", "-p1", "--forward", "-i"]
 for patch in patches:
     print(f"Applying patch: {patch}\n")
-    subprocess.run(["patch", "-p1", "--forward", "-i", os.path.join(directory, patch)], check=True)
+    arguments = []
+    arguments.extend(ARGUMENTS)
+    arguments.append(os.path.join(directory, patch))
+    try:
+        subprocess.run(arguments, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        arguments[1:1] = ['-d', current_dir]
+        command = " ".join(arguments)
+        print(f"Failed to apply patch, command to reproduce locally:\n{command}")
+        print("\nError output:")
+        print(e.stderr.decode('utf-8'))
+        print("\nStandard output:")
+        print(e.stdout.decode('utf-8'))
+        print("Exiting")
+        exit(1)

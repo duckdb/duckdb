@@ -4,7 +4,7 @@
 
 require noforcestorage
 
-query IIIIIIII
+query IIIIIIIII
 from duckdb_logs
 ----
 
@@ -18,7 +18,7 @@ statement ok
 SELECT 1;
 
 query IIIII
-SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
 ----
 duckdb.ClientContext.BeginQuery	INFO	SELECT 1;	CONNECTION	NULL
 
@@ -27,10 +27,10 @@ set enable_logging=false;
 
 # With logging disabled, the log will persist
 query IIIII
-SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
 ----
 duckdb.ClientContext.BeginQuery	INFO	SELECT 1;	CONNECTION	NULL
-duckdb.ClientContext.BeginQuery	INFO	SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs	CONNECTION	NULL
+duckdb.ClientContext.BeginQuery	INFO	SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs	CONNECTION	NULL
 duckdb.ClientContext.BeginQuery	INFO	set enable_logging=false;	CONNECTION	NULL
 
 statement ok
@@ -46,5 +46,5 @@ Invalid Input Error: Log storage 'quack' is not yet registered
 
 # Storage is now cleared because switching storage will clear it
 query IIIII
-SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
 ----

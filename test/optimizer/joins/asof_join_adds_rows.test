@@ -37,6 +37,12 @@ create table large_build as from values
 (1, '1992-03-22 01:02:19'::TIMESTAMP),
 (1, '1992-03-22 01:02:20'::TIMESTAMP) t(lb_const, b);
 
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 query I
 select a from (select * from small_probe, child_join where c=sp_const) asof join large_build on (lb_const = sp_const and a < b) order by a;
 ----
@@ -110,3 +116,5 @@ ORDER BY
 ----
 ID1	fqn1	fqn1	2021-01-01 00:00:00
 ID1	fqn2	fqn2	2021-03-03 00:00:00
+
+endloop

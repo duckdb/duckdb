@@ -15,7 +15,10 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -79,6 +82,16 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 	return nullptr;
 }
 
+unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause) {
+	if (!at_clause) {
+		return nullptr;
+	}
+	ConstantBinder binder(*this, context, "AT clause");
+	auto expr = binder.Bind(at_clause->ExpressionMutable());
+	auto val = ExpressionExecutor::EvaluateScalar(context, *expr);
+	return make_uniq<BoundAtClause>(at_clause->Unit(), std::move(val));
+}
+
 vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string &schema_name) {
 	vector<CatalogSearchEntry> view_search_path;
 	auto &catalog_name = catalog.GetName();
@@ -108,8 +121,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// check if the table name refers to a CTE
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
+	// unless we want to refer to the recurring table of "using key".
 	vector<reference<CommonTableExpressionInfo>> found_ctes;
-	if (ref.schema_name.empty()) {
+	if (ref.schema_name.empty() || ref.schema_name == "recurring") {
 		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
 	}
 
@@ -133,13 +147,29 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 #endif
 				}
-				auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
+
+				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
+					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+				}
+
+				auto result =
+				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
 				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
 				bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
+
+				auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
+
 				// Update references to CTE
-				auto cteref = bind_context.cte_references[ref.table_name];
+				auto cteref = bind_context.cte_references[cte_reference];
+
+				if (cteref == nullptr && ref.schema_name == "recurring") {
+					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
+					                      "referenced from this part of the query.",
+					                      ref.table_name);
+				}
+
 				(*cteref)++;
 
 				result->types = ctebinding->types;
@@ -159,6 +189,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					throw BinderException(
 					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
 					    ref.table_name);
+				}
+
+				if (ref.schema_name == "recurring") {
+					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
+					                      "referenced from this part of the query.",
+					                      ref.table_name);
 				}
 
 				// Move CTE to subquery and bind recursively
@@ -191,9 +227,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
-	auto table_or_view = entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-	                                              ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
+	auto at_clause = BindAtClause(ref.at_clause);
+	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, entry_at_clause, error_context);
+	BindSchemaOrCatalog(entry_retriever, ref.catalog_name, ref.schema_name);
+	auto table_or_view =
+	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -239,8 +278,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		(void)entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
-		                               OnEntryNotFound::THROW_EXCEPTION, error_context);
+		(void)entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup,
+		                               OnEntryNotFound::THROW_EXCEPTION);
 		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
 
@@ -254,7 +293,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		properties.RegisterDBRead(table.ParentCatalog(), context);
 
 		unique_ptr<FunctionData> bind_data;
-		auto scan_function = table.GetScanFunction(context, bind_data);
+		auto scan_function = table.GetScanFunction(context, bind_data, table_lookup);
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
@@ -270,9 +309,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
+		virtual_column_map_t virtual_columns;
+		if (scan_function.get_virtual_columns) {
+			virtual_columns = scan_function.get_virtual_columns(context, bind_data.get());
+		} else {
+			virtual_columns = table.GetVirtualColumns();
+		}
 		auto logical_get =
 		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), table.GetRowIdType());
+		                          std::move(return_names), std::move(virtual_columns));
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {
@@ -290,7 +335,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
-		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.GetQuery().Copy()));
 		subquery.alias = ref.alias;
 		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
 		// subquery aliases
@@ -304,6 +349,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto view_search_path =
 		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
+		// propagate the AT clause through the view
+		view_binder->entry_retriever.SetAtClause(entry_at_clause);
+
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
@@ -312,9 +360,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
-		// verify that the types and names match up with the expected types and names
+		// verify that the types and names match up with the expected types and names if the view has type info defined
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
-		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
+		if (GetBindingMode() != BindingMode::EXTRACT_NAMES && view_catalog_entry.HasTypes()) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing
