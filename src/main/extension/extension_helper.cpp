@@ -121,6 +121,7 @@ static const DefaultExtension internal_extensions[] = {
     {"delta", "Adds support for Delta Lake", false},
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
+    {"encodings", "All unicode encodings to UTF-8", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
