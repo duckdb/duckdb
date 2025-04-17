@@ -241,7 +241,8 @@ void duckdb_slice_vector(duckdb_vector dict_values, duckdb_selection_vector sele
 	ddict->Slice(*dselection, len);
 }
 
-void duckdb_vector_slice_dictionary(duckdb_vector dict_values, idx_t dict_size, duckdb_selection_vector selection, idx_t len) {
+void duckdb_vector_slice_dictionary(duckdb_vector dict_values, idx_t dict_size, duckdb_selection_vector selection,
+                                    idx_t len) {
 	auto ddict = reinterpret_cast<duckdb::Vector *>(dict_values);
 	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
 	ddict->Dictionary(dict_size, *dselection, len);
