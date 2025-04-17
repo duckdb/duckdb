@@ -19,6 +19,13 @@ select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
 require icu
 
 statement ok
+set calendar='gregorian';
+
+statement ok
+set TimeZone='America/Los_Angeles';
+
+
+statement ok
 set disable_timestamptz_casts=false;
 
 statement ok
