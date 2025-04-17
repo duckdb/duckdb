@@ -133,6 +133,8 @@ struct ClientConfig {
 	bool ieee_floating_point_ops = true;
 	//! Allow ordering by non-integer literals - ordering by such literals has no effect
 	bool order_by_non_integer_literal = false;
+	//! Disable casting from timestamp => timestamptz (naïve timestamps)
+	bool disable_timestamptz_casts = false;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;
