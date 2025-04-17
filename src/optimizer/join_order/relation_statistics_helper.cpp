@@ -332,6 +332,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	stats.column_distinct_count = child_stats.column_distinct_count;
 	vector<double> distinct_counts;
 	for (auto &g_set : aggr.grouping_sets) {
+		vector<double> set_distinct_counts;
 		for (auto &ind : g_set) {
 			if (aggr.groups[ind]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
@@ -345,8 +346,12 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
 				continue;
 			}
-			double distinct_count = double(child_stats.column_distinct_count[col_index].distinct_count);
-			distinct_counts.push_back(distinct_count == 0 ? 1 : distinct_count);
+			double distinct_count = static_cast<double>(child_stats.column_distinct_count[col_index].distinct_count);
+			set_distinct_counts.push_back(distinct_count == 0 ? 1 : distinct_count);
+		}
+		// We use the grouping set with the most group key columns for cardinality estimation
+		if (set_distinct_counts.size() > distinct_counts.size()) {
+			distinct_counts = std::move(set_distinct_counts);
 		}
 	}
 
@@ -368,8 +373,13 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 
 		// Estimate using the "Occupancy Problem",
 		// where "product" is number of bins, and "child_stats.cardinality" is number of balls
-		new_card = product * (1.0 - exp(-static_cast<double>(child_stats.cardinality) / product));
-		new_card = MinValue(new_card, static_cast<double>(child_stats.cardinality));
+		const auto mult = 1.0 - exp(-static_cast<double>(child_stats.cardinality) / product);
+		if (mult == 0) { // Can become 0 with very large estimates due to double imprecision
+			new_card = static_cast<double>(child_stats.cardinality);
+		} else {
+			new_card = product * mult;
+			new_card = MinValue(new_card, static_cast<double>(child_stats.cardinality));
+		}
 	}
 
 	// an ungrouped aggregate has 1 row
