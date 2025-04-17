@@ -103,7 +103,7 @@ jobs:
     steps:
       - id: set-output
         shell: bash
-        run:
+        run: |
           if [[ "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.linux-release.result }}" == "success" && \
                 "${{ needs.linux-release.result }}" == "success" && \
