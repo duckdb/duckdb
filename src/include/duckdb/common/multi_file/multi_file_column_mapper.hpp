@@ -34,6 +34,7 @@ private:
 	unique_ptr<TableFilterSet> CreateFilters(map<idx_t, reference<TableFilter>> &filters, ResultColumnMapping &mapping);
 	ReaderInitializeType EvaluateConstantFilters(ResultColumnMapping &mapping,
 	                                             map<idx_t, reference<TableFilter>> &remaining_filters);
+	Value GetConstantValue(idx_t global_index);
 
 private:
 	ClientContext &context;

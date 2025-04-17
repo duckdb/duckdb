@@ -241,6 +241,7 @@ public:
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
+	idx_t total_rows_copied = 0;
 
 	//! Buffers the tuples in partitions before writing
 	unique_ptr<HivePartitionedColumnData> part_buffer;
@@ -520,7 +521,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		// if we are only writing the file when there are rows to write we need to initialize here
 		g.Initialize(context.client, *this);
 	}
-	g.rows_copied += chunk.size();
+	l.total_rows_copied += chunk.size();
 
 	if (partition_output) {
 		l.AppendToPartition(context, *this, g, chunk);
@@ -557,6 +558,11 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
+	if (l.total_rows_copied == 0) {
+		// no rows copied
+		return SinkCombineResultType::FINISHED;
+	}
+	g.rows_copied += l.total_rows_copied;
 
 	if (partition_output) {
 		// flush all remaining partitions
