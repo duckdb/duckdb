@@ -89,7 +89,8 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 }
 
 idx_t StandardBufferManager::GetUsedSwap() const {
-	lock_guard<mutex> guard(temporary_directory.lock);
+	// This pointer is set once, and then never unset, so we don't need the lock to read this value
+	// We add a suppression to the thread sanitizer so it doesn't complain about this
 	if (!temporary_directory.handle) {
 		return 0;
 	}

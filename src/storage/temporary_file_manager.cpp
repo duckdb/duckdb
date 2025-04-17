@@ -504,7 +504,7 @@ bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {
 }
 
 idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() const {
-	return size_on_disk.load();
+	return size_on_disk.load(std::memory_order_relaxed);
 }
 
 optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
