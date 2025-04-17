@@ -155,7 +155,7 @@ def launch_test(test, list_of_tests=False):
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
         # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
-        if list_of_tests or no_exit:
+        if list_of_tests or no_exit or tests_per_invocation:
             env = {'SUMMARIZE_FAILURES': '0', 'NO_DUPLICATING_HEADERS': '1'}
         else:
             env = {'SUMMARIZE_FAILURES': '0'}
@@ -201,19 +201,18 @@ RETURNCODE
 --------------------"""
     )
     print(res.returncode)
-    if not list_of_tests:
-        print(
-            """--------------------
+    print(
+        """--------------------
 STDOUT
 --------------------"""
-        )
-        print(stdout)
-        print(
-            """--------------------
+    )
+    print(stdout)
+    print(
+        """--------------------
 STDERR
 --------------------"""
-        )
-        print(stderr)
+    )
+    print(stderr)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
