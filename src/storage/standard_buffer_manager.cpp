@@ -41,7 +41,6 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	}
 	if (source) {
 		auto tmp = std::move(source);
-		//! Fix this assert too
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size, GetBlockHeaderSize()));
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {

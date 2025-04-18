@@ -5,6 +5,8 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/block_manager.hpp"
+
 #include <cstring>
 
 namespace duckdb {
