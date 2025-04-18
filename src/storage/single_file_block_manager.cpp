@@ -153,9 +153,8 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
-      path(path_p),
-      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(), options.block_header_size),
+      path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
+                                  Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(), this),
       iteration_count(0), options(options) {
 }
 
@@ -592,7 +591,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize(), GetBlockHeaderSize());
+		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize(), *this);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;

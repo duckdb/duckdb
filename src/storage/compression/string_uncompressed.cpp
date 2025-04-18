@@ -32,7 +32,7 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), col_data.GetBlockManager().GetBlockHeaderSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<StringAnalyzeState>(info);
 }
 
@@ -221,7 +221,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 
-	CompressionInfo info(segment.GetBlockManager().GetBlockSize(), segment.GetBlockManager().GetBlockHeaderSize());
+	CompressionInfo info(segment.GetBlockManager());
 	if (total_size >= info.GetCompactionFlushLimit()) {
 		// the block is full enough, don't bother moving around the dictionary
 		return segment.SegmentSize();
@@ -341,8 +341,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
-		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size, false,
-		                                 buffer_manager.GetBlockHeaderSize());
+		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size, false, &segment.GetBlockManager());
 		block = handle.GetBlockHandle();
 		state.overflow_blocks.insert(make_pair(block->BlockId(), reference<StringBlock>(*new_block)));
 		new_block->block = std::move(block);

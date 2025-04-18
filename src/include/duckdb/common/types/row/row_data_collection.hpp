@@ -21,7 +21,7 @@ public:
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0),
 	      block_header_size(buffer_manager.GetBlockHeaderSize()) {
 		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
-		auto buffer_handle = buffer_manager.Allocate(tag, size, false, block_header_size);
+		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
 		block = buffer_handle.GetBlockHandle();
 		D_ASSERT(BufferManager::GetAllocSize(size, block_header_size) == block->GetMemoryUsage());
 	}

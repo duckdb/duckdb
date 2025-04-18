@@ -38,7 +38,7 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), col_data.GetBlockManager().GetBlockHeaderSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<AlpRDAnalyzeState<T>>(info);
 }
 

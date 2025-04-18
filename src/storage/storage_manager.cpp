@@ -190,6 +190,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
+			storage_options.block_header_size = options.block_header_size;
 		} else {
 			// No encryption; use the default option.
 			options.block_header_size = config.options.default_block_header_size;

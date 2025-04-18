@@ -35,7 +35,7 @@ public:
 
 public:
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
-	                              const idx_t block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE) = 0;
+	                              BlockManager *block_manager = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
@@ -59,8 +59,7 @@ public:
 	virtual idx_t GetBlockHeaderSize() const = 0;
 
 	//! Returns a new block of transient memory.
-	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size,
-	                                                        const uint64_t block_header_size);
+	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager);
 	//! Returns a new block of memory that is smaller than the block size setting.
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size);
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size);
@@ -81,8 +80,8 @@ public:
 
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
-	                                                      idx_t block_header_size,
-	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
+	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER,
+	                                                      BlockManager *block_manager = nullptr);
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool() const;
 

@@ -12,8 +12,7 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	auto buffer_handle =
-	    buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, buffer_manager.GetBlockHeaderSize());
+	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
 	handle = buffer_handle.GetBlockHandle();
 }
 

@@ -13,6 +13,7 @@
 
 namespace duckdb {
 class Allocator;
+class BlockManager;
 struct FileHandle;
 
 enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3 };
@@ -26,7 +27,7 @@ public:
 	//! (typically 8 bytes). On return, this->AllocSize() >= this->size >= user_size.
 	//! Our allocation size will always be page-aligned, which is necessary to support
 	//! DIRECT_IO
-	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, const optional_idx block_header_size);
+	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, BlockManager *block_manager = nullptr);
 	FileBuffer(FileBuffer &source, FileBufferType type);
 
 	virtual ~FileBuffer();
@@ -52,7 +53,7 @@ public:
 
 	// Same rules as the constructor. We add room for a header, in addition to
 	// the requested user bytes. We then sector-align the result.
-	void Resize(uint64_t user_size, uint64_t block_header_size);
+	void Resize(uint64_t user_size, BlockManager *block_manager = nullptr);
 
 	uint64_t AllocSize() const {
 		return internal_size;
