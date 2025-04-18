@@ -357,6 +357,8 @@
         "duckdb_append_varchar",
         "duckdb_append_varchar_length",
         "duckdb_append_blob",
-        "duckdb_append_null"
+        "duckdb_append_null",
+        "duckdb_create_map_value",
+        "duckdb_create_union_value"
     ]
 }
