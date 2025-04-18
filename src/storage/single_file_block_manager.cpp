@@ -261,7 +261,9 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	handle = fs.OpenFile(path, flags);
 	if (!handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist, or cannot be opened by already registered filesystems.", path);
+		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist, or cannot be opened "
+						  "by already registered filesystems.",
+                          path);
 	}
 
 	MainHeader::CheckMagicBytes(*handle);
