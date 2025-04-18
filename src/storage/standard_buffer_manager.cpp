@@ -12,8 +12,6 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
-#include <duckdb/common/sort/duckdb_pdqsort.hpp>
-
 namespace duckdb {
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
@@ -396,10 +394,9 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 	auto &buffer = handle->GetBuffer(lock);
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
-		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, GetBlockHeaderSize());
+		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size);
 	} else {
-		replacement_buffer =
-		    make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, GetBlockHeaderSize());
+		replacement_buffer = make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size);
 	}
 	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
 	WriteGarbageIntoBuffer(lock, *handle);
