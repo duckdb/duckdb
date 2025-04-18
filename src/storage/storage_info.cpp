@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-const uint64_t VERSION_NUMBER = 64;
+const uint64_t VERSION_NUMBER = 66;
 const uint64_t VERSION_NUMBER_LOWER = 64;
 const uint64_t VERSION_NUMBER_UPPER = 66;
 
@@ -26,7 +26,7 @@ struct SerializationVersionInfo {
 // Do not edit them manually, your changes will be overwritten
 // clang-format off
 // START OF STORAGE VERSION INFO
-const uint64_t DEFAULT_STORAGE_VERSION_INFO = 64;
+const uint64_t DEFAULT_STORAGE_VERSION_INFO = 66;
 static const StorageVersionInfo storage_version_info[] = {
 	{"v0.0.4", 1},
 	{"v0.1.0", 1},

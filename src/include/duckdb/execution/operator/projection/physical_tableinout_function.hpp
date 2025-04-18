@@ -32,7 +32,7 @@ public:
 	                                        OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
-		return true;
+		return !(function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED);
 	}
 
 	bool RequiresFinalExecute() const override {
