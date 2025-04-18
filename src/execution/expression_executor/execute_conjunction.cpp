@@ -131,7 +131,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			}
 		}
 		if (true_sel) {
-			true_sel->sort(result_count);
+			true_sel->Sort(result_count);
 		}
 
 		// adapt runtime statistics

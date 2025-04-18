@@ -95,9 +95,6 @@ public:
 	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
 		return sel_vector ? sel_vector[idx] : idx;
 	}
-	void sort(idx_t count) {
-		std::sort(sel_vector, sel_vector + count);
-	}
 	sel_t *data() { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
@@ -119,6 +116,7 @@ public:
 		return sel_vector;
 	}
 	void Verify(idx_t count, idx_t vector_size) const;
+	void Sort(idx_t count);
 
 private:
 	sel_t *sel_vector;
