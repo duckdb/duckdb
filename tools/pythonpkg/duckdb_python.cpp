@@ -320,6 +320,15 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    },
 	    "Interrupt pending operations", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
+	    "query_progress",
+	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->QueryProgress();
+	    },
+	    "Query progress of pending operation", py::kw_only(), py::arg("connection") = py::none());
+	m.def(
 	    "fetchone",
 	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
