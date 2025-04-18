@@ -395,7 +395,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, handle->block_manager);
 	} else {
 		replacement_buffer =
-		    make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, handle->block_manager);
+		    make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, &handle->block_manager);
 	}
 	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
 	WriteGarbageIntoBuffer(lock, *handle);
