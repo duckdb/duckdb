@@ -3083,6 +3083,17 @@ References the `from` vector in the `to` vector, this makes take shared ownershi
 */
 DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
 
+/*!
+Returns the debug string from the data chunk.
+The string returned must be freed.
+*/
+DUCKDB_C_API const char *duckdb_data_chunk_to_string(duckdb_data_chunk chunk);
+
+/*!
+Verifies the data chunk is a valid chunk.
+*/
+DUCKDB_C_API void duckdb_data_chunk_verify(duckdb_data_chunk chunk);
+
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//
