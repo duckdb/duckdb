@@ -701,9 +701,34 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	if (fsync(fd) != 0) {
+
+#if HAVE_FULLFSYNC
+	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
+	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
+	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+		return;
+	}
+#endif // HAVE_FULLFSYNC
+
+#if HAVE_FDATASYNC
+	bool sync_success = ::fdatasync(fd) == 0;
+#else
+	bool sync_success = ::fsync(fd) == 0;
+#endif // HAVE_FDATASYNC
+
+	if (sync_success) {
+		return;
+	}
+
+	// Use fatal exception to handle fsyncgate issue: `fsync` only reports EIO for once, which makes it unretriable and
+	// data loss unrecoverable.
+	if (errno == EIO) {
 		throw FatalException("fsync failed!");
 	}
+
+	// For other types of errors, throw normal IO exception.
+	throw IOException("Could not fsync file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.GetPath(),
+	                  strerror(errno));
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
@@ -1220,8 +1245,8 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
-                                     bool join_path) {
+static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
+                                     bool match_directory, bool join_path) {
 
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		string concat;
@@ -1243,7 +1268,7 @@ static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<
 }
 
 static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<string> &result, bool join_path) {
+                              vector<OpenFileInfo> &result, bool join_path) {
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		if (is_directory != match_directory) {
 			return;
@@ -1258,10 +1283,10 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 	});
 }
 
-vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
-	vector<string> result;
+vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
+	vector<OpenFileInfo> result;
 	if (FileExists(path, opener) || IsPipe(path, opener)) {
-		result.push_back(path);
+		result.emplace_back(path);
 	} else if (!absolute_path) {
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
@@ -1270,7 +1295,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
 				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
-					result.push_back(joined_path);
+					result.emplace_back(joined_path);
 				}
 			}
 		}
@@ -1319,9 +1344,9 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	return path.c_str() + GetFileUrlOffset(path);
 }
 
-vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
-		return vector<string>();
+		return vector<OpenFileInfo>();
 	}
 	// split up the path into separate chunks
 	vector<string> splits;
@@ -1372,7 +1397,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		// no glob: return only the file (if it exists or is a pipe)
 		return FetchFileWithoutGlob(path, opener, absolute_path);
 	}
-	vector<string> previous_directories;
+	vector<OpenFileInfo> previous_directories;
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
 		previous_directories.push_back(splits[0]);
@@ -1406,7 +1431,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
-		vector<string> result;
+		vector<OpenFileInfo> result;
 		if (!has_glob) {
 			// no glob, just append as-is
 			if (previous_directories.empty()) {
@@ -1414,14 +1439,14 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			} else {
 				if (is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
-						const string filename = JoinPath(prev_directory, splits[i]);
+						const string filename = JoinPath(prev_directory.path, splits[i]);
 						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
 							result.push_back(filename);
 						}
 					}
 				} else {
 					for (auto &prev_directory : previous_directories) {
-						result.push_back(JoinPath(prev_directory, splits[i]));
+						result.push_back(JoinPath(prev_directory.path, splits[i]));
 					}
 				}
 			}
@@ -1434,7 +1459,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
 				} else {
 					for (auto &prev_dir : previous_directories) {
-						RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk, true);
+						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
 					}
 				}
 			} else {
@@ -1445,7 +1470,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 					// previous directories
 					// we iterate over each of the previous directories, and apply the glob of the current directory
 					for (auto &prev_directory : previous_directories) {
-						GlobFilesInternal(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
 					}
 				}
 			}
@@ -1460,7 +1485,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 		previous_directories = std::move(result);
 	}
-	return vector<string>();
+	return vector<OpenFileInfo>();
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {

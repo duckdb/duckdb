@@ -16,28 +16,22 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# HTTPFS
-# Warning: the patching mechanism on windows doesn't work for httpfs somehow.
-# To patch httpfs:
-#  - add patch file, enable APPLY_PATCHES
-#  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
-#  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
+    GIT_TAG 22a0387e09389ee9148f58b3f8a71e7896b48093
     INCLUDE_DIR extension/httpfs/include
+    APPLY_PATCHES
     )
 
-### Skip due to missing patch
-if(FALSE)
 ################# AVRO
 if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
             GIT_TAG ed18629fa56a97e0796a3582110b51ddd125159d
+            APPLY_PATCHES
     )
-endif()
 endif()
 
 ################## AWS
@@ -56,6 +50,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
             GIT_TAG 1593cb56745a51eb7d8415c1fd7d11a15f20f413
+            APPLY_PATCHES
             )
 endif()
 
@@ -79,10 +74,12 @@ duckdb_extension_load(excel
     GIT_URL https://github.com/duckdb/duckdb-excel
     GIT_TAG b724b308b2b3a3c5644272cc84ec140fbcc7617d
     INCLUDE_DIR src/excel/include
+    APPLY_PATCHES
     )
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
+if (FALSE)
 IF (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
 else ()
@@ -95,6 +92,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_URL https://github.com/duckdb/duckdb-iceberg
             GIT_TAG 2db98c685f67373b347c3a8c435ef2e01c509697
             )
+endif()
 endif()
 
 ################# INET
@@ -128,6 +126,7 @@ duckdb_extension_load(spatial
     GIT_TAG 4be6065edc313a53ff2196ff79c11a0d5e249720
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 

@@ -81,7 +81,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	REQUIRE(!fs->FileExists(fname_in_dir2));
 
 	auto file_listing = fs->Glob(fs->JoinPath(dname_triple_slash, "*"));
-	REQUIRE(file_listing[0] == fname_in_dir);
+	REQUIRE(file_listing[0].path == fname_in_dir);
 
 	fs->MoveFile(fname_in_dir, fname_in_dir2);
 
@@ -89,7 +89,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	REQUIRE(fs->FileExists(fname_in_dir2));
 
 	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_no_host, "*"));
-	REQUIRE(file_listing_after_move[0] == fname_in_dir3);
+	REQUIRE(file_listing_after_move[0].path == fname_in_dir3);
 
 	fs->RemoveDirectory(dname_triple_slash);
 

@@ -177,7 +177,7 @@ struct JSONError {
 
 class JSONReader : public BaseFileReader {
 public:
-	JSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
+	JSONReader(ClientContext &context, JSONReaderOptions options, OpenFileInfo file);
 
 	void OpenJSONFile();
 	void CloseHandle();
