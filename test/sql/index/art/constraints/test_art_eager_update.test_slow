@@ -1,6 +1,6 @@
 # name: test/sql/index/art/constraints/test_art_eager_update.test_slow
 # description: Test ART BIGINT key type
-# group: [types]
+# group: [constraints]
 
 statement ok
 PRAGMA enable_verification
