@@ -688,7 +688,6 @@ void Linenoise::EditDeletePrevWord() {
 	while (pos > 0 && IsSpace(buf[pos - 1])) {
 		pos--;
 	}
-	//
 	while (pos > 0 && !IsSpace(buf[pos - 1]) && IsQuote(buf[pos - 1])) {
 		pos--;
 	}
