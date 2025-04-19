@@ -401,16 +401,16 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &allocator = Allocator::Get(db);
 	auto block_header_size = handle->block_manager.GetBlockHeaderSize();
-	auto alloc_size = handle->GetMemoryUsage() - block_header_size);
+	auto alloc_size = handle->GetMemoryUsage() - block_header_size;
 	auto &buffer = handle->GetBuffer(lock);
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
 		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, block_header_size);
 	} else {
-		replacement_buffer = make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), block_header_size);
+		replacement_buffer = make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), handle->block_manager);
 	}
 	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
-	WriteGarbageIntoBuffer(lock, *handle);
+	// WriteGarbageIntoBuffer(lock, *handle);
 	buffer = std::move(replacement_buffer);
 #endif
 }

@@ -16,6 +16,7 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "encryption_key") {
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
+			storage_options.encryption = true;
 			// set storage version to v1.3.0
 			storage_options.storage_version = SerializationCompatibility::FromString("v1.3.0").serialization_version;
 		} else if (entry.first == "row_group_size") {

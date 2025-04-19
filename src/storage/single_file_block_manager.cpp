@@ -210,6 +210,12 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+
+	if (options.NeedsEncryption()) {
+		//! set database flag if encryption is required
+		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+	}
+
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	//! the main database header is written
 	ChecksumAndWrite(header_buffer, 0, true);
@@ -272,6 +278,15 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
+
+	if (main_header.IsEncrypted() && !options.NeedsEncryption()) {
+		throw CatalogException("Cannot open encrypted database \"%s\" without a password", path);
+	}
+	if (!main_header.IsEncrypted() && options.NeedsEncryption()) {
+		// database is not encrypted, but we are trying to open it with encryption
+		throw CatalogException("A password is specified, but database \"%s\" is not encrypted", path);
+	}
+
 	options.version_number = main_header.version_number;
 
 	// read the database headers from disk

@@ -185,11 +185,14 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
 		}
-		// Set the block header size for the encrypted database files.
+		//! set the block header size for the encrypted database files
+		//! set the database to encrypted
+		//! update the storage version to 1.3.0
 		if (storage_options.block_header_size.IsValid()) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
+			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
 		} else {
 			// No encryption; use the default option.
@@ -210,11 +213,13 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
 
-		// Set the block header size for the encrypted database files (also if they already exist).
+		// set the block header size for the encrypted database files
+		// (also if they already exist)
 		if (storage_options.block_header_size.IsValid()) {
-			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
+			options.encryption = storage_options.encryption;
+			options.storage_version = storage_options.storage_version;
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;

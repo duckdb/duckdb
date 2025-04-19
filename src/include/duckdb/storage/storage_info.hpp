@@ -83,6 +83,7 @@ struct MainHeader {
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
+	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
 	//! The magic bytes in front of the file should be "DUCK"
 	static const char MAGIC_BYTES[];
 	//! The version of the database
@@ -96,6 +97,10 @@ struct MainHeader {
 	}
 	string LibraryGitHash() {
 		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
+	}
+
+	bool IsEncrypted() const {
+		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
 	void Write(WriteStream &ser);

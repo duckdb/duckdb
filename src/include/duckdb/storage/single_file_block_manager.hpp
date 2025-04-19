@@ -30,6 +30,13 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
+
+	//! indicates whether db is encrypted
+	bool encryption = false;
+
+	bool NeedsEncryption() const {
+		return encryption;
+	}
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
