@@ -59,7 +59,7 @@ public:
 
 		auto &info = state.info;
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockSize());
+		                                                                info.GetBlockSize(), info.GetBlockManager());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
 			compressed_segment->stats.statistics.SetHasNullFast();

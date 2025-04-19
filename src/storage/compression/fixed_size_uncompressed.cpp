@@ -22,7 +22,7 @@ struct FixedSizeAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<FixedSizeAnalyzeState>(info);
 }
 
@@ -68,8 +68,8 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
+	                                                                info.GetBlockManager());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &partial_block_manager = checkpoint_data.GetCheckpointState().GetPartialBlockManager();
