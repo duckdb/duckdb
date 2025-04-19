@@ -2,7 +2,7 @@
 # description: Test the list_value function
 # group: [list]
 
-# test very large table
+# test very large table with nested lists
 statement ok
 CREATE TABLE large_list_table(a INTEGER[], b INTEGER[], c INTEGER[]);
 
@@ -13,3 +13,15 @@ query I
 SELECT LIST_VALUE(a, b, c) FROM large_list_table WHERE a[1] = 1;
 ----
 [[1, 1, 1], [2, 2], [3]]
+
+# test very large table with structs
+statement ok
+CREATE TABLE large_struct_table(a ROW(a INTEGER, b INTEGER), b ROW(a INTEGER, b INTEGER), c ROW(a INTEGER, b INTEGER));
+
+statement ok
+INSERT INTO large_struct_table SELECT ROW(i - 5, i - 4), ROW(i - 3, i - 2), ROW(i - 1, i) FROM range(1000000) tbl(i);
+
+query I
+SELECT LIST_VALUE(a, b, c) FROM large_struct_table WHERE a.a = 1;
+----
+[{'a': 1, 'b': 2}, {'a': 3, 'b': 4}, {'a': 5, 'b': 6}]
