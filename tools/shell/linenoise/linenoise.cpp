@@ -669,6 +669,16 @@ bool Linenoise::IsSpace(char c) {
 	}
 }
 
+bool Linenoise::IsQuote(char c) {
+	switch (c) {
+	case '\'':
+	case '"':
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* Delete the previous word, maintaining the cursor at the start of the
  * current word. */
 void Linenoise::EditDeletePrevWord() {
@@ -678,7 +688,8 @@ void Linenoise::EditDeletePrevWord() {
 	while (pos > 0 && IsSpace(buf[pos - 1])) {
 		pos--;
 	}
-	while (pos > 0 && !IsSpace(buf[pos - 1])) {
+	//
+	while (pos > 0 && !IsSpace(buf[pos - 1]) && IsQuote(buf[pos - 1])) {
 		pos--;
 	}
 	diff = old_pos - pos;
@@ -695,7 +706,7 @@ void Linenoise::EditDeleteNextWord() {
 	while (next_pos < len && IsSpace(buf[next_pos])) {
 		next_pos++;
 	}
-	while (next_pos < len && !IsSpace(buf[next_pos])) {
+	while (next_pos < len && !IsSpace(buf[next_pos]) && IsQuote(buf[pos - 1])) {
 		next_pos++;
 	}
 	diff = next_pos - pos;
