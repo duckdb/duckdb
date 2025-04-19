@@ -1,0 +1,44 @@
+# name: test/sql/copy/encryption/simple_encryption.test
+# group: [encryption]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+
+statement  ok
+CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM unencrypted.tbl
+----
+45
+
+statement ok
+DETACH unencrypted
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+
+statement ok
+COPY FROM DATABASE unencrypted TO encrypted;
+
+statement ok
+DETACH unencrypted
+
+statement ok
+DETACH encrypted
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+query I
+SELECT SUM(i) FROM encrypted.tbl
+----
+45
