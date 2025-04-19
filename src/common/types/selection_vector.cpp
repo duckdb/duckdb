@@ -28,6 +28,10 @@ string SelectionVector::ToString(idx_t count) const {
 	return result;
 }
 
+void SelectionVector::Sort(idx_t count) {
+	std::sort(sel_vector, sel_vector + count);
+}
+
 void SelectionVector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
