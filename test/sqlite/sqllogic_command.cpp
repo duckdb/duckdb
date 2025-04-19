@@ -93,6 +93,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
@@ -350,18 +351,19 @@ bool LoopCommand::SupportsConcurrent() const {
 
 void Query::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
+	std::ostringstream &oss = GetSummary();
 
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
-			logger.PrintLineSep();
-			logger.PrintFileHeader();
+			logger.PrintLineSep(oss);
+			logger.PrintFileHeader(oss);
 			logger.PrintSQLFormatted();
-			logger.PrintLineSep();
+			logger.PrintLineSep(oss);
 		}
 
 		if (runner.output_sql) {
-			logger.PrintSQL();
+			logger.PrintSQL(oss);
 			return;
 		}
 	}
@@ -465,22 +467,23 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-
+	std::ostringstream &oss = GetSummary();
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
-			logger.PrintLineSep();
-			logger.PrintFileHeader();
+			logger.PrintLineSep(oss);
+			logger.PrintFileHeader(oss);
 			logger.PrintSQLFormatted();
-			logger.PrintLineSep();
+			logger.PrintLineSep(oss);
 		}
 
 		query_break(query_line);
 		if (runner.output_sql) {
-			logger.PrintSQL();
+			logger.PrintSQL(oss);
 			return;
 		}
 	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
