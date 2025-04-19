@@ -14,8 +14,7 @@ Block::Block(Allocator &allocator, block_id_t id, uint32_t internal_size, idx_t 
 }
 
 Block::Block(Allocator &allocator, block_id_t id, BlockManager &block_manager)
-    : FileBuffer(allocator, FileBufferType::BLOCK, block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize()),
-      id(id) {
+    : FileBuffer(allocator, FileBufferType::BLOCK, block_manager), id(id) {
 	D_ASSERT((AllocSize() & (Storage::SECTOR_SIZE - 1)) == 0);
 }
 

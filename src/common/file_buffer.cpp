@@ -19,6 +19,12 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_
 	}
 }
 
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager)
+    : allocator(allocator), type(type) {
+	Init();
+	Resize(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
+}
+
 void FileBuffer::Init() {
 	buffer = nullptr;
 	size = 0;

@@ -28,6 +28,7 @@ public:
 	//! Our allocation size will always be page-aligned, which is necessary to support
 	//! DIRECT_IO
 	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size);
+	FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager);
 	FileBuffer(FileBuffer &source, FileBufferType type);
 
 	virtual ~FileBuffer();

@@ -258,8 +258,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 #endif
 
 	// allocate a buffer to hold the data of all of the blocks
-	auto intermediate_buffer =
-	    Allocate(MemoryTag::BASE_TABLE, block_count * block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
+	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * block_manager.GetBlockSize());
 	// perform a batch read of the blocks into the buffer
 	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
