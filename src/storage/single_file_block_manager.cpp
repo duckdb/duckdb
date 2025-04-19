@@ -280,11 +280,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 
 	if (main_header.IsEncrypted() && !options.NeedsEncryption()) {
-		throw CatalogException("Cannot open encrypted database \"%s\" without a password", path);
+		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 	}
 	if (!main_header.IsEncrypted() && options.NeedsEncryption()) {
-		// database is not encrypted, but we are trying to open it with encryption
-		throw CatalogException("A password is specified, but database \"%s\" is not encrypted", path);
+		// database is not encrypted, but is tried to be opened with a key
+		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
 	}
 
 	options.version_number = main_header.version_number;
