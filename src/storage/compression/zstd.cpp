@@ -294,8 +294,7 @@ public:
 		}
 
 		if (!to_use->IsValid()) {
-			*to_use = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize(),
-			                                  block_manager.GetBlockHeaderSize());
+			*to_use = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, &block_manager);
 		}
 		return *to_use;
 	}

@@ -22,7 +22,7 @@ public:
 		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
 		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
 		block = buffer_handle.GetBlockHandle();
-		D_ASSERT(BufferManager::GetAllocSize(size, block->block_manager.GetBlockHeaderSize()) ==
+		D_ASSERT(BufferManager::GetAllocSize(size + block->block_manager.GetBlockHeaderSize()) ==
 		         block->GetMemoryUsage());
 	}
 
@@ -113,7 +113,8 @@ public:
 #ifdef DEBUG
 		for (auto &block : blocks) {
 			D_ASSERT(block->block->GetMemoryUsage() ==
-			         BufferManager::GetAllocSize(block->capacity * entry_size, buffer_manager.GetBlockHeaderSize()));
+			         BufferManager::GetAllocSize(block->capacity * entry_size +
+			                                     buffer_manager.GetTemporaryBlockHeaderSize()));
 		}
 #endif
 	}

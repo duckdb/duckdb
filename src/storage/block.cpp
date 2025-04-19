@@ -4,12 +4,18 @@
 
 namespace duckdb {
 
-Block::Block(Allocator &allocator, const block_id_t id, const idx_t block_size, BlockManager &block_manager)
-    : FileBuffer(allocator, FileBufferType::BLOCK, block_size, &block_manager), id(id) {
+Block::Block(Allocator &allocator, const block_id_t id, const idx_t block_size, const idx_t block_header_size)
+    : FileBuffer(allocator, FileBufferType::BLOCK, block_size, block_header_size), id(id) {
 }
 
-Block::Block(Allocator &allocator, block_id_t id, uint32_t internal_size, BlockManager &block_manager)
-    : FileBuffer(allocator, FileBufferType::BLOCK, internal_size, &block_manager), id(id) {
+Block::Block(Allocator &allocator, block_id_t id, uint32_t internal_size, idx_t block_header_size)
+    : FileBuffer(allocator, FileBufferType::BLOCK, internal_size, block_header_size), id(id) {
+	D_ASSERT((AllocSize() & (Storage::SECTOR_SIZE - 1)) == 0);
+}
+
+Block::Block(Allocator &allocator, block_id_t id, BlockManager &block_manager)
+    : FileBuffer(allocator, FileBufferType::BLOCK, block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize()),
+      id(id) {
 	D_ASSERT((AllocSize() & (Storage::SECTOR_SIZE - 1)) == 0);
 }
 

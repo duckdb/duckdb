@@ -38,8 +38,6 @@ public:
 	StandardBufferManager(DatabaseInstance &db, string temp_directory);
 	~StandardBufferManager() override;
 
-	optional_idx block_header_size;
-
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
@@ -61,12 +59,16 @@ public:
 	idx_t GetBlockAllocSize() const final;
 	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
-	idx_t GetBlockHeaderSize() const final;
+	idx_t GetTemporaryBlockHeaderSize() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
-	                                 BlockManager *block_manager = nullptr) final;
+	DUCKDB_API shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
+	                                                           bool can_destroy = true) final;
+	DUCKDB_API shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
+	                                                  bool can_destroy = true) final;
+	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
+	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
@@ -99,9 +101,8 @@ public:
 	}
 
 	//! Construct a managed buffer.
-	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
-	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER,
-	                                              BlockManager *block_manager = nullptr) override;
+	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
+	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER) override;
 
 	DUCKDB_API void ReserveMemory(idx_t size) final;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
@@ -122,8 +123,10 @@ protected:
 	//! The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
-	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy,
-	                                       BlockManager *block_manager);
+	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy);
+
+	//! Get allocated size for a block
+	idx_t GetBlockAllocSize(idx_t block_size) const;
 
 	//! Garbage collect eviction queue
 	void PurgeQueue(const BlockHandle &handle) final;

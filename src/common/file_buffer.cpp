@@ -11,15 +11,11 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, BlockManager *block_manager)
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size)
     : allocator(allocator), type(type) {
 	Init();
 	if (user_size) {
-		if (block_manager) {
-			Resize(user_size, block_manager);
-		} else {
-			Resize(user_size);
-		}
+		Resize(user_size, block_header_size);
 	}
 }
 
@@ -80,13 +76,7 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size, ui
 	return result;
 }
 
-void FileBuffer::Resize(uint64_t new_size, BlockManager *block_manager) {
-	uint64_t block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-
-	if (block_manager) {
-		block_header_size = block_manager->GetBlockHeaderSize();
-	}
-
+void FileBuffer::Resize(uint64_t new_size, uint64_t block_header_size) {
 	auto req = CalculateMemory(new_size, block_header_size);
 	ReallocBuffer(req.alloc_size);
 
