@@ -15,14 +15,14 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_
     : allocator(allocator), type(type) {
 	Init();
 	if (user_size) {
-		Resize(user_size, block_header_size);
+		ResizeInternal(user_size, block_header_size);
 	}
 }
 
 FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager)
     : allocator(allocator), type(type) {
 	Init();
-	Resize(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
+	Resize(block_manager);
 }
 
 void FileBuffer::Init() {
@@ -82,7 +82,7 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size, ui
 	return result;
 }
 
-void FileBuffer::Resize(uint64_t new_size, uint64_t block_header_size) {
+void FileBuffer::ResizeInternal(uint64_t new_size, uint64_t block_header_size) {
 	auto req = CalculateMemory(new_size, block_header_size);
 	ReallocBuffer(req.alloc_size);
 
@@ -90,6 +90,14 @@ void FileBuffer::Resize(uint64_t new_size, uint64_t block_header_size) {
 		buffer = internal_buffer + req.header_size;
 		size = internal_size - req.header_size;
 	}
+}
+
+void FileBuffer::Resize(uint64_t new_size, BlockManager &block_manager) {
+	ResizeInternal(new_size, block_manager.GetBlockHeaderSize());
+}
+
+void FileBuffer::Resize(BlockManager &block_manager) {
+	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {

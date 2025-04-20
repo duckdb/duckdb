@@ -97,7 +97,7 @@ ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' as unencrypted_v_1_2_0 (STORAGE
 statement ok
 COPY FROM DATABASE encrypted TO unencrypted_new;
 
-# copy encrypted db to unencrypted database with v0.10.2 storage version
+# copy encrypted db to unencrypted database with v1.2.0 storage version
 statement ok
 COPY FROM DATABASE encrypted_v2 TO unencrypted_v_1_2_0;
 
