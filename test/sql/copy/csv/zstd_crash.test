@@ -25,7 +25,7 @@ Attempting to open a compressed file, but the compression type is not supported
 statement error
 COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION GZIP);
 ----
-Input is not a GZIP stream
+Input is not a GZIP stream: data/csv/broken/test.csv.zst
 
 statement error
 COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION NONE);
