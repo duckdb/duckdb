@@ -13,7 +13,7 @@ statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb';
+ATTACH '__TEST_DIR__/unencrypted.duckdb' (STORAGE_VERSION 'v1.0.0');
 
 statement  ok
 CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(10) t(i);
