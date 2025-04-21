@@ -180,7 +180,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		AddTableOperator(op);
+		// AddTableOperator(op);
 		ExtractOperatorsInternal(*op->children[0], joins);
 		ExtractOperatorsInternal(*op->children[1], joins);
 		return;
