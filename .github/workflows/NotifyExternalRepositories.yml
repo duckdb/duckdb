@@ -18,12 +18,12 @@ on:
         type: 'string'
       should-publish:
         description: 'Should the called workflow push updates or not'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
       is-success:
         description: 'True, if all the builds in InvokeCI had succeeded'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
   workflow_dispatch:
     inputs:
       duckdb-sha:
@@ -42,12 +42,12 @@ on:
         type: 'string'
       should-publish:
         description: 'Should the called workflow push updates'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
       is-success:
         description: 'True, if all the builds in InvokeCI had succeeded'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
 
 concurrency:
   group: ${{ github.workflow }}
