@@ -30,7 +30,7 @@ namespace duckdb {
 
 // A BF is at most (1 << 21) * 8 = 8 MB
 static constexpr const uint32_t MAX_NUM_BLOCKS = (1ULL << 31);
-static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
+static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 32;
 static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_BLOCK_SIZE = 5;
 
@@ -63,10 +63,11 @@ private:
 		for (int i = 0; i < num; i++) {
 			uint32_t key_high = static_cast<uint32_t>(key[i] >> 32);
 			uint32_t key_low = static_cast<uint32_t>(key[i]);
-			// We have the do some operators on key_high, otherwise the compiler will use 8 * 64 gathers instead of 16 *
-			// 32 gathers.
+
 			uint32_t block = key_high & (num_blocks_ - 1);
-			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31));
+			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31)) |
+			                (1 << ((key_low >> 15) & 31)) | (1 << ((key_low >> 20) & 31)) |
+			                (1 << ((key_low >> 25) & 31));
 			out[i] = (bf[block] & mask) == mask;
 		}
 		return num;
@@ -76,10 +77,11 @@ private:
 		for (int i = 0; i < num; i++) {
 			uint32_t key_high = static_cast<uint32_t>(key[i] >> 32);
 			uint32_t key_low = static_cast<uint32_t>(key[i]);
-			// We have the do some operators on key_high, otherwise the compiler will use 8 * 64 gathers instead of 16 *
-			// 32 gathers.
+
 			uint32_t block = key_high & (num_blocks_ - 1);
-			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31));
+			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31)) |
+			                (1 << ((key_low >> 15) & 31)) | (1 << ((key_low >> 20) & 31)) |
+			                (1 << ((key_low >> 25) & 31));
 			bf[block] |= mask;
 		}
 	}
