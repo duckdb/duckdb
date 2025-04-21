@@ -51,11 +51,11 @@ public:
 	int Lookup(DataChunk &chunk, vector<uint32_t> &results);
 	void Insert(DataChunk &chunk);
 
-	uint32_t num_blocks_;
+	uint32_t num_blocks;
 	uint32_t num_blocks_log;
 
 	std::mutex insert_lock;
-	uint32_t *blocks_;
+	uint32_t *blocks;
 
 private:
 	int BloomFilterLookup(int num, uint64_t *BF_RESTRICT key, uint32_t *BF_RESTRICT bf,
@@ -64,7 +64,7 @@ private:
 			uint32_t key_high = static_cast<uint32_t>(key[i] >> 32);
 			uint32_t key_low = static_cast<uint32_t>(key[i]);
 
-			uint32_t block = key_high & (num_blocks_ - 1);
+			uint32_t block = key_high & (num_blocks - 1);
 			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31)) |
 			                (1 << ((key_low >> 15) & 31)) | (1 << ((key_low >> 20) & 31)) |
 			                (1 << ((key_low >> 25) & 31));
@@ -78,7 +78,7 @@ private:
 			uint32_t key_high = static_cast<uint32_t>(key[i] >> 32);
 			uint32_t key_low = static_cast<uint32_t>(key[i]);
 
-			uint32_t block = key_high & (num_blocks_ - 1);
+			uint32_t block = key_high & (num_blocks - 1);
 			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31)) |
 			                (1 << ((key_low >> 15) & 31)) | (1 << ((key_low >> 20) & 31)) |
 			                (1 << ((key_low >> 25) & 31));
