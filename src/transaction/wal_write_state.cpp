@@ -45,6 +45,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
+	case CatalogType::MATVIEW_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
@@ -70,6 +71,10 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::TABLE_ENTRY:
 				// CREATE TABLE statement
 				log.WriteCreateTable(parent.Cast<TableCatalogEntry>());
+				break;
+			case CatalogType::MATVIEW_ENTRY:
+				// CREATE MATERIALIZED VIEW statement
+				log.WriteCreateMatView(parent.Cast<MatViewCatalogEntry>());
 				break;
 			case CatalogType::VIEW_ENTRY:
 				// CREATE VIEW statement

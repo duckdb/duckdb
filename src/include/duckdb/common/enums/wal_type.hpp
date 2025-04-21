@@ -44,6 +44,9 @@ enum class WALType : uint8_t {
 	CREATE_INDEX = 23,
 	DROP_INDEX = 24,
 
+	CREATE_MATVIEW = 25,
+	DROP_MATVIEW = 26,
+
 	// -----------------------------
 	// Data
 	// -----------------------------
