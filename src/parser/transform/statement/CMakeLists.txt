@@ -25,6 +25,7 @@ add_library_unity(
   transform_insert.cpp
   transform_load.cpp
   transform_pragma.cpp
+  transform_refresh_matview.cpp
   transform_rename.cpp
   transform_secret.cpp
   transform_select.cpp

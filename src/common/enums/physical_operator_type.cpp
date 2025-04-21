@@ -89,8 +89,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_TABLE";
 	case PhysicalOperatorType::CREATE_TABLE_AS:
 		return "CREATE_TABLE_AS";
-	case PhysicalOperatorType::CREATE_MATVIEW:
-		return "CREATE_MATERIALIZED_VIEW";
 	case PhysicalOperatorType::BATCH_CREATE_TABLE_AS:
 		return "BATCH_CREATE_TABLE_AS";
 	case PhysicalOperatorType::CREATE_INDEX:

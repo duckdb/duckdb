@@ -159,14 +159,6 @@ public:
 	//! Creates a table in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateView(ClientContext &context, CreateViewInfo &info);
-
-	//! Creates a materialized view in the catalog.
-	DUCKDB_API optional_ptr<CatalogEntry> CreateMatView(ClientContext &context, BoundCreateTableInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateMatView(ClientContext &context, unique_ptr<CreateMatViewInfo> info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateMatView(CatalogTransaction &transaction, SchemaCatalogEntry &schema,
-	                                                    BoundCreateTableInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateMatView(CatalogTransaction &transaction, BoundCreateTableInfo &info);
-
 	//! Creates a sequence in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSequence(ClientContext &context, CreateSequenceInfo &info);

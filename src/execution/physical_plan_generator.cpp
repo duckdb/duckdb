@@ -122,8 +122,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalUpdate>());
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
-	case LogicalOperatorType::LOGICAL_CREATE_MATVIEW:
-		return CreatePlan(op.Cast<LogicalCreateMatView>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 		return CreatePlan(op.Cast<LogicalCreateIndex>());
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
