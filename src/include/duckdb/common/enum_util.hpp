@@ -282,6 +282,8 @@ enum class PreparedParamType : uint8_t;
 
 enum class PreparedStatementMode : uint8_t;
 
+enum class PreserveOrderType : uint8_t;
+
 enum class ProfilerPrintFormat : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
@@ -775,6 +777,9 @@ const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value);
 
 template<>
 const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value);
+
+template<>
+const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
@@ -1328,6 +1333,9 @@ PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value);
 
 template<>
 PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value);
+
+template<>
+PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value);
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
