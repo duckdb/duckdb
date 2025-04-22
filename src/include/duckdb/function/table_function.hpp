@@ -266,6 +266,9 @@ public:
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
+typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
+                                                                      TableFunctionBindInput &input, idx_t bind_index,
+                                                                      vector<string> &return_names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,
@@ -337,6 +340,10 @@ public:
 	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
 	//! also return a nullptr to indicate a regular bind needs to be performed instead.
 	table_function_bind_replace_t bind_replace;
+	//! (Optional) Bind operator function
+	//! This function is called before the regular bind function - similar to bind_replace - but allows returning a
+	//! custom LogicalOperator instead.
+	table_function_bind_operator_t bind_operator;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
 	//! The global operator state is used to keep track of the progress in the table function and is shared between

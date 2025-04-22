@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
+shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size, BlockManager &block_manager) {
 	throw NotImplementedException("This type of BufferManager can not create 'transient-memory' blocks");
 }
 
@@ -68,13 +68,12 @@ idx_t BufferManager::GetQueryMaxMemory() const {
 	return GetBufferPool().GetQueryMaxMemory();
 }
 
-unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&,
-                                                             FileBufferType type) {
+unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, idx_t block_header_size,
+                                                             unique_ptr<FileBuffer> &&, FileBufferType type) {
 	throw NotImplementedException("This type of BufferManager can not construct managed buffers");
 }
 
 // Protected methods
-
 void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	throw NotImplementedException("This type of BufferManager does not support 'AddToEvictionQueue");
 }

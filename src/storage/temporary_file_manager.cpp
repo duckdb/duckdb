@@ -208,7 +208,8 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 	handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(), GetPositionInFile(block_index));
 
 	// Decompress into buffer
-	auto buffer = buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockSize(), std::move(reusable_buffer));
+	auto buffer = buffer_manager.ConstructManagedBuffer(
+	    buffer_manager.GetBlockSize(), buffer_manager.GetTemporaryBlockHeaderSize(), std::move(reusable_buffer));
 
 	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
