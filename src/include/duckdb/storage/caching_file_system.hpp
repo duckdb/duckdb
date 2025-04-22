@@ -79,6 +79,8 @@ private:
 	OpenFileInfo path;
 	//! Flags used to open the file
 	FileOpenFlags flags;
+	//! Whether to validate the cache entry
+	bool validate;
 	//! The associated CachedFile with cached ranges
 	CachedFile &cached_file;
 
@@ -113,8 +115,6 @@ private:
 	FileSystem &file_system;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
-	//! Whether to validate cache entries
-	bool validate;
 };
 
 } // namespace duckdb
