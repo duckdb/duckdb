@@ -41,7 +41,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
 
 	auto &buffer_manager = block_manager.buffer_manager;
 	auto block_size = block_manager.GetBlockSize();
-	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_size, false);
+	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
 	block_handle = buffer_handle.GetBlockHandle();
 
 	// Zero-initialize the buffer as it might get serialized to storage.
@@ -143,7 +143,7 @@ void FixedSizeBuffer::Pin() {
 
 	// Copy the (partial) data into a new (not yet disk-backed) buffer handle.
 	shared_ptr<BlockHandle> new_block_handle;
-	auto new_buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.GetBlockSize(), false);
+	auto new_buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
 	new_block_handle = new_buffer_handle.GetBlockHandle();
 	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
 
