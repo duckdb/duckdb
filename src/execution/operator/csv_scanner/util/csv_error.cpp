@@ -579,10 +579,11 @@ CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_co
                                const string &current_path) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Invalid unicode (byte sequence mismatch) detected. This file is not UTF-8 encoded." << '\n';
+	error << "Invalid unicode (byte sequence mismatch) detected. This file is not " << options.encoding << " encoded."
+	      << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it
-	    << "Possible Solution: Set the correct encoding, if available, to read this CSV File.(e.g., encoding='UTF-16')"
+	    << "Possible Solution: Set the correct encoding, if available, to read this CSV File (e.g., encoding='UTF-16')"
 	    << '\n';
 	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
 	return CSVError(error.str(), INVALID_ENCODING, current_column, csv_row, error_info, row_byte_position,
