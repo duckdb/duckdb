@@ -132,7 +132,8 @@ void DictFSSTCompressionStorage::StringScanPartial(ColumnSegment &segment, Colum
 
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE ||
-	    start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
+	    start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0 ||
+	    scan_state.mode == DictFSSTMode::FSST_ONLY) {
 		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);
