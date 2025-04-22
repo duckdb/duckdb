@@ -32,6 +32,20 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 
 	// **Backward pass**: Process nodes in original order (from first to last)
 	// - Similar to the forward pass, but for backward edges
+	if (!ordered_nodes.empty()) {
+		auto* root = ordered_nodes.front();
+		if (root->type == LogicalOperatorType::LOGICAL_GET) {
+			auto& get = root->Cast<LogicalGet>();
+			if (get.table_filters.filters.empty()) {
+				// The largest table has no filter, so it should not transfer any BF for other tables.
+				idx_t node_id = TableOperatorManager::GetScalarTableIndex(&get);
+				auto& node = graph_manager.transfer_graph[node_id];
+				node->backward_stage_edges.out.clear();
+			}
+		}
+	}
+
+
 	for (auto *current_node : ordered_nodes) {
 		for (auto &BF_plan : CreateBloomFilterPlan(*current_node, true)) {
 			graph_manager.AddFilterPlan(BF_plan.first, BF_plan.second, true);

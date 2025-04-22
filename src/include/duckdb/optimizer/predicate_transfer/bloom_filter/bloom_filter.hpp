@@ -30,7 +30,7 @@ namespace duckdb {
 
 // A BF is at most (1 << 21) * 8 = 8 MB
 static constexpr const uint32_t MAX_NUM_BLOCKS = (1ULL << 31);
-static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 32;
+static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
 static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_BLOCK_SIZE = 5;
 
