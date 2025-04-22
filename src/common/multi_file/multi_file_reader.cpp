@@ -10,6 +10,7 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
 
@@ -17,6 +18,11 @@ namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX;
+constexpr int32_t MultiFileReader::ORDINAL_FIELD_ID;
+constexpr int32_t MultiFileReader::FILENAME_FIELD_ID;
+constexpr int32_t MultiFileReader::ROW_ID_FIELD_ID;
+constexpr int32_t MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID;
 
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }
@@ -257,6 +263,7 @@ void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderB
 		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
 		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
 	}
+	result.insert(make_pair(COLUMN_IDENTIFIER_FILE_INDEX, TableColumn("file_index", LogicalType::UBIGINT)));
 }
 
 void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,
@@ -280,9 +287,14 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
 		if ((options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) ||
-		    column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
+		    column_id == COLUMN_IDENTIFIER_FILENAME) {
 			// filename
 			reader_data.constant_map.Add(global_idx, Value(filename));
+			continue;
+		}
+		if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
+			// filename
+			reader_data.constant_map.Add(global_idx, Value::UBIGINT(reader_data.reader->file_list_idx.GetIndex()));
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {
@@ -338,8 +350,8 @@ ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, Mult
                                                     const OpenFileInfo &initial_file,
                                                     const MultiFileReaderBindData &bind_data,
                                                     const virtual_column_map_t &virtual_columns) {
-	MultiFileColumnMapper column_mapper(context, reader_data, global_columns, global_column_ids, filters, initial_file,
-	                                    bind_data, virtual_columns);
+	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
+	                                    initial_file, bind_data, virtual_columns);
 	return column_mapper.CreateMapping();
 }
 
@@ -467,6 +479,22 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
+}
+
+unique_ptr<Expression> MultiFileReader::GetConstantVirtualColumn(MultiFileReaderData &reader_data, idx_t column_id,
+                                                                 const LogicalType &type) {
+	if (column_id == COLUMN_IDENTIFIER_EMPTY || column_id == COLUMN_IDENTIFIER_FILENAME) {
+		return make_uniq<BoundConstantExpression>(Value(type));
+	}
+	return nullptr;
+}
+
+unique_ptr<Expression> MultiFileReader::GetVirtualColumnExpression(ClientContext &, MultiFileReaderData &,
+                                                                   const vector<MultiFileColumnDefinition> &,
+                                                                   idx_t &column_id, const LogicalType &type,
+                                                                   MultiFileLocalIndex local_idx,
+                                                                   optional_ptr<MultiFileColumnDefinition> &) {
+	return make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
 }
 
 HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
