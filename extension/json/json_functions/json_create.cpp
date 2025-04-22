@@ -547,8 +547,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::DOUBLE:
 		TemplatedCreateValues<double, double>(doc, vals, value_v, count);
 		break;
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		TemplatedCreateValues<string_t, string_t>(doc, vals, value_v, count);
 		break;
@@ -567,6 +565,8 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::ARRAY:
 		CreateValuesArray(names, doc, vals, value_v, count);
 		break;
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:

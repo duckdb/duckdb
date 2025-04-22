@@ -132,6 +132,16 @@ bool CSVErrorHandler::HasError(const CSVErrorType error_type) {
 	return false;
 }
 
+CSVError CSVErrorHandler::GetFirstError(CSVErrorType error_type) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	for (const auto &er : errors) {
+		if (er.type == error_type) {
+			return er;
+		}
+	}
+	throw InternalException("CSVErrorHandler::GetFirstError was called without having an appropriate error type");
+}
+
 idx_t CSVErrorHandler::GetSize() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return errors.size();
@@ -272,6 +282,10 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	std::ostringstream error;
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
+	}
+	// Let's cap the csv row to 10k bytes. For performance reasons.
+	if (csv_row.size() > 10000) {
+		csv_row.erase(csv_row.begin() + 10000, csv_row.end());
 	}
 	error << error_message << '\n';
 	error << fixes << '\n';

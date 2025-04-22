@@ -71,9 +71,17 @@ public:
 			// We're deserializing from a previously successful bind call
 			// verify that the amount of columns still matches
 			if (return_types.size() != result->types.size()) {
-				auto file_string = !result->file_options.union_by_name && bound_on_first_file
-				                       ? result->file_list->GetFirstFile()
-				                       : StringUtil::Join(result->file_list->GetPaths(), ",");
+				string file_string;
+				if (!result->file_options.union_by_name && bound_on_first_file) {
+					file_string = result->file_list->GetFirstFile().path;
+				} else {
+					for (auto &file : result->file_list->GetPaths()) {
+						if (!file_string.empty()) {
+							file_string += ",";
+						}
+						file_string += file.path;
+					}
+				}
 				string extended_error;
 				extended_error = "Table schema: ";
 				for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
@@ -164,7 +172,7 @@ public:
 	// Returns true if resized
 	static bool TryGetNextFile(MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
-		string scanned_file;
+		OpenFileInfo scanned_file;
 		if (!global_state.file_list.Scan(global_state.file_list_scan, scanned_file)) {
 			return false;
 		}
@@ -188,9 +196,8 @@ public:
 		// 1. The MultiFileReader::Bind call
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-		return bind_data.multi_file_reader->InitializeReader(
-		    reader_data, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
-		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
+		return bind_data.multi_file_reader->InitializeReader(reader_data, bind_data, global_columns, global_column_ids,
+		                                                     table_filters, context, reader_state);
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
@@ -438,7 +445,7 @@ public:
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
-			if (bind_data.initial_reader->file_name == file_list.GetFirstFile()) {
+			if (bind_data.initial_reader->GetFileName() == file_list.GetFirstFile().path) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(std::move(bind_data.initial_reader)));
 			}
 		}
@@ -451,16 +458,16 @@ public:
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
-			string file_name;
+			OpenFileInfo file_name;
 			idx_t file_idx = result->file_list_scan.current_file_idx;
 			file_list.Scan(result->file_list_scan, file_name);
 			if (reader_data->union_data) {
-				if (file_name != reader_data->union_data->GetFileName()) {
+				if (file_name.path != reader_data->union_data->GetFileName()) {
 					throw InternalException("Mismatch in filename order and union reader order in multi file scan");
 				}
 			} else {
 				D_ASSERT(reader_data->reader);
-				if (file_name != reader_data->reader->file_name) {
+				if (file_name.path != reader_data->reader->GetFileName()) {
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
 				auto init_result = InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters,
@@ -646,7 +653,7 @@ public:
 
 		vector<Value> file_path;
 		for (const auto &file : bind_data.file_list->Files()) {
-			file_path.emplace_back(file);
+			file_path.emplace_back(file.path);
 		}
 
 		// LCOV_EXCL_START

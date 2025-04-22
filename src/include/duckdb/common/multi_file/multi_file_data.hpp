@@ -12,11 +12,20 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/open_file_info.hpp"
 #include <numeric>
 
 namespace duckdb {
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, SKIPPED, CLOSED };
+
+class DeleteFilter {
+public:
+	virtual ~DeleteFilter() = default;
+
+public:
+	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) = 0;
+};
 
 struct HivePartitioningIndex {
 	HivePartitioningIndex(string value, idx_t index);

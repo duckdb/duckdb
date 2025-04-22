@@ -212,7 +212,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (!catalog_entry) {
 		return false;
 	}
-	if (index == COLUMN_IDENTIFIER_ROW_ID) {
+	if (IsVirtualColumn(index)) {
 		return false;
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
@@ -613,10 +613,10 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
-                               StandardEntry &entry, bool add_row_id) {
+                               TableCatalogEntry &entry, bool add_virtual_columns) {
 	virtual_column_map_t virtual_columns;
-	if (add_row_id) {
-		virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	if (add_virtual_columns) {
+		virtual_columns = entry.GetVirtualColumns();
 	}
 	AddBinding(
 	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
@@ -626,7 +626,6 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<st
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const string &table_name) {
 	virtual_column_map_t virtual_columns;
-	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
 	                                   index, std::move(virtual_columns)));
 }

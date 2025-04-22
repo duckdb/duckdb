@@ -36,8 +36,6 @@
 
 namespace duckdb {
 
-constexpr int32_t ParquetReader::ORDINAL_FIELD_ID;
-
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::FieldRepetitionType;
@@ -48,58 +46,87 @@ using duckdb_parquet::SchemaElement;
 using duckdb_parquet::Statistics;
 using duckdb_parquet::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
-	auto transport = std::make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFileProtocol(CachingFileHandle &file_handle,
+                                                                                       bool prefetch_mode) {
+	auto transport = std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache>
-LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_handle,
-             const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
-             const EncryptionUtil &encryption_util) {
-	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
-	auto file_proto = CreateThriftFileProtocol(allocator, file_handle, false);
-	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
-	auto file_size = transport.GetSize();
-	if (file_size < 12) {
-		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
-	}
-
-	ResizeableBuffer buf;
-	buf.resize(allocator, 8);
-	buf.zero();
-
-	transport.SetLocation(file_size - 8);
-	transport.read(buf.ptr, 8);
-
-	bool footer_encrypted;
-	if (memcmp(buf.ptr + 4, "PAR1", 4) == 0) {
+void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
+                        const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
+                        bool &footer_encrypted) {
+	if (memcmp(buffer + 4, "PAR1", 4) == 0) {
 		footer_encrypted = false;
 		if (encryption_config) {
-			throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set",
-			                            file_handle.path);
+			throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set", file_path);
 		}
-	} else if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+	} else if (memcmp(buffer + 4, "PARE", 4) == 0) {
 		footer_encrypted = true;
 		if (!encryption_config) {
-			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set",
-			                            file_handle.path);
+			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set", file_path);
 		}
 	} else {
-		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
+		throw InvalidInputException("No magic bytes found at end of file '%s'", file_path);
 	}
 
 	// read four-byte footer length from just before the end magic bytes
-	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
+	footer_len = Load<uint32_t>(buffer);
 	if (footer_len == 0 || file_size < 12 + footer_len) {
-		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
+		throw InvalidInputException("Footer length error in file '%s'", file_path);
+	}
+}
+
+static shared_ptr<ParquetFileMetadataCache>
+LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
+             const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
+             optional_idx footer_size) {
+	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+	auto file_proto = CreateThriftFileProtocol(file_handle, false);
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
+	auto file_size = transport.GetSize();
+	if (file_size < 12) {
+		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
 	}
 
-	auto metadata_pos = file_size - (footer_len + 8);
-	transport.SetLocation(metadata_pos);
-	transport.Prefetch(metadata_pos, footer_len);
+	bool footer_encrypted;
+	// footer size is not provided - read it from the back
+	if (!footer_size.IsValid()) {
+		ResizeableBuffer buf;
+		buf.resize(allocator, 8);
+		buf.zero();
+
+		transport.Prefetch(file_size - 8, 8);
+		transport.SetLocation(file_size - 8);
+		transport.read(buf.ptr, 8);
+
+		uint32_t footer_len;
+		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+
+		auto metadata_pos = file_size - (footer_len + 8);
+		transport.SetLocation(metadata_pos);
+		transport.Prefetch(metadata_pos, footer_len);
+	} else {
+		auto footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
+		if (footer_len == 0 || file_size < 12 + footer_len) {
+			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
+		}
+
+		idx_t total_footer_len = footer_len + 8;
+		auto metadata_pos = file_size - total_footer_len;
+		transport.SetLocation(metadata_pos);
+		transport.Prefetch(metadata_pos, total_footer_len);
+
+		auto read_head = transport.GetReadHead(metadata_pos);
+		auto data_ptr = read_head->buffer_ptr;
+
+		uint32_t read_footer_len;
+		ParseParquetFooter(data_ptr + footer_len, file_handle.GetPath(), file_size, encryption_config, read_footer_len,
+		                   footer_encrypted);
+		if (read_footer_len != footer_len) {
+			throw InvalidInputException("Parquet footer length stored in file is not equal to footer length provided");
+		}
+	}
 
 	auto metadata = make_uniq<FileMetaData>();
 	if (footer_encrypted) {
@@ -107,7 +134,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		crypto_metadata->read(file_proto.get());
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_handle.path);
+			                            file_handle.GetPath());
 		}
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
 	} else {
@@ -615,7 +642,7 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
                                                                ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
 	if (element.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
-		result.identifier = Value::INTEGER(ORDINAL_FIELD_ID);
+		result.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		return result;
 	}
 	auto &column_schema = file_meta_data.schema[element.schema_index];
@@ -640,13 +667,13 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	if (file_meta_data->__isset.encryption_algorithm) {
 		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_name);
+			                            GetFileName());
 		}
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
 		throw InvalidInputException("Failed to read Parquet file '%s': Need at least one non-root column in the file",
-		                            file_name);
+		                            GetFileName());
 	}
 	root_schema = ParseSchema();
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
@@ -690,23 +717,37 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	return result;
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p,
+ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(std::move(file_name_p)), fs(FileSystem::GetFileSystem(context_p)),
+    : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
-	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
 		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
 
+	// read the extended file open info (if any)
+	optional_idx footer_size;
+	if (file.extended_info) {
+		auto &open_options = file.extended_info->options;
+		auto encryption_entry = file.extended_info->options.find("encryption_key");
+		if (encryption_entry != open_options.end()) {
+			parquet_options.encryption_config =
+			    make_shared_ptr<ParquetEncryptionConfig>(StringValue::Get(encryption_entry->second));
+		}
+		auto footer_entry = file.extended_info->options.find("footer_size");
+		if (footer_entry != open_options.end()) {
+			footer_size = UBigIntValue::Get(footer_entry->second);
+		}
+	}
 	// set pointer to factory method for AES state
 	auto &config = DBConfig::GetConfig(context_p);
 	if (config.encryption_util && parquet_options.debug_use_openssl) {
 		encryption_util = config.encryption_util;
 	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 	}
 
 	// If metadata cached is disabled
@@ -716,15 +757,15 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		Value metadata_cache = false;
 		context_p.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
 		if (!metadata_cache.GetValue<bool>()) {
-			metadata =
-			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
+			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
+			                        *encryption_util, footer_size);
 		} else {
-			auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
-			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
+			auto last_modify_time = file_handle->GetLastModifiedTime();
+			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file.path);
 			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-				                        *encryption_util);
-				ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
+				                        *encryption_util, footer_size);
+				ObjectCache::GetObjectCache(context_p).Put(file.path, metadata);
 			}
 		}
 	} else {
@@ -738,7 +779,7 @@ ParquetUnionData::~ParquetUnionData() {
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(string()), fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
+    : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	InitializeSchema(context_p);
 }
@@ -805,6 +846,15 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 	} else {
 		return iprot.getTransport()->read(buffer, buffer_size);
 	}
+}
+
+idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
+	idx_t row_group_offset = 0;
+	auto &row_groups = reader.GetFileMetadata()->row_groups;
+	for (idx_t i = 0; i < group_idx; i++) {
+		row_group_offset += row_groups[i].num_rows;
+	}
+	return row_group_offset;
 }
 
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
@@ -947,10 +997,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
-			// TODO we might not have stats but STILL a bloom filter so move this up
-			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
-			bool is_expression = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION;
+			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
+			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
 			bool has_min_max = false;
 			if (!is_generated_column) {
 				has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
@@ -976,8 +1025,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
 			}
+			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-			    !is_generated_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
 			                                                group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
@@ -986,7 +1036,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				// this effectively will skip this chunk
-				state.group_offset = group.num_rows;
+				state.offset_in_group = group.num_rows;
 				return;
 			}
 		}
@@ -1016,14 +1066,19 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
                                    vector<idx_t> groups_to_read) {
 	state.current_group = -1;
 	state.finished = false;
-	state.group_offset = 0;
+	state.offset_in_group = 0;
 	state.group_idx_list = std::move(groups_to_read);
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-	if (!state.file_handle || state.file_handle->path != file_handle->path) {
+	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
 		Value disable_prefetch = false;
-		Value prefetch_all_files = false;
+		Value prefetch_all_files =
+#ifdef DUCKDB_PREFETCH_ALL_PARQUET_FILES
+		    true; // For debugging purposes we can toggle this to always enable
+#else
+		    false; // Defaults to false
+#endif
 		context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 		context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
 		bool should_prefetch = !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>();
@@ -1031,12 +1086,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		if (should_prefetch && can_prefetch) {
 			state.prefetch_mode = true;
-			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			if (file_handle->IsRemoteFile()) {
+				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			}
 		} else {
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = fs.OpenFile(file_handle->path, flags);
+		state.file_handle = fs.OpenFile(file_handle->GetPath(), flags);
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
@@ -1047,7 +1104,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(*state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -1068,9 +1125,9 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (state.current_group < 0 || (int64_t)state.group_offset >= GetGroup(state).num_rows) {
+	if (state.current_group < 0 || (int64_t)state.offset_in_group >= GetGroup(state).num_rows) {
 		state.current_group++;
-		state.group_offset = 0;
+		state.offset_in_group = 0;
 
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
@@ -1080,6 +1137,9 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			state.finished = true;
 			return false;
 		}
+
+		// TODO: only need this if we have a deletion vector?
+		state.group_offset = GetRowGroupOffset(state.root_reader->Reader(), state.group_idx_list[state.current_group]);
 
 		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1093,7 +1153,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		}
 
 		auto &group = GetGroup(state);
-		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
+		if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
@@ -1103,7 +1163,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
 				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
 				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
-				    file_name);
+				    GetFileName());
 			}
 
 			if (!filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
@@ -1144,13 +1204,15 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		return true;
 	}
 
-	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
+	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
 	result.SetCardinality(scan_count);
 
 	if (scan_count == 0) {
 		state.finished = true;
 		return false; // end of last group, we are done
 	}
+
+	auto &deletion_filter = state.root_reader->Reader().deletion_filter;
 
 	state.define_buf.zero();
 	state.repeat_buf.zero();
@@ -1160,31 +1222,44 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
-	if (filters) {
+	if (filters || deletion_filter) {
 		idx_t filter_count = result.size();
+		D_ASSERT(filter_count == scan_count);
 		vector<bool> need_to_read(column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		D_ASSERT(state.scan_filters.size() == filters->filters.size());
+		D_ASSERT(!filters || state.scan_filters.size() == filters->filters.size());
 
-		// first load the columns that are used in filters
-		auto filter_state = state.adaptive_filter->BeginFilter();
-		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-			if (filter_count == 0) {
-				// if no rows are left we can stop checking filters
-				break;
-			}
-			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-			auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
-			auto column_id = column_ids[local_idx];
-
-			auto &result_vector = result.data[local_idx.GetIndex()];
-			auto &child_reader = root_reader.GetChildReader(column_id);
-			child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-			                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
-			need_to_read[local_idx.GetIndex()] = false;
+		bool is_first_filter = true;
+		if (deletion_filter) {
+			auto row_start = UnsafeNumericCast<row_t>(state.offset_in_group + state.group_offset);
+			filter_count = deletion_filter->Filter(row_start, scan_count, state.sel);
+			//! FIXME: does this need to be set?
+			//! As part of 'DirectFilter' we also initialize reads of the child readers
+			is_first_filter = false;
 		}
-		state.adaptive_filter->EndFilter(filter_state);
+
+		if (filters) {
+			// first load the columns that are used in filters
+			auto filter_state = state.adaptive_filter->BeginFilter();
+			for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+				if (filter_count == 0) {
+					// if no rows are left we can stop checking filters
+					break;
+				}
+				auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
+				auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
+				auto column_id = column_ids[local_idx];
+
+				auto &result_vector = result.data[local_idx.GetIndex()];
+				auto &child_reader = root_reader.GetChildReader(column_id);
+				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
+				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
+				need_to_read[local_idx.GetIndex()] = false;
+				is_first_filter = false;
+			}
+			state.adaptive_filter->EndFilter(filter_state);
+		}
 
 		// we still may have to read some cols
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1219,7 +1294,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 	}
 
 	rows_read += scan_count;
-	state.group_offset += scan_count;
+	state.offset_in_group += scan_count;
 	return true;
 }
 

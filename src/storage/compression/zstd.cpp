@@ -146,7 +146,7 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
 	}
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	auto &data_table_info = col_data.info;
 	auto &attached_db = data_table_info.GetDB();
 	auto &config = DBConfig::Get(attached_db);
@@ -294,7 +294,7 @@ public:
 		}
 
 		if (!to_use->IsValid()) {
-			*to_use = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize());
+			*to_use = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, &block_manager);
 		}
 		return *to_use;
 	}
@@ -524,7 +524,7 @@ public:
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockSize());
+		                                                                info.GetBlockSize(), info.GetBlockManager());
 		segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
