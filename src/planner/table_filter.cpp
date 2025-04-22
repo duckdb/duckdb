@@ -52,25 +52,27 @@ void TableFilterSet::UnifyFilters() {
 			}
 
 			if (constant_filter.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-				if (best_greater_filter == nullptr || !best_greater_filter->Compare(constant_filter.constant)) {
+				if (best_greater_filter == nullptr || best_greater_filter->Compare(constant_filter.constant)) {
 					best_greater_filter = &constant_filter;
 				}
 			} else if (constant_filter.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
-				if (best_less_filter == nullptr || !best_less_filter->Compare(constant_filter.constant)) {
+				if (best_less_filter == nullptr || best_less_filter->Compare(constant_filter.constant)) {
 					best_less_filter = &constant_filter;
 				}
+			} else {
+				unified_filter->child_filters.push_back(child_filter->Copy());
 			}
 		}
 		if (equal_filter) {
-			pair.second = std::move(equal_filter->Copy());
+			pair.second = equal_filter->Copy();
 			continue;
 		}
 
 		if (best_greater_filter) {
-			unified_filter->child_filters.push_back(std::move(best_greater_filter->Copy()));
+			unified_filter->child_filters.push_back(best_greater_filter->Copy());
 		}
 		if (best_less_filter) {
-			unified_filter->child_filters.push_back(std::move(best_less_filter->Copy()));
+			unified_filter->child_filters.push_back(best_less_filter->Copy());
 		}
 		pair.second = std::move(unified_filter);
 	}
