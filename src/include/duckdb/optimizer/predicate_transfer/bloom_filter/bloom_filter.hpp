@@ -58,7 +58,7 @@ public:
 	uint32_t *blocks;
 
 private:
-	int BloomFilterLookup(int num, uint64_t *BF_RESTRICT key, uint32_t *BF_RESTRICT bf,
+	int BloomFilterLookup(int num, const uint64_t *BF_RESTRICT key, const uint32_t *BF_RESTRICT bf,
 	                      uint32_t *BF_RESTRICT out) const {
 		for (int i = 0; i < num; i++) {
 			uint32_t key_high = static_cast<uint32_t>(key[i] >> 32);
@@ -73,7 +73,7 @@ private:
 		return num;
 	}
 
-	void BloomFilterInsert(int num, uint64_t *BF_RESTRICT key, uint32_t *BF_RESTRICT bf) const {
+	void BloomFilterInsert(int num, const uint64_t *BF_RESTRICT key, uint32_t *BF_RESTRICT bf) const {
 		for (int i = 0; i < num; i++) {
 			uint32_t key_high = static_cast<uint32_t>(key[i] >> 32);
 			uint32_t key_low = static_cast<uint32_t>(key[i]);

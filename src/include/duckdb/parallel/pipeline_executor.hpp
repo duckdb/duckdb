@@ -58,8 +58,8 @@ private:
 class PipelineExecutor {
 public:
 	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
-	static constexpr double SCAN_SELECTIVITY_THRESHOLD = 0.2;
-	static constexpr double FILTER_SELECTIVITY_THRESHOLD = 0.2;
+	static constexpr double SCAN_SELECTIVITY_THRESHOLD = 0.5;
+	static constexpr double FILTER_SELECTIVITY_THRESHOLD = 0.5;
 	static constexpr int64_t SMALL_TABLE_THRESHOLD = 1 << 20;
 
 public:
