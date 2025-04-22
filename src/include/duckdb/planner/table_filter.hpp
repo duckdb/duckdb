@@ -86,6 +86,9 @@ public:
 public:
 	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
 
+	//! Unify min-max filters working on the same columns, e.g., A > 3, A > 5 would be unified into A > 5.
+	void UnifyFilters();
+
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {
 			return false;
