@@ -1,21 +1,18 @@
 #include "duckdb/common/sort/partition_state.hpp"
 
-#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 
-#include <numeric>
-
 namespace duckdb {
 
-PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
+PartitionGlobalHashGroup::PartitionGlobalHashGroup(ClientContext &context, const Orders &partitions,
                                                    const Orders &orders, const Types &payload_types, bool external)
     : count(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
-	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 	global_sort->external = external;
 
 	//	Set up a comparator for the partition subset
@@ -99,17 +96,17 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 		++max_bits;
 	}
 
+	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types.Initialize(payload_types);
-			auto new_group =
-			    make_uniq<PartitionGlobalHashGroup>(buffer_manager, partitions, orders, payload_types, external);
+			grouping_types_ptr->Initialize(payload_types);
+			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types.Initialize(types);
+			grouping_types_ptr->Initialize(types);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}
@@ -133,13 +130,14 @@ void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &
 	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	if (fixed_bits != old_bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, fixed_bits, hash_col_idx);
+		grouping_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, fixed_bits, hash_col_idx);
 	}
 }
 
 unique_ptr<RadixPartitionedTupleData> PartitionGlobalSinkState::CreatePartition(idx_t new_bits) const {
 	const auto hash_col_idx = payload_types.size();
-	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, new_bits, hash_col_idx);
 }
 
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
@@ -172,7 +170,7 @@ void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_parti
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(*new_partition);
+	local_partition->Repartition(context, *new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -407,8 +405,8 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
       num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
-	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
-	                                                     sink.payload_types, sink.external);
+	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.context, sink.partitions, sink.orders, sink.payload_types,
+	                                                     sink.external);
 	sink.hash_groups.emplace_back(std::move(new_group));
 
 	hash_group = sink.hash_groups[group_idx].get();
@@ -477,7 +475,7 @@ void PartitionLocalMergeState::ExecuteTask() {
 bool PartitionGlobalMergeState::AssignTask(PartitionLocalMergeState &local_state) {
 	lock_guard<mutex> guard(lock);
 
-	if (tasks_assigned >= total_tasks) {
+	if (tasks_assigned >= total_tasks && !TryPrepareNextStage()) {
 		return false;
 	}
 
@@ -496,15 +494,13 @@ void PartitionGlobalMergeState::CompleteTask() {
 }
 
 bool PartitionGlobalMergeState::TryPrepareNextStage() {
-	lock_guard<mutex> guard(lock);
-
 	if (tasks_completed < total_tasks) {
 		return false;
 	}
 
 	tasks_assigned = tasks_completed = 0;
 
-	switch (stage) {
+	switch (stage.load()) {
 	case PartitionSortStage::INIT:
 		//	If the partitions are unordered, don't scan in parallel
 		//	because it produces non-deterministic orderings.
@@ -627,23 +623,6 @@ bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_sta
 			}
 
 			// Try to assign work for this hash group to this thread
-			if (global_state->AssignTask(local_state)) {
-				// We assigned a task to this thread!
-				// Break out of this loop to re-enter the top-level loop and execute the task
-				break;
-			}
-
-			// Hash group global state couldn't assign a task to this thread
-			// Try to prepare the next stage
-			if (!global_state->TryPrepareNextStage()) {
-				// This current hash group is not yet done
-				// But we were not able to assign a task for it to this thread
-				// See if the next hash group is better
-				continue;
-			}
-
-			// We were able to prepare the next stage for this hash group!
-			// Try to assign a task once more
 			if (global_state->AssignTask(local_state)) {
 				// We assigned a task to this thread!
 				// Break out of this loop to re-enter the top-level loop and execute the task

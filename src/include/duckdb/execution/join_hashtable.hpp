@@ -212,6 +212,7 @@ public:
 		return null_values_are_equal[col_idx];
 	}
 
+	ClientContext &context;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
@@ -234,7 +235,7 @@ public:
 	//! The column indices of the non-equality predicates to be used to compare the rows
 	vector<column_t> non_equality_predicate_columns;
 	//! Data column layout
-	TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
 	//! Matches the equal condition rows during the build phase of the hash join to prevent
 	//! duplicates in a list because of hash-collisions
 	RowMatcher row_matcher_build;
@@ -383,13 +384,22 @@ public:
 		return radix_bits;
 	}
 
+	//! For a LOAD_FACTOR of 2.0, the HT is between 25% and 50% full
+	static constexpr double DEFAULT_LOAD_FACTOR = 2.0;
+	//! For a LOAD_FACTOR of 1.5, the HT is between 33% and 67% full
+	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
+
+	double load_factor = DEFAULT_LOAD_FACTOR;
+
 	//! Capacity of the pointer table given the ht count
-	//! (minimum of 1024 to prevent collision chance for small HT's)
-	static idx_t PointerTableCapacity(idx_t count) {
-		return MaxValue<idx_t>(NextPowerOfTwo(count * 2), 1 << 10);
+	idx_t PointerTableCapacity(idx_t count) const {
+		static constexpr idx_t MINIMUM_CAPACITY = 16384;
+
+		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
+		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);
 	}
 	//! Size of the pointer table (in bytes)
-	static idx_t PointerTableSize(idx_t count) {
+	idx_t PointerTableSize(idx_t count) const {
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 

@@ -1033,7 +1033,6 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 					error_message = "Incompatible ISO year offset specified";
 					error_position = start_pos;
 					return false;
-					break;
 				}
 				if (number > 9999) {
 					// %G only supports numbers between [0..9999]
@@ -1138,15 +1137,17 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				weekday = number;
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_ISO:
-				// y/m/d overrides G/V/u but does not conflict
 				switch (offset_specifier) {
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					error_message = "ISO week offsets are incompatible with non-ISO year specifiers. Use '%G' instead";
+					error_position = start_pos;
+					return false;
 				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 				case StrTimeSpecifier::DAY_OF_MONTH:
 				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 				case StrTimeSpecifier::MONTH_DECIMAL:
-				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
-				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-				case StrTimeSpecifier::YEAR_DECIMAL:
 					// Just validate, don't use
 					break;
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:

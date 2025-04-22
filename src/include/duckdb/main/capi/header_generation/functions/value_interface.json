@@ -84,7 +84,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a int8_t (a tinyint)\n\n",
+                "description": "Creates a value from an int8_t (a tinyint)\n\n",
                 "param_comments": {
                     "input": "The tinyint value"
                 },
@@ -118,7 +118,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a int16_t (a smallint)\n\n",
+                "description": "Creates a value from an int16_t (a smallint)\n\n",
                 "param_comments": {
                     "input": "The smallint value"
                 },
@@ -152,7 +152,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a int32_t (an integer)\n\n",
+                "description": "Creates a value from an int32_t (an integer)\n\n",
                 "param_comments": {
                     "input": "The integer value"
                 },
@@ -618,7 +618,7 @@
             "comment": {
                 "description": "Returns the int32_t value of the given value.\n\n",
                 "param_comments": {
-                    "val": "A duckdb_value containing a integer"
+                    "val": "A duckdb_value containing an integer"
                 },
                 "return_value": "A int32_t, or MinValue<int32> if the value cannot be converted"
             }
@@ -1275,6 +1275,23 @@
                     "index": "The index of the child."
                 },
                 "return_value": "The child as a duckdb_value."
+            }
+        },
+        {
+            "name": "duckdb_value_to_string",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Returns the SQL string representation of the given value.\n\n",
+                "param_comments": {
+                    "value": "A duckdb_value."
+                },
+                "return_value": "The SQL string representation as a null-terminated string. The result must be freed with `duckdb_free`."
             }
         }
     ]

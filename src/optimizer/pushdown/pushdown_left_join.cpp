@@ -6,6 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -95,6 +97,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	}
 	// now check the set of filters
+	vector<unique_ptr<Filter>> remaining_filters;
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
@@ -124,9 +127,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				for (auto &left_filter : left_pushdown.filters) {
 					filters.push_back(std::move(left_filter));
 				}
+				for (auto &filter : remaining_filters) {
+					filters.push_back(std::move(filter));
+				}
 				// now push down the inner join
 				return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 			}
+			// we should keep the filters which do not remove NULL values
+			remaining_filters.push_back(std::move(filters[i]));
+			filters.erase_at(i);
+			i--;
 		}
 	}
 	// finally we check the FilterCombiner to see if there are any predicates we can push into the RHS
@@ -183,6 +193,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 
 	if (rewrite_right) {
 		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	}
+
+	for (auto &filter : remaining_filters) {
+		filters.push_back(std::move(filter));
 	}
 
 	return PushFinalFilters(std::move(op));

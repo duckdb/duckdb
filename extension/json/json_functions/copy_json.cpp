@@ -118,9 +118,9 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 
 	function.plan = CopyToJSONPlan;
 
-	function.copy_from_bind = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBindCopy;
+	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
-	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
+	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
 
 	return function;
 }

@@ -8,6 +8,8 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -15,6 +17,8 @@ on:
       git_ref:
         type: string
       skip_tests:
+        type: string
+      run_all:
         type: string
   push:
     branches-ignore:
@@ -29,6 +33,7 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
 
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -144,7 +149,7 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
+    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true'
     runs-on: windows-2019
     needs: win-release-64
 
@@ -184,7 +189,7 @@ jobs:
 
  win-release-arm64:
    name: Windows (ARM64)
-   if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
+   if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true'
    runs-on: windows-2019
    needs: win-release-64
 

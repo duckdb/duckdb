@@ -42,8 +42,12 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
-	//! Fetch state
+	//! The row fetch state.
 	ColumnFetchState fetch_state;
+	//! The current position in the local storage scan.
+	TableScanState scan_state;
+	//! The column IDs of the local storage scan.
+	vector<StorageIndex> column_ids;
 };
 
 static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
@@ -118,8 +122,6 @@ public:
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
 
-	TableScanState table_scan_state;
-
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                   TableFunctionInitInput &input) override {
@@ -127,6 +129,19 @@ public:
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
+		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+
+		// Initialize the local storage scan.
+		auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		auto &storage = duck_table.GetStorage();
+		auto &local_storage = LocalStorage::Get(context.client, duck_table.catalog);
+
+		for (const auto &col_idx : input.column_indexes) {
+			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
+		}
+		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
+		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
 
@@ -172,10 +187,10 @@ public:
 			auto &local_storage = LocalStorage::Get(tx);
 			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
-				local_storage.Scan(table_scan_state.local_state, column_ids, l_state.all_columns);
+				local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.all_columns);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
-				local_storage.Scan(table_scan_state.local_state, column_ids, output);
+				local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
 			}
 		}
 	}
@@ -325,7 +340,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 }
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
-                                                             DataTable &storage, const TableScanBindData &bind_data,
+                                                             const TableScanBindData &bind_data,
                                                              unsafe_vector<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
 	if (!row_ids.empty()) {
@@ -335,9 +350,6 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	g_state->finished = g_state->row_ids.empty() ? true : false;
 
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
-	g_state->table_scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-
 	if (input.CanRemoveFilterColumns()) {
 		g_state->projection_ids = input.projection_ids;
 	}
@@ -351,9 +363,6 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		}
 		g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 	}
-
-	g_state->table_scan_state.Initialize(g_state->column_ids, context, input.filters);
-	local_storage.InitializeScan(storage, g_state->table_scan_state.local_state, input.filters);
 
 	// Const-cast to indicate an index scan.
 	// We need this information in the bind data so that we can access it during ANALYZE.
@@ -604,7 +613,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!index_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
-	return DuckIndexScanInitGlobal(context, input, storage, bind_data, row_ids);
+	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids);
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,

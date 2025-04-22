@@ -16,7 +16,7 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
       - '!.github/workflows/CodeQuality.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -36,7 +36,7 @@ env:
 jobs:
   format-check:
     name: Format Check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CC: gcc-10
@@ -50,7 +50,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black cxxheaderparser pcpp
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
       - name: List Installed Packages
         shell: bash
@@ -73,7 +73,7 @@ jobs:
   enum-check:
     name: C Enum Integrity Check
     needs: format-check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CC: gcc-10

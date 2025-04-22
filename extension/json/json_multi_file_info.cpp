@@ -21,14 +21,16 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 		}
 	} else {
 		// COPY
+		options.type = JSONScanType::READ_JSON;
 		options.record_type = JSONRecordType::RECORDS;
-		options.format = JSONFormat::NEWLINE_DELIMITED;
+		options.format = JSONFormat::AUTO_DETECT;
+		options.auto_detect = false;
 	}
 	return std::move(reader_options);
 }
 
-bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &value,
-                                    MultiFileReaderOptions &, BaseFileReaderOptions &options_p) {
+bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &value, MultiFileOptions &,
+                                    BaseFileReaderOptions &options_p) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
 	if (value.IsNull()) {
@@ -76,6 +78,9 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &name = StructType::GetChildName(child_type, i);
 			auto &val = struct_children[i];
+			if (val.IsNull()) {
+				throw BinderException("read_json \"columns\" parameter type specification cannot be NULL.");
+			}
 			options.name_list.push_back(name);
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
@@ -222,6 +227,7 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		} else {
 			JSONCheckSingleParameter(key, values);
 			options.auto_detect = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+			options.format = JSONFormat::NEWLINE_DELIMITED;
 		}
 		return true;
 	}
@@ -238,6 +244,9 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 			JSONCheckSingleParameter(key, values);
 			if (BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				options.format = JSONFormat::ARRAY;
+			} else {
+				// Default to newline-delimited otherwise
+				options.format = JSONFormat::NEWLINE_DELIMITED;
 			}
 		}
 		return true;
@@ -316,8 +325,31 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			name_collision_count[col_name] = 0;
 		}
 	}
-	// FIXME: re-use readers created during auto-detection instead of clearing here
-	bind_data.union_readers.clear();
+	bool reuse_readers = true;
+	for (auto &union_reader : bind_data.union_readers) {
+		if (!union_reader || !union_reader->reader) {
+			// not all readers have been initialized - don't re-use any
+			reuse_readers = false;
+			break;
+		}
+		auto &json_reader = union_reader->reader->Cast<JSONReader>();
+		if (!json_reader.IsOpen()) {
+			// no open file-handle - close
+			reuse_readers = false;
+		}
+	}
+	if (!reuse_readers) {
+		bind_data.union_readers.clear();
+	} else {
+		// re-use readers
+		for (auto &union_reader : bind_data.union_readers) {
+			auto &json_reader = union_reader->reader->Cast<JSONReader>();
+			union_reader->names = names;
+			union_reader->types = return_types;
+			union_reader->reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
+			json_reader.Reset();
+		}
+	}
 }
 
 void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
@@ -348,7 +380,10 @@ unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(Cl
 		const auto &col_id = column_index.GetPrimaryIndex();
 
 		// Skip any multi-file reader / row id stuff
-		if (col_id == bind_data.reader_bind.filename_idx || IsVirtualColumn(col_id)) {
+		if (bind_data.reader_bind.filename_idx.IsValid() && col_id == bind_data.reader_bind.filename_idx.GetIndex()) {
+			continue;
+		}
+		if (IsVirtualColumn(col_id)) {
 			continue;
 		}
 		bool skip = false;
@@ -395,21 +430,21 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const MultiFileBindData &bind_data_p) {
 	auto &json_data = bind_data_p.bind_data->Cast<JSONScanData>();
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, union_data.GetFileName());
-	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
+	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
 	return std::move(reader);
 }
 
 shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                                           const string &filename, idx_t file_idx,
+                                                           const OpenFileInfo &file, idx_t file_idx,
                                                            const MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, filename);
-	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, file.path);
+	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 	return std::move(reader);
 }
-shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                            JSONReaderOptions &options,
-                                                           const MultiFileReaderOptions &file_options) {
+                                                           const MultiFileOptions &file_options) {
 	throw InternalException("Create reader from file not implemented");
 }
 
@@ -427,8 +462,10 @@ bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<Bas
                                           GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
+	auto &json_reader = reader->Cast<JSONReader>();
+
 	lstate.GetScanState().ResetForNextBuffer();
-	return lstate.TryInitializeScan(gstate, reader->Cast<JSONReader>());
+	return lstate.TryInitializeScan(gstate, json_reader);
 }
 
 void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
@@ -439,11 +476,12 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 	const auto count = lstate.Read();
 	yyjson_val **values = scan_state.values;
 
+	auto &column_ids = json_reader.column_ids;
 	if (!gstate.names.empty()) {
 		vector<Vector *> result_vectors;
-		result_vectors.reserve(gstate.column_ids.size());
-		for (const auto &col_idx : gstate.column_ids) {
-			result_vectors.emplace_back(&output.data[col_idx]);
+		result_vectors.reserve(column_ids.size());
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			result_vectors.emplace_back(&output.data[i]);
 		}
 
 		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
@@ -486,9 +524,8 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 
 	if (!gstate.names.empty()) {
 		// Create the strings without copying them
-		const auto col_idx = gstate.column_ids[0];
-		auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
-		auto &validity = FlatVector::Validity(output.data[col_idx]);
+		auto strings = FlatVector::GetData<string_t>(output.data[0]);
+		auto &validity = FlatVector::Validity(output.data[0]);
 		for (idx_t i = 0; i < count; i++) {
 			if (objects[i]) {
 				strings[i] = string_t(units[i].pointer, units[i].size);

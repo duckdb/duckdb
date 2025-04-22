@@ -142,8 +142,8 @@ SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk
 		}
 	}
 
-	ART::GenerateKeyVectors(l_state.arena_allocator, l_state.key_chunk, chunk.data[chunk.ColumnCount() - 1],
-	                        l_state.keys, l_state.row_ids);
+	l_state.local_index->Cast<ART>().GenerateKeyVectors(
+	    l_state.arena_allocator, l_state.key_chunk, chunk.data[chunk.ColumnCount() - 1], l_state.keys, l_state.row_ids);
 
 	if (sorted) {
 		return SinkSorted(input);
@@ -174,8 +174,9 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
-	if (!storage.IsRoot()) {
-		throw TransactionException("cannot add an index to a table that has been altered");
+	if (!storage.IsMainTable()) {
+		throw TransactionException(
+		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 	}
 
 	auto &schema = table.schema;

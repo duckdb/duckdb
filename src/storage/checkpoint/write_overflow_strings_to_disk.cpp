@@ -14,27 +14,50 @@ WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	D_ASSERT(Exception::UncaughtException() || offset == 0);
 }
 
-shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &manager, block_id_t block_id) {
+shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &manager_p, block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	auto entry = handles.find(block_id);
 	if (entry != handles.end()) {
 		return entry->second;
 	}
+	auto &manager = block_manager ? *block_manager : manager_p;
 	auto result = manager.RegisterBlock(block_id);
 	handles.insert(make_pair(block_id, result));
 	return result;
 }
 
-void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager, block_id_t block_id) {
+void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager_p, block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	auto entry = handles.find(block_id);
 	if (entry != handles.end()) {
 		throw InternalException("UncompressedStringSegmentState::RegisterBlock - block id %llu already exists",
 		                        block_id);
 	}
+	auto &manager = block_manager ? *block_manager : manager_p;
 	auto result = manager.RegisterBlock(block_id);
 	handles.insert(make_pair(block_id, std::move(result)));
 	on_disk_blocks.push_back(block_id);
+}
+
+string UncompressedStringSegmentState::GetSegmentInfo() const {
+	if (on_disk_blocks.empty()) {
+		return "";
+	}
+	string result = StringUtil::Join(on_disk_blocks, on_disk_blocks.size(), ", ",
+	                                 [&](block_id_t block) { return to_string(block); });
+	return "Overflow String Block Ids: " + result;
+}
+
+vector<block_id_t> UncompressedStringSegmentState::GetAdditionalBlocks() const {
+	return on_disk_blocks;
+}
+
+void UncompressedStringSegmentState::Cleanup(BlockManager &manager_p) {
+	auto &manager = block_manager ? *block_manager : manager_p;
+	for (auto &block_id : on_disk_blocks) {
+		manager.MarkBlockAsModified(block_id);
+	}
+	on_disk_blocks.clear();
 }
 
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,

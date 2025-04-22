@@ -19,7 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
 
 public:
-	PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right);
+	PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right);
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
@@ -35,6 +35,9 @@ public:
 
 	// Projection mappings
 	vector<column_t> right_projection_map;
+
+	// Predicate (join conditions that don't reference both sides)
+	unique_ptr<Expression> predicate;
 
 public:
 	// Operator Interface

@@ -242,6 +242,9 @@ typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } du
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! Type used for the selection vector
+typedef uint32_t sel_t;
+
 //! The callback that will be called to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
@@ -390,6 +393,12 @@ typedef struct {
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
+
+//! A selection vector is a possibly duplicative vector of indices, which refer to values in a vector.
+//! The resulting vector is make up of the values at each index in the selection vector.
+typedef struct _duckdb_selection_vector {
+	void *internal_ptr;
+} * duckdb_selection_vector;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
@@ -1648,7 +1657,7 @@ DUCKDB_C_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared
                                               duckdb_hugeint val);
 
 /*!
-Binds an duckdb_uhugeint value to the prepared statement at the specified index.
+Binds a duckdb_uhugeint value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uhugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                duckdb_uhugeint val);
@@ -1660,24 +1669,24 @@ DUCKDB_C_API duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared
                                               duckdb_decimal val);
 
 /*!
-Binds an uint8_t value to the prepared statement at the specified index.
+Binds a uint8_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val);
 
 /*!
-Binds an uint16_t value to the prepared statement at the specified index.
+Binds a uint16_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                              uint16_t val);
 
 /*!
-Binds an uint32_t value to the prepared statement at the specified index.
+Binds a uint32_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                              uint32_t val);
 
 /*!
-Binds an uint64_t value to the prepared statement at the specified index.
+Binds a uint64_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                              uint64_t val);
@@ -1978,7 +1987,7 @@ Creates a value from a boolean
 DUCKDB_C_API duckdb_value duckdb_create_bool(bool input);
 
 /*!
-Creates a value from a int8_t (a tinyint)
+Creates a value from an int8_t (a tinyint)
 
 * @param input The tinyint value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -1994,7 +2003,7 @@ Creates a value from a uint8_t (a utinyint)
 DUCKDB_C_API duckdb_value duckdb_create_uint8(uint8_t input);
 
 /*!
-Creates a value from a int16_t (a smallint)
+Creates a value from an int16_t (a smallint)
 
 * @param input The smallint value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2010,7 +2019,7 @@ Creates a value from a uint16_t (a usmallint)
 DUCKDB_C_API duckdb_value duckdb_create_uint16(uint16_t input);
 
 /*!
-Creates a value from a int32_t (an integer)
+Creates a value from an int32_t (an integer)
 
 * @param input The integer value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2229,7 +2238,7 @@ DUCKDB_C_API uint16_t duckdb_get_uint16(duckdb_value val);
 /*!
 Returns the int32_t value of the given value.
 
-* @param val A duckdb_value containing a integer
+* @param val A duckdb_value containing an integer
 * @return A int32_t, or MinValue<int32> if the value cannot be converted
 */
 DUCKDB_C_API int32_t duckdb_get_int32(duckdb_value val);
@@ -2536,6 +2545,14 @@ Returns the STRUCT child at index as a duckdb_value.
 * @return The child as a duckdb_value.
 */
 DUCKDB_C_API duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index);
+
+/*!
+Returns the SQL string representation of the given value.
+
+* @param value A duckdb_value.
+* @return The SQL string representation as a null-terminated string. The result must be freed with `duckdb_free`.
+*/
+DUCKDB_C_API char *duckdb_value_to_string(duckdb_value value);
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
@@ -2897,6 +2914,18 @@ DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size
 //===--------------------------------------------------------------------===//
 
 /*!
+Creates a flat vector.
+
+*/
+DUCKDB_C_API duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity);
+
+/*!
+Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.
+
+*/
+DUCKDB_C_API void duckdb_destroy_vector(duckdb_vector *vector);
+
+/*!
 Retrieves the column type of the specified vector.
 
 The result must be destroyed with `duckdb_destroy_logical_type`.
@@ -3020,7 +3049,7 @@ The resulting vector is valid as long as the parent vector is valid.
 DUCKDB_C_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
 
 /*!
-Retrieves the child vector of a array vector.
+Retrieves the child vector of an array vector.
 
 The resulting vector is valid as long as the parent vector is valid.
 The resulting vector has the size of the parent vector multiplied by the array size.
@@ -3029,6 +3058,30 @@ The resulting vector has the size of the parent vector multiplied by the array s
 * @return The child vector
 */
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
+
+/*!
+Slice a vector with a selection vector.
+
+The max value in the selection vector must be less than the length of the vector
+
+The resulting vector happens to be a dictionary vector.
+
+* @param vector The vector which is to become a dictionary
+* @param selection The selection vector
+* @param len The length of the selection vector
+*/
+DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+
+/*!
+Copies the value from `value` to `vector`.
+*/
+DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
+
+/*!
+References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer
+
+*/
+DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
@@ -3233,6 +3286,25 @@ If the set is incomplete or a function with this name already exists DuckDBError
 * @return Whether or not the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
+
+//===--------------------------------------------------------------------===//
+// Selection Vector Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new selection vector of size `size`.
+*/
+DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
+
+/*!
+Destroys a selection vector.
+*/
+DUCKDB_C_API void duckdb_destroy_selection_vector(duckdb_selection_vector vector);
+
+/*!
+Access the data pointer of a selection vector.
+*/
+DUCKDB_C_API sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Aggregate Functions

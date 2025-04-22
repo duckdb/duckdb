@@ -17,7 +17,7 @@
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
-
+#include "duckdb/common/adbc/wrappers.hpp"
 #include <stdlib.h>
 #include <string.h>
 
@@ -229,10 +229,10 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 
 	std::string query = "SELECT * FROM ";
 	if (catalog != nullptr && strlen(catalog) > 0) {
-		query += std::string(catalog) + ".";
+		query += duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
 	}
-	query += std::string(db_schema) + ".";
-	query += std::string(table_name) + " LIMIT 0;";
+	query += duckdb::KeywordHelper::WriteOptionallyQuoted(db_schema) + ".";
+	query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) + " LIMIT 0;";
 
 	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
 	if (success != ADBC_STATUS_OK) {
@@ -249,7 +249,9 @@ AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
-	connection->private_data = nullptr;
+	auto connection_wrapper = new duckdb::DuckDBAdbcConnectionWrapper();
+	connection_wrapper->connection = nullptr;
+	connection->private_data = connection_wrapper;
 	return ADBC_STATUS_OK;
 }
 
@@ -263,45 +265,65 @@ AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct 
 	return ADBC_STATUS_OK;
 }
 
+AdbcStatusCode InternalSetOption(duckdb::Connection &conn, std::unordered_map<std::string, std::string> &options,
+                                 struct AdbcError *error) {
+	// If we got here, the options have already been validated and are acceptable
+	for (auto &option : options) {
+		if (strcmp(option.first.c_str(), ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
+			if (strcmp(option.second.c_str(), ADBC_OPTION_VALUE_ENABLED) == 0) {
+				if (conn.HasActiveTransaction()) {
+					AdbcStatusCode status = ExecuteQuery(&conn, "COMMIT", error);
+					if (status != ADBC_STATUS_OK) {
+						options.clear();
+						return status;
+					}
+				}
+			} else if (strcmp(option.second.c_str(), ADBC_OPTION_VALUE_DISABLED) == 0) {
+				if (!conn.HasActiveTransaction()) {
+					AdbcStatusCode status = ExecuteQuery(&conn, "START TRANSACTION", error);
+					if (status != ADBC_STATUS_OK) {
+						options.clear();
+						return status;
+					}
+				}
+			}
+		}
+	}
+	options.clear();
+	return ADBC_STATUS_OK;
+}
 AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char *key, const char *value,
                                    struct AdbcError *error) {
 	if (!connection) {
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+	std::string key_string = std::string(key);
+	std::string key_value = std::string(value);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
 	if (strcmp(key, ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
 		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
-			if (conn->HasActiveTransaction()) {
-				AdbcStatusCode status = ExecuteQuery(conn, "COMMIT", error);
-				if (status != ADBC_STATUS_OK) {
-					return status;
-				}
-			} else {
-				// no-op
-			}
+			conn_wrapper->options[key_string] = key_value;
 		} else if (strcmp(value, ADBC_OPTION_VALUE_DISABLED) == 0) {
-			if (conn->HasActiveTransaction()) {
-				// no-op
-			} else {
-				// begin
-				AdbcStatusCode status = ExecuteQuery(conn, "START TRANSACTION", error);
-				if (status != ADBC_STATUS_OK) {
-					return status;
-				}
-			}
+			conn_wrapper->options[key_string] = key_value;
 		} else {
 			auto error_message = "Invalid connection option value " + std::string(key) + "=" + std::string(value);
 			SetError(error, error_message);
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
+	} else {
+		// This is an unknown option to the DuckDB driver
+		auto error_message =
+		    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
+		SetError(error, error_message);
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
+	if (!conn_wrapper->connection) {
+		// If the connection has not yet been initialized, we just return here.
 		return ADBC_STATUS_OK;
 	}
-	auto error_message =
-	    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
-	SetError(error, error_message);
-	return ADBC_STATUS_NOT_IMPLEMENTED;
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+	return InternalSetOption(*conn, conn_wrapper->options, error);
 }
 
 AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
@@ -323,7 +345,8 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 	if (!conn->HasActiveTransaction()) {
 		SetError(error, "No active transaction, cannot commit");
 		return ADBC_STATUS_INVALID_STATE;
@@ -341,7 +364,8 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 	if (!conn->HasActiveTransaction()) {
 		SetError(error, "No active transaction, cannot rollback");
 		return ADBC_STATUS_INVALID_STATE;
@@ -479,16 +503,25 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto database_wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	conn_wrapper->connection = nullptr;
 
-	connection->private_data = nullptr;
-	auto res =
-	    duckdb_connect(database_wrapper->database, reinterpret_cast<duckdb_connection *>(&connection->private_data));
-	return CheckResult(res, error, "Failed to connect to Database");
+	auto res = duckdb_connect(database_wrapper->database, &conn_wrapper->connection);
+	auto adbc_status = CheckResult(res, error, "Failed to connect to Database");
+	if (adbc_status != ADBC_STATUS_OK) {
+		return adbc_status;
+	}
+	// We might have options to set
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+	return InternalSetOption(*conn, conn_wrapper->options, error);
 }
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error) {
 	if (connection && connection->private_data) {
-		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&connection->private_data));
+		auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
+		delete conn_wrapper;
 		connection->private_data = nullptr;
 	}
 	return ADBC_STATUS_OK;
@@ -589,13 +622,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			break;
 		case IngestionMode::APPEND: {
 			arrow_scan->CreateView("temp_adbc_view", true, true);
-			std::string query;
+			std::string query = "insert into ";
 			if (schema) {
-				query = duckdb::StringUtil::Format("insert into \"%s.%s\" select * from temp_adbc_view", schema,
-				                                   table_name);
-			} else {
-				query = duckdb::StringUtil::Format("insert into \"%s\" select * from temp_adbc_view", table_name);
+				query += duckdb::KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 			}
+			query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name);
+			query += " select * from temp_adbc_view";
 			auto result = cconn->Query(query);
 			break;
 		}
@@ -639,7 +671,9 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	}
 
 	statement->private_data = statement_wrapper;
-	statement_wrapper->connection = static_cast<duckdb_connection>(connection->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+
+	statement_wrapper->connection = conn_wrapper->connection;
 	statement_wrapper->statement = nullptr;
 	statement_wrapper->result = nullptr;
 	statement_wrapper->ingestion_stream.release = nullptr;

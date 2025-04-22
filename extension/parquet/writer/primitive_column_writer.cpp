@@ -7,9 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
-PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path,
-                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls)
-    : ColumnWriter(writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls) {
+PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
+                                             vector<string> schema_path, bool can_have_nulls)
+    : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
@@ -24,7 +24,7 @@ void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_gro
 	column_chunk.meta_data.codec = writer.GetCodec();
 	column_chunk.meta_data.path_in_schema = schema_path;
 	column_chunk.meta_data.num_values = 0;
-	column_chunk.meta_data.type = writer.GetType(schema_idx);
+	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
 	row_group.columns.push_back(std::move(column_chunk));
 }
 
@@ -44,8 +44,8 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
-	HandleRepeatLevels(state, parent, count, max_repeat);
-	HandleDefineLevels(state, parent, validity, count, max_define, max_define - 1);
+	HandleRepeatLevels(state, parent, count, MaxRepeat());
+	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
 	idx_t vector_index = 0;
 	reference<PageInformation> page_info_ref = state.page_info.back();
@@ -175,10 +175,10 @@ void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
 	auto &temp_writer = *write_info.temp_writer;
 
 	// write the repetition levels
-	WriteLevels(temp_writer, state.repetition_levels, max_repeat, page_info.offset, page_info.row_count);
+	WriteLevels(temp_writer, state.repetition_levels, MaxRepeat(), page_info.offset, page_info.row_count);
 
 	// write the definition levels
-	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count,
+	WriteLevels(temp_writer, state.definition_levels, MaxDefine(), page_info.offset, page_info.row_count,
 	            state.null_count + state.parent_null_count);
 }
 
@@ -255,33 +255,41 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (!state.stats_state) {
 		return;
 	}
-	if (max_repeat == 0) {
+	if (MaxRepeat() == 0) {
 		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
-	// set min/max/min_value/max_value
-	// this code is not going to win any beauty contests, but well
-	auto min = state.stats_state->GetMin();
-	if (!min.empty()) {
-		column_chunk.meta_data.statistics.min = std::move(min);
-		column_chunk.meta_data.statistics.__isset.min = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
-	auto max = state.stats_state->GetMax();
-	if (!max.empty()) {
-		column_chunk.meta_data.statistics.max = std::move(max);
-		column_chunk.meta_data.statistics.__isset.max = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
-	if (state.stats_state->HasStats()) {
-		column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
-		column_chunk.meta_data.statistics.__isset.min_value = true;
-		column_chunk.meta_data.__isset.statistics = true;
+	// if we have NaN values - don't write the min/max here
+	if (!state.stats_state->HasNaN()) {
+		// set min/max/min_value/max_value
+		// this code is not going to win any beauty contests, but well
+		auto min = state.stats_state->GetMin();
+		if (!min.empty()) {
+			column_chunk.meta_data.statistics.min = std::move(min);
+			column_chunk.meta_data.statistics.__isset.min = true;
+			column_chunk.meta_data.__isset.statistics = true;
+		}
+		auto max = state.stats_state->GetMax();
+		if (!max.empty()) {
+			column_chunk.meta_data.statistics.max = std::move(max);
+			column_chunk.meta_data.statistics.__isset.max = true;
+			column_chunk.meta_data.__isset.statistics = true;
+		}
 
-		column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
-		column_chunk.meta_data.statistics.__isset.max_value = true;
-		column_chunk.meta_data.__isset.statistics = true;
+		if (state.stats_state->HasStats()) {
+			column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
+			column_chunk.meta_data.statistics.__isset.min_value = true;
+			column_chunk.meta_data.__isset.statistics = true;
+			column_chunk.meta_data.statistics.is_min_value_exact = state.stats_state->MinIsExact();
+			column_chunk.meta_data.statistics.__isset.is_min_value_exact = true;
+
+			column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
+			column_chunk.meta_data.statistics.__isset.max_value = true;
+			column_chunk.meta_data.__isset.statistics = true;
+			column_chunk.meta_data.statistics.is_max_value_exact = state.stats_state->MaxIsExact();
+			column_chunk.meta_data.statistics.__isset.is_max_value_exact = true;
+		}
 	}
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = UnsafeNumericCast<int64_t>(DictionarySize(state));
@@ -327,7 +335,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
-			;
 		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
@@ -345,7 +352,9 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
 	}
-	// which row group is this?
+
+	// finalize the stats
+	writer.FlushColumnStats(state.col_idx, column_chunk, state.stats_state.get());
 }
 
 void PrimitiveColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats) {
@@ -381,6 +390,12 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	CompressPage(*write_info.temp_writer, write_info.compressed_size, write_info.compressed_data,
 	             write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
+
+	if (write_info.compressed_buf) {
+		// if the data has been compressed, we no longer need the uncompressed data
+		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
+		write_info.temp_writer.reset();
+	}
 
 	// insert the dictionary page as the first page to write for this column
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
