@@ -120,6 +120,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"can_cast_implicitly", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cardinality", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"cast_to_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cbrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceil", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceiling", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
