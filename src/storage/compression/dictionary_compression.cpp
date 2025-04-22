@@ -76,7 +76,7 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 		return nullptr;
 	}
 
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
 

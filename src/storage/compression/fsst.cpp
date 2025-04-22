@@ -104,7 +104,7 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 		return nullptr;
 	}
 
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
@@ -244,7 +244,7 @@ public:
 		auto &type = checkpoint_data.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockSize());
+		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 		Reset();
 	}

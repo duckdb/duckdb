@@ -701,9 +701,34 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	if (fsync(fd) != 0) {
+
+#if HAVE_FULLFSYNC
+	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
+	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
+	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+		return;
+	}
+#endif // HAVE_FULLFSYNC
+
+#if HAVE_FDATASYNC
+	bool sync_success = ::fdatasync(fd) == 0;
+#else
+	bool sync_success = ::fsync(fd) == 0;
+#endif // HAVE_FDATASYNC
+
+	if (sync_success) {
+		return;
+	}
+
+	// Use fatal exception to handle fsyncgate issue: `fsync` only reports EIO for once, which makes it unretriable and
+	// data loss unrecoverable.
+	if (errno == EIO) {
 		throw FatalException("fsync failed!");
 	}
+
+	// For other types of errors, throw normal IO exception.
+	throw IOException("Could not fsync file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.GetPath(),
+	                  strerror(errno));
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
