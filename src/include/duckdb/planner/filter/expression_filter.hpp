@@ -24,6 +24,7 @@ public:
 	unique_ptr<Expression> expr;
 
 public:
+	bool EvaluateWithConstant(ClientContext &context, const Value &val);
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) const override;
 	bool Equals(const TableFilter &other) const override;

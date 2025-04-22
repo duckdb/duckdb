@@ -1,11 +1,25 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
     : TableFilter(TableFilterType::EXPRESSION_FILTER), expr(std::move(expr_p)) {
+}
+
+bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) {
+	DataChunk input;
+	input.data.emplace_back(val);
+	input.SetCardinality(1);
+
+	SelectionVector sel(1);
+
+	ExpressionExecutor executor(context, *expr);
+	idx_t count = executor.SelectExpression(input, sel);
+	return count > 0;
 }
 
 FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) {
