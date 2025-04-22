@@ -19,7 +19,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
-	    !op.partition_columns.empty() || op.overwrite_mode != CopyOverwriteMode::COPY_ERROR_ON_CONFLICT) {
+	    !op.partition_columns.empty()) {
 		// hive-partitioning/per-thread output does not care about insertion order, and does not support batch indexes
 		preserve_insertion_order = false;
 		supports_batch_index = false;
