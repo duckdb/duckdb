@@ -142,6 +142,10 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
+	auto catalog_type = info.base->type;
+	if (catalog_type == CatalogType::MATVIEW_ENTRY) {
+		return CreateMatView(transaction, info);
+	}
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
