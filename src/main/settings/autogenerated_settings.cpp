@@ -427,6 +427,23 @@ void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
+// Disable Timestamptz Casts
+//===----------------------------------------------------------------------===//
+void DisableTimestamptzCastsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.disable_timestamptz_casts = input.GetValue<bool>();
+}
+
+void DisableTimestamptzCastsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).disable_timestamptz_casts = ClientConfig().disable_timestamptz_casts;
+}
+
+Value DisableTimestamptzCastsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.disable_timestamptz_casts);
+}
+
+//===----------------------------------------------------------------------===//
 // Dynamic Or Filter Threshold
 //===----------------------------------------------------------------------===//
 void DynamicOrFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
