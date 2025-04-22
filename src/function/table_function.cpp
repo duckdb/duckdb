@@ -34,6 +34,9 @@ TableFunction::TableFunction(const vector<LogicalType> &arguments, table_functio
     : TableFunction(string(), arguments, function, bind, init_global, init_local) {
 }
 
+TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr, nullptr) {
+}
+
 bool TableFunction::Equal(const TableFunction &rhs) const {
 	// number of types
 	if (this->arguments.size() != rhs.arguments.size()) {
