@@ -11,13 +11,17 @@ ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
 }
 
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) {
+	ExpressionExecutor executor(context, *expr);
+	return EvaluateWithConstant(executor, val);
+}
+
+bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const {
 	DataChunk input;
 	input.data.emplace_back(val);
 	input.SetCardinality(1);
 
 	SelectionVector sel(1);
 
-	ExpressionExecutor executor(context, *expr);
 	idx_t count = executor.SelectExpression(input, sel);
 	return count > 0;
 }

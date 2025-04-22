@@ -12,19 +12,22 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class ExpressionExecutor;
 
 class ExpressionFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::EXPRESSION_FILTER;
 
 public:
-	ExpressionFilter(unique_ptr<Expression> expr);
+	explicit ExpressionFilter(unique_ptr<Expression> expr);
 
 	//! The expression to evaluate
 	unique_ptr<Expression> expr;
 
 public:
 	bool EvaluateWithConstant(ClientContext &context, const Value &val);
+	bool EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const;
+
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) const override;
 	bool Equals(const TableFilter &other) const override;
