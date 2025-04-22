@@ -1,0 +1,43 @@
+# name: test/sql/copy/csv/test_thousands_separator.test
+# description: Test the thousands separator option
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# # Test NULL
+# statement ok
+# FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = NULL, delim = NULL)
+#
+# # Test Empty
+# statement ok
+# FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = '', delim = NULL)
+#
+# # Test more than one char
+# statement error
+# FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = 'bla', delim = NULL)
+# ----
+# Unsupported parameter for THOUSANDS: should be max one character
+
+# Must be different from decimal separator
+statement error
+FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', decimal_separator = ',')
+----
+THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
+
+statement error
+FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = '.')
+----
+THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
+
+# Test sniffer prompt
+
+#TODO Add it to python client
+
+#TODO Add it to COPY statement
+
+
+# Test conflict with decimal separator
+# query I
+# FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = '')
+# ----
