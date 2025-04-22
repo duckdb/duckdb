@@ -26,6 +26,8 @@ metrics = [
     "LATENCY",
     "ROWS_RETURNED",
     "OPERATOR_NAME",
+    "SYSTEM_PEAK_BUFFER_MEMORY",
+    "SYSTEM_PEAK_TEMP_DIR_SIZE",
 ]
 
 phase_timing_metrics = [
@@ -37,6 +39,12 @@ phase_timing_metrics = [
     "PHYSICAL_PLANNER_COLUMN_BINDING",
     "PHYSICAL_PLANNER_RESOLVE_TYPES",
     "PHYSICAL_PLANNER_CREATE_PLAN",
+]
+
+query_global_metrics = [
+    "BLOCKED_THREAD_TIME",
+    "SYSTEM_PEAK_BUFFER_MEMORY",
+    "SYSTEM_PEAK_TEMP_DIR_SIZE",
 ]
 
 optimizer_types = []
@@ -94,6 +102,7 @@ get_optimizer_metric_by_type_fun = 'GetOptimizerMetricByType(OptimizerType type)
 get_optimizer_type_by_metric_fun = 'GetOptimizerTypeByMetric(MetricsType type)'
 is_optimizer_metric_fun = 'IsOptimizerMetric(MetricsType type)'
 is_phase_timing_metric_fun = 'IsPhaseTimingMetric(MetricsType type)'
+is_query_global_metric_fun = 'IsQueryGlobalMetric(MetricsType type)'
 
 metrics_class = 'MetricsUtils'
 
@@ -134,6 +143,7 @@ with open(metrics_header_file, "w") as f:
     f.write(f'    static OptimizerType {get_optimizer_type_by_metric_fun};\n\n')
     f.write(f'    static bool {is_optimizer_metric_fun};\n')
     f.write(f'    static bool {is_phase_timing_metric_fun};\n')
+    f.write(f'    static bool {is_query_global_metric_fun};\n')
     f.write('};\n\n')
 
     f.write("} // namespace duckdb\n")
@@ -196,6 +206,17 @@ with open(metrics_cpp_file, "w") as f:
     f.write(f'bool {metrics_class}::{is_phase_timing_metric_fun} {{\n')
     f.write('    switch(type) {\n')
     for metric in phase_timing_metrics:
+        f.write(f"        case MetricsType::{metric}:\n")
+
+    f.write('            return true;\n')
+    f.write('        default:\n')
+    f.write('            return false;\n')
+    f.write('    };\n')
+    f.write('}\n\n')
+
+    f.write(f'bool {metrics_class}::{is_query_global_metric_fun} {{\n')
+    f.write('    switch(type) {\n')
+    for metric in query_global_metrics:
         f.write(f"        case MetricsType::{metric}:\n")
 
     f.write('            return true;\n')

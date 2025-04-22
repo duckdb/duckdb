@@ -90,12 +90,8 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
 }
 
-idx_t StandardBufferManager::GetUsedSwap() {
-	lock_guard<mutex> guard(temporary_directory.lock);
-	if (!temporary_directory.handle) {
-		return 0;
-	}
-	return temporary_directory.handle->GetTempFile().GetTotalUsedSpaceInBytes();
+idx_t StandardBufferManager::GetUsedSwap() const {
+	return temporary_directory.size_on_disk.load(std::memory_order_relaxed);
 }
 
 optional_idx StandardBufferManager::GetMaxSwap() const {
@@ -489,8 +485,8 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	lock_guard<mutex> guard(temporary_directory.lock);
 	if (!temporary_directory.handle) {
 		// temp directory has not been created yet: initialize it
-		temporary_directory.handle =
-		    make_uniq<TemporaryDirectoryHandle>(db, temporary_directory.path, temporary_directory.maximum_swap_space);
+		temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
+		    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space);
 	}
 }
 
