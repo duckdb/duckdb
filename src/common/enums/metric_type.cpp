@@ -232,8 +232,8 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
 bool MetricsUtils::IsQueryGlobalMetric(MetricsType type) {
     switch(type) {
         case MetricsType::BLOCKED_THREAD_TIME:
-        case MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY:
-        case MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE:
+        case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
+        case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
             return true;
         default:
             return false;

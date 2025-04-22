@@ -165,7 +165,7 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 
 			auto &child_info = child->GetProfilingInfo();
 			auto value = child_info.metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>();
-			info.AddToMetric(MetricsType::OPERATOR_CARDINALITY, value);
+			info.MetricSum(MetricsType::OPERATOR_CARDINALITY, value);
 		}
 	}
 }
@@ -186,7 +186,7 @@ static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, 
 
 		auto &child_info = child->GetProfilingInfo();
 		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
-		info.UpdateMetricValue<METRIC_TYPE>(aggregated_metric, value, update_fun);
+		info.MetricUpdate<METRIC_TYPE>(aggregated_metric, value, update_fun);
 	}
 }
 
@@ -422,11 +422,11 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
 			info.AddResultSetSize(result_set_size);
 		}
-		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY)) {
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MEMORY)) {
 			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
 			info.UpdateSystemPeakBufferManagerMemory(used_memory);
 		}
-		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
 			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
 			info.UpdateSystemPeakTempDirectorySize(used_swap);
 		}
@@ -500,10 +500,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		auto &info = tree_node.GetProfilingInfo();
 
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_TIMING)) {
-			info.AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
+			info.MetricSum<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_CARDINALITY)) {
-			info.AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements_returned);
+			info.MetricSum<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements_returned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_ROWS_SCANNED)) {
 			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
@@ -513,24 +513,24 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 				if (bind_data && scan_op.function.cardinality) {
 					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
 					if (cardinality && cardinality->has_estimated_cardinality) {
-						info.AddToMetric<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
+						info.MetricSum<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
 					}
 				}
 			}
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::RESULT_SET_SIZE)) {
-			info.AddToMetric<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
+			info.MetricSum<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::EXTRA_INFO)) {
 			info.extra_info = node.second.extra_info;
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY)) {
-			query_info.query_global_info.MaxOfMetric(MetricsType::SYSTEM_PEAK_BUFFER_MANAGER_MEMORY,
-			                                         node.second.system_peak_buffer_manager_memory);
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MEMORY)) {
+			query_info.query_global_info.MetricMax(MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
+			                                       node.second.system_peak_buffer_manager_memory);
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE)) {
-			query_info.query_global_info.MaxOfMetric(MetricsType::SYSTEM_PEAK_TEMP_DIRECTORY_SIZE,
-			                                         node.second.system_peak_temp_directory_size);
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
+			query_info.query_global_info.MetricMax(MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+			                                       node.second.system_peak_temp_directory_size);
 		}
 	}
 	profiler.operator_infos.clear();
@@ -833,7 +833,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	if (depth != 0) {
 		info.metrics[MetricsType::OPERATOR_NAME] = root_p.GetName();
-		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
+		info.MetricSum<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
 	}
 	if (info.Enabled(info.settings, MetricsType::EXTRA_INFO)) {
 		info.extra_info = root_p.ParamsToString();

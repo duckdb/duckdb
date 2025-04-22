@@ -26,8 +26,8 @@ metrics = [
     "LATENCY",
     "ROWS_RETURNED",
     "OPERATOR_NAME",
-    "SYSTEM_PEAK_BUFFER_MANAGER_MEMORY",
-    "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE",
+    "SYSTEM_PEAK_BUFFER_MEMORY",
+    "SYSTEM_PEAK_TEMP_DIR_SIZE",
 ]
 
 phase_timing_metrics = [
@@ -43,8 +43,8 @@ phase_timing_metrics = [
 
 query_global_metrics = [
     "BLOCKED_THREAD_TIME",
-    "SYSTEM_PEAK_BUFFER_MANAGER_MEMORY",
-    "SYSTEM_PEAK_TEMP_DIRECTORY_SIZE",
+    "SYSTEM_PEAK_BUFFER_MEMORY",
+    "SYSTEM_PEAK_TEMP_DIR_SIZE",
 ]
 
 optimizer_types = []

@@ -66,8 +66,8 @@ public:
 	}
 
 	template <class METRIC_TYPE>
-	void UpdateMetricValue(const MetricsType type, const Value &value,
-	                       const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
+	void MetricUpdate(const MetricsType type, const Value &value,
+	                  const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
 		if (metrics.find(type) == metrics.end()) {
 			metrics[type] = value;
 			return;
@@ -77,35 +77,35 @@ public:
 	}
 
 	template <class METRIC_TYPE>
-	void UpdateMetricValue(const MetricsType type, const METRIC_TYPE &value,
-	                       const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
+	void MetricUpdate(const MetricsType type, const METRIC_TYPE &value,
+	                  const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
 		auto new_value = Value::CreateValue(value);
-		UpdateMetricValue<METRIC_TYPE>(type, new_value, update_fun);
+		MetricUpdate<METRIC_TYPE>(type, new_value, update_fun);
 	}
 
 	template <class METRIC_TYPE>
-	void AddToMetric(const MetricsType type, const Value &value) {
-		UpdateMetricValue<METRIC_TYPE>(type, value, [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) {
+	void MetricSum(const MetricsType type, const Value &value) {
+		MetricUpdate<METRIC_TYPE>(type, value, [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) {
 			return old_value + new_value;
 		});
 	}
 
 	template <class METRIC_TYPE>
-	void AddToMetric(const MetricsType type, const METRIC_TYPE &value) {
+	void MetricSum(const MetricsType type, const METRIC_TYPE &value) {
 		auto new_value = Value::CreateValue(value);
-		return AddToMetric<METRIC_TYPE>(type, new_value);
+		return MetricSum<METRIC_TYPE>(type, new_value);
 	}
 
 	template <class METRIC_TYPE>
-	void MaxOfMetric(const MetricsType type, const Value &value) {
-		UpdateMetricValue<METRIC_TYPE>(type, value, [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) {
+	void MetricMax(const MetricsType type, const Value &value) {
+		MetricUpdate<METRIC_TYPE>(type, value, [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) {
 			return MaxValue(old_value, new_value);
 		});
 	}
 	template <class METRIC_TYPE>
-	void MaxOfMetric(const MetricsType type, const METRIC_TYPE &value) {
+	void MetricMax(const MetricsType type, const METRIC_TYPE &value) {
 		auto new_value = Value::CreateValue(value);
-		return MaxOfMetric<METRIC_TYPE>(type, new_value);
+		return MetricMax<METRIC_TYPE>(type, new_value);
 	}
 };
 

@@ -34,20 +34,17 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t result_set_size_p = 0,
-	                             idx_t system_peak_buffer_manager_memory_p = 0,
-	                             idx_t system_peak_temp_directory_size_p = 0)
-	    : time(time_p), elements_returned(elements_returned_p), result_set_size(result_set_size_p),
-	      system_peak_buffer_manager_memory(system_peak_buffer_manager_memory_p),
-	      system_peak_temp_directory_size(system_peak_temp_directory_size_p) {
+	explicit OperatorInformation() {
 	}
 
-	double time;
-	idx_t elements_returned;
-	idx_t result_set_size;
-	idx_t system_peak_buffer_manager_memory;
-	idx_t system_peak_temp_directory_size;
 	string name;
+
+	double time = 0;
+	idx_t elements_returned = 0;
+	idx_t result_set_size = 0;
+	idx_t system_peak_buffer_manager_memory = 0;
+	idx_t system_peak_temp_directory_size = 0;
+
 	InsertionOrderPreservingMap<string> extra_info;
 
 	void AddTime(double n_time) {
