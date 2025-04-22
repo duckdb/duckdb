@@ -45,6 +45,13 @@ EXTENSIONS_PATH = os.path.join("build", "extension_configuration", "extensions.c
 DUCKDB_PATH = os.path.join(*args.shell.split('/'))
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
 
+EXTENSION_DEPENDENCIES = {
+    'iceberg': [
+        'avro',
+        'parquet',
+    ]
+}
+
 from enum import Enum
 
 
@@ -460,13 +467,29 @@ class ExtensionData:
         self.settings_map.update(entries.settings)
         self.secret_types_map.update(entries.secret_types)
 
+    def load_dependencies(self, extension_name: str) -> str:
+        if extension_name not in EXTENSION_DEPENDENCIES:
+            return ''
+
+        res = ''
+        dependencies = EXTENSION_DEPENDENCIES[extension_name]
+        for item in dependencies:
+            if item not in self.extensions:
+                print(f"Could not load extension '{extension_name}', dependency '{item}' is missing")
+                exit(1)
+            extension_path = self.extensions[item]
+            print(f"Load {item} at {extension_path}")
+            res += f"LOAD '{extension_path}';"
+        return res
+
     def add_extension(self, extension_name: str):
         if extension_name in self.extensions:
             # Perform a LOAD and add the added settings/functions/secret_types
             extension_path = self.extensions[extension_name]
 
             print(f"Load {extension_name} at {extension_path}")
-            load = f"LOAD '{extension_path}';"
+            load = self.load_dependencies(extension_name)
+            load += f"LOAD '{extension_path}';"
 
             (functions, function_overloads) = get_functions(load)
             extension_functions = list(functions)
