@@ -25,7 +25,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
-	    !op.partition_columns.empty() || op.overwrite_mode != CopyOverwriteMode::COPY_ERROR_ON_CONFLICT) {
+	    !op.partition_columns.empty()) {
 		if (op.preserve_order == PreserveOrderType::PRESERVE_ORDER) {
 			throw InvalidInputException("PRESERVE_ORDER is not supported with these parameters");
 		}
