@@ -646,6 +646,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			data_table.LocalMerge(context, collection);
 			data_table.ResetOptimisticCollection(context, collection_index);
 		}
+		writer->FinalFlush();
 
 		auto &optimistic_writer = data_table.GetOptimisticWriter(context);
 		optimistic_writer.Merge(*writer);
