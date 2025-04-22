@@ -378,19 +378,27 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 			new_card = static_cast<double>(child_stats.cardinality);
 		} else {
 			new_card = product * mult;
-			new_card = MinValue(new_card, static_cast<double>(child_stats.cardinality));
 		}
+		new_card = MinValue(new_card, static_cast<double>(child_stats.cardinality));
 	}
 
 	// an ungrouped aggregate has 1 row
 	stats.cardinality = aggr.groups.empty() ? 1 : LossyNumericCast<idx_t>(new_card);
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
-	auto num_child_columns = aggr.GetColumnBindings().size();
+	const auto aggr_column_bindings = aggr.GetColumnBindings();
+	auto num_child_columns = aggr_column_bindings.size();
 
-	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns;
-	     column_index++) {
-		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
+	for (idx_t column_index = 0; column_index < num_child_columns; column_index++) {
+		const auto &binding = aggr_column_bindings[column_index];
+		if (binding.table_index == aggr.group_index && column_index < distinct_counts.size()) {
+			// Group column that we have the HLL of
+			stats.column_distinct_count.push_back(
+			    DistinctCount({LossyNumericCast<idx_t>(distinct_counts[column_index]), true}));
+		} else {
+			// Non-group column, or we don't have the HLL
+			stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
+		}
 		stats.column_names.push_back("aggregate");
 	}
 	return stats;
