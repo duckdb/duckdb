@@ -446,6 +446,16 @@ class ExtensionData:
         # All function overloads (also ones that will not be written to the file)
         self.all_function_overloads: Dict[Function, List[ExtensionFunctionOverload]] = {}
 
+        self.base_settings: Set[str] = set()
+        self.base_secret_types: Set[str] = set()
+        self.base_functions: Set[Function] = set()
+
+        self.extension_settings: Dict[str, Set[str]] = {}
+        self.extension_secret_types: Dict[str, Set[str]] = {}
+        self.extension_functions: Dict[str, Set[Function]] = {}
+
+        self.added_extensions: Set[str] = set()
+
         # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
 
@@ -483,6 +493,11 @@ class ExtensionData:
         return res
 
     def add_extension(self, extension_name: str):
+        if extension_name in EXTENSION_DEPENDENCIES:
+            for item in EXTENSION_DEPENDENCIES[extension_name]:
+                if item not in self.added_extensions:
+                    self.add_extension(item)
+
         if extension_name in self.extensions:
             # Perform a LOAD and add the added settings/functions/secret_types
             extension_path = self.extensions[extension_name]
@@ -514,11 +529,23 @@ class ExtensionData:
 Please double check if '{args.extension_dir}' is the right location to look for ./**/*.duckdb_extension files"""
             print(error)
             exit(1)
+        self.added_extensions.add(extension_name)
 
     def add_settings(self, extension_name: str, settings_list: List[str]):
         extension_name = extension_name.lower()
 
-        added_settings: Set[str] = set(settings_list) - self.base_settings
+        base_settings = set()
+        base_settings.update(self.base_settings)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            dependencies = EXTENSION_DEPENDENCIES[extension_name]
+            for item in dependencies:
+                assert item in self.extension_settings
+                base_settings.update(self.extension_settings[item])
+
+        added_settings: Set[str] = set(settings_list) - base_settings
+
+        self.extension_settings[extension_name] = added_settings
+
         settings_to_add: Dict[str, ExtensionSetting] = {}
         for setting in added_settings:
             setting_name = setting.lower()
@@ -529,7 +556,18 @@ Please double check if '{args.extension_dir}' is the right location to look for 
     def add_secret_types(self, extension_name: str, secret_types_list: List[str]):
         extension_name = extension_name.lower()
 
-        added_secret_types: Set[str] = set(secret_types_list) - self.base_secret_types
+        base_secret_types = set()
+        base_secret_types.update(self.base_secret_types)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            dependencies = EXTENSION_DEPENDENCIES[extension_name]
+            for item in dependencies:
+                assert item in self.extension_secret_types
+                base_secret_types.update(self.extension_secret_types[item])
+
+        added_secret_types: Set[str] = set(secret_types_list) - base_secret_types
+
+        self.extension_secret_types[extension_name] = added_secret_types
+
         secret_types_to_add: Dict[str, ExtensionSecretType] = {}
         for secret_type in added_secret_types:
             secret_type_name = secret_type.lower()
@@ -557,8 +595,19 @@ Please double check if '{args.extension_dir}' is the right location to look for 
     ):
         extension_name = extension_name.lower()
 
+        base_functions = set()
+        base_functions.update(self.base_functions)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            dependencies = EXTENSION_DEPENDENCIES[extension_name]
+            for item in dependencies:
+                assert item in self.extension_functions
+                base_functions.update(self.extension_functions[item])
+
         overloads = self.get_extension_overloads(extension_name, overloads)
-        added_functions: Set[Function] = set(function_list) - self.base_functions
+        added_functions: Set[Function] = set(function_list) - base_functions
+
+        self.extension_functions[extension_name] = added_functions
+
         functions_to_add: Dict[Function, ExtensionFunction] = {}
         for function in added_functions:
             if function in self.function_overloads:

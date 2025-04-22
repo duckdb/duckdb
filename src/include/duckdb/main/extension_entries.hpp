@@ -1021,9 +1021,15 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"aws", "httpfs"},         {"azure", "azure"},         {"gcs", "httpfs"},
-    {"huggingface", "httpfs"}, {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"},
-    {"r2", "httpfs"},          {"s3", "httpfs"},
+    {"aws", "httpfs"},
+    {"azure", "azure"},
+    {"gcs", "httpfs"},
+    {"huggingface", "httpfs"},
+    {"iceberg", "iceberg"},
+    {"mysql", "mysql_scanner"},
+    {"postgres", "postgres_scanner"},
+    {"r2", "httpfs"},
+    {"s3", "httpfs"},
 }; // END_OF_EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
