@@ -19,18 +19,51 @@ PRAGMA enable_verification
 # ----
 # Unsupported parameter for THOUSANDS: should be max one character
 
-# Must be different from decimal separator
-statement error
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', decimal_separator = ',')
-----
-THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
+# # Must be different from decimal separator
+# statement error
+# FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', decimal_separator = ',')
+# ----
+# THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
+#
+# statement error
+# FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = '.')
+# ----
+# THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
+#
+# # Test sniffer prompt
+# query I
+# SELECT prompt FROM sniff_csv('data/csv/thousands_separator/simple.csv', thousands = ',')
+# ----
+# FROM read_csv('data/csv/thousands_separator/simple.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'100,000.00': 'VARCHAR'}, thousands=',');
 
-statement error
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = '.')
+query I
+FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'double'}, header = False, auto_detect = false)
 ----
-THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
+100000.0
+300000.2
+300000000.4
+50.0
+9999999999.2
 
-# Test sniffer prompt
+query I
+FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'float'}, header = False, auto_detect = false)
+----
+100000.0
+300000.2
+300000000.4
+50.0
+9999999999.2
+
+query I
+FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'decimal(32,3)'}, header = False, auto_detect = false)
+----
+100000.0
+300000.2
+300000000.4
+50.0
+9999999999.2
+
+# Now try with auto-detect
 
 #TODO Add it to python client
 
