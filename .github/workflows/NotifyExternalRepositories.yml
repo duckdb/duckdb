@@ -18,12 +18,12 @@ on:
         type: 'string'
       should-publish:
         description: 'Should the called workflow push updates or not'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
       is-success:
         description: 'True, if all the builds in InvokeCI had succeeded'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
   workflow_dispatch:
     inputs:
       duckdb-sha:
@@ -42,12 +42,12 @@ on:
         type: 'string'
       should-publish:
         description: 'Should the called workflow push updates'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
       is-success:
         description: 'True, if all the builds in InvokeCI had succeeded'
-        default: false
-        type: 'boolean'
+        default: 'false'
+        type: 'string'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -57,7 +57,7 @@ jobs:
   notify-odbc-run:
     name: Run ODBC Vendor
     runs-on: ubuntu-latest
-    if: ${{ inputs.is-success }}
+    if: ${{ inputs.is-success == 'true' }}
     env:
       PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -94,5 +94,5 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"branch": "${{ inputs.target-branch }}", "event": "${{ inputs.triggering_event }}", "should_publish": "${{ inputs.should_publish }}"}}'
+          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"branch": "${{ inputs.target-branch }}", "event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
