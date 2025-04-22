@@ -29,10 +29,12 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, c
                                      FileOpenFlags flags_p, CachedFile &cached_file_p)
     : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
       path(path_p), flags(flags_p), validate(true), cached_file(cached_file_p), position(0) {
-	auto &open_options = path.extended_info->options;
-	const auto validate_entry = open_options.find("validate_external_file_cache");
-	if (validate_entry != open_options.end()) {
-		validate = BooleanValue::Get(validate_entry->second);
+	if (path.extended_info) {
+		const auto &open_options = path.extended_info->options;
+		const auto validate_entry = open_options.find("validate_external_file_cache");
+		if (validate_entry != open_options.end()) {
+			validate = BooleanValue::Get(validate_entry->second);
+		}
 	}
 	if (!external_file_cache.IsEnabled() || validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
