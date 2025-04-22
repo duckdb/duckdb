@@ -71,7 +71,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 		auto &expr = *filters[i]->filter;
 		if (expr.IsVolatile() || expr.CanThrow()) {
-			// we cannot push down volatile or throwing expressions if there are multiple filters
+			// we cannot push down volatile or throwing expressions
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);

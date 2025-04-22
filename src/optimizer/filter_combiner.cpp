@@ -349,7 +349,7 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	// extract the column bindings from this expression
 	vector<ColumnBinding> bindings;
 	ColumnLifetimeAnalyzer::ExtractColumnBindings(expr, bindings);
-	if (bindings.size() == 0) {
+	if (bindings.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	// we can only pushdown expressions that refer to exactly one column
