@@ -43,10 +43,7 @@ SerializedCSVReaderOptions::SerializedCSVReaderOptions(CSVOption<char> single_by
 
 unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const OpenFileInfo &file, const CSVReaderOptions &options,
                                            ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto &allocator = BufferAllocator::Get(context);
-	auto &db_config = DBConfig::GetConfig(context);
-	return CSVFileHandle::OpenFile(db_config, fs, allocator, file, options);
+	return CSVFileHandle::OpenFile(context, file, options);
 }
 
 ReadCSVData::ReadCSVData() {
