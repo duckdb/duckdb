@@ -57,6 +57,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
 	bool write_empty_file = true;
+	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -121,6 +122,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
+			}
+		} else if (loption == "preserve_order") {
+			if (GetBooleanArg(context, option.second)) {
+				preserve_order = PreserveOrderType::PRESERVE_ORDER;
+			} else {
+				preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
 			}
 		} else if (loption == "return_stats") {
 			if (GetBooleanArg(context, option.second)) {
@@ -263,6 +270,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	copy->partition_columns = std::move(partition_cols);
 	copy->write_empty_file = write_empty_file;
 	copy->return_type = return_type;
+	copy->preserve_order = preserve_order;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;

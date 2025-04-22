@@ -56,7 +56,6 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(PhysicalOperator &plan) {
 }
 
 bool PhysicalPlanGenerator::UseBatchIndex(ClientContext &context, PhysicalOperator &plan) {
-	// TODO: always preserve order if query contains ORDER BY
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	if (scheduler.NumberOfThreads() == 1) {
 		// batch index usage only makes sense if we are using multiple threads
