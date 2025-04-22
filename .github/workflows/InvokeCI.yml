@@ -113,9 +113,9 @@ jobs:
                 "${{ needs.R.result }}" == "success" && \
                 "${{ needs.Wasm.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
-            echo "success=true" >> $GITHUB_OUTPUT
+            echo "success='true'" >> $GITHUB_OUTPUT
           else
-            echo "success=false" >> $GITHUB_OUTPUT
+            echo "success='false'" >> $GITHUB_OUTPUT
           fi
     
   notify-external-repos-main:
@@ -128,7 +128,7 @@ jobs:
       target-branch: ${{ github.ref_name }}
       duckdb-sha: ${{ github.ref }}
       triggering-event: ${{ github.event_name }}
-      should-publish: true
+      should-publish: 'true'
 
   notify-specific-branch-on-external-repos:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
@@ -140,4 +140,4 @@ jobs:
       target-branch: ${{ github.ref_name }}
       duckdb-sha: ${{ inputs.git_ref }}
       triggering-event: ${{ github.event_name }}
-      should-publish: true
+      should-publish: 'true'
