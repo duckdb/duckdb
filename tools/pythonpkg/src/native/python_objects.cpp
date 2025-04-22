@@ -360,6 +360,10 @@ PyDate::PyDate(py::handle &ele) {
 	day = PyDateTime::GetDays(ele);
 }
 
+date_t PyDate::ToDate() {
+	return Date::FromDate(year, month, day);
+}
+
 Value PyDate::ToDuckValue() {
 	auto value = Value::DATE(year, month, day);
 	return value;

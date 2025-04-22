@@ -230,8 +230,7 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 		if (arg_orderer) {
 			auto &context = aggregator.executor.context;
 			auto &orders = aggregator.wexpr.arg_orders;
-			auto &buffer_manager = BufferManager::GetBufferManager(context);
-			GlobalSortState global_sort(buffer_manager, orders, payload_layout);
+			GlobalSortState global_sort(context, orders, payload_layout);
 			LocalSortState local_sort;
 			local_sort.Initialize(global_sort, global_sort.buffer_manager);
 

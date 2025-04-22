@@ -2,6 +2,8 @@
 # description: Test same seed same sample for system sample
 # group: [sample]
 
+require vector_size 2048
+
 statement ok
 CREATE OR REPLACE TABLE test AS SELECT UNNEST(RANGE(100000)) as x;
 

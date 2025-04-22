@@ -29,6 +29,10 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
 	}
+	auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
+	if (verify_vector) {
+		config->options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(verify_vector);
+	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -49,7 +53,8 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(std::move(command));
+		auto &current_loop = *active_loops.back();
+		current_loop.loop_commands.push_back(std::move(command));
 	} else {
 		ExecuteContext context;
 		command->Execute(context);
@@ -60,7 +65,8 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(std::move(loop));
+		auto &current_loop = *active_loops.back();
+		current_loop.loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
 		top_level_loop = std::move(loop);
@@ -497,13 +503,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_vector_verification") {
-#ifdef DUCKDB_VERIFY_VECTOR
-		return RequireResult::MISSING;
-#else
+		auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
+		if (verify_vector) {
+			return RequireResult::MISSING;
+		}
 		return RequireResult::PRESENT;
-#endif
 	}
-
 	if (param == "no_extension_autoloading") {
 		if (params.size() < 2) {
 			parser.Fail("require no_extension_autoloading needs an explanation string");

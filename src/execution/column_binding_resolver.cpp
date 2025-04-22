@@ -1,7 +1,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -9,6 +8,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 namespace duckdb {
 
@@ -25,6 +25,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		VisitOperator(*comp_join.children[0]);
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
+		}
+		// resolve any single-side predicates
+		// for now, only ASOF supports this, and we are guaranteed that all right side predicates
+		// have been pushed into a filter.
+		if (comp_join.predicate) {
+			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			VisitExpression(&comp_join.predicate);
 		}
 		// visit the duplicate eliminated columns on the LHS, if any
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
@@ -131,6 +138,16 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
 		ext_op.ResolveColumnBindings(*this, bindings);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+		VisitOperatorChildren(op);
+		bindings = op.GetColumnBindings();
+
+		for (auto &expr : rec.key_targets) {
+			VisitExpression(&expr);
+		}
 		return;
 	}
 	default:

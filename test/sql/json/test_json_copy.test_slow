@@ -14,8 +14,10 @@ copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
 statement ok
 delete from integers
 
-statement ok
+query I
 copy integers from '__TEST_DIR__/integers.json.gz'
+----
+1
 
 query T
 select i from integers
@@ -158,14 +160,15 @@ select * from '__TEST_DIR__/out.json'
 statement ok
 create table conclusions (conclusion varchar)
 
-# this doesn't work because we assume NDJSON records
-statement error
-copy conclusions from 'data/json/top_level_array.json'
-----
-
-# but works if we tell it to auto-detect
+# works because we auto-detect by default
 statement ok
-copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT TRUE)
+copy conclusions from 'data/json/top_level_array.json'
+
+# doesn't work if we disable auto-detection
+statement error
+copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT FALSE)
+----
+Invalid Input Error
 
 statement ok
 delete from conclusions;

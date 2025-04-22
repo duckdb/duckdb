@@ -45,7 +45,6 @@ jobs:
   android:
     name: Android
     runs-on: ubuntu-latest
-    container: ubuntu:20.04
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     strategy:
@@ -68,9 +67,9 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: ./.github/actions/ubuntu_18_setup
-      with:
-        ccache: 1
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get -y update && sudo apt-get -y install ninja-build
 
     - name: Checkout (again)
       shell: bash

@@ -25,6 +25,9 @@ bool LogStorage::ScanContexts(LogStorageScanState &state, DataChunk &result) con
 void LogStorage::InitializeScanContexts(LogStorageScanState &state) const {
 	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanContexts");
 }
+void LogStorage::Truncate() {
+	throw NotImplementedException("Not implemented for this LogStorage: TruncateLogStorage");
+}
 
 StdOutLogStorage::StdOutLogStorage() {
 }
@@ -37,13 +40,17 @@ void StdOutLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, cons
 	std::cout << StringUtil::Format(
 	    "[LOG] %s, %s, %s, %s, %s, %s, %s, %s\n", Value::TIMESTAMP(timestamp).ToString(), log_type,
 	    EnumUtil::ToString(level), log_message, EnumUtil::ToString(context.context.scope),
-	    context.context.client_context.IsValid() ? to_string(context.context.client_context.GetIndex()) : "NULL",
+	    context.context.connection_id.IsValid() ? to_string(context.context.connection_id.GetIndex()) : "NULL",
 	    context.context.transaction_id.IsValid() ? to_string(context.context.transaction_id.GetIndex()) : "NULL",
-	    context.context.thread.IsValid() ? to_string(context.context.thread.GetIndex()) : "NULL");
+	    context.context.thread_id.IsValid() ? to_string(context.context.thread_id.GetIndex()) : "NULL");
 }
 
 void StdOutLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
 	throw NotImplementedException("StdOutLogStorage::WriteLogEntries");
+}
+
+void StdOutLogStorage::Truncate() {
+	// NOP
 }
 
 void StdOutLogStorage::Flush() {
@@ -70,8 +77,9 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	vector<LogicalType> log_context_schema = {
 	    LogicalType::UBIGINT, // context_id
 	    LogicalType::VARCHAR, // scope TODO: enumify
-	    LogicalType::UBIGINT, // client_context
+	    LogicalType::UBIGINT, // connection_id
 	    LogicalType::UBIGINT, // transaction_id
+	    LogicalType::UBIGINT, // query_id
 	    LogicalType::UBIGINT, // thread
 	};
 
@@ -80,6 +88,16 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	log_context_buffer->Initialize(Allocator::DefaultAllocator(), log_context_schema, max_buffer_size);
 	log_entries = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_entry_schema);
 	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_context_schema);
+}
+
+void InMemoryLogStorage::ResetBuffers() {
+	entry_buffer->Reset();
+	log_context_buffer->Reset();
+
+	log_entries->Reset();
+	log_contexts->Reset();
+
+	registered_contexts.clear();
 }
 
 InMemoryLogStorage::~InMemoryLogStorage() {
@@ -122,6 +140,11 @@ void InMemoryLogStorage::Flush() {
 	FlushInternal();
 }
 
+void InMemoryLogStorage::Truncate() {
+	unique_lock<mutex> lck(lock);
+	ResetBuffers();
+}
+
 void InMemoryLogStorage::FlushInternal() {
 	if (entry_buffer->size() > 0) {
 		log_entries->Append(*entry_buffer);
@@ -146,9 +169,9 @@ void InMemoryLogStorage::WriteLoggingContext(const RegisteredLoggingContext &con
 	context_scope_data[size] =
 	    StringVector::AddString(log_context_buffer->data[1], EnumUtil::ToString(context.context.scope));
 
-	if (context.context.client_context.IsValid()) {
+	if (context.context.connection_id.IsValid()) {
 		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[2]);
-		client_context_data[size] = context.context.client_context.GetIndex();
+		client_context_data[size] = context.context.connection_id.GetIndex();
 	} else {
 		FlatVector::Validity(log_context_buffer->data[2]).SetInvalid(size);
 	}
@@ -158,11 +181,18 @@ void InMemoryLogStorage::WriteLoggingContext(const RegisteredLoggingContext &con
 	} else {
 		FlatVector::Validity(log_context_buffer->data[3]).SetInvalid(size);
 	}
-	if (context.context.thread.IsValid()) {
-		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[4]);
-		thread_data[size] = context.context.thread.GetIndex();
+	if (context.context.query_id.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[4]);
+		client_context_data[size] = context.context.query_id.GetIndex();
 	} else {
 		FlatVector::Validity(log_context_buffer->data[4]).SetInvalid(size);
+	}
+
+	if (context.context.thread_id.IsValid()) {
+		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[5]);
+		thread_data[size] = context.context.thread_id.GetIndex();
+	} else {
+		FlatVector::Validity(log_context_buffer->data[5]).SetInvalid(size);
 	}
 
 	log_context_buffer->SetCardinality(size + 1);

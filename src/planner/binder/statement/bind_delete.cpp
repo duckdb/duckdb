@@ -73,11 +73,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	del->bound_constraints = BindConstraints(table);
 	del->AddChild(std::move(root));
 
-	// set up the delete expression
-	auto &column_ids = get.GetColumnIds();
-	del->expressions.push_back(
-	    make_uniq<BoundColumnRefExpression>(table.GetRowIdType(), ColumnBinding(get.table_index, column_ids.size())));
-	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+	// bind the row id columns and add them to the projection list
+	BindRowIdColumns(table, get, del->expressions);
 
 	if (!stmt.returning_list.empty()) {
 		del->return_chunk = true;

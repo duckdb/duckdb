@@ -22,10 +22,10 @@
 #include "dbgen/config.h"
 
 #include <stdlib.h>
-#ifndef WIN32
+#ifndef _WIN32
  /* Change for Windows NT */
 #include <unistd.h>
-#endif /* WIN32 */
+#endif /* _WIN32 */
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>

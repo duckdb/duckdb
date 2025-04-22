@@ -186,6 +186,9 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
 		    strings, patterns, replaces, result, args.size(), [&](string_t input, string_t pattern, string_t replace) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
+			    if (!re.ok()) {
+				    throw InvalidInputException(re.error());
+			    }
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
 				    RE2::GlobalReplace(&sstring, re, CreateStringPiece(replace));

@@ -1,0 +1,36 @@
+# name: test/sql/alter/struct/rename_col_nested_struct.test
+# description: Test ALTER TABLE RENAME COLUMN: rename column of a nested struct
+# group: [struct]
+
+statement ok
+CREATE TABLE test(s STRUCT(s2 STRUCT(v1 INT, v2 INT)))
+
+statement ok
+INSERT INTO test VALUES (ROW(ROW(1, 1))), (ROW(ROW(2, 2)))
+
+# rename a column of a nested struct
+statement ok
+ALTER TABLE test RENAME s.s2.v1 TO i
+
+query I
+SELECT * FROM test
+----
+{'s2': {'i': 1, 'v2': 1}}
+{'s2': {'i': 2, 'v2': 2}}
+
+
+# already exists
+statement error
+ALTER TABLE test RENAME COLUMN s.s2.v2 TO i
+----
+already exists
+
+# rename the entire struct
+statement ok
+ALTER TABLE test RENAME COLUMN s.s2 TO x
+
+query I
+SELECT * FROM test
+----
+{'x': {'i': 1, 'v2': 1}}
+{'x': {'i': 2, 'v2': 2}}

@@ -140,7 +140,7 @@ public:
 		for (const auto &col_idx : input.column_indexes) {
 			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
 		}
-		l_state->scan_state.Initialize(l_state->column_ids, input.filters.get());
+		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
 		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
@@ -232,7 +232,7 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
+		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 		auto &storage = duck_table.GetStorage();
@@ -712,6 +712,11 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
+virtual_column_map_t TableScanGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	return bind_data.table.GetVirtualColumns();
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -729,8 +734,10 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
 	scan_function.sampling_pushdown = true;
+	scan_function.late_materialization = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
+	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	return scan_function;
 }
 
