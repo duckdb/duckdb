@@ -157,6 +157,7 @@ bool DictionarySupportsFilter(const TableFilter &filter) {
 	}
 	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NOT_NULL:
+	case TableFilterType::EXPRESSION_FILTER:
 		return true;
 	case TableFilterType::IS_NULL:
 	case TableFilterType::DYNAMIC_FILTER:
