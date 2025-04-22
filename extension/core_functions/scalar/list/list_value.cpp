@@ -119,7 +119,7 @@ static void ListValueStructFunction(DataChunk &args, Vector &result) {
 	for (idx_t entry_idx = 0; entry_idx < result_entries.size(); entry_idx++) {
 		idx_t offset = 0;
 		for (idx_t c = 0; c < list_size; c++) {
-			auto list = args.data[c];
+			auto &list = args.data[c];
 			auto &list_entries = StructVector::GetEntries(list);
 
 			VectorOperations::Copy(*list_entries[entry_idx], *result_entries[entry_idx], rows, 0, offset);

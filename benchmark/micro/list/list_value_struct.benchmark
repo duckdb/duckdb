@@ -1,5 +1,5 @@
 # name: benchmark/micro/list/list_value_struct.benchmark
-# description: LIST_VALUE performance with very large lists
+# description: LIST_VALUE performance with large structs
 # group: [list]
 
 name List Value
