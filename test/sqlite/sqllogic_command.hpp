@@ -66,7 +66,7 @@ public:
 	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, Connection *connection,
 	                                                         string file_name, idx_t query_line) const;
 
-	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
+	virtual void ExecuteInternal(ExecuteContext &context) const;
 	void Execute(ExecuteContext &context) const;
 
 	virtual bool SupportsConcurrent() const {

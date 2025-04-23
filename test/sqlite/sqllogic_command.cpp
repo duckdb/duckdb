@@ -184,6 +184,10 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 	return true;
 }
 
+void Command::ExecuteInternal(ExecuteContext &context) const {
+
+}
+
 void Command::Execute(ExecuteContext &context) const {
 	if (runner.finished_processing_file) {
 		return;
@@ -354,16 +358,16 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 	std::ostringstream &oss = GetSummary();
 
 	{
-		SQLLogicTestLogger logger(context, *this);
+		SQLLogicTestLogger logger(context, *this, oss);
 		if (runner.output_result_mode || runner.debug_mode) {
-			logger.PrintLineSep(oss);
-			logger.PrintFileHeader(oss);
+			logger.PrintLineSep();
+			logger.PrintFileHeader();
 			logger.PrintSQLFormatted();
-			logger.PrintLineSep(oss);
+			logger.PrintLineSep();
 		}
 
 		if (runner.output_sql) {
-			logger.PrintSQL(oss);
+			logger.PrintSQL();
 			return;
 		}
 	}
@@ -469,17 +473,17 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
 	std::ostringstream &oss = GetSummary();
 	{
-		SQLLogicTestLogger logger(context, *this);
+		SQLLogicTestLogger logger(context, *this, oss);
 		if (runner.output_result_mode || runner.debug_mode) {
-			logger.PrintLineSep(oss);
-			logger.PrintFileHeader(oss);
+			logger.PrintLineSep();
+			logger.PrintFileHeader();
 			logger.PrintSQLFormatted();
-			logger.PrintLineSep(oss);
+			logger.PrintLineSep();
 		}
 
 		query_break(query_line);
 		if (runner.output_sql) {
-			logger.PrintSQL(oss);
+			logger.PrintSQL();
 			return;
 		}
 	}
