@@ -91,7 +91,7 @@ void SQLLogicTestRunner::EndLoop() {
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
-	std::ostringstream &oss = GetSummary();
+	// auto &oss = GetSummary();
 
 	// restart the database with the specified db path
 	db.reset();
@@ -106,8 +106,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
 		ExecuteContext context;
-		SQLLogicTestLogger logger(context, *this, oss);
-		logger.LoadDatabaseFail(dbpath, err.Message());
+		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
 		FAIL();
 	}
 	Reconnect();

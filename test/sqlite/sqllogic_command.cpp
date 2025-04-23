@@ -184,9 +184,8 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 	return true;
 }
 
-void Command::ExecuteInternal(ExecuteContext &context) const {
-
-}
+// void Command::ExecuteInternal(ExecuteContext &context) const {
+// }
 
 void Command::Execute(ExecuteContext &context) const {
 	if (runner.finished_processing_file) {
@@ -355,10 +354,10 @@ bool LoopCommand::SupportsConcurrent() const {
 
 void Query::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-	std::ostringstream &oss = GetSummary();
+	// auto &oss = GetSummary();
 
 	{
-		SQLLogicTestLogger logger(context, *this, oss);
+		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
 			logger.PrintLineSep();
 			logger.PrintFileHeader();
@@ -471,9 +470,9 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-	std::ostringstream &oss = GetSummary();
+	// auto &oss = GetSummary();
 	{
-		SQLLogicTestLogger logger(context, *this, oss);
+		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
 			logger.PrintLineSep();
 			logger.PrintFileHeader();

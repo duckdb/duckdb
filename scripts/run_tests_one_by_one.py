@@ -125,8 +125,7 @@ is_active = False
 
 def get_test_name_from(text):
     match = re.findall(r'\((.*?)\)\!', text)
-    if match:
-        return match
+    return match[0] if match else ''
 
 
 def print_interval_background(interval):
@@ -174,7 +173,7 @@ def launch_test(test, list_of_tests=False):
 
     if len(stderr) > 0:
         # when list_of_tests test name gets transformed, but we can get it from stderr
-        test = test if not list_of_tests else get_test_name_from(stderr)
+        test = test[0] if not list_of_tests else get_test_name_from(stderr)
         new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
         error_container.append(new_data)
 
@@ -270,6 +269,6 @@ if len(error_container):
 '''
     )
     for i, error in enumerate(error_container, start=1):
-        print(f"{i}:", error["test"][0])
+        print(f"{i}:", error["test"])
         print(error["stderr"])
 exit(1)
