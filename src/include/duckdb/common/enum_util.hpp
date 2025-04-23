@@ -34,8 +34,6 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTMergeResult : uint8_t;
-
 enum class ARTScanHandling : uint8_t;
 
 enum class ARTScanHandlingResult : uint8_t;
@@ -405,9 +403,6 @@ enum class WindowExcludeMode : uint8_t;
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
-
-template<>
-const char* EnumUtil::ToChars<ARTMergeResult>(ARTMergeResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
@@ -961,9 +956,6 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
-
-template<>
-ARTMergeResult EnumUtil::FromString<ARTMergeResult>(const char *value);
 
 template<>
 ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);

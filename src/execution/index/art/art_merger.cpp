@@ -11,107 +11,154 @@
 namespace duckdb {
 
 void ARTMerger::Init(Node &left, Node &right) {
-	Emplace(left, right);
+	Emplace(left, right, GateStatus::GATE_NOT_SET, 0);
 }
 
-ARTMergeResult ARTMerger::Merge() {
+ARTConflictType ARTMerger::Merge() {
 	while (!s.empty()) {
+		// Copy the entry so we can pop it.
 		auto entry = s.top();
-		auto &left = entry.left;
-		auto &right = entry.right;
-
-		// We have the references to the nodes, so we can now pop this entry.
 		s.pop();
 
-		const auto left_type = left.GetType();
-		const auto right_type = right.GetType();
+		const auto left_type = entry.left.GetType();
+		const auto right_type = entry.right.GetType();
 
 		// Early-out due to a constraint violation.
 		// The 'smaller' node is always on the right, i.e., if right is any leaf, then left is any leaf, too.
-		// TODO: Handle this case before pushing the entry?
-		const auto duplicate_key = right_type == NType::LEAF_INLINED || right.GetGateStatus() == GateStatus::GATE_SET;
+		const auto duplicate_key =
+		    right_type == NType::LEAF_INLINED || entry.right.GetGateStatus() == GateStatus::GATE_SET;
 		if (art.IsUnique() && duplicate_key) {
-			return ARTMergeResult::DUPLICATE;
+			return ARTConflictType::CONSTRAINT;
 		}
 
 		if (left_type == NType::LEAF_INLINED) {
 			// Both left and right are inlined leaves.
 			D_ASSERT(right_type == NType::LEAF_INLINED);
-			MergeInlined(left, right);
+			MergeInlined(entry);
 			continue;
 		}
 
 		if (right_type == NType::LEAF_INLINED) {
-			// Left is a gate, right is LEAF_INLINED.
-			D_ASSERT(left.GetGateStatus() == GateStatus::GATE_SET);
-			MergeGateAndInlined(left, right);
+			// Left is any node except LEAF_INLINED, right is LEAF_INLINED.
+			auto result = MergeNodeAndInlined(entry);
+			if (result != ARTConflictType::NO_CONFLICT) {
+				return result;
+			}
 			continue;
 		}
 
-		if (right.IsLeafNode()) {
+		if (entry.right.IsLeafNode()) {
 			// Both left and right are leaf nodes.
-			D_ASSERT(left.IsLeafNode());
-			MergeLeaves(left, right);
+			D_ASSERT(entry.left.IsLeafNode());
+			MergeLeaves(entry);
 			continue;
 		}
 
-		if (left.IsNode() && right.IsNode()) {
+		if (entry.left.IsNode() && entry.right.IsNode()) {
 			// Both left and right are nodes.
-			MergeNodes(left, right);
+			MergeNodes(entry);
 			continue;
 		}
 
 		D_ASSERT(right_type == NType::PREFIX);
 		if (left_type == NType::PREFIX) {
 			// Both left and right are prefixes.
-			MergePrefixes(left, right);
+			MergePrefixes(entry);
 			continue;
 		}
 		// Left is a node, right is a PREFIX.
-		MergeNodeAndPrefix(left, right);
+		MergeNodeAndPrefix(entry.left, entry.right, entry.status, entry.depth);
 	}
 
 	// We exhausted the stack.
-	return ARTMergeResult::SUCCESS;
+	return ARTConflictType::NO_CONFLICT;
 }
 
-void ARTMerger::Emplace(Node &left, Node &right) {
+void ARTMerger::Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth) {
 	const auto left_type = left.GetType();
-	if (left_type == NType::LEAF_INLINED || left_type == NType::PREFIX) {
+	const auto right_type = right.GetType();
+
+	if (left_type == NType::LEAF_INLINED) {
+		swap(left, right);
+	} else if (left_type == NType::PREFIX && right_type != NType::LEAF_INLINED) {
 		swap(left, right);
 	}
-	s.emplace(left, right);
+
+	if (left.GetGateStatus() != GateStatus::GATE_SET) {
+		s.emplace(left, right, parent_status, depth);
+		return;
+	}
+
+	// Enter a gate.
+	// Reset the depth.
+	D_ASSERT(parent_status == GateStatus::GATE_NOT_SET);
+	s.emplace(left, right, GateStatus::GATE_SET, 0);
 }
 
-void ARTMerger::TransformInlinedToNested(Node &inlined) {
-	D_ASSERT(inlined.GetType() == NType::LEAF_INLINED);
+void ARTMerger::MergeInlined(NodeEntry &entry) {
+	D_ASSERT(entry.left.GetType() == NType::LEAF_INLINED);
+	D_ASSERT(entry.right.GetType() == NType::LEAF_INLINED);
 
-	// Retrieve the inlined row ID.
-	const auto row_id = inlined.GetRowId();
-	inlined.Clear();
+	// We enter this case, if
+	// 1. we are outside a nested leaf.
+	// 2. we are in a nested leaf with two 'compressed' prefixes.
 
-	// Turn the inlined row ID into a list of prefix nodes.
-	const auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, row_id);
-	reference<Node> ref(inlined);
-	Prefix::New(art, ref, row_id_key, 0, sizeof(row_id));
-	Leaf::New(ref.get(), row_id);
-	inlined.SetGateStatus(GateStatus::GATE_SET);
+	auto new_status = GateStatus::GATE_NOT_SET;
+	if (entry.status == GateStatus::GATE_NOT_SET) {
+		// We create a nested leaf.
+		new_status = GateStatus::GATE_SET;
+		entry.depth = 0;
+	}
+
+	// Get the corresponding row IDs and their ART keys.
+	auto left_row_id = entry.left.GetRowId();
+	auto right_row_id = entry.right.GetRowId();
+	auto left_key = ARTKey::CreateARTKey<row_t>(arena, left_row_id);
+	auto right_key = ARTKey::CreateARTKey<row_t>(arena, right_row_id);
+
+	auto pos = left_key.GetMismatchPos(right_key, entry.depth);
+
+	entry.left.Clear();
+	reference<Node> node(entry.left);
+	if (pos != entry.depth) {
+		// The row IDs share a prefix.
+		Prefix::New(art, node, left_key, entry.depth, pos - entry.depth);
+	}
+
+	auto left_byte = left_key.data[pos];
+	auto right_byte = right_key.data[pos];
+
+	if (pos == Prefix::ROW_ID_COUNT) {
+		// The row IDs differ on the last byte.
+		Node7Leaf::New(art, node);
+		Node7Leaf::InsertByte(art, node, left_byte);
+		Node7Leaf::InsertByte(art, node, right_byte);
+		entry.left.SetGateStatus(new_status);
+		return;
+	}
+
+	// Create and insert the (compressed) children.
+	// We inline directly into the node, instead of creating trailing prefixes.
+	Node4::New(art, node);
+
+	Node left_child;
+	Leaf::New(left_child, left_row_id);
+	Node4::InsertChild(art, node, left_byte, left_child);
+
+	Node right_child;
+	Leaf::New(right_child, right_row_id);
+	Node4::InsertChild(art, node, right_byte, right_child);
+
+	entry.left.SetGateStatus(new_status);
 }
 
-void ARTMerger::MergeInlined(Node &left, Node &right) {
-	D_ASSERT(left.GetType() == NType::LEAF_INLINED);
-	D_ASSERT(right.GetType() == NType::LEAF_INLINED);
+ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
+	D_ASSERT(entry.right.GetType() == NType::LEAF_INLINED);
+	D_ASSERT(entry.status == GateStatus::GATE_SET);
 
-	TransformInlinedToNested(left);
-	MergeGateAndInlined(left, right);
-}
-
-void ARTMerger::MergeGateAndInlined(Node &gate, Node &inlined) {
-	D_ASSERT(gate.GetGateStatus() == GateStatus::GATE_SET);
-	D_ASSERT(inlined.GetType() == NType::LEAF_INLINED);
-
-	TransformInlinedToNested(inlined);
-	Emplace(gate, inlined);
+	auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, entry.right.GetRowId());
+	return art.Insert(entry.left, row_id_key, entry.depth, row_id_key, GateStatus::GATE_SET, nullptr,
+	                  IndexAppendMode::DEFAULT);
 }
 
 array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf_node) {
@@ -128,22 +175,22 @@ array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf_node) {
 	}
 }
 
-void ARTMerger::MergeLeaves(Node &left, Node &right) {
-	D_ASSERT(left.IsLeafNode());
-	D_ASSERT(right.IsLeafNode());
-	D_ASSERT(left.GetGateStatus() == GateStatus::GATE_NOT_SET);
-	D_ASSERT(right.GetGateStatus() == GateStatus::GATE_NOT_SET);
+void ARTMerger::MergeLeaves(NodeEntry &entry) {
+	D_ASSERT(entry.left.IsLeafNode());
+	D_ASSERT(entry.right.IsLeafNode());
+	D_ASSERT(entry.left.GetGateStatus() == GateStatus::GATE_NOT_SET);
+	D_ASSERT(entry.right.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
 	// Get the bytes of the right node.
 	// Then, copy them into left.
-	auto bytes = GetBytes(right);
+	auto bytes = GetBytes(entry.right);
 
 	// FIXME: Obtain a reference to left once and
 	// FIXME: handle the different node type combinations.
 	for (idx_t i = 0; i < bytes.size(); i++) {
-		Node::InsertChild(art, left, bytes[i]);
+		Node::InsertChild(art, entry.left, bytes[i]);
 	}
-	Node::Free(art, right);
+	Node::Free(art, entry.right);
 }
 
 NodeChildren ARTMerger::ExtractChildren(Node &node) {
@@ -162,39 +209,48 @@ NodeChildren ARTMerger::ExtractChildren(Node &node) {
 	}
 }
 
-void ARTMerger::MergeNodes(Node &left, Node &right) {
-	D_ASSERT(left.IsNode());
-	D_ASSERT(right.IsNode());
+void ARTMerger::MergeNodes(NodeEntry &entry) {
+	D_ASSERT(entry.left.IsNode());
+	D_ASSERT(entry.right.IsNode());
 
 	// Merge the smaller node into the bigger node.
-	if (left.GetType() < right.GetType()) {
-		swap(left, right);
+	if (entry.left.GetType() < entry.right.GetType()) {
+		swap(entry.left, entry.right);
 	}
 
 	// Get the children of the right node.
 	// Then, copy them into left.
-	auto children = ExtractChildren(right);
-
-	// FIXME: Obtain a reference to left once and
-	// FIXME: handle the different node type combinations.
-	for (idx_t i = 0; i < children.bytes.size(); i++) {
-		const auto byte = children.bytes[i];
-		auto &right_child = children.children[i];
-		auto child = left.GetChildMutable(art, byte);
-
-		if (!child) {
-			Node::InsertChild(art, left, byte, right_child);
-			continue;
-		}
-		Emplace(*child, right_child);
-	}
-
+	auto children = ExtractChildren(entry.right);
 	// As long as the arena is valid,
 	// the copied-out nodes (and their references) are valid.
-	Node::Free(art, right);
+	Node::Free(art, entry.right);
+
+	// First, we iterate and insert children.
+	// This might grow the node, so we need to do it prior to Emplace operations.
+	vector<idx_t> remaining_children;
+	for (idx_t i = 0; i < children.bytes.size(); i++) {
+		const auto byte = children.bytes[i];
+		auto child = entry.left.GetChildMutable(art, byte);
+
+		if (!child) {
+			auto &right_child = children.children[i];
+			Node::InsertChild(art, entry.left, byte, right_child);
+			continue;
+		}
+		remaining_children.emplace_back(i);
+	}
+
+	// Now, we emplace all remaining children.
+	for (idx_t i = 0; i < remaining_children.size(); i++) {
+		const auto byte = children.bytes[remaining_children[i]];
+		auto &right_child = children.children[remaining_children[i]];
+		auto child = entry.left.GetChildMutable(art, byte);
+		Emplace(*child, right_child, entry.status, entry.depth + 1);
+	}
 }
 
-void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const uint8_t pos) {
+void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth,
+                                   const uint8_t pos) {
 	D_ASSERT(node.IsNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
@@ -207,7 +263,8 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const uint8_t pos) 
 
 	if (child) {
 		// Iterate on the child and the remaining prefix.
-		Emplace(*child, prefix);
+		// Emplace here ensures depth-first traversal into the child node.
+		Emplace(*child, prefix, parent_status, parent_depth + 1);
 		return;
 	}
 
@@ -215,16 +272,16 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const uint8_t pos) 
 	prefix.Clear();
 }
 
-void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix) {
+void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth) {
 	D_ASSERT(node.IsNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
-	MergeNodeAndPrefix(node, prefix, 0);
+	MergeNodeAndPrefix(node, prefix, parent_status, parent_depth, 0);
 }
 
-void ARTMerger::MergePrefixes(Node &left, Node &right) {
-	D_ASSERT(left.GetType() == NType::PREFIX);
-	D_ASSERT(right.GetType() == NType::PREFIX);
+void ARTMerger::MergePrefixes(NodeEntry &entry) {
+	D_ASSERT(entry.left.GetType() == NType::PREFIX);
+	D_ASSERT(entry.right.GetType() == NType::PREFIX);
 
 	// We traverse prefixes until we
 	// - 3.1. find a position where they differ.
@@ -237,8 +294,8 @@ void ARTMerger::MergePrefixes(Node &left, Node &right) {
 	// the prefixes are the same. That means, we only need to keep
 	// one of them around (as we are merging).
 
-	Prefix l_prefix(art, left, true);
-	Prefix r_prefix(art, right, true);
+	Prefix l_prefix(art, entry.left, true);
+	Prefix r_prefix(art, entry.right, true);
 	const auto count = Prefix::Count(art);
 
 	// Find a byte at pos where the prefixes differ.
@@ -258,19 +315,19 @@ void ARTMerger::MergePrefixes(Node &left, Node &right) {
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
 
 		Node l_child;
-		const auto l_byte = Prefix::GetByte(art, left, cast_pos);
+		const auto l_byte = Prefix::GetByte(art, entry.left, cast_pos);
 
-		reference<Node> ref(left);
+		reference<Node> ref(entry.left);
 		const auto status = Prefix::Split(art, ref, l_child, cast_pos);
 		Node4::New(art, ref);
 		ref.get().SetGateStatus(status);
 
 		Node4::InsertChild(art, ref, l_byte, l_child);
 
-		auto r_byte = Prefix::GetByte(art, right, cast_pos);
-		Prefix::Reduce(art, right, cast_pos);
-		Node4::InsertChild(art, ref, r_byte, right);
-		right.Clear();
+		auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
+		Prefix::Reduce(art, entry.right, cast_pos);
+		Node4::InsertChild(art, ref, r_byte, entry.right);
+		entry.right.Clear();
 		return;
 	}
 
@@ -279,23 +336,27 @@ void ARTMerger::MergePrefixes(Node &left, Node &right) {
 		// Free the right prefix, but keep the reference to its child alive.
 		auto r_child = *r_prefix.ptr;
 		r_prefix.ptr->Clear();
-		Node::Free(art, right);
-		right = r_child;
+		Node::Free(art, entry.right);
+		entry.right = r_child;
 
-		Emplace(*l_prefix.ptr, right);
+		// Emplace here ensures depth-first traversal into the child node.
+		auto depth = entry.depth + l_prefix.data[count];
+		Emplace(*l_prefix.ptr, entry.right, entry.status, depth);
 		return;
 	}
+
+	// max_count indexes the byte after the exhausted prefix in a child node.
 
 	if (r_prefix.data[count] == max_count) {
 		// We exhausted the right prefix.
 		// Ensure that we continue merging into left.
-		swap(left, right);
-		MergeNodeAndPrefix(*r_prefix.ptr, right, max_count);
+		swap(entry.left, entry.right);
+		MergeNodeAndPrefix(*r_prefix.ptr, entry.right, entry.status, entry.depth + max_count, max_count);
 		return;
 	}
 
 	// We exhausted the left prefix.
-	MergeNodeAndPrefix(*l_prefix.ptr, right, max_count);
+	MergeNodeAndPrefix(*l_prefix.ptr, entry.right, entry.status, entry.depth + max_count, max_count);
 }
 
 } // namespace duckdb

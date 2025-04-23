@@ -382,7 +382,7 @@ bool Node::Merge(ART &art, Node &other) {
 	if (HasMetadata()) {
 		ARTMerger merger(Allocator::Get(art.db), art);
 		merger.Init(*this, other);
-		return merger.Merge() == ARTMergeResult::SUCCESS;
+		return merger.Merge() == ARTConflictType::NO_CONFLICT;
 	}
 
 	*this = other;

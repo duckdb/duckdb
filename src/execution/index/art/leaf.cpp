@@ -31,15 +31,6 @@ void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row
 	node.get().SetGateStatus(GateStatus::GATE_SET);
 }
 
-void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
-	D_ASSERT(r_node.GetType() == INLINED);
-
-	ArenaAllocator arena_allocator(Allocator::Get(art.db));
-	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId());
-	art.Insert(l_node, key, 0, key, l_node.GetGateStatus(), nullptr, IndexAppendMode::DEFAULT);
-	r_node.Clear();
-}
-
 void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const GateStatus status) {
 	D_ASSERT(node.GetType() == INLINED);
 

@@ -12,11 +12,6 @@
 
 namespace duckdb {
 
-enum class ARTMergeResult : uint8_t {
-	SUCCESS,
-	DUPLICATE,
-};
-
 class ARTMerger {
 public:
 	ARTMerger() = delete;
@@ -25,15 +20,18 @@ public:
 
 public:
 	void Init(Node &left, Node &right);
-	ARTMergeResult Merge();
+	ARTConflictType Merge();
 
 private:
 	struct NodeEntry {
 		NodeEntry() = delete;
-		NodeEntry(Node &left, Node &right) : left(left), right(right) {};
+		NodeEntry(Node &left, Node &right, const GateStatus status, const idx_t depth)
+		    : left(left), right(right), status(status), depth(depth) {};
 
 		Node &left;
 		Node &right;
+		GateStatus status;
+		idx_t depth;
 	};
 
 	ArenaAllocator arena;
@@ -43,22 +41,22 @@ private:
 private:
 	// When pushing anything on the stack, we ensure that:
 	// - if left is LEAF_INLINED, then right is also LEAF_INLINED.
-	// - if left is PREFIX, then right is also PREFIX.
-	void Emplace(Node &left, Node &right);
+	// - if left is PREFIX, then right is also PREFIX (except for PREFIX <-> LEAF_INLINED combinations).
+	void Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth);
 
-	void TransformInlinedToNested(Node &inlined);
-	void MergeInlined(Node &left, Node &right);
-	void MergeGateAndInlined(Node &gate, Node &inlined);
+	void MergeInlined(NodeEntry &entry);
+	ARTConflictType MergeNodeAndInlined(NodeEntry &entry);
 
 	array_ptr<uint8_t> GetBytes(Node &node);
-	void MergeLeaves(Node &left, Node &right);
+	void MergeLeaves(NodeEntry &entry);
 
 	NodeChildren ExtractChildren(Node &node);
-	void MergeNodes(Node &left, Node &right);
+	void MergeNodes(NodeEntry &entry);
 
-	void MergeNodeAndPrefix(Node &node, Node &prefix, uint8_t pos);
-	void MergeNodeAndPrefix(Node &node, Node &prefix);
-	void MergePrefixes(Node &left, Node &right);
+	void MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth,
+	                        uint8_t pos);
+	void MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth);
+	void MergePrefixes(NodeEntry &entry);
 };
 
 } // namespace duckdb
