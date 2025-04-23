@@ -53,6 +53,7 @@ if not args.unittest_program:
 unittest_program = args.unittest_program
 no_exit = args.no_exit
 fast_fail = args.fast_fail
+tests_per_invocation = args.tests_per_invocation
 
 if no_exit:
     if fast_fail:
