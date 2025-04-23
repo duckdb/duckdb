@@ -199,12 +199,8 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 
 			// Check the selectivity
 			double input_rows = gstate.num_input_rows;
-			// double source_rows = this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE;
 			double source_rows = this_pipeline->num_source_rows;
 			double selectivity = input_rows / source_rows;
-
-			// this_pipeline->GetSource()->Print();
-			// std::cerr << "selectivity: " << selectivity << "\n";
 
 			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
 			// a full table.

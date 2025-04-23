@@ -535,17 +535,9 @@ bool PipelineExecutor::StopBuildingBF(const DataChunk &result) const {
 		return !bf_creator.is_successful;
 	}
 
-	// This IF must be false.
-	if (pipeline.source->type != PhysicalOperatorType::CHUNK_SCAN &&
-	    pipeline.source->type != PhysicalOperatorType::DELIM_SCAN &&
-	    pipeline.source->type != PhysicalOperatorType::COLUMN_DATA_SCAN &&
-	    pipeline.source->type != PhysicalOperatorType::TABLE_SCAN) {
-		return false;
-	}
-
 	// Collect pipeline source statistics
 	++pipeline.num_source_chunks;
-	pipeline.num_source_rows += result.size();
+	pipeline.num_source_rows += static_cast<int64_t>(result.size());
 	if (pipeline.num_source_chunks > 32) {
 		pipeline.is_selectivity_checked = true;
 	}
