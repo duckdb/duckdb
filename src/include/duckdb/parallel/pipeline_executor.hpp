@@ -57,12 +57,6 @@ private:
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 public:
-	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
-	static constexpr double SCAN_SELECTIVITY_THRESHOLD = 0.5;
-	static constexpr double FILTER_SELECTIVITY_THRESHOLD = 0.5;
-	static constexpr int64_t SMALL_TABLE_THRESHOLD = 1 << 20;
-
-public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted

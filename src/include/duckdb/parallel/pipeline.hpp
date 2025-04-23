@@ -79,8 +79,8 @@ public:
 	Executor &executor;
 
 	//! Runtime Statistics for Predicate Transfer
-	std::atomic<int64_t> num_fetched_source_chunks;
-	std::atomic<int64_t> num_fetched_source_rows;
+	std::atomic<int64_t> num_source_chunks;
+	std::atomic<int64_t> num_source_rows;
 
 	bool is_building_bf = false;
 	bool is_probing_side = false;

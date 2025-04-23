@@ -20,8 +20,8 @@ void TransferBFLinker::LinkBFOperators(LogicalOperator &op) {
 	state = State::UPDATE_MIN_MAX_BINDING;
 	VisitOperator(op);
 
-	// state = State::MARK_PROBING_CREATOR;
-	// VisitOperator(op, false);
+	state = State::MARK_PROBING_CREATOR;
+	VisitOperator(op, false);
 }
 
 void TransferBFLinker::VisitOperator(LogicalOperator &op) {

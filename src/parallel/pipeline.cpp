@@ -66,7 +66,7 @@ TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 }
 
 Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), num_fetched_source_chunks(0), num_fetched_source_rows(0), ready(false), initialized(false),
+    : executor(executor_p), num_source_chunks(0), num_source_rows(0), ready(false), initialized(false),
       source(nullptr), sink(nullptr), is_selectivity_checked(false) {
 }
 

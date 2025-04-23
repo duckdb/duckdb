@@ -524,19 +524,18 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 }
 
 bool PipelineExecutor::StopBuildingBF(const DataChunk &result) const {
+	// Only the pipeline that 1. has a CREATE_BF; and 2. is in the probing side can be canceled.
 	if (!pipeline.is_building_bf || !pipeline.is_probing_side) {
 		return false;
 	}
 
-	if (pipeline.source->estimated_cardinality < SMALL_TABLE_THRESHOLD) {
-		return false;
-	}
-
+	// This pipeline has been checked.
 	if (pipeline.is_selectivity_checked) {
 		auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
 		return !bf_creator.is_successful;
 	}
 
+	// This IF must be false.
 	if (pipeline.source->type != PhysicalOperatorType::CHUNK_SCAN &&
 	    pipeline.source->type != PhysicalOperatorType::DELIM_SCAN &&
 	    pipeline.source->type != PhysicalOperatorType::COLUMN_DATA_SCAN &&
@@ -544,28 +543,11 @@ bool PipelineExecutor::StopBuildingBF(const DataChunk &result) const {
 		return false;
 	}
 
-	if (!pipeline.operators.empty() && pipeline.operators[0].get().type == PhysicalOperatorType::FILTER) {
-		auto &filter = pipeline.operators[0].get().Cast<PhysicalFilter>();
-		if (!filter.is_estimated || filter.filter_selectivity < FILTER_SELECTIVITY_THRESHOLD) {
-			return false;
-		}
-	}
-
 	// Collect pipeline source statistics
-	++pipeline.num_fetched_source_chunks;
-	pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
-
-	if (pipeline.num_fetched_source_chunks >= NUM_CHUNK_FOR_CHECK) {
+	++pipeline.num_source_chunks;
+	pipeline.num_source_rows += result.size();
+	if (pipeline.num_source_chunks > 32) {
 		pipeline.is_selectivity_checked = true;
-		auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
-		auto fetched_rows = pipeline.num_fetched_source_rows.load();
-
-		double scan_sel = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
-		if (scan_sel > SCAN_SELECTIVITY_THRESHOLD) {
-			auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
-			bf_creator.is_successful = false;
-			return true;
-		}
 	}
 
 	return false;

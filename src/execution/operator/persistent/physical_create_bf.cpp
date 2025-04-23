@@ -34,7 +34,8 @@ public:
 	CreateBFGlobalSinkState(ClientContext &context, const PhysicalCreateBF &op)
 	    : context(context), op(op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)) {
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), is_selectivity_checked(false),
+	      num_input_rows(0) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
 
 		// init min max aggregation
@@ -137,6 +138,10 @@ public:
 
 	//! If memory is not enough, give up creating BFs
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
+
+	// runtime statistics
+	atomic<bool> is_selectivity_checked;
+	atomic<int64_t> num_input_rows;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
@@ -176,12 +181,40 @@ public:
 
 bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<CreateBFLocalSinkState>();
+	auto &gstate = input.global_state.Cast<CreateBFGlobalSinkState>();
 
+	// Early Stop: OOM
 	if (lstate.local_data->AllocationSize() + chunk.GetAllocationSize() >=
 	    lstate.temporary_memory_state->GetReservation()) {
 		is_successful = false;
 		return true;
 	}
+
+	// Early Stop: Unfiltered Table
+	if (!gstate.is_selectivity_checked) {
+		gstate.num_input_rows += chunk.size();
+
+		if (this_pipeline->num_source_chunks > 32) {
+			gstate.is_selectivity_checked = true;
+
+			// Check the selectivity
+			double input_rows = gstate.num_input_rows;
+			// double source_rows = this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE;
+			double source_rows = this_pipeline->num_source_rows;
+			double selectivity = input_rows / source_rows;
+
+			// this_pipeline->GetSource()->Print();
+			// std::cerr << "selectivity: " << selectivity << "\n";
+
+			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
+			// a full table.
+			if (selectivity > 0.95) {
+				is_successful = false;
+				return true;
+			}
+		}
+	}
+
 	return false;
 }
 
