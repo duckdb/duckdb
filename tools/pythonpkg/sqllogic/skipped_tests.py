@@ -1,5 +1,6 @@
 SKIPPED_TESTS = set(
     [
+        'test/sql/timezone/disable_timestamptz_casts.test',  # <-- ICU extension is always loaded
         'test/sql/copy/return_stats_truncate.test',  # <-- <REGEX> handling was changed
         'test/sql/copy/return_stats.test',  # <-- <REGEX> handling was changed
         'test/sql/copy/parquet/writer/skip_empty_write.test',  # <-- <REGEX> handling was changed
