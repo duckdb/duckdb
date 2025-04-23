@@ -12,7 +12,7 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 	auto rhs = TransformExpression(node.rhs);
 	D_ASSERT(lhs);
 	D_ASSERT(rhs);
-	auto result = make_uniq<LambdaExpression>(std::move(lhs), std::move(rhs));
+	auto result = make_uniq<LambdaExpression>(std::move(lhs), std::move(rhs), node.deprecated);
 	SetQueryLocation(*result, node.location);
 	return std::move(result);
 }

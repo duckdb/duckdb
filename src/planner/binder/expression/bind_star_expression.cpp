@@ -207,7 +207,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		auto lhs = make_uniq<ColumnRefExpression>("__lambda_col");
 		function.children[0] = lhs->Copy();
 
-		auto lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(root));
+		auto lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(root), false);
 		vector<unique_ptr<ParsedExpression>> filter_children;
 		filter_children.push_back(std::move(star_expr));
 		filter_children.push_back(std::move(lambda));

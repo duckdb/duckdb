@@ -240,3 +240,16 @@ statement error
 SELECT list_transform(map_entries(m), x -> UNNEST(range(x.value))) FROM map_tbl;
 ----
 <REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement ok
+CREATE TABLE dummy_tbl (y INT);
+
+statement error
+SELECT list_transform([1], LAMBDA x : LAMBDA y : x + y) FROM dummy_tbl;
+----
+<REGEX>:Binder Error.*invalid LAMBDA expression.*
+
+statement error
+SELECT list_transform([1], LAMBDA x : 1 : hello) FROM dummy_tbl;
+----
+<REGEX>:Parser Error.*syntax error.*

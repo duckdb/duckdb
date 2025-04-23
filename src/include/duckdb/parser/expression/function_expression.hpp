@@ -62,7 +62,7 @@ public:
 	void Verify() const override;
 
 	//! Returns true, if the function has a lambda expression as a child.
-	bool IsLambdaFunction() const;
+	optional_ptr<ParsedExpression> IsLambdaFunction() const;
 
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>

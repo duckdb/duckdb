@@ -571,6 +571,23 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Single Arrow For Lambda
+//===----------------------------------------------------------------------===//
+void EnableSingleArrowForLambdaSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_single_arrow_for_lambda = input.GetValue<bool>();
+}
+
+void EnableSingleArrowForLambdaSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_single_arrow_for_lambda = ClientConfig().enable_single_arrow_for_lambda;
+}
+
+Value EnableSingleArrowForLambdaSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.enable_single_arrow_for_lambda);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable View Dependencies
 //===----------------------------------------------------------------------===//
 void EnableViewDependenciesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

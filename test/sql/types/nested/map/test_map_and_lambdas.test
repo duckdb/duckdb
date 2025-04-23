@@ -9,6 +9,16 @@ statement ok
 CREATE TABLE i AS SELECT str_split('my yay', ' ') AS l, range AS i FROM range(3);
 
 query I
+SELECT list_transform(l, LAMBDA x : {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VARCHAR: x::VARCHAR}}) FROM i;
+----
+[{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]
+[{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]
+[{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]
+
+statement ok
+SET enable_single_arrow_for_lambda=true
+
+query I
 SELECT list_transform(l, x -> {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VARCHAR: x::VARCHAR}}) FROM i;
 ----
 [{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]

@@ -76,12 +76,12 @@ SELECT v.split(' ') FROM varchars
 [Hello, World]
 
 query I
-SELECT v.split(' ').apply(x -> x.lower()) FROM varchars
+SELECT v.split(' ').apply(LAMBDA x : x.lower()) FROM varchars
 ----
 [hello, world]
 
 query I
-SELECT v.split(' ').apply(x -> x.lower()).filter(x -> x[1] == 'h') FROM varchars
+SELECT v.split(' ').apply(LAMBDA x : x.lower()).filter(LAMBDA x : x[1] == 'h') FROM varchars
 ----
 [hello]
 

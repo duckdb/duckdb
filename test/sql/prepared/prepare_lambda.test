@@ -2,6 +2,9 @@
 # description: PREPARE of lambda functions
 # group: [prepared]
 
+statement ok
+SET enable_single_arrow_for_lambda=true
+
 # list_transform
 statement ok
 PREPARE v1 AS SELECT list_transform(?, x -> x + 1)

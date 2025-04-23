@@ -413,6 +413,12 @@
         "custom_implementation": true
     },
     {
+        "name": "enable_single_arrow_for_lambda",
+        "description": "Enables the deprecated usage of the single arrow operator (->) for lambda functions.",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "enable_view_dependencies",
         "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",

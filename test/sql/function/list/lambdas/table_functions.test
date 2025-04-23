@@ -16,35 +16,35 @@ COPY tmp TO '__TEST_DIR__/my_file_cba.parquet' (FORMAT PARQUET);
 # now test different table functions
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
-list_aggr(list_transform(['C', 'B', 'A'], s -> lower(s)), 'string_agg', '') || '.parquet');
+list_aggr(list_transform(['C', 'B', 'A'], LAMBDA s : lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
-list_aggr(list_transform(list_sort(['a', 'b', 'c'], 'DESC'), s -> lower(s)), 'string_agg', '') || '.parquet');
+list_aggr(list_transform(list_sort(['a', 'b', 'c'], 'DESC'), LAMBDA s : lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 # nested lambdas
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
-list_aggr(list_transform(list_filter(['s', 'c', 'b', NULL, 'a'], x -> x IS NOT NULL AND x != 's'),
-s -> lower(s)), 'string_agg', '') || '.parquet');
+list_aggr(list_transform(list_filter(['s', 'c', 'b', NULL, 'a'], LAMBDA x : x IS NOT NULL AND x != 's'),
+LAMBDA s : lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
 list_aggr(list_transform(list_filter(
-list_filter(['s', 'c', 'b', NULL, 'a'], y -> y != 's'), x -> x IS NOT NULL),
-s -> lower(s)), 'string_agg', '') || '.parquet');
+list_filter(['s', 'c', 'b', NULL, 'a'], LAMBDA y : y != 's'), LAMBDA x : x IS NOT NULL),
+LAMBDA s : lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
-list_aggr(list_reduce([['c', 'b', NULL, 'a']], (x, y) -> coalesce(x,y)), 'string_agg', '') || '.parquet');
+list_aggr(list_reduce([['c', 'b', NULL, 'a']], LAMBDA (x, y) : coalesce(x,y)), 'string_agg', '') || '.parquet');
 ----
 10
 
@@ -56,7 +56,7 @@ COPY tmp TO '__TEST_DIR__/my_file_ac.parquet' (FORMAT PARQUET);
 
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
-list_aggr(list_transform(['a'], x -> list_transform(['a', 'c'], y -> x || y)[2]), 'string_agg', '') || '.parquet');
+list_aggr(list_transform(['a'], LAMBDA x : list_transform(['a', 'c'], LAMBDA y : x || y)[2]), 'string_agg', '') || '.parquet');
 ----
 10
 
@@ -81,7 +81,7 @@ SELECT * FROM (VALUES ('Amsterdam', [90, 10]), ('London', [89, 102])) cities (na
 statement ok
 ALTER TABLE cities
 ALTER COLUMN prices SET DATA TYPE INTEGER[] USING
-	list_filter(cities.prices, price -> price < 100);
+	list_filter(cities.prices, LAMBDA price : price < 100);
 
 query II
 SELECT name, prices AS cheap_options FROM cities;

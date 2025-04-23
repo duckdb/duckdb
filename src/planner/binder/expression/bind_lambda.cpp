@@ -64,6 +64,9 @@ void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vec
 
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
+	if (!expr.deprecated && !bind_lambda_function) {
+		return BindResult("invalid LAMBDA expression");
+	}
 
 	if (!bind_lambda_function) {
 		// This is not a lambda expression, but the JSON arrow operator.

@@ -16,10 +16,28 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func) {
+BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
+                                                 const bool deprecated) {
+	if (!deprecated) {
+		// LAMBDA ... : ... syntax.
+		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	}
 
 	auto lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	if (!lambda_bind_result.HasError()) {
+		auto &config = ClientConfig::GetConfig(context);
+		auto enable_single_arrow = config.enable_single_arrow_for_lambda;
+		if (enable_single_arrow) {
+			return lambda_bind_result;
+		}
+
+		string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
+		             "i.e.., LAMBDA (x, i) : x + i, before DuckDB's 1.4.0 release. \n"
+		             "Use SET enable_single_arrow_for_lambda=true to revert to the deprecated behavior. \n"
+		             "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
+		return BindResult(msg);
+	}
+	if (StringUtil::Contains(lambda_bind_result.error.RawMessage(), "Deprecated lambda arrow (->) detected.")) {
 		return lambda_bind_result;
 	}
 
@@ -88,8 +106,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		if (function.IsLambdaFunction()) {
-			return TryBindLambdaOrJson(function, depth, *func);
+		auto child = function.IsLambdaFunction();
+		if (child) {
+			return TryBindLambdaOrJson(function, depth, *func, child->Cast<LambdaExpression>().deprecated);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}

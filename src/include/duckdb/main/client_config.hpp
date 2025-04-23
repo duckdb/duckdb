@@ -135,6 +135,8 @@ struct ClientConfig {
 	bool order_by_non_integer_literal = false;
 	//! Disable casting from timestamp => timestamptz (naïve timestamps)
 	bool disable_timestamptz_casts = false;
+	//! If true, it is possible to use the deprecated single arrow operator (->) for lambda functions.
+	bool enable_single_arrow_for_lambda = false;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;

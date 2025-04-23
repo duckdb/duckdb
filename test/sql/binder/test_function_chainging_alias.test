@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET enable_single_arrow_for_lambda=true
+
 query II
 SELECT 'test' || ' more testing' as added,
         added.substr(5) as my_substr

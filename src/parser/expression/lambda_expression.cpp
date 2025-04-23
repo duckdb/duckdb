@@ -12,8 +12,10 @@ namespace duckdb {
 LambdaExpression::LambdaExpression() : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA) {
 }
 
-LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)
-    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)) {
+LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr,
+                                   const bool deprecated)
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)),
+      deprecated(deprecated) {
 }
 
 vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) {
@@ -66,7 +68,10 @@ bool LambdaExpression::IsLambdaParameter(const vector<unordered_set<string>> &la
 }
 
 string LambdaExpression::ToString() const {
-	return "(" + lhs->ToString() + " -> " + expr->ToString() + ")";
+	if (deprecated) {
+		return "(" + lhs->ToString() + " -> " + expr->ToString() + ")";
+	}
+	return "(LAMBDA " + lhs->ToString() + " : " + expr->ToString() + ")";
 }
 
 bool LambdaExpression::Equal(const LambdaExpression &a, const LambdaExpression &b) {
@@ -81,7 +86,7 @@ hash_t LambdaExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
-	auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
+	auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy(), deprecated);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }

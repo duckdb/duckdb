@@ -258,6 +258,11 @@
         "id": 201,
         "name": "expr",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 202,
+        "name": "deprecated",
+        "type": "bool"
       }
     ]
   },

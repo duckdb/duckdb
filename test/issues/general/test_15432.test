@@ -6,6 +6,9 @@ statement ok
 pragma enable_verification;
 
 statement ok
+SET enable_single_arrow_for_lambda=true
+
+statement ok
 create or replace function transpose(lst) as (
 	select list_transform(
 		range(1, 1+length(lst[1])),

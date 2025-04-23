@@ -632,6 +632,17 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableSingleArrowForLambdaSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_single_arrow_for_lambda";
+	static constexpr const char *Description =
+	    "Enables the deprecated usage of the single arrow operator (->) for lambda functions.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableViewDependenciesSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_view_dependencies";

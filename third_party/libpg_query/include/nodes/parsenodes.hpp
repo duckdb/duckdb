@@ -2136,6 +2136,7 @@ typedef struct PGLambdaFunction {
 	PGNodeTag type;
 	PGNode *lhs;                 /* parameter expression */
 	PGNode *rhs;                 /* lambda expression */
+	bool deprecated; 			 /* true, if the lambda function uses the deprecated -> operator */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;
 

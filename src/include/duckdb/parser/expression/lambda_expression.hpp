@@ -23,7 +23,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
 
 public:
-	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
+	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr, const bool deprecated);
 
 	//! The LHS of a lambda expression or the JSON "->"-operator. We need the context
 	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (JSON)
@@ -32,6 +32,8 @@ public:
 	unique_ptr<ParsedExpression> expr;
 	//! Band-aid for conflicts between lambda binding and JSON binding.
 	unique_ptr<ParsedExpression> copied_expr;
+	//! True, if the lambda function uses the deprecated -> operator.
+	bool deprecated;
 
 public:
 	//! Returns a vector to the column references in the LHS expression, and fills the error message,

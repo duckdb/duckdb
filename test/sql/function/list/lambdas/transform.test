@@ -10,42 +10,42 @@ PRAGMA enable_verification
 # test NULLs and simple cases
 
 query II
-SELECT [1] AS l, list_transform([1], l -> l + 1)
+SELECT [1] AS l, list_transform([1], LAMBDA l : l + 1)
 ----
 [1]	[2]
 
 query I
-SELECT list_transform(NULL, x -> x + 1)
+SELECT list_transform(NULL, LAMBDA x : x + 1)
 ----
 NULL
 
 query I
-SELECT list_transform([1], x -> x)
+SELECT list_transform([1], LAMBDA x : x)
 ----
 [1]
 
 query I
-SELECT list_transform(['duck', 'a', 'ö'], duck -> concat(duck, 'DB'))
+SELECT list_transform(['duck', 'a', 'ö'], LAMBDA duck : concat(duck, 'DB'))
 ----
 [duckDB, aDB, öDB]
 
 query I
-SELECT list_transform([1, 2, 3], x -> 1)
+SELECT list_transform([1, 2, 3], LAMBDA x : 1)
 ----
 [1, 1, 1]
 
 query I
-SELECT list_transform([], x -> x + 1)
+SELECT list_transform([], LAMBDA x : x + 1)
 ----
 []
 
 query I
-SELECT list_transform([1, 2, 3], x -> x + 1)
+SELECT list_transform([1, 2, 3], LAMBDA x : x + 1)
 ----
 [2, 3, 4]
 
 query I
-SELECT list_transform([1, NULL, -2, NULL], x -> x + 1)
+SELECT list_transform([1, NULL, -2, NULL], LAMBDA x : x + 1)
 ----
 [2, NULL, -1, NULL]
 
@@ -58,7 +58,7 @@ statement ok
 INSERT INTO lists VALUES (1, [1]), (2, [1, 2, 3]), (3, NULL), (4, [-1, NULL, 2])
 
 query I
-SELECT list_transform(l, x -> x) FROM lists
+SELECT list_transform(l, LAMBDA x : x) FROM lists
 ----
 [1]
 [1, 2, 3]
@@ -66,7 +66,7 @@ NULL
 [-1, NULL, 2]
 
 query I
-SELECT list_transform(l, x -> x + n) FROM lists
+SELECT list_transform(l, LAMBDA x : x + n) FROM lists
 ----
 [2]
 [3, 4, 5]
@@ -74,7 +74,7 @@ NULL
 [3, NULL, 6]
 
 query I
-SELECT list_transform(l, x -> x < 2) FROM lists
+SELECT list_transform(l, LAMBDA x : x < 2) FROM lists
 ----
 [true]
 [true, false, false]
@@ -84,81 +84,81 @@ NULL
 # test other operators and more complex/nested functions
 
 query I
-SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
+SELECT list_transform(['x', 'abc', 'z'], LAMBDA x : x || '0')
 ----
 [x0, abc0, z0]
 
 query I
-SELECT list_transform([[1], [2, 3], [NULL], NULL], x -> list_transform(x, y -> y + 1))
+SELECT list_transform([[1], [2, 3], [NULL], NULL], LAMBDA x : list_transform(x, LAMBDA y : y + 1))
 ----
 [[2], [3, 4], [NULL], NULL]
 
 query I
-SELECT list_transform([[1], [2], [3]], x -> list_concat(x, x))
+SELECT list_transform([[1], [2], [3]], LAMBDA x : list_concat(x, x))
 ----
 [[1, 1], [2, 2], [3, 3]]
 
 query I
-SELECT list_transform([5, NULL, 6], x -> POW(x, 2)::INTEGER)
+SELECT list_transform([5, NULL, 6], LAMBDA x : POW(x, 2)::INTEGER)
 ----
 [25, NULL, 36]
 
 query I
-SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
+SELECT list_transform([5, NULL, 6], LAMBDA x : COALESCE(x, 0) + 1)
 ----
 [6, 1, 7]
 
 query I
-SELECT list_transform(list_value(list_unique(list_concat([1,2],[2,2]))), x -> (x + 1)::INTEGER);
+SELECT list_transform(list_value(list_unique(list_concat([1,2],[2,2]))), LAMBDA x : (x + 1)::INTEGER);
 ----
 [3]
 
 query I
-SELECT list_sort(list_transform(list_distinct(list_concat([1,2],[2,2])), x -> x + 1));
+SELECT list_sort(list_transform(list_distinct(list_concat([1,2],[2,2])), LAMBDA x : x + 1));
 ----
 [2, 3]
 
 query I
-SELECT list_transform([[1], [2], [3]], x -> list_concat(list_transform(x, y -> y + 1), list_transform(x, z -> z - 1)))
+SELECT list_transform([[1], [2], [3]], LAMBDA x : list_concat(list_transform(x, LAMBDA y : y + 1), list_transform(x, LAMBDA z : z - 1)))
 ----
 [[2, 0], [3, 1], [4, 2]]
 
 statement error
-SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
+SELECT list_transform([[1], [4], NULL, [1], [8]], LAMBDA x : list_concat(list_transform(x, LAMBDA y : CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
 ----
 an explicit cast is required
 
 query I
-SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x::VARCHAR[]))
+SELECT list_transform([[1], [4], NULL, [1], [8]], LAMBDA x : list_concat(list_transform(x, LAMBDA y : CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x::VARCHAR[]))
 ----
 [[nay, 1], [yay, 4], [], [nay, 1], [yay, 8]]
 
 # test aliases
 
 query I
-SELECT array_transform([1, NULL], arr_elem -> arr_elem - 4)
+SELECT array_transform([1, NULL], LAMBDA arr_elem : arr_elem - 4)
 ----
 [-3, NULL]
 
 query I
-SELECT array_apply([1, NULL], arr_elem -> arr_elem - 4)
+SELECT array_apply([1, NULL], LAMBDA arr_elem : arr_elem - 4)
 ----
 [-3, NULL]
 
 query I
-SELECT list_apply([1, NULL], arr_elem -> arr_elem - 4)
+SELECT list_apply([1, NULL], LAMBDA arr_elem : arr_elem - 4)
 ----
 [-3, NULL]
 
 # more tests on precedence
 
 query I
-select list_apply(i, x -> (6 + 2 * 12) // x) from (values (list_value(1, 2, 3))) tbl(i);
+select list_apply(i, LAMBDA x : (6 + 2 * 12) // x) from (values (list_value(1, 2, 3))) tbl(i);
 ----
 [30, 15, 10]
 
 query I
-select list_apply(i, x -> x + 1 AND x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+select list_apply(i, LAMBDA x : x + 1 AND x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
 [true, true, true]
 
@@ -171,10 +171,10 @@ statement ok
 CREATE TABLE transformed_lists (g integer, l integer[]);
 
 statement ok
-INSERT INTO transformed_lists (SELECT g + 1, list_transform(l, x -> x + 1) FROM large_lists WHERE g != 3)
+INSERT INTO transformed_lists (SELECT g + 1, list_transform(l, LAMBDA x : x + 1) FROM large_lists WHERE g != 3)
 
 statement ok
-INSERT INTO transformed_lists (SELECT g - 3, list_transform(l, x -> x - 3) FROM large_lists WHERE g = 3)
+INSERT INTO transformed_lists (SELECT g - 3, list_transform(l, LAMBDA x : x - 3) FROM large_lists WHERE g = 3)
 
 query I
 SELECT ll.l = tl.l FROM large_lists ll, transformed_lists tl WHERE ll.g = tl.g
@@ -187,27 +187,27 @@ True
 # test structs (issue #5005)
 
 query I
-SELECT list_transform([{'a': 1}], x -> x.a);
+SELECT list_transform([{'a': 1}], LAMBDA x : x.a);
 ----
 [1]
 
 query I
-SELECT list_transform([{'a': [1, 2, 3]}], x -> x.a[2]);
+SELECT list_transform([{'a': [1, 2, 3]}], LAMBDA x : x.a[2]);
 ----
 [2]
 
 query I
-SELECT list_transform([{'b' : {'a': 1}}], x -> x.b.a);
+SELECT list_transform([{'b' : {'a': 1}}], LAMBDA x : x.b.a);
 ----
 [1]
 
 query I
-SELECT list_transform([{'b' : {'a': 42, 'b': 43}}], x -> x.b.b);
+SELECT list_transform([{'b' : {'a': 42, 'b': 43}}], LAMBDA x : x.b.b);
 ----
 [43]
 
 query I
-SELECT list_transform([{'b' : {'a': [{'c': 77}], 'b': 43}}], x -> x.b.a[1].c);
+SELECT list_transform([{'b' : {'a': [{'c': 77}], 'b': 43}}], LAMBDA x : x.b.a[1].c);
 ----
 [77]
 
@@ -220,13 +220,13 @@ statement ok
 INSERT INTO corr_test VALUES (1, [2, 1, 1], 1), (3, [NULL, 2, 4, 4], 1), (NULL, NULL, 1), (0, [], 1)
 
 query I
-SELECT n FROM corr_test WHERE list_sum(list_transform(l, elem -> elem - n)) >= n
+SELECT n FROM corr_test WHERE list_sum(list_transform(l, LAMBDA elem : elem - n)) >= n
 ----
 1
 
 query I
 SELECT ct.n FROM corr_test ct
-WHERE list_count(ct.l) < (SELECT list_count(list_transform(list_concat(list(c.n), ct.l), a -> a)) FROM corr_test c GROUP BY c.g)
+WHERE list_count(ct.l) < (SELECT list_count(list_transform(list_concat(list(c.n), ct.l), LAMBDA a : a)) FROM corr_test c GROUP BY c.g)
 ORDER BY ct.n
 ----
 0
@@ -234,7 +234,7 @@ ORDER BY ct.n
 3
 
 query I
-SELECT (SELECT list_transform(l, elem -> elem + 1)) FROM corr_test
+SELECT (SELECT list_transform(l, LAMBDA elem : elem + 1)) FROM corr_test
 ----
 [3, 2, 2]
 [NULL, 3, 5, 5]
@@ -242,7 +242,7 @@ NULL
 []
 
 query I
-SELECT (SELECT list_transform(l, elem -> elem + n)) FROM corr_test
+SELECT (SELECT list_transform(l, LAMBDA elem : elem + n)) FROM corr_test
 ----
 [3, 2, 2]
 [NULL, 5, 7, 7]
@@ -250,7 +250,7 @@ NULL
 []
 
 query I
-SELECT (SELECT (SELECT (SELECT list_transform(l, elem -> elem + 1)))) FROM corr_test
+SELECT (SELECT (SELECT (SELECT list_transform(l, LAMBDA elem : elem + 1)))) FROM corr_test
 ----
 [3, 2, 2]
 [NULL, 3, 5, 5]
@@ -259,7 +259,7 @@ NULL
 
 # positional references in lambda functions
 query I
-SELECT list_transform([1, 2, 3], x -> x + #1) FROM range(10)
+SELECT list_transform([1, 2, 3], LAMBDA x : x + #1) FROM range(10)
 ----
 [1, 2, 3]
 [2, 3, 4]
@@ -281,7 +281,7 @@ statement ok
 insert into test values (1, 2), (1, 3), (1, 4), (2, 2), (2, 3), (2, 4), (3, 2), (3, 3), (3, 4);
 
 query III
-select list_transform(bb, x->[x,b]), bb, b
+select list_transform(bb, LAMBDA x : [x, b]), bb, b
 from (select list(b) over wind as bb, first(b) over wind as b
     from test window wind as
         (order by a asc, b asc rows between 4 preceding and current row)
@@ -294,21 +294,21 @@ from (select list(b) over wind as bb, first(b) over wind as b
 [[3, 3], [4, 3], [2, 3], [3, 3], [4, 3]]	[3, 4, 2, 3, 4]	3
 
 query I
-SELECT list_transform([[2, 3], [4]], x -> list_transform([42], y -> y + 1))
+SELECT list_transform([[2, 3], [4]], LAMBDA x : list_transform([42], LAMBDA y : y + 1))
 ----
 [[43], [43]]
 
 query I
-SELECT list_transform([[2, 3], [4]], x -> list_transform(x, y -> y + 1))
+SELECT list_transform([[2, 3], [4]], LAMBDA x : list_transform(x, LAMBDA y : y + 1))
 ----
 [[3, 4], [5]]
 
 query I
-SELECT list_transform([[2, 3], [4]], x -> list_transform([1], y -> x || [y]))
+SELECT list_transform([[2, 3], [4]], LAMBDA x : list_transform([1], LAMBDA y : x || [y]))
 ----
 [[[2, 3, 1]], [[4, 1]]]
 
 query I
-SELECT list_transform([[2, 3], [4]], x -> list_transform(x, y -> x || [y]))
+SELECT list_transform([[2, 3], [4]], LAMBDA x : list_transform(x, LAMBDA y : x || [y]))
 ----
 [[[2, 3, 2], [2, 3, 3]], [[4, 4]]]
