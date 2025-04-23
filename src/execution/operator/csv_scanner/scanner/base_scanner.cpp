@@ -28,9 +28,10 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 
 string BaseScanner::RemoveSeparator(const char *value_ptr, const idx_t size, char thousands_separator) {
 	string result;
+	result.reserve(size);
 	for (idx_t i = 0; i < size; i++) {
 		if (value_ptr[i] != thousands_separator) {
-			result += value_ptr[i];
+			result.push_back(value_ptr[i]);
 		}
 	}
 	return result;
