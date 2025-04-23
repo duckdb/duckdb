@@ -427,7 +427,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	auto result =
 	    catalog_type == CatalogType::TABLE_ENTRY
 	        ? make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), minimum_memory_per_thread)
-	        : table;
+	        : make_uniq<BatchInsertGlobalState>(context, table->Cast<MatViewCatalogEntry>(), minimum_memory_per_thread);
 	return std::move(result);
 }
 
