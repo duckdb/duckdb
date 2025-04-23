@@ -397,6 +397,10 @@ typedef struct _duckdb_selection_vector {
 	void *internal_ptr;
 } * duckdb_selection_vector;
 
+typedef struct _duckdb_vector_buffer {
+	void *ptr;
+} * duckdb_vector_buffer;
+
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
 //===--------------------------------------------------------------------===//
@@ -682,6 +686,17 @@ struct duckdb_extension_access {
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+//===--------------------------------------------------------------------===//
+// Opaque Buffers
+//===--------------------------------------------------------------------===//
+
+//! A opaque buffer which can be interpreted as a data buffer
+typedef struct _opaque_buffer {
+    void *internal_ptr;
+} * opaque_buffer;
+
+typedef void (*opaque_buffer_free)(opaque_buffer buffer);
 
 // FILE_CONTENT_SECTION
 
