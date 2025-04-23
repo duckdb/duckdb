@@ -219,16 +219,6 @@ void FullLinePosition::SanitizeError(string &value) {
 	value = {char_array.begin(), char_array.end() - 1};
 }
 
-string RemoveSeparator(const char *value_ptr, const idx_t size, char thousands_separator) {
-	string result;
-	for (idx_t i = 0; i < size; i++) {
-		if (value_ptr[i] != thousands_separator) {
-			result += value_ptr[i];
-		}
-	}
-	return result;
-}
-
 void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
@@ -304,7 +294,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	     parse_types[chunk_col_id].type_id == LogicalTypeId::DECIMAL) &&
 	    state_machine.options.thousands_separator != '\0') {
 		// If we have a thousands separator we should try to use that
-		strip_thousands = RemoveSeparator(value_ptr, size, state_machine.options.thousands_separator);
+		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, size, state_machine.options.thousands_separator);
 		value_ptr = strip_thousands.c_str();
 		size = strip_thousands.size();
 	}

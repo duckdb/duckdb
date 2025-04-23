@@ -64,6 +64,14 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 9999999999.2
 
 # Now try with auto-detect
+query I
+FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False)
+----
+100000.0
+300000.2
+300000000.4
+50.0
+9999999999.2
 
 #TODO Add it to python client
 
