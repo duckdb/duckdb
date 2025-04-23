@@ -72,6 +72,7 @@ jobs:
   notify-jdbc-run:
     name: Run JDBC Vendor
     runs-on: ubuntu-latest
+    if: ${{ inputs.is-success == 'true' }}
     env:
       PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -91,10 +92,8 @@ jobs:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     steps:
       - name: Run Nightly build status
-        # if: ${{ github.repository == 'duckdb/duckdb' }}
+        if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
-        
-          # export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export URL=https://api.github.com/repos/hmeriann/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
+          export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
           export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"branch": "${{ inputs.target-branch }}", "event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
