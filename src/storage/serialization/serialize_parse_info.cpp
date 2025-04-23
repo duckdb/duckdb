@@ -20,6 +20,8 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/parser/parsed_data/sequence_value_info.hpp"
+#include "duckdb/parser/parsed_data/table_data_info.hpp"
 
 namespace duckdb {
 
@@ -57,6 +59,12 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::PRAGMA_INFO:
 		result = PragmaInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::SEQUENCE_VALUE_INFO:
+		result = SequenceValueInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::TABLE_DATA_INFO:
+		result = TableDataInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::TRANSACTION_INFO:
 		result = TransactionInfo::Deserialize(deserializer);
@@ -193,6 +201,39 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &deserializer) {
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterViewInfo!");
 	}
+	return std::move(result);
+}
+
+void TableDataInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WriteProperty<TableDataType>(200, "table_data_type", table_data_type);
+	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(202, "name", name);
+}
+
+unique_ptr<ParseInfo> TableDataInfo::Deserialize(Deserializer &deserializer) {
+	auto table_data_type = deserializer.ReadProperty<TableDataType>(200, "table_data_type");
+	auto schema = deserializer.ReadPropertyWithDefault<string>(201, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<string>(202, "name");
+	unique_ptr<TableDataInfo> result;
+	switch (table_data_type) {
+	case TableDataType::TABLE_DATA_DELETE_INFO:
+		result = TableDataDeleteInfo::Deserialize(deserializer);
+		break;
+	case TableDataType::TABLE_DATA_INSERT_INFO:
+		result = TableDataInsertInfo::Deserialize(deserializer);
+		break;
+	case TableDataType::TABLE_DATA_ROW_GROUP_INFO:
+		result = TableDataRowGroupInfo::Deserialize(deserializer);
+		break;
+	case TableDataType::TABLE_DATA_UPDATE_INFO:
+		result = TableDataUpdateInfo::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of TableDataInfo!");
+	}
+	result->schema = std::move(schema);
+	result->name = std::move(name);
 	return std::move(result);
 }
 
@@ -515,6 +556,23 @@ unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer
 	return std::move(result);
 }
 
+void SequenceValueInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(201, "name", name);
+	serializer.WritePropertyWithDefault<uint64_t>(202, "usage_count", usage_count);
+	serializer.WritePropertyWithDefault<int64_t>(203, "counter", counter);
+}
+
+unique_ptr<ParseInfo> SequenceValueInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SequenceValueInfo>(new SequenceValueInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<string>(201, "name", result->name);
+	deserializer.ReadPropertyWithDefault<uint64_t>(202, "usage_count", result->usage_count);
+	deserializer.ReadPropertyWithDefault<int64_t>(203, "counter", result->counter);
+	return std::move(result);
+}
+
 void SetColumnCommentInfo::Serialize(Serializer &serializer) const {
 	AlterInfo::Serialize(serializer);
 	serializer.WriteProperty<CatalogType>(300, "catalog_entry_type", catalog_entry_type);
@@ -586,6 +644,44 @@ void SetSortedByInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetSortedByInfo>(new SetSortedByInfo());
 	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(400, "orders", result->orders);
+	return std::move(result);
+}
+
+void TableDataDeleteInfo::Serialize(Serializer &serializer) const {
+	TableDataInfo::Serialize(serializer);
+}
+
+unique_ptr<TableDataInfo> TableDataDeleteInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<TableDataDeleteInfo>(new TableDataDeleteInfo());
+	return std::move(result);
+}
+
+void TableDataInsertInfo::Serialize(Serializer &serializer) const {
+	TableDataInfo::Serialize(serializer);
+}
+
+unique_ptr<TableDataInfo> TableDataInsertInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<TableDataInsertInfo>(new TableDataInsertInfo());
+	return std::move(result);
+}
+
+void TableDataRowGroupInfo::Serialize(Serializer &serializer) const {
+	TableDataInfo::Serialize(serializer);
+	serializer.WriteProperty<PersistentCollectionData>(203, "collection_data", collection_data);
+}
+
+unique_ptr<TableDataInfo> TableDataRowGroupInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<TableDataRowGroupInfo>(new TableDataRowGroupInfo());
+	deserializer.ReadProperty<PersistentCollectionData>(203, "collection_data", result->collection_data);
+	return std::move(result);
+}
+
+void TableDataUpdateInfo::Serialize(Serializer &serializer) const {
+	TableDataInfo::Serialize(serializer);
+}
+
+unique_ptr<TableDataInfo> TableDataUpdateInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<TableDataUpdateInfo>(new TableDataUpdateInfo());
 	return std::move(result);
 }
 
