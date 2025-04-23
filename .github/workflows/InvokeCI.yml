@@ -20,97 +20,73 @@ concurrency:
 
 jobs:
   osx:
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
-    # uses: ./.github/workflows/OSX.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    #   run_all: ${{ inputs.run_all }}
+    uses: ./.github/workflows/OSX.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
   linux-release:
-    # uses: ./.github/workflows/LinuxRelease.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
+    uses: ./.github/workflows/LinuxRelease.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
 
   windows:
-    # uses: ./.github/workflows/Windows.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    #   run_all: ${{ inputs.run_all }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
+    uses: ./.github/workflows/Windows.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
   python:
-    # uses: ./.github/workflows/Python.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    #   run_all: ${{ inputs.run_all }}
-    #   override_twine_upload: ${{ inputs.twine_upload }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
+    uses: ./.github/workflows/Python.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
+      override_twine_upload: ${{ inputs.twine_upload }}
 
   pyodide:
-    # uses: ./.github/workflows/Pyodide.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
+    uses: ./.github/workflows/Pyodide.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
 
   R:
-    # uses: ./.github/workflows/R.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
-
+    uses: ./.github/workflows/R.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+    
   Wasm:
-    # uses: ./.github/workflows/Wasm.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
+    uses: ./.github/workflows/Wasm.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
 
   static-libraries:
-    # uses: ./.github/workflows/BundleStaticLibs.yml
-    # secrets: inherit
-    # with:
-    #   override_git_describe: ${{ inputs.override_git_describe }}
-    #   git_ref: ${{ inputs.git_ref }}
-    #   skip_tests: ${{ inputs.skip_tests }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: exit 0
-      
+    uses: ./.github/workflows/BundleStaticLibs.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
   prepare-status:
     runs-on: ubuntu-latest
     if: always()
