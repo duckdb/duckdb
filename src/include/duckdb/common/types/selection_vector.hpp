@@ -116,6 +116,7 @@ public:
 		return sel_vector;
 	}
 	void Verify(idx_t count, idx_t vector_size) const;
+	void Sort(idx_t count);
 
 private:
 	sel_t *sel_vector;

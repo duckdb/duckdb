@@ -1,0 +1,34 @@
+# name: test/sql/copy/parquet/parquet_expression_filter.test
+# description: Test expression filters on Parquet
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE tbl AS
+SELECT i, 'thisisalongstring'||(i%5000)::VARCHAR AS str
+FROM range(100000) t(i);
+
+statement ok
+COPY tbl TO '__TEST_DIR__/parquet_expr.parquet'
+
+statement ok
+CREATE VIEW parq AS FROM '__TEST_DIR__/parquet_expr.parquet'
+
+query I
+SELECT COUNT(*) FROM parq
+WHERE least(str, 'thisisalongstring50') = str
+----
+88940
+
+query I
+SELECT COUNT(*) FROM parq
+WHERE least(str, 'thisisalongstring50') = str AND str >= 'this'
+----
+88940
+
+query I
+SELECT COUNT(*) FROM parq
+WHERE least(str, 'thisisalongstring50') = str AND str >= 'thisisalongstring2000' AND str <= 'thisisalongstring4000'
+----
+44460
