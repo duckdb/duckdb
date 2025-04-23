@@ -709,6 +709,107 @@
     ]
   },
   {
+    "class": "SequenceValueInfo",
+    "base": "ParseInfo",
+    "enum": "SEQUENCE_VALUE_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/sequence_value_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "usage_count",
+        "type": "uint64_t"
+      },
+      {
+        "id": 203,
+        "name": "counter",
+        "type": "int64_t"
+      }
+    ]
+  },
+  {
+    "class": "TableDataInfo",
+    "base": "ParseInfo",
+    "enum": "TABLE_DATA_INFO",
+    "class_type": "table_data_type",
+    "includes": [
+      "duckdb/parser/parsed_data/table_data_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "table_data_type",
+        "type": "TableDataType"
+      },
+      {
+        "id": 201,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "TableDataInsertInfo",
+    "base": "TableDataInfo",
+    "enum": "TABLE_DATA_INSERT_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/table_data_info.hpp"
+    ],
+    "members": [
+    ]
+  },
+  {
+    "class": "TableDataUpdateInfo",
+    "base": "TableDataInfo",
+    "enum": "TABLE_DATA_UPDATE_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/table_data_info.hpp"
+    ],
+    "members": [
+    ]
+  },
+  {
+    "class": "TableDataDeleteInfo",
+    "base": "TableDataInfo",
+    "enum": "TABLE_DATA_DELETE_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/table_data_info.hpp"
+    ],
+    "members": [
+    ]
+  },
+  {
+    "class": "TableDataRowGroupInfo",
+    "base": "TableDataInfo",
+    "enum": "TABLE_DATA_ROW_GROUP_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/table_data_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 203,
+        "name": "collection_data",
+        "type": "PersistentCollectionData"
+      }
+    ]
+  },
+  {
     "class": "AddConstraintInfo",
     "base": "AlterTableInfo",
     "enum": "ADD_CONSTRAINT",

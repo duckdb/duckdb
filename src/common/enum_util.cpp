@@ -133,6 +133,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/parsed_data/table_data_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -2818,19 +2819,24 @@ const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
 		{ static_cast<uint32_t>(ParseInfoType::COMMENT_ON_INFO), "COMMENT_ON_INFO" },
 		{ static_cast<uint32_t>(ParseInfoType::COMMENT_ON_COLUMN_INFO), "COMMENT_ON_COLUMN_INFO" },
 		{ static_cast<uint32_t>(ParseInfoType::COPY_DATABASE_INFO), "COPY_DATABASE_INFO" },
-		{ static_cast<uint32_t>(ParseInfoType::UPDATE_EXTENSIONS_INFO), "UPDATE_EXTENSIONS_INFO" }
+		{ static_cast<uint32_t>(ParseInfoType::UPDATE_EXTENSIONS_INFO), "UPDATE_EXTENSIONS_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::SEQUENCE_VALUE_INFO), "SEQUENCE_VALUE_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::TABLE_DATA_INFO), "TABLE_DATA_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::VERSION_INFO), "VERSION_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::FLUSH_INFO), "FLUSH_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::CHECKPOINT_INFO), "CHECKPOINT_INFO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
-	return StringUtil::EnumToString(GetParseInfoTypeValues(), 17, "ParseInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetParseInfoTypeValues(), 22, "ParseInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
-	return static_cast<ParseInfoType>(StringUtil::StringToEnum(GetParseInfoTypeValues(), 17, "ParseInfoType", value));
+	return static_cast<ParseInfoType>(StringUtil::StringToEnum(GetParseInfoTypeValues(), 22, "ParseInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {
@@ -3934,6 +3940,27 @@ const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value) {
 template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
 	return static_cast<TableColumnType>(StringUtil::StringToEnum(GetTableColumnTypeValues(), 2, "TableColumnType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTableDataTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TableDataType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(TableDataType::TABLE_DATA_INSERT_INFO), "TABLE_DATA_INSERT_INFO" },
+		{ static_cast<uint32_t>(TableDataType::TABLE_DATA_DELETE_INFO), "TABLE_DATA_DELETE_INFO" },
+		{ static_cast<uint32_t>(TableDataType::TABLE_DATA_UPDATE_INFO), "TABLE_DATA_UPDATE_INFO" },
+		{ static_cast<uint32_t>(TableDataType::TABLE_DATA_ROW_GROUP_INFO), "TABLE_DATA_ROW_GROUP_INFO" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TableDataType>(TableDataType value) {
+	return StringUtil::EnumToString(GetTableDataTypeValues(), 5, "TableDataType", static_cast<uint32_t>(value));
+}
+
+template<>
+TableDataType EnumUtil::FromString<TableDataType>(const char *value) {
+	return static_cast<TableDataType>(StringUtil::StringToEnum(GetTableDataTypeValues(), 5, "TableDataType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
