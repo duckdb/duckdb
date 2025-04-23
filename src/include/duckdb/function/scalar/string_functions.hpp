@@ -165,7 +165,7 @@ struct LengthFun {
 	static constexpr const char *Name = "length";
 	static constexpr const char *Parameters = "string::VARCHAR\001bit::BIT\001list::ANY[]";
 	static constexpr const char *Description = "Number of characters in `string`.\001Returns the bit-length of the `bit` argument.\001Returns the length of the `list`.";
-	static constexpr const char *Example = "length('Hello🦆')\001length(42::TINYINT::BIT)\001length([1, 2, 3])";
+	static constexpr const char *Example = "length('Hello🦆')\001length(42::TINYINT::BIT)\001length([1,2,3])";
 	static constexpr const char *Categories = "string\001numeric\001list";
 
 	static ScalarFunctionSet GetFunctions();
@@ -241,10 +241,10 @@ struct ArrayLengthFun {
 
 struct SubstringFun {
 	static constexpr const char *Name = "substring";
-	static constexpr const char *Parameters = "string::VARCHAR,start::BIGINT\001string::VARCHAR,start::BIGINT,length::BIGINT";
-	static constexpr const char *Description = "Extracts substring starting from character `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.\001Extracts substring of `length` characters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.";
-	static constexpr const char *Example = "substring('Hello', 2)\001substring('Hello', 2, 2)";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "string,start,length";
+	static constexpr const char *Description = "Extracts substring starting from character `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` characters instead. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Example = "substring('Hello', 2)\002substring('Hello', 2, 2)";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -257,10 +257,10 @@ struct SubstrFun {
 
 struct SubstringGraphemeFun {
 	static constexpr const char *Name = "substring_grapheme";
-	static constexpr const char *Parameters = "string::VARCHAR,start::BIGINT\001string::VARCHAR,start::BIGINT,length::BIGINT";
-	static constexpr const char *Description = "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the `first` character of the `string`.\001Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the `first` character of the `string`.";
-	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)\001substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "string,start,length";
+	static constexpr const char *Description = "Extracts substring starting from grapheme clusters `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` grapheme clusters instead. Note that a `start` value of `1` refers to the `first` character of the `string`.";
+	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)\002substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -295,10 +295,10 @@ struct SplitFun {
 
 struct StringSplitRegexFun {
 	static constexpr const char *Name = "string_split_regex";
-	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Splits the `string` along the `regex`.\001Splits the `string` along the `regex`, applying the set of regexp `options`.";
-	static constexpr const char *Example = "string_split_regex('hello world; 42', ';? ')\001string_split_regex('hello world; 42', ' ?WORLD; ?', 'i')";
-	static constexpr const char *Categories = "regex\001regex";
+	static constexpr const char *Parameters = "string,regex,options";
+	static constexpr const char *Description = "Splits the `string` along the `regex`. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "string_split_regex('hello world; 42', ';? ')";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -317,30 +317,30 @@ struct RegexpSplitToArrayFun {
 
 struct RegexpFun {
 	static constexpr const char *Name = "regexp_full_match";
-	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `regex`.\001Returns `true` if the entire `string` matches the `regex`, applying the set of regexp `options`.";
-	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')\001regexp_full_match('Banana', '[a-z]+', 'i')";
-	static constexpr const char *Categories = "regex\001regex";
+	static constexpr const char *Parameters = "string,regex";
+	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `regex`. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct RegexpMatchesFun {
 	static constexpr const char *Name = "regexp_matches";
-	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Returns `true` if `string` contains the `regex`, `false` otherwise. See the Regular Expressions page for more details.\001Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`. See the Regular Expressions page for more details.";
-	static constexpr const char *Example = "regexp_matches('anabanana', '(an)*')\001regexp_matches('anabanana', '(AN)+', 'i')";
-	static constexpr const char *Categories = "regex\001regex";
+	static constexpr const char *Parameters = "string,regex,options";
+	static constexpr const char *Description = "Returns `true` if `string` contains the `regex`, `false` otherwise. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_matches('anabanana', '(an)*')";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct RegexpReplaceFun {
 	static constexpr const char *Name = "regexp_replace";
-	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR,replacement::VARCHAR\001string::VARCHAR,regex::VARCHAR,replacement::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the `regex`, replaces the matching part with `replacement`. See the Regular Expressions page for more details.\001If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied. See the Regular Expressions page for more details.";
-	static constexpr const char *Example = "regexp_replace('hello', '[lo]', '-')\001regexp_replace('hello', '[LO]', '-', 'i')";
-	static constexpr const char *Categories = "regex\001regex";
+	static constexpr const char *Parameters = "string,regex,replacement,options";
+	static constexpr const char *Description = "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_replace('hello', '[lo]', '-')";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -348,7 +348,7 @@ struct RegexpReplaceFun {
 struct RegexpExtractFun {
 	static constexpr const char *Name = "regexp_extract";
 	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.";
+	static constexpr const char *Description = "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "regexp_extract('abcde', '[a-z]{3}')\001regexp_extract('abc', '([a-z])(b)', 1)\001regexp_extract('ABC', '([a-z])(b)', 1, 'i')\001regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])\001regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')";
 	static constexpr const char *Categories = "regex\001regex\001regex\001regex\001regex";
 
@@ -357,10 +357,10 @@ struct RegexpExtractFun {
 
 struct RegexpExtractAllFun {
 	static constexpr const char *Name = "regexp_extract_all";
-	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR";
-	static constexpr const char *Description = "Returns a list with the non-overlapping occurrences of the `regex` in the `string`.\001Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`.\001Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`, applying the set of regexp `options`.";
-	static constexpr const char *Example = "regexp_extract_all('Peter: 33, Paul:14', '\\d+')\001regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)\001regexp_extract_all('Peter: 33, Paul:14', '([a-z]+):\\s*(\\d+)', 1, 'i')";
-	static constexpr const char *Categories = "regex\001regex\001regex";
+	static constexpr const char *Parameters = "string,regex,group,options";
+	static constexpr const char *Description = "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };

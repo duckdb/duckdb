@@ -284,7 +284,7 @@ struct LastDayFun {
 struct MakeDateFun {
 	static constexpr const char *Name = "make_date";
 	static constexpr const char *Parameters = "year,month,day\001date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
-	static constexpr const char *Description = "The date for the given parts\001The date for the given struct.";
+	static constexpr const char *Description = "The date for the given parts.\001The date for the given struct.";
 	static constexpr const char *Example = "make_date(1992, 9, 20)\001make_date({'year': 2024, 'month': 11, 'day': 14})";
 	static constexpr const char *Categories = "\001";
 

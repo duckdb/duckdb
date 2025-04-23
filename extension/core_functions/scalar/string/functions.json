@@ -145,52 +145,18 @@
     },
     {
         "name": "jaro_similarity",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "s1", "type": "VARCHAR"},
-                    {"name": "s2", "type": "VARCHAR"}
-                ],
-                "description": "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.",
-                "example": "jaro_similarity('duck', 'duckdb')",
-                "categories": ["text_similarity"]
-            },
-            {
-                "parameters": [
-                    {"name": "s1", "type": "VARCHAR"},
-                    {"name": "s2", "type": "VARCHAR"},
-                    {"name": "score_cutoff", "type": "DOUBLE"}
-                ],
-                "description": "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < score_cutoff, 0 is returned instead.",
-                "example": "jaro_similarity('duck', 'duckdb', 0.9)",
-                "categories": ["text_similarity"]
-            }
-        ],
+        "parameters": "s1,s2,score_cutoff",
+        "description": "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < `score_cutoff`, 0 is returned instead. `score_cutoff` defaults to 0.",
+        "example": "jaro_similarity('duck', 'duckdb')",
+        "categories": ["text_similarity"],
         "type": "scalar_function_set"
     },
     {
         "name": "jaro_winkler_similarity",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "s1", "type": "VARCHAR"},
-                    {"name": "s2", "type": "VARCHAR"}
-                ],
-                "description": "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.",
-                "example": "jaro_winkler_similarity('duck', 'duckdb')",
-                "categories": ["text_similarity"]
-            },
-            {
-                "parameters": [
-                    {"name": "s1", "type": "VARCHAR"},
-                    {"name": "s2", "type": "VARCHAR"},
-                    {"name": "score_cutoff", "type": "DOUBLE"}
-                ],
-                "description": "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < score_cutoff, 0 is returned instead.",
-                "example": "jaro_winkler_similarity('duck', 'duckdb', 0.5)",
-                "categories": ["text_similarity"]
-            }
-        ],
+        "parameters": "s1,s2,score_cutoff",
+        "description": "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < `score_cutoff`, 0 is returned instead. `score_cutoff` defaults to 0.",
+        "example": "jaro_winkler_similarity('duck', 'duckdb')",
+        "categories": ["text_similarity"],
         "type": "scalar_function_set"
     },
     {
@@ -228,141 +194,48 @@
     },
     {
         "name": "ltrim",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"}
-                ],
-                "description": "Removes any spaces from the left side of the `string`. In the example, the `␣` symbol denotes a space character.",
-                "example": "ltrim('␣␣␣␣test␣␣')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "characters", "type": "VARCHAR"}
-                ],
-                "description": "Removes any occurrences of any of the `characters` from the left side of the `string`.",
-                "example": "ltrim('>>>>test<<', '><')",
-                "categories": ["string"]
-
-            }
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.",
+        "examples": [
+            "ltrim('␣␣␣␣test␣␣')",
+            "ltrim('>>>>test<<', '><')"
         ],
+        "categories": ["string"],
         "type": "scalar_function_set"
     },
     {
         "name": "parse_dirname",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"}
-                ],
-                "description": "Returns the top-level directory name from the given `path`, using both `forward_slash` and `backslash` as separators.",
-                "example": "parse_dirname('path/to/file.csv')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"},
-                    {"name": "separator", "type": "VARCHAR"}
-                ],
-                "description": "Returns the top-level directory name from the given `path`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_dirname('path/to/file.csv', 'system')",
-                "categories": ["string"]
-            }
-        ],
+        "parameters": "path,separator",
+        "description": "Returns the top-level directory name from the given `path`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+        "example": "parse_dirname('path/to/file.csv', 'system')",
+        "categories": ["string"],
         "type": "scalar_function_set",
         "struct": "ParseDirnameFun"
     },
     {
         "name": "parse_dirpath",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"}
-                ],
-                "description": "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`, using both `forward_slash` and `backslash` as separators.",
-                "example": "parse_dirpath('path/to/file.csv')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"},
-                    {"name": "separator", "type": "VARCHAR"}
-                ],
-                "description": "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_dirpath('path/to/file.csv', 'forward_slash')",
-                "categories": ["string"]
-            }
-        ],
+        "parameters": "path,separator",
+        "description": "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+        "example": "parse_dirpath('path/to/file.csv', 'forward_slash')",
+        "categories": ["string"],
         "type": "scalar_function_set",
         "struct": "ParseDirpathFun"
     },
     {
         "name": "parse_filename",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"}
-                ],
-                "description": "Returns the last component of the `path` similarly to Python's `os.path.basename` function, using both `forward_slash` and `backslash` as separators.",
-                "example": "parse_filename('path/to/file.csv')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"},
-                    {"name": "separator", "type": "VARCHAR"}
-                ],
-                "description": "Returns the last component of the `path` similarly to Python's `os.path.basename` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_filename('path/to/file.csv', 'forward_slash')",
-                "categories": ["string"]
-
-            },
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"},
-                    {"name": "trim_extension", "type": "BOOLEAN"}
-                ],
-                "description": "Returns the last component of the `path` similarly to Python's `os.path.basename` function, using both `forward_slash` and `backslash` as separators. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`).",
-                "example": "parse_filename('path/to/file.csv', true)",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"},
-                    {"name": "trim_extension", "type": "BOOLEAN"},
-                    {"name": "separator", "type": "VARCHAR"}
-                ],
-                "description": "Returns the last component of the `path` similarly to Python's `os.path.basename` function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_filename('path/to/file.csv', true, 'system')",
-                "categories": ["string"]
-            }
-        ],
+        "parameters": "string,trim_extension,separator",
+        "description": "Returns the last component of the `path` similarly to Python's `os.path.basename` function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+        "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
+        "categories": ["string"],
         "type": "scalar_function_set",
         "struct": "ParseFilenameFun"
     },
     {
         "name": "parse_path",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"}
-                ],
-                "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function, using both `forward_slash` and `backslash` as separators.",
-                "example": "parse_path('path/to/file.csv')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "path", "type": "VARCHAR"},
-                    {"name": "separator", "type": "VARCHAR"}
-                ],
-                "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_path('path/to/file.csv', 'system')",
-                "categories": ["string"]
-            }
-        ],
+        "parameters": "path,separator",
+        "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+        "example": "parse_path('path/to/file.csv', 'system')",
+        "categories": ["string"],
         "type": "scalar_function_set",
         "struct": "ParsePathFun"
     },
@@ -376,10 +249,35 @@
     },
     {
         "name": "repeat",
-        "parameters": "string,count",
-        "description": "Repeats the `string` `count` number of times.",
-        "example": "repeat('A', 5)",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "count", "type": "BIGINT"}
+                ],
+                "description": "Repeats the `string` `count` number of times.",
+                "example": "repeat('A', 5)",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "list", "type": "ANY[]"},
+                    {"name": "count", "type": "BIGINT"}
+                ],
+                "description": "Repeats the `list` `count` number of times.",
+                "example": "repeat([1, 2, 3], 5)",
+                "categories": ["list"]
+            },
+            {
+                "parameters": [
+                    {"name": "blob", "type": "BLOB"},
+                    {"name": "count", "type": "BIGINT"}
+                ],
+                "description": "Repeats the `blob` `count` number of times.",
+                "example": "repeat('\\xAA\\xBB'::BLOB, 5)",
+                "categories": ["blob"]
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
@@ -424,26 +322,13 @@
     },
     {
         "name": "rtrim",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"}
-                ],
-                "description": "Removes any spaces from the right side of the `string`. In the example, the `␣` symbol denotes a space character.",
-                "example": "rtrim('␣␣␣␣test␣␣')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "characters", "type": "VARCHAR"}
-                ],
-                "description": "Removes any occurrences of any of the `characters` from the right side of the `string`.",
-                "example": "rtrim('>>>>test<<', '><')",
-                "categories": ["string"]
-
-            }
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.",
+        "examples": [
+            "rtrim('␣␣␣␣test␣␣')",
+            "rtrim('>>>>test<<', '><')"
         ],
+        "categories": ["string"],
         "type": "scalar_function_set"
     },
     {
@@ -456,25 +341,13 @@
     },
     {
         "name": "trim",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"}
-                ],
-                "description": "Removes any spaces from either side of the `string`.",
-                "example": "trim('    test  ')",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "characters", "type": "VARCHAR"}
-                ],
-                "description": "Removes any occurrences of any of the `characters` from either side of the `string`.",
-                "example": "trim('>>>>test<<', '><')",
-                "categories": ["string"]
-            }
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.",
+        "examples": [
+            "trim('␣␣␣␣test␣␣')",
+            "trim('>>>>test<<', '><')"
         ],
+        "categories": ["string"],
         "type": "scalar_function_set"
     },
     {
@@ -506,26 +379,11 @@
     },
     {
         "name": "to_base",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "number", "type": "BIGINT"},
-                    {"name": "radix", "type": "INTEGER"}
-                ],
-                "description": "Converts a `number` to a string in the given base `radix`.",
-                "example": "to_base(42, 16)",
-                "categories": ["numeric"]
-            },
-            {
-                "parameters": [
-                    {"name": "number", "type": "BIGINT"},
-                    {"name": "radix", "type": "INTEGER"},
-                    {"name": "min_length", "type": "INTEGER"}
-                ],
-                "description": "Converts a `number` to a string in the given base `radix`, padding with leading zeros to the minimum length.",
-                "example": "to_base(42, 16, 5)",
-                "categories": ["numeric"]
-            }
+        "parameters": "number,radix,min_length",
+        "description": "Converts a `number` to a string in the given base `radix`. If optional argument `min_length` is provided, the result will be padded with leading zeros upto the minimum length.",
+        "examples": [
+            "to_base(42, 16)",
+            "to_base(42, 16, 5)"
         ],
         "type": "scalar_function_set"
     },

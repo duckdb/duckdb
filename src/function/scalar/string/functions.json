@@ -142,7 +142,7 @@
             {
                 "parameters": [{"name": "list", "type": "ANY[]"}],
                 "description": "Returns the length of the `list`.",
-                "example": "length([1, 2, 3])",
+                "example": "length([1,2,3])",
                 "categories": ["list"]
             }
         ],
@@ -209,7 +209,9 @@
         "name": "array_length",
         "variants": [
             {
-                "parameters": [{"name": "list", "type": "ANY[]"}],
+                "parameters": [
+                    {"name": "list", "type": "ANY[]"}
+                ],
                 "description": "Returns the length of the `list`.",
                 "example": "array_length([1, 2, 3])",
                 "categories": ["list"]
@@ -228,53 +230,25 @@
     },
     {
         "name": "substring",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "start", "type": "BIGINT"}
-                ],
-                "description": "Extracts substring starting from character `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.",
-                "example": "substring('Hello', 2)",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "start", "type": "BIGINT"},
-                    {"name": "length", "type": "BIGINT"}
-                ],
-                "description": "Extracts substring of `length` characters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.",
-                "example": "substring('Hello', 2, 2)",
-                "categories": ["string"]
-            }
+        "parameters": "string,start,length",
+        "description": "Extracts substring starting from character `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` characters instead. Note that a `start` value of `1` refers to the first character of the `string`.",
+        "examples": [
+            "substring('Hello', 2)",
+            "substring('Hello', 2, 2)"
         ],
+        "categories": ["string"],
         "type": "scalar_function_set",
         "aliases": ["substr"]
     },
     {
         "name": "substring_grapheme",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "start", "type": "BIGINT"}
-                ],
-                "description": "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the `first` character of the `string`.",
-                "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)",
-                "categories": ["string"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "start", "type": "BIGINT"},
-                    {"name": "length", "type": "BIGINT"}
-                ],
-                "description": "Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the `first` character of the `string`.",
-                "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)",
-                "categories": ["string"]
-            }
+        "parameters": "string,start,length",
+        "description": "Extracts substring starting from grapheme clusters `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` grapheme clusters instead. Note that a `start` value of `1` refers to the `first` character of the `string`.",
+        "examples": [
+            "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)",
+            "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)"
         ],
+        "categories": ["string"],
         "type": "scalar_function_set"
     },
     {
@@ -288,106 +262,36 @@
     },
     {
         "name": "string_split_regex",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"}
-                ],
-                "description": "Splits the `string` along the `regex`.",
-                "example": "string_split_regex('hello world; 42', ';? ')",
-                "categories": ["regex"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "options", "type": "VARCHAR"}
-                ],
-                "description": "Splits the `string` along the `regex`, applying the set of regexp `options`.",
-                "example": "string_split_regex('hello world; 42', ' ?WORLD; ?', 'i')",
-                "categories": ["regex"]
-            }
-        ],
+        "parameters": "string,regex,options",
+        "description": "Splits the `string` along the `regex`. A set of optional regex `options` can be set.",
+        "example": "string_split_regex('hello world; 42', ';? ')",
+        "categories": ["regex"],
         "type": "scalar_function_set",
         "aliases": ["str_split_regex", "regexp_split_to_array"]
     },
     {
         "name": "regexp_full_match",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"}
-                ],
-                "description": "Returns `true` if the entire `string` matches the `regex`.",
-                "example": "regexp_full_match('anabanana', '(an)*')",
-                "categories": ["regex"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "options", "type": "VARCHAR"}
-                ],
-                "description": "Returns `true` if the entire `string` matches the `regex`, applying the set of regexp `options`.",
-                "example": "regexp_full_match('Banana', '[a-z]+', 'i')",
-                "categories": ["regex"]
-            }
-        ],
+        "parameters": "string,regex",
+        "description": "Returns `true` if the entire `string` matches the `regex`. A set of optional regex `options` can be set.",
+        "example": "regexp_full_match('anabanana', '(an)*')",
+        "categories": ["regex"],
         "type": "scalar_function_set",
         "struct": "RegexpFun"
     },
     {
         "name": "regexp_matches",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"}
-                ],
-                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise. See the Regular Expressions page for more details.",
-                "example": "regexp_matches('anabanana', '(an)*')",
-                "categories": ["regex"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "options", "type": "VARCHAR"}
-                ],
-                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`. See the Regular Expressions page for more details.",
-                "example": "regexp_matches('anabanana', '(AN)+', 'i')",
-                "categories": ["regex"]
-            }
-        ],
+        "parameters": "string,regex,options",
+        "description": "Returns `true` if `string` contains the `regex`, `false` otherwise. A set of optional regex `options` can be set.",
+        "example": "regexp_matches('anabanana', '(an)*')",
+        "categories": ["regex"],
         "type": "scalar_function_set"
     },
     {
         "name": "regexp_replace",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "replacement", "type": "VARCHAR"}
-                ],
-                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. See the Regular Expressions page for more details.",
-                "example": "regexp_replace('hello', '[lo]', '-')",
-                "categories": ["regex"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "replacement", "type": "VARCHAR"},
-                    {"name": "options", "type": "VARCHAR"}
-                ],
-                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied. See the Regular Expressions page for more details.",
-                "example": "regexp_replace('hello', '[LO]', '-', 'i')",
-                "categories": ["regex"]
-            }
-        ],
+        "parameters": "string,regex,replacement,options",
+        "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of optional regex `options` can be set.",
+        "example": "regexp_replace('hello', '[lo]', '-')",
+        "categories": ["regex"],
         "type": "scalar_function_set"
     },
     {
@@ -398,7 +302,7 @@
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string. See the Regular Expressions page for more details.",
+                "description": "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.",
                 "example": "regexp_extract('abcde', '[a-z]{3}')",
                 "categories": ["regex"]
             },
@@ -408,7 +312,7 @@
                     {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"}
                 ],
-                "description": "If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.",
+                "description": "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.",
                 "example": "regexp_extract('abc', '([a-z])(b)', 1)",
                 "categories": ["regex"]
             },
@@ -419,7 +323,7 @@
                     {"name": "group", "type": "INTEGER"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.",
+                "description": "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.",
                 "example": "regexp_extract('ABC', '([a-z])(b)', 1, 'i')",
                 "categories": ["regex"]
             },
@@ -429,7 +333,7 @@
                     {"name": "regex", "type": "VARCHAR"},
                     {"name": "name_list", "type": "VARCHAR[]"}
                 ],
-                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.",
+                "description": "If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.",
                 "example": "regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])",
                 "categories": ["regex"]
             },
@@ -440,7 +344,7 @@
                     {"name": "name_list", "type": "VARCHAR[]"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.",
+                "description": "If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.",
                 "example": "regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')",
                 "categories": ["regex"]
             }
@@ -449,38 +353,10 @@
     },
     {
         "name": "regexp_extract_all",
-        "variants": [
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"}
-                ],
-                "description": "Returns a list with the non-overlapping occurrences of the `regex` in the `string`.",
-                "example": "regexp_extract_all('Peter: 33, Paul:14', '\\d+')",
-                "categories": ["regex"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "group", "type": "INTEGER"}
-                ],
-                "description": "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`.",
-                "example": "regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)",
-                "categories": ["regex"]
-            },
-            {
-                "parameters": [
-                    {"name": "string", "type": "VARCHAR"},
-                    {"name": "regex", "type": "VARCHAR"},
-                    {"name": "group", "type": "INTEGER"},
-                    {"name": "options", "type": "VARCHAR"}
-                ],
-                "description": "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`, applying the set of regexp `options`.",
-                "example": "regexp_extract_all('Peter: 33, Paul:14', '([a-z]+):\\s*(\\d+)', 1, 'i')",
-                "categories": ["regex"]
-            }
-        ],
+        "parameters": "string,regex,group,options",
+        "description": "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`. A set of optional regex `options` can be set.",
+        "example": "regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)",
+        "categories": ["regex"],
         "type": "scalar_function_set"
     },
     {

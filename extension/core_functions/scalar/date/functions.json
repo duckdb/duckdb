@@ -181,7 +181,7 @@
                     {"name": "month"},
                     {"name": "day"}
                 ],
-                "description": "The date for the given parts",
+                "description": "The date for the given parts.",
                 "example": "make_date(1992, 9, 20)"
             },
             {

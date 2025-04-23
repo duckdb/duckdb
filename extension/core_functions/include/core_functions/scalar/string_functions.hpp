@@ -189,20 +189,20 @@ struct JaccardFun {
 
 struct JaroSimilarityFun {
 	static constexpr const char *Name = "jaro_similarity";
-	static constexpr const char *Parameters = "s1::VARCHAR,s2::VARCHAR\001s1::VARCHAR,s2::VARCHAR,score_cutoff::DOUBLE";
-	static constexpr const char *Description = "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.\001The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < score_cutoff, 0 is returned instead.";
-	static constexpr const char *Example = "jaro_similarity('duck', 'duckdb')\001jaro_similarity('duck', 'duckdb', 0.9)";
-	static constexpr const char *Categories = "text_similarity\001text_similarity";
+	static constexpr const char *Parameters = "s1,s2,score_cutoff";
+	static constexpr const char *Description = "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < `score_cutoff`, 0 is returned instead. `score_cutoff` defaults to 0.";
+	static constexpr const char *Example = "jaro_similarity('duck', 'duckdb')";
+	static constexpr const char *Categories = "text_similarity";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct JaroWinklerSimilarityFun {
 	static constexpr const char *Name = "jaro_winkler_similarity";
-	static constexpr const char *Parameters = "s1::VARCHAR,s2::VARCHAR\001s1::VARCHAR,s2::VARCHAR,score_cutoff::DOUBLE";
-	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.\001The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < score_cutoff, 0 is returned instead.";
-	static constexpr const char *Example = "jaro_winkler_similarity('duck', 'duckdb')\001jaro_winkler_similarity('duck', 'duckdb', 0.5)";
-	static constexpr const char *Categories = "text_similarity\001text_similarity";
+	static constexpr const char *Parameters = "s1,s2,score_cutoff";
+	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < `score_cutoff`, 0 is returned instead. `score_cutoff` defaults to 0.";
+	static constexpr const char *Example = "jaro_winkler_similarity('duck', 'duckdb')";
+	static constexpr const char *Categories = "text_similarity";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -255,50 +255,50 @@ struct LpadFun {
 
 struct LtrimFun {
 	static constexpr const char *Name = "ltrim";
-	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
-	static constexpr const char *Description = "Removes any spaces from the left side of the `string`. In the example, the `␣` symbol denotes a space character.\001Removes any occurrences of any of the `characters` from the left side of the `string`.";
-	static constexpr const char *Example = "ltrim('␣␣␣␣test␣␣')\001ltrim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "string,characters";
+	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.";
+	static constexpr const char *Example = "ltrim('␣␣␣␣test␣␣')\002ltrim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct ParseDirnameFun {
 	static constexpr const char *Name = "parse_dirname";
-	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns the top-level directory name from the given `path`, using both `forward_slash` and `backslash` as separators.\001Returns the top-level directory name from the given `path`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
-	static constexpr const char *Example = "parse_dirname('path/to/file.csv')\001parse_dirname('path/to/file.csv', 'system')";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "path,separator";
+	static constexpr const char *Description = "Returns the top-level directory name from the given `path`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
+	static constexpr const char *Example = "parse_dirname('path/to/file.csv', 'system')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct ParseDirpathFun {
 	static constexpr const char *Name = "parse_dirpath";
-	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`, using both `forward_slash` and `backslash` as separators.\001Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
-	static constexpr const char *Example = "parse_dirpath('path/to/file.csv')\001parse_dirpath('path/to/file.csv', 'forward_slash')";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "path,separator";
+	static constexpr const char *Description = "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
+	static constexpr const char *Example = "parse_dirpath('path/to/file.csv', 'forward_slash')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct ParseFilenameFun {
 	static constexpr const char *Name = "parse_filename";
-	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR\001path::VARCHAR,trim_extension::BOOLEAN\001path::VARCHAR,trim_extension::BOOLEAN,separator::VARCHAR";
-	static constexpr const char *Description = "Returns the last component of the `path` similarly to Python's `os.path.basename` function, using both `forward_slash` and `backslash` as separators.\001Returns the last component of the `path` similarly to Python's `os.path.basename` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.\001Returns the last component of the `path` similarly to Python's `os.path.basename` function, using both `forward_slash` and `backslash` as separators. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`).\001Returns the last component of the `path` similarly to Python's `os.path.basename` function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
-	static constexpr const char *Example = "parse_filename('path/to/file.csv')\001parse_filename('path/to/file.csv', 'forward_slash')\001parse_filename('path/to/file.csv', true)\001parse_filename('path/to/file.csv', true, 'system')";
-	static constexpr const char *Categories = "string\001string\001string\001string";
+	static constexpr const char *Parameters = "string,trim_extension,separator";
+	static constexpr const char *Description = "Returns the last component of the `path` similarly to Python's `os.path.basename` function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
+	static constexpr const char *Example = "parse_filename('path/to/file.csv', true, 'forward_slash')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct ParsePathFun {
 	static constexpr const char *Name = "parse_path";
-	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function, using both `forward_slash` and `backslash` as separators.\001Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
-	static constexpr const char *Example = "parse_path('path/to/file.csv')\001parse_path('path/to/file.csv', 'system')";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "path,separator";
+	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
+	static constexpr const char *Example = "parse_path('path/to/file.csv', 'system')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -315,10 +315,10 @@ struct PrintfFun {
 
 struct RepeatFun {
 	static constexpr const char *Name = "repeat";
-	static constexpr const char *Parameters = "string,count";
-	static constexpr const char *Description = "Repeats the `string` `count` number of times.";
-	static constexpr const char *Example = "repeat('A', 5)";
-	static constexpr const char *Categories = "string";
+	static constexpr const char *Parameters = "string::VARCHAR,count::BIGINT\001list::ANY[],count::BIGINT\001blob::BLOB,count::BIGINT";
+	static constexpr const char *Description = "Repeats the `string` `count` number of times.\001Repeats the `list` `count` number of times.\001Repeats the `blob` `count` number of times.";
+	static constexpr const char *Example = "repeat('A', 5)\001repeat([1, 2, 3], 5)\001repeat('\\xAA\\xBB'::BLOB, 5)";
+	static constexpr const char *Categories = "string\001list\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -375,10 +375,10 @@ struct RpadFun {
 
 struct RtrimFun {
 	static constexpr const char *Name = "rtrim";
-	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
-	static constexpr const char *Description = "Removes any spaces from the right side of the `string`. In the example, the `␣` symbol denotes a space character.\001Removes any occurrences of any of the `characters` from the right side of the `string`.";
-	static constexpr const char *Example = "rtrim('␣␣␣␣test␣␣')\001rtrim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "string,characters";
+	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.";
+	static constexpr const char *Example = "rtrim('␣␣␣␣test␣␣')\002rtrim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -395,10 +395,10 @@ struct TranslateFun {
 
 struct TrimFun {
 	static constexpr const char *Name = "trim";
-	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
-	static constexpr const char *Description = "Removes any spaces from either side of the `string`.\001Removes any occurrences of any of the `characters` from either side of the `string`.";
-	static constexpr const char *Example = "trim('    test  ')\001trim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string\001string";
+	static constexpr const char *Parameters = "string,characters";
+	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.";
+	static constexpr const char *Example = "trim('␣␣␣␣test␣␣')\002trim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -453,10 +453,10 @@ struct OrdFun {
 
 struct ToBaseFun {
 	static constexpr const char *Name = "to_base";
-	static constexpr const char *Parameters = "number::BIGINT,radix::INTEGER\001number::BIGINT,radix::INTEGER,min_length::INTEGER";
-	static constexpr const char *Description = "Converts a `number` to a string in the given base `radix`.\001Converts a `number` to a string in the given base `radix`, padding with leading zeros to the minimum length.";
-	static constexpr const char *Example = "to_base(42, 16)\001to_base(42, 16, 5)";
-	static constexpr const char *Categories = "numeric\001numeric";
+	static constexpr const char *Parameters = "number,radix,min_length";
+	static constexpr const char *Description = "Converts a `number` to a string in the given base `radix`. If optional argument `min_length` is provided, the result will be padded with leading zeros upto the minimum length.";
+	static constexpr const char *Example = "to_base(42, 16)\002to_base(42, 16, 5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
