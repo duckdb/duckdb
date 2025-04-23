@@ -31,6 +31,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/wal_reader.hpp"
 
 namespace duckdb {
 
@@ -879,4 +880,32 @@ unique_ptr<ParseInfo> WriteAheadLogDeserializer::ReplayCheckpoint() {
 	return nullptr;
 }
 
+WALReader::WALReader(AttachedDatabase &database, unique_ptr<BufferedFileReader> reader_p) {
+	Connection con(database.GetDatabase());
+	reader = std::move(reader_p);
+	if (reader->Finished()) {
+		return;
+	}
+	// WAL file version, so Open() has the reader positioned at the expected offset.
+	//
+	// Simplified logic from ReplayVersion(). Note that we can't call the deserializer
+	// directly here because of chicken and egg.
+	//
+	// An alternative is to call reader->Read<idx_t>(), ignore the return value and use
+	// duckdb::WAL_VERSION_NUMBER to set the wal_version.
+	auto wal_version = (reader->Read<idx_t>() >> 40) & 0xFF;
+	state = make_uniq<ReplayState>(database, *con.context);
+	state->wal_version = wal_version;
+}
+
+unique_ptr<ParseInfo> WALReader::Next() {
+	if (reader->Finished()) {
+		return nullptr;
+	}
+	auto deserializer = WriteAheadLogDeserializer::Open(*state, *reader, true);
+	return deserializer.DeserializeEntry();
+}
+
+WALReader::~WALReader() {
+}
 } // namespace duckdb
