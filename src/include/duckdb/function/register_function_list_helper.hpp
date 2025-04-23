@@ -45,7 +45,7 @@ static vector<string> GetExamplesForFunctionAlias(const string &function_name, c
 		}
 	}
 	// fallback 1: create fitting examples by replacing canonical name by function_name
-	if (filtered_examples.empty() && alias_of != "" && !alias_of_is_operator && !is_operator) {
+	if (filtered_examples.empty() && !alias_of.empty() && !alias_of_is_operator && !is_operator) {
 		for (string &example : all_examples) {
 			if (example.compare(0, alias_of.size(), alias_of) == 0) {
 				filtered_examples.emplace_back(function_name +
