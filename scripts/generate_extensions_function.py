@@ -477,6 +477,21 @@ class ExtensionData:
         self.settings_map.update(entries.settings)
         self.secret_types_map.update(entries.secret_types)
 
+    def load_dependencies(self, extension_name: str) -> str:
+        if extension_name not in EXTENSION_DEPENDENCIES:
+            return ''
+
+        res = ''
+        dependencies = EXTENSION_DEPENDENCIES[extension_name]
+        for item in dependencies:
+            if item not in self.extensions:
+                print(f"Could not load extension '{extension_name}', dependency '{item}' is missing")
+                exit(1)
+            extension_path = self.extensions[item]
+            print(f"Load {item} at {extension_path}")
+            res += f"LOAD '{extension_path}';"
+        return res
+
     def add_extension(self, extension_name: str):
         if extension_name in EXTENSION_DEPENDENCIES:
             for item in EXTENSION_DEPENDENCIES[extension_name]:
@@ -488,7 +503,7 @@ class ExtensionData:
             extension_path = self.extensions[extension_name]
 
             print(f"Load {extension_name} at {extension_path}")
-            load = f"set extension_directory='{args.extension_repository}';"
+            load = self.load_dependencies(extension_name)
             load += f"LOAD '{extension_path}';"
 
             (functions, function_overloads) = get_functions(load)
