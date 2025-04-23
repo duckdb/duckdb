@@ -289,9 +289,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 	bool success = true;
 	string strip_thousands;
-	if ((parse_types[chunk_col_id].type_id == LogicalTypeId::FLOAT ||
-	     parse_types[chunk_col_id].type_id == LogicalTypeId::DOUBLE ||
-	     parse_types[chunk_col_id].type_id == LogicalTypeId::DECIMAL) &&
+	if (LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) &&
 	    state_machine.options.thousands_separator != '\0') {
 		// If we have a thousands separator we should try to use that
 		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, size, state_machine.options.thousands_separator);

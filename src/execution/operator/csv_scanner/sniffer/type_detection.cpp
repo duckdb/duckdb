@@ -112,9 +112,7 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	auto value_ptr = value.GetData();
 	auto value_size = value.GetSize();
 	string strip_thousands;
-	if ((type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE ||
-	     type.id() == LogicalTypeId::DECIMAL) &&
-	    thousands_separator != '\0') {
+	if (type.IsNumeric() && thousands_separator != '\0') {
 		// If we have a thousands separator we should try to use that
 		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, value_size, thousands_separator);
 		value_ptr = strip_thousands.c_str();

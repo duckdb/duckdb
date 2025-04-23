@@ -144,3 +144,17 @@ FROM read_csv('data/csv/thousands_separator/thousands_broken.csv', thousands = '
 300000.2
 300000.4
 3000.406
+
+# Test an integer
+query I
+FROM read_csv('data/csv/thousands_separator/integers.csv', thousands = ',')
+----
+100000000000
+140000000000
+900000000000
+900
+
+query I
+select columns from sniff_csv('data/csv/thousands_separator/integers.csv', thousands = ',')
+----
+[{'name': bigvalues, 'type': BIGINT}]
