@@ -10,6 +10,8 @@ namespace duckdb {
 
 MatViewCatalogEntry::MatViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                          shared_ptr<DataTable> inherited_storage)
-    : DuckTableEntry(catalog, schema, info, std::move(inherited_storage)) {
+    : DuckTableEntry(catalog, schema, info, std::move(inherited_storage)), query(std::move(info.query)) {
+	this->type = CatalogType::MATVIEW_ENTRY;
+	this->query = std::move(info.query);
 }
 } // namespace duckdb
