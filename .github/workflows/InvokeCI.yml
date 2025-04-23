@@ -113,6 +113,7 @@ jobs:
 
   prepare-status:
     runs-on: ubuntu-latest
+    if: always()
     needs:
       - osx
       - linux-release
@@ -161,7 +162,7 @@ jobs:
     if: ${{ inputs.git_ref != '' && always() }}
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
+      target-branch: 'main'
       duckdb-sha: ${{ inputs.git_ref }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
