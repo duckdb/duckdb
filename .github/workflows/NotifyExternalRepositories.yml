@@ -57,7 +57,7 @@ jobs:
   notify-odbc-run:
     name: Run ODBC Vendor
     runs-on: ubuntu-latest
-    if: ${{ inputs.is-success == 'true' }}
+    if: ${{ inputs.is-success }}
     env:
       PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -72,7 +72,7 @@ jobs:
   notify-jdbc-run:
     name: Run JDBC Vendor
     runs-on: ubuntu-latest
-    if: ${{ inputs.is-success == 'true' }}
+    if: ${{ inputs.is-success }}
     env:
       PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
