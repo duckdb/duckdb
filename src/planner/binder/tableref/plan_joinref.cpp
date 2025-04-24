@@ -315,9 +315,12 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.lateral) {
 		if (!is_outside_flattened) {
 			// If outer dependent joins is yet to be flattened, only plan the lateral
-			has_unplanned_dependent_joins = true;
-			return LogicalDependentJoin::Create(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-			                                    std::move(ref.condition));
+//			has_unplanned_dependent_joins = true;
+//			return LogicalDependentJoin::Create(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+//			                                    std::move(ref.condition));
+			auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+						                                std::move(ref.condition));
+			return new_plan;
 		} else {
 			// All outer dependent joins have been planned and flattened, so plan and flatten lateral and recursively
 			// plan the children

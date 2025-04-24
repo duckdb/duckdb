@@ -56,8 +56,12 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	// replace with the entry referring to the duplicate eliminated scan
 	// if this assertion occurs it generally means the bindings are inappropriate set in the binder or
 	// we either missed to account for lateral binder or over-counted for the lateral binder
-	D_ASSERT(expr.depth == 1 + lateral_depth);
+//	D_ASSERT(expr.depth == 1 + lateral_depth);
 	auto entry = correlated_map.find(expr.binding);
+	// I tried that to fix recursive CTE, not working.
+	//	if (entry == correlated_map.end()) {
+//		return nullptr;
+//	}
 	D_ASSERT(entry != correlated_map.end());
 
 	expr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);

@@ -333,3 +333,100 @@ FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
 1	2	12
 2	1	12
 2	2	9
+
+# Deep subquery nesting
+query III
+SELECT *
+FROM generate_series(1,3) AS "input"("n"),
+LATERAL
+(WITH RECURSIVE "subquery1"("x") AS (
+  (SELECT "n", true AS "exists")
+    UNION ALL
+  (WITH "subquery" AS (SELECT * FROM "subquery1")
+  SELECT "x" - 1, (SELECT NOT EXISTS (SELECT 1 FROM "subquery" AS "input"("a") WHERE "a" > _."x"))
+  FROM "subquery" AS _("x") WHERE "x" > 0)
+  ) table "subquery1")
+ORDER BY "n", "x";
+----
+1	0	true
+1	1	true
+2	0	true
+2	1	true
+2	2	true
+3	0	true
+3	1	true
+3	2	true
+3	3	true
+
+query III
+SELECT *
+FROM generate_series(1,3) AS "input"("n"),
+LATERAL
+(WITH RECURSIVE "subquery"("x") AS (
+  (SELECT "n", true AS "exists")
+    UNION ALL
+  SELECT "x" - 1, y
+  FROM "subquery" AS _("x"), LATERAL (SELECT NOT EXISTS (SELECT 1 FROM "subquery" AS "input"("a") WHERE "a" > _."x")) AS __(y)
+  WHERE "x" > 0
+  ) table "subquery")
+ORDER BY "n", "x"
+;
+----
+1	0	true
+1	1	true
+2	0	true
+2	1	true
+2	2	true
+3	0	true
+3	1	true
+3	2	true
+3	3	true
+
+query III
+SELECT *
+FROM generate_series(1,3) AS "input"("n"),
+LATERAL
+(WITH RECURSIVE "subquery"("x") AS (
+  (SELECT "n", true AS "exists")
+    UNION ALL
+  SELECT "x" - 1, y
+  FROM "subquery" AS _("x"), LATERAL (SELECT (SELECT (SELECT NOT EXISTS (SELECT 1 FROM "subquery" AS "input"("a") WHERE "a" > _."x")))) AS __(y)
+  WHERE "x" > 0
+  ) table "subquery")
+ORDER BY "n", "x"
+;
+----
+1	0	true
+1	1	true
+2	0	true
+2	1	true
+2	2	true
+3	0	true
+3	1	true
+3	2	true
+3	3	true
+
+query III
+SELECT *
+FROM generate_series(1,3) AS "input"("n"),
+LATERAL
+(WITH RECURSIVE "subquery"("x", "exists") AS (
+  (SELECT "n", true AS "exists")
+    UNION ALL
+    SELECT "a" - 1, (SELECT NOT bool_or("input"."x1" > _."a") FROM "subquery" AS "input"("x1"))
+    FROM "subquery" AS _("a")
+    WHERE "a" > 0
+  )
+  table "subquery")
+ORDER BY "n", "x"
+;
+----
+1	0	true
+1	1	true
+2	0	true
+2	1	true
+2	2	true
+3	0	true
+3	1	true
+3	2	true
+3	3	true

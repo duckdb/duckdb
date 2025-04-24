@@ -181,17 +181,20 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	}
 }
 
-static unique_ptr<LogicalComparisonJoin>
+static unique_ptr<LogicalDependentJoin>
 CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_columns, JoinType join_type,
                               unique_ptr<LogicalOperator> original_plan, bool perform_delim) {
-	auto delim_join = make_uniq<LogicalComparisonJoin>(join_type, LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	auto delim_join = make_uniq<LogicalDependentJoin>(join_type);
+	delim_join->correlated_columns = correlated_columns;
+	delim_join->perform_delim = perform_delim;
 	if (!perform_delim) {
 		// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
 		// and perform all duplicate elimination on that row number instead
 		D_ASSERT(correlated_columns[0].type.id() == LogicalTypeId::BIGINT);
 		auto window = make_uniq<LogicalWindow>(correlated_columns[0].binding.table_index);
 		auto row_number =
-		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+				make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr,
+				                                 nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		row_number->SetAlias("delim_index");
@@ -291,27 +294,38 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, std::move(root), perform_delim);
 
+		delim_join->subquery_type = SubqueryType::SCALAR;
+		delim_join->correlated_columns = correlated_columns;
+		delim_join->perform_delim = perform_delim;
+		delim_join->any_join = false;
+//		delim_join->propagate_null_values = false;
 		// the right side initially is a DEPENDENT join between the duplicate eliminated scan and the subquery
 		// HOWEVER: we do not explicitly create the dependent join
 		// instead, we eliminate the dependent join by pushing it down into the right side of the plan
-		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim);
+//		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim);
 
 		// first we check which logical operators have correlated expressions in the first place
-		flatten.DetectCorrelatedExpressions(*plan);
+//		flatten.DetectCorrelatedExpressions(*plan);
 		// now we push the dependent join down
-		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
+//		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
 
 		// now the dependent join is fully eliminated
 		// we only need to create the join conditions between the LHS and the RHS
 		// fetch the set of columns
-		auto plan_columns = dependent_join->GetColumnBindings();
+//		auto plan_columns = dependent_join->GetColumnBindings();
+		auto plan_column = plan->GetColumnBindings().back();
+//		plan_column.table_index = DConstants::INVALID_INDEX;
+//		plan_column.column_index = DConstants::INVALID_INDEX;
 
 		// now create the join conditions
-		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
-		delim_join->AddChild(std::move(dependent_join));
+//		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+//		delim_join->AddChild(std::move(dependent_join));
+		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, plan_columns[flatten.data_offset]);
+//		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, plan_columns[flatten.data_offset]);
+//		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX));
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, plan_column);
 	}
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
@@ -319,18 +333,25 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		idx_t mark_index = binder.GenerateTableIndex();
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
+
+		delim_join->subquery_type = SubqueryType::EXISTS;
 		delim_join->mark_index = mark_index;
+		delim_join->correlated_columns = correlated_columns;
+		delim_join->perform_delim = perform_delim;
+		delim_join->any_join = true;
+//		delim_join->propagate_null_values = false;
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim, true);
-		flatten.DetectCorrelatedExpressions(*plan);
-		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
+//		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim, true);
+//		flatten.DetectCorrelatedExpressions(*plan);
+//		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
 
 		// fetch the set of columns
-		auto plan_columns = dependent_join->GetColumnBindings();
+//		auto plan_columns = dependent_join->GetColumnBindings();
 
 		// now we create the join conditions between the dependent join and the original table
-		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
-		delim_join->AddChild(std::move(dependent_join));
+//		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+//		delim_join->AddChild(std::move(dependent_join));
+		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
 		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
@@ -347,17 +368,25 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		idx_t mark_index = binder.GenerateTableIndex();
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
+
+		delim_join->subquery_type = SubqueryType::ANY;
 		delim_join->mark_index = mark_index;
+		delim_join->correlated_columns = correlated_columns;
+		delim_join->perform_delim = perform_delim;
+		delim_join->any_join = true;
+//		delim_join->propagate_null_values = false;
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns, true, true);
-		flatten.DetectCorrelatedExpressions(*plan);
-		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
+//		FlattenDependentJoins flatten(binder, correlated_columns, true, true);
+//		flatten.DetectCorrelatedExpressions(*plan);
+//		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
+		auto &dependent_join = plan;
 
 		// fetch the columns
-		auto plan_columns = dependent_join->GetColumnBindings();
+//		auto plan_columns = dependent_join->GetColumnBindings();
+		auto plan_columns = plan->GetColumnBindings();
 
 		// now we create the join conditions between the dependent join and the original table
-		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+//		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
 		if (expr.children.size() > 1) {
 			// FIXME: the code to generate the plan here is actually correct
 			// the problem is in the hash join - specifically PhysicalHashJoin::InitializeHashTable
@@ -366,17 +395,23 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 			// this needs to be generalized to get this to work
 			throw NotImplementedException("Correlated IN/ANY/ALL with multiple columns not yet supported");
 		}
+
+		delim_join->expression_children = std::move(expr.children);
+		delim_join->child_types = expr.child_types;
+		delim_join->child_targets = expr.child_targets;
+		delim_join->comparison_type = expr.comparison_type;
+
 		// add the actual condition based on the ANY/ALL predicate
-		for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
-			JoinCondition compare_cond;
-			compare_cond.left = std::move(expr.children[child_idx]);
-			auto &child_type = expr.child_types[child_idx];
-			compare_cond.right = BoundCastExpression::AddDefaultCastToType(
-			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
-			    expr.child_targets[child_idx]);
-			compare_cond.comparison = expr.comparison_type;
-			delim_join->conditions.push_back(std::move(compare_cond));
-		}
+//		for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+//			JoinCondition compare_cond;
+//			compare_cond.left = std::move(expr.children[child_idx]);
+//			auto &child_type = expr.child_types[child_idx];
+//			compare_cond.right = BoundCastExpression::AddDefaultCastToType(
+//			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
+//			    expr.child_targets[child_idx]);
+//			compare_cond.comparison = expr.comparison_type;
+//			delim_join->conditions.push_back(std::move(compare_cond));
+//		}
 
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
@@ -396,13 +431,13 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			root = std::move(op.children[i]);
 			D_ASSERT(root);
-			if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-				// Found a dependent join, flatten it
-				auto &new_root = root->Cast<LogicalDependentJoin>();
-				root = binder.PlanLateralJoin(std::move(new_root.children[0]), std::move(new_root.children[1]),
-				                              new_root.correlated_columns, new_root.join_type,
-				                              std::move(new_root.join_condition));
-			}
+//			if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+//				// Found a dependent join, flatten it
+//				auto &new_root = root->Cast<LogicalDependentJoin>();
+//				root = binder.PlanLateralJoin(std::move(new_root.children[0]), std::move(new_root.children[1]),
+//				                              new_root.correlated_columns, new_root.join_type,
+//				                              std::move(new_root.join_condition));
+//			}
 			VisitOperatorExpressions(op);
 			op.children[i] = std::move(root);
 		}
@@ -457,13 +492,13 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		auto &subquery = expr.Cast<BoundSubqueryExpression>();
 		// subquery node! plan it
-		if (!is_outside_flattened) {
-			// detected a nested correlated subquery
-			// we don't plan it yet here, we are currently planning a subquery
-			// nested subqueries will only be planned AFTER the current subquery has been flattened entirely
-			has_unplanned_dependent_joins = true;
-			return;
-		}
+//		if (!is_outside_flattened) {
+//			// detected a nested correlated subquery
+//			// we don't plan it yet here, we are currently planning a subquery
+//			// nested subqueries will only be planned AFTER the current subquery has been flattened entirely
+//			has_unplanned_dependent_joins = true;
+//			return;
+//		}
 		expr_ptr = PlanSubquery(subquery, root);
 	}
 }
@@ -487,43 +522,50 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	auto perform_delim = PerformDuplicateElimination(*this, correlated);
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated, join_type, std::move(left), perform_delim);
 
-	FlattenDependentJoins flatten(*this, correlated, perform_delim);
+	delim_join->perform_delim = perform_delim;
+	delim_join->any_join = false;
+	delim_join->propagate_null_values = join_type != JoinType::INNER;
+	delim_join->is_lateral_join = true;
+	delim_join->arbitrary_expressions = std::move(arbitrary_expressions);
+
+//	FlattenDependentJoins flatten(*this, correlated, perform_delim);
 
 	// first we check which logical operators have correlated expressions in the first place
-	flatten.DetectCorrelatedExpressions(*right, true);
+//	flatten.DetectCorrelatedExpressions(*right, true);
 	// now we push the dependent join down
-	auto dependent_join = flatten.PushDownDependentJoin(std::move(right), join_type != JoinType::INNER);
+//	auto dependent_join = flatten.PushDownDependentJoin(std::move(right), join_type != JoinType::INNER);
 
 	// now the dependent join is fully eliminated
 	// we only need to create the join conditions between the LHS and the RHS
 	// fetch the set of columns
-	auto plan_columns = dependent_join->GetColumnBindings();
+//	auto plan_columns = dependent_join->GetColumnBindings();
 
 	// in case of a materialized CTE, the output is defined by the second children operator
-	if (dependent_join->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		plan_columns = dependent_join->children[1]->GetColumnBindings();
-	}
+//	if (dependent_join->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+//		plan_columns = dependent_join->children[1]->GetColumnBindings();
+//	}
 
 	// now create the join conditions
 	// start off with the conditions that were passed in (if any)
-	D_ASSERT(delim_join->conditions.empty());
+//	D_ASSERT(delim_join->conditions.empty());
 	delim_join->conditions = std::move(conditions);
 	// then add the delim join conditions
-	CreateDelimJoinConditions(*delim_join, correlated, plan_columns, flatten.delim_offset, perform_delim);
-	delim_join->AddChild(std::move(dependent_join));
+//	CreateDelimJoinConditions(*delim_join, correlated, plan_columns, flatten.delim_offset, perform_delim);
+//	delim_join->AddChild(std::move(dependent_join));
+	delim_join->AddChild(std::move(right));
 
 	// check if there are any arbitrary expressions left
-	if (!arbitrary_expressions.empty()) {
-		// we can only evaluate scalar arbitrary expressions for inner joins
-		if (join_type != JoinType::INNER) {
-			throw BinderException(
-			    "Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side");
-		}
-		auto filter = make_uniq<LogicalFilter>();
-		filter->expressions = std::move(arbitrary_expressions);
-		filter->AddChild(std::move(delim_join));
-		return std::move(filter);
-	}
+//	if (!arbitrary_expressions.empty()) {
+//		// we can only evaluate scalar arbitrary expressions for inner joins
+//		if (join_type != JoinType::INNER) {
+//			throw BinderException(
+//			    "Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side");
+//		}
+//		auto filter = make_uniq<LogicalFilter>();
+//		filter->expressions = std::move(arbitrary_expressions);
+//		filter->AddChild(std::move(delim_join));
+//		return std::move(filter);
+//	}
 	return std::move(delim_join);
 }
 
