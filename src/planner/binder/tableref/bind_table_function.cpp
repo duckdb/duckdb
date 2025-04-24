@@ -23,6 +23,7 @@
 
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
