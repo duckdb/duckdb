@@ -258,6 +258,8 @@ enum class OrderPreservationType : uint8_t;
 
 enum class OrderType : uint8_t;
 
+enum class Ordinality_request_t : uint8_t;
+
 enum class OutputStream : uint8_t;
 
 enum class ParseInfoType : uint8_t;
@@ -399,8 +401,6 @@ enum class WindowAggregationMode : uint32_t;
 enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
-
-enum class ordinality_request_t : uint32_t;
 
 
 template<>
@@ -743,6 +743,9 @@ template<>
 const char* EnumUtil::ToChars<OrderType>(OrderType value);
 
 template<>
+const char* EnumUtil::ToChars<Ordinality_request_t>(Ordinality_request_t value);
+
+template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
 
 template<>
@@ -954,9 +957,6 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 
 template<>
 const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
-
-template<>
-const char* EnumUtil::ToChars<ordinality_request_t>(ordinality_request_t value);
 
 
 template<>
@@ -1299,6 +1299,9 @@ template<>
 OrderType EnumUtil::FromString<OrderType>(const char *value);
 
 template<>
+Ordinality_request_t EnumUtil::FromString<Ordinality_request_t>(const char *value);
+
+template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
 
 template<>
@@ -1510,9 +1513,6 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
 
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
-
-template<>
-ordinality_request_t EnumUtil::FromString<ordinality_request_t>(const char *value);
 
 
 }

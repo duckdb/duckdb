@@ -7,16 +7,19 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "duckdb/common/constants.hpp"
+
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
-enum class ordinality_request_t : uint32_t { NOT_REQUESTED = 0, REQUESTED = 1 };
+enum class Ordinality_request_t : uint8_t { NOT_REQUESTED = 0, REQUESTED = 1 };
 
 struct ordinality_data_t {
 
-	ordinality_request_t ordinality_request = ordinality_request_t::NOT_REQUESTED;
+	Ordinality_request_t ordinality_request = Ordinality_request_t::NOT_REQUESTED;
 	idx_t column_id;
 
 	void SetOrdinality(DataChunk &chunk, const idx_t &ordinality_idx, const idx_t &ordinality) const {

@@ -22,7 +22,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	// transform the function call
 	auto result = make_uniq<TableFunctionRef>();
 	if (root.ordinality) {
-		result->with_ordinality = ordinality_request_t::REQUESTED;
+		result->with_ordinality = Ordinality_request_t::REQUESTED;
 	}
 	switch (call_tree->type) {
 	case duckdb_libpgquery::T_PGFuncCall: {

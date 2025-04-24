@@ -2779,6 +2779,24 @@ OrderType EnumUtil::FromString<OrderType>(const char *value) {
 	return static_cast<OrderType>(StringUtil::StringToEnum(GetOrderTypeValues(), 7, "OrderType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetOrdinality_request_tValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(Ordinality_request_t::NOT_REQUESTED), "NOT_REQUESTED" },
+		{ static_cast<uint32_t>(Ordinality_request_t::REQUESTED), "REQUESTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<Ordinality_request_t>(Ordinality_request_t value) {
+	return StringUtil::EnumToString(GetOrdinality_request_tValues(), 2, "Ordinality_request_t", static_cast<uint32_t>(value));
+}
+
+template<>
+Ordinality_request_t EnumUtil::FromString<Ordinality_request_t>(const char *value) {
+	return static_cast<Ordinality_request_t>(StringUtil::StringToEnum(GetOrdinality_request_tValues(), 2, "Ordinality_request_t", value));
+}
+
 const StringUtil::EnumStringLiteral *GetOutputStreamValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(OutputStream::STREAM_STDOUT), "STREAM_STDOUT" },
@@ -4436,24 +4454,6 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	return static_cast<WindowExcludeMode>(StringUtil::StringToEnum(GetWindowExcludeModeValues(), 4, "WindowExcludeMode", value));
-}
-
-const StringUtil::EnumStringLiteral *Getordinality_request_tValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ordinality_request_t::NOT_REQUESTED), "NOT_REQUESTED" },
-		{ static_cast<uint32_t>(ordinality_request_t::REQUESTED), "REQUESTED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ordinality_request_t>(ordinality_request_t value) {
-	return StringUtil::EnumToString(Getordinality_request_tValues(), 2, "ordinality_request_t", static_cast<uint32_t>(value));
-}
-
-template<>
-ordinality_request_t EnumUtil::FromString<ordinality_request_t>(const char *value) {
-	return static_cast<ordinality_request_t>(StringUtil::StringToEnum(Getordinality_request_tValues(), 2, "ordinality_request_t", value));
 }
 
 }

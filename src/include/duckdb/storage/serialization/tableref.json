@@ -144,7 +144,7 @@
       {
         "id": 202,
         "name": "with_ordinality",
-        "type": "ordinality_request_t"
+        "type": "Ordinality_request_t"
       }
     ]
   },

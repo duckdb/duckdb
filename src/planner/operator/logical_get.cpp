@@ -275,10 +275,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
-		if (result->ordinality_request == ordinality_request_t::REQUESTED) {
+		if (result->ordinality_request == Ordinality_request_t::REQUESTED) {
 			bind_return_types.emplace_back(LogicalType::BIGINT);
 			bind_names.emplace_back("ordinality");
-			function.ordinality_data.ordinality_request = ordinality_request_t::REQUESTED;
+			function.ordinality_data.ordinality_request = Ordinality_request_t::REQUESTED;
 			function.ordinality_data.column_id = bind_return_types.size() - 1;
 		}
 

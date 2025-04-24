@@ -59,7 +59,7 @@ public:
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Contains information about WITH ORDINALITY for Deserialization
-	ordinality_request_t ordinality_request = ordinality_request_t::NOT_REQUESTED;
+	Ordinality_request_t ordinality_request = Ordinality_request_t::NOT_REQUESTED;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

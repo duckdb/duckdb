@@ -123,7 +123,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		break;
 	}
 
-	if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
+	if (function.ordinality_data.ordinality_request == Ordinality_request_t::REQUESTED) {
 		idx_t ordinality = chunk.size();
 		function.ordinality_data.SetOrdinality(chunk, g_state.ordinality_idx, ordinality);
 		g_state.ordinality_idx += ordinality;
