@@ -44,6 +44,12 @@
         ]
     },
     {
+        "name": "allow_deprecated_lambda_syntax",
+        "description": "Enables the deprecated usage of the single arrow operator (->) for lambda functions.",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",
@@ -411,12 +417,6 @@
         "type": "BOOLEAN",
         "scope": "local",
         "custom_implementation": true
-    },
-    {
-        "name": "enable_single_arrow_for_lambda",
-        "description": "Enables the deprecated usage of the single arrow operator (->) for lambda functions.",
-        "type": "BOOLEAN",
-        "scope": "local"
     },
     {
         "name": "enable_view_dependencies",

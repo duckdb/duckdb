@@ -5,9 +5,6 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-SET enable_single_arrow_for_lambda=true
-
-statement ok
 CREATE OR REPLACE TABLE foo (
 	pk_col INT PRIMARY KEY,
 	str VARCHAR,
@@ -19,7 +16,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, 'hello', ['x', 'y', 'z'], 40
 ON CONFLICT DO UPDATE SET
-	str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y);
+	str = list_reduce(EXCLUDED.str_list, LAMBDA (x, y) : x || '||' || y);
 
 query IIII
 FROM foo;
@@ -32,7 +29,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, 'world', ['a', 'b', 'c'], 41
 ON CONFLICT DO UPDATE SET
-	str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y);
+	str = list_reduce(EXCLUDED.str_list, LAMBDA (x, y) : x || '||' || y);
 
 query IIII
 FROM foo;
@@ -45,7 +42,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, '', ['1', '2'], 42
 ON CONFLICT DO UPDATE SET
-  str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y), 
+  str = list_reduce(EXCLUDED.str_list, LAMBDA (x, y) : x || '||' || y),
   payload_col = EXCLUDED.payload_col;
 
 query IIII
@@ -59,7 +56,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, '', ['l', 'm', 'n'], 43
 ON CONFLICT DO UPDATE SET
-  str = list_reduce(str_list, (x, y) -> x || '||' || y);
+  str = list_reduce(str_list, LAMBDA (x, y) : x || '||' || y);
 
 query IIII
 FROM foo;
@@ -72,7 +69,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, 'world', ['s', 't'], 42
 ON CONFLICT DO UPDATE SET
-  str = list_reduce(EXCLUDED.str_list, (x, y) -> x || str || y || EXCLUDED.str);
+  str = list_reduce(EXCLUDED.str_list, LAMBDA (x, y) : x || str || y || EXCLUDED.str);
 
 query IIII
 FROM foo;
@@ -86,7 +83,7 @@ INSERT INTO foo
 SELECT 1, 'motorcycle', ['brrr', 'brrrrrr'], 1042
 ON CONFLICT DO UPDATE SET
   str = 'black-bellied whistling duck'
-  WHERE list_reduce(EXCLUDED.str_list, (x, y) -> x || str || y || EXCLUDED.str) = 'brrrsx||y||ztworldbrrrrrrmotorcycle';
+  WHERE list_reduce(EXCLUDED.str_list, LAMBDA (x, y) : x || str || y || EXCLUDED.str) = 'brrrsx||y||ztworldbrrrrrrmotorcycle';
 
 query IIII
 FROM foo;

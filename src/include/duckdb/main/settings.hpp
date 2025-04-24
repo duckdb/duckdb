@@ -117,6 +117,17 @@ struct AllowCommunityExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct AllowDeprecatedLambdaSyntaxSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "allow_deprecated_lambda_syntax";
+	static constexpr const char *Description =
+	    "Enables the deprecated usage of the single arrow operator (->) for lambda functions.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllowExtensionsMetadataMismatchSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
@@ -626,17 +637,6 @@ struct EnableProgressBarPrintSetting {
 	static constexpr const char *Name = "enable_progress_bar_print";
 	static constexpr const char *Description =
 	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
-	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct EnableSingleArrowForLambdaSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_single_arrow_for_lambda";
-	static constexpr const char *Description =
-	    "Enables the deprecated usage of the single arrow operator (->) for lambda functions.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET enable_single_arrow_for_lambda=true
+SET allow_deprecated_lambda_syntax=true
 
 statement ok
 CREATE TABLE tbl (tag_product VARCHAR);

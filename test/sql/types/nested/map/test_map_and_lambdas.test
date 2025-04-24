@@ -16,7 +16,7 @@ SELECT list_transform(l, LAMBDA x : {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VA
 [{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]
 
 statement ok
-SET enable_single_arrow_for_lambda=true
+SET allow_deprecated_lambda_syntax=true
 
 query I
 SELECT list_transform(l, x -> {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VARCHAR: x::VARCHAR}}) FROM i;

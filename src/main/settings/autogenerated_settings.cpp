@@ -79,6 +79,23 @@ Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) 
 }
 
 //===----------------------------------------------------------------------===//
+// Allow Deprecated Lambda Syntax
+//===----------------------------------------------------------------------===//
+void AllowDeprecatedLambdaSyntaxSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.allow_deprecated_lambda_syntax = input.GetValue<bool>();
+}
+
+void AllowDeprecatedLambdaSyntaxSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).allow_deprecated_lambda_syntax = ClientConfig().allow_deprecated_lambda_syntax;
+}
+
+Value AllowDeprecatedLambdaSyntaxSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.allow_deprecated_lambda_syntax);
+}
+
+//===----------------------------------------------------------------------===//
 // Allow Extensions Metadata Mismatch
 //===----------------------------------------------------------------------===//
 void AllowExtensionsMetadataMismatchSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -568,23 +585,6 @@ void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
 Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.enable_progress_bar);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable Single Arrow For Lambda
-//===----------------------------------------------------------------------===//
-void EnableSingleArrowForLambdaSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_single_arrow_for_lambda = input.GetValue<bool>();
-}
-
-void EnableSingleArrowForLambdaSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_single_arrow_for_lambda = ClientConfig().enable_single_arrow_for_lambda;
-}
-
-Value EnableSingleArrowForLambdaSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_single_arrow_for_lambda);
 }
 
 //===----------------------------------------------------------------------===//
