@@ -23,8 +23,7 @@ struct FlattenDependentJoins {
 
 	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<LogicalOperator> Decorrelate(Binder &binder,
-											unique_ptr<LogicalOperator> plan,
+	unique_ptr<LogicalOperator> Decorrelate(unique_ptr<LogicalOperator> plan,
 											bool parent_propagate_null_values = true,
 											idx_t lateral_depth = 0);
 

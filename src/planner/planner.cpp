@@ -47,9 +47,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
-		vector<CorrelatedColumnInfo> correlated;
-		FlattenDependentJoins flatten(*binder, correlated);
-		this->plan = flatten.Decorrelate(*binder, std::move(bound_statement.plan));
+		this->plan = FlattenDependentJoins::DecorrelateIndependent(*binder, std::move(bound_statement.plan));
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
