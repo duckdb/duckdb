@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-const uint64_t VERSION_NUMBER = 66;
+const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
 const uint64_t VERSION_NUMBER_UPPER = 66;
 
