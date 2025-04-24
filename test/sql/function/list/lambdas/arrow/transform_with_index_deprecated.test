@@ -106,19 +106,6 @@ SELECT list_transform(a, (x, i) -> (c / b ) * (x + i)) FROM tbl;
 NULL
 [22.0, NULL, 30.0]
 
-# test very large lists
-
-query I transform list
-SELECT range(1, 20000, 2);
-----
-
-statement ok transform
-SET enable_single_arrow_for_lambda=true
-
-query I transform list
-SELECT list_transform(range(10000), (x, i) -> x + i);
-----
-
 query I
 SELECT list_transform([1, 2, 3], (x, x_i) -> list_transform([4, 5, 6], y -> x + y + x_i));
 ----

@@ -1,9 +1,0 @@
-# name: test/temp.test
-# group: [test]
-
-statement ok transform
-SET enable_single_arrow_for_lambda=true
-
-query I transform list
-SELECT list_transform(range(10000), (x, i) -> x + i);
-----
