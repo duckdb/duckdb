@@ -8,10 +8,11 @@ PRAGMA enable_verification
 # requires notwindows because tests will return \r\n to be used in the parameters
 require notwindows
 
+# This has a row with an extra column, so with ignore_errors we give preference to that
 query II
 SELECT quote, escape from sniff_csv('data/csv/16857.csv', ignore_errors = true);
 ----
-"	"
+'	\
 
 query II
 SELECT quote, escape from sniff_csv('data/csv/16857.csv');

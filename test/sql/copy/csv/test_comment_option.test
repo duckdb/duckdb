@@ -5,6 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
+# Test comment and skip option
+query III
+FROM read_csv('data/csv/comments/17226.csv', comment='#', all_varchar=True, skip=0, ignore_errors=True)
+----
+1	2	3
+4	5	6
+
 # Comment must be different than quote and delimiter options
 statement error
 FROM  read_csv('data/csv/comments/mixed_options.csv', delim = ',', comment = ',', auto_detect = false, columns= {'a':'integer'})

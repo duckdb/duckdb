@@ -308,6 +308,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 				dirty_notes = row;
+				num_cols = sniffed_column_counts[row].number_of_columns ;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
 				ignored_rows++;
