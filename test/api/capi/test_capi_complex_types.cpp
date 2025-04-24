@@ -807,6 +807,8 @@ TEST_CASE("Map value construction (happy path)", "[capi]") {
 	auto logical_type = duckdb_vector_get_column_type(vector);
 	REQUIRE(logical_type);
 	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_MAP);
+	duckdb_destroy_logical_type(&logical_type);
+
 	auto list_entry_data = (uint64_t *)duckdb_vector_get_data(vector);
 	REQUIRE(list_entry_data);
 	REQUIRE(list_entry_data[0] == 0);           // offset
@@ -870,11 +872,12 @@ TEST_CASE("Map value construction (null values array)", "[capi]") {
 }
 
 TEST_CASE("Map value construction (invalid map type)", "[capi]") {
-	auto invalid_map_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
 	duckdb::vector<duckdb_value> key_vals;
 	duckdb::vector<duckdb_value> value_vals;
-	auto map_value = duckdb_create_map_value(invalid_map_type, key_vals.data(), value_vals.data(), 0);
+	auto map_value = duckdb_create_map_value(int_type, key_vals.data(), value_vals.data(), 0);
 	REQUIRE(map_value == nullptr);
+	duckdb_destroy_logical_type(&int_type);
 }
 
 TEST_CASE("Map value construction (invalid key array value types)", "[capi]") {
@@ -971,6 +974,8 @@ TEST_CASE("Union value construction (happy path)", "[capi]") {
 	auto logical_type = duckdb_vector_get_column_type(vector);
 	REQUIRE(logical_type);
 	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_UNION);
+	duckdb_destroy_logical_type(&logical_type);
+
 	auto tags_vector = duckdb_struct_vector_get_child(vector, 0);
 	REQUIRE(tags_vector);
 	auto tags_data = (uint8_t *)duckdb_vector_get_data(tags_vector);
