@@ -31,6 +31,10 @@ public:
 	static constexpr idx_t M = 1 << P;
 	static constexpr double ALPHA = 0.721347520444481703680; // 1 / (2 log(2))
 
+	static double GetErrorRate() {
+		return sqrt(PI / 2.0) / sqrt(M);
+	}
+
 public:
 	HyperLogLog() {
 		memset(k, 0, sizeof(k));

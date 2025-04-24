@@ -14,6 +14,7 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 
 namespace duckdb {
 
@@ -98,17 +99,25 @@ public:
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
 	//! Resize the HT to the specified size. Must be larger than the current size.
-	void Resize(idx_t size);
+	void Resize(idx_t size, bool leave_empty);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
 	//! Set the radix bits for this HT
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
 	idx_t GetRadixBits() const;
-	//! Get the total amount of data sunk into this HT
+	//! Get the total number of tuples sunk into this HT
 	idx_t GetSinkCount() const;
+	//! Get the total number of tuples materialized currently in this HT
+	idx_t GetMaterializedCount() const;
 	//! Skips lookups from here on out
 	void SkipLookups();
+	//! Enable/disable HLL
+	void EnableHLL(bool enable);
+	//! Whether HLL is enabled
+	bool HLLEnabled() const;
+	//! Get HLL count
+	idx_t GetHLLUpperBound() const;
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
@@ -186,6 +195,9 @@ private:
 
 		RowOperationsState row_state;
 	} state;
+
+	bool enable_hll;
+	HyperLogLog hll;
 
 private:
 	//! Disabled the copy constructor
