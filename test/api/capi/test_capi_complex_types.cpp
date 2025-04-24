@@ -772,7 +772,7 @@ TEST_CASE("Map value construction (happy path)", "[capi]") {
 
 	duckdb::vector<duckdb_value> key_vals;
 	duckdb::vector<duckdb_value> value_vals;
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		key_vals.push_back(duckdb_create_int32(keys[i]));
 		value_vals.push_back(duckdb_create_double(values[i]));
 	}
@@ -780,7 +780,7 @@ TEST_CASE("Map value construction (happy path)", "[capi]") {
 	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), value_vals.data(), entry_count);
 	REQUIRE(map_value);
 	REQUIRE(duckdb_get_map_size(map_value) == entry_count);
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		auto key_val = duckdb_get_map_key(map_value, i);
 		REQUIRE(duckdb_get_int32(key_val) == keys[i]);
 		duckdb_destroy_value(&key_val);
@@ -822,14 +822,14 @@ TEST_CASE("Map value construction (happy path)", "[capi]") {
 	REQUIRE(keys_data);
 	auto values_data = (double *)duckdb_vector_get_data(values_vector);
 	REQUIRE(values_data);
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		REQUIRE(keys_data[i] == keys[i]);
 		REQUIRE(values_data[i] == values[i]);
 	}
 
 	duckdb_destroy_prepare(&prepared);
 	duckdb_destroy_value(&map_value);
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		duckdb_destroy_value(&key_vals[i]);
 		duckdb_destroy_value(&value_vals[i]);
 	}
@@ -888,7 +888,7 @@ TEST_CASE("Map value construction (invalid key array value types)", "[capi]") {
 
 	duckdb::vector<duckdb_value> key_vals;
 	duckdb::vector<duckdb_value> value_vals;
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		key_vals.push_back(duckdb_create_varchar(keys[i]));
 		value_vals.push_back(duckdb_create_double(values[i]));
 	}
@@ -896,7 +896,7 @@ TEST_CASE("Map value construction (invalid key array value types)", "[capi]") {
 	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), value_vals.data(), entry_count);
 	REQUIRE(map_value == nullptr);
 
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		duckdb_destroy_value(&key_vals[i]);
 		duckdb_destroy_value(&value_vals[i]);
 	}
@@ -916,7 +916,7 @@ TEST_CASE("Map value construction (invalid value array value types)", "[capi]") 
 
 	duckdb::vector<duckdb_value> key_vals;
 	duckdb::vector<duckdb_value> value_vals;
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		key_vals.push_back(duckdb_create_int32(keys[i]));
 		value_vals.push_back(duckdb_create_varchar(values[i]));
 	}
@@ -924,7 +924,7 @@ TEST_CASE("Map value construction (invalid value array value types)", "[capi]") 
 	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), value_vals.data(), entry_count);
 	REQUIRE(map_value == nullptr);
 
-	for (int i = 0; i < entry_count; ++i) {
+	for (idx_t i = 0; i < entry_count; ++i) {
 		duckdb_destroy_value(&key_vals[i]);
 		duckdb_destroy_value(&value_vals[i]);
 	}
@@ -940,11 +940,11 @@ TEST_CASE("Union value construction (happy path)", "[capi]") {
 	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
 	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
 
-	duckdb_logical_type member_types[] {varchar_type, int_type};
-	const char *member_names[] {"str", "int"};
+	duckdb::vector<duckdb_logical_type> member_types {varchar_type, int_type};
+	duckdb::vector<const char *> member_names {"str", "int"};
 	idx_t member_count = 2;
 
-	auto union_type = duckdb_create_union_type(member_types, member_names, member_count);
+	auto union_type = duckdb_create_union_type(member_types.data(), member_names.data(), member_count);
 
 	idx_t tag_index = 1;
 	int32_t int32 = 42;
@@ -973,7 +973,7 @@ TEST_CASE("Union value construction (happy path)", "[capi]") {
 	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_UNION);
 	auto tags_vector = duckdb_struct_vector_get_child(vector, 0);
 	REQUIRE(tags_vector);
-	auto tags_data = (uint16_t *)duckdb_vector_get_data(tags_vector);
+	auto tags_data = (uint8_t *)duckdb_vector_get_data(tags_vector);
 	REQUIRE(tags_data);
 	REQUIRE(tags_data[0] == tag_index);
 	auto value_vector = duckdb_struct_vector_get_child(vector, tag_index + 1);
