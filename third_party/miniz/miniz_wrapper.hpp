@@ -49,6 +49,17 @@ public:
 		auto err = duckdb_miniz::mz_error(mz_ret);
 		FormatException(error_msg + std::string(": ") + (err ? err : "Unknown error code"));
 	}
+	// According to "https://www.zlib.net/manual.html",
+	// we should keep decompress gzip data until input data is all read even meet MZ_STREAM_END
+	void DecompressExhaustive(const char *compressed_data, size_t compressed_size, char *out_data, size_t out_size) {
+		size_t in_idx = 0;
+		size_t out_idx = 0;
+		while (in_idx < compressed_size) {
+			Decompress(compressed_data + in_idx, compressed_size - in_idx, out_data + out_idx, out_size - out_idx);
+			in_idx += stream.total_in + GZIP_HEADER_MINSIZE + GZIP_FOOTER_SIZE;
+			out_idx += stream.total_out;
+		}
+	}
 	void Decompress(const char *compressed_data, size_t compressed_size, char *out_data, size_t out_size) {
 		auto mz_ret = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
 		if (mz_ret != duckdb_miniz::MZ_OK) {

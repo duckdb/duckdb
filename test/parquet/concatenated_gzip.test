@@ -1,0 +1,10 @@
+# name: test/parquet/concatenated_gzip.test
+# description: Support uncompress multi gzip member data in one parquet page
+# group: [parquet]
+
+require parquet
+
+query I
+select max(long_col) from 'data/parquet-testing/concatenated_gzip_members.parquet';
+----
+513
