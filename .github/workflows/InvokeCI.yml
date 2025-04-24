@@ -114,9 +114,9 @@ jobs:
                 "${{ needs.R.result }}" == "success" && \
                 "${{ needs.Wasm.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
-            echo "success='true'" >> $GITHUB_OUTPUT
+            echo "success=true" >> $GITHUB_OUTPUT
           else
-            echo "success='false'" >> $GITHUB_OUTPUT
+            echo "success=false" >> $GITHUB_OUTPUT
           fi
     
   notify-external-repos-main:
