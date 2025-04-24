@@ -194,8 +194,7 @@ CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_col
 		D_ASSERT(correlated_columns[0].type.id() == LogicalTypeId::BIGINT);
 		auto window = make_uniq<LogicalWindow>(correlated_columns[0].binding.table_index);
 		auto row_number =
-				make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr,
-				                                 nullptr);
+		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		row_number->SetAlias("delim_index");

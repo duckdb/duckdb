@@ -29,13 +29,13 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			}
 			cteref.correlated_columns += correlated_columns.size();
 		}
-	} else if(op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		// There is another DependentJoin below the correlated recursive CTE.
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.
 		auto &join = op.Cast<LogicalDependentJoin>();
 
-		for (auto &c: correlated_columns) {
+		for (auto &c : correlated_columns) {
 			bool contains_binding = false;
 			for (auto &col : join.correlated_columns) {
 				if (col.binding == c.binding) {

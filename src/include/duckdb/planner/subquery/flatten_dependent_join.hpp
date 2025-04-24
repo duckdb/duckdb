@@ -23,22 +23,21 @@ struct FlattenDependentJoins {
 
 	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<LogicalOperator> Decorrelate(unique_ptr<LogicalOperator> plan,
-											bool parent_propagate_null_values = true,
-											idx_t lateral_depth = 0);
+	unique_ptr<LogicalOperator> Decorrelate(unique_ptr<LogicalOperator> plan, bool parent_propagate_null_values = true,
+	                                        idx_t lateral_depth = 0);
 
 private:
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
-	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0, bool parent_is_dependent_join = false);
+	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0,
+	                                 bool parent_is_dependent_join = false);
 
 	//! Mark entire subtree of Logical Operators as correlated by adding them to the has_correlated_expressions map.
 	bool MarkSubtreeCorrelated(LogicalOperator &op);
 
 	//! Push the dependent join down a LogicalOperator
 	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
-	                                                  bool propagates_null_values = true,
-													  idx_t lateral_depth = 0);
+	                                                  bool propagates_null_values = true, idx_t lateral_depth = 0);
 
 public:
 	Binder &binder;
@@ -54,6 +53,7 @@ public:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
+
 private:
 	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
 	                                                          bool &parent_propagate_null_values, idx_t lateral_depth);

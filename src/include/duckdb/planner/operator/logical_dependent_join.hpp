@@ -48,6 +48,7 @@ public:
 	vector<LogicalType> child_types;
 	vector<LogicalType> child_targets;
 	ExpressionType comparison_type;
+
 public:
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
 	                                          vector<CorrelatedColumnInfo> correlated_columns, JoinType type,

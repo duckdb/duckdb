@@ -15,7 +15,6 @@ LogicalDependentJoin::LogicalDependentJoin(JoinType join_type)
     : LogicalComparisonJoin(join_type, LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 }
 
-
 unique_ptr<LogicalOperator> LogicalDependentJoin::Create(unique_ptr<LogicalOperator> left,
                                                          unique_ptr<LogicalOperator> right,
                                                          vector<CorrelatedColumnInfo> correlated_columns, JoinType type,
