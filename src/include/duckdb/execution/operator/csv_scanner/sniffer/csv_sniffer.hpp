@@ -37,7 +37,7 @@ struct DialectCandidates {
 
 	//! Static functions to get defaults of the search space
 	static vector<string> GetDefaultDelimiter();
-
+	//! Default Quote/Escape combinations in priority order
 	static vector<QuoteEscapeCombination> GetDefaultQuoteEscapeCombination();
 
 	static vector<char> GetDefaultComment();

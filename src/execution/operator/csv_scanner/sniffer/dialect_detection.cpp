@@ -19,7 +19,8 @@ vector<string> DialectCandidates::GetDefaultDelimiter() {
 }
 
 vector<QuoteEscapeCombination> DialectCandidates::GetDefaultQuoteEscapeCombination() {
-	return {{'\0', '\0'}, {'\"', '\"'}, {'\"', '\0'}, {'\"', '\''}, {'\"', '\\'}, {'\'', '\\'}};
+	return {{'\0', '\0'}, {'\"', '\0'}, {'\"', '\"'}, {'\"', '\''},
+	        {'\"', '\\'}, {'\'', '\0'}, {'\'', '\''}, {'\'', '\\'}};
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
@@ -104,12 +105,26 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 				quote_escape_candidates.push_back(candidate);
 			}
 		}
+		if (quote_escape_candidates.empty()) {
+			// This is an uncommon quote
+			quote_escape_candidates.push_back({options.quote.GetValue(), options.quote.GetValue()});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\0'});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\\'});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\"'});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\''});
+		}
 	} else if (options.escape.IsSetByUser()) {
 		// Only Escape is set, look for quote matches
 		for (auto &candidate : default_quote_escape) {
 			if (candidate.escape == options.escape.GetValue()) {
 				quote_escape_candidates.push_back(candidate);
 			}
+		}
+		if (quote_escape_candidates.empty()) {
+			// This is an uncommon escape
+			quote_escape_candidates.push_back({options.escape.GetValue(), options.escape.GetValue()});
+			quote_escape_candidates.push_back({'\"', options.escape.GetValue()});
+			quote_escape_candidates.push_back({'\'', options.escape.GetValue()});
 		}
 	} else {
 		// Nothing is set
