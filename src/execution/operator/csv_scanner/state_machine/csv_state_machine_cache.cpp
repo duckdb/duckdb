@@ -464,25 +464,20 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
-	auto default_quote = DialectCandidates::GetDefaultQuote();
-	auto default_escape = DialectCandidates::GetDefaultEscape();
-	auto default_quote_rule = DialectCandidates::GetDefaultQuoteRule();
+	auto default_quote_escape = DialectCandidates::GetDefaultQuoteEscapeCombination();
 	auto default_delimiter = DialectCandidates::GetDefaultDelimiter();
 	auto default_comment = DialectCandidates::GetDefaultComment();
 
-	for (auto quote_rule : default_quote_rule) {
-		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quote_rule)];
-		for (const auto &quote : quote_candidates) {
-			for (const auto &delimiter : default_delimiter) {
-				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quote_rule)];
-				for (const auto &escape : escape_candidates) {
-					for (const auto &comment : default_comment) {
-						for (const bool strict_mode : {true, false}) {
-							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N, strict_mode});
-							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R, strict_mode});
-							Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON, strict_mode});
-						}
-					}
+	for (auto quote_escape : default_quote_escape) {
+		for (const auto &delimiter : default_delimiter) {
+			for (const auto &comment : default_comment) {
+				for (const bool strict_mode : {true, false}) {
+					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_N,
+					        strict_mode});
+					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::SINGLE_R,
+					        strict_mode});
+					Insert({delimiter, quote_escape.quote, quote_escape.escape, comment, NewLineIdentifier::CARRY_ON,
+					        strict_mode});
 				}
 			}
 		}

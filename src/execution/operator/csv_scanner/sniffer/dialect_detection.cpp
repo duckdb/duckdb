@@ -18,16 +18,8 @@ vector<string> DialectCandidates::GetDefaultDelimiter() {
 	return {",", "|", ";", "\t"};
 }
 
-vector<vector<char>> DialectCandidates::GetDefaultQuote() {
-	return {{'\0'}, {'\"', '\''}, {'\"'}};
-}
-
-vector<QuoteRule> DialectCandidates::GetDefaultQuoteRule() {
-	return {QuoteRule::NO_QUOTES, QuoteRule::QUOTES_OTHER, QuoteRule::QUOTES_RFC};
-}
-
-vector<vector<char>> DialectCandidates::GetDefaultEscape() {
-	return {{'\0'}, {'\\'}, {'\"', '\0', '\''}};
+vector<QuoteEscapeCombination> DialectCandidates::GetDefaultQuoteEscapeCombination() {
+	return {{'\0', '\0'}, {'\"', '\"'}, {'\"', '\0'}, {'\"', '\''}, {'\"', '\\'}, {'\'', '\\'}};
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
@@ -46,33 +38,23 @@ string DialectCandidates::Print() {
 	}
 	search_space << "\n";
 	search_space << "Quote/Escape Candidates: ";
-	for (uint8_t i = 0; i < static_cast<uint8_t>(quote_rule_candidates.size()); i++) {
-		auto quote_candidate = quote_candidates_map[i];
-		auto escape_candidate = escape_candidates_map[i];
-		for (idx_t j = 0; j < quote_candidate.size(); j++) {
-			for (idx_t k = 0; k < escape_candidate.size(); k++) {
-				search_space << "[\'";
-				if (quote_candidate[j] == '\0') {
-					search_space << "(no quote)";
-				} else {
-					search_space << quote_candidate[j];
-				}
-				search_space << "\',\'";
-				if (escape_candidate[k] == '\0') {
-					search_space << "(no escape)";
-				} else {
-					search_space << escape_candidate[k];
-				}
-				search_space << "\']";
-				if (k < escape_candidate.size() - 1) {
-					search_space << ",";
-				}
-			}
-			if (j < quote_candidate.size() - 1) {
-				search_space << ",";
-			}
+	for (idx_t i = 0; i < quote_escape_candidates.size(); i++) {
+		const auto quote_candidate = quote_escape_candidates[i].quote;
+		const auto escape_candidate = quote_escape_candidates[i].escape;
+		search_space << "[\'";
+		if (quote_candidate == '\0') {
+			search_space << "(no quote)";
+		} else {
+			search_space << quote_candidate;
 		}
-		if (i < quote_rule_candidates.size() - 1) {
+		search_space << "\',\'";
+		if (escape_candidate == '\0') {
+			search_space << "(no escape)";
+		} else {
+			search_space << escape_candidate;
+		}
+		search_space << "\']";
+		if (i < quote_escape_candidates.size() - 1) {
 			search_space << ",";
 		}
 	}
@@ -92,17 +74,9 @@ string DialectCandidates::Print() {
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	// assert that quotes escapes and rules have equal size
-	const auto default_quote = GetDefaultQuote();
-	const auto default_escape = GetDefaultEscape();
-	const auto default_quote_rule = GetDefaultQuoteRule();
 	const auto default_delimiter = GetDefaultDelimiter();
 	const auto default_comment = GetDefaultComment();
-
-	D_ASSERT(default_quote.size() == default_quote_rule.size() && default_quote_rule.size() == default_escape.size());
-	// fill the escapes
-	for (idx_t i = 0; i < default_quote_rule.size(); i++) {
-		escape_candidates_map[static_cast<uint8_t>(default_quote_rule[i])] = default_escape[i];
-	}
+	const auto default_quote_escape = GetDefaultQuoteEscapeCombination();
 
 	if (options.delimiter.IsSetByUser()) {
 		// user provided a delimiter: use that delimiter
@@ -111,6 +85,7 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		// no delimiter provided: try standard/common delimiters
 		delim_candidates = default_delimiter;
 	}
+
 	if (options.comment.IsSetByUser()) {
 		// user provided comment character: use that as a comment
 		comment_candidates = {options.comment.GetValue()};
@@ -118,32 +93,27 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		// no comment provided: try standard/common comments
 		comment_candidates = default_comment;
 	}
-	if (options.quote.IsSetByUser()) {
-		// user provided quote: use that quote rule
-		for (auto &quote_rule : default_quote_rule) {
-			quote_candidates_map[static_cast<uint8_t>(quote_rule)] = {options.quote.GetValue()};
+
+	if (options.quote.IsSetByUser() && options.escape.IsSetByUser()) {
+		// User set quote and escape, that's our only candidate then
+		quote_escape_candidates.push_back({options.quote.GetValue(), options.escape.GetValue()});
+	} else if (options.quote.IsSetByUser()) {
+		// Only quote is set, look for escape matches.
+		for (auto &candidate : default_quote_escape) {
+			if (candidate.quote == options.quote.GetValue()) {
+				quote_escape_candidates.push_back(candidate);
+			}
 		}
-		// also add it as an escape rule
-		if (!IsQuoteDefault(options.quote.GetValue())) {
-			escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)].emplace_back(options.quote.GetValue());
+	} else if (options.escape.IsSetByUser()) {
+		// Only Escape is set, look for quote matches
+		for (auto &candidate : default_quote_escape) {
+			if (candidate.escape == options.escape.GetValue()) {
+				quote_escape_candidates.push_back(candidate);
+			}
 		}
 	} else {
-		// no quote rule provided: use standard/common quotes
-		for (idx_t i = 0; i < default_quote_rule.size(); i++) {
-			quote_candidates_map[static_cast<uint8_t>(default_quote_rule[i])] = {default_quote[i]};
-		}
-	}
-	if (options.escape.IsSetByUser()) {
-		// user provided escape: use that escape rule
-		if (options.escape == '\0') {
-			quote_rule_candidates = {QuoteRule::QUOTES_RFC};
-		} else {
-			quote_rule_candidates = {QuoteRule::QUOTES_OTHER};
-		}
-		escape_candidates_map[static_cast<uint8_t>(quote_rule_candidates[0])] = {options.escape.GetValue()};
-	} else {
-		// no escape provided: try standard/common escapes
-		quote_rule_candidates = default_quote_rule;
+		// Nothing is set
+		quote_escape_candidates = default_quote_escape;
 	}
 }
 
@@ -158,36 +128,29 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
-	for (const auto quote_rule : dialect_candidates.quote_rule_candidates) {
-		const auto &quote_candidates = dialect_candidates.quote_candidates_map.at(static_cast<uint8_t>(quote_rule));
-		for (const auto &quote : quote_candidates) {
-			for (const auto &delimiter : dialect_candidates.delim_candidates) {
-				const auto &escape_candidates =
-				    dialect_candidates.escape_candidates_map.at(static_cast<uint8_t>(quote_rule));
-				for (const auto &escape : escape_candidates) {
-					for (const auto &comment : dialect_candidates.comment_candidates) {
-						D_ASSERT(buffer_manager);
-						CSVStateMachineOptions state_machine_options(
-						    delimiter, quote, escape, comment, new_line_id,
-						    options.dialect_options.state_machine_options.strict_mode.GetValue());
-						auto sniffing_state_machine =
-						    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
-						if (options.dialect_options.skip_rows.IsSetByUser()) {
-							if (!iterator_set) {
-								first_iterator = BaseScanner::SkipCSVRows(buffer_manager, sniffing_state_machine,
-								                                          options.dialect_options.skip_rows.GetValue());
-								iterator_set = true;
-							}
-							column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
-							    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
-							    CSVReaderOptions::sniff_size, first_iterator));
-							continue;
-						}
-						column_count_scanners.emplace_back(
-						    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
-						                                  detection_error_handler, CSVReaderOptions::sniff_size));
+	for (const auto quote_escape_candidate : dialect_candidates.quote_escape_candidates) {
+		for (const auto &delimiter : dialect_candidates.delim_candidates) {
+			for (const auto &comment : dialect_candidates.comment_candidates) {
+				D_ASSERT(buffer_manager);
+				CSVStateMachineOptions state_machine_options(
+				    delimiter, quote_escape_candidate.quote, quote_escape_candidate.escape, comment, new_line_id,
+				    options.dialect_options.state_machine_options.strict_mode.GetValue());
+				auto sniffing_state_machine =
+				    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
+				if (options.dialect_options.skip_rows.IsSetByUser()) {
+					if (!iterator_set) {
+						first_iterator = BaseScanner::SkipCSVRows(buffer_manager, sniffing_state_machine,
+						                                          options.dialect_options.skip_rows.GetValue());
+						iterator_set = true;
 					}
+					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
+					    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
+					    CSVReaderOptions::sniff_size, first_iterator));
+					continue;
 				}
+				column_count_scanners.emplace_back(
+				    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
+				                                  detection_error_handler, CSVReaderOptions::sniff_size));
 			}
 		}
 	}
@@ -308,7 +271,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 				dirty_notes = row;
-				num_cols = sniffed_column_counts[row].number_of_columns ;
+				num_cols = sniffed_column_counts[row].number_of_columns;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
 				ignored_rows++;
@@ -415,7 +378,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			return;
 		}
 		if (max_columns_found > 1 && num_cols > max_columns_found && consistent_rows < best_consistent_rows / 2 &&
-		    options.null_padding) {
+		    (options.null_padding || ignore_errors)) {
 			// When null_padding is true, we only give preference to a max number of columns if null padding is at least
 			// 50% as consistent as the best case scenario
 			return;
