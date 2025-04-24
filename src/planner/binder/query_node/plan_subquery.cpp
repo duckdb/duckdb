@@ -372,7 +372,6 @@ unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubquery
 unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root) {
 	D_ASSERT(root);
 	// first we translate the QueryNode of the subquery into a logical plan
-	// note that we do not plan nested subqueries yet
 	auto sub_binder = Binder::CreateBinder(context, this);
 	sub_binder->is_outside_flattened = false;
 	auto subquery_root = sub_binder->CreatePlan(*expr.subquery);
@@ -407,13 +406,6 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		auto &subquery = expr.Cast<BoundSubqueryExpression>();
 		// subquery node! plan it
-//		if (!is_outside_flattened) {
-//			// detected a nested correlated subquery
-//			// we don't plan it yet here, we are currently planning a subquery
-//			// nested subqueries will only be planned AFTER the current subquery has been flattened entirely
-//			has_unplanned_dependent_joins = true;
-//			return;
-//		}
 		expr_ptr = PlanSubquery(subquery, root);
 	}
 }
