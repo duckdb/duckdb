@@ -1,8 +1,10 @@
 #include "duckdb/optimizer/predicate_transfer/transfer_graph_manager.hpp"
+
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/optimizer/predicate_transfer/predicate_transfer_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <queue>
 
@@ -17,7 +19,7 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 
 	// 2. Getting graph edges information from join operators
 	ExtractEdgesInfo(joins);
-	if (edges_info.empty()) {
+	if (neighbor_matrix.empty()) {
 		return false;
 	}
 
@@ -28,6 +30,8 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 
 void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<FilterPlan> &filter_plan, bool reverse) {
 	bool is_forward = !reverse;
+
+	D_ASSERT(filter_plan->apply.size() >= 1);
 	auto &expr = filter_plan->apply[0]->Cast<BoundColumnRefExpression>().binding;
 	auto node_idx = expr.table_index;
 	transfer_graph[node_idx]->Add(create_table, filter_plan, is_forward, true);
@@ -35,6 +39,9 @@ void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<Fi
 
 void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators) {
 	unordered_set<hash_t> existed_set;
+	auto ComputeConditionHash = [](const JoinCondition &cond) {
+		return cond.left->Hash() + cond.right->Hash();
+	};
 
 	for (size_t i = 0; i < join_operators.size(); i++) {
 		auto &join = join_operators[i].get();
@@ -58,11 +65,10 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				continue;
 			}
 
-			hash_t hash = cond.left->Hash() + cond.right->Hash();
-			if (existed_set.count(hash)) {
+			hash_t hash = ComputeConditionHash(cond);
+			if (!existed_set.insert(hash).second) {
 				continue;
 			}
-			existed_set.insert(hash);
 
 			ColumnBinding left_binding = cond.left->Cast<BoundColumnRefExpression>().binding;
 			idx_t left_table = table_operator_manager.GetRenaming(left_binding).table_index;
@@ -114,17 +120,34 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			}
 
 			// Store edge info
-			pair<int, int> key1 = make_pair(right_table, left_table);
-			pair<int, int> key2 = make_pair(left_table, right_table);
-			if (edges_info.find(key1) == edges_info.end()) {
-				edges_info[key1] = vector<shared_ptr<EdgeInfo>>();
-				edges_info[key2] = vector<shared_ptr<EdgeInfo>>();
-			}
-			edges_info[key1].push_back(edge);
-			edges_info[key2].push_back(edge);
+			neighbor_matrix[left_table][right_table].push_back(edge);
+			neighbor_matrix[right_table][left_table].push_back(edge);
 		}
 	}
 }
+
+// void TransferGraphManager::IgnoreUnfilteredTable() {
+// 	size_t num_table = table_operator_manager.table_operators.size();
+//
+// 	vector<idx_t> unfiltered_table_idx;
+// 	for (auto &pair : table_operator_manager.table_operators) {
+// 		auto idx = pair.first;
+// 		auto *table = pair.second;
+//
+// 		if (table->type != LogicalOperatorType::LOGICAL_GET) {
+// 			continue;
+// 		}
+//
+// 		auto &get = table->Cast<LogicalGet>();
+// 		if (get.table_filters.filters.empty()) {
+// 			unfiltered_table_idx.push_back(idx);
+// 		}
+// 	}
+//
+// 	for (auto &table_idx : unfiltered_table_idx) {
+// 		vector<shared_ptr<EdgeInfo>> edges;
+// 	}
+// }
 
 void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	unordered_set<idx_t> constructed_set;
@@ -157,10 +180,9 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 			break;
 		}
 
-		if (edges_info.count(selected_edge)) {
-			for (auto &v : edges_info[selected_edge]) {
-				selected_edges.emplace_back(std::move(v));
-			}
+		auto &edges = neighbor_matrix[selected_edge.first][selected_edge.second];
+		for (auto &edge : edges) {
+			selected_edges.emplace_back(std::move(edge));
 		}
 
 		auto node = transfer_graph[selected_edge.second].get();
@@ -218,13 +240,13 @@ pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &co
 	for (auto i : unconstructed_set) {
 		for (auto j : constructed_set) {
 			auto key = make_pair(j, i);
-			auto it = edges_info.find(key);
-			if (it == edges_info.end()) {
+			auto it = neighbor_matrix[i][j];
+			if (it.empty()) {
 				continue;
 			}
 
 			idx_t card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
-			idx_t weight = it->second.size();
+			idx_t weight = it.size();
 
 			if (weight > max_weight || (weight == max_weight && card > max_card)) {
 				max_weight = weight;

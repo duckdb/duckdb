@@ -11,6 +11,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 namespace duckdb {
 
@@ -192,18 +193,31 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 
 	// Early Stop: Unfiltered Table
 	if (!gstate.is_selectivity_checked) {
-		gstate.num_input_rows += chunk.size();
+		gstate.num_input_rows += static_cast<int64_t>(chunk.size());
 
 		if (this_pipeline->num_source_chunks > 32) {
 			gstate.is_selectivity_checked = true;
 
+			bool has_logical_filter = true;
+			switch (this_pipeline->GetSource()->type) {
+			case PhysicalOperatorType::TABLE_SCAN: {
+				auto &source = this_pipeline->GetSource()->Cast<PhysicalTableScan>();
+				has_logical_filter = source.table_filters && !source.table_filters->filters.empty();
+				break;
+			}
+			default:
+				break;
+			}
+
 			// Check the selectivity
-			double input_rows = gstate.num_input_rows;
-			double source_rows = this_pipeline->num_source_rows;
+			double input_rows = static_cast<double>(gstate.num_input_rows);
+			double source_rows = has_logical_filter
+			                         ? static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE)
+			                         : static_cast<double>(this_pipeline->num_source_rows);
 			double selectivity = input_rows / source_rows;
 
-			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
-			// a full table.
+			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF
+			// on a full table.
 			if (selectivity > 0.95) {
 				is_successful = false;
 				return true;

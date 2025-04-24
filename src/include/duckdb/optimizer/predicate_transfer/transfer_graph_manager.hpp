@@ -38,19 +38,15 @@ public:
 
 private:
 	void ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators);
-	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
+	// void IgnoreUnfilteredTable();
 	void CreatePredicateTransferGraph();
+	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
 
-	std::pair<idx_t, idx_t> FindEdge(const unordered_set<idx_t> &constructed_set,
-	                                 const unordered_set<idx_t> &unconstructed_set);
+	pair<idx_t, idx_t> FindEdge(const unordered_set<idx_t> &constructed_set,
+	                            const unordered_set<idx_t> &unconstructed_set);
 
 private:
-	struct PairHash {
-		std::size_t operator()(const std::pair<int, int> &p) const {
-			return std::hash<int> {}(p.first) ^ (std::hash<int> {}(p.second) << 1);
-		}
-	};
-	unordered_map<std::pair<int, int>, vector<shared_ptr<EdgeInfo>>, PairHash> edges_info;
+	unordered_map<idx_t, unordered_map<idx_t, vector<shared_ptr<EdgeInfo>>>> neighbor_matrix;
 	vector<shared_ptr<EdgeInfo>> selected_edges;
 };
 } // namespace duckdb
