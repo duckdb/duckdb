@@ -6,8 +6,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
-#include <algorithm>
-#include <cmath>
 #include <stdlib.h>
 
 namespace duckdb {
@@ -16,6 +14,50 @@ struct ApproxQuantileState {
 	duckdb_tdigest::TDigest *h;
 	idx_t pos;
 };
+
+struct ApproxQuantileCoding {
+	template <typename INPUT_TYPE, typename SAVE_TYPE>
+	static SAVE_TYPE Encode(const INPUT_TYPE &input) {
+		return Cast::template Operation<INPUT_TYPE, SAVE_TYPE>(input);
+	}
+
+	template <typename SAVE_TYPE, typename TARGET_TYPE>
+	static bool Decode(const SAVE_TYPE &source, TARGET_TYPE &target) {
+		// The result is approximate, so clamp instead of overflowing.
+		if (TryCast::Operation(source, target, false)) {
+			return true;
+		} else if (source < 0) {
+			target = NumericLimits<TARGET_TYPE>::Minimum();
+		} else {
+			target = NumericLimits<TARGET_TYPE>::Maximum();
+		}
+		return false;
+	}
+};
+
+template <>
+double ApproxQuantileCoding::Encode(const dtime_tz_t &input) {
+	return Encode<uint64_t, double>(input.sort_key());
+}
+
+template <>
+bool ApproxQuantileCoding::Decode(const double &source, dtime_tz_t &target) {
+	uint64_t sort_key;
+	const auto decoded = Decode<double, uint64_t>(source, sort_key);
+	if (decoded) {
+		//	We can invert the sort key because its offset was not touched.
+		auto offset = dtime_tz_t::decode_offset(sort_key);
+		auto micros = dtime_tz_t::decode_micros(sort_key);
+		micros -= int64_t(dtime_tz_t::encode_offset(offset) * dtime_tz_t::OFFSET_MICROS);
+		target = dtime_tz_t(dtime_t(micros), offset);
+	} else if (source < 0) {
+		target = Value::MinimumValue(LogicalTypeId::TIME_TZ).GetValue<dtime_tz_t>();
+	} else {
+		target = Value::MaximumValue(LogicalTypeId::TIME_TZ).GetValue<dtime_tz_t>();
+	}
+
+	return decoded;
+}
 
 struct ApproximateQuantileBindData : public FunctionData {
 	ApproximateQuantileBindData() {
@@ -73,7 +115,7 @@ struct ApproxQuantileOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		auto val = Cast::template Operation<INPUT_TYPE, SAVE_TYPE>(input);
+		auto val = ApproxQuantileCoding::template Encode<INPUT_TYPE, SAVE_TYPE>(input);
 		if (!Value::DoubleIsFinite(val)) {
 			return;
 		}
@@ -121,15 +163,8 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 		state.h->compress();
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		// The result is approximate, so clamp instead of overflowing.
 		const auto source = state.h->quantile(bind_data.quantiles[0]);
-		if (TryCast::Operation(source, target, false)) {
-			return;
-		} else if (source < 0) {
-			target = NumericLimits<TARGET_TYPE>::Minimum();
-		} else {
-			target = NumericLimits<TARGET_TYPE>::Maximum();
-		}
+		ApproxQuantileCoding::Decode(source, target);
 	}
 };
 
@@ -281,7 +316,9 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 		entry.length = bind_data.quantiles.size();
 		for (size_t q = 0; q < entry.length; ++q) {
 			const auto &quantile = bind_data.quantiles[q];
-			rdata[ridx + q] = Cast::template Operation<SAVE_TYPE, CHILD_TYPE>(state.h->quantile(quantile));
+			const auto &source = state.h->quantile(quantile);
+			auto &target = rdata[ridx + q];
+			ApproxQuantileCoding::Decode(source, target);
 		}
 
 		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);

@@ -31,7 +31,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  CMAKE_POLICY_VERSION_MINIMUM: 3.5
 
 jobs:
  wasm-extensions:

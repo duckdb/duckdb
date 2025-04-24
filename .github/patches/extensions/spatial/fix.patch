@@ -1,265 +1,247 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index bd50e20..1ebe9e9 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -290,6 +290,9 @@ string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+ void RTreeIndex::VerifyAllocations(IndexLock &state) {
+ }
+ 
++void RTreeIndex::VerifyBuffers(IndexLock &l) {
++}
++
+ //------------------------------------------------------------------------------
+ // Register Index Type
+ //------------------------------------------------------------------------------
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 3462613..126f220 100644
+index 126f220..5e1ae9c 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
-@@ -34,7 +34,7 @@ public:
- 		return std::move(res);
+@@ -62,6 +62,7 @@ public:
+ 
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
++	void VerifyBuffers(IndexLock &l) override;
+ 
+ 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+ 	                                     DataChunk &input) override {
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 6079be1..e629e5b 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -14,6 +14,7 @@
+ #include "duckdb/planner/operator/logical_projection.hpp"
+ #include "duckdb/planner/operator_extension.hpp"
+ #include "duckdb/storage/data_table.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
+ #include "duckdb/main/database.hpp"
+ 
+ #include "spatial/geometry/bbox.hpp"
+@@ -57,6 +58,21 @@ public:
+ 		    expr, [&](Expression &child) { RewriteIndexExpression(index, get, child, rewrite_possible); });
  	}
  
--	static unique_ptr<PhysicalOperator> CreatePlan(PlanIndexInput &input);
-+	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
++	static void RewriteIndexExpressionForFilter(Index &index, LogicalGet &get, unique_ptr<Expression> &expr, idx_t filter_idx, bool &rewrite_possible) {
++		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
++			auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
++			if (bound_colref.binding.column_index != filter_idx) {
++				rewrite_possible = false;
++				return;
++			}
++			// this column matches the index column - turn it into a BoundReference
++			expr = make_uniq<BoundReferenceExpression>(bound_colref.return_type, 0ULL);
++			return;
++		}
++		ExpressionIterator::EnumerateChildren(
++			*expr, [&](unique_ptr<Expression> &child) { RewriteIndexExpressionForFilter(index, get, child, filter_idx, rewrite_possible); });
++	}
++
+ 	static bool IsSpatialPredicate(const ScalarFunction &function, const unordered_set<string> &predicates) {
  
- public:
- 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
-index 9c891e3..a2f7448 100644
---- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
-+++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
-@@ -39,8 +39,8 @@ void LogicalCreateRTreeIndex::ResolveColumnBindings(ColumnBindingResolver &res,
- 	                                             [&](unique_ptr<Expression> *child) { res.VisitExpression(child); });
- }
+ 		if (predicates.find(function.name) == predicates.end()) {
+@@ -101,26 +117,47 @@ public:
+ 	static bool TryOptimize(Binder &binder, ClientContext &context, unique_ptr<LogicalOperator> &plan,
+ 	                        unique_ptr<LogicalOperator> &root) {
+ 		// Look for a FILTER with a spatial predicate followed by a LOGICAL_GET table scan
++		// OR for a seq_scan with an ExpressionFilter
+ 		auto &op = *plan;
  
--static unique_ptr<PhysicalOperator> CreateNullFilter(const LogicalOperator &op, const vector<LogicalType> &types,
--                                                     ClientContext &context) {
-+static PhysicalOperator &CreateNullFilter(PhysicalPlanGenerator &generator, const LogicalOperator &op,
-+                                          const vector<LogicalType> &types, ClientContext &context) {
- 	vector<unique_ptr<Expression>> filter_select_list;
- 
- 	// Filter NOT NULL on the GEOMETRY column
-@@ -66,14 +66,13 @@ static unique_ptr<PhysicalOperator> CreateNullFilter(const LogicalOperator &op,
- 	// Combine into an AND
- 	auto and_expr = make_uniq_base<Expression, BoundConjunctionExpression>(
- 	    ExpressionType::CONJUNCTION_AND, std::move(is_not_null_expr), std::move(is_not_empty_expr));
+-		if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
+-			return false;
+-		}
 -
- 	filter_select_list.push_back(std::move(and_expr));
+-		// Look for a spatial predicate
+-		auto &filter = op.Cast<LogicalFilter>();
++		if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
++			// extract the filter from the filter node
++			// Look for a spatial predicate
++			auto &filter = op.Cast<LogicalFilter>();
  
--	return make_uniq<PhysicalFilter>(types, std::move(filter_select_list), op.estimated_cardinality);
-+	return generator.Make<PhysicalFilter>(types, std::move(filter_select_list), op.estimated_cardinality);
- }
- 
--static unique_ptr<PhysicalOperator>
--CreateBoundingBoxProjection(const LogicalOperator &op, const vector<LogicalType> &types, ClientContext &context) {
-+static PhysicalOperator &CreateBoundingBoxProjection(PhysicalPlanGenerator &planner, const LogicalOperator &op,
-+                                                     const vector<LogicalType> &types, ClientContext &context) {
- 	auto &catalog = Catalog::GetSystemCatalog(context);
- 
- 	// Get the bounding box function
-@@ -96,11 +95,11 @@ CreateBoundingBoxProjection(const LogicalOperator &op, const vector<LogicalType>
- 	select_list.push_back(std::move(bbox_expr));
- 	select_list.push_back(std::move(rowid_expr));
- 
--	return make_uniq<PhysicalProjection>(types, std::move(select_list), op.estimated_cardinality);
-+	return planner.Make<PhysicalProjection>(types, std::move(select_list), op.estimated_cardinality);
- }
- 
--static unique_ptr<PhysicalOperator> CreateOrderByMinX(const LogicalOperator &op, const vector<LogicalType> &types,
--                                                      ClientContext &context) {
-+static PhysicalOperator &CreateOrderByMinX(PhysicalPlanGenerator &planner, const LogicalOperator &op,
-+                                           const vector<LogicalType> &types, ClientContext &context) {
- 	auto &catalog = Catalog::GetSystemCatalog(context);
- 
- 	// Get the centroid value function
-@@ -130,14 +129,15 @@ static unique_ptr<PhysicalOperator> CreateOrderByMinX(const LogicalOperator &op,
- 	vector<BoundOrderByNode> orders;
- 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(xmin_expr));
- 	vector<idx_t> projections = {0, 1};
--	return make_uniq<PhysicalOrder>(types, std::move(orders), projections, op.estimated_cardinality);
-+	return planner.Make<PhysicalOrder>(types, std::move(orders), projections, op.estimated_cardinality);
- }
- 
--unique_ptr<PhysicalOperator> RTreeIndex::CreatePlan(PlanIndexInput &input) {
-+PhysicalOperator &RTreeIndex::CreatePlan(PlanIndexInput &input) {
- 
- 	auto &op = input.op;
- 	auto &table_scan = input.table_scan;
- 	auto &context = input.context;
-+	auto &planner = input.planner;
- 
- 	// generate a physical plan for the parallel index creation which consists of the following operators
- 	// table scan - projection (for expression execution) - filter (NOT NULL) - order - create index
-@@ -175,38 +175,35 @@ unique_ptr<PhysicalOperator> RTreeIndex::CreatePlan(PlanIndexInput &input) {
- 	select_list.push_back(make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
- 
- 	// Project the expressions
--	auto projection = make_uniq<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
--	projection->children.push_back(std::move(table_scan));
-+	auto &projection =
-+	    planner.Make<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
-+	projection.children.push_back(table_scan);
- 
- 	// Filter operator for (IS_NOT_NULL) and (NOT ST_IsEmpty) on the geometry column
--	auto null_filter = CreateNullFilter(op, new_column_types, context);
--	null_filter->children.push_back(std::move(projection));
-+	auto &null_filter = CreateNullFilter(planner, op, new_column_types, context);
-+	null_filter.children.push_back(projection);
- 
- 	// Project the bounding box and the row ID
- 	vector<LogicalType> projected_types = {GeoTypes::BOX_2DF(), LogicalType::ROW_TYPE};
--	auto bbox_proj = CreateBoundingBoxProjection(op, projected_types, context);
--	bbox_proj->children.push_back(std::move(null_filter));
-+	auto &bbox_proj = CreateBoundingBoxProjection(planner, op, projected_types, context);
-+	bbox_proj.children.push_back(null_filter);
- 
- 	// Create an ORDER_BY operator to sort the bounding boxes by the xmin value
--	auto physical_order = CreateOrderByMinX(op, projected_types, context);
--	physical_order->children.push_back(std::move(bbox_proj));
-+	auto &physical_order = CreateOrderByMinX(planner, op, projected_types, context);
-+	physical_order.children.push_back(bbox_proj);
- 
- 	// Now finally create the actual physical create index operator
--	auto physical_create_index =
--	    make_uniq<PhysicalCreateRTreeIndex>(op, op.table, op.info->column_ids, std::move(op.info),
--	                                        std::move(op.unbound_expressions), op.estimated_cardinality);
+-		if (filter.expressions.size() != 1) {
+-			// We can only optimize if there is a single expression right now
+-			return false;
++			if (filter.expressions.size() != 1) {
++				// We can only optimize if there is a single expression right now
++				return false;
++			}
++			auto &filter_expr = filter.expressions[0];
++			// Look for a table scan
++			if (filter.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
++				return false;
++			}
++			auto &get_ptr = filter.children.front();
++			return TryOptimizeGet(binder, context, get_ptr, root, filter, optional_idx(), filter_expr);
+ 		}
+-		auto &filter_expr = filter.expressions[0];
 -
--	physical_create_index->children.push_back(std::move(physical_order));
--
--	return std::move(physical_create_index);
-+	auto &physical_create_index =
-+	    planner.Make<PhysicalCreateRTreeIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-+	                                           std::move(op.unbound_expressions), op.estimated_cardinality);
-+	physical_create_index.children.push_back(physical_order);
-+	return physical_create_index;
- }
+-		// Look for a table scan
+-		if (filter.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
++		if (op.type == LogicalOperatorType::LOGICAL_GET) {
++			// this is a LogicalGet - check if there is an ExpressionFilter
++			auto &get = op.Cast<LogicalGet>();
++			for(auto &entry : get.table_filters.filters) {
++				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
++					// not an expression filter
++					continue;
++				}
++				auto &expr_filter = entry.second->Cast<ExpressionFilter>();
++				if (TryOptimizeGet(binder, context, plan, root, nullptr, entry.first, expr_filter.expr)) {
++					return true;
++				}
++			}
+ 			return false;
+ 		}
+-		auto &get_ptr = filter.children.front();
++		return false;
++	}
++
++
++	static bool TryOptimizeGet(Binder &binder, ClientContext &context, unique_ptr<LogicalOperator> &get_ptr,
++							unique_ptr<LogicalOperator> &root, optional_ptr<LogicalFilter> filter, optional_idx filter_column_idx, unique_ptr<Expression> &filter_expr) {
+ 		auto &get = get_ptr->Cast<LogicalGet>();
+ 		if (get.function.name != "seq_scan") {
+ 			return false;
+@@ -150,9 +187,13 @@ public:
  
- // TODO: Remove this
--unique_ptr<PhysicalOperator> LogicalCreateRTreeIndex::CreatePlan(ClientContext &context,
--                                                                 PhysicalPlanGenerator &generator) {
--
--	auto table_scan = generator.CreatePlan(std::move(children[0]));
-+PhysicalOperator &LogicalCreateRTreeIndex::CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) {
+ 		table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index_entry) {
+ 			// Create the bind data for this index given the bounding box
+-			auto index_expr = index_entry.unbound_expressions[0]->Copy();
+ 			bool rewrite_possible = true;
+-			RewriteIndexExpression(index_entry, get, *index_expr, rewrite_possible);
++			auto index_expr = index_entry.unbound_expressions[0]->Copy();
++			if (filter_column_idx.IsValid()) {
++				RewriteIndexExpressionForFilter(index_entry, get, index_expr, filter_column_idx.GetIndex(), rewrite_possible);
++			} else {
++				RewriteIndexExpression(index_entry, get, *index_expr, rewrite_possible);
++			}
+ 			if (!rewrite_possible) {
+ 				// Could not rewrite!
+ 				return false;
+@@ -202,8 +243,8 @@ public:
+ 		}
  
-+	auto &table_scan = planner.CreatePlan(*children[0]);
- 	auto &op = *this;
- 
- 	// generate a physical plan for the parallel index creation which consists of the following operators
-@@ -235,7 +232,7 @@ unique_ptr<PhysicalOperator> LogicalCreateRTreeIndex::CreatePlan(ClientContext &
- 	D_ASSERT(op.info->index_type == RTreeIndex::TYPE_NAME);
- 
- 	// table scan operator for index key columns and row IDs
--	generator.dependencies.AddDependency(op.table);
-+	planner.dependencies.AddDependency(op.table);
- 
- 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());
- 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
-@@ -255,30 +252,29 @@ unique_ptr<PhysicalOperator> LogicalCreateRTreeIndex::CreatePlan(ClientContext &
- 	select_list.push_back(make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
- 
- 	// Project the expressions
--	auto projection = make_uniq<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
--	projection->children.push_back(std::move(table_scan));
-+	auto &projection =
-+	    planner.Make<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
-+	projection.children.push_back(table_scan);
- 
- 	// Filter operator for (IS_NOT_NULL) and (NOT ST_IsEmpty) on the geometry column
--	auto null_filter = CreateNullFilter(op, new_column_types, context);
--	null_filter->children.push_back(std::move(projection));
-+	auto &null_filter = CreateNullFilter(planner, op, new_column_types, context);
-+	null_filter.children.push_back(projection);
- 
- 	// Project the bounding box and the row ID
- 	vector<LogicalType> projected_types = {GeoTypes::BOX_2DF(), LogicalType::ROW_TYPE};
--	auto bbox_proj = CreateBoundingBoxProjection(op, projected_types, context);
--	bbox_proj->children.push_back(std::move(null_filter));
-+	auto &bbox_proj = CreateBoundingBoxProjection(planner, op, projected_types, context);
-+	bbox_proj.children.push_back(null_filter);
- 
- 	// Create an ORDER_BY operator to sort the bounding boxes by the xmin value
--	auto physical_order = CreateOrderByMinX(op, projected_types, context);
--	physical_order->children.push_back(std::move(bbox_proj));
-+	auto &physical_order = CreateOrderByMinX(planner, op, projected_types, context);
-+	physical_order.children.push_back(bbox_proj);
- 
- 	// Now finally create the actual physical create index operator
--	auto physical_create_index =
--	    make_uniq<PhysicalCreateRTreeIndex>(op, op.table, op.info->column_ids, std::move(op.info),
--	                                        std::move(op.unbound_expressions), op.estimated_cardinality);
--
--	physical_create_index->children.push_back(std::move(physical_order));
--
--	return std::move(physical_create_index);
-+	auto &physical_create_index =
-+	    planner.Make<PhysicalCreateRTreeIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-+	                                           std::move(op.unbound_expressions), op.estimated_cardinality);
-+	physical_create_index.children.push_back(physical_order);
-+	return physical_create_index;
- }
- 
- } // namespace duckdb
-diff --git a/src/spatial/index/rtree/rtree_index_create_logical.hpp b/src/spatial/index/rtree/rtree_index_create_logical.hpp
-index e960069..2b73e36 100644
---- a/src/spatial/index/rtree/rtree_index_create_logical.hpp
-+++ b/src/spatial/index/rtree/rtree_index_create_logical.hpp
-@@ -25,7 +25,7 @@ public:
- 	void ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings) override;
- 
- 	// Actually create and plan the index creation
--	unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) override;
-+	PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) override;
- 
- 	void Serialize(Serializer &writer) const override {
- 		LogicalExtensionOperator::Serialize(writer);
-diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
-index 2cb8db3..adf0135 100644
---- a/src/spatial/index/rtree/rtree_index_scan.cpp
-+++ b/src/spatial/index/rtree/rtree_index_scan.cpp
-@@ -60,7 +60,7 @@ static unique_ptr<GlobalTableFunctionState> RTreeIndexScanInitGlobal(ClientConte
- 	}
- 
- 	// Initialize the storage scan state
--	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
-+	result->local_storage_state.Initialize(result->column_ids, context, input.filters);
- 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
- 
- 	// Initialize the scan state for the index
+ 		// Before we clear projection ids, replace projection map in the filter
+-		if (!get.projection_ids.empty()) {
+-			for (auto &id : filter.projection_map) {
++		if (!get.projection_ids.empty() && filter) {
++			for (auto &id : filter->projection_map) {
+ 				id = get.projection_ids[id];
+ 			}
+ 		}
 diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index b96928d..69307c0 100644
+index 7143df8..b62bb6b 100644
 --- a/src/spatial/modules/gdal/gdal_module.cpp
 +++ b/src/spatial/modules/gdal/gdal_module.cpp
-@@ -9,7 +9,7 @@
- // DuckDB
- #include "duckdb/main/database.hpp"
- #include "duckdb/common/enums/file_glob_options.hpp"
--#include "duckdb/common/multi_file_reader.hpp"
-+#include "duckdb/common/multi_file/multi_file_reader.hpp"
- #include "duckdb/function/table/arrow.hpp"
- #include "duckdb/main/extension_util.hpp"
- #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+@@ -375,7 +375,7 @@ public:
+ 
+ 		auto file_vector = fs.Glob(file_glob);
+ 		for (auto &file : file_vector) {
+-			auto tmp = AddPrefix(file);
++			auto tmp = AddPrefix(file.path);
+ 			files.AddString(tmp.c_str());
+ 		}
+ 		return files.StealList();
+@@ -1153,9 +1153,9 @@ struct ST_Read_Meta {
+ 	// Bind
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	struct BindData final : TableFunctionData {
+-		vector<string> file_names;
++		vector<OpenFileInfo> file_names;
+ 
+-		explicit BindData(vector<string> file_names_p) : file_names(std::move(file_names_p)) {
++		explicit BindData(vector<OpenFileInfo> file_names_p) : file_names(std::move(file_names_p)) {
+ 		}
+ 	};
+ 
+@@ -1276,8 +1276,8 @@ struct ST_Read_Meta {
+ 		auto out_size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.file_names.size() - state.current_idx);
+ 
+ 		for (idx_t out_idx = 0; out_idx < out_size; out_idx++, state.current_idx++) {
+-			auto file_name = bind_data.file_names[state.current_idx];
+-			auto prefixed_file_name = GDALClientContextState::GetOrCreate(context).GetPrefix(file_name);
++			auto &file = bind_data.file_names[state.current_idx];
++			auto prefixed_file_name = GDALClientContextState::GetOrCreate(context).GetPrefix(file.path);
+ 
+ 			GDALDatasetUniquePtr dataset;
+ 			try {
+@@ -1290,7 +1290,7 @@ struct ST_Read_Meta {
+ 				continue;
+ 			}
+ 
+-			output.data[0].SetValue(out_idx, file_name);
++			output.data[0].SetValue(out_idx, file.path);
+ 			output.data[1].SetValue(out_idx, dataset->GetDriver()->GetDescription());
+ 			output.data[2].SetValue(out_idx, dataset->GetDriver()->GetMetadataItem(GDAL_DMD_LONGNAME));
+ 			output.data[3].SetValue(out_idx, GetLayerData(dataset));
 diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
-index 5659fc8..4b51d75 100644
+index 4b51d75..a0bf5cb 100644
 --- a/src/spatial/modules/shapefile/shapefile_module.cpp
 +++ b/src/spatial/modules/shapefile/shapefile_module.cpp
-@@ -3,7 +3,7 @@
- #include "spatial/geometry/sgl.hpp"
- #include "spatial/spatial_types.hpp"
+@@ -935,7 +935,7 @@ constexpr ShapeTypeEntry shape_type_map[] = {
+ struct Shapefile_Meta {
  
--#include "duckdb/common/multi_file_reader.hpp"
-+#include "duckdb/common/multi_file/multi_file_reader.hpp"
- #include "duckdb/function/replacement_scan.hpp"
- #include "duckdb/main/extension_util.hpp"
- #include "duckdb/parser/expression/constant_expression.hpp"
-diff --git a/test/sql/geometry/st_dump.test b/test/sql/geometry/st_dump.test
-index 3346f5f..c181720 100644
---- a/test/sql/geometry/st_dump.test
-+++ b/test/sql/geometry/st_dump.test
-@@ -25,7 +25,7 @@ SElECT ST_Dump(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY'));
- query I
- SElECT ST_Dump(ST_GeomFromText('GEOMETRYCOLLECTION (POINT (0 0))'));
- ----
--[{'geom': POINT (0 0), 'path': [1]}]
-+[{'geom': 'POINT (0 0)', 'path': [1]}]
+ 	struct ShapeFileMetaBindData final : TableFunctionData {
+-		vector<string> files;
++		vector<OpenFileInfo> files;
+ 	};
  
- # Test with multipoint
- query II
-@@ -69,9 +69,9 @@ FROM (VALUES
-     (ST_GeomFromText('GEOMETRYCOLLECTION (POINT (1 1), GEOMETRYCOLLECTION(POINT (3 3)), POINT (2 2))'))
- ) as t(geom)
- ----
--[{'geom': POINT (1 1), 'path': [1]}, {'geom': POINT (2 2), 'path': [2]}, {'geom': POINT (3 3), 'path': [3, 1]}]
-+[{'geom': 'POINT (1 1)', 'path': [1]}, {'geom': 'POINT (2 2)', 'path': [2]}, {'geom': 'POINT (3 3)', 'path': [3, 1]}]
- NULL
--[{'geom': POINT (1 1), 'path': [1]}, {'geom': POINT (3 3), 'path': [2, 1]}, {'geom': POINT (2 2), 'path': [3]}]
-+[{'geom': 'POINT (1 1)', 'path': [1]}, {'geom': 'POINT (3 3)', 'path': [2, 1]}, {'geom': 'POINT (2 2)', 'path': [3]}]
+ 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+@@ -947,7 +947,7 @@ struct Shapefile_Meta {
+ 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);
  
+ 		for (auto &file : file_list->Files()) {
+-			if (StringUtil::EndsWith(StringUtil::Lower(file), ".shp")) {
++			if (StringUtil::EndsWith(StringUtil::Lower(file.path), ".shp")) {
+ 				result->files.push_back(file);
+ 			}
+ 		}
+@@ -977,7 +977,7 @@ struct Shapefile_Meta {
+ 		ShapeFileMetaGlobalState() : current_file_idx(0) {
+ 		}
+ 		idx_t current_file_idx;
+-		vector<string> files;
++		vector<OpenFileInfo> files;
+ 	};
  
- # With Z and M
+ 	static unique_ptr<GlobalTableFunctionState> InitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+@@ -1011,17 +1011,17 @@ struct Shapefile_Meta {
+ 		auto output_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.files.size() - state.current_file_idx);
+ 
+ 		for (idx_t out_idx = 0; out_idx < output_count; out_idx++) {
+-			auto &file_name = bind_data.files[state.current_file_idx + out_idx];
++			auto &file = bind_data.files[state.current_file_idx + out_idx];
+ 
+-			auto file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+-			auto shp_handle = OpenSHPFile(fs, file_name.c_str());
++			auto file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
++			auto shp_handle = OpenSHPFile(fs, file.path.c_str());
+ 
+ 			double min_bound[4];
+ 			double max_bound[4];
+ 			int shape_type;
+ 			int record_count;
+ 			SHPGetInfo(shp_handle.get(), &record_count, &shape_type, min_bound, max_bound);
+-			file_name_data[out_idx] = StringVector::AddString(file_name_vector, file_name);
++			file_name_data[out_idx] = StringVector::AddString(file_name_vector, file.path);
+ 			shape_type_data[out_idx] = 0;
+ 			for (size_t shape_type_idx = 0; shape_type_idx < sizeof(shape_type_map) / sizeof(ShapeTypeEntry);
+ 			     shape_type_idx++) {

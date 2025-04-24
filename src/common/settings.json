@@ -279,6 +279,12 @@
         "custom_implementation": true
     },
     {
+        "name": "disable_timestamptz_casts",
+        "description": "Disable casting from timestamp to timestamptz ",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "disabled_compression_methods",
         "description": "Disable a specific set of compression methods (comma separated)",
         "type": "VARCHAR",
@@ -330,6 +336,13 @@
             "set",
             "reset"
         ]
+    },
+    {
+        "name": "enable_external_file_cache",
+        "description": "Allow the database to cache external files (e.g., Parquet) in memory.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "enable_fsst_vectors",

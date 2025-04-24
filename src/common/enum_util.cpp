@@ -46,6 +46,7 @@
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/enums/preserve_order.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
@@ -391,19 +392,22 @@ const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 		{ static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
 		{ static_cast<uint32_t>(AlterTableType::ADD_CONSTRAINT), "ADD_CONSTRAINT" },
 		{ static_cast<uint32_t>(AlterTableType::SET_PARTITIONED_BY), "SET_PARTITIONED_BY" },
-		{ static_cast<uint32_t>(AlterTableType::SET_SORTED_BY), "SET_SORTED_BY" }
+		{ static_cast<uint32_t>(AlterTableType::SET_SORTED_BY), "SET_SORTED_BY" },
+		{ static_cast<uint32_t>(AlterTableType::ADD_FIELD), "ADD_FIELD" },
+		{ static_cast<uint32_t>(AlterTableType::REMOVE_FIELD), "REMOVE_FIELD" },
+		{ static_cast<uint32_t>(AlterTableType::RENAME_FIELD), "RENAME_FIELD" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 14, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 17, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 14, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 17, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
@@ -2387,19 +2391,20 @@ const StringUtil::EnumStringLiteral *GetMemoryTagValues() {
 		{ static_cast<uint32_t>(MemoryTag::IN_MEMORY_TABLE), "IN_MEMORY_TABLE" },
 		{ static_cast<uint32_t>(MemoryTag::ALLOCATOR), "ALLOCATOR" },
 		{ static_cast<uint32_t>(MemoryTag::EXTENSION), "EXTENSION" },
-		{ static_cast<uint32_t>(MemoryTag::TRANSACTION), "TRANSACTION" }
+		{ static_cast<uint32_t>(MemoryTag::TRANSACTION), "TRANSACTION" },
+		{ static_cast<uint32_t>(MemoryTag::EXTERNAL_FILE_CACHE), "EXTERNAL_FILE_CACHE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value) {
-	return StringUtil::EnumToString(GetMemoryTagValues(), 13, "MemoryTag", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMemoryTagValues(), 14, "MemoryTag", static_cast<uint32_t>(value));
 }
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
-	return static_cast<MemoryTag>(StringUtil::StringToEnum(GetMemoryTagValues(), 13, "MemoryTag", value));
+	return static_cast<MemoryTag>(StringUtil::StringToEnum(GetMemoryTagValues(), 14, "MemoryTag", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMetaPipelineTypeValues() {
@@ -2436,6 +2441,8 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_NAME), "OPERATOR_NAME" },
+		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_BUFFER_MEMORY), "SYSTEM_PEAK_BUFFER_MEMORY" },
+		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE), "SYSTEM_PEAK_TEMP_DIR_SIZE" },
 		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
@@ -2477,12 +2484,12 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 49, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 51, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 49, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 51, "MetricsType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -3114,6 +3121,25 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 template<>
 PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value) {
 	return static_cast<PreparedStatementMode>(StringUtil::StringToEnum(GetPreparedStatementModeValues(), 2, "PreparedStatementMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPreserveOrderTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PreserveOrderType::AUTOMATIC), "AUTOMATIC" },
+		{ static_cast<uint32_t>(PreserveOrderType::PRESERVE_ORDER), "PRESERVE_ORDER" },
+		{ static_cast<uint32_t>(PreserveOrderType::DONT_PRESERVE_ORDER), "DONT_PRESERVE_ORDER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value) {
+	return StringUtil::EnumToString(GetPreserveOrderTypeValues(), 3, "PreserveOrderType", static_cast<uint32_t>(value));
+}
+
+template<>
+PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value) {
+	return static_cast<PreserveOrderType>(StringUtil::StringToEnum(GetPreserveOrderTypeValues(), 3, "PreserveOrderType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetProfilerPrintFormatValues() {
@@ -3920,19 +3946,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
 		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 9, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 10, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 9, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 10, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {

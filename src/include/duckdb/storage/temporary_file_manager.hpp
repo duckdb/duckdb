@@ -252,7 +252,7 @@ class TemporaryFileManager {
 	friend class TemporaryFileHandle;
 
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, atomic<idx_t> &size_on_disk);
 	~TemporaryFileManager();
 
 private:
@@ -322,7 +322,7 @@ private:
 	//! Map of TemporaryBufferSize -> manager of in-use temporary file indexes
 	unordered_map<TemporaryBufferSize, BlockIndexManager, EnumClassHash> index_managers;
 	//! The size in bytes of the temporary files that are currently alive
-	atomic<idx_t> size_on_disk;
+	atomic<idx_t> &size_on_disk;
 	//! The max amount of disk space that can be used
 	idx_t max_swap_space;
 	//! How many compression adaptivities we have so that threads don't all share the same one
@@ -336,7 +336,8 @@ private:
 //===--------------------------------------------------------------------===//
 class TemporaryDirectoryHandle {
 public:
-	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space);
+	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
+	                         optional_idx max_swap_space);
 	~TemporaryDirectoryHandle();
 
 public:

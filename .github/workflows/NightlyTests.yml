@@ -65,14 +65,12 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -100,6 +98,80 @@ jobs:
       shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+
+  release-assert-osx:
+    name: Release Assertions OSX
+    runs-on: macos-latest
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      run: brew install ninja llvm
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' UNSAFE_NUMERIC_CAST=1 make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+
+  release-assert-osx-storage:
+    name: Release Assertions OSX Storage
+    runs-on: macos-latest
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      run: brew install ninja
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200 --force-storage
 
   smaller-binary:
     name: Smaller Binary
@@ -137,33 +209,28 @@ jobs:
       run: |
           build/release/test/unittest "*"
 
-  linux-clang:
-    name: Clang 14
-    runs-on: ubuntu-22.04
+  release-assert-clang:
+    name: Release Assertions with Clang
+    runs-on: ubuntu-latest
     needs: linux-memory-leaks
     env:
-      CC: /home/runner/work/llvm/bin/clang
-      CPP: /home/runner/work/llvm/bin/clang-cpp
-      CXX: /home/runner/work/llvm/bin/clang++
-      LD: /home/runner/work/llvm/bin/ld.lld
-      EXTENSION_STATIC_BUILD: 1
-      CORE_EXTENSIONS: "json"
-      TREAT_WARNINGS_AS_ERRORS: 1
+      CC: clang
+      CXX: clang++
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
-        directory: '/home/runner/work/llvm'
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -173,11 +240,12 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make release
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
       shell: bash
-      run: make allunit
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
   linux-compile-32:
     name: Linux (32 Bit)
@@ -397,6 +465,7 @@ jobs:
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -415,7 +484,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: FORCE_ASYNC_SINK_SOURCE=1 make relassert
+        run: make relassert
 
       - name: Test
         shell: bash

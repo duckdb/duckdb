@@ -59,7 +59,7 @@ void ParquetEncryptionConfig::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig(deserializer.Get<ClientContext &>()));
+	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig());
 	deserializer.ReadPropertyWithDefault<string>(100, "footer_key", result->footer_key);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(101, "column_keys", result->column_keys);
 	return result;

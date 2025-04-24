@@ -92,9 +92,16 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
+	return SelectExpression(input, sel, nullptr, input.size());
+}
+
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &result_sel,
+                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
+	D_ASSERT(current_count <= input.size());
 	SetChunk(&input);
-	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	idx_t selected_tuples =
+	    Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, &result_sel, nullptr);
 	return selected_tuples;
 }
 

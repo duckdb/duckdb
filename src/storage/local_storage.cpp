@@ -161,7 +161,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		error = DataTable::AppendToIndexes(index_list, nullptr, mock_chunk, start_row, index_append_mode);
+		error = DataTable::AppendToIndexes(index_list, delete_indexes, mock_chunk, start_row, index_append_mode);
 		if (error.HasError()) {
 			return false;
 		}
@@ -657,12 +657,9 @@ void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, co
 	storage->row_groups->Fetch(transaction, chunk, col_ids, row_ids, count, fetch_state);
 }
 
-TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
-	auto storage = table_manager.GetStorage(table);
-	if (!storage) {
-		throw InternalException("LocalStorage::GetIndexes - local storage not found");
-	}
-	return storage->append_indexes;
+TableIndexList &LocalStorage::GetIndexes(ClientContext &context, DataTable &table) {
+	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	return storage.append_indexes;
 }
 
 optional_ptr<LocalTableStorage> LocalStorage::GetStorage(DataTable &table) {
