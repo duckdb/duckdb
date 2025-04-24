@@ -361,6 +361,7 @@ public:
 	DataChunk group_chunk;
 
 	//! After seeing this many tuples, we decide whether to adapt our strategy
+	//! This also serves as the maximum HT sink capacity
 	static constexpr idx_t ADAPTIVITY_THRESHOLD = 1048576;
 	//! Whether we have decided to adapt our strategy
 	bool adapted;
