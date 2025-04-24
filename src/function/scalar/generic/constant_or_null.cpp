@@ -43,6 +43,8 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			if (ConstantVector::IsNull(args.data[idx])) {
 				// input is constant null, return constant null
 				result.Reference(info.value);
+				auto &result_mask = ConstantVector::Validity(result);
+				result_mask.Copy(result_mask, args.size());
 				ConstantVector::SetNull(result, true);
 				return;
 			}
