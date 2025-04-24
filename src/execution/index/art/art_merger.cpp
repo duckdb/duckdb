@@ -85,7 +85,10 @@ void ARTMerger::Emplace(Node &left, Node &right, const GateStatus parent_status,
 		swap(left, right);
 	}
 
-	if (left.GetGateStatus() != GateStatus::GATE_SET) {
+	// left ONLY has GATE_SET, if it is the gate node.
+	// When outside the gate, we propagate the parent_status (GATE_NOT_SET) and the depth.
+	// When inside the gate, we already reset the depth, and we propagate the parent_status (GATE_SET).
+	if (left.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		s.emplace(left, right, parent_status, depth);
 		return;
 	}
@@ -260,6 +263,8 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus pa
 	auto child = node.GetChildMutable(art, byte);
 
 	// Reduce the prefix to the bytes after pos.
+	// We always reduce by at least one byte, i.e., if the prefix was a gate, it no longer is.
+	prefix.SetGateStatus(GateStatus::GATE_NOT_SET);
 	Prefix::Reduce(art, prefix, pos);
 
 	if (child) {
