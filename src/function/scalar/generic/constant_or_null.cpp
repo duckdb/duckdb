@@ -44,7 +44,8 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 				// input is constant null, return constant null
 				result.Reference(info.value);
 				auto &result_mask = ConstantVector::Validity(result);
-				result_mask.Copy(result_mask, args.size());
+				auto &input_mask = ConstantVector::Validity(args.data[idx]);
+				result_mask.Initialize(input_mask);
 				ConstantVector::SetNull(result, true);
 				return;
 			}
