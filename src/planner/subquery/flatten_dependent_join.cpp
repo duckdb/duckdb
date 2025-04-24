@@ -317,29 +317,31 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			// we want to keep the logical projection for positionality.
 			exit_projection = true;
-		} else {
-			if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
-				auto &cteref = plan->Cast<LogicalCTERef>();
-				auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-				auto left_binding = ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
-				// add the correlated columns to the join conditions
-				for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-					JoinCondition cond;
-					cond.left = make_uniq<BoundColumnRefExpression>(
-					    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-					cond.right = make_uniq<BoundColumnRefExpression>(
-					    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
-					cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-					join->conditions.push_back(std::move(cond));
-				}
-				join->children.push_back(std::move(plan));
-				join->children.push_back(std::move(delim_scan));
-
-				return join;
-			} else {
-				auto cross_product = LogicalCrossProduct::Create(Decorrelate(std::move(plan)), std::move(delim_scan));
-				return cross_product;
+		} else if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			// Should a reference to a CTE be the final non-recursive operator,
+			// we have to add a filter predicate to ensure column equality between
+			// the left and right side of the join. A simple cross product does not
+			// suffice in this case.
+			auto &cteref = plan->Cast<LogicalCTERef>();
+			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+			auto left_binding = ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
+			// add the correlated columns to the join conditions
+			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
+				JoinCondition cond;
+				cond.left = make_uniq<BoundColumnRefExpression>(
+				    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+				cond.right = make_uniq<BoundColumnRefExpression>(
+				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				join->conditions.push_back(std::move(cond));
 			}
+			join->children.push_back(std::move(plan));
+			join->children.push_back(std::move(delim_scan));
+
+			return join;
+		} else {
+			auto cross_product = LogicalCrossProduct::Create(Decorrelate(std::move(plan)), std::move(delim_scan));
+			return cross_product;
 		}
 	}
 	switch (plan->type) {
@@ -365,12 +367,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			parent_propagate_null_values &= expr->PropagatesNullValues();
 		}
 
-		bool children_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
-
 		// If our immediate children is a DEPENDENT JOIN, the projection expressions did contain
 		// a subquery expression previously—Which does not propagate null values.
 		// We have to account for that.
-		parent_propagate_null_values &= !children_is_dependent_join;
+		bool child_is_dependent_join = plan->children[0]->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
+		parent_propagate_null_values &= !child_is_dependent_join;
 
 		// if the node has no correlated expressions,
 		// push the cross product with the delim get only below the projection.
@@ -394,21 +395,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			plan->expressions.push_back(std::move(colref));
-		}
-
-		if (children_is_dependent_join) {
-			auto plan_columns = plan->children[0]->children[1]->GetColumnBindings();
-
-			// Initialize a ColumnBindingReplacer with the new bindings
-			vector<ReplacementBinding> replacement_bindings;
-			replacement_bindings.emplace_back(ReplacementBinding(ColumnBinding(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX), plan_columns[data_offset]));
-			ColumnBindingReplacer replacer;
-			replacer.replacement_bindings = replacement_bindings;
-//				replacer.VisitOperator(*plan);
-			for (auto &expression: proj.expressions) {
-				replacer.VisitExpression(&expression);
-			}
-
 		}
 
 		base_binding.table_index = proj.table_index;
@@ -538,6 +524,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// only left has correlation: push into left
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
+
+			// recurse into right children, there may be more local correlations
 			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
 			return plan;
 		}
@@ -545,6 +533,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// only right has correlation: push into right
 			plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 			                                                  parent_propagate_null_values, lateral_depth);
+
+			// recurse into left children
+			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
 			return plan;
 		}
 		// both sides have correlation
@@ -570,30 +561,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return std::move(join);
 	}
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
-		auto &dependent_join = plan->Cast<LogicalDependentJoin>();
 		D_ASSERT(plan->children.size() == 2);
 		return Decorrelate(std::move(plan), parent_propagate_null_values, lateral_depth);
-//		if (!((dependent_join.join_type == JoinType::INNER) || (dependent_join.join_type == JoinType::LEFT))) {
-//			throw NotImplementedException("Dependent join can only be INNER or LEFT type");
-//		}
-		// Push all the bindings down to the left side so the right side knows where to refer DELIM_GET from
-		plan->children[0] =
-		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
-
-		if(dependent_join.join_type == JoinType::SINGLE) {
-			plan->children[1] =
-		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth+1);
-		}
-
-		// Normal rewriter like in other joins
-		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
-		rewriter.VisitOperator(*plan);
-
-		// Recursive rewriter to visit right side of lateral join and update bindings from left
-		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, lateral_depth + 1, true);
-		recursive_rewriter.VisitOperator(*plan->children[1]);
-
-		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:

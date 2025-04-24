@@ -24,7 +24,6 @@ public:
 private:
 	idx_t table_index;
 	const vector<CorrelatedColumnInfo> &correlated_columns;
-	idx_t depth;
 };
 
 } // namespace duckdb

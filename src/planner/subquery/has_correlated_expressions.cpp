@@ -20,17 +20,17 @@ void HasCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr,
                                                               unique_ptr<Expression> *expr_ptr) {
 	// Indicates local correlations (all correlations within a child) for the root
-//	if (expr.depth <= lateral_depth) {
-//		return nullptr;
-//	}
+	if (expr.depth <= lateral_depth) {
+		return nullptr;
+	}
 
 	// Should never happen
-//	if (expr.depth > 1 + lateral_depth) {
-//		if (lateral) {
-//			throw BinderException("Invalid lateral depth encountered for an expression");
-//		}
-//		throw InternalException("Expression with depth > 1 detected in non-lateral join");
-//	}
+	if (expr.depth > 1 + lateral_depth) {
+		if (lateral) {
+			throw BinderException("Invalid lateral depth encountered for an expression");
+		}
+		throw InternalException("Expression with depth > 1 detected in non-lateral join");
+	}
 	// Note: This is added, since we only want to set has_correlated_expressions to true when the
 	// BoundSubqueryExpression has the same bindings as one of the correlated_columns from the left hand side
 	// (correlated_columns is the correlated_columns from left hand side)
@@ -42,7 +42,7 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpr
 		}
 	}
 	// correlated column reference
-//	D_ASSERT(expr.depth == lateral_depth + 1);
+	D_ASSERT(expr.depth == lateral_depth + 1);
 	has_correlated_expressions |= found_match;
 	return nullptr;
 }
