@@ -61,7 +61,7 @@ public:
 
 	void Verify() const override;
 
-	//! Returns true, if the function has a lambda expression as a child.
+	//! Returns a pointer to the lambda expression, if the function has a lambda expression as a child, else nullptr.
 	optional_ptr<ParsedExpression> IsLambdaFunction() const;
 
 public:

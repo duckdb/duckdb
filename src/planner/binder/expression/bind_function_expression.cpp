@@ -19,7 +19,7 @@ namespace duckdb {
 BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
                                                  const bool deprecated) {
 	if (!deprecated) {
-		// LAMBDA ... : ... syntax.
+		// LAMBDA x : x + 1 syntax.
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
