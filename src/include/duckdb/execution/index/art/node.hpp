@@ -166,6 +166,9 @@ private:
 	}
 };
 
+//! NodeChildren holds the extracted bytes of a node, and their respective children.
+//! The bytes and children are valid as long as the arena is valid,
+//! even if the original node has been freed.
 struct NodeChildren {
 	NodeChildren() = delete;
 	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};

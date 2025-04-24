@@ -43,7 +43,8 @@ public:
 
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(uint8_t &byte);
-	//! TODO.
+	//! Returns a pointer to the bytes in the leaf.
+	//! The pointer's data is valid as long as the arena is valid.
 	array_ptr<uint8_t> GetBytes(ArenaAllocator &arena);
 	//! Get the first byte greater or equal to the byte.
 	bool GetNextByte(uint8_t &byte);

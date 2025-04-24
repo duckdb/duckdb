@@ -25,7 +25,7 @@ ARTConflictType ARTMerger::Merge() {
 		const auto right_type = entry.right.GetType();
 
 		// Early-out due to a constraint violation.
-		// The 'smaller' node is always on the right, i.e., if right is any leaf, then left is any leaf, too.
+		// If right is LEAF_INLINED, then left is also LEAF_INLINED.
 		const auto duplicate_key =
 		    right_type == NType::LEAF_INLINED || entry.right.GetGateStatus() == GateStatus::GATE_SET;
 		if (art.IsUnique() && duplicate_key) {
@@ -103,16 +103,16 @@ void ARTMerger::MergeInlined(NodeEntry &entry) {
 	D_ASSERT(entry.left.GetType() == NType::LEAF_INLINED);
 	D_ASSERT(entry.right.GetType() == NType::LEAF_INLINED);
 
-	// We enter this case, if
-	// 1. we are outside a nested leaf.
-	// 2. we are in a nested leaf with two 'compressed' prefixes.
-
 	auto new_status = GateStatus::GATE_NOT_SET;
 	if (entry.status == GateStatus::GATE_NOT_SET) {
-		// We create a nested leaf.
+		// Case 1: We are outside a nested leaf,
+		// so we create a nested leaf.
 		new_status = GateStatus::GATE_SET;
 		entry.depth = 0;
 	}
+	// Otherwise, case 2: we are in a nested leaf with two 'compressed' prefixes.
+	// A 'compressed prefix' is an inlined leaf that could've been expanded to
+	// a prefix with an inlined leaf as its only child.
 
 	// Get the corresponding row IDs and their ART keys.
 	auto left_row_id = entry.left.GetRowId();
@@ -142,7 +142,8 @@ void ARTMerger::MergeInlined(NodeEntry &entry) {
 	}
 
 	// Create and insert the (compressed) children.
-	// We inline directly into the node, instead of creating trailing prefixes.
+	// We inline directly into the node, instead of creating prefixes
+	// with a single inlined leaf as their child.
 	Node4::New(art, node);
 
 	Node left_child;
@@ -160,20 +161,21 @@ ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
 	D_ASSERT(entry.right.GetType() == NType::LEAF_INLINED);
 	D_ASSERT(entry.status == GateStatus::GATE_SET);
 
+	// We fall back to the ART insertion code.
 	auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, entry.right.GetRowId());
 	return art.Insert(entry.left, row_id_key, entry.depth, row_id_key, GateStatus::GATE_SET, nullptr,
 	                  IndexAppendMode::DEFAULT);
 }
 
-array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf_node) {
-	const auto type = leaf_node.GetType();
+array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf) {
+	const auto type = leaf.GetType();
 	switch (type) {
 	case NType::NODE_7_LEAF:
-		return Node::Ref<Node7Leaf>(art, leaf_node, type).GetBytes();
+		return Node::Ref<Node7Leaf>(art, leaf, type).GetBytes();
 	case NType::NODE_15_LEAF:
-		return Node::Ref<Node15Leaf>(art, leaf_node, type).GetBytes();
+		return Node::Ref<Node15Leaf>(art, leaf, type).GetBytes();
 	case NType::NODE_256_LEAF:
-		return Node::Ref<Node256Leaf>(art, leaf_node, type).GetBytes(arena);
+		return Node::Ref<Node256Leaf>(art, leaf, type).GetBytes(arena);
 	default:
 		throw InternalException("invalid node type for ARTMerger::GetBytes: %s", EnumUtil::ToString(type));
 	}
@@ -184,6 +186,11 @@ void ARTMerger::MergeLeaves(NodeEntry &entry) {
 	D_ASSERT(entry.right.IsLeafNode());
 	D_ASSERT(entry.left.GetGateStatus() == GateStatus::GATE_NOT_SET);
 	D_ASSERT(entry.right.GetGateStatus() == GateStatus::GATE_NOT_SET);
+
+	// Merge the smaller leaf into the bigger leaf.
+	if (entry.left.GetType() < entry.right.GetType()) {
+		swap(entry.left, entry.right);
+	}
 
 	// Get the bytes of the right node.
 	// Then, copy them into left.
@@ -230,24 +237,28 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	Node::Free(art, entry.right);
 
 	// First, we iterate and insert children.
-	// This might grow the node, so we need to do it prior to Emplace operations.
-	vector<idx_t> remaining_children;
+	// This might grow the node, so we need to do it prior to Emplace.
+	vector<idx_t> remaining;
 	for (idx_t i = 0; i < children.bytes.size(); i++) {
 		const auto byte = children.bytes[i];
 		auto child = entry.left.GetChildMutable(art, byte);
 
 		if (!child) {
+			// There is no child at this byte.
+			// We can insert the right node's child at byte and are done.
 			auto &right_child = children.children[i];
 			Node::InsertChild(art, entry.left, byte, right_child);
 			continue;
 		}
-		remaining_children.emplace_back(i);
+		// There is a left and a right child at this byte.
+		// We remember to emplace the two children.
+		remaining.emplace_back(i);
 	}
 
-	// Now, we emplace all remaining children.
-	for (idx_t i = 0; i < remaining_children.size(); i++) {
-		const auto byte = children.bytes[remaining_children[i]];
-		auto &right_child = children.children[remaining_children[i]];
+	// Emplace all remaining children.
+	for (idx_t i = 0; i < remaining.size(); i++) {
+		const auto byte = children.bytes[remaining[i]];
+		auto &right_child = children.children[remaining[i]];
 		auto child = entry.left.GetChildMutable(art, byte);
 		Emplace(*child, right_child, entry.status, entry.depth + 1);
 	}
@@ -263,17 +274,19 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus pa
 	auto child = node.GetChildMutable(art, byte);
 
 	// Reduce the prefix to the bytes after pos.
-	// We always reduce by at least one byte, i.e., if the prefix was a gate, it no longer is.
+	// We always reduce by at least one byte,
+	// thus, if the prefix was a gate, it no longer is.
 	prefix.SetGateStatus(GateStatus::GATE_NOT_SET);
 	Prefix::Reduce(art, prefix, pos);
 
 	if (child) {
 		// Iterate on the child and the remaining prefix.
-		// Emplace here ensures depth-first traversal into the child node.
 		Emplace(*child, prefix, parent_status, parent_depth + 1);
 		return;
 	}
 
+	// There is no child at this prefix byte,
+	// so we can insert the remaining prefix and are done.
 	Node::InsertChild(art, node, byte, prefix);
 	prefix.Clear();
 }
@@ -290,15 +303,15 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 	D_ASSERT(entry.right.GetType() == NType::PREFIX);
 
 	// We traverse prefixes until we
-	// - 3.1. find a position where they differ.
-	// - 3.2. find that they are the same.
-	// - 3.3. find that one prefix contains the other.
+	// Case 1: find a position where they differ.
+	// Case 2: find that they are the same.
+	// Case 3: find that one prefix contains the other.
 
 	// Until we reach one of these cases, we keep reducing
 	// the right prefix (and freeing the fully reduced nodes).
 	// We can do so because up to any of these three cases,
 	// the prefixes are the same. That means, we only need to keep
-	// one of them around (as we are merging).
+	// one of them around.
 
 	Prefix l_prefix(art, entry.left, true);
 	Prefix r_prefix(art, entry.right, true);
@@ -318,20 +331,21 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// The prefixes differ at pos.
 		// We split the left prefix, and reduce the right prefix.
 		// Then, we insert both remainders into a new Node4.
+		// Then, we are done.
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
-
-		Node l_child;
 		const auto l_byte = Prefix::GetByte(art, entry.left, cast_pos);
+		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
 
+		// Split and reduce.
 		reference<Node> ref(entry.left);
+		Node l_child;
 		const auto status = Prefix::Split(art, ref, l_child, cast_pos);
+		Prefix::Reduce(art, entry.right, cast_pos);
+
 		Node4::New(art, ref);
 		ref.get().SetGateStatus(status);
 
 		Node4::InsertChild(art, ref, l_byte, l_child);
-
-		auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
-		Prefix::Reduce(art, entry.right, cast_pos);
 		Node4::InsertChild(art, ref, r_byte, entry.right);
 		entry.right.Clear();
 		return;
@@ -340,19 +354,18 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 	if (l_prefix.data[count] == r_prefix.data[count]) {
 		// The prefixes match.
 		// Free the right prefix, but keep the reference to its child alive.
+		// Then, iterate on the left and right (reduced) child.
 		auto r_child = *r_prefix.ptr;
 		r_prefix.ptr->Clear();
 		Node::Free(art, entry.right);
 		entry.right = r_child;
 
-		// Emplace here ensures depth-first traversal into the child node.
 		auto depth = entry.depth + l_prefix.data[count];
 		Emplace(*l_prefix.ptr, entry.right, entry.status, depth);
 		return;
 	}
 
 	// max_count indexes the byte after the exhausted prefix in a child node.
-
 	if (r_prefix.data[count] == max_count) {
 		// We exhausted the right prefix.
 		// Ensure that we continue merging into left.

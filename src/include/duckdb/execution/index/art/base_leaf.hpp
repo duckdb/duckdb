@@ -50,7 +50,8 @@ public:
 		return false;
 	}
 
-	//! TODO.
+	//! Returns a pointer to the bytes in the leaf.
+	//! The pointer's data is valid as long as the leaf is valid.
 	array_ptr<uint8_t> GetBytes() {
 		return array_ptr<uint8_t>(key, count);
 	}
