@@ -341,7 +341,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			join->children.push_back(std::move(plan));
 			join->children.push_back(std::move(delim_scan));
 
-			return join;
+			return std::move(join);
 		} else {
 			auto cross_product = LogicalCrossProduct::Create(Decorrelate(std::move(plan)), std::move(delim_scan));
 			return cross_product;
