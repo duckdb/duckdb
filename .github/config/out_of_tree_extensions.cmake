@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
+    GIT_TAG 22a0387e09389ee9148f58b3f8a71e7896b48093
     INCLUDE_DIR extension/httpfs/include
     APPLY_PATCHES
     )
@@ -178,5 +178,14 @@ duckdb_extension_load(fts
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-fts
         GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
+        TEST_DIR test/sql
+)
+
+################# ENCODINGS
+duckdb_extension_load(encodings
+        LOAD_TESTS
+        DONT_LINK
+        GIT_URL https://github.com/duckdb/duckdb-encodings
+        GIT_TAG 8d125f58509d803b61a8680ec130ac89f4e4f491
         TEST_DIR test/sql
 )

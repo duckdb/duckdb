@@ -15,7 +15,7 @@ namespace duckdb {
 PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
-      comparison_type(ExpressionType::INVALID) {
+      comparison_type(ExpressionType::INVALID), predicate(std::move(op.predicate)) {
 
 	// Convert the conditions partitions and sorts
 	for (auto &cond : conditions) {
@@ -380,6 +380,10 @@ public:
 	DataChunk rhs_payload;
 	idx_t right_group = 0;
 
+	//	Predicate evaluation
+	SelectionVector filter_sel;
+	ExpressionExecutor filterer;
+
 	idx_t lhs_match_count;
 	bool fetch_next_left;
 };
@@ -387,7 +391,7 @@ public:
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op)
     : context(context), allocator(Allocator::Get(context)), op(op),
       buffer_manager(BufferManager::GetBufferManager(context)), force_external(IsExternal(context)),
-      memory_per_thread(op.GetMaxThreadMemory(context)), left_outer(IsLeftOuterJoin(op.join_type)),
+      memory_per_thread(op.GetMaxThreadMemory(context)), left_outer(IsLeftOuterJoin(op.join_type)), filterer(context),
       fetch_next_left(true) {
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 	Orders partitions; // Not used.
@@ -400,6 +404,11 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 
 	lhs_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
+
+	if (op.predicate) {
+		filter_sel.Initialize();
+		filterer.AddExpression(*op.predicate);
+	}
 }
 
 void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
@@ -496,7 +505,6 @@ void AsOfProbeBuffer::EndLeftScan() {
 void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 	// If there was no right partition, there are no matches
 	lhs_match_count = 0;
-	left_outer.Reset();
 	if (!right_itr) {
 		return;
 	}
@@ -549,8 +557,6 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		}
 
 		// Emit match data
-		right_outer->SetMatch(first);
-		left_outer.SetMatch(i);
 		if (found_match) {
 			found_match[i] = true;
 		}
@@ -612,6 +618,21 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		chunk.data[i].Slice(lhs_payload.data[i], lhs_sel, lhs_match_count);
 	}
 	chunk.SetCardinality(lhs_match_count);
+	auto match_sel = &lhs_sel;
+	if (filterer.expressions.size() == 1) {
+		lhs_match_count = filterer.SelectExpression(chunk, filter_sel);
+		chunk.Slice(filter_sel, lhs_match_count);
+		match_sel = &filter_sel;
+	}
+
+	//	Update the match masks for the rows we ended up with
+	left_outer.Reset();
+	for (idx_t i = 0; i < lhs_match_count; ++i) {
+		const auto idx = match_sel->get_index(i);
+		left_outer.SetMatch(idx);
+		const auto first = matches[idx];
+		right_outer->SetMatch(first);
+	}
 
 	//	If we are doing a left join, come back for the NULLs
 	fetch_next_left = !left_outer.Enabled();
