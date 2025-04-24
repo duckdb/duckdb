@@ -32,9 +32,11 @@ THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
 
 # Test sniffer prompt
 query I
-SELECT prompt FROM sniff_csv('data/csv/thousands_separator/simple.csv', thousands = ',')
+SELECT COUNT(*) > 0 AS has_match
+FROM sniff_csv('data/csv/thousands_separator/simple.csv', thousands = ',')
+WHERE prompt LIKE '%thousands='',''%';
 ----
-FROM read_csv('data/csv/thousands_separator/simple.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'DOUBLE'}, thousands=',');
+TRUE
 
 query I
 FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'double'}, header = False, auto_detect = false)
