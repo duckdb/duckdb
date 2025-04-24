@@ -167,11 +167,11 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
 	}
 
-	if(options.db_type.empty()) {
+	if (options.db_type.empty()) {
 		return;
 	}
 
-	if(config.storage_extensions.find(options.db_type) != config.storage_extensions.end()) {
+	if (config.storage_extensions.find(options.db_type) != config.storage_extensions.end()) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
