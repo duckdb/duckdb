@@ -78,11 +78,12 @@ jobs:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     steps:
       - name: Run JDBC Vendor
-        if: ${{ github.repository == 'duckdb/duckdb' }}
+        # if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
-          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+          echo SHOULD TRIGGER THE RUN
+          # export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
+          # export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          # curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
 
   notify-nightly-build-status:
     name: Run Nightly build status
@@ -92,7 +93,7 @@ jobs:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     steps:
       - name: Run Nightly build status
-        if: ${{ github.repository == 'duckdb/duckdb' }}
+        # if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
           export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
