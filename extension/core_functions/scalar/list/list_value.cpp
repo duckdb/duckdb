@@ -108,22 +108,19 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 static void ListValueStructFunction(DataChunk &args, Vector &result) {
 	const idx_t list_size = args.ColumnCount();
 	const idx_t rows = args.size();
-	const idx_t new_size = list_size * rows;
+	const idx_t result_child_size = list_size * rows;
 
-	ListVector::Reserve(result, new_size);
+	ListVector::Reserve(result, result_child_size);
 
 	// The length of the child vector is the number of structs * the number
 	auto &result_list = ListVector::GetEntry(result);
 	auto &result_entries = StructVector::GetEntries(result_list);
 
-	for (idx_t entry_idx = 0; entry_idx < result_entries.size(); entry_idx++) {
-		idx_t offset = 0;
+	for (idx_t member_idx = 0; member_idx < result_entries.size(); member_idx++) {
 		for (idx_t c = 0; c < list_size; c++) {
-			auto &list = args.data[c];
-			auto &list_entries = StructVector::GetEntries(list);
-
-			VectorOperations::Copy(*list_entries[entry_idx], *result_entries[entry_idx], rows, 0, offset);
-			offset += rows;
+			auto &struct_vector = args.data[c];
+			auto &struct_members = StructVector::GetEntries(struct_vector);
+			VectorOperations::Copy(*struct_members[member_idx], *result_entries[member_idx], rows, 0, c * rows);
 		}
 	}
 
@@ -132,7 +129,7 @@ static void ListValueStructFunction(DataChunk &args, Vector &result) {
 
 	const auto args_unified_format = args.ToUnifiedFormat();
 
-	SelectionVector sel(new_size);
+	SelectionVector sel(result_child_size);
 	for (idx_t r = 0; r < rows; r++) {
 		for (idx_t c = 0; c < list_size; c++) {
 			const auto result_idx = r * list_size + c;
@@ -148,10 +145,10 @@ static void ListValueStructFunction(DataChunk &args, Vector &result) {
 	}
 
 	for (idx_t c = 0; c < result_entries.size(); c++) {
-		result_entries[c]->Slice(sel, new_size);
+		result_entries[c]->Slice(sel, result_child_size);
 	}
 
-	ListVector::SetListSize(result, new_size);
+	ListVector::SetListSize(result, result_child_size);
 }
 
 static void TemplatedListValueFunctionFallback(DataChunk &args, Vector &result) {
