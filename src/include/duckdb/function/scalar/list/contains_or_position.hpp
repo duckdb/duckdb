@@ -4,9 +4,10 @@
 
 namespace duckdb {
 
-template <class T, bool RETURN_POSITION, bool FIND_NULLS = false>
+template <class T, class RETURN_TYPE, bool FIND_NULLS = false>
 idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, idx_t count) {
-	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, bool>::type;
+	// The return type is either a position (1-based) or a boolean.
+	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
 	const auto input_count = ListVector::GetListSize(input_list);
 
@@ -44,7 +45,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 		const auto finished = !FIND_NULLS && !target_valid;
 		// We did not find the target (finished, or list is empty).
 		if (finished || list_entries[list_entry_idx].length == 0) {
-			if (finished || RETURN_POSITION) {
+			if (finished || return_pos) {
 				// Return NULL as the position.
 				result_validity.SetInvalid(row_idx);
 			} else {
@@ -67,13 +68,16 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 			    (child_valid && Equals::Operation<T>(child_data[child_entry_idx], target_data[target_entry_idx]))) {
 				found = true;
 				total_matches++;
-				result_data[row_idx] =
-				    RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + list_idx - entry_offset) : true;
+				if (return_pos) {
+					result_data[row_idx] = UnsafeNumericCast<int32_t>(1 + list_idx - entry_offset);
+				} else {
+					result_data[row_idx] = true;
+				}
 			}
 		}
 
 		if (!found) {
-			if (RETURN_POSITION) {
+			if (return_pos) {
 				result_validity.SetInvalid(row_idx);
 			} else {
 				result_data[row_idx] = false;
@@ -84,7 +88,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	return total_matches;
 }
 
-template <bool RETURN_POSITION>
+template <class RETURN_TYPE>
 idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result_vec,
                          const idx_t target_count) {
 	// Set up sort keys for nested types.
@@ -96,7 +100,7 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers, source_count);
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
-	return ListSearchSimpleOp<string_t, RETURN_POSITION>(list_vec, source_sort_key_vec, target_sort_key_vec, result_vec,
+	return ListSearchSimpleOp<string_t, RETURN_TYPE>(list_vec, source_sort_key_vec, target_sort_key_vec, result_vec,
 	                                                     target_count);
 }
 
@@ -104,57 +108,57 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 //! true/false or the position of the value in the list. The result vector is populated with the result of the search.
 //! usually the "source" vector is the list child vector, but it is passed separately to enable searching nested
 //! children, for example when searching the keys of a MAP vectors.
-template <bool RETURN_POSITION, bool FIND_NULLS = false>
+template <class RETURN_TYPE, bool FIND_NULLS = false>
 idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &result_v, idx_t target_count) {
 	const auto type = target_v.GetType().InternalType();
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return ListSearchSimpleOp<int8_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<int8_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                               target_count);
 	case PhysicalType::INT16:
-		return ListSearchSimpleOp<int16_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<int16_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                target_count);
 	case PhysicalType::INT32:
-		return ListSearchSimpleOp<int32_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<int32_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                target_count);
 	case PhysicalType::INT64:
-		return ListSearchSimpleOp<int64_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<int64_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                target_count);
 	case PhysicalType::INT128:
-		return ListSearchSimpleOp<hugeint_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<hugeint_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                  target_count);
 	case PhysicalType::UINT8:
-		return ListSearchSimpleOp<uint8_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<uint8_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                target_count);
 	case PhysicalType::UINT16:
-		return ListSearchSimpleOp<uint16_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<uint16_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                 target_count);
 	case PhysicalType::UINT32:
-		return ListSearchSimpleOp<uint32_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<uint32_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                 target_count);
 	case PhysicalType::UINT64:
-		return ListSearchSimpleOp<uint64_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<uint64_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                 target_count);
 	case PhysicalType::UINT128:
-		return ListSearchSimpleOp<uhugeint_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<uhugeint_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                   target_count);
 	case PhysicalType::FLOAT:
-		return ListSearchSimpleOp<float, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<float, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                              target_count);
 	case PhysicalType::DOUBLE:
-		return ListSearchSimpleOp<double, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<double, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                               target_count);
 	case PhysicalType::VARCHAR:
-		return ListSearchSimpleOp<string_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<string_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                 target_count);
 	case PhysicalType::INTERVAL:
-		return ListSearchSimpleOp<interval_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		return ListSearchSimpleOp<interval_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                                   target_count);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY:
-		return ListSearchNestedOp<RETURN_POSITION>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchNestedOp<RETURN_TYPE>(list_v, source_v, target_v, result_v, target_count);
 	default:
 		throw NotImplementedException("This function has not been implemented for logical type %s",
 		                              TypeIdToString(type));

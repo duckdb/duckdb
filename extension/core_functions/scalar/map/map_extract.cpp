@@ -57,7 +57,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 
 	// Collect the matching positions
 	Vector pos_vec(LogicalType::INTEGER, count);
-	ListSearchOp<true>(map_vec, key_vec, arg_vec, pos_vec, args.size());
+	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
@@ -118,7 +118,7 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 
 	// Collect the matching positions
 	Vector pos_vec(LogicalType::INTEGER, count);
-	ListSearchOp<true>(map_vec, key_vec, arg_vec, pos_vec, args.size());
+	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
 	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat pos_format;

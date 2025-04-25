@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-template <bool RETURN_POSITION, bool FIND_NULLS = false>
+template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -19,7 +19,7 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 	auto &list_child = ListVector::GetEntry(input_list);
 	auto &target = input.data[1];
 
-	ListSearchOp<RETURN_POSITION, FIND_NULLS>(input_list, list_child, target, result, target_count);
+	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);
 
 	if (target_count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -73,12 +73,12 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 
 ScalarFunction ListContainsFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::BOOLEAN,
-	                      ListSearchFunction<false>, ListSearchBind);
+	                      ListSearchFunction<bool>, ListSearchBind);
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
-	                          ListSearchFunction<true, true>, ListSearchBind);
+	                          ListSearchFunction<int32_t, true>, ListSearchBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
