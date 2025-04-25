@@ -117,11 +117,15 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 				return;
 			}
 
-			if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
-			    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-			    child->children[1]->estimated_cardinality < 1000) {
-				AddTableOperator(op);
-			}
+			// if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
+			//     child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// 	auto &join = child->Cast<LogicalComparisonJoin>();
+			//
+			// 	// if it is a mark join and the left table is small, we can build a BF based on it.
+			// 	if (join.join_type == JoinType::MARK && join.children[1]->estimated_cardinality < 1000) {
+			// 		AddTableOperator(op);
+			// 	}
+			// }
 
 			D_ASSERT(!op->expressions.empty());
 			ExtractOperatorsInternal(*child, joins);
@@ -131,11 +135,15 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			LogicalOperator *child = op->children[0].get();
 
-			if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
-			    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-			    child->children[1]->estimated_cardinality < 1000) {
-				AddTableOperator(op);
-			}
+			// if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
+			//     child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// 	auto &join = child->Cast<LogicalComparisonJoin>();
+			//
+			// 	// if it is a mark join and the left table is small, we can build a BF based on it.
+			// 	if (join.join_type == JoinType::MARK && join.children[1]->estimated_cardinality < 1000) {
+			// 		AddTableOperator(op);
+			// 	}
+			// }
 
 			D_ASSERT(!op->expressions.empty());
 			ExtractOperatorsInternal(*child, joins);
@@ -148,9 +156,9 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
-		// case JoinType::MARK: {
-		// 	return;
-		// }
+		case JoinType::MARK: {
+			return;
+		}
 		case JoinType::INNER:
 		case JoinType::LEFT:
 		case JoinType::RIGHT:

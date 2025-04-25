@@ -13,6 +13,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {
 
@@ -338,6 +339,12 @@ void Pipeline::ModifyCreateBFPipeline() {
 	PhysicalOperator *op = &bf_creator.children[0].get();
 	while (true) {
 		switch (op->type) {
+		// case PhysicalOperatorType::HASH_JOIN: {
+		// 	auto& join = op->Cast<PhysicalHashJoin>();
+		// 	D_ASSERT(join.join_type == JoinType::MARK);
+		// 	new_operators.push_back(*op);
+		// 	break;
+		// }
 		case PhysicalOperatorType::USE_BF:
 		case PhysicalOperatorType::FILTER:
 		case PhysicalOperatorType::PROJECTION: {
