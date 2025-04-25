@@ -6,7 +6,7 @@ namespace duckdb {
 
 template <class T, bool RETURN_POSITION, bool FIND_NULLS = false>
 idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, idx_t count) {
-	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, int8_t>::type;
+	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, bool>::type;
 
 	const auto input_count = ListVector::GetListSize(input_list);
 
@@ -31,6 +31,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
 		const auto list_entry_idx = list_format.sel->get_index(row_idx);
 
+		// The entire list is NULL, the result is also NULL.
 		if (!list_format.validity.RowIsValid(list_entry_idx)) {
 			result_validity.SetInvalid(row_idx);
 			continue;
@@ -39,12 +40,16 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 		const auto target_entry_idx = target_format.sel->get_index(row_idx);
 		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
 
-		const auto invalid_res = !FIND_NULLS && !target_valid;
-		if (invalid_res || list_entries[list_entry_idx].length == 0) {
-			if (invalid_res || RETURN_POSITION) {
+		// We are finished, if we are not looking for NULL, and the target is NULL.
+		const auto finished = !FIND_NULLS && !target_valid;
+		// We did not find the target (finished, or list is empty).
+		if (finished || list_entries[list_entry_idx].length == 0) {
+			if (finished || RETURN_POSITION) {
+				// Return NULL as the position.
 				result_validity.SetInvalid(row_idx);
 			} else {
-				result_data[row_idx] = 0;
+				// Set 'contains' to false.
+				result_data[row_idx] = false;
 			}
 			continue;
 		}
@@ -63,7 +68,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 				found = true;
 				total_matches++;
 				result_data[row_idx] =
-				    RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + list_idx - entry_offset) : 1;
+				    RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + list_idx - entry_offset) : true;
 			}
 		}
 
@@ -71,7 +76,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 			if (RETURN_POSITION) {
 				result_validity.SetInvalid(row_idx);
 			} else {
-				result_data[row_idx] = 0;
+				result_data[row_idx] = false;
 			}
 		}
 	}
