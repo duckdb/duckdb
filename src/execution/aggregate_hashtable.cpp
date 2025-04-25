@@ -273,12 +273,13 @@ idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
 	return LossyNumericCast<idx_t>((1 + HyperLogLog::GetErrorRate()) * static_cast<double>(hll.Count()));
 }
 
-void GroupedAggregateHashTable::Resize(idx_t size, bool leave_empty) {
+void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 	D_ASSERT(IsPowerOfTwo(size));
 	if (Count() != 0 && size < capacity) {
 		throw InternalException("Cannot downsize a non-empty hash table!");
 	}
+	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
 
 	capacity = size;
 	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
@@ -286,7 +287,7 @@ void GroupedAggregateHashTable::Resize(idx_t size, bool leave_empty) {
 	ClearPointerTable();
 	bitmask = capacity - 1;
 
-	if (!leave_empty && Count() != 0) {
+	if (Count() != 0) {
 		ReinsertTuples(*partitioned_data);
 		if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 			ReinsertTuples(*unpartitioned_data);
@@ -600,7 +601,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	const auto chunk_size = groups.size();
 	if (Count() + chunk_size > capacity || Count() + chunk_size > ResizeThreshold()) {
 		Verify();
-		Resize(capacity * 2, false);
+		Resize(capacity * 2);
 	}
 	D_ASSERT(capacity - Count() >= chunk_size); // we need to be able to fit at least one vector of data
 

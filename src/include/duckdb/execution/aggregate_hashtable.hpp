@@ -99,7 +99,7 @@ public:
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
 	//! Resize the HT to the specified size. Must be larger than the current size.
-	void Resize(idx_t size, bool leave_empty);
+	void Resize(idx_t size);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
 	//! Set the radix bits for this HT
@@ -169,6 +169,10 @@ private:
 	idx_t sink_count;
 	//! If true, we just append, skipping HT lookups
 	bool skip_lookups;
+	//! Whether to enable HLL counting the hashes
+	bool enable_hll;
+	//! The associated HLL
+	HyperLogLog hll;
 
 	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;
@@ -195,9 +199,6 @@ private:
 
 		RowOperationsState row_state;
 	} state;
-
-	bool enable_hll;
-	HyperLogLog hll;
 
 private:
 	//! Disabled the copy constructor

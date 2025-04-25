@@ -440,7 +440,7 @@ void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lst
 		                                   RadixHTLocalSinkState::ADAPTIVITY_THRESHOLD);
 		lstate.local_sink_capacity = MaxValue(gstate.config.sink_capacity, new_capacity);
 		ht.Abandon();
-		ht.Resize(lstate.local_sink_capacity, true);
+		ht.Resize(lstate.local_sink_capacity);
 	}
 }
 
@@ -562,7 +562,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1 or 2 threads
 		ht.Abandon();
 		if (gstate.external) {
-			ht.Resize(lstate.local_sink_capacity, true);
+			ht.Resize(lstate.local_sink_capacity);
 		}
 	}
 
