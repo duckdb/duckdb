@@ -28,6 +28,14 @@ typedef void (*encode_t)(CSVEncoderBuffer &encoded_buffer, char *decoded_buffer,
                          const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
                          EncodingFunction *encoding_function);
 
+//! Encoding Map Entry Struct
+typedef struct {
+	size_t key_len;
+	const char *key;
+	size_t value_len;
+	const char *value;
+} map_entry_encoding;
+
 class EncodingFunction {
 public:
 	DUCKDB_API EncodingFunction() : encode_function(nullptr), max_bytes_per_iteration(0) {
@@ -43,7 +51,7 @@ public:
 	};
 
 	DUCKDB_API EncodingFunction(const string &encode_name, encode_t encode_function, const idx_t bytes_per_iteration,
-	                            const idx_t lookup_bytes, const uintptr_t map, const size_t map_size)
+	                            const idx_t lookup_bytes, const map_entry_encoding* map, const size_t map_size)
 	    : conversion_map(map), map_size(map_size), name(encode_name), encode_function(encode_function),
 	      max_bytes_per_iteration(bytes_per_iteration), lookup_bytes(lookup_bytes) {
 		D_ASSERT(encode_function);
@@ -67,8 +75,8 @@ public:
 	}
 
 	//! Optional convertion map, that indicates byte replacements.
-	DUCKDB_API uintptr_t conversion_map {};
-	DUCKDB_API size_t map_size {};
+	const map_entry_encoding * conversion_map {};
+	size_t map_size {};
 
 protected:
 	//! The encoding type of this function (e.g., utf-8)
@@ -83,13 +91,7 @@ protected:
 	idx_t lookup_bytes = 1;
 };
 
-//! Encoding Map Entry Struct
-typedef struct {
-	size_t key_len;
-	const char *key;
-	size_t value_len;
-	const char *value;
-} map_entry_encoding;
+
 
 //! The set of encoding functions
 struct EncodingFunctionSet {
