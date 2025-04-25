@@ -28,7 +28,7 @@ typedef void (*encode_t)(CSVEncoderBuffer &encoded_buffer, char *decoded_buffer,
                          const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
                          EncodingFunction *encoding_function);
 
-//! Encoding Map Entry Struct
+//! Encoding Map Entry Struct used for byte replacement
 typedef struct {
 	size_t key_len;
 	const char *key;
