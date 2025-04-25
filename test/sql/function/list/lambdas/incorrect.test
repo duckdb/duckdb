@@ -253,3 +253,56 @@ statement error
 SELECT list_transform([1], LAMBDA x : 1 : hello) FROM dummy_tbl;
 ----
 <REGEX>:Parser Error.*syntax error.*
+
+statement error
+CREATE OR REPLACE function transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			LAMBDA i : lst[i][j]
+		)
+	)
+);
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*
+
+statement error
+CREATE OR REPLACE FUNCTION transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*
+
+statement ok
+SET allow_deprecated_lambda_syntax=true
+
+statement ok
+CREATE OR REPLACE FUNCTION transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);
+
+
+statement ok
+ATTACH '__TEST_DIR__/deprecated_syntax.db';
+
+statement ok
+CREATE OR REPLACE FUNCTION deprecated_syntax.transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);
+
+statement ok
+DETACH deprecated_syntax;
+
+statement ok
+ATTACH '__TEST_DIR__/deprecated_syntax.db';

@@ -23,7 +23,8 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
 
 public:
-	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr, const bool deprecated);
+	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr,
+	                 const bool deprecated = false);
 
 	//! The LHS of a lambda expression or the JSON "->"-operator. We need the context
 	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (JSON)

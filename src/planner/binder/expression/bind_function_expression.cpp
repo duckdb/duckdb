@@ -23,18 +23,32 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
-	auto lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	auto &config = ClientConfig::GetConfig(context);
+	auto allow_deprecated_lambda_syntax = config.allow_deprecated_lambda_syntax;
+	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
+	                   "i.e.., LAMBDA (x, i) : x + i, before DuckDB's 1.4.0 release. \n"
+	                   "Use SET allow_deprecated_lambda_syntax=true to revert to the deprecated behavior. \n"
+	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
+
+	BindResult lambda_bind_result;
+	ErrorData error;
+	try {
+		lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	} catch (const std::exception &ex) {
+		error = ErrorData(ex);
+	}
+
+	if (error.HasError() && error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED && !allow_deprecated_lambda_syntax) {
+		ErrorData deprecation_error(ExceptionType::BINDER, msg);
+		deprecation_error.Throw();
+	} else if (error.HasError()) {
+		error.Throw();
+	}
+
 	if (!lambda_bind_result.HasError()) {
-		auto &config = ClientConfig::GetConfig(context);
-		auto allow_deprecated_lambda_syntax = config.allow_deprecated_lambda_syntax;
 		if (allow_deprecated_lambda_syntax) {
 			return lambda_bind_result;
 		}
-
-		string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
-		             "i.e.., LAMBDA (x, i) : x + i, before DuckDB's 1.4.0 release. \n"
-		             "Use SET allow_deprecated_lambda_syntax=true to revert to the deprecated behavior. \n"
-		             "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
 		return BindResult(msg);
 	}
 	if (StringUtil::Contains(lambda_bind_result.error.RawMessage(), "Deprecated lambda arrow (->) detected.")) {
