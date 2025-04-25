@@ -84,13 +84,13 @@ SELECT * FROM histogram_values(integers, (i%2)::VARCHAR)
 1	64
 
 # FIXME: there are some minor rounding problems on ARM64 with the below tests
-mode skip
+# mode skip
 
 # varchar does not work with equi-width-bins
 statement error
 SELECT * FROM histogram_values(integers, (i%2)::VARCHAR, technique := 'equi-width')
 ----
-Unsupported
+<REGEX>:.*Binder Error.*Unsupported type "VARCHAR" for equi_width_bins.*
 
 # but it works with equi-height
 query II
