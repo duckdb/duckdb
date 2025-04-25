@@ -56,9 +56,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
-		if (!everything_referenced) {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		// if there is more than one grouping set, the group by most likely has a rollup or cube
+		// If there is an equality join underneath the aggregate, this can change the groups to avoid unused columns
+		// This causes the duplicate eliminator to ignore functionality provided by grouping sets
+		if (aggr.grouping_sets.size() > 1) {
+			return;
+		}
+		if (!everything_referenced ) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			auto &aggr = op.Cast<LogicalAggregate>();
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
