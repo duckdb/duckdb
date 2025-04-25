@@ -5,8 +5,8 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS = false>
-idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, idx_t count) {
-	// if the return type is not a bool return the position
+idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, const idx_t count) {
+	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
 	const auto input_count = ListVector::GetListSize(input_list);
@@ -65,7 +65,8 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 			const bool child_valid = child_format.validity.RowIsValid(child_entry_idx);
 
 			if ((FIND_NULLS && !child_valid && !target_valid) ||
-			    (child_valid && Equals::Operation<T>(child_data[child_entry_idx], target_data[target_entry_idx]))) {
+			    (child_valid && target_valid &&
+			     Equals::Operation<T>(child_data[child_entry_idx], target_data[target_entry_idx]))) {
 				found = true;
 				total_matches++;
 				if (return_pos) {
