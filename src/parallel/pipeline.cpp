@@ -362,8 +362,7 @@ void Pipeline::ModifyCreateBFPipeline() {
 		case PhysicalOperatorType::COLUMN_DATA_SCAN:
 		case PhysicalOperatorType::CHUNK_SCAN:
 		case PhysicalOperatorType::TABLE_SCAN:
-		case PhysicalOperatorType::DELIM_SCAN:
-		case PhysicalOperatorType::CTE_SCAN: {
+		case PhysicalOperatorType::DELIM_SCAN: {
 			source = op;
 			operators.insert(operators.begin(), new_operators.rbegin(), new_operators.rend());
 			return;

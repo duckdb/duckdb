@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
@@ -76,6 +77,14 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 
 		// table scan
 		if (last_creator == last_op || plan->type != LogicalOperatorType::LOGICAL_FILTER) {
+			last_op->AddChild(std::move(plan));
+			plan = std::move(it->second);
+			return;
+		}
+
+		// in clause
+		auto &filter = plan->Cast<LogicalFilter>();
+		if (!filter.expressions.empty() && filter.expressions[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 			last_op->AddChild(std::move(plan));
 			plan = std::move(it->second);
 			return;
