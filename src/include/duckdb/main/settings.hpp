@@ -440,6 +440,16 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DisableTimestamptzCastsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "disable_timestamptz_casts";
+	static constexpr const char *Description = "Disable casting from timestamp to timestamptz ";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DisabledCompressionMethodsSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "disabled_compression_methods";
