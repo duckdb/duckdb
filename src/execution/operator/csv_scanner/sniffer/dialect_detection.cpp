@@ -516,30 +516,36 @@ void CSVSniffer::RefineCandidates() {
 	// that have actually quoted values, otherwise we will choose quotes = \0
 	vector<unique_ptr<ColumnCountScanner>> successful_candidates = std::move(candidates);
 	if (!successful_candidates.empty()) {
+		bool ever_quoted = false;
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
 			unique_ptr<ColumnCountScanner> cc_best_candidate = std::move(successful_candidates[i]);
-			if (cc_best_candidate->state_machine->state_machine_options.quote != '\0' &&
-			    cc_best_candidate->ever_quoted) {
+			if (cc_best_candidate->ever_quoted) {
 				if (cc_best_candidate->ever_escaped) {
 					// It can't be better than this
+					candidates.clear();
 					candidates.push_back(std::move(cc_best_candidate));
 					return;
 				}
-				// If we have multiple candidates with the same quote, but different escapes
-				for (idx_t j = i + 1; j < successful_candidates.size(); j++) {
-					// we give preference if it has the same character between escape and quote
-					if (successful_candidates[j]->state_machine->state_machine_options.escape ==
-					    successful_candidates[j]->state_machine->state_machine_options.quote) {
-						cc_best_candidate = std::move(successful_candidates[j]);
-						break;
-					}
+				if (!ever_quoted) {
+					ever_quoted = true;
+					candidates.clear();
 				}
-				candidates.clear();
 				candidates.push_back(std::move(cc_best_candidate));
+			} else if (!ever_quoted) {
+				candidates.push_back(std::move(cc_best_candidate));
+			}
+		}
+	}
+	if (candidates.size() > 1) {
+		successful_candidates = std::move(candidates);
+		for (idx_t i = 0; i < successful_candidates.size(); i++) {
+			if (successful_candidates[i]->state_machine->state_machine_options.quote ==
+			    successful_candidates[i]->state_machine->state_machine_options.escape) {
+				candidates.push_back(std::move(std::move(successful_candidates[i])));
 				return;
 			}
-			candidates.push_back(std::move(cc_best_candidate));
 		}
+		candidates.push_back(std::move(std::move(successful_candidates[0])));
 	}
 }
 
