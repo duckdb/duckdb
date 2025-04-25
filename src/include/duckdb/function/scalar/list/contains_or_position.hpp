@@ -6,7 +6,7 @@ namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS = false>
 idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, idx_t count) {
-	// The return type is either a position (1-based) or a boolean.
+	// if the return type is not a bool return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
 	const auto input_count = ListVector::GetListSize(input_list);
@@ -101,7 +101,7 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
 	return ListSearchSimpleOp<string_t, RETURN_TYPE>(list_vec, source_sort_key_vec, target_sort_key_vec, result_vec,
-	                                                     target_count);
+	                                                 target_count);
 }
 
 //! "Search" each list in the list vector for the corresponding value in the target vector, returning either
@@ -114,47 +114,40 @@ idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &r
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return ListSearchSimpleOp<int8_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                               target_count);
+		return ListSearchSimpleOp<int8_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	case PhysicalType::INT16:
-		return ListSearchSimpleOp<int16_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                target_count);
+		return ListSearchSimpleOp<int16_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	case PhysicalType::INT32:
-		return ListSearchSimpleOp<int32_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                target_count);
+		return ListSearchSimpleOp<int32_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	case PhysicalType::INT64:
-		return ListSearchSimpleOp<int64_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                target_count);
+		return ListSearchSimpleOp<int64_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	case PhysicalType::INT128:
 		return ListSearchSimpleOp<hugeint_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                  target_count);
+		                                                              target_count);
 	case PhysicalType::UINT8:
-		return ListSearchSimpleOp<uint8_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                target_count);
+		return ListSearchSimpleOp<uint8_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	case PhysicalType::UINT16:
 		return ListSearchSimpleOp<uint16_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                 target_count);
+		                                                             target_count);
 	case PhysicalType::UINT32:
 		return ListSearchSimpleOp<uint32_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                 target_count);
+		                                                             target_count);
 	case PhysicalType::UINT64:
 		return ListSearchSimpleOp<uint64_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                 target_count);
+		                                                             target_count);
 	case PhysicalType::UINT128:
 		return ListSearchSimpleOp<uhugeint_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                   target_count);
-	case PhysicalType::FLOAT:
-		return ListSearchSimpleOp<float, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                              target_count);
-	case PhysicalType::DOUBLE:
-		return ListSearchSimpleOp<double, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
 		                                                               target_count);
+	case PhysicalType::FLOAT:
+		return ListSearchSimpleOp<float, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
+	case PhysicalType::DOUBLE:
+		return ListSearchSimpleOp<double, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	case PhysicalType::VARCHAR:
 		return ListSearchSimpleOp<string_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                 target_count);
+		                                                             target_count);
 	case PhysicalType::INTERVAL:
 		return ListSearchSimpleOp<interval_t, RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v,
-		                                                                   target_count);
+		                                                               target_count);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY:
