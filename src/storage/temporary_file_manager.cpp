@@ -5,6 +5,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/main/database.hpp"
 #include "zstd.h"
 
 namespace duckdb {
