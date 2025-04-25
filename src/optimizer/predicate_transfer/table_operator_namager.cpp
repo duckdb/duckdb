@@ -55,6 +55,7 @@ ColumnBinding TableOperatorManager::GetRenaming(ColumnBinding binding) {
 
 idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -86,7 +87,6 @@ idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 
 bool TableOperatorManager::OperatorNeedsRelation(LogicalOperatorType op_type) {
 	switch (op_type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -107,7 +107,8 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 	}
 }
 
-void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
+void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins,
+                                                    bool can_add_mark_join) {
 	LogicalOperator *op = &plan;
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
@@ -117,8 +118,28 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 				return;
 			}
 
+			can_add_mark_join = false;
+			if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
+			    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+				can_add_mark_join = true;
+			}
+
 			D_ASSERT(!op->expressions.empty());
-			ExtractOperatorsInternal(*child, joins);
+			ExtractOperatorsInternal(*child, joins, can_add_mark_join);
+			return;
+		}
+
+		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			LogicalOperator *child = op->children[0].get();
+
+			can_add_mark_join = false;
+			if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
+			    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+				can_add_mark_join = true;
+			}
+
+			D_ASSERT(!op->expressions.empty());
+			ExtractOperatorsInternal(*child, joins, can_add_mark_join);
 			return;
 		}
 		op = op->children[0].get();
@@ -129,7 +150,15 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
 		case JoinType::MARK: {
-			return;
+			if (can_add_mark_join &&
+			    std::any_of(join.conditions.begin(), join.conditions.end(), [](const JoinCondition &jc) {
+				    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
+				           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
+				           jc.right->type == ExpressionType::BOUND_COLUMN_REF;
+			    })) {
+				joins.push_back(*op);
+			}
+			break;
 		}
 		case JoinType::INNER:
 		case JoinType::LEFT:

@@ -300,6 +300,18 @@ public:
 	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p)
 	    : ExecutorTask(context, std::move(event_p), sink_p.op), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p) {
+
+		// Because null values should not be filtered in many cases (e.g., mark join), we insert null into each bloom
+		// filter.
+		DataChunk chunk;
+		sink.data_collection->InitializeScanChunk(chunk);
+		chunk.SetCardinality(1);
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			chunk.SetValue(0, 0, Value());
+		}
+		for (auto &bf : sink.op.bf_to_create) {
+			bf->Insert(chunk);
+		}
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {

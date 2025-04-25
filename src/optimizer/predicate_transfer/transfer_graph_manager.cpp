@@ -61,10 +61,6 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				continue;
 			}
 
-			if (!cond.left->return_type.IsNumeric() || !cond.right->return_type.IsNumeric()) {
-				continue;
-			}
-
 			hash_t hash = ComputeConditionHash(cond);
 			if (!existed_set.insert(hash).second) {
 				continue;
@@ -99,6 +95,8 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 				if (comp_join.join_type == JoinType::LEFT) {
 					(left_is_larger ? edge->protect_bigger_side : edge->protect_smaller_side) = true;
+				} else if (comp_join.join_type == JoinType::MARK) {
+					(left_is_larger ? edge->protect_smaller_side : edge->protect_bigger_side) = true;
 				} else if (comp_join.join_type == JoinType::RIGHT) {
 					(left_is_larger ? edge->protect_smaller_side : edge->protect_bigger_side) = true;
 				} else if (comp_join.join_type != JoinType::INNER && comp_join.join_type != JoinType::SEMI &&

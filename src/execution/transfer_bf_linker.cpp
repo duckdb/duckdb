@@ -78,19 +78,36 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
 			auto &bf_user = op.Cast<LogicalUseBF>();
 
-			vector<ColumnBinding> updated_bindings;
-			shared_ptr<DynamicTableFilterSet> filter_set = nullptr;
+			bool all_numerical = true;
 			for (auto &expr : bf_user.filter_plan->apply) {
-				auto &binding = expr->Cast<BoundColumnRefExpression>().binding;
-				updated_bindings.push_back(binding);
+				auto &col_binding = expr->Cast<BoundColumnRefExpression>();
+				if (!col_binding.return_type.IsNumeric()) {
+					all_numerical = false;
+					break;
+				}
 			}
-			UpdateMinMaxBinding(*bf_user.children[0], updated_bindings, filter_set);
 
-			if (filter_set) {
-				auto *related_creator = bf_user.related_create_bf;
-				idx_t plan_idx = FindPlanIndex(bf_user.filter_plan, related_creator->filter_plans);
-				related_creator->min_max_to_create[plan_idx] = filter_set;
-				related_creator->min_max_applied_cols[plan_idx] = std::move(updated_bindings);
+			if (all_numerical) {
+				vector<ColumnBinding> updated_bindings;
+				shared_ptr<DynamicTableFilterSet> filter_set = nullptr;
+				for (auto &expr : bf_user.filter_plan->apply) {
+					auto &binding = expr->Cast<BoundColumnRefExpression>().binding;
+					updated_bindings.push_back(binding);
+				}
+				UpdateMinMaxBinding(*bf_user.children[0], updated_bindings, filter_set);
+
+				if (filter_set) {
+					auto *related_creator = bf_user.related_create_bf;
+					idx_t plan_idx = FindPlanIndex(bf_user.filter_plan, related_creator->filter_plans);
+					related_creator->min_max_to_create[plan_idx] = filter_set;
+					related_creator->min_max_applied_cols[plan_idx] = std::move(updated_bindings);
+				}
+			}
+		} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = op.Cast<LogicalComparisonJoin>();
+			if (join.join_type == JoinType::MARK) {
+				// min-max filter does not support mark join
+				return;
 			}
 		}
 		break;
