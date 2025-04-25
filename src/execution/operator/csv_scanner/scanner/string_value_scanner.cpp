@@ -1771,8 +1771,7 @@ void StringValueScanner::SetStart() {
 		}
 	}
 	// 3. We are in an escaped value
-	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0' &&
-	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
 		if (escape_row.is_valid) {
 			best_row = escape_row;
