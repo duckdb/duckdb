@@ -25,10 +25,6 @@ select * from lineitem l1 where exists (
 1	1	42
 1	2	43
 
-# since https://github.com/duckdb/duckdb/issues/16803 these tests no
-# longer remove the INNER join.
-mode skip
-
 # deliminator should remove INNER
 query II
 explain select * from lineitem l1 where exists (
@@ -61,8 +57,6 @@ explain select * from lineitem l1 where (
 );
 ----
 logical_opt	<!REGEX>:.*INNER.*
-
-mode unskip
 
 # operations on the columns - we can't do the optimization here,
 # but with enable_verification we check the results are the same with/without optimizer
@@ -120,10 +114,6 @@ select count(*) from lineitem l1 where exists (
 ----
 2
 
-
-# also not working since https://github.com/duckdb/duckdb/issues/16803
-mode skip
-
 query II
 explain select count(*) from lineitem l1 where exists (
      select l_partkey from lineitem l2
@@ -133,8 +123,6 @@ explain select count(*) from lineitem l1 where exists (
 );
 ----
 logical_opt	<!REGEX>:.*INNER.*
-
-mode unskip
 
 # aggregate within the subquery
 query I
