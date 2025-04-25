@@ -307,7 +307,7 @@ public:
 		sink.data_collection->InitializeScanChunk(chunk);
 		chunk.SetCardinality(1);
 		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-			chunk.SetValue(0, 0, Value());
+			chunk.SetValue(i, 0, Value());
 		}
 		for (auto &bf : sink.op.bf_to_create) {
 			bf->Insert(chunk);
