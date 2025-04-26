@@ -120,8 +120,6 @@ private:
 	unique_ptr<AlterStatement> TransformRename(duckdb_libpgquery::PGRenameStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTable(duckdb_libpgquery::PGCreateStmt &node);
-	//! Transform a Postgres libpgquery::T_PGCreateMatViewStmt node into a CreateStatement
-	unique_ptr<CreateStatement> TransformCreateMatView(duckdb_libpgquery::PGCreateMatViewStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTableAs(duckdb_libpgquery::PGCreateTableAsStmt &stmt);
 	//! Transform a Postgres node into a CreateStatement
@@ -136,6 +134,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGCreateFunctionStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateType(duckdb_libpgquery::PGCreateTypeStmt &stmt);
+	//! Transform a Postgres duckdb_libpgquery::T_PGGRefreshMatViewStmt node into RefreshMatViewStatement
+	unique_ptr<RefreshMatViewStatement> TransformRefreshMatView(duckdb_libpgquery::PGRefreshMatViewStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformCommentOn(duckdb_libpgquery::PGCommentOnStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement

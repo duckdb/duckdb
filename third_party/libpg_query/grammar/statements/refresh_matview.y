@@ -9,6 +9,7 @@ RefreshMatViewStmt:
                 {
                     PGRefreshMatViewStmt *stmt = makeNode(PGRefreshMatViewStmt);
                     stmt->matView = $4;
+                    stmt->removeType = PG_OBJECT_MATVIEW;
                     $$ = (PGNode *) stmt;
                 }
 		;

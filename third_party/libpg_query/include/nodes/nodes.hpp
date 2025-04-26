@@ -327,7 +327,6 @@ typedef enum PGNodeTag {
 	T_PGCopyStmt,
 	T_PGCopyDatabaseStmt,
 	T_PGCreateStmt,
-	T_PGCreateMatViewStmt,
 	T_PGDefineStmt,
 	T_PGDropStmt,
 	T_PGTruncateStmt,
@@ -435,6 +434,7 @@ typedef enum PGNodeTag {
 	T_PGAttachStmt,
 	T_PGDetachStmt,
 	T_PGUseStmt,
+	T_RefreshMatViewStmt,
 
 	/*
 	 * TAGS FOR PARSE TREE NODES (parsenodes.h)

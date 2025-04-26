@@ -147,8 +147,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformSelectStmt(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateStmt:
 		return TransformCreateTable(PGCast<duckdb_libpgquery::PGCreateStmt>(stmt));
-	case duckdb_libpgquery::T_PGCreateMatViewStmt:
-		return TransformCreateMatView(PGCast<duckdb_libpgquery::PGCreateMatViewStmt>(stmt));
+	case duckdb_libpgquery::T_PGRefreshMatViewStmt:
+		return TransformRefreshMatView(PGCast<duckdb_libpgquery::PGRefreshMatViewStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateSchemaStmt:
 		return TransformCreateSchema(PGCast<duckdb_libpgquery::PGCreateSchemaStmt>(stmt));
 	case duckdb_libpgquery::T_PGViewStmt:

@@ -8,9 +8,6 @@
 namespace duckdb {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquery::PGCreateTableAsStmt &stmt) {
-	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
-		throw NotImplementedException("Materialized view not implemented");
-	}
 	if (stmt.is_select_into || stmt.into->options) {
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
@@ -42,6 +39,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 			// We really don't know the type of the columns during parsing, so we just use UNKNOWN
 			info->columns.AddColumn(ColumnDefinition(cols[i], LogicalType::UNKNOWN));
 		}
+	}
+	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
+		info->type = CatalogType::MATVIEW_ENTRY;
 	}
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;

@@ -12,19 +12,15 @@
 
 namespace duckdb {
 
-struct RefreshMatViewInfo : public ParseInfo {
-public:
-	static constexpr const ParseInfoType TYPE = ParseInfoType::REFRESH_MATVIEW_INFO;
-
-public:
-	RefreshMatViewInfo() : ParseInfo(TYPE) {
+struct RefreshMatViewInfo : CreateTableInfo {
+	RefreshMatViewInfo() : CreateTableInfo() {
+		this->type = CatalogType::MATVIEW_ENTRY;
 	}
-	//! The name of the materialized view to refresh
-	string name;
+	RefreshMatViewInfo(string catalog, string schema, string name);
 
 public:
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
+	string ToString() const override;
 };
 
 } // namespace duckdb

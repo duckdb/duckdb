@@ -639,15 +639,4 @@ unique_ptr<ParseInfo> VacuumInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
-void RefreshMatViewInfo::Serialize(Serializer &serializer) const {
-	ParseInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(202, "name", name);
-}
-
-unique_ptr<ParseInfo> RefreshMatViewInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<RefreshMatViewInfo>(new RefreshMatViewInfo());
-	deserializer.ReadPropertyWithDefault<string>(202, "name", result->name);
-	return std::move(result);
-}
-
 } // namespace duckdb

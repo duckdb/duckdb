@@ -1,5 +1,7 @@
 #include "duckdb/parser/statement/refresh_matview_statement.hpp"
 
+#include <duckdb/catalog/catalog_entry/matview_catalog_entry.hpp>
+
 namespace duckdb {
 
 RefreshMatViewStatement::RefreshMatViewStatement() : SQLStatement(StatementType::REFRESH_MATVIEW_STATEMENT) {

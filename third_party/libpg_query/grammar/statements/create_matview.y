@@ -1,13 +1,13 @@
 /*****************************************************************************
  *
  *		QUERY :
- *				CREATE [ OR REPLACE ] MATERIALIZED VIEW <matviewname> AS SelectStmt [ WITH [NO] DATA ]
+ *				CREATE MATERIALIZED VIEW matviewname AS PGSelectStmt [ WITH [NO] DATA ]
  *
  *****************************************************************************/
 CreateMatViewStmt:
 		CREATE_P MATERIALIZED VIEW create_as_target AS SelectStmt opt_with_data
 				{
-					PGCreateMatViewStmt *ctas = makeNode(PGCreateMatViewStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
                     ctas->query = $6;
                     ctas->into = $4;
                     ctas->relkind = PG_OBJECT_MATVIEW;
@@ -18,7 +18,7 @@ CreateMatViewStmt:
 				}
 		| CREATE_P OR REPLACE MATERIALIZED VIEW create_as_target AS SelectStmt opt_with_data
 				{
-					PGCreateMatViewStmt *ctas = makeNode(PGCreateMatViewStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
                     ctas->query = $8;
                     ctas->into = $6;
                     ctas->relkind = PG_OBJECT_MATVIEW;
