@@ -5,7 +5,6 @@
 namespace duckdb {
 
 class DataTable;
-struct CreateMatViewInfo;
 
 //! A Materialized View catalog entry
 class MatViewCatalogEntry : public DuckTableEntry {

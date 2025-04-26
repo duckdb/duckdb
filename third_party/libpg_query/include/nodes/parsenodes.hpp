@@ -1989,17 +1989,10 @@ typedef struct PGCreateTableAsStmt {
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTableAsStmt;
 
-/* ----------------------
- * CREATE MATERIALIZED VIEW Statement
- * ----------------------
- */
-typedef struct PGCreateMatViewStmt : PGCreateTableAsStmt {
-} PGCreateMatViewStmt;
-
 typedef struct PGRefreshMatViewStmt {
 	PGNodeTag type;
 	PGRangeVar *matView;           /* target materialized view name */
-	PGObjectType removeType; /* object type */
+	PGObjectType removeType;	   /* object type */
 } PGRefreshMatViewStmt;
 
 /* ----------------------

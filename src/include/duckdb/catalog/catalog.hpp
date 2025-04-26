@@ -23,7 +23,6 @@
 #include "duckdb/catalog/entry_lookup_info.hpp"
 
 #include <functional>
-#include <duckdb/parser/parsed_data/create_matview_info.hpp>
 
 namespace duckdb {
 struct CreateSchemaInfo;

@@ -27,7 +27,6 @@ struct CreateIndexInfo;
 struct CreateFunctionInfo;
 struct CreateCollationInfo;
 struct CreateViewInfo;
-struct CreateMatViewInfo;
 struct BoundCreateTableInfo;
 struct CreatePragmaFunctionInfo;
 struct CreateSequenceInfo;
