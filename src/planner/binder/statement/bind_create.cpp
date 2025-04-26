@@ -470,7 +470,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::MATVIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
-		auto root = std::move(bound_info->query);
+		// Retain select query for CREATE MATERIALIZED VIEW for later storing to MatViewCatalogEntry
+		auto root = bound_info->query ? bound_info->query->Copy(context) : std::move(bound_info->query);
 
 		// create the logical operator
 		auto &schema = bound_info->schema;
