@@ -22,6 +22,9 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	}
 	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
 	auto &table = table_binding.table;
+	if (table.type == CatalogType::MATVIEW_ENTRY) {
+		throw BinderException("Cannot delete from materialized view %s!", table.name);
+	}
 
 	auto root = CreatePlan(*bound_table);
 	auto &get = root->Cast<LogicalGet>();
