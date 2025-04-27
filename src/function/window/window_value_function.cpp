@@ -300,6 +300,10 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 			auto val_idx = NumericCast<int64_t>(own_row);
 			int64_t offset = 1;
 			if (wexpr.offset_expr) {
+				if (leadlag_offset.CellIsNull(i)) {
+					FlatVector::SetNull(result, i, true);
+					continue;
+				}
 				offset = leadlag_offset.GetCell<int64_t>(i);
 			}
 			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
@@ -344,6 +348,12 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	for (idx_t i = 0; i < count;) {
 		int64_t offset = 1;
 		if (wexpr.offset_expr) {
+			if (leadlag_offset.CellIsNull(i)) {
+				FlatVector::SetNull(result, i, true);
+				++i;
+				++row_idx;
+				continue;
+			}
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
