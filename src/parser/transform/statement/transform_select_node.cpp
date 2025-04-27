@@ -154,6 +154,11 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		default:
 			throw InternalException("Unexpected setop type");
 		}
+
+		if (!stmt.all) {
+			result.modifiers.push_back(make_uniq<DistinctModifier>());
+		}
+
 		if (stmt.sampleOptions) {
 			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");
 		}
