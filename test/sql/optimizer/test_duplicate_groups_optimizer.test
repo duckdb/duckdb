@@ -33,6 +33,40 @@ group by rollup(col1, col2, col3) order by 1, 2 ,3;
 NULL	NULL	NULL
 
 
+query III
+select
+	col1,
+	col2,
+	col3
+from t1
+	join t2
+	on t1.col1 = t2.col3
+group by cube(col1, col2, col3) order by 1, 2 ,3;
+----
+1	1	1
+1	1	NULL
+1	NULL	1
+1	NULL	NULL
+NULL	1	1
+NULL	1	NULL
+NULL	NULL	1
+NULL	NULL	NULL
+
+
+query III
+select
+      col1,
+      col2,
+      col3
+  from t1
+      join t2
+      on t1.col1 = t2.col3
+  group by grouping sets (col1, col2, col3), (col1, col2), (col1) order by 1, 2 ,3;
+----
+1	1	1
+1	1	NULL
+1	1	NULL
+
 statement ok
 pragma explain_output='optimized_only';
 
@@ -52,3 +86,36 @@ from t1
 group by col1, col3;
 ----
 logical_opt	<REGEX>:.*Groups: col1.*
+
+
+statement ok
+create table t2 (a int, b int, c int);
+
+statement ok
+insert into t2 values
+(1, 1, 1),
+(1, 2, 2),
+(1, 1, 1),
+(1, 2, 1);
+
+query III
+select * from t2 group by cube(a, b, c) order by all;
+----
+1	1	1
+1	1	NULL
+1	2	1
+1	2	2
+1	2	NULL
+1	NULL	1
+1	NULL	2
+1	NULL	NULL
+NULL	1	1
+NULL	1	NULL
+NULL	2	1
+NULL	2	2
+NULL	2	NULL
+NULL	NULL	1
+NULL	NULL	2
+NULL	NULL	NULL
+
+
