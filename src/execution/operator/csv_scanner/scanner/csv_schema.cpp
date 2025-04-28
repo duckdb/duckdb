@@ -76,8 +76,8 @@ void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	}
 }
 
-CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p,
-                     const bool empty_p)
+CSVSchema::CSVSchema(const vector<string> &names, const vector<LogicalType> &types, const string &file_path,
+                     idx_t rows_read_p, const bool empty_p)
     : rows_read(rows_read_p), empty(empty_p) {
 	Initialize(names, types, file_path);
 }
@@ -90,8 +90,8 @@ void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		auto name = names.at(i);
-		auto type = types.at(i);
+		const auto &name = names.at(i);
+		const auto &type = types.at(i);
 		columns.push_back({name, type});
 		name_idx_map[names[i]] = i;
 	}

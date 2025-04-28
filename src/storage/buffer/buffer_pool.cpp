@@ -271,8 +271,8 @@ void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 	memory_usage.UpdateUsedMemory(tag, size);
 }
 
-idx_t BufferPool::GetUsedMemory() const {
-	return memory_usage.GetUsedMemory(MemoryUsageCaches::FLUSH);
+idx_t BufferPool::GetUsedMemory(bool flush) const {
+	return memory_usage.GetUsedMemory(flush ? MemoryUsageCaches::FLUSH : MemoryUsageCaches::NO_FLUSH);
 }
 
 idx_t BufferPool::GetMaxMemory() const {

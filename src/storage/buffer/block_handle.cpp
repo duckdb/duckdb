@@ -51,8 +51,10 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
-
-	block_manager.UnregisterBlock(*this);
+	try {
+		block_manager.UnregisterBlock(*this);
+	} catch (...) {
+	}
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
@@ -112,7 +114,7 @@ void BlockHandle::ResizeBuffer(BlockLock &l, idx_t block_size, int64_t memory_de
 
 	D_ASSERT(buffer);
 	// resize and adjust current memory
-	buffer->Resize(block_size);
+	buffer->Resize(block_size, block_manager);
 	memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage.load()) + memory_delta);
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }

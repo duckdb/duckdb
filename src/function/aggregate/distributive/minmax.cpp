@@ -337,8 +337,8 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 			// to make sure the result's correctness.
 			string function_name = function.name == "min" ? "arg_min" : "arg_max";
 			QueryErrorContext error_context;
-			auto func = Catalog::GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, "", "", function_name,
-			                              OnEntryNotFound::RETURN_NULL, error_context);
+			auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", function_name,
+			                                                             OnEntryNotFound::RETURN_NULL, error_context);
 			if (!func) {
 				throw NotImplementedException(
 				    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "
@@ -346,7 +346,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 				    function.name);
 			}
 
-			auto &func_entry = func->Cast<AggregateFunctionCatalogEntry>();
+			auto &func_entry = *func;
 
 			FunctionBinder function_binder(context);
 			vector<LogicalType> types {arguments[0]->return_type, arguments[0]->return_type};
@@ -412,8 +412,8 @@ public:
 	UnaryAggregateHeap<T, COMPARATOR> heap;
 	bool is_initialized = false;
 
-	void Initialize(idx_t nval) {
-		heap.Initialize(nval);
+	void Initialize(ArenaAllocator &allocator, idx_t nval) {
+		heap.Initialize(allocator, nval);
 		is_initialized = true;
 	}
 
@@ -432,7 +432,7 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
-	;
+
 	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
 
 	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
@@ -464,7 +464,7 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 			if (nval >= MAX_N) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MAX_N);
 			}
-			state.Initialize(UnsafeNumericCast<idx_t>(nval));
+			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}
 
 		// Now add the input to the heap

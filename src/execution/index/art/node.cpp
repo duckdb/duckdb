@@ -7,6 +7,7 @@
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
@@ -44,7 +45,7 @@ void Node::New(ART &art, Node &node, NType type) {
 		Node256::New(art, node);
 		break;
 	default:
-		throw InternalException("Invalid node type for New: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for New: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -113,7 +114,7 @@ uint8_t Node::GetAllocatorIdx(const NType type) {
 	case NType::NODE_256_LEAF:
 		return 8;
 	default:
-		throw InternalException("Invalid node type for GetAllocatorIdx: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetAllocatorIdx: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -135,7 +136,7 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) co
 	case NType::NODE_256:
 		return Ref<Node256>(art, *this, type).ReplaceChild(byte, child);
 	default:
-		throw InternalException("Invalid node type for ReplaceChild: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for ReplaceChild: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -159,7 +160,7 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 	case NType::NODE_256_LEAF:
 		return Node256Leaf::InsertByte(art, node, byte);
 	default:
-		throw InternalException("Invalid node type for InsertChild: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for InsertChild: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -188,7 +189,7 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, c
 	case NType::NODE_256_LEAF:
 		return Node256Leaf::DeleteByte(art, node, byte);
 	default:
-		throw InternalException("Invalid node type for DeleteChild: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for DeleteChild: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -212,7 +213,7 @@ unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t b
 		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte);
 	}
 	default:
-		throw InternalException("Invalid node type for GetChildInternal: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetChildInternal: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -239,7 +240,7 @@ unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &by
 	case NType::NODE_256:
 		return Node256::GetNextChild(Node::Ref<Node256>(art, node, type), byte);
 	default:
-		throw InternalException("Invalid node type for GetNextChildInternal: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetNextChildInternal: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -263,7 +264,7 @@ bool Node::HasByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).HasByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextByte: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetNextByte: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -279,7 +280,7 @@ bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextByte: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetNextByte: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -304,7 +305,7 @@ idx_t GetCapacity(NType type) {
 	case NType::NODE_256:
 		return Node256::CAPACITY;
 	default:
-		throw InternalException("Invalid node type for GetCapacity: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetCapacity: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -362,35 +363,23 @@ bool Node::IsAnyLeaf() const {
 
 void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(HasMetadata());
-	auto type = GetType();
+	ARTScanner<ARTScanHandling::POP, Node> scanner(art);
 
-	switch (type) {
-	case NType::PREFIX:
-		return Prefix::InitializeMerge(art, *this, upper_bounds);
-	case NType::LEAF:
-		throw InternalException("Failed to initialize merge due to deprecated ART storage.");
-	case NType::NODE_4:
-		InitMergeInternal(art, Ref<Node4>(art, *this, type), upper_bounds);
-		break;
-	case NType::NODE_16:
-		InitMergeInternal(art, Ref<Node16>(art, *this, type), upper_bounds);
-		break;
-	case NType::NODE_48:
-		InitMergeInternal(art, Ref<Node48>(art, *this, type), upper_bounds);
-		break;
-	case NType::NODE_256:
-		InitMergeInternal(art, Ref<Node256>(art, *this, type), upper_bounds);
-		break;
-	case NType::LEAF_INLINED:
-		return;
-	case NType::NODE_7_LEAF:
-	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF:
-		break;
-	}
+	auto handler = [&upper_bounds](Node &node) {
+		const auto type = node.GetType();
+		if (node.GetType() == NType::LEAF_INLINED) {
+			return ARTScanHandlingResult::CONTINUE;
+		}
+		if (type == NType::LEAF) {
+			throw InternalException("deprecated ART storage in InitMerge");
+		}
+		const auto idx = GetAllocatorIdx(type);
+		node.IncreaseBufferId(upper_bounds[idx]);
+		return ARTScanHandlingResult::CONTINUE;
+	};
 
-	auto idx = GetAllocatorIdx(type);
-	IncreaseBufferId(upper_bounds[idx]);
+	scanner.Init(handler, *this);
+	scanner.Scan(handler);
 }
 
 bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status) {
@@ -597,55 +586,61 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 
 void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	D_ASSERT(HasMetadata());
+	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(art);
 
-	auto type = GetType();
-	switch (type) {
-	case NType::LEAF_INLINED:
-		return;
-	case NType::PREFIX:
-		return Prefix::Vacuum(art, *this, indexes);
-	case NType::LEAF:
-		if (indexes.find(GetAllocatorIdx(type)) == indexes.end()) {
-			return;
+	auto handler = [&art, &indexes](Node &node) {
+		ARTScanHandlingResult result;
+		const auto type = node.GetType();
+		switch (type) {
+		case NType::LEAF_INLINED:
+			return ARTScanHandlingResult::SKIP;
+		case NType::LEAF: {
+			if (indexes.find(GetAllocatorIdx(type)) == indexes.end()) {
+				return ARTScanHandlingResult::SKIP;
+			}
+			Leaf::DeprecatedVacuum(art, node);
+			return ARTScanHandlingResult::SKIP;
 		}
-		return Leaf::DeprecatedVacuum(art, *this);
-	default:
-		break;
-	}
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF: {
+			result = ARTScanHandlingResult::SKIP;
+			break;
+		}
+		case NType::PREFIX:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256: {
+			result = ARTScanHandlingResult::CONTINUE;
+			break;
+		}
+		default:
+			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
+		}
 
-	auto idx = GetAllocatorIdx(type);
-	auto &allocator = GetAllocator(art, type);
-	auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(*this);
-	if (needs_vacuum) {
-		auto status = GetGateStatus();
-		*this = allocator.VacuumPointer(*this);
-		SetMetadata(static_cast<uint8_t>(type));
-		SetGateStatus(status);
-	}
+		const auto idx = GetAllocatorIdx(type);
+		auto &allocator = GetAllocator(art, type);
+		const auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
+		if (needs_vacuum) {
+			const auto status = node.GetGateStatus();
+			node = allocator.VacuumPointer(node);
+			node.SetMetadata(static_cast<uint8_t>(type));
+			node.SetGateStatus(status);
+		}
+		return result;
+	};
 
-	switch (type) {
-	case NType::NODE_4:
-		return VacuumInternal(art, Ref<Node4>(art, *this, type), indexes);
-	case NType::NODE_16:
-		return VacuumInternal(art, Ref<Node16>(art, *this, type), indexes);
-	case NType::NODE_48:
-		return VacuumInternal(art, Ref<Node48>(art, *this, type), indexes);
-	case NType::NODE_256:
-		return VacuumInternal(art, Ref<Node256>(art, *this, type), indexes);
-	case NType::NODE_7_LEAF:
-	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF:
-		return;
-	default:
-		throw InternalException("Invalid node type for Vacuum: %d.", static_cast<uint8_t>(type));
-	}
+	scanner.Init(handler, *this);
+	scanner.Scan(handler);
 }
 
 //===--------------------------------------------------------------------===//
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
-void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+void Node::TransformToDeprecated(ART &art, Node &node,
+                                 unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator) {
 	D_ASSERT(node.HasMetadata());
 
 	if (node.GetGateStatus() == GateStatus::GATE_SET) {
@@ -656,21 +651,21 @@ void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSi
 	auto type = node.GetType();
 	switch (type) {
 	case NType::PREFIX:
-		return Prefix::TransformToDeprecated(art, node, allocator);
+		return Prefix::TransformToDeprecated(art, node, deprecated_prefix_allocator);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
 		return;
 	case NType::NODE_4:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), deprecated_prefix_allocator);
 	case NType::NODE_16:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), deprecated_prefix_allocator);
 	case NType::NODE_48:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), deprecated_prefix_allocator);
 	case NType::NODE_256:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), deprecated_prefix_allocator);
 	default:
-		throw InternalException("Invalid node type for TransformToDeprecated: %d.", static_cast<uint8_t>(type));
+		throw InternalException("invalid node type for TransformToDeprecated: %s", EnumUtil::ToString(type));
 	}
 }
 
@@ -732,34 +727,42 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 
 void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
+	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art);
 
-	auto type = GetType();
-	switch (type) {
-	case NType::PREFIX:
-		return Prefix::VerifyAllocations(art, *this, node_counts);
-	case NType::LEAF:
-		return Ref<Leaf>(art, *this, type).DeprecatedVerifyAllocations(art, node_counts);
-	case NType::LEAF_INLINED:
-		return;
-	case NType::NODE_4:
-		VerifyAllocationsInternal(art, Ref<Node4>(art, *this, type), node_counts);
-		break;
-	case NType::NODE_16:
-		VerifyAllocationsInternal(art, Ref<Node16>(art, *this, type), node_counts);
-		break;
-	case NType::NODE_48:
-		VerifyAllocationsInternal(art, Ref<Node48>(art, *this, type), node_counts);
-		break;
-	case NType::NODE_256:
-		VerifyAllocationsInternal(art, Ref<Node256>(art, *this, type), node_counts);
-		break;
-	case NType::NODE_7_LEAF:
-	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF:
-		break;
-	}
+	auto handler = [&art, &node_counts](const Node &node) {
+		ARTScanHandlingResult result;
+		const auto type = node.GetType();
+		switch (type) {
+		case NType::LEAF_INLINED:
+			return ARTScanHandlingResult::SKIP;
+		case NType::LEAF: {
+			auto &leaf = Ref<Leaf>(art, node, type);
+			leaf.DeprecatedVerifyAllocations(art, node_counts);
+			return ARTScanHandlingResult::SKIP;
+		}
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF: {
+			result = ARTScanHandlingResult::SKIP;
+			break;
+		}
+		case NType::PREFIX:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256: {
+			result = ARTScanHandlingResult::CONTINUE;
+			break;
+		}
+		default:
+			throw InternalException("invalid node type for VerifyAllocations: %s", EnumUtil::ToString(type));
+		}
+		node_counts[GetAllocatorIdx(type)]++;
+		return result;
+	};
 
-	node_counts[GetAllocatorIdx(type)]++;
+	scanner.Init(handler, *this);
+	scanner.Scan(handler);
 }
 
 } // namespace duckdb

@@ -184,7 +184,7 @@ struct ValidityAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<ValidityAnalyzeState>(info);
 }
 
@@ -401,10 +401,6 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// dictionary encoding handles the validity itself
-		return;
-	}
 	result.Flatten(scan_count);
 
 	auto start = segment.GetRelativeIndex(state.row_index);

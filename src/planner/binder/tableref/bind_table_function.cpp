@@ -53,7 +53,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 		}
 		if (function.in_out_function) {
 			has_in_out_function = true;
-		} else if (function.function || function.bind_replace) {
+		} else if (function.function || function.bind_replace || function.bind_operator) {
 			has_standard_table_function = true;
 		} else {
 			throw InternalException("Function \"%s\" has neither in_out_function nor function defined",
@@ -197,19 +197,43 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
-	if (table_function.bind || table_function.bind_replace) {
+	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
+		if (table_function.bind_operator) {
+			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
+			if (new_plan) {
+				new_plan->ResolveOperatorTypes();
+				if (new_plan->types.size() != return_names.size()) {
+					throw InternalException("Failed to bind \"%s\": return_types/names must have same size",
+					                        table_function.name);
+				}
+				for (auto &binding : new_plan->GetColumnBindings()) {
+					if (binding.table_index != bind_index) {
+						throw InternalException(
+						    "Failed to bind \"%s\": root bind index must be the passed in bind index",
+						    table_function.name);
+					}
+				}
+				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
+				return new_plan;
+			}
+		}
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan) {
-				new_plan->alias = ref.alias;
-				new_plan->column_name_alias = ref.column_name_alias;
+				if (!ref.alias.empty()) {
+					new_plan->alias = ref.alias;
+				}
+				if (!ref.column_name_alias.empty()) {
+					new_plan->column_name_alias = ref.column_name_alias;
+				}
 				return CreatePlan(*Bind(*new_plan));
-			} else if (!table_function.bind) {
-				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
-				                      table_function.name);
 			}
+		}
+		if (!table_function.bind) {
+			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
+			                      table_function.name);
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 	} else {
@@ -232,8 +256,13 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			return_names[i] = "C" + to_string(i);
 		}
 	}
+	virtual_column_map_t virtual_columns;
+	if (table_function.get_virtual_columns) {
+		virtual_columns = table_function.get_virtual_columns(context, bind_data.get());
+	}
 
-	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
+	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
+	                                 virtual_columns);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
@@ -245,7 +274,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-	                              get->GetTable().get());
+	                              get->GetTable().get(), std::move(virtual_columns));
 	return std::move(get);
 }
 
@@ -272,8 +301,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog
-	auto &func_catalog = *GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, fexpr.function_name,
-	                                      OnEntryNotFound::THROW_EXCEPTION, error_context);
+
+	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.function_name, error_context);
+	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();

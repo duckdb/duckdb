@@ -34,15 +34,17 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t elements_scanned_p = 0,
-	                             idx_t result_set_size_p = 0)
-	    : time(time_p), elements_returned(elements_returned_p), result_set_size(result_set_size_p) {
+	explicit OperatorInformation() {
 	}
 
-	double time;
-	idx_t elements_returned;
-	idx_t result_set_size;
 	string name;
+
+	double time = 0;
+	idx_t elements_returned = 0;
+	idx_t result_set_size = 0;
+	idx_t system_peak_buffer_manager_memory = 0;
+	idx_t system_peak_temp_directory_size = 0;
+
 	InsertionOrderPreservingMap<string> extra_info;
 
 	void AddTime(double n_time) {
@@ -55,6 +57,18 @@ struct OperatorInformation {
 
 	void AddResultSetSize(idx_t n_result_set_size) {
 		result_set_size += n_result_set_size;
+	}
+
+	void UpdateSystemPeakBufferManagerMemory(idx_t used_memory) {
+		if (used_memory > system_peak_buffer_manager_memory) {
+			system_peak_buffer_manager_memory = used_memory;
+		}
+	}
+
+	void UpdateSystemPeakTempDirectorySize(idx_t used_swap) {
+		if (used_swap > system_peak_temp_directory_size) {
+			system_peak_temp_directory_size = used_swap;
+		}
 	}
 };
 
@@ -71,10 +85,13 @@ public:
 public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
+	DUCKDB_API void FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate);
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
+	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
+	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
 
 public:
 	ClientContext &context;
@@ -94,9 +111,10 @@ private:
 };
 
 struct QueryInfo {
-	QueryInfo() : blocked_thread_time(0) {};
+	QueryInfo() {
+	}
 	string query_name;
-	double blocked_thread_time;
+	ProfilingInfo query_global_info;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -164,6 +182,13 @@ public:
 	//! Return the root of the query tree
 	optional_ptr<ProfilingNode> GetRoot() {
 		return root.get();
+	}
+
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(GetRoot());
 	}
 
 private:

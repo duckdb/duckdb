@@ -236,6 +236,7 @@ public:
 
 	static bool IsRelease(const string &version_tag);
 	static bool CreateSuggestions(const string &extension_name, string &message);
+	static string ExtensionInstallDocumentationLink(const string &extension_name);
 
 private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,

@@ -542,6 +542,23 @@ typedef struct {
 	                                               idx_t row);
 #endif
 
+// New string functions that are added
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	char *(*duckdb_value_to_string)(duckdb_value value);
+#endif
+
+// An API to create new vector types
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
+	void (*duckdb_destroy_vector)(duckdb_vector *vector);
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_vector_reference_value)(duckdb_vector vector, duckdb_value value);
+	void (*duckdb_vector_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
+	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
+#endif
+
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -963,6 +980,19 @@ typedef struct {
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_string_functions
+#define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_vector_types
+#define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector
+#define duckdb_destroy_vector                duckdb_ext_api.duckdb_destroy_vector
+#define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_vector_reference_value        duckdb_ext_api.duckdb_vector_reference_value
+#define duckdb_vector_reference_vector       duckdb_ext_api.duckdb_vector_reference_vector
+#define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

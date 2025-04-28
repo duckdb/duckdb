@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
@@ -23,7 +24,7 @@ class TableStatistics;
 //! Abstraction will support, for example: tiering, versioning, or splitting into multiple block managers.
 class TableDataWriter {
 public:
-	explicit TableDataWriter(TableCatalogEntry &table);
+	explicit TableDataWriter(TableCatalogEntry &table, optional_ptr<ClientContext> client_context);
 	virtual ~TableDataWriter();
 
 public:
@@ -37,11 +38,12 @@ public:
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
 	virtual CheckpointType GetCheckpointType() const = 0;
 
-	TaskScheduler &GetScheduler();
 	DatabaseInstance &GetDatabase();
+	unique_ptr<TaskExecutor> CreateTaskExecutor();
 
 protected:
 	DuckTableEntry &table;
+	optional_ptr<ClientContext> client_context;
 	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
 };

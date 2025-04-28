@@ -96,6 +96,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (StringUtil::CIEquals(entry.first, "block_size")) {
 			continue;
 		}
+		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
+			continue;
+		}
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
 			continue;
 		}
@@ -173,11 +176,11 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(StorageOptions options) {
+void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
 	if (IsSystem()) {
-		catalog->Initialize(true);
+		catalog->Initialize(context, true);
 	} else {
-		catalog->Initialize(false);
+		catalog->Initialize(context, false);
 	}
 	if (storage) {
 		storage->Initialize(options);
@@ -247,7 +250,7 @@ void AttachedDatabase::Close() {
 			}
 			CheckpointOptions options;
 			options.wal_action = CheckpointWALAction::DELETE_WAL;
-			storage->CreateCheckpoint(options);
+			storage->CreateCheckpoint(nullptr, options);
 		}
 	} catch (...) { // NOLINT
 	}

@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 
 #ifdef DEBUG
 	for (auto &expr : op.expressions) {
@@ -15,7 +15,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		D_ASSERT(!expr->IsAggregate());
 	}
 #endif
-	if (plan->types.size() == op.types.size()) {
+	if (plan.GetTypes().size() == op.types.size()) {
 		// check if this projection can be omitted entirely
 		// this happens if a projection simply emits the columns in the same order
 		// e.g. PROJECTION(#0, #1, #2, #3, ...)
@@ -36,9 +36,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		}
 	}
 
-	auto projection = make_uniq<PhysicalProjection>(op.types, std::move(op.expressions), op.estimated_cardinality);
-	projection->children.push_back(std::move(plan));
-	return std::move(projection);
+	auto &proj = Make<PhysicalProjection>(op.types, std::move(op.expressions), op.estimated_cardinality);
+	proj.children.push_back(plan);
+	return proj;
 }
 
 } // namespace duckdb

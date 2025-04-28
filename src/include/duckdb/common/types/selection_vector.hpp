@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
@@ -19,7 +20,7 @@ class VectorBuffer;
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
 
-	unsafe_unique_array<sel_t> owned_data;
+	AllocatedData owned_data;
 };
 
 struct SelectionVector {
@@ -72,11 +73,11 @@ public:
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
 		selection_data = make_shared_ptr<SelectionData>(count);
-		sel_vector = selection_data->owned_data.get();
+		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {
 		selection_data = std::move(data);
-		sel_vector = selection_data->owned_data.get();
+		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
@@ -115,6 +116,7 @@ public:
 		return sel_vector;
 	}
 	void Verify(idx_t count, idx_t vector_size) const;
+	void Sort(idx_t count);
 
 private:
 	sel_t *sel_vector;

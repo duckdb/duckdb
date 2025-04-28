@@ -101,6 +101,8 @@ struct ClientConfig {
 	idx_t nested_loop_join_threshold = 5;
 	//! The number of rows we need on either table to choose a merge join over an IE join
 	idx_t merge_join_threshold = 1000;
+	//! The maximum number of rows to use the nested loop join implementation
+	idx_t asof_loop_join_threshold = 64;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
@@ -131,6 +133,8 @@ struct ClientConfig {
 	bool ieee_floating_point_ops = true;
 	//! Allow ordering by non-integer literals - ordering by such literals has no effect
 	bool order_by_non_integer_literal = false;
+	//! Disable casting from timestamp => timestamptz (naïve timestamps)
+	bool disable_timestamptz_casts = false;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;

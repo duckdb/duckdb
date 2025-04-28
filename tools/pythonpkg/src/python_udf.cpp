@@ -17,6 +17,7 @@
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -304,10 +305,6 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 
 		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
-		// owning references
-		vector<py::object> python_objects;
-		vector<PyObject *> python_results;
-		python_results.resize(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
@@ -324,8 +321,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			}
 			if (contains_null) {
 				// Immediately insert None, no need to call the function
-				python_objects.push_back(py::none());
-				python_results[row] = py::none().ptr();
+				FlatVector::SetNull(result, row, true);
 				continue;
 			}
 
@@ -338,18 +334,17 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					                            exception.what());
 				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
 					PyErr_Clear();
-					ret = Py_None;
+					FlatVector::SetNull(result, row, true);
+					continue;
 				} else {
 					throw NotImplementedException("Exception handling type not implemented");
 				}
 			} else if ((!ret || ret == Py_None) && default_null_handling) {
 				throw InvalidInputException(NullHandlingError());
 			}
-			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
-			python_results[row] = ret;
+			TransformPythonObject(ret, result, row);
 		}
 
-		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
 		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
@@ -377,6 +372,17 @@ struct ParameterKind {
 		}
 	}
 };
+
+static bool NumpyDeprecatesAccessToCore(const py::tuple &numpy_version) {
+	if (numpy_version.empty()) {
+		return false;
+	}
+	if (string(py::str(numpy_version[0])) == string("2")) {
+		//! Starting with numpy version 2.0.0 the use of 'core' is deprecated.
+		return true;
+	}
+	return false;
+}
 
 struct PythonUDFData {
 public:
@@ -480,9 +486,21 @@ public:
 	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects,
 	                           const ClientProperties &client_properties) {
 
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		// Import this module, because importing this from a non-main thread causes a segfault
-		(void)import_cache.numpy.core.multiarray();
+
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		py::handle core;
+		auto numpy = import_cache.numpy();
+		if (!numpy) {
+			throw InvalidInputException("'numpy' is required for this operation, but it wasn't installed");
+		}
+		auto numpy_version = py::cast<py::tuple>(numpy.attr("__version__"));
+		if (NumpyDeprecatesAccessToCore(numpy_version)) {
+			core = numpy.attr("_core");
+		} else {
+			core = numpy.attr("core");
+		}
+		(void)core.attr("multiarray");
 
 		scalar_function_t func;
 		if (vectorized) {

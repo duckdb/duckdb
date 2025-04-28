@@ -61,6 +61,30 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                     ClientProperties &options, ClientContext &context);
 
+void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                          ClientProperties &options, ClientContext &context, bool map_is_parent = false) {
+	child.format = "+s";
+	auto &child_types = StructType::GetChildTypes(type);
+	child.n_children = NumericCast<int64_t>(child_types.size());
+	root_holder.nested_children.emplace_back();
+	root_holder.nested_children.back().resize(child_types.size());
+	root_holder.nested_children_ptr.emplace_back();
+	root_holder.nested_children_ptr.back().resize(child_types.size());
+	for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+		root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
+	}
+	child.children = &root_holder.nested_children_ptr.back()[0];
+	for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+		InitializeChild(*child.children[type_idx], root_holder);
+		root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
+		child.children[type_idx]->name = root_holder.owned_type_names.back().get();
+		SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
+	}
+	if (map_is_parent) {
+		child.children[0]->flags = 0; // Set the 'keys' field to non-nullable
+	}
+}
+
 void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                        ClientProperties &options, ClientContext &context) {
 	child.format = "+m";
@@ -74,7 +98,7 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
 	child.children[0]->flags = 0; // Set the 'entries' field to non-nullable
-	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, context);
+	SetArrowStructFormat(root_holder, **child.children, ListType::GetChildType(type), options, context, true);
 }
 
 bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
@@ -265,26 +289,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
-		child.format = "+s";
-		auto &child_types = StructType::GetChildTypes(type);
-		child.n_children = NumericCast<int64_t>(child_types.size());
-		root_holder.nested_children.emplace_back();
-		root_holder.nested_children.back().resize(child_types.size());
-		root_holder.nested_children_ptr.emplace_back();
-		root_holder.nested_children_ptr.back().resize(child_types.size());
-		for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
-			root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
-		}
-		child.children = &root_holder.nested_children_ptr.back()[0];
-		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
-
-			InitializeChild(*child.children[type_idx], root_holder);
-
-			root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
-
-			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
-		}
+		SetArrowStructFormat(root_holder, child, type, options, context);
 		break;
 	}
 	case LogicalTypeId::ARRAY: {

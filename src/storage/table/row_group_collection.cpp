@@ -141,7 +141,7 @@ void RowGroupCollection::Verify() {
 // Scan
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
-                                        TableFilterSet *table_filters) {
+                                        optional_ptr<TableFilterSet> table_filters) {
 	auto row_group = row_groups->GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
@@ -404,12 +404,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
 
-	auto &table_sample = state.stats.GetTableSampleRef(*local_stats_lock);
-	if (!table_sample.destroyed) {
-		D_ASSERT(table_sample.type == SampleType::RESERVOIR_SAMPLE);
-		table_sample.AddToReservoir(chunk);
-	}
-
 	return new_row_group;
 }
 
@@ -441,22 +435,6 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
-	}
-
-	auto local_sample = state.stats.GetTableSample(*local_stats_lock);
-	auto global_sample = stats.GetTableSample(*global_stats_lock);
-
-	if (local_sample && global_sample) {
-		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &reservoir_sample = global_sample->Cast<ReservoirSample>();
-		reservoir_sample.Merge(std::move(local_sample));
-		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(reservoir_sample.GetSampleCount());
-		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
-	} else {
-		state.stats.SetTableSample(*local_stats_lock, std::move(local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	}
 
 	Verify();
@@ -607,10 +585,6 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
 
-	// When deleting destroy the sample.
-	auto stats_guard = stats.GetLock();
-	stats.DestroyTableSample(*stats_guard);
-
 	return delete_count;
 }
 
@@ -619,6 +593,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
                                 DataChunk &updates) {
+	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
@@ -648,9 +623,6 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
-	// on update destroy the sample
-	auto stats_guard = stats.GetLock();
-	stats.DestroyTableSample(*stats_guard);
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -776,7 +748,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 struct CollectionCheckpointState {
 	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer,
 	                          vector<SegmentNode<RowGroup>> &segments, TableStatistics &global_stats)
-	    : collection(collection), writer(writer), executor(writer.GetScheduler()), segments(segments),
+	    : collection(collection), writer(writer), executor(writer.CreateTaskExecutor()), segments(segments),
 	      global_stats(global_stats) {
 		writers.resize(segments.size());
 		write_data.resize(segments.size());
@@ -784,7 +756,7 @@ struct CollectionCheckpointState {
 
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
-	TaskExecutor executor;
+	unique_ptr<TaskExecutor> executor;
 	vector<SegmentNode<RowGroup>> &segments;
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
@@ -795,7 +767,7 @@ struct CollectionCheckpointState {
 class BaseCheckpointTask : public BaseExecutorTask {
 public:
 	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state)
-	    : BaseExecutorTask(checkpoint_state.executor), checkpoint_state(checkpoint_state) {
+	    : BaseExecutorTask(*checkpoint_state.executor), checkpoint_state(checkpoint_state) {
 	}
 
 protected:
@@ -1028,7 +1000,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// schedule the vacuum task
 	auto vacuum_task = make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count,
 	                                         merge_rows, state.row_start);
-	checkpoint_state.executor.ScheduleTask(std::move(vacuum_task));
+	checkpoint_state.executor->ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
@@ -1073,17 +1045,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
 			auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-			checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
+			checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
 			vacuum_state.row_start += entry.node->count;
 		}
 	} catch (const std::exception &e) {
 		ErrorData error(e);
-		checkpoint_state.executor.PushError(std::move(error));
-		checkpoint_state.executor.WorkOnTasks(); // ensure all tasks have completed first before rethrowing
+		checkpoint_state.executor->PushError(std::move(error));
+		checkpoint_state.executor->WorkOnTasks(); // ensure all tasks have completed first before rethrowing
 		throw;
 	}
 	// all tasks have been successfully scheduled - execute tasks until we are done
-	checkpoint_state.executor.WorkOnTasks();
+	checkpoint_state.executor->WorkOnTasks();
 
 	// no errors - finalize the row groups
 	idx_t new_total_rows = 0;
@@ -1110,9 +1082,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 //===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::CommitDropColumn(idx_t index) {
+void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDropColumn(index);
+		row_group.CommitDropColumn(column_index);
 	}
 }
 
@@ -1171,8 +1143,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-	// When adding a column destroy the sample
-	stats.DestroyTableSample(*lock);
 
 	return result;
 }
@@ -1291,14 +1261,6 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 }
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
-	auto lock = stats.GetLock();
-	auto &sample = stats.GetTableSampleRef(*lock);
-	if (!sample.destroyed) {
-		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto ret = sample.Copy();
-		ret->Cast<ReservoirSample>().EvictOverBudgetSamples();
-		return ret;
-	}
 	return nullptr;
 }
 

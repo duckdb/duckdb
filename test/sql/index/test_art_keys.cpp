@@ -45,7 +45,7 @@ static void TestKeys(duckdb::vector<ARTKey> &keys) {
 	}
 }
 
-static ARTKey CreateCompoundKey(ArenaAllocator &arena_allocator, string str_val, int32_t int_val) {
+static ARTKey CreateCompoundKey(ArenaAllocator &arena_allocator, const string &str_val, int32_t int_val) {
 
 	auto key_left = ARTKey::CreateARTKey<string_t>(arena_allocator, string_t(str_val.c_str(), str_val.size()));
 	auto key_right = ARTKey::CreateARTKey<int32_t>(arena_allocator, int_val);

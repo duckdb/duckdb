@@ -1462,7 +1462,7 @@ string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
-	return UUID::FromString(input.GetString(), result);
+	return UUID::FromString(input.GetString(), result, parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1556,6 +1556,7 @@ template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters) {
 	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result)) {
 	case TimestampCastResult::SUCCESS:
+	case TimestampCastResult::STRICT_UTC:
 		return true;
 	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
 		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);

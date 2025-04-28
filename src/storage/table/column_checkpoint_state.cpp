@@ -71,7 +71,6 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 			}
 		}
 	}
-
 	Clear();
 }
 

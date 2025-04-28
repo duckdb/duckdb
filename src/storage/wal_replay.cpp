@@ -416,7 +416,7 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// Read the data into a buffer handle.
-			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 
@@ -658,7 +658,6 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	if (DeserializeOnly()) {
 		return;
 	}
-
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure that the index type exists.
@@ -666,41 +665,16 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	auto index_type = context.db->config.GetIndexTypes().FindByName(info.index_type);
-	if (!index_type) {
-		throw InternalException("Index type \"%s\" not recognized", info.index_type);
-	}
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
+	auto &storage = table.GetStorage();
+	auto &io_manager = TableIOManager::Get(storage);
 
 	// Create the index in the catalog.
-	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
-	auto &index = table.schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
+	table.schema.CreateIndex(context, info, table);
 
-	// Add the table to the bind context to bind the parsed expressions.
-	auto binder = Binder::CreateBinder(context);
-	vector<LogicalType> column_types;
-	vector<string> column_names;
-	for (auto &col : table.GetColumns().Logical()) {
-		column_types.push_back(col.Type());
-		column_names.push_back(col.Name());
-	}
-
-	// create a binder to bind the parsed expressions
-	vector<ColumnIndex> column_ids;
-	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
-	IndexBinder idx_binder(*binder, context);
-
-	// Bind the parsed expressions to create unbound expressions.
-	vector<unique_ptr<Expression>> unbound_expressions;
-	for (auto &expr : index.parsed_expressions) {
-		auto copy = expr->Copy();
-		unbound_expressions.push_back(idx_binder.Bind(copy));
-	}
-
-	auto &storage = table.GetStorage();
-	CreateIndexInput input(TableIOManager::Get(storage), storage.db, info.constraint_type, info.index_name,
-	                       info.column_ids, unbound_expressions, index_info, info.options);
-	auto index_instance = index_type->create_instance(input);
-	storage.AddIndex(std::move(index_instance));
+	// add the index to the storage
+	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
+	storage.AddIndex(std::move(unbound_index));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -764,7 +738,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
 	PersistentCollectionData data;
 	deserializer.Set<DatabaseInstance &>(db.GetDatabase());
-	CompressionInfo compression_info(block_manager.GetBlockSize());
+	CompressionInfo compression_info(block_manager);
 	deserializer.Set<const CompressionInfo &>(compression_info);
 	deserializer.ReadProperty(101, "row_group_data", data);
 	deserializer.Unset<const CompressionInfo>();

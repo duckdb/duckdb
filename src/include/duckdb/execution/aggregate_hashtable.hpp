@@ -13,12 +13,11 @@
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
 class BlockHandle;
-class BufferHandle;
 
 struct FlushMoveState;
 
@@ -29,6 +28,14 @@ struct FlushMoveState;
    as input the set of groups and the types of the aggregates to compute and
    stores them in the HT. It uses linear probing for collision resolution.
 */
+struct AggregateHTScanState {
+public:
+	AggregateHTScanState() {
+	}
+
+	idx_t partition_idx = 0;
+	TupleDataScanState scan_states;
+};
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
@@ -46,6 +53,7 @@ public:
 	constexpr static double LOAD_FACTOR = 1.25;
 
 	//! Get the layout of this HT
+	shared_ptr<TupleDataLayout> GetLayoutPtr();
 	const TupleDataLayout &GetLayout() const;
 	//! Number of groups in the HT
 	idx_t Count() const;
@@ -71,6 +79,9 @@ public:
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
+
+	void InitializeScan(AggregateHTScanState &scan_state);
+	bool Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows, DataChunk &payload_rows);
 
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
@@ -104,6 +115,7 @@ public:
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
 
 private:
+	ClientContext &context;
 	//! Efficiently matches groups
 	RowMatcher row_matcher;
 
@@ -120,25 +132,6 @@ private:
 		unsafe_unique_array<bool> found_entry;
 		idx_t capacity = 0;
 	};
-
-	//! Append state
-	struct AggregateHTAppendState {
-		AggregateHTAppendState();
-
-		PartitionedTupleDataAppendState partitioned_append_state;
-		PartitionedTupleDataAppendState unpartitioned_append_state;
-
-		Vector ht_offsets;
-		Vector hash_salts;
-		SelectionVector group_compare_vector;
-		SelectionVector no_match_vector;
-		SelectionVector empty_vector;
-		SelectionVector new_groups;
-		Vector addresses;
-		unsafe_unique_array<UnifiedVectorFormat> group_data;
-		DataChunk group_chunk;
-		AggregateDictionaryState dict_state;
-	} state;
 
 	//! If we have this many or more radix bits, we use the unpartitioned data collection too
 	static constexpr idx_t UNPARTITIONED_RADIX_BITS_THRESHOLD = 3;
@@ -172,6 +165,27 @@ private:
 	shared_ptr<ArenaAllocator> aggregate_allocator;
 	//! Owning arena allocators that this HT has data from
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
+
+	//! Append state
+	struct AggregateHTAppendState {
+		explicit AggregateHTAppendState(ArenaAllocator &allocator);
+
+		PartitionedTupleDataAppendState partitioned_append_state;
+		PartitionedTupleDataAppendState unpartitioned_append_state;
+
+		Vector hashes;
+		Vector ht_offsets;
+		Vector hash_salts;
+		SelectionVector group_compare_vector;
+		SelectionVector no_match_vector;
+		SelectionVector empty_vector;
+		SelectionVector new_groups;
+		Vector addresses;
+		DataChunk group_chunk;
+		AggregateDictionaryState dict_state;
+
+		RowOperationsState row_state;
+	} state;
 
 private:
 	//! Disabled the copy constructor

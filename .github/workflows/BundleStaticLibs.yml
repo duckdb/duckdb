@@ -16,7 +16,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -81,7 +80,8 @@ jobs:
 
       - name: Bundle static library
         shell: bash
-        run: make bundle-library-o
+        run: |
+          make gather-libs
 
       - name: Print platform
         shell: bash
@@ -93,19 +93,22 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          python scripts/amalgamation.py
-          zip -j static-lib-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libduckdb_bundle.a
-          ./scripts/upload-assets-to-staging.sh github_release static-lib-osx-${{ matrix.architecture }}.zip
+          python3 scripts/amalgamation.py
+          zip -r -j static-libs-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-osx-${{ matrix.architecture }}.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: duckdb-static-lib-osx-${{ matrix.architecture }}
+          name: duckdb-static-libs-osx-${{ matrix.architecture }}
           path: |
-            static-lib-osx-${{ matrix.architecture }}.zip
+            static-libs-osx-${{ matrix.architecture }}.zip
 
   bundle-mingw-static-lib:
     name: Windows MingW static libs
     runs-on: windows-2019
+    env:
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -124,21 +127,23 @@ jobs:
 
       - uses: ./.github/actions/build_extensions
         with:
-          deploy_as: windows_amd64_mingw
           duckdb_arch: windows_amd64_mingw
           vcpkg_target_triplet: x64-mingw-static
           treat_warn_as_error: 0
           override_cc: gcc
           override_cxx: g++
           vcpkg_build: 1
-          no_static_linking: 1
+          no_static_linking: 0
           run_tests: 0
           run_autoload_tests: 0
+          build_in_tree_extensions: 0
+          build_out_of_tree_extensions: 0
+          bundle_static_lib_mode: 1
 
       - name: Bundle static library
         shell: bash
         run: |
-          make bundle-library-obj
+          make gather-libs
 
       - name: Deploy
         shell: bash
@@ -146,11 +151,61 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          zip -j static-lib-windows-mingw.zip src/include/duckdb.h build/release/libduckdb_bundle.a
-          ./scripts/upload-assets-to-staging.sh github_release static-lib-windows-mingw.zip
+          zip -r -j static-libs-windows-mingw.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: duckdb-static-lib-windows-mingw
+          name: duckdb-static-libs-windows-mingw
           path: |
-            static-lib-windows-mingw.zip
+            static-libs-windows-mingw.zip
+
+  bundle-linux-static-libs:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64 }, { runner: ubuntu-24.04-arm, arch: arm64, image: aarch64 } ]
+
+    name: Linux Static Libraries (${{ matrix.config.arch }})
+    runs-on: ${{ matrix.config.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - name: Build
+        shell: bash
+        run: |
+          export PWD=`pwd`
+          docker run                                                             \
+          -v$PWD:$PWD                                                            \
+          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
+          -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
+          -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
+          -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
+          -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+          -e BUILD_BENCHMARK=1                                                   \
+          -e FORCE_WARN_UNUSED=1                                                 \
+          quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
+          bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make gather-libs -C $PWD"
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          python3 scripts/amalgamation.py
+          zip -r -j static-libs-linux-${{ matrix.config.arch }}.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-${{ matrix.config.arch }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-static-libs-linux-${{ matrix.config.arch }}
+          path: |
+            static-libs-linux-${{ matrix.config.arch }}.zip

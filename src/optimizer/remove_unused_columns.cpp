@@ -87,10 +87,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for inner joins with equality predicates in the form of (X=Y)
 			// we can replace any references to the RHS (Y) to references to the LHS (X)
 			// this reduces the amount of columns we need to extract from the join hash table
+			// (except in the case of floating point numbers which have +0 and -0, equal but different).
 			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 					if (cond.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    !(cond.left->Cast<BoundColumnRefExpression>().return_type.IsFloating() &&
+					      cond.right->Cast<BoundColumnRefExpression>().return_type.IsFloating())) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
@@ -240,8 +243,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					throw InternalException("Could not find column index for table filter");
 				}
 
-				auto column_type =
-				    filter.first == COLUMN_IDENTIFIER_ROW_ID ? LogicalType::ROW_TYPE : get.returned_types[filter.first];
+				auto column_type = get.GetColumnType(ColumnIndex(filter.first));
 
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
@@ -261,9 +263,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (entry == column_references.end()) {
 					throw InternalException("RemoveUnusedColumns - could not find referenced column");
 				}
-				if (final_column_ids[col_sel_idx].HasChildren()) {
-					throw InternalException("RemoveUnusedColumns - LogicalGet::column_ids already has children");
-				}
 				ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
 				column_ids.emplace_back(new_index);
 			}
@@ -271,7 +270,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns
-				column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+				column_ids.emplace_back(get.GetAnyColumn());
 			}
 			get.SetColumnIds(std::move(column_ids));
 
@@ -304,18 +303,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		everything_referenced = true;
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-		everything_referenced = true;
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_CTE_REF: {
-		everything_referenced = true;
-		break;
-	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 	case LogicalOperatorType::LOGICAL_PIVOT: {
 		everything_referenced = true;
 		break;

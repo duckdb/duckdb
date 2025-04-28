@@ -1,0 +1,15 @@
+# name: benchmark/micro/array/large_array_dense_select.benchmark
+# description: Array Dense Select: select 33% of all arrays, randomly split
+# group: [array]
+
+name Large Array Dense Select
+group array
+
+load
+CREATE TABLE arrays AS SELECT i%2000 as sparse_id, i%3 as dense_id, [i + x for x in range(1024)]::INT[1024] arr FROM range(10000000) tbl(i);
+
+run
+SELECT SUM(LIST_SUM(arr)) FROM arrays WHERE dense_id=0;
+
+result I
+17068414293682176

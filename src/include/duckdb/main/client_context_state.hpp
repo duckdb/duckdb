@@ -13,6 +13,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -37,6 +38,11 @@ struct PreparedStatementCallbackInfo {
 
 	PreparedStatementData &prepared_statement;
 	const PendingQueryParameters &parameters;
+};
+
+struct BindPreparedStatementCallbackInfo {
+	PreparedStatementData &prepared_statement;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 };
 
 //! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
@@ -78,7 +84,15 @@ public:
 	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
+	virtual RebindQueryInfo OnRebindPreparedStatement(ClientContext &context, BindPreparedStatementCallbackInfo &info,
+	                                                  RebindQueryInfo current_rebind) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
 	virtual void WriteProfilingInformation(std::ostream &ss) {
+	}
+	virtual void OnTaskStart(ClientContext &context) {
+	}
+	virtual void OnTaskStop(ClientContext &context) {
 	}
 
 public:

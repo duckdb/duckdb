@@ -47,7 +47,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 }
 
-void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
+void ColumnLifetimeAnalyzer::ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_ref = expr.Cast<BoundColumnRefExpression>();
 		bindings.push_back(bound_ref.binding);
@@ -108,9 +108,11 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
 		//! We still need to project all values from these operators so the projection
 		//! on top of them can select from only the table values being inserted.
+	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		// for set operations/materialized CTEs we don't remove anything, just recursively visit the children
 		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
@@ -221,6 +223,9 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 
 	// Create a projection and swap the operators accordingly
 	auto projection = make_uniq<LogicalProjection>(table_index, std::move(expressions));
+	if (child->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(child->estimated_cardinality);
+	}
 	projection->children.emplace_back(std::move(child));
 	child = std::move(projection);
 

@@ -1,5 +1,9 @@
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 
+#include "duckdb/common/types/value_map.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
@@ -48,23 +52,21 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(DBConfig &config, 
 	py::list projection_list = py::cast(column_list);
 
 	bool has_filter = filters && !filters->filters.empty();
+	py::dict kwargs;
+	if (!column_list.empty()) {
+		kwargs["columns"] = projection_list;
+	}
 
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
-		}
-	} else {
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
+		if (!filter.is(py::none())) {
+			kwargs["filter"] = filter;
 		}
 	}
+	return arrow_scanner(arrow_obj_handle, **kwargs);
 }
+
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
@@ -304,6 +306,37 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		auto &constant_filter = filter.Cast<ConstantFilter>();
 		auto constant_field = field(py::tuple(py::cast(column_ref)));
 		auto constant_value = GetScalar(constant_filter.constant, timezone_config, type);
+
+		bool is_nan = false;
+		auto &constant = constant_filter.constant;
+		auto &constant_type = constant.type();
+		if (constant_type.id() == LogicalTypeId::FLOAT) {
+			is_nan = Value::IsNan(constant.GetValue<float>());
+		} else if (constant_type.id() == LogicalTypeId::DOUBLE) {
+			is_nan = Value::IsNan(constant.GetValue<double>());
+		}
+
+		// Special handling for NaN comparisons (to explicitly violate IEEE-754)
+		if (is_nan) {
+			switch (constant_filter.comparison_type) {
+			case ExpressionType::COMPARE_EQUAL:
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				return constant_field.attr("is_nan")();
+			case ExpressionType::COMPARE_LESSTHAN:
+			case ExpressionType::COMPARE_NOTEQUAL:
+				return constant_field.attr("is_nan")().attr("__invert__")();
+			case ExpressionType::COMPARE_GREATERTHAN:
+				// Nothing is greater than NaN
+				return import_cache.pyarrow.dataset().attr("scalar")(false);
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+				// Everything is less than or equal to NaN
+				return import_cache.pyarrow.dataset().attr("scalar")(true);
+			default:
+				throw NotImplementedException("Unsupported comparison type (%s) for NaN values",
+				                              EnumUtil::ToString(constant_filter.comparison_type));
+			}
+		}
+
 		switch (constant_filter.comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
 			return constant_field.attr("__eq__")(constant_value);
@@ -318,7 +351,8 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		case ExpressionType::COMPARE_NOTEQUAL:
 			return constant_field.attr("__ne__")(constant_value);
 		default:
-			throw NotImplementedException("Comparison Type can't be an Arrow Scan Pushdown Filter");
+			throw NotImplementedException("Comparison Type %s can't be an Arrow Scan Pushdown Filter",
+			                              EnumUtil::ToString(constant_filter.comparison_type));
 		}
 	}
 	//! We do not pushdown is null yet
@@ -337,6 +371,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
 			auto &child_filter = *or_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
 			} else {
@@ -351,6 +388,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < and_filter.child_filters.size(); i++) {
 			auto &child_filter = *and_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
 			} else {
@@ -370,10 +410,30 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		                                           struct_child_type);
 		return child_expr;
 	}
-	case TableFilterType::OPTIONAL_FILTER:
-		return py::none();
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &optional_filter = filter.Cast<OptionalFilter>();
+		if (!optional_filter.child_filter) {
+			return py::none();
+		}
+		return TransformFilterRecursive(*optional_filter.child_filter, column_ref, timezone_config, type);
+	}
+	case TableFilterType::IN_FILTER: {
+		auto &in_filter = filter.Cast<InFilter>();
+		ConjunctionOrFilter or_filter;
+		value_set_t unique_values;
+		for (const auto &value : in_filter.values) {
+			if (unique_values.find(value) == unique_values.end()) {
+				unique_values.insert(value);
+			}
+		}
+		for (const auto &value : unique_values) {
+			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
+		}
+		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+	}
 	default:
-		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");
+		throw NotImplementedException("Pushdown Filter Type %s is not currently supported in PyArrow Scans",
+		                              EnumUtil::ToString(filter.filter_type));
 	}
 }
 

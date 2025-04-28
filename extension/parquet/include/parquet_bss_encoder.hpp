@@ -15,11 +15,14 @@ namespace duckdb {
 class BssEncoder {
 public:
 	explicit BssEncoder(const idx_t total_value_count_p, const idx_t bit_width_p)
-	    : total_value_count(total_value_count_p), bit_width(bit_width_p), count(0),
-	      buffer(Allocator::DefaultAllocator().Allocate(total_value_count * bit_width + 1)) {
+	    : total_value_count(total_value_count_p), bit_width(bit_width_p), count(0) {
 	}
 
 public:
+	void BeginWrite(Allocator &allocator) {
+		buffer = allocator.Allocate(total_value_count * bit_width + 1);
+	}
+
 	template <class T>
 	void WriteValue(const T &value) {
 		D_ASSERT(sizeof(T) == bit_width);
@@ -30,7 +33,6 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(count == total_value_count);
 		writer.WriteData(buffer.get(), total_value_count * bit_width);
 	}
 

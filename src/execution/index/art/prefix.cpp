@@ -40,7 +40,7 @@ idx_t Prefix::GetMismatchWithOther(const Prefix &l_prefix, const Prefix &r_prefi
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth) {
+optional_idx Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth) {
 	Prefix prefix(art, node);
 	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 		if (prefix.data[i] != key[depth]) {
@@ -48,7 +48,7 @@ idx_t Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, 
 		}
 		depth++;
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx::Invalid();
 }
 
 uint8_t Prefix::GetByte(const ART &art, const Node &node, const uint8_t pos) {
@@ -99,23 +99,6 @@ void Prefix::Free(ART &art, Node &node) {
 	node.Clear();
 }
 
-void Prefix::InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds) {
-	auto buffer_count = upper_bounds[Node::GetAllocatorIdx(PREFIX)];
-	Node next = node;
-	Prefix prefix(art, next, true);
-
-	while (next.GetType() == PREFIX) {
-		next = *prefix.ptr;
-		if (prefix.ptr->GetType() == PREFIX) {
-			prefix.ptr->IncreaseBufferId(buffer_count);
-			prefix = Prefix(art, next, true);
-		}
-	}
-
-	node.IncreaseBufferId(buffer_count);
-	prefix.ptr->InitMerge(art, upper_bounds);
-}
-
 void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
                     const GateStatus status) {
 	D_ASSERT(!parent.IsAnyLeaf());
@@ -160,14 +143,14 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 }
 
 template <class NODE>
-idx_t TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
-                       const bool is_mutable = false) {
+optional_idx TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
+                              const bool is_mutable = false) {
 	D_ASSERT(node.get().HasMetadata());
 	D_ASSERT(node.get().GetType() == NType::PREFIX);
 
 	while (node.get().GetType() == NType::PREFIX) {
 		auto pos = Prefix::GetMismatchWithKey(art, node, key, depth);
-		if (pos != DConstants::INVALID_INDEX) {
+		if (pos.IsValid()) {
 			return pos;
 		}
 
@@ -177,14 +160,18 @@ idx_t TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t
 			break;
 		}
 	}
-	return DConstants::INVALID_INDEX;
+
+	// We return an invalid index, if (and only if) the next node is:
+	// 1. not a prefix, or
+	// 2. a gate.
+	return optional_idx::Invalid();
 }
 
-idx_t Prefix::Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth) {
+optional_idx Prefix::Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth) {
 	return TraverseInternal<const Node>(art, node, key, depth);
 }
 
-idx_t Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth) {
+optional_idx Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth) {
 	return TraverseInternal<Node>(art, node, key, depth, true);
 }
 
@@ -300,15 +287,14 @@ ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t de
 	// We recurse into the next node, if
 	// (1) the prefix matches the key.
 	// (2) we reach a gate.
-	if (pos == DConstants::INVALID_INDEX) {
-		if (next.get().GetType() != NType::PREFIX || next.get().GetGateStatus() == GateStatus::GATE_SET) {
-			return art.Insert(next, key, depth, row_id, status, delete_art, append_mode);
-		}
+	if (!pos.IsValid()) {
+		D_ASSERT(next.get().GetType() != NType::PREFIX || next.get().GetGateStatus() == GateStatus::GATE_SET);
+		return art.Insert(next, key, depth, row_id, status, delete_art, append_mode);
 	}
 
 	Node remainder;
-	auto byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos));
-	auto split_status = Split(art, next, remainder, UnsafeNumericCast<uint8_t>(pos));
+	auto byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos.GetIndex()));
+	auto split_status = Split(art, next, remainder, UnsafeNumericCast<uint8_t>(pos.GetIndex()));
 	Node4::New(art, next);
 	next.get().SetGateStatus(split_status);
 
@@ -316,7 +302,7 @@ ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t de
 	Node4::InsertChild(art, next, byte, remainder);
 
 	if (status == GateStatus::GATE_SET) {
-		D_ASSERT(pos != ROW_ID_COUNT);
+		D_ASSERT(pos.GetIndex() != ROW_ID_COUNT);
 		Node new_row_id;
 		Leaf::New(new_row_id, key.GetRowId());
 		Node::InsertChild(art, next, key[depth], new_row_id);
@@ -330,6 +316,7 @@ ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t de
 		auto count = key.len - depth - 1;
 		Prefix::New(art, ref, key, depth + 1, count);
 	}
+
 	// Create the inlined leaf.
 	Leaf::New(ref, row_id.GetRowId());
 	Node4::InsertChild(art, next, key[depth], leaf);
@@ -353,32 +340,6 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 
 	auto child = ref.get().VerifyAndToString(art, only_verify);
 	return only_verify ? "" : str + child;
-}
-
-void Prefix::VerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts) {
-	auto idx = Node::GetAllocatorIdx(PREFIX);
-	reference<const Node> ref(node);
-	Iterator(art, ref, false, false, [&](Prefix &prefix) { node_counts[idx]++; });
-	return ref.get().VerifyAllocations(art, node_counts);
-}
-
-void Prefix::Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes) {
-	bool set = indexes.find(Node::GetAllocatorIdx(PREFIX)) != indexes.end();
-	auto &allocator = Node::GetAllocator(art, PREFIX);
-
-	reference<Node> ref(node);
-	while (ref.get().GetType() == PREFIX) {
-		if (set && allocator.NeedsVacuum(ref)) {
-			auto status = ref.get().GetGateStatus();
-			ref.get() = allocator.VacuumPointer(ref);
-			ref.get().SetMetadata(static_cast<uint8_t>(PREFIX));
-			ref.get().SetGateStatus(status);
-		}
-		Prefix prefix(art, ref, true);
-		ref = *prefix.ptr;
-	}
-
-	ref.get().Vacuum(art, indexes);
 }
 
 void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {

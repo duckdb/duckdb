@@ -946,4 +946,70 @@ class TestArrowFilterPushdown(object):
         duck_probe = duckdb_conn.table("probe")
         duck_probe_arrow = duck_probe.arrow()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
-        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a in (1, 999)").fetchall() == [(1,), (999,)]
+        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a = any([1,999])").fetchall() == [(1,), (999,)]
+
+    def test_pushdown_of_optional_filter(self, duckdb_cursor):
+        cardinality_table = pa.Table.from_pydict(
+            {
+                'column_name': [
+                    'id',
+                    'product_code',
+                    'price',
+                    'quantity',
+                    'category',
+                    'is_available',
+                    'rating',
+                    'discount',
+                    'color',
+                ],
+                'cardinality': [100, 100, 100, 45, 5, 3, 6, 39, 5],
+            }
+        )
+
+        result = duckdb.query(
+            """
+            SELECT *
+            FROM cardinality_table
+            WHERE cardinality > 1
+            ORDER BY cardinality ASC
+        """
+        )
+        res = result.fetchall()
+        assert res == [
+            ('is_available', 3),
+            ('category', 5),
+            ('color', 5),
+            ('rating', 6),
+            ('discount', 39),
+            ('quantity', 45),
+            ('id', 100),
+            ('product_code', 100),
+            ('price', 100),
+        ]
+
+    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the greatest value
+    def test_nan_filter_pushdown(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            """
+            create table test as select a::DOUBLE a from VALUES
+                ('inf'),
+                ('nan'),
+                ('0.34234'),
+                ('34234234.00005'),
+                ('-nan')
+            t(a);
+        """
+        )
+
+        def assert_equal_results(con, arrow_table, query):
+            duckdb_res = con.sql(query.format(table='test')).fetchall()
+            arrow_res = con.sql(query.format(table='arrow_table')).fetchall()
+            assert len(duckdb_res) == len(arrow_res)
+
+        arrow_table = duckdb_cursor.table('test').arrow()
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a > 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a >= 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a < 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a <= 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a = 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a != 'NaN'::FLOAT")

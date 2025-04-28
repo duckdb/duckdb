@@ -77,7 +77,7 @@ SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[]
 query I
 SELECT ARRAY[[1, 2], [3, 4]]::VARCHAR[]
 ----
-[[1, 2], [3, 4]]
+['[1, 2]', '[3, 4]']
 
 # double unnest
 statement error

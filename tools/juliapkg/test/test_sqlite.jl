@@ -171,6 +171,7 @@ end
         DuckDB.drop!(db, "temp")
 
         DBInterface.execute(db, "CREATE TABLE temp AS SELECT * FROM Album")
+        # FIXME Does it make sense to use named parameters here?
         r = DBInterface.execute(db, "SELECT * FROM temp LIMIT ?", (a = 3,)) |> columntable
         @test length(r) == 3 && length(r[1]) == 3
         r = DBInterface.execute(db, "SELECT * FROM temp LIMIT ?", a = 3) |> columntable

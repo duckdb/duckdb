@@ -13,6 +13,8 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 #include <cstring>
 
@@ -47,11 +49,12 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
                                                                 const LogicalType &type, const idx_t start,
-                                                                const idx_t segment_size, const idx_t block_size) {
+                                                                const idx_t segment_size, BlockManager &block_manager) {
 
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
+	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
+	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_manager);
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
@@ -132,11 +135,11 @@ void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &res
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
-                           idx_t &sel_count, const TableFilter &filter) {
+                           idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	if (!function.get().filter) {
 		throw InternalException("ColumnSegment::Filter not implemented for this compression method");
 	}
-	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter);
+	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter, filter_state);
 }
 
 void ColumnSegment::Skip(ColumnScanState &state) {
@@ -274,10 +277,6 @@ DataPointer ColumnSegment::GetDataPointer() {
 // Drop Segment
 //===--------------------------------------------------------------------===//
 void ColumnSegment::CommitDropSegment() {
-	if (segment_type != ColumnSegmentType::PERSISTENT) {
-		// not persistent
-		return;
-	}
 	if (block_id != INVALID_BLOCK) {
 		GetBlockManager().MarkBlockAsModified(block_id);
 	}
@@ -407,21 +406,25 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 }
 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-                                     const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count) {
+                                     const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+                                     idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
 		return scan_count;
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
+		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
 		idx_t count_total = 0;
 		SelectionVector result_sel(approved_tuple_count);
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
-		for (auto &child_filter : conjunction_or.child_filters) {
+		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
+			auto &child_filter = *conjunction_or.child_filters[child_idx];
 			SelectionVector temp_sel;
 			temp_sel.Initialize(sel);
 			idx_t temp_tuple_count = approved_tuple_count;
-			idx_t temp_count = FilterSelection(temp_sel, vector, vdata, *child_filter, scan_count, temp_tuple_count);
+			idx_t temp_count = FilterSelection(temp_sel, vector, vdata, child_filter, *state.child_states[child_idx],
+			                                   scan_count, temp_tuple_count);
 			// tuples passed, move them into the actual result vector
 			for (idx_t i = 0; i < temp_count; i++) {
 				auto new_idx = temp_sel.get_index(i);
@@ -443,8 +446,11 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		for (auto &child_filter : conjunction_and.child_filters) {
-			FilterSelection(sel, vector, vdata, *child_filter, scan_count, approved_tuple_count);
+		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
+		for (idx_t child_idx = 0; child_idx < conjunction_and.child_filters.size(); child_idx++) {
+			auto &child_filter = *conjunction_and.child_filters[child_idx];
+			FilterSelection(sel, vector, vdata, child_filter, *state.child_states[child_idx], scan_count,
+			                approved_tuple_count);
 		}
 		return approved_tuple_count;
 	}
@@ -536,18 +542,76 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		}
 		return approved_tuple_count;
 	}
-	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NULL: {
 		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
-	case TableFilterType::IS_NOT_NULL:
+	}
+	case TableFilterType::IS_NOT_NULL: {
 		return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
+	}
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		// Apply the filter on the child vector
 		auto &child_vec = StructVector::GetEntries(vector)[struct_filter.child_idx];
 		UnifiedVectorFormat child_data;
 		child_vec->ToUnifiedFormat(scan_count, child_data);
-		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, scan_count,
+		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
 		                       approved_tuple_count);
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &state = filter_state.Cast<ExpressionFilterState>();
+		SelectionVector result_sel(approved_tuple_count);
+		if (scan_count > STANDARD_VECTOR_SIZE) {
+			// scan count is > vector size - split up the vector into multiple chunks
+			idx_t offset = 0;
+			idx_t result_offset = 0;
+			idx_t current_sel_offset = 0;
+			SelectionVector current_sel(approved_tuple_count);
+			while (offset < scan_count) {
+				idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count - offset);
+				idx_t chunk_end = offset + chunk_count;
+				DataChunk chunk;
+				chunk.data.emplace_back(vector, offset, chunk_end);
+				chunk.SetCardinality(chunk_count);
+
+				// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
+				idx_t current_count = 0;
+				for (; current_sel_offset < approved_tuple_count; current_sel_offset++) {
+					auto sel_index = sel.get_index(current_sel_offset);
+					if (sel_index >= chunk_end) {
+						// exhausted the chunk
+						break;
+					}
+					if (sel_index < offset) {
+						throw InternalException("sel_index < offset in expression filter");
+					}
+					current_sel.set_index(current_count++, sel_index - offset);
+				}
+				if (current_count == 0) {
+					// no matching tuples in this chunk
+					offset += chunk_count;
+					continue;
+				}
+				auto current_result_data = result_sel.data() + result_offset;
+				SelectionVector current_result_sel(current_result_data);
+				idx_t new_matches =
+				    state.executor.SelectExpression(chunk, current_result_sel, current_sel, current_count);
+				// increment all matches by the offset
+				for (idx_t i = 0; i < new_matches; i++) {
+					current_result_data[i] += offset;
+				}
+				result_offset += new_matches;
+				offset += chunk_count;
+			}
+			approved_tuple_count = result_offset;
+		} else {
+			// standard case: we can handle everything at once - run the expression once
+			DataChunk chunk;
+			chunk.data.emplace_back(vector);
+			chunk.SetCardinality(scan_count);
+			approved_tuple_count = state.executor.SelectExpression(chunk, result_sel, sel, approved_tuple_count);
+		}
+		sel.Initialize(result_sel);
+		return approved_tuple_count;
 	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");

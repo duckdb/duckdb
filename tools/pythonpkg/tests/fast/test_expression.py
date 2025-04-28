@@ -320,9 +320,12 @@ class TestExpression(object):
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         expr = col1 - col2
-        rel = rel.select(expr)
-        res = rel.fetchall()
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
         assert res == [(2,)]
+
+        res = rel.select(1 - col1).fetchall()
+        assert res == [(-2,)]
 
     def test_multiply_expression(self):
         con = duckdb.connect()
@@ -860,6 +863,20 @@ class TestExpression(object):
         assert len(res) == 2
         assert res == [(1, 'a'), (4, 'a')]
 
+    def test_empty_in(self, filter_rel):
+        expr = ColumnExpression("a")
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Incorrect amount of parameters to 'isin', needs at least 1 parameter"
+        ):
+            expr = expr.isin()
+
+        expr = ColumnExpression("a")
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Incorrect amount of parameters to 'isnotin', needs at least 1 parameter",
+        ):
+            expr = expr.isnotin()
+
     def test_filter_in(self, filter_rel):
         # IN expression
         expr = ColumnExpression("a")
@@ -867,7 +884,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
-        assert res == [(1, 'a'), (1, 'b'), (2, 'b')]
+        assert res == [(1, 'a'), (2, 'b'), (1, 'b')]
 
     def test_filter_not_in(self, filter_rel):
         expr = ColumnExpression("a")

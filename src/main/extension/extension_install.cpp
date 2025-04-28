@@ -56,6 +56,18 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
+string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
+	auto components = PathComponents();
+
+	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
+
+	if (components.size() >= 2) {
+		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
+	}
+
+	return link;
+}
+
 duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	string home_directory = fs.GetHomeDirectory();
 	// exception if the home directory does not exist, don't create whatever we think is home
@@ -208,11 +220,10 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 	} else {
 		versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 	}
+	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 #ifdef WASM_LOADABLE_EXTENSIONS
-	string default_endpoint = DEFAULT_REPOSITORY;
 	versioned_path = versioned_path + ".wasm";
 #else
-	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 	versioned_path = versioned_path + CompressionExtensionFromType(FileCompressionType::GZIP);
 #endif
 	string url_template = repository.path + versioned_path;
@@ -307,7 +318,8 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	// Throw error on failure
 	if (!exists) {
 		if (!fs.IsRemoteFile(file)) {
-			throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			throw IOException("Failed to install local extension \"%s\", no access to the file at PATH \"%s\"\n",
+			                  extension_name, file);
 		}
 		if (StringUtil::StartsWith(file, "https://")) {
 			throw IOException("Failed to install remote extension \"%s\" from url \"%s\"", extension_name, file);
@@ -444,9 +456,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
 			// if we should not retry or exceeded the number of retries - bubble up the error
 			string message;
-			auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
-			if (exact_match && !ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
-				message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
+			ExtensionHelper::CreateSuggestions(extension_name, message);
+
+			auto documentation_link = ExtensionHelper::ExtensionInstallDocumentationLink(extension_name);
+			if (!documentation_link.empty()) {
+				message += "\nFor more info, visit " + documentation_link;
 			}
 			if (res.error() == duckdb_httplib::Error::Success) {
 				throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",
