@@ -188,20 +188,6 @@ CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_col
 	delim_join->correlated_columns = correlated_columns;
 	delim_join->perform_delim = perform_delim;
 	delim_join->join_type = join_type;
-	if (!perform_delim) {
-		// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
-		// and perform all duplicate elimination on that row number instead
-		D_ASSERT(correlated_columns[0].type.id() == LogicalTypeId::BIGINT);
-		auto window = make_uniq<LogicalWindow>(correlated_columns[0].binding.table_index);
-		auto row_number =
-		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-		row_number->SetAlias("delim_index");
-		window->expressions.push_back(std::move(row_number));
-		window->AddChild(std::move(original_plan));
-		original_plan = std::move(window);
-	}
 	delim_join->AddChild(std::move(original_plan));
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];

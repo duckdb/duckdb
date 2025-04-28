@@ -64,21 +64,20 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 		// If we have a parent, we unnest the left side of the DEPENDENT JOIN in the parent's context.
 		if (parent) {
-			op.children[0] =
-			    PushDownDependentJoin(std::move(op.children[0]), parent_propagate_null_values, lateral_depth);
+			// only push the dependent join to the left side, if there is correlation.
+			auto entry = has_correlated_expressions.find(*plan);
+			D_ASSERT(entry != has_correlated_expressions.end());
+
+			if (entry->second) {
+				op.children[0] =
+				    PushDownDependentJoin(std::move(op.children[0]), parent_propagate_null_values, lateral_depth);
+			} else {
+				// There might be unrelated correlation, so we have to traverse the tree
+				op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
+			}
 
 			// rewrite
 			idx_t lateral_depth = 0;
-			// We have to add 'parent' delim_index columns to the set of correlated_columns.
-			// Otherwise, fancy decorrelation of `LIST`-values etc. does not work as intended.
-			if (!perform_delim && !op.perform_delim) {
-				for (auto &c : correlated_columns) {
-					if (c.name == "delim_index") {
-						op.correlated_columns.emplace(op.correlated_columns.begin(), c);
-						break;
-					}
-				}
-			}
 
 			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 			rewriter.VisitOperator(*plan);
@@ -87,6 +86,21 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 			recursive_rewriter.VisitOperator(*plan);
 		} else {
 			op.children[0] = Decorrelate(std::move(op.children[0]));
+		}
+
+		if (!op.perform_delim) {
+			// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
+			// and perform all duplicate elimination on that row number instead
+			D_ASSERT(op.correlated_columns[0].type.id() == LogicalTypeId::BIGINT);
+			auto window = make_uniq<LogicalWindow>(op.correlated_columns[0].binding.table_index);
+			auto row_number = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
+			                                                   nullptr, nullptr);
+			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+			row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+			row_number->SetAlias("delim_index");
+			window->expressions.push_back(std::move(row_number));
+			window->AddChild(std::move(op.children[0]));
+			op.children[0] = std::move(window);
 		}
 
 		lateral_depth = 0;
@@ -157,15 +171,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 				    op.child_targets[child_idx]);
 				compare_cond.comparison = op.comparison_type;
 				op.conditions.push_back(std::move(compare_cond));
-			}
-
-			if (!correlated_columns.empty()) {
-				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
-				rewriter.VisitOperator(*plan);
-
-				// Recursive rewriter to visit right side of lateral join and update bindings from left
-				RewriteCorrelatedExpressions recursive_rewriter(base_binding, correlated_map, lateral_depth + 1, true);
-				recursive_rewriter.VisitOperator(*plan->children[1]);
 			}
 		}
 
@@ -583,6 +588,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only left has correlation: push into left
 				plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
 				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
@@ -590,6 +596,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
 				delim_offset += plan->children[0]->GetColumnBindings().size();
 				// Remove the correlated columns coming from outside for current join node
 				return plan;
@@ -600,6 +607,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only left has correlation: push into left
 				plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
 				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
@@ -609,6 +617,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
 				delim_offset += plan->children[0]->GetColumnBindings().size();
 				return plan;
 			}
@@ -619,6 +628,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
+			plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
 			// rewrite expressions in the join conditions
 			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 			rewriter.VisitOperator(*plan);
