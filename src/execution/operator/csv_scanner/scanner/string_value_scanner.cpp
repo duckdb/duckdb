@@ -207,6 +207,10 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 	} else {
 		result.last_position.buffer_pos = buffer_pos + 2;
 	}
+	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
+	                                   result.buffer_size};
+	result.current_line_position.begin = result.current_line_position.end;
+	result.current_line_position.end = current_line_start;
 	result.cur_col_id = 0;
 	result.chunk_col_id = 0;
 	return done;
