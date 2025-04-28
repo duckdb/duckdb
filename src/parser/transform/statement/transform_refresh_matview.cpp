@@ -13,7 +13,6 @@ unique_ptr<RefreshMatViewStatement> Transformer::TransformRefreshMatView(duckdb_
 	info->table = qname.name;
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
-	// TODO: disable later
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 	result->info = std::move(info);
 	return result;

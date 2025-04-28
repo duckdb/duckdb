@@ -23,17 +23,7 @@ unique_ptr<CreateInfo> RefreshMatViewInfo::Copy() const {
 }
 
 string RefreshMatViewInfo::ToString() const {
-	string ret = "";
-
-	ret += "REFRESH";
-	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-		ret += " OR REPLACE";
-	}
-	if (temporary) {
-		ret += " TEMP";
-	}
-	ret += " MATERIALIZED VIEW ";
-
+	string ret = "REFRESH MATERIALIZED VIEW ";
 	ret += QualifierToString(temporary ? "" : catalog, schema, table);
 	return ret;
 }
