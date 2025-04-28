@@ -155,7 +155,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 				filter->AddChild(std::move(plan));
 				return std::move(filter);
 			}
-			return std::move(plan);
+			return plan;
 		}
 
 		CreateDelimJoinConditions(op, op.correlated_columns, plan_columns, flatten.delim_offset, op.perform_delim);
@@ -174,7 +174,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 			}
 		}
 
-		return std::move(plan);
+		return plan;
 	}
 	default: {
 		for (auto &child : plan->children) {
@@ -183,7 +183,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 	}
 	}
 
-	return std::move(plan);
+	return plan;
 }
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool lateral, idx_t lateral_depth,
