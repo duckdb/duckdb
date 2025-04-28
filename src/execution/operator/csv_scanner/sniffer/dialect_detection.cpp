@@ -286,6 +286,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 				dirty_notes = row;
+				dirty_notes_minus_comments = dirty_notes - comment_rows;
 				num_cols = sniffed_column_counts[row].number_of_columns;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
@@ -428,7 +429,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
 		} else if (!options.null_padding) {
-			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
+			sniffing_state_machine.dialect_options.skip_rows = dirty_notes_minus_comments;
 		}
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;

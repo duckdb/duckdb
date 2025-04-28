@@ -704,12 +704,10 @@ class TestReadCSV(object):
         assert rel.columns == ['one', 'two', 'three', 'four', 'five']
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
 
-    # def test_skip_comment_option(self, tmp_path):
-# file1 = tmp_path / "file1.csv"
-# file1.write_text('skip this line\n# comment\nx,y,z\n1,2,3\n4,5,6')
-con = duckdb.connect()
-rel = con.read_csv("/Users/holanda/Desktop/t.csv", comment='#', skiprows=1)
-print(rel.fetchall())
-assert rel.columns == ['x','y','z']
-assert rel.fetchall() == [('1', '2', '3'), ('4', '5', '6')]
-
+    def test_skip_comment_option(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('skip this line\n# comment\nx,y,z\n1,2,3\n4,5,6')
+        con = duckdb.connect()
+        rel = con.read_csv("file1", comment='#', skiprows=1)
+        assert rel.columns == ['x', 'y', 'z']
+        assert rel.fetchall() == [('1', '2', '3'), ('4', '5', '6')]

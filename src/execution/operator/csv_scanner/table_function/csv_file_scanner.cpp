@@ -84,8 +84,8 @@ CSVUnionData::~CSVUnionData() {
 
 void CSVFileScan::SetStart() {
 	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
-	rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
-	                                          state_machine->dialect_options.header.GetValue());
+	// rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
+	//                                           state_machine->dialect_options.header.GetValue());
 	if (rows_to_skip == 0) {
 		start_iterator.first_one = true;
 		return;
