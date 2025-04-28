@@ -60,10 +60,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// if there is more than one grouping set, the group by most likely has a rollup or cube
 		// If there is an equality join underneath the aggregate, this can change the groups to avoid unused columns
 		// This causes the duplicate eliminator to ignore functionality provided by grouping sets
+		bool new_root = false;
 		if (aggr.grouping_sets.size() > 1) {
-			return;
+			;
+			new_root = true;
 		}
-		if (!everything_referenced) {
+		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
@@ -76,7 +78,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 
 		// then recurse into the children of the aggregate
-		RemoveUnusedColumns remove(binder, context);
+		RemoveUnusedColumns remove(binder, context, new_root);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;

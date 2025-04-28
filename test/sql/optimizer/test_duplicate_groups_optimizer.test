@@ -89,17 +89,17 @@ logical_opt	<REGEX>:.*Groups: col1.*
 
 
 statement ok
-create table t2 (a int, b int, c int);
+create table t3 (a int, b int, c int);
 
 statement ok
-insert into t2 values
+insert into t3 values
 (1, 1, 1),
 (1, 2, 2),
 (1, 1, 1),
 (1, 2, 1);
 
 query III
-select * from t2 group by cube(a, b, c) order by all;
+select * from t3 group by cube(a, b, c) order by all;
 ----
 1	1	1
 1	1	NULL
