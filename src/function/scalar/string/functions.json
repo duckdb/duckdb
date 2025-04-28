@@ -451,7 +451,7 @@
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns the MD5 hash of the `blob` as as a `VARCHAR`.",
+                "description": "Returns the MD5 hash of the `blob` as a `VARCHAR`.",
                 "example": "md5('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }

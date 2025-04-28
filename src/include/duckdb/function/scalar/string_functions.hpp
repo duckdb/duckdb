@@ -468,7 +468,7 @@ struct NotIlikeEscapeFun {
 struct MD5Fun {
 	static constexpr const char *Name = "md5";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `VARCHAR`.\001Returns the MD5 hash of the `blob` as as a `VARCHAR`.";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `VARCHAR`.\001Returns the MD5 hash of the `blob` as a `VARCHAR`.";
 	static constexpr const char *Example = "md5('123')\001md5('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
