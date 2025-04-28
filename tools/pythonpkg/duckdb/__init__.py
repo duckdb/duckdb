@@ -3,11 +3,13 @@ _exported_symbols = []
 # Modules
 import duckdb.functional as functional
 import duckdb.typing as typing
+import duckdb.wal_reader as wal_reader
 import functools
 
 _exported_symbols.extend([
     "typing",
-    "functional"
+    "functional",
+    "wal_reader"
 ])
 
 # Classes

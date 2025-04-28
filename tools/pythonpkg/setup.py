@@ -358,11 +358,13 @@ packages = [
     'duckdb.query_graph',
     'duckdb.functional',
     'duckdb.value',
+    'duckdb.wal_reader',
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
     'duckdb-stubs.value',
     'duckdb-stubs.value.constant',
+    'duckdb-stubs.wal_reader',
     'adbc_driver_duckdb',
 ]
 

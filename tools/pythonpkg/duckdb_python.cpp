@@ -12,6 +12,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
+#include "duckdb_python/wal_reader.hpp"
 #include "duckdb_python/functional.hpp"
 #include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -1028,6 +1029,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	DuckDBPyStatement::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
+	DuckDBPyWalReader::Initialize(m);
 	PythonObject::Initialize();
 
 	py::options pybind_opts;
