@@ -181,26 +181,6 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		return false;
 	}
 
-	// if the delim join is a semi or anti, we want to make sure the comparison join with the
-	// delim get retains all values produced by the delim get, since the presence of one match
-	// in the semi/anti delim join will mean a tuple is produced/not produced.
-	// So for semi's and anti's we want to retain the "extra information" since it is relevant to
-	// the semi/anti join type.
-	// If the comparison join has an equality however, that means the extra information (other column values)
-	// are the same, and there really is no "extra information"
-	if (delim_join.join_type == JoinType::SEMI || delim_join.join_type == JoinType::ANTI) {
-		bool can_apply = false;
-		for (const auto &cond : comparison_join.conditions) {
-			if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
-			    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-				can_apply = true;
-			}
-		}
-		if (!can_apply) {
-			return false;
-		}
-	}
-
 	// Get the index (left or right) of the DelimGet side of the join
 	const idx_t delim_idx = OperatorIsDelimGet(*join->children[0]) ? 0 : 1;
 
@@ -301,10 +281,14 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 
 	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
 	//  JoinType::SINGLE yet, and JoinType::MARK is a special case
+	bool is_strict_not_equal = false;
 	if (delim_join.join_type == JoinType::SINGLE || delim_join.join_type == JoinType::MARK) {
 		bool has_one_equality = false;
 		for (auto &cond : join_conditions) {
 			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
+			if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+				is_strict_not_equal = true;
+			}
 		}
 		if (!has_one_equality) {
 			return false;
@@ -369,6 +353,17 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 					}
 				}
 				delim_condition.comparison = FlipComparisonExpression(join_comparison);
+				// join condition was a not equal and filtered out all NULLS.
+				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
+				// comparison expression type.
+				if (delim_join.join_type != JoinType::MARK) {
+					if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_NOTEQUAL;
+					}
+					if (delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_EQUAL;
+					}
+				}
 				found = true;
 				break;
 			}
