@@ -10,6 +10,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -151,6 +152,11 @@ column_t LogicalGet::GetAnyColumn() const {
 	if (entry != virtual_columns.end()) {
 		// return the rowid column if the projection supports it
 		return COLUMN_IDENTIFIER_ROW_ID;
+	}
+	entry = virtual_columns.find(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+	if (entry != virtual_columns.end()) {
+		// return the file row number column if the projection supports it
+		return MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
 	}
 	// otherwise return the first column
 	return 0;
