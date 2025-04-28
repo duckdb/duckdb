@@ -59,7 +59,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		InitializeUnpartitionedData();
 	}
-	Resize(initial_capacity, true);
+	Resize(initial_capacity);
 
 	// Predicates
 	predicates.resize(layout_ptr->ColumnCount() - 1, ExpressionType::COMPARE_NOT_DISTINCT_FROM);
