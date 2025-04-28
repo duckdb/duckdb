@@ -19,10 +19,22 @@ void SkipResult::QuotedNewLine(SkipResult &result) {
 	// nop
 }
 
+void SkipResult::SetComment(SkipResult &result, idx_t buffer_pos) {
+	if (!result.states.WasStandard()) {
+		result.cur_line_starts_as_comment = true;
+	}
+	result.comment = true;
+}
+
 bool SkipResult::UnsetComment(SkipResult &result, idx_t buffer_pos) {
 	// If we are unsetting a comment, it means this row started with a comment char.
+	bool done = false;
+	if (!result.cur_line_starts_as_comment) {
+		done = result.AddRow(result, buffer_pos);
+	}
 	result.comment = false;
-	return false;
+	result.cur_line_starts_as_comment = false;
+	return done;
 }
 
 bool SkipResult::AddRow(SkipResult &result, const idx_t buffer_pos) {

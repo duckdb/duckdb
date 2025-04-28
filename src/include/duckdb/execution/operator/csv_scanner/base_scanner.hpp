@@ -101,6 +101,7 @@ public:
 	const idx_t result_size;
 
 	CSVStateMachine &state_machine;
+	bool cur_line_starts_as_comment = false;
 
 	void Print() const {
 		state_machine.Print();

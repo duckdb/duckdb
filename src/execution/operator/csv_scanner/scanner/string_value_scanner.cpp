@@ -951,7 +951,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
              buffer_manager->GetFilePath(), scanner_idx_p),
       start_pos(0) {
 	if (scanner_idx == 0 && csv_file_scan) {
-		lines_read+= csv_file_scan->skipped_rows;
+		lines_read += csv_file_scan->skipped_rows;
 	}
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
@@ -967,7 +967,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
              buffer_manager->GetFilePath(), 0),
       start_pos(0) {
 	if (scanner_idx == 0 && csv_file_scan) {
-		lines_read+= csv_file_scan->skipped_rows;
+		lines_read += csv_file_scan->skipped_rows;
 	}
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
