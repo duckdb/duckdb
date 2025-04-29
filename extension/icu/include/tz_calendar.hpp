@@ -19,7 +19,7 @@ struct TZCalendar {
 	TZCalendar(icu::Calendar &calendar_p, const string &cal_setting)
 	    : calendar(CalendarPtr(calendar_p.clone())),
 	      is_gregorian(cal_setting.empty() || StringUtil::CIEquals(cal_setting, "gregorian")),
-	      supports_intervals(calendar->getMaximum(UCAL_MONTH) > 11) { // 0-based
+	      supports_intervals(calendar->getMaximum(UCAL_MONTH) < 12) { // 0-based
 	}
 
 	icu::Calendar *GetICUCalendar() {
@@ -27,6 +27,9 @@ struct TZCalendar {
 	}
 	bool IsGregorian() const {
 		return is_gregorian;
+	}
+	bool SupportsIntervals() const {
+		return supports_intervals;
 	}
 
 	CalendarPtr calendar;

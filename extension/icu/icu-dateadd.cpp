@@ -17,7 +17,7 @@ static duckdb::unique_ptr<FunctionData> ICUBindIntervalMonths(ClientContext &con
 	auto result = ICUDateFunc::Bind(context, bound_function, arguments);
 	auto &info = result->Cast<ICUDateFunc::BindData>();
 	TZCalendar calendar(*info.calendar, info.cal_setting);
-	if (calendar.supports_intervals) {
+	if (!calendar.SupportsIntervals()) {
 		throw NotImplementedException("INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.");
 	}
 	return std::move(result);
