@@ -292,8 +292,6 @@ enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
-enum class QuoteRule : uint8_t;
-
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
@@ -792,9 +790,6 @@ const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
-
-template<>
-const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1348,9 +1343,6 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
-
-template<>
-QuoteRule EnumUtil::FromString<QuoteRule>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
