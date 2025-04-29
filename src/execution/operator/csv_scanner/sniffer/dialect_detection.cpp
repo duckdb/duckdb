@@ -19,8 +19,8 @@ vector<string> DialectCandidates::GetDefaultDelimiter() {
 }
 
 vector<QuoteEscapeCombination> DialectCandidates::GetDefaultQuoteEscapeCombination() {
-	return {{'\0', '\0'}, {'\"', '\0'}, {'\"', '\"'}, {'\"', '\''},
-	        {'\"', '\\'}, {'\'', '\0'}, {'\'', '\''}, {'\'', '\\'}};
+	return {{'\0', '\0'}, {'\"', '\0'}, {'\"', '\"'}, {'\"', '\''}, {'\"', '\\'},
+	        {'\'', '\0'}, {'\'', '\''}, {'\'', '\"'}, {'\'', '\\'}};
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
