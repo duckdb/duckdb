@@ -120,6 +120,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"can_cast_implicitly", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cardinality", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"cast_to_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cbrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceil", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceiling", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1020,6 +1021,12 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"unsafe_enable_version_guessing", "iceberg"},
 }; // END_OF_EXTENSION_SETTINGS
 
+static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
+    {"aws", "httpfs"},         {"azure", "azure"},         {"gcs", "httpfs"},
+    {"huggingface", "httpfs"}, {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"},
+    {"r2", "httpfs"},          {"s3", "httpfs"},
+}; // END_OF_EXTENSION_SECRET_TYPES
+
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parquet"},
@@ -1076,14 +1083,6 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
                                                              {".json?", "json"},
                                                              {".ndjson?", ".jsonl?"},
                                                              {".jsonl?", ".ndjson?"}}; // EXTENSION_FILE_CONTAINS
-
-// Note: these are currently hardcoded in scripts/generate_extensions_function.py
-// TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"s3", "httpfs"},           {"r2", "httpfs"},
-    {"gcs", "httpfs"},          {"azure", "azure"},
-    {"huggingface", "httpfs"},  {"bearer", "httpfs"},
-    {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

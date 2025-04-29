@@ -4,6 +4,7 @@ add_library_unity(
   conjunction_filter.cpp
   constant_filter.cpp
   dynamic_filter.cpp
+  expression_filter.cpp
   in_filter.cpp
   null_filter.cpp
   struct_filter.cpp

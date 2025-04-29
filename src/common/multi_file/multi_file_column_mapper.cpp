@@ -9,6 +9,7 @@
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
@@ -425,6 +426,11 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			auto expr =
 			    multi_file_reader.GetVirtualColumnExpression(context, reader_data, local_columns, global_column_id,
 			                                                 virtual_column_type, local_idx, global_column_reference);
+			if (expr && expr->type == ExpressionType::VALUE_CONSTANT) {
+				// the column is constant after all - handle it
+				expressions.push_back(std::move(expr));
+				continue;
+			}
 			if (!global_column_reference) {
 				auto is_reference = expr->type == ExpressionType::BOUND_REF;
 				expressions.push_back(std::move(expr));
@@ -528,7 +534,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping() {
 	}
 }
 
-static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant) {
+bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant) {
 	const auto type = filter.filter_type;
 
 	switch (type) {
@@ -620,10 +626,31 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 		}
 		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
 	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		return expr_filter.EvaluateWithConstant(context, constant);
+	}
 	default:
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
 		                              EnumUtil::ToString(type));
 	}
+}
+
+Value MultiFileColumnMapper::GetConstantValue(idx_t global_index) {
+	auto global_column_id = global_column_ids[global_index].GetPrimaryIndex();
+	auto &expr = reader_data.expressions[global_index];
+	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+		return expr->Cast<BoundConstantExpression>().value;
+	}
+	for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
+		auto &constant_map_entry = reader_data.constant_map[MultiFileConstantMapIndex(i)];
+		if (constant_map_entry.column_idx.GetIndex() == global_index) {
+			return constant_map_entry.value;
+		}
+	}
+	auto &global_column = global_columns[global_column_id];
+	throw InternalException("Column '%s' is not present in the file, but no constant_map entry exists for it!",
+	                        global_column.name);
 }
 
 ReaderInitializeType
@@ -645,34 +672,7 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 		}
 
 		//! FIXME: this does not check for filters against struct fields that are not present in the file
-		auto global_column_id = global_column_ids[global_index].GetPrimaryIndex();
-		Value constant_value;
-		auto virtual_it = virtual_columns.find(global_column_ids[global_index].GetPrimaryIndex());
-		if (virtual_it != virtual_columns.end()) {
-			auto &virtual_column = virtual_it->second;
-			if (virtual_column.name == "filename") {
-				constant_value = Value(reader_data.reader->GetFileName());
-			} else {
-				throw InternalException("Unrecognized virtual column found: %s", virtual_column.name);
-			}
-		} else {
-			bool has_constant = false;
-			for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
-				auto &constant_map_entry = reader_data.constant_map[MultiFileConstantMapIndex(i)];
-				if (constant_map_entry.column_idx.GetIndex() == global_index) {
-					has_constant = true;
-					constant_value = constant_map_entry.value;
-					break;
-				}
-			}
-			if (!has_constant) {
-				auto &global_column = global_columns[global_column_id];
-				throw InternalException(
-				    "Column '%s' is not present in the file, but no constant_map entry exists for it!",
-				    global_column.name);
-			}
-		}
-
+		auto constant_value = GetConstantValue(global_index);
 		if (!EvaluateFilterAgainstConstant(*global_filter, constant_value)) {
 			return ReaderInitializeType::SKIP_READING_FILE;
 		}
@@ -785,6 +785,9 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		}
 		return make_uniq<InFilter>(std::move(in_list));
 	}
+	case TableFilterType::EXPRESSION_FILTER:
+		// unsupported
+		return nullptr;
 	default:
 		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
 		                              EnumUtil::ToString(type));

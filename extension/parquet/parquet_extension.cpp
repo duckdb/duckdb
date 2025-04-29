@@ -250,10 +250,15 @@ public:
 		table_function.statistics = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStats;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
+		table_function.pushdown_expression = ParquetScanPushdownExpression;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 
 		return MultiFileReader::CreateFunctionSet(static_cast<TableFunction>(table_function));
+	}
+
+	static bool ParquetScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
+		return true;
 	}
 
 	static void VerifyParquetSchemaParameter(const Value &schema) {

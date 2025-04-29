@@ -62,9 +62,75 @@ env:
   CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
+# This is just a sanity check of Python 3.10 running with Arrow / Spark
+  linux-python3-10:
+    name: Python 3.10 Linux
+    runs-on: ubuntu-22.04
+
+    env:
+      CIBW_BUILD: 'cp310-*'
+      CIBW_ARCHS: 'x86_64'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
+      # FIXME: add this back to CIBW_TEST_COMMAND '&& USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
+      PYTEST_TIMEOUT: '600'
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
+      CIBW_BEFORE_ALL: 'cd {project} && ./scripts/install_spark_in_cibuildwheels_linux_container.sh'
+      CIBW_MANYLINUX_X86_64_IMAGE: 'manylinux_2_28'
+      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: 'manylinux_2_28'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - name: Check/Act on inputs.override_git_describe
+      shell: bash
+      run: |
+        if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+        elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+        else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+        fi
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install
+      shell: bash
+      run: pip install 'cibuildwheel>=2.16.2' build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build source dist
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
+        pyproject-build . --sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
+    - name: Build
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
+
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-22.04
+    needs: linux-python3-10
     strategy:
       fail-fast: false
       matrix:
@@ -132,7 +198,6 @@ jobs:
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
       with:
@@ -167,6 +232,7 @@ jobs:
   osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true'
       name: Python 3 OSX
+      needs: linux-python3-10
       runs-on: macos-latest
       strategy:
        matrix:
@@ -229,6 +295,7 @@ jobs:
   win-python3:
       name: Python 3 Windows
       runs-on: windows-2019
+      needs: linux-python3-10
       strategy:
        matrix:
         python_build: [cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
