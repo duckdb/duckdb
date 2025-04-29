@@ -24,7 +24,7 @@ vector<QuoteEscapeCombination> DialectCandidates::GetDefaultQuoteEscapeCombinati
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
-	return {'#', '\0'};
+	return {'\0', '#'};
 }
 
 string DialectCandidates::Print() {
@@ -143,9 +143,10 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
-	for (const auto quote_escape_candidate : dialect_candidates.quote_escape_candidates) {
-		for (const auto &delimiter : dialect_candidates.delim_candidates) {
-			for (const auto &comment : dialect_candidates.comment_candidates) {
+	for (const auto &comment : dialect_candidates.comment_candidates) {
+		for (const auto quote_escape_candidate : dialect_candidates.quote_escape_candidates) {
+			for (const auto &delimiter : dialect_candidates.delim_candidates) {
+
 				D_ASSERT(buffer_manager);
 				CSVStateMachineOptions state_machine_options(
 				    delimiter, quote_escape_candidate.quote, quote_escape_candidate.escape, comment, new_line_id,
@@ -204,7 +205,10 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool
 		}
 		return false;
 	}
-
+	if (result.state_machine.state_machine_options.comment.GetValue() != '\0' &&
+	    valid_comments / detected_comments >= min_majority) {
+		return true;
+	}
 	return valid_comments / detected_comments >= min_majority;
 }
 

@@ -76,7 +76,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 }
 
 void ColumnCountResult::SetComment(ColumnCountResult &result, idx_t buffer_pos) {
-	if (!result.states.WasStandard()) {
+	if (!result.states.WasStandard() && !result.states.WasState(CSVState::DELIMITER)) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;
