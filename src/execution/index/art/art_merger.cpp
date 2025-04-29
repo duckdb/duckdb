@@ -324,6 +324,7 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 	for (idx_t i = 0; i < max_count; i++) {
 		if (l_prefix.data[i] != r_prefix.data[i]) {
 			pos = i;
+			break;
 		}
 	}
 
