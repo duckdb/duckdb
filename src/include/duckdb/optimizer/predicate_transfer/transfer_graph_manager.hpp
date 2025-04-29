@@ -10,16 +10,22 @@ namespace duckdb {
 
 class EdgeInfo {
 public:
-	EdgeInfo(unique_ptr<Expression> condition, LogicalOperator &bigger, LogicalOperator &smaller)
-	    : condition(std::move(condition)), bigger_table(bigger), smaller_table(smaller), protect_bigger_side(false),
-	      protect_smaller_side(false) {
+	EdgeInfo(unique_ptr<Expression> condition, LogicalOperator &left, const ColumnBinding &left_binding,
+	         LogicalOperator &right, const ColumnBinding &right_binding)
+	    : condition(std::move(condition)), left_table(left), left_binding(left_binding), right_table(right),
+	      right_binding(right_binding) {
 	}
 
 	unique_ptr<Expression> condition;
-	LogicalOperator &bigger_table;
-	LogicalOperator &smaller_table;
-	bool protect_bigger_side;
-	bool protect_smaller_side;
+
+	LogicalOperator &left_table;
+	ColumnBinding left_binding;
+
+	LogicalOperator &right_table;
+	ColumnBinding right_binding;
+
+	bool protect_left = false;
+	bool protect_right = false;
 };
 
 class TransferGraphManager {
@@ -38,12 +44,14 @@ public:
 
 private:
 	void ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators);
-	// void IgnoreUnfilteredTable();
 	void CreatePredicateTransferGraph();
 	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
 
 	pair<idx_t, idx_t> FindEdge(const unordered_set<idx_t> &constructed_set,
 	                            const unordered_set<idx_t> &unconstructed_set);
+
+private:
+	void IgnoreUnfilteredTable();
 
 private:
 	unordered_map<idx_t, unordered_map<idx_t, vector<shared_ptr<EdgeInfo>>>> neighbor_matrix;
