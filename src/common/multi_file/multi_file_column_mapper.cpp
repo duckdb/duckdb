@@ -9,6 +9,7 @@
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
@@ -533,7 +534,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping() {
 	}
 }
 
-static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant) {
+bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant) {
 	const auto type = filter.filter_type;
 
 	switch (type) {
@@ -624,6 +625,10 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 			return true;
 		}
 		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		return expr_filter.EvaluateWithConstant(context, constant);
 	}
 	default:
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
@@ -780,6 +785,9 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		}
 		return make_uniq<InFilter>(std::move(in_list));
 	}
+	case TableFilterType::EXPRESSION_FILTER:
+		// unsupported
+		return nullptr;
 	default:
 		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
 		                              EnumUtil::ToString(type));
