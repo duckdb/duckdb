@@ -8,10 +8,60 @@ create or replace table test as select 9223372036854776 + range * 92233720368547
 statement ok
 create index my_index on test(i);
 
+# this already worked properly, uses an index scan
+query II
+explain analyze select i from test SEMI JOIN (select i from test using sample reservoir(10) repeatable (42)) USING (i);
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+# should return exactly 10 values, as we join with a sample of size 10 of itself
+query I
+select count(*) from test SEMI JOIN (select i from test using sample reservoir(10) repeatable (42)) USING (i);
+----
+10
+
+# given the seed, the return values should be stable
+query I
+select i from test SEMI JOIN (select i from test using sample reservoir(10) repeatable (42)) USING (i) order by all;
+----
+36893488147419104
+138350580552821640
+184467440737095520
+249031044995078952
+295147905179352832
+433498485732174472
+682529530727253424
+700976274800962976
+839326855353784616
+903890459611768048
+
+# this did not work properly before the fix: doing the same join with a table
 statement ok
 create or replace table sample as select i from test using sample reservoir(10) repeatable (42);
 
+# should also use an index scan now
 query II
 explain analyze select i from test SEMI JOIN sample USING (i);
 ----
 analyzed_plan	<REGEX>:.*Index Scan.*
+
+# again should be 10 values
+query I
+select count(*) from test SEMI JOIN sample USING (i);
+----
+10
+
+# values should be exactly the same as before
+query I
+select i from test SEMI JOIN sample USING (i) order by all;
+----
+36893488147419104
+138350580552821640
+184467440737095520
+249031044995078952
+295147905179352832
+433498485732174472
+682529530727253424
+700976274800962976
+839326855353784616
+903890459611768048

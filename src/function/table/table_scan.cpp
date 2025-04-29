@@ -430,7 +430,7 @@ void ExtractConjunctionAnd(ConjunctionAndFilter &filter, BoundColumnRefExpressio
 			break;
 		}
 		default:
-			// No support for other filter types than CONSTANT_COMPARISON and IN_FILTER in CONJUNCTION_AND yet.
+			// Not yet supported: filter types than CONSTANT_COMPARISON/IN_FILTER/CONJUNCTION_AND in CONJUNCTION_AND.
 			return;
 		}
 	}
