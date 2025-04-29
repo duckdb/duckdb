@@ -1,0 +1,17 @@
+# name: test/sql/index/art/issues/test_art_internal_issue_4742.test
+# description: Test that Index Scan is triggered even when there is a nested conjunction filter on the index column
+# group: [issues]
+
+statement ok
+create or replace table test as select 9223372036854776 + range * 9223372036854776 i from range(100);
+
+statement ok
+create index my_index on test(i);
+
+statement ok
+create or replace table sample as select i from test using sample reservoir(10) repeatable (42);
+
+query II
+explain analyze select i from test SEMI JOIN sample USING (i);
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
