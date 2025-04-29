@@ -292,6 +292,14 @@ protected:
 					ever_escaped = true;
 					T::SetEscaped(result);
 				}
+				if ((states.states[0] == CSVState::ESCAPE || states.states[0] == CSVState::ESCAPED_RETURN ||
+				     states.states[0] == CSVState::UNQUOTED_ESCAPE) &&
+				    (buffer_handle_ptr[iterator.pos.buffer_pos] ==
+				         state_machine->dialect_options.state_machine_options.quote.GetValue() ||
+				     !state_machine->dialect_options.state_machine_options.strict_mode.GetValue())) {
+					// We only set the ever escaped variable if this is either a quote char OR strict mode is off
+					ever_escaped = true;
+				}
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
@@ -324,7 +332,6 @@ protected:
 			case CSVState::UNQUOTED_ESCAPE:
 			case CSVState::ESCAPED_RETURN:
 				T::SetEscaped(result);
-				ever_escaped = true;
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::STANDARD: {
