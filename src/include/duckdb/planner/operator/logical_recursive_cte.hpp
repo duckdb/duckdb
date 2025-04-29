@@ -25,8 +25,9 @@ public:
 	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t column_count, bool union_all,
 	                    vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom)
-	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all),
-	      key_targets(std::move(key_targets)) {
+	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),
+	                 LogicalOperatorType::LOGICAL_RECURSIVE_CTE),
+	      union_all(union_all), key_targets(std::move(key_targets)) {
 	}
 
 	bool union_all;

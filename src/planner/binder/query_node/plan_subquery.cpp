@@ -331,7 +331,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 	if (!op.children.empty()) {
 		// Collect all recursive CTEs during recursive descend
-		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE || op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+		    op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
 		}
