@@ -13,7 +13,6 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/execution/index/art/art_merger.hpp"
 
 namespace duckdb {
 

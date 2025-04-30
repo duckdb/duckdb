@@ -20,12 +20,6 @@ enum class ARTScanHandling : uint8_t {
 	POP,
 };
 
-enum class ARTHandlingResult : uint8_t {
-	CONTINUE,
-	SKIP,
-	YIELD,
-};
-
 //! ARTScanner scans the entire ART and processes each node.
 template <ARTScanHandling HANDLING, class NODE>
 class ARTScanner {
