@@ -25,7 +25,6 @@
 #include <memory>
 #include <cstdint>
 #include <string>
-#include <stdint.h>
 
 namespace duckdb_apache {
 namespace thrift {
