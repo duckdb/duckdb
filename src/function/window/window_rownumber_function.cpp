@@ -15,12 +15,24 @@ public:
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask),
 	      ntile_idx(executor.ntile_idx) {
 		if (!executor.arg_order_idx.empty()) {
-			//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their position in
-			//	the input data, such that two elements never compare as equal."
-			token_tree = make_uniq<WindowTokenTree>(executor.context, executor.wexpr.arg_orders, executor.arg_order_idx,
-			                                        payload_count, true);
+			use_framing = true;
+
+			//	If the argument order is prefix of the partition ordering,
+			//	then we can just use the partition ordering.
+			auto &wexpr = executor.wexpr;
+			auto &arg_orders = executor.wexpr.arg_orders;
+			const auto optimize = ClientConfig::GetConfig(executor.context).enable_optimizer;
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
+				//	position in the input data, such that two elements never compare as equal."
+				token_tree = make_uniq<WindowTokenTree>(executor.context, executor.wexpr.arg_orders,
+				                                        executor.arg_order_idx, payload_count, true);
+			}
 		}
 	}
+
+	//! Use framing instead of partitions (ORDER BY arguments)
+	bool use_framing = false;
 
 	//! The token tree for ORDER BY arguments
 	unique_ptr<WindowTokenTree> token_tree;
@@ -103,12 +115,18 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
 	auto rdata = FlatVector::GetData<uint64_t>(result);
 
-	if (grstate.token_tree) {
+	if (grstate.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
 		auto frame_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
-		for (idx_t i = 0; i < count; ++i, ++row_idx) {
-			// Row numbers are unique ranks
-			rdata[i] = grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
+		if (grstate.token_tree) {
+			for (idx_t i = 0; i < count; ++i, ++row_idx) {
+				// Row numbers are unique ranks
+				rdata[i] = grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
+			}
+		} else {
+			for (idx_t i = 0; i < count; ++i, ++row_idx) {
+				rdata[i] = row_idx - frame_begin[i] + 1;
+			}
 		}
 		return;
 	}
@@ -136,7 +154,7 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Wi
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_END]);
-	if (grstate.token_tree) {
+	if (grstate.use_framing) {
 		// With secondary sorts, we restrict to the frame boundaries, but everything else should compute the same.
 		partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
 		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);

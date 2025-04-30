@@ -399,7 +399,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		repeated_element.__isset.num_children = true;
 		repeated_element.__isset.type = false;
 		repeated_element.__isset.repetition_type = true;
-		repeated_element.name = is_list ? "list" : "array";
+		repeated_element.name = "list";
 		schemas.push_back(std::move(repeated_element));
 
 		ParquetColumnSchema list_column(name, type, max_define, max_repeat, schema_idx, 0);
@@ -494,7 +494,7 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 	}
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
 		auto is_list = type.id() == LogicalTypeId::LIST;
-		path_in_schema.push_back(is_list ? "list" : "array");
+		path_in_schema.push_back("list");
 		auto child_writer = CreateWriterRecursive(context, writer, parquet_schemas, schema.children[0], path_in_schema);
 		if (is_list) {
 			return make_uniq<ListColumnWriter>(writer, schema, std::move(path_in_schema), std::move(child_writer),

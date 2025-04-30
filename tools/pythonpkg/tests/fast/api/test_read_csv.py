@@ -703,3 +703,16 @@ class TestReadCSV(object):
         rel = con.read_csv(file_path, union_by_name=True)
         assert rel.columns == ['one', 'two', 'three', 'four', 'five']
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
+
+    def test_thousands_separator(self, tmp_path):
+        file = tmp_path / "file_thousands.csv"
+        file.write_text('money\n"10,000.23"\n"1,000,000,000.01"')
+
+        con = duckdb.connect()
+        rel = con.read_csv(file, thousands=',')
+        assert rel.fetchall() == [(10000.23,), (1000000000.01,)]
+
+        with pytest.raises(
+            duckdb.BinderException, match="Unsupported parameter for THOUSANDS: should be max one character"
+        ):
+            con.read_csv(file, thousands=',,,')

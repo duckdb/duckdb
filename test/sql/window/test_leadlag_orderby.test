@@ -10,8 +10,8 @@ SELECT
 	i,
 	(i * 29) % 11 AS outside,
 	i // 2 AS inside,
-	lead(i ORDER BY inside DESC, i) OVER w,
-	lag(i ORDER BY inside DESC, i) OVER w,
+	lead(i, 1, NULL ORDER BY inside DESC, i) OVER w,
+	lag(i, 1, NULL ORDER BY inside DESC, i) OVER w,
 FROM range(10) tbl(i)
 WINDOW w AS (
 	ORDER BY outside
@@ -28,3 +28,27 @@ ORDER BY inside DESC, i
 3	10	1	0	2
 0	0	0	NULL	NULL
 1	7	0	NULL	0
+
+query IIII
+SELECT 
+	i,
+	i // 2 AS inside,
+	lead(i, 1, NULL ORDER BY i // 2, i) OVER w AS next,
+	lag(i, 1, NULL ORDER BY i // 2, i) OVER w AS prev,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY i // 2
+	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING
+)
+ORDER BY i
+----
+0	0	1	NULL
+1	0	2	0
+2	1	3	1
+3	1	4	2
+4	2	5	3
+5	2	6	4
+6	3	7	5
+7	3	8	6
+8	4	9	7
+9	4	NULL	8
