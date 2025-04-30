@@ -1391,8 +1391,6 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	// Traverse the allocated memory of the tree to perform a vacuum.
-	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(*this);
-
 	auto &art = *this;
 	auto handler = [&art, &indexes](Node &node) {
 		ARTHandlingResult result;
@@ -1437,7 +1435,7 @@ void ART::Vacuum(IndexLock &state) {
 		return result;
 	};
 
-	scanner.Init(handler, tree);
+	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(*this, handler, tree);
 	scanner.Scan(handler);
 
 	// Finalize the vacuum operation.
@@ -1457,7 +1455,6 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 
 void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(node.HasMetadata());
-	ARTScanner<ARTScanHandling::POP, Node> scanner(*this);
 
 	auto handler = [&upper_bounds](Node &node) {
 		const auto type = node.GetType();
@@ -1472,7 +1469,7 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 		return ARTHandlingResult::CONTINUE;
 	};
 
-	scanner.Init(handler, node);
+	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);
 	scanner.Scan(handler);
 }
 

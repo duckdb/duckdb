@@ -445,7 +445,6 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 
 void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
-	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art);
 
 	auto handler = [&art, &node_counts](const Node &node) {
 		ARTHandlingResult result;
@@ -479,7 +478,7 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		return result;
 	};
 
-	scanner.Init(handler, *this);
+	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art, handler, *this);
 	scanner.Scan(handler);
 }
 
