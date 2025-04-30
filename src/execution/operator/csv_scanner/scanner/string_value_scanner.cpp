@@ -219,7 +219,7 @@ void FullLinePosition::SanitizeError(string &value) {
 	value = {char_array.begin(), char_array.end() - 1};
 }
 
-void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
+void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool allocate) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
 	}
@@ -288,6 +288,14 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 	}
 	bool success = true;
+	string strip_thousands;
+	if (LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) &&
+	    state_machine.options.thousands_separator != '\0') {
+		// If we have a thousands separator we should try to use that
+		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, size, state_machine.options.thousands_separator);
+		value_ptr = strip_thousands.c_str();
+		size = strip_thousands.size();
+	}
 	switch (parse_types[chunk_col_id].type_id) {
 	case LogicalTypeId::BOOLEAN:
 		success =

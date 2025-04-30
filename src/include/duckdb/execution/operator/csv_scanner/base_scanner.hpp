@@ -147,6 +147,9 @@ public:
 
 	CSVStateMachine &GetStateMachine() const;
 
+	//! Removes thousands separator
+	static string RemoveSeparator(const char *value_ptr, const idx_t size, char thousands_separator);
+
 	shared_ptr<CSVFileScan> csv_file_scan;
 
 	//! If this scanner is being used for sniffing
