@@ -435,7 +435,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 				HandleUnicodeError(cur_col_id, last_position);
 			}
 			// If we got here, we are ignoring errors, hence we must ignore this line.
-			current_errors.Insert(INVALID_UNICODE, cur_col_id, chunk_col_id, last_position);
+			current_errors.Insert(INVALID_ENCODING, cur_col_id, chunk_col_id, last_position);
 			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = StringVector::AddStringOrBlob(
 			    parse_chunk.data[chunk_col_id], string_t(value_ptr, UnsafeNumericCast<uint32_t>(0)));
 			break;
@@ -627,7 +627,7 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 bool LineError::HandleErrors(StringValueResult &result) {
 	bool skip_sniffing = false;
 	for (auto &cur_error : current_errors) {
-		if (cur_error.type == CSVErrorType::INVALID_UNICODE) {
+		if (cur_error.type == CSVErrorType::INVALID_ENCODING) {
 			skip_sniffing = true;
 		}
 	}
@@ -663,7 +663,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
 			break;
-		case INVALID_UNICODE: {
+		case INVALID_ENCODING: {
 			if (result.current_line_position.begin == line_pos) {
 				csv_error = CSVError::InvalidUTF8(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
