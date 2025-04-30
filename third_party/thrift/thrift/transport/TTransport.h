@@ -24,6 +24,7 @@
 #include "thrift/transport/TTransportException.h"
 #include <memory>
 #include <string>
+#include <stdint.h>
 
 namespace duckdb_apache {
 namespace thrift {

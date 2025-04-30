@@ -98,7 +98,7 @@ if(${EXIT_TIME_DESTRUCTORS_WARNING})
       "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
 endif()
 
-add_library_unity(
+add_library(
   duckdb_main_extension
   OBJECT
   extension_alias.cpp
