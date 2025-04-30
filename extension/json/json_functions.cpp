@@ -14,7 +14,7 @@ namespace duckdb {
 
 using JSONPathType = JSONCommon::JSONPathType;
 
-static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, size_t &len) {
 	if (path_val.IsNull()) {
 		throw BinderException("JSON path cannot be NULL");
 	}
@@ -113,7 +113,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+		if (JSONReadFunctionData::CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
 			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
 		}
 	}
@@ -200,6 +200,12 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+
+	// Table in-out
+	functions.push_back(GetJSONEachFunction());
+	functions.push_back(GetJSONTreeFunction());
+
+	// Serialized plan
 	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;

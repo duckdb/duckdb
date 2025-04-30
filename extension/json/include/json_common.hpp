@@ -304,6 +304,20 @@ public:
 	//! Validate JSON Path ($.field[index]... syntax), returns true if there are wildcards in the path
 	static JSONPathType ValidatePath(const char *ptr, const idx_t &len, const bool binder);
 
+public:
+	//! Same as BigQuery json_value
+	static inline string_t JSONValue(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &mask, idx_t idx) {
+		switch (yyjson_get_tag(val)) {
+		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+			mask.SetInvalid(idx);
+			return string_t {};
+		default:
+			return JSONCommon::WriteVal<yyjson_val>(val, alc);
+		}
+	}
+
 private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
