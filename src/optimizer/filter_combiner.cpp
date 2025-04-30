@@ -603,7 +603,8 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
-FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids, Expression &expr) {
+FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters,
+                                                           const vector<ColumnIndex> &column_ids, Expression &expr) {
 	auto pushdown_result = TryPushdownPrefixFilter(table_filters, column_ids, expr);
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
@@ -623,7 +624,8 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table
 	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids, vector<FilterPushdownResult> &pushdown_results) {
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
+                                                        vector<FilterPushdownResult> &pushdown_results) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
