@@ -101,14 +101,6 @@ public:
 	//! Returns the node type for a count.
 	static NType GetNodeType(const idx_t count);
 
-	//! Initialize a merge by incrementing the buffer IDs of a node and its children.
-	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
-	//! Merge a node into this node.
-	bool Merge(ART &art, Node &other);
-
-	//! Vacuum all nodes exceeding their vacuum threshold.
-	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
-
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node,
 	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);

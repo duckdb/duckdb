@@ -354,98 +354,6 @@ bool Node::IsAnyLeaf() const {
 }
 
 //===--------------------------------------------------------------------===//
-// Merge
-//===--------------------------------------------------------------------===//
-
-void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
-	D_ASSERT(HasMetadata());
-	ARTScanner<ARTScanHandling::POP, Node> scanner(art);
-
-	auto handler = [&upper_bounds](Node &node) {
-		const auto type = node.GetType();
-		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTScanHandlingResult::CONTINUE;
-		}
-		if (type == NType::LEAF) {
-			throw InternalException("deprecated ART storage in InitMerge");
-		}
-		const auto idx = GetAllocatorIdx(type);
-		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTScanHandlingResult::CONTINUE;
-	};
-
-	scanner.Init(handler, *this);
-	scanner.Scan(handler);
-}
-
-bool Node::Merge(ART &art, Node &other) {
-	if (HasMetadata()) {
-		ARTMerger merger(Allocator::Get(art.db), art);
-		merger.Init(*this, other);
-		return merger.Merge() == ARTConflictType::NO_CONFLICT;
-	}
-
-	*this = other;
-	other = Node();
-	return true;
-}
-
-//===--------------------------------------------------------------------===//
-// Vacuum
-//===--------------------------------------------------------------------===//
-
-void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
-	D_ASSERT(HasMetadata());
-	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(art);
-
-	auto handler = [&art, &indexes](Node &node) {
-		ARTScanHandlingResult result;
-		const auto type = node.GetType();
-		switch (type) {
-		case NType::LEAF_INLINED:
-			return ARTScanHandlingResult::SKIP;
-		case NType::LEAF: {
-			if (indexes.find(GetAllocatorIdx(type)) == indexes.end()) {
-				return ARTScanHandlingResult::SKIP;
-			}
-			Leaf::DeprecatedVacuum(art, node);
-			return ARTScanHandlingResult::SKIP;
-		}
-		case NType::NODE_7_LEAF:
-		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF: {
-			result = ARTScanHandlingResult::SKIP;
-			break;
-		}
-		case NType::PREFIX:
-		case NType::NODE_4:
-		case NType::NODE_16:
-		case NType::NODE_48:
-		case NType::NODE_256: {
-			result = ARTScanHandlingResult::CONTINUE;
-			break;
-		}
-		default:
-			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
-		}
-
-		const auto idx = GetAllocatorIdx(type);
-		auto &allocator = GetAllocator(art, type);
-		const auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
-		if (needs_vacuum) {
-			const auto status = node.GetGateStatus();
-			node = allocator.VacuumPointer(node);
-			node.SetMetadata(static_cast<uint8_t>(type));
-			node.SetGateStatus(status);
-		}
-		return result;
-	};
-
-	scanner.Init(handler, *this);
-	scanner.Scan(handler);
-}
-
-//===--------------------------------------------------------------------===//
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
@@ -540,20 +448,20 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art);
 
 	auto handler = [&art, &node_counts](const Node &node) {
-		ARTScanHandlingResult result;
+		ARTHandlingResult result;
 		const auto type = node.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return ARTScanHandlingResult::SKIP;
+			return ARTHandlingResult::SKIP;
 		case NType::LEAF: {
 			auto &leaf = Ref<Leaf>(art, node, type);
 			leaf.DeprecatedVerifyAllocations(art, node_counts);
-			return ARTScanHandlingResult::SKIP;
+			return ARTHandlingResult::SKIP;
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
-			result = ARTScanHandlingResult::SKIP;
+			result = ARTHandlingResult::SKIP;
 			break;
 		}
 		case NType::PREFIX:
@@ -561,7 +469,7 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256: {
-			result = ARTScanHandlingResult::CONTINUE;
+			result = ARTHandlingResult::CONTINUE;
 			break;
 		}
 		default:

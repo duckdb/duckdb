@@ -98,6 +98,7 @@ public:
 	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
+	//! FIXME: Return ARTConflictType instead of a boolean.
 	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
 
 	//! Vacuums the ART storage.
@@ -151,7 +152,8 @@ private:
 	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
 	                       ARTKeySection &section);
 
-	void InitializeMerge(unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

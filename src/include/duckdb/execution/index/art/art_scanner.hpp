@@ -20,7 +20,7 @@ enum class ARTScanHandling : uint8_t {
 	POP,
 };
 
-enum class ARTScanHandlingResult : uint8_t {
+enum class ARTHandlingResult : uint8_t {
 	CONTINUE,
 	SKIP,
 	YIELD,
@@ -88,7 +88,7 @@ private:
 	template <class FUNC>
 	void Emplace(FUNC &&handler, NODE &node) {
 		if (HANDLING == ARTScanHandling::EMPLACE) {
-			if (handler(node) == ARTScanHandlingResult::SKIP) {
+			if (handler(node) == ARTHandlingResult::SKIP) {
 				return;
 			}
 		}
