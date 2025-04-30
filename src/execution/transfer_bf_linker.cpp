@@ -30,6 +30,16 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 	case State::COLLECT_BF_CREATORS: {
 		if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
 			auto &create_bf_op = op.Cast<LogicalCreateBF>();
+
+			// Compact consecutive creators: creator --> creator --> scan ==> new_creator --> scan
+			while (create_bf_op.children[0]->type == LogicalOperatorType::LOGICAL_CREATE_BF) {
+				auto &child_creator = create_bf_op.children[0]->Cast<LogicalCreateBF>();
+				for (auto &filter_plan : child_creator.filter_plans) {
+					create_bf_op.filter_plans.push_back(filter_plan);
+				}
+				create_bf_op.children[0] = std::move(child_creator.children[0]);
+			}
+
 			for (auto &filter_plan : create_bf_op.filter_plans) {
 				bf_creators[filter_plan.get()] = &create_bf_op;
 			}
