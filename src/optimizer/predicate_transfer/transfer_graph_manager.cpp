@@ -23,6 +23,9 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 		return false;
 	}
 
+	// 2.5 Remove Bloom filter creation for unfiltered tables
+	IgnoreUnfilteredTable();
+
 	// 3. Create the transfer graph
 	CreatePredicateTransferGraph();
 	return true;
@@ -118,9 +121,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 }
 
 void TransferGraphManager::IgnoreUnfilteredTable() {
-	size_t num_table = table_operator_manager.table_operators.size();
-
-	// collect unfiltered tables
+	// 1. Collect unfiltered tables
 	vector<idx_t> unfiltered_table_idx;
 	for (auto &pair : table_operator_manager.table_operators) {
 		auto idx = pair.first;
@@ -136,20 +137,134 @@ void TransferGraphManager::IgnoreUnfilteredTable() {
 		}
 	}
 
+	// 2. Collect received BFs for each unfiltered table
+	unordered_map<idx_t, unordered_map<idx_t, vector<shared_ptr<EdgeInfo>>>> received_bfs_total;
 	for (auto &table_idx : unfiltered_table_idx) {
-		// collect received BFs for this table
-		unordered_map<idx_t, vector<shared_ptr<EdgeInfo>>> received_BFs;
+		auto &received_bfs = received_bfs_total[table_idx];
+		auto &all_edges = neighbor_matrix[table_idx];
 
-		auto &edges = neighbor_matrix[table_idx];
-		for (auto &pair : edges) {
-			auto creator_table_idx = pair.first;
+		for (auto &pair : all_edges) {
 			auto &edge = pair.second;
 
-			D_ASSERT(edge.size() == 1);
 			for (auto &e : edge) {
 				if (e->left_binding.table_index == table_idx && !e->protect_left) {
-
+					auto &bfs = received_bfs[e->left_binding.column_index];
+					bfs.push_back(e);
 				} else if (e->right_binding.table_index == table_idx && !e->protect_right) {
+					auto &bfs = received_bfs[e->right_binding.column_index];
+					bfs.push_back(e);
+				}
+			}
+		}
+	}
+
+	// 2.5 (Optional) Should we keep link table? A is a link table, if there exists B and C, such that the join
+	// condition B.1 = A.2, A.3 = C.2 holds.
+	unfiltered_table_idx.erase(
+	    std::remove_if(unfiltered_table_idx.begin(), unfiltered_table_idx.end(),
+	                   [&](idx_t table_idx) { return received_bfs_total[table_idx].size() > 1; }),
+	    unfiltered_table_idx.end());
+
+	// 3. Remove sent BFs for tables which are 1) unfiltered; 2) not link table
+	for (auto &table_idx : unfiltered_table_idx) {
+		auto &edges = neighbor_matrix[table_idx];
+		auto &received_bfs = received_bfs_total[table_idx];
+
+		// remove BFs creation for this table
+		for (auto &pair : edges) {
+			auto &links = pair.second;
+
+			for (auto &link : links) {
+				bool is_left = (link->left_binding.table_index == table_idx && !link->protect_right);
+				bool is_right = (link->right_binding.table_index == table_idx && !link->protect_left);
+				if (!is_left && !is_right) {
+					continue;
+				}
+
+				idx_t col_idx = is_left ? link->left_binding.column_index : link->right_binding.column_index;
+				auto &bfs = received_bfs[col_idx];
+
+				// add links
+				for (auto &bf_link : bfs) {
+					// the same edge
+					if (bf_link->left_binding == link->left_binding && bf_link->right_binding == link->right_binding) {
+						continue;
+					}
+
+					bool bf_left = (bf_link->left_binding.table_index == table_idx && !bf_link->protect_left);
+					bool bf_right = (bf_link->right_binding.table_index == table_idx && !bf_link->protect_right);
+					if (!bf_left && !bf_right) {
+						continue;
+					}
+
+					shared_ptr<EdgeInfo> concat_edge = nullptr;
+					auto cond = link->condition->Copy();
+					auto &cond_expr = cond->Cast<BoundComparisonExpression>();
+
+					if (is_left && bf_left) {
+						cond_expr.left = bf_link->condition->Cast<BoundComparisonExpression>().right->Copy();
+						concat_edge =
+						    make_shared_ptr<EdgeInfo>(std::move(cond), bf_link->right_table, bf_link->right_binding,
+						                              link->right_table, link->right_binding);
+						concat_edge->protect_left = true;
+					} else if (is_left && bf_right) {
+						const auto &bf_cond = bf_link->condition->Cast<BoundComparisonExpression>();
+						cond_expr.left = bf_cond.right->Copy();
+						cond_expr.right = link->condition->Cast<BoundComparisonExpression>().right->Copy();
+						concat_edge =
+						    make_shared_ptr<EdgeInfo>(std::move(cond), bf_link->left_table, bf_link->left_binding,
+						                              link->right_table, link->right_binding);
+						concat_edge->protect_left = true;
+					} else if (is_right && bf_left) {
+						cond_expr.right = bf_link->condition->Cast<BoundComparisonExpression>().right->Copy();
+						concat_edge = make_shared_ptr<EdgeInfo>(std::move(cond), link->left_table, link->left_binding,
+						                                        bf_link->right_table, bf_link->right_binding);
+						concat_edge->protect_right = true;
+					} else if (is_right && bf_right) {
+						cond_expr.right = bf_link->condition->Cast<BoundComparisonExpression>().left->Copy();
+						concat_edge = make_shared_ptr<EdgeInfo>(std::move(cond), link->left_table, link->left_binding,
+						                                        bf_link->left_table, bf_link->left_binding);
+						concat_edge->protect_right = true;
+					}
+
+					if (concat_edge) {
+						idx_t i = concat_edge->left_binding.table_index;
+						idx_t j = concat_edge->right_binding.table_index;
+						auto &edges_ij = neighbor_matrix[i][j];
+						auto &edges_ji = neighbor_matrix[j][i];
+
+						bool exists = false;
+						for (auto &existing_edge : edges_ij) {
+							bool same_direction = existing_edge->left_binding == concat_edge->left_binding &&
+							                      existing_edge->right_binding == concat_edge->right_binding;
+							bool reverse_direction = existing_edge->left_binding == concat_edge->right_binding &&
+							                         existing_edge->right_binding == concat_edge->left_binding;
+
+							if (same_direction || reverse_direction) {
+								if (same_direction) {
+									existing_edge->protect_left &= concat_edge->protect_left;
+									existing_edge->protect_right &= concat_edge->protect_right;
+								} else { // reverse_direction
+									existing_edge->protect_left &= concat_edge->protect_right;
+									existing_edge->protect_right &= concat_edge->protect_left;
+								}
+								exists = true;
+								break;
+							}
+						}
+
+						if (!exists) {
+							edges_ij.push_back(concat_edge);
+							edges_ji.push_back(concat_edge);
+						}
+					}
+				}
+
+				// disable current link
+				if (is_left) {
+					link->protect_right = true;
+				} else {
+					link->protect_left = true;
 				}
 			}
 		}
@@ -248,6 +363,20 @@ pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &co
 		for (auto j : constructed_set) {
 			auto &edges = neighbor_matrix[i][j];
 			if (edges.empty()) {
+				continue;
+			}
+
+			bool connected = false;
+			for (auto &edge : edges) {
+				bool is_left = (edge->left_binding.table_index == j && !edge->protect_right);
+				bool is_right = (edge->right_binding.table_index == j && !edge->protect_left);
+
+				if (is_left || is_right) {
+					connected = true;
+					break;
+				}
+			}
+			if (!connected) {
 				continue;
 			}
 
