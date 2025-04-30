@@ -100,6 +100,7 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/function/table/arrow/arrow_type_info.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
@@ -518,19 +519,20 @@ const StringUtil::EnumStringLiteral *GetArrowTypeInfoTypeValues() {
 		{ static_cast<uint32_t>(ArrowTypeInfoType::STRUCT), "STRUCT" },
 		{ static_cast<uint32_t>(ArrowTypeInfoType::DATE_TIME), "DATE_TIME" },
 		{ static_cast<uint32_t>(ArrowTypeInfoType::STRING), "STRING" },
-		{ static_cast<uint32_t>(ArrowTypeInfoType::ARRAY), "ARRAY" }
+		{ static_cast<uint32_t>(ArrowTypeInfoType::ARRAY), "ARRAY" },
+		{ static_cast<uint32_t>(ArrowTypeInfoType::DECIMAL), "DECIMAL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value) {
-	return StringUtil::EnumToString(GetArrowTypeInfoTypeValues(), 5, "ArrowTypeInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetArrowTypeInfoTypeValues(), 6, "ArrowTypeInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
-	return static_cast<ArrowTypeInfoType>(StringUtil::StringToEnum(GetArrowTypeInfoTypeValues(), 5, "ArrowTypeInfoType", value));
+	return static_cast<ArrowTypeInfoType>(StringUtil::StringToEnum(GetArrowTypeInfoTypeValues(), 6, "ArrowTypeInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetArrowVariableSizeTypeValues() {
@@ -1141,6 +1143,26 @@ const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification v
 template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value) {
 	return static_cast<DebugVectorVerification>(StringUtil::StringToEnum(GetDebugVectorVerificationValues(), 6, "DebugVectorVerification", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DecimalBitWidth::DECIMAL_32), "DECIMAL_32" },
+		{ static_cast<uint32_t>(DecimalBitWidth::DECIMAL_64), "DECIMAL_64" },
+		{ static_cast<uint32_t>(DecimalBitWidth::DECIMAL_128), "DECIMAL_128" },
+		{ static_cast<uint32_t>(DecimalBitWidth::DECIMAL_256), "DECIMAL_256" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value) {
+	return StringUtil::EnumToString(GetDecimalBitWidthValues(), 4, "DecimalBitWidth", static_cast<uint32_t>(value));
+}
+
+template<>
+DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value) {
+	return static_cast<DecimalBitWidth>(StringUtil::StringToEnum(GetDecimalBitWidthValues(), 4, "DecimalBitWidth", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDefaultOrderByNullTypeValues() {
