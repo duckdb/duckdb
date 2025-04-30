@@ -21,6 +21,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
+#include "duckdb/execution/index/art/art_merger.hpp"
 
 namespace duckdb {
 
