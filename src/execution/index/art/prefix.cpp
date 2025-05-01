@@ -175,39 +175,6 @@ optional_idx Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTK
 	return TraverseInternal<Node>(art, node, key, depth, true);
 }
 
-bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos, const GateStatus status) {
-	D_ASSERT(l_node.get().HasMetadata());
-	D_ASSERT(r_node.get().HasMetadata());
-
-	Prefix l_prefix(art, l_node, true);
-	Prefix r_prefix(art, r_node, true);
-
-	idx_t max_count = MinValue(l_prefix.data[Count(art)], r_prefix.data[Count(art)]);
-	pos = GetMismatchWithOther(l_prefix, r_prefix, max_count);
-	if (pos != DConstants::INVALID_INDEX) {
-		return true;
-	}
-
-	// Match.
-	if (l_prefix.data[Count(art)] == r_prefix.data[Count(art)]) {
-		auto r_child = *r_prefix.ptr;
-		r_prefix.ptr->Clear();
-		Node::Free(art, r_node);
-		return l_prefix.ptr->MergeInternal(art, r_child, status);
-	}
-
-	pos = max_count;
-	if (r_prefix.ptr->GetType() != PREFIX && r_prefix.data[Count(art)] == max_count) {
-		// l_prefix contains r_prefix.
-		swap(l_node.get(), r_node.get());
-		l_node = *r_prefix.ptr;
-		return true;
-	}
-	// r_prefix contains l_prefix.
-	l_node = *l_prefix.ptr;
-	return true;
-}
-
 void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 	D_ASSERT(node.HasMetadata());
 	D_ASSERT(pos < Count(art));
@@ -221,6 +188,7 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 		return;
 	}
 
+	// FIXME: Copy into new prefix (chain) instead of shifting.
 	for (idx_t i = 0; i < Count(art) - pos - 1; i++) {
 		prefix.data[i] = prefix.data[pos + i + 1];
 	}
