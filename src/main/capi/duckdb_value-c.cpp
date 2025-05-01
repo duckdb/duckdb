@@ -451,7 +451,7 @@ duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, idx_t tag
 	const auto member_types = duckdb::UnionType::CopyMemberTypes(union_logical_type);
 	duckdb::Value *union_value = new duckdb::Value;
 	try {
-		*union_value = duckdb::Value::UNION(member_types, tag_index, unwrapped_value);
+		*union_value = duckdb::Value::UNION(member_types, duckdb::NumericCast<uint8_t>(tag_index), unwrapped_value);
 	} catch (...) {
 		delete union_value;
 		return nullptr;
