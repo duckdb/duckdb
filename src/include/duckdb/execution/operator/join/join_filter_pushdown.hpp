@@ -70,8 +70,8 @@ public:
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	unique_ptr<DataChunk> Finalize(ClientContext &context, JoinHashTable *ht, JoinFilterGlobalState &gstate,
-	                               const PhysicalComparisonJoin &op) const;
+	unique_ptr<DataChunk> Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
+	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op) const;
 
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,

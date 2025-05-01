@@ -733,7 +733,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable *ht,
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
 	// finalize the min/max aggregates
