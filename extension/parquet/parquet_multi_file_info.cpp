@@ -14,6 +14,15 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_row_groups;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	ParquetOptions parquet_options;
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto result = make_uniq<ParquetReadBindData>();
+		result->initial_file_cardinality = initial_file_cardinality;
+		result->initial_file_row_groups = initial_file_row_groups;
+		result->explicit_cardinality = explicit_cardinality;
+		result->parquet_options = parquet_options;
+		return std::move(result);
+	}
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
@@ -229,6 +238,13 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	return bind_data;
 }
 
+vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	vector<column_t> result;
+	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX);
+	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+	return result;
+}
+
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
@@ -242,9 +258,11 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.statistics = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStats;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
+	table_function.get_row_id_columns = ParquetGetRowIdColumns;
 	table_function.pushdown_expression = ParquetScanPushdownExpression;
 	table_function.filter_pushdown = true;
 	table_function.filter_prune = true;
+	table_function.late_materialization = true;
 
 	return MultiFileReader::CreateFunctionSet(static_cast<TableFunction>(table_function));
 }
