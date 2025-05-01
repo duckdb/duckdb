@@ -339,12 +339,6 @@ void Pipeline::ModifyCreateBFPipeline() {
 	PhysicalOperator *op = &bf_creator.children[0].get();
 	while (true) {
 		switch (op->type) {
-		// case PhysicalOperatorType::HASH_JOIN: {
-		// 	auto& join = op->Cast<PhysicalHashJoin>();
-		// 	D_ASSERT(join.join_type == JoinType::MARK);
-		// 	new_operators.push_back(*op);
-		// 	break;
-		// }
 		case PhysicalOperatorType::USE_BF:
 		case PhysicalOperatorType::FILTER:
 		case PhysicalOperatorType::PROJECTION: {

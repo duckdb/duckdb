@@ -88,10 +88,6 @@ public:
 	//! Result do not need to be exact 'return 0' is a valid fallback strategy
 	static idx_t GetEstimatedCPUId();
 
-public:
-	//! The active background threads of the task scheduler
-	vector<unique_ptr<SchedulerThread>> threads;
-
 private:
 	void RelaunchThreadsInternal(int32_t n);
 
@@ -101,6 +97,8 @@ private:
 	unique_ptr<ConcurrentQueue> queue;
 	//! Lock for modifying the thread count
 	mutex thread_lock;
+	//! The active background threads of the task scheduler
+	vector<unique_ptr<SchedulerThread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
 	vector<unique_ptr<atomic<bool>>> markers;
 	//! The threshold after which to flush the allocator after completing a task
