@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
 
 #include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"

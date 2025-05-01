@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/logical_create_bf.hpp"
 
 namespace duckdb {
 

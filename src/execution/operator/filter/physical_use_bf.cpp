@@ -1,9 +1,7 @@
 #include "duckdb/execution/operator/filter/physical_use_bf.hpp"
 
+#include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
-#include "duckdb/parallel/thread_context.hpp"
-
-#include <utility>
 
 namespace duckdb {
 PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, const shared_ptr<FilterPlan> &filter_plan,
