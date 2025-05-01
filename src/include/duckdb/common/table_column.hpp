@@ -19,6 +19,9 @@ struct TableColumn {
 
 	string name;
 	LogicalType type;
+
+	void Serialize(Serializer &serializer) const;
+	static TableColumn Deserialize(Deserializer &deserializer);
 };
 
 using virtual_column_map_t = unordered_map<column_t, TableColumn>;
