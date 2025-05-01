@@ -22,6 +22,7 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
       is_probing_side(is_probing_side), is_successful(true), filter_plans(filter_plans),
       min_max_applied_cols(std::move(dynamic_filter_cols)), min_max_to_create(std::move(dynamic_filter_sets)) {
+	// TODO: we may unify the creation of BFs if they are built on the same columns.
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
 		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
 	}

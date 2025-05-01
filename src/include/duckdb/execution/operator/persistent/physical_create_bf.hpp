@@ -29,6 +29,7 @@ public:
 	// We use a mutable boolean variable to mark if this operator successfully materializes and creates its BFs.
 	// This variable is helpful for dynamic pipeline scheduling. It allows us to end the pipeline that has
 	// PhysicalCreateBFs in advance.
+	// TODO: we may need to remove the mutable usage.
 	bool is_probing_side;
 	mutable atomic<bool> is_successful;
 	shared_ptr<Pipeline> this_pipeline;
