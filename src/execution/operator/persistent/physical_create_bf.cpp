@@ -219,7 +219,7 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 
 			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
 			// a full table.
-			if (selectivity > 0.95) {
+			if (selectivity > 0.4) {
 				is_successful = false;
 				return true;
 			}
@@ -385,7 +385,7 @@ public:
 		}
 	}
 
-	static constexpr idx_t CHUNKS_PER_TASK = 256;
+	static constexpr idx_t CHUNKS_PER_TASK = 64;
 };
 
 void CreateBFGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -499,7 +499,6 @@ void PhysicalCreateBF::BuildPipelinesFromRelated(Pipeline &current, MetaPipeline
 
 		// set pipeline flag
 		this_pipeline->is_building_bf = true;
-		this_pipeline->is_probing_side = is_probing_side;
 
 		child_meta_pipeline.Build(children[0]);
 	} else {
@@ -524,7 +523,6 @@ void PhysicalCreateBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 		// set pipeline flag
 		this_pipeline->is_building_bf = true;
-		this_pipeline->is_probing_side = is_probing_side;
 
 		child_meta_pipeline.Build(children[0]);
 	} else {

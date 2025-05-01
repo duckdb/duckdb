@@ -524,8 +524,8 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 }
 
 bool PipelineExecutor::StopBuildingBF(const DataChunk &result) const {
-	// Only the pipeline that 1. has a CREATE_BF; and 2. is in the probing side can be canceled.
-	if (!pipeline.is_building_bf || !pipeline.is_probing_side) {
+	// Only the pipeline that has a CREATE_BF can be canceled.
+	if (!pipeline.is_building_bf) {
 		return false;
 	}
 

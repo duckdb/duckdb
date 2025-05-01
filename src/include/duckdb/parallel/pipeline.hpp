@@ -83,7 +83,6 @@ public:
 	std::atomic<int64_t> num_source_rows;
 
 	bool is_building_bf = false;
-	bool is_probing_side = false;
 
 public:
 	ClientContext &GetClientContext();
