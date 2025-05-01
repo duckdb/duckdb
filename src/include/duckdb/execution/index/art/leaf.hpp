@@ -43,9 +43,6 @@ public:
 	static void New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
 	                const idx_t count);
 
-	//! Merge two leaves. r_node must be INLINED.
-	static void MergeInlined(ART &art, Node &l_node, Node &r_node);
-
 	//! Insert a row ID into an inlined leaf.
 	static void InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const GateStatus status);
 

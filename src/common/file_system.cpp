@@ -442,6 +442,43 @@ void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
+void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	// To avoid hitting directories we have no permission for when using allowed_directories + enable_external_access,
+	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
+	// dir that is not in the allowed_directories list
+
+	auto sep = PathSeparator(path);
+	vector<string> dirs_to_create;
+
+	string current_prefix = path;
+
+	StringUtil::RTrim(current_prefix, sep);
+
+	// Strip directories from the path until we hit a directory that exists
+	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
+		auto found = current_prefix.find_last_of(sep);
+
+		// Push back the root dir
+		if (found == string::npos || found == 0) {
+			dirs_to_create.push_back(current_prefix);
+			current_prefix = "";
+			break;
+		}
+
+		// Add the directory to the directories to be created
+		dirs_to_create.push_back(current_prefix.substr(found, current_prefix.size() - found));
+
+		// Update the current prefix to remove the current dir
+		current_prefix = current_prefix.substr(0, found);
+	}
+
+	// Create the directories one by one
+	for (vector<string>::reverse_iterator riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
+		current_prefix += *riter;
+		CreateDirectory(current_prefix);
+	}
+}
+
 void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }

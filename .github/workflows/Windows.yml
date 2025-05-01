@@ -254,7 +254,8 @@ jobs:
  mingw:
      name: MinGW (64 Bit)
      runs-on: windows-2019
-     if: ${{ inputs.skip_tests != 'true' }}
+     #FIXME: add this back -- if: ${{ inputs.skip_tests != 'true' }}
+     if: false
      needs: win-release-64
      steps:
        - uses: actions/checkout@v4

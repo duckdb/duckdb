@@ -11,7 +11,6 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/execution/operator/csv_scanner/state_machine_options.hpp"
-#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 
 namespace duckdb {
