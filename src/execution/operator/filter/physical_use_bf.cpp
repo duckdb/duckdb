@@ -3,8 +3,6 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
-#include <utility>
-
 namespace duckdb {
 PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, const shared_ptr<FilterPlan> &filter_plan,
                              shared_ptr<BloomFilter> bf, PhysicalCreateBF *related_create_bfs,

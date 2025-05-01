@@ -229,9 +229,9 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 			ProgressData progress;
 			this_pipeline->GetProgress(progress);
 			double percent = progress.done / progress.total;
-			int64_t estimated_num_rows = gstate.num_input_rows / percent;
-			int64_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
-			int64_t estimated_required_memory = estimated_num_rows * per_tuple_size;
+			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / percent;
+			idx_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
+			idx_t estimated_required_memory = static_cast<idx_t>(estimated_num_rows) * per_tuple_size;
 			if (estimated_required_memory >= lstate.temporary_memory_state->GetReservation()) {
 				is_successful = false;
 				return true;
