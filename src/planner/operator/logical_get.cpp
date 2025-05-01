@@ -274,7 +274,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
 
-		for(auto &col_id : result->column_ids) {
+		for (auto &col_id : result->column_ids) {
 			if (col_id.IsVirtualColumn()) {
 				auto idx = col_id.GetPrimaryIndex();
 				auto ventry = virtual_columns.find(idx);
