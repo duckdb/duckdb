@@ -87,6 +87,24 @@ public:
 		return nullptr;
 	}
 
+	//! Extracts the bytes and their respective children.
+	//! The return value is valid as long as the arena is valid.
+	//! The node must be freed after calling into this function.
+	NodeChildren ExtractChildren(ArenaAllocator &arena) {
+		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
+		array_ptr<uint8_t> bytes(mem_bytes, count);
+		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
+		array_ptr<Node> children_ptr(reinterpret_cast<Node *>(mem_children), count);
+
+		for (uint8_t i = 0; i < count; i++) {
+			bytes[i] = key[i];
+			children_ptr[i] = children[i];
+		}
+
+		count = 0;
+		return NodeChildren(bytes, children_ptr);
+	}
+
 public:
 	template <class F>
 	static void Iterator(BaseNode<CAPACITY, TYPE> &n, F &&lambda) {

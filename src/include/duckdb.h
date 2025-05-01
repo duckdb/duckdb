@@ -2463,6 +2463,31 @@ Must be destroyed with `duckdb_destroy_value`.
 DUCKDB_C_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
+Creates a map value from a map type and two arrays, one for the keys and one for the values, each of length
+`entry_count`. Must be destroyed with `duckdb_destroy_value`.
+
+* @param map_type The map type
+* @param keys The keys of the map
+* @param values The values of the map
+* @param entry_count The number of entrys (key-value pairs) in the map
+* @return The map value, or nullptr, if the parameters are invalid.
+*/
+DUCKDB_C_API duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value *keys,
+                                                  duckdb_value *values, idx_t entry_count);
+
+/*!
+Creates a union value from a union type, a tag index, and a value.
+Must be destroyed with `duckdb_destroy_value`.
+
+* @param union_type The union type
+* @param tag_index The index of the tag of the union
+* @param value The value of the union
+* @return The union value, or nullptr, if the parameters are invalid.
+*/
+DUCKDB_C_API duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, idx_t tag_index,
+                                                    duckdb_value value);
+
+/*!
 Returns the number of elements in a MAP value.
 
 * @param value The MAP value.
