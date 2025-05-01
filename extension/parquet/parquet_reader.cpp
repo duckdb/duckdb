@@ -52,6 +52,21 @@ static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFilePr
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
+static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
+	Value disable_prefetch = false;
+	Value prefetch_all_files =
+#ifdef DUCKDB_PREFETCH_ALL_PARQUET_FILES
+	    true; // For debugging purposes we can toggle this to always enable
+#else
+	    false; // Defaults to false
+#endif
+	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
+	context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
+	bool should_prefetch = !file_handle.OnDiskFile() || prefetch_all_files.GetValue<bool>();
+	bool can_prefetch = file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
+	return should_prefetch && can_prefetch;
+}
+
 void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
                         const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
                         bool &footer_encrypted) {
@@ -92,11 +107,26 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	bool footer_encrypted;
 	// footer size is not provided - read it from the back
 	if (!footer_size.IsValid()) {
+		// We have to do two reads here:
+		// 1. The 8 bytes from the back to check if it's a Parquet file and the footer size
+		// 2. The footer (after getting the size)
+		// For local reads this doesn't matter much, but for remote reads this means two round trips,
+		// which is especially bad for small Parquet files where the read cost is mostly round trips.
+		// So, we prefetch more, to hopefully save a round trip.
+		static constexpr idx_t ESTIMATED_FOOTER_RATIO = 1000; // Estimate 1/1000th of the file to be footer
+		static constexpr idx_t MIN_PREFETCH_SIZE = 16384;     // Prefetch at least this many bytes
+		static constexpr idx_t MAX_PREFETCH_SIZE = 262144;    // Prefetch at most this many bytes
+		idx_t prefetch_size = 8;
+		if (ShouldAndCanPrefetch(context, file_handle)) {
+			prefetch_size = ClampValue(file_size / ESTIMATED_FOOTER_RATIO, MIN_PREFETCH_SIZE, MAX_PREFETCH_SIZE);
+			prefetch_size = MinValue(NextPowerOfTwo(prefetch_size), file_size);
+		}
+
 		ResizeableBuffer buf;
 		buf.resize(allocator, 8);
 		buf.zero();
 
-		transport.Prefetch(file_size - 8, 8);
+		transport.Prefetch(file_size - prefetch_size, prefetch_size);
 		transport.SetLocation(file_size - 8);
 		transport.read(buf.ptr, 8);
 
@@ -105,7 +135,9 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
-		transport.Prefetch(metadata_pos, footer_len);
+		if (footer_len > prefetch_size - 8) {
+			transport.Prefetch(metadata_pos, footer_len);
+		}
 	} else {
 		auto footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
 		if (footer_len == 0 || file_size < 12 + footer_len) {
@@ -1071,20 +1103,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
-
-		Value disable_prefetch = false;
-		Value prefetch_all_files =
-#ifdef DUCKDB_PREFETCH_ALL_PARQUET_FILES
-		    true; // For debugging purposes we can toggle this to always enable
-#else
-		    false; // Defaults to false
-#endif
-		context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
-		context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
-		bool should_prefetch = !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>();
-		bool can_prefetch = file_handle->CanSeek() && !disable_prefetch.GetValue<bool>();
-
-		if (should_prefetch && can_prefetch) {
+		if (ShouldAndCanPrefetch(context, *file_handle)) {
 			state.prefetch_mode = true;
 			if (file_handle->IsRemoteFile()) {
 				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
