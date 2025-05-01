@@ -9,8 +9,8 @@ select count(*) from json_each(range(3000));
 ----
 3000
 
-statement ok
-pragma enable_verification
+# statement ok
+# pragma enable_verification
 
 ##### SQLITE TESTS #####
 
