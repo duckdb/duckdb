@@ -274,21 +274,13 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
 
-		for (auto &col_id : result->column_ids) {
+		for(auto &col_id : result->column_ids) {
 			if (col_id.IsVirtualColumn()) {
 				auto idx = col_id.GetPrimaryIndex();
 				auto ventry = virtual_columns.find(idx);
 				if (ventry == virtual_columns.end()) {
 					throw SerializationException(
 					    "Table function deserialization failure - could not find virtual column with id %d", idx);
-				}
-				auto &ret_type = ventry->second.type;
-				auto &col_name = ventry->second.name;
-				if (bind_return_types[idx] != ret_type) {
-					throw SerializationException(
-					    "Table function deserialization failure in function \"%s\" - virtual column with "
-					    "name %s was serialized with type %s, but now has type %s",
-					    function.name, col_name, ret_type, bind_return_types[idx]);
 				}
 			} else {
 				auto idx = col_id.GetPrimaryIndex();
