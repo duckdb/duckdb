@@ -8,7 +8,7 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 	D_ASSERT(node.lhs);
 	D_ASSERT(node.rhs);
 
-	auto parameters = TransformNameList(*node.lhs);
+	auto parameters = TransformStringList(node.lhs);
 	auto rhs = TransformExpression(node.rhs);
 	D_ASSERT(!parameters.empty());
 	D_ASSERT(rhs);
