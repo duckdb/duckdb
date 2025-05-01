@@ -90,7 +90,6 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
-#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -3246,25 +3245,6 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 4, "QueryResultType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetQuoteRuleValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(QuoteRule::QUOTES_RFC), "QUOTES_RFC" },
-		{ static_cast<uint32_t>(QuoteRule::QUOTES_OTHER), "QUOTES_OTHER" },
-		{ static_cast<uint32_t>(QuoteRule::NO_QUOTES), "NO_QUOTES" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value) {
-	return StringUtil::EnumToString(GetQuoteRuleValues(), 3, "QuoteRule", static_cast<uint32_t>(value));
-}
-
-template<>
-QuoteRule EnumUtil::FromString<QuoteRule>(const char *value) {
-	return static_cast<QuoteRule>(StringUtil::StringToEnum(GetQuoteRuleValues(), 3, "QuoteRule", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRelationTypeValues() {
