@@ -2,6 +2,9 @@
 # description: Test that Index Scan is triggered even when there is a nested conjunction filter on the index column
 # group: [issues]
 
+# needs this vector size otherwise the sample is somehow not repeatable
+require vector_size 2048
+
 statement ok
 create or replace table test as select 9223372036854776 + range * 9223372036854776 i from range(100);
 

@@ -431,6 +431,7 @@ void ExtractConjunctionAnd(ConjunctionAndFilter &filter, BoundColumnRefExpressio
 		}
 		default:
 			// Not yet supported: filter types than CONSTANT_COMPARISON/IN_FILTER/CONJUNCTION_AND in CONJUNCTION_AND.
+			expressions.clear();
 			return;
 		}
 	}
