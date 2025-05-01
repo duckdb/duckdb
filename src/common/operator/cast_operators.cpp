@@ -1800,11 +1800,12 @@ struct HugeIntegerCastOperation {
 		}
 
 		// Get the first (left-most) digit of the decimals
-		while (state.decimal_total_digits > 39) {
-			state.decimal /= T::Operation::POWERS_OF_TEN[39];
-			state.decimal_total_digits -= 39;
+		constexpr auto MAX_DIGITS = T::Operation::CACHED_POWERS_OF_TEN - 1;
+		while (state.decimal_total_digits > MAX_DIGITS) {
+			state.decimal /= T::Operation::POWERS_OF_TEN[MAX_DIGITS];
+			state.decimal_total_digits -= MAX_DIGITS;
 		}
-		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= 39);
+		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= MAX_DIGITS);
 		state.decimal /= T::Operation::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
 		if (state.decimal >= 5) {
