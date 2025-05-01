@@ -176,6 +176,25 @@ ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetARTHandlingResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTHandlingResult::CONTINUE), "CONTINUE" },
+		{ static_cast<uint32_t>(ARTHandlingResult::SKIP), "SKIP" },
+		{ static_cast<uint32_t>(ARTHandlingResult::YIELD), "YIELD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value) {
+	return StringUtil::EnumToString(GetARTHandlingResultValues(), 3, "ARTHandlingResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value) {
+	return static_cast<ARTHandlingResult>(StringUtil::StringToEnum(GetARTHandlingResultValues(), 3, "ARTHandlingResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetARTScanHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ARTScanHandling::EMPLACE), "EMPLACE" },
@@ -192,25 +211,6 @@ const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value) {
 template<>
 ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value) {
 	return static_cast<ARTScanHandling>(StringUtil::StringToEnum(GetARTScanHandlingValues(), 2, "ARTScanHandling", value));
-}
-
-const StringUtil::EnumStringLiteral *GetARTScanHandlingResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTScanHandlingResult::CONTINUE), "CONTINUE" },
-		{ static_cast<uint32_t>(ARTScanHandlingResult::SKIP), "SKIP" },
-		{ static_cast<uint32_t>(ARTScanHandlingResult::YIELD), "YIELD" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ARTScanHandlingResult>(ARTScanHandlingResult value) {
-	return StringUtil::EnumToString(GetARTScanHandlingResultValues(), 3, "ARTScanHandlingResult", static_cast<uint32_t>(value));
-}
-
-template<>
-ARTScanHandlingResult EnumUtil::FromString<ARTScanHandlingResult>(const char *value) {
-	return static_cast<ARTScanHandlingResult>(StringUtil::StringToEnum(GetARTScanHandlingResultValues(), 3, "ARTScanHandlingResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {

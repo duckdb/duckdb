@@ -16,6 +16,7 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
+enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2 };
 
 class ConflictManager;
 class ARTKey;
@@ -98,6 +99,7 @@ public:
 	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
+	//! FIXME: Return ARTConflictType instead of a boolean.
 	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
 
 	//! Vacuums the ART storage.
@@ -151,7 +153,8 @@ private:
 	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
 	                       ARTKeySection &section);
 
-	void InitializeMerge(unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
