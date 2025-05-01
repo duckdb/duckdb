@@ -14,6 +14,7 @@
 namespace duckdb {
 
 struct TableColumn {
+	TableColumn() = default;
 	TableColumn(string name_p, LogicalType type_p) : name(std::move(name_p)), type(std::move(type_p)) {
 	}
 
