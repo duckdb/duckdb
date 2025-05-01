@@ -233,8 +233,9 @@ struct JSONTableInOutResult {
 };
 
 template <JSONTableInOutType TYPE>
-static bool InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &input, DataChunk &output,
-                                 JSONTableInOutResult &result) {
+static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &input, JSONTableInOutResult &result) {
+	lstate.total_count = 0;
+
 	// Parse path, default to root if not given
 	Value path_value("$");
 	if (input.data.size() > 1) {
@@ -252,16 +253,14 @@ static bool InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 	// Parse document and get the value at the supplied path
 	const auto &input_vector = input.data[0];
 	if (ConstantVector::IsNull(input_vector)) {
-		output.SetCardinality(0);
-		return false;
+		return;
 	}
 	const auto &input_data = FlatVector::GetData<string_t>(input_vector)[0];
 	lstate.doc = JSONCommon::ReadDocument(input_data, JSONCommon::READ_FLAG, lstate.alc);
 	const auto root = JSONCommon::GetUnsafe(lstate.doc->root, lstate.path.c_str(), lstate.len);
 
 	if (!root) {
-		output.SetCardinality(0);
-		return false;
+		return;
 	}
 
 	const auto is_container = unsafe_yyjson_is_arr(root) || unsafe_yyjson_is_obj(root);
@@ -271,20 +270,13 @@ static bool InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 	if (is_container) {
 		lstate.AddRecursionNode(root, nullptr);
 	}
-
-	lstate.initialized = true;
-	return true;
 }
 
 template <JSONTableInOutType TYPE>
 static bool JSONInOutTableFunctionHandleValue(JSONTableInOutLocalState &lstate, JSONTableInOutResult &result,
                                               yyjson_val *val, optional_ptr<yyjson_val> vkey) {
 	result.AddRow<TYPE>(lstate, val, vkey);
-	if (TYPE == JSONTableInOutType::TREE && (unsafe_yyjson_is_arr(val) || unsafe_yyjson_is_obj(val))) {
-		lstate.AddRecursionNode(val, vkey);
-		return true;
-	}
-	return false;
+	return TYPE == JSONTableInOutType::TREE && (unsafe_yyjson_is_arr(val) || unsafe_yyjson_is_obj(val));
 }
 
 template <JSONTableInOutType TYPE>
@@ -296,10 +288,12 @@ static void JSONTableInOutTraverseArray(JSONTableInOutLocalState &lstate, JSONTa
 		if (idx < child_index) {
 			continue;
 		}
-		if (JSONInOutTableFunctionHandleValue<TYPE>(lstate, result, child_val, nullptr)) {
-			break; // We added a recursion index, break to go depth-first
-		}
+		const auto add_node = JSONInOutTableFunctionHandleValue<TYPE>(lstate, result, child_val, nullptr);
 		child_index++; // We finished processing the array element
+		if (add_node) {
+			lstate.AddRecursionNode(child_val, nullptr);
+			break; // We added a recursion node, break to go depth-first
+		}
 		if (result.count == STANDARD_VECTOR_SIZE) {
 			break; // Vector is full
 		}
@@ -319,10 +313,12 @@ static void JSONTableInOutTraverseObject(JSONTableInOutLocalState &lstate, JSONT
 		if (idx < child_index) {
 			continue;
 		}
-		if (JSONInOutTableFunctionHandleValue<TYPE>(lstate, result, child_val, child_key)) {
-			break; // We added a recursion index, break to go depth-first
+		const auto add_node = JSONInOutTableFunctionHandleValue<TYPE>(lstate, result, child_val, child_key);
+		child_index++; // We finished processing the array element
+		if (add_node) {
+			lstate.AddRecursionNode(child_val, child_key);
+			break; // We added a recursion node, break to go depth-first
 		}
-		child_index++; // We finished processing the object field
 		if (result.count == STANDARD_VECTOR_SIZE) {
 			break; // Vector is full
 		}
@@ -344,15 +340,15 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 
 	// Initialize (if not yet done)
 	if (!lstate.initialized) {
-		if (!InitializeLocalState<TYPE>(lstate, input, output, result)) {
-			return OperatorResultType::NEED_MORE_INPUT;
-		}
+		InitializeLocalState<TYPE>(lstate, input, result);
+		lstate.initialized = true;
 	}
 
 	// Traverse the JSON (keeping a stack to avoid recursion and save progress across calls)
+	auto &recursion_nodes = lstate.recursion_nodes;
 	while (!lstate.recursion_nodes.empty() && result.count != STANDARD_VECTOR_SIZE) {
-		auto &parent_val = lstate.recursion_nodes.back().parent_val;
-		auto &child_index = lstate.recursion_nodes.back().child_index;
+		auto &parent_val = recursion_nodes.back().parent_val;
+		auto &child_index = recursion_nodes.back().child_index;
 		switch (yyjson_get_tag(parent_val)) {
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 			JSONTableInOutTraverseArray<TYPE>(lstate, result, parent_val, child_index);
@@ -382,7 +378,12 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 		ConstantVector::SetNull(empty_vector, true);
 	}
 
-	return lstate.recursion_nodes.empty() ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
+	if (output.size() == 0) {
+		D_ASSERT(recursion_nodes.empty());
+		lstate.initialized = false;
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 virtual_column_map_t GetJSONTableInOutVirtualColumns(ClientContext &, optional_ptr<FunctionData>) {

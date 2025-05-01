@@ -1,0 +1,336 @@
+# name: test/sql/json/table/test_json_table_in_out.test_slow
+# description: Test JSON table in/out functions (json_each/json_tree)
+# group: [table]
+
+require json
+
+query I
+select count(*) from json_each(range(3000));
+----
+3000
+
+statement ok
+pragma enable_verification
+
+##### SQLITE TESTS #####
+
+### JSON101-5 ###
+statement ok
+CREATE TABLE j2(id INTEGER PRIMARY KEY, json JSON, src VARCHAR);
+
+statement ok
+INSERT INTO j2(id,json,src)
+VALUES(1,'{
+"firstName": "John",
+"lastName": "Smith",
+"isAlive": true,
+"age": 25,
+"address": {
+  "streetAddress": "21 2nd Street",
+  "city": "New York",
+  "state": "NY",
+  "postalCode": "10021-3100"
+},
+"phoneNumbers": [
+  {
+    "type": "home",
+    "number": "212 555-1234"
+  },
+  {
+    "type": "office",
+    "number": "646 555-4567"
+  }
+],
+"children": [],
+"spouse": null
+}','https://en.wikipedia.org/wiki/JSON');
+
+statement ok
+INSERT INTO j2(id,json,src)
+VALUES(2, '{
+"id": "0001",
+"type": "donut",
+"name": "Cake",
+"ppu": 0.55,
+"batters":
+    {
+        "batter":
+            [
+                { "id": "1001", "type": "Regular" },
+                { "id": "1002", "type": "Chocolate" },
+                { "id": "1003", "type": "Blueberry" },
+                { "id": "1004", "type": "Devil''s Food" }
+            ]
+    },
+"topping":
+    [
+        { "id": "5001", "type": "None" },
+        { "id": "5002", "type": "Glazed" },
+        { "id": "5005", "type": "Sugar" },
+        { "id": "5007", "type": "Powdered Sugar" },
+        { "id": "5006", "type": "Chocolate with Sprinkles" },
+        { "id": "5003", "type": "Chocolate" },
+        { "id": "5004", "type": "Maple" }
+    ]
+}','https://adobe.github.io/Spry/samples/data_region/JSONDataSetSample.html');
+
+statement ok
+INSERT INTO j2(id,json,src)
+VALUES(3,'[
+{
+    "id": "0001",
+    "type": "donut",
+    "name": "Cake",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" },
+                    { "id": "1002", "type": "Chocolate" },
+                    { "id": "1003", "type": "Blueberry" },
+                    { "id": "1004", "type": "Devil''s Food" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5005", "type": "Sugar" },
+            { "id": "5007", "type": "Powdered Sugar" },
+            { "id": "5006", "type": "Chocolate with Sprinkles" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+},
+{
+    "id": "0002",
+    "type": "donut",
+    "name": "Raised",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5005", "type": "Sugar" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+},
+{
+    "id": "0003",
+    "type": "donut",
+    "name": "Old Fashioned",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" },
+                    { "id": "1002", "type": "Chocolate" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+}
+]','https://adobe.github.io/Spry/samples/data_region/JSONDataSetSample.html');
+
+query I
+select count(*) from j2, json_tree(j2.json);
+----
+154
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_tree(j2.json) AS jx
+WHERE fullkey!=(path || CASE WHEN TRY_CAST(key AS UBIGINT) IS NOT NULL THEN '['||key||']'
+                            ELSE '.'||key END);
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_each(j2.json) AS jx
+WHERE fullkey!=(path || CASE WHEN TRY_CAST(key AS UBIGINT) IS NOT NULL THEN '['||key||']'
+                            ELSE '.'||key END);
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_each(j2.json) AS jx
+WHERE jx.json<>j2.json;
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_tree(j2.json) AS jx
+WHERE jx.json<>j2.json;
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_each(j2.json) AS jx
+WHERE jx.value<>jx.atom AND type NOT IN ('ARRAY','OBJECT');
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_tree(j2.json) AS jx
+WHERE jx.value<>jx.atom AND type NOT IN ('ARRAY','OBJECT');
+----
+
+
+### JSON101-13 ###
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE TABLE t1(id INTEGER, json JSON);
+
+statement ok
+INSERT INTO t1(id,json) VALUES(1,'{"items":[3,5]}');
+
+statement ok
+CREATE TABLE t2(id INTEGER, json JSON);
+
+statement ok
+INSERT INTO t2(id,json) VALUES(2,'{"value":2}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(3,'{"value":3}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(4,'{"value":4}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(5,'{"value":5}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(6,'{"value":6}');
+
+query I
+select count(*) from t2, json_each(t2.json) je;
+----
+5
+
+query I
+select je.rowid from t2, json_each(t2.json) je;
+----
+0
+0
+0
+0
+0
+
+# our result here differs from SQLite because our correlated subquery behavior is different
+query IIII rowsort
+SELECT * FROM t1 CROSS JOIN t2
+WHERE EXISTS(SELECT 1 FROM json_each(t1.json,'$.items') AS Z
+             WHERE Z.value==t2.id);
+----
+1	{"items":[3,5]}	3	{"value":3}
+1	{"items":[3,5]}	5	{"value":5}
+
+query IIII rowsort
+SELECT * FROM t2 CROSS JOIN t1
+WHERE EXISTS(SELECT 1 FROM json_each(t1.json,'$.items') AS Z
+             WHERE Z.value==t2.id);
+----
+3	{"value":3}	1	{"items":[3,5]}
+5	{"value":5}	1	{"items":[3,5]}
+
+### JSON101-14 ###
+query I
+SELECT fullkey FROM json_each('123');
+----
+$
+
+query I
+SELECT fullkey FROM json_each('123.56');
+----
+$
+
+query I
+SELECT fullkey FROM json_each('"hello"');
+----
+$
+
+query I
+SELECT fullkey FROM json_each('null');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('123');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('123.56');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('"hello"');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('null');
+----
+$
+
+### JSON101-15 ###
+query IIIIIIII
+SELECT * FROM JSON_EACH('{"a":1, "b":2}');
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+query IIIIIIII
+SELECT xyz.* FROM JSON_EACH('{"a":1, "b":2}') AS xyz;
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+query IIIIIIII
+SELECT * FROM (FROM JSON_EACH('{"a":1, "b":2}'));
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+query IIIIIIII
+SELECT xyz.* FROM (FROM JSON_EACH('{"a":1, "b":2}')) AS xyz;
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+### JSON101-17 ###
+query I
+SELECT count(*) FROM json_each(NULL);
+----
+0
+
+query I
+SELECT count(*) FROM json_tree(NULL);
+----
+0
