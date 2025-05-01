@@ -207,6 +207,10 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 	} else {
 		result.last_position.buffer_pos = buffer_pos + 2;
 	}
+	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
+	                                   result.buffer_size};
+	result.current_line_position.begin = result.current_line_position.end;
+	result.current_line_position.end = current_line_start;
 	result.cur_col_id = 0;
 	result.chunk_col_id = 0;
 	return done;
@@ -958,6 +962,9 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), scanner_idx_p),
       start_pos(0) {
+	if (scanner_idx == 0 && csv_file_scan) {
+		lines_read += csv_file_scan->skipped_rows;
+	}
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
@@ -971,6 +978,9 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), 0),
       start_pos(0) {
+	if (scanner_idx == 0 && csv_file_scan) {
+		lines_read += csv_file_scan->skipped_rows;
+	}
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
@@ -1779,8 +1789,7 @@ void StringValueScanner::SetStart() {
 		}
 	}
 	// 3. We are in an escaped value
-	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.escape.GetValue() != '\0' &&
-	    state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
+	if (!best_row.is_valid && state_machine->dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		auto escape_row = TryRow(CSVState::ESCAPE, iterator.pos.buffer_pos, iterator.GetEndPos());
 		if (escape_row.is_valid) {
 			best_row = escape_row;

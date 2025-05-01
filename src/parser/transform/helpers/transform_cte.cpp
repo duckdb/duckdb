@@ -45,10 +45,11 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
-
-		auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
-		if (key_target) {
-			TransformExpressionList(*cte.recursive_keys, info->key_targets);
+		if (cte.recursive_keys) {
+			auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
+			if (key_target) {
+				TransformExpressionList(*cte.recursive_keys, info->key_targets);
+			}
 		}
 
 		if (cte.aliascolnames) {

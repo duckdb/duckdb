@@ -91,6 +91,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		csv_options.dialect_options.state_machine_options.escape.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.delimiter.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.quote.ChangeSetByUserTrue();
+		csv_options.dialect_options.state_machine_options.comment.ChangeSetByUserTrue();
 		csv_options.dialect_options.header.ChangeSetByUserTrue();
 		csv_options.dialect_options.skip_rows.ChangeSetByUserTrue();
 	}
