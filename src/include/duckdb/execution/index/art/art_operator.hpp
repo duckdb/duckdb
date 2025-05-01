@@ -139,7 +139,7 @@ public:
 				return ARTConflictType::NO_CONFLICT;
 			}
 			case NType::PREFIX: {
-				Prefix prefix(art, active_node);
+				Prefix prefix(art, active_node, true);
 				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 					if (prefix.data[i] != active_key[depth]) {
 						// The active key and the prefix don't match.
