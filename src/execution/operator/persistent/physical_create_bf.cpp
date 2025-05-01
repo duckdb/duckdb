@@ -192,7 +192,7 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 		return true;
 	}
 
-	// Early Stop: Unfiltered Table
+	// Early Stop: Unfiltered Table or estimated OOM
 	if (!gstate.is_selectivity_checked) {
 		gstate.num_input_rows += static_cast<int64_t>(chunk.size());
 
@@ -217,9 +217,22 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 			                         : static_cast<double>(this_pipeline->num_source_rows);
 			double selectivity = input_rows / source_rows;
 
-			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF
-			// on a full table.
+			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
+			// a full table.
 			if (selectivity > 0.95) {
+				is_successful = false;
+				return true;
+			}
+
+			// Estimate the lower bound of required memory, which is used to materialize this table. If it is very
+			// large, give up creating BF.
+			ProgressData progress;
+			this_pipeline->GetProgress(progress);
+			double percent = progress.done / progress.total;
+			int64_t estimated_num_rows = gstate.num_input_rows / percent;
+			int64_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
+			int64_t estimated_required_memory = estimated_num_rows * per_tuple_size;
+			if (estimated_required_memory >= lstate.temporary_memory_state->GetReservation()) {
 				is_successful = false;
 				return true;
 			}
