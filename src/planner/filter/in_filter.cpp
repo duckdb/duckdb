@@ -22,7 +22,7 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 	}
 }
 
-FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
 	switch (values[0].type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
@@ -37,10 +37,10 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                  array_ptr<Value>(values.data(), values.size()));
+		                                  array_ptr<const Value>(values.data(), values.size()));
 	case PhysicalType::VARCHAR:
 		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                 array_ptr<Value>(values.data(), values.size()));
+		                                 array_ptr<const Value>(values.data(), values.size()));
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

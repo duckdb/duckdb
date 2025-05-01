@@ -28,7 +28,7 @@ public:
 	bool EvaluateWithConstant(ClientContext &context, const Value &val);
 	bool EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const;
 
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 	string ToString(const string &column_name) const override;
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;

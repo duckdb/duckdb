@@ -26,7 +26,7 @@ bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const 
 	return count > 0;
 }
 
-FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) const {
 	// we cannot prune based on arbitrary expressions currently
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
