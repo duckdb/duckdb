@@ -121,7 +121,8 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
+JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
+    : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
 JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
@@ -140,7 +141,7 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLo
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
+	lstate.json_allocator->Reset();
 	return lstate;
 }
 
@@ -232,8 +233,8 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(

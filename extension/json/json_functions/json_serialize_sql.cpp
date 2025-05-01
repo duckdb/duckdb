@@ -84,7 +84,7 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 
 static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = local_state.json_allocator.GetYYAlc();
+	auto alc = local_state.json_allocator->GetYYAlc();
 	auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -212,9 +212,8 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 // JSON DESERIALIZE SQL FUNCTION
 //----------------------------------------------------------------------
 static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = local_state.json_allocator.GetYYAlc();
+	auto alc = local_state.json_allocator->GetYYAlc();
 	auto &inputs = args.data[0];
 
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
@@ -235,7 +234,7 @@ ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 //----------------------------------------------------------------------
 static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, const FunctionParameters &parameters) {
 	JSONFunctionLocalState local_state(context);
-	auto alc = local_state.json_allocator.GetYYAlc();
+	auto alc = local_state.json_allocator->GetYYAlc();
 
 	auto input = parameters.values[0].GetValueUnsafe<string_t>();
 	auto stmt = DeserializeSelectStatement(input, alc);
@@ -260,7 +259,7 @@ struct ExecuteSqlTableFunction {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                     vector<LogicalType> &return_types, vector<string> &names) {
 		JSONFunctionLocalState local_state(context);
-		auto alc = local_state.json_allocator.GetYYAlc();
+		auto alc = local_state.json_allocator->GetYYAlc();
 
 		auto result = make_uniq<BindData>();
 

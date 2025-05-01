@@ -63,7 +63,7 @@ public:
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
 public:
-	JSONAllocator json_allocator;
+	shared_ptr<JSONAllocator> json_allocator;
 };
 
 class JSONFunctions {

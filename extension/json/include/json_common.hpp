@@ -18,11 +18,23 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+class JSONAllocator;
+
+class JSONStringVectorBuffer : public VectorBuffer {
+public:
+	explicit JSONStringVectorBuffer(shared_ptr<JSONAllocator> allocator_p)
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), allocator(std::move(allocator_p)) {
+	}
+
+private:
+	shared_ptr<JSONAllocator> allocator;
+};
+
 //! JSON allocator is a custom allocator for yyjson that prevents many tiny allocations
-class JSONAllocator {
+class JSONAllocator : public enable_shared_from_this<JSONAllocator> {
 public:
 	explicit JSONAllocator(Allocator &allocator)
-	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, &arena_allocator}) {
+	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, this}) {
 	}
 
 	inline yyjson_alc *GetYYAlc() {
@@ -33,15 +45,26 @@ public:
 		arena_allocator.Reset();
 	}
 
+	void AddBuffer(Vector &vector) {
+		if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+			StringVector::AddBuffer(vector, make_buffer<JSONStringVectorBuffer>(shared_from_this()));
+		}
+	}
+
+	static void AddBuffer(Vector &vector, yyjson_alc *alc) {
+		auto alloc = (JSONAllocator *)alc->ctx; // NOLINT
+		alloc->AddBuffer(vector);
+	}
+
 private:
 	static inline void *Allocate(void *ctx, size_t size) {
-		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->AllocateAligned(size);
+		auto alloc = (JSONAllocator *)ctx; // NOLINT
+		return alloc->arena_allocator.AllocateAligned(size);
 	}
 
 	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
-		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->ReallocateAligned(data_ptr_cast(ptr), old_size, size);
+		auto alloc = (JSONAllocator *)ctx; // NOLINT
+		return alloc->arena_allocator.ReallocateAligned(data_ptr_cast(ptr), old_size, size);
 	}
 
 	static inline void Free(void *ctx, void *ptr) {
