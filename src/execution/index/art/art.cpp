@@ -1328,7 +1328,8 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	// Merge the ARTs.
 	D_ASSERT(tree.GetGateStatus() == other_art.tree.GetGateStatus());
 	if (tree.HasMetadata()) {
-		ARTMerger merger(Allocator::Get(db), *this);
+		ArenaAllocator arena(Allocator::Get(db));
+		ARTMerger merger(arena, *this);
 		merger.Init(tree, other_art.tree);
 		return merger.Merge() == ARTConflictType::NO_CONFLICT;
 	}
