@@ -58,7 +58,6 @@ private:
 	// - if left is PREFIX, then right is also PREFIX (except for PREFIX + LEAF_INLINED).
 	void Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth);
 
-	void MergeInlined(NodeEntry &entry);
 	ARTConflictType MergeNodeAndInlined(NodeEntry &entry);
 
 	array_ptr<uint8_t> GetBytes(Node &leaf);

@@ -10,6 +10,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -88,11 +89,13 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(OperatorSinkInput &input) co
 	auto row_count = l_state.key_chunk.size();
 	auto &art = l_state.local_index->Cast<ART>();
 
+	ArenaAllocator arena(BufferAllocator::Get(art.db));
+
 	// Insert each key and its corresponding row ID.
 	for (idx_t i = 0; i < row_count; i++) {
 		auto status = art.tree.GetGateStatus();
-		auto conflict_type =
-		    art.Insert(art.tree, l_state.keys[i], 0, l_state.row_ids[i], status, nullptr, IndexAppendMode::DEFAULT);
+		auto conflict_type = ARTOperator::Insert(arena, art, art.tree, l_state.keys[i], 0, l_state.row_ids[i], status,
+		                                         nullptr, IndexAppendMode::DEFAULT);
 		D_ASSERT(conflict_type != ARTConflictType::TRANSACTION);
 		if (conflict_type == ARTConflictType::CONSTRAINT) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");
