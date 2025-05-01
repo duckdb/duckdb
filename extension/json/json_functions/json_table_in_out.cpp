@@ -299,14 +299,15 @@ static void JSONTableInOutTraverseArray(JSONTableInOutLocalState &lstate, JSONTa
 		if (JSONInOutTableFunctionHandleValue<TYPE>(lstate, result, child_val, nullptr)) {
 			break; // We added a recursion index, break to go depth-first
 		}
+		child_index++; // We finished processing the array element
 		if (result.count == STANDARD_VECTOR_SIZE) {
-			break;
+			break; // Vector is full
 		}
-		// We finished processing the array element
-		child_index++;
 	}
-	// Array is done, get rid of it
-	lstate.recursion_nodes.pop_back();
+	if (idx == max) {
+		// Array is done, get rid of it
+		lstate.recursion_nodes.pop_back();
+	}
 }
 
 template <JSONTableInOutType TYPE>
@@ -321,14 +322,15 @@ static void JSONTableInOutTraverseObject(JSONTableInOutLocalState &lstate, JSONT
 		if (JSONInOutTableFunctionHandleValue<TYPE>(lstate, result, child_val, child_key)) {
 			break; // We added a recursion index, break to go depth-first
 		}
+		child_index++; // We finished processing the object field
 		if (result.count == STANDARD_VECTOR_SIZE) {
-			break;
+			break; // Vector is full
 		}
-		// We finished processing the object field
-		child_index++;
 	}
-	// Object is done, get rid of it
-	lstate.recursion_nodes.pop_back();
+	if (idx == max) {
+		// Object is done, get rid of it
+		lstate.recursion_nodes.pop_back();
+	}
 }
 
 template <JSONTableInOutType TYPE>
