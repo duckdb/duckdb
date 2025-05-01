@@ -245,7 +245,9 @@ BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_by
 			if (result.IsValid()) {
 				return result;
 			}
-			continue;
+			break;
+		default:
+			throw InternalException("Unknown CachedFileRangeOverlap");
 		}
 		++it;
 	}
@@ -257,9 +259,6 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
                                                      CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,
                                                      idx_t location) {
 	D_ASSERT(file_range.GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL);
-	if (file_range.block_handle->IsUnloaded()) {
-		return BufferHandle(); // Purely in-memory (for now)
-	}
 	auto result = external_file_cache.GetBufferManager().Pin(file_range.block_handle);
 	if (result.IsValid()) {
 		buffer = result.Ptr() + (location - file_range.location);
@@ -297,6 +296,8 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 			// Since we have the write lock here, we can do some cleanup
 			it = ranges.erase(it);
 			continue;
+		default:
+			throw InternalException("Unknown CachedFileRangeOverlap");
 		}
 		if (break_loop) {
 			break;

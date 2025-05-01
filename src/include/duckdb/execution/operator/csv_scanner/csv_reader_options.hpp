@@ -65,6 +65,9 @@ struct CSVReaderOptions {
 	bool allow_quoted_nulls = true;
 	char comment = '\0';
 
+	//! Thousands separator option (to be able to accept "100,000.220" as a double or decimal.
+	char thousands_separator = '\0';
+
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//

@@ -90,7 +90,8 @@ public:
 
 	//! If a string_t value can be cast to a type
 	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
-	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
+	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator,
+	                         const char thousands_separator);
 
 	idx_t LinesSniffed() const;
 

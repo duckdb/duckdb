@@ -10,7 +10,7 @@ SELECT
 	i,
 	(i * 29) % 11 AS outside,
 	i // 2 AS inside,
-	cume_dist(ORDER BY inside DESC) OVER w,
+	cume_dist(ORDER BY inside DESC) OVER w AS cd,
 FROM range(10) tbl(i)
 WINDOW w AS (
 	ORDER BY outside
