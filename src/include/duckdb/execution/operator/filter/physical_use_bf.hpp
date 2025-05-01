@@ -1,15 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/physical_use_bf.hpp
+// duckdb/planner/operator/logical_use_bf.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp"
-#include "duckdb/optimizer/predicate_transfer/dag.hpp"
+#include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
 
 namespace duckdb {
 class PhysicalUseBF : public CachingPhysicalOperator {

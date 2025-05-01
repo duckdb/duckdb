@@ -1,10 +1,15 @@
 #include "duckdb/optimizer/predicate_transfer/predicate_transfer_optimizer.hpp"
-
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_use_bf.hpp"
-#include "duckdb/planner/operator/logical_create_bf.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 

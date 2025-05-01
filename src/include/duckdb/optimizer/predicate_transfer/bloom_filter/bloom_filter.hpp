@@ -7,11 +7,14 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
+#include <random>
+#include <cstring>
 
 #ifndef BF_RESTRICT
 #if defined(_MSC_VER)

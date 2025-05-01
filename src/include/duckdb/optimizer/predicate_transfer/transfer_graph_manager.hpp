@@ -1,18 +1,12 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/optimizer/predicate_transfer/transfer_graph_manager.hpp
-//
-//
-//===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/optimizer/predicate_transfer/table_operator_namager.hpp"
 #include "duckdb/optimizer/predicate_transfer/dag.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
-class LogicalOperator;
 
 class EdgeInfo {
 public:

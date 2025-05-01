@@ -1,10 +1,11 @@
 #pragma once
 
 #include "duckdb/optimizer/predicate_transfer/transfer_graph_manager.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
-class LogicalCreateBF;
-class LogicalUseBF;
+using BloomFilters = vector<shared_ptr<BloomFilter>>;
 
 class PredicateTransferOptimizer {
 public:
