@@ -184,7 +184,7 @@ void TransferGraphManager::IgnoreUnfilteredTable() {
 				idx_t col_idx = is_left ? link->left_binding.column_index : link->right_binding.column_index;
 				auto &bfs = received_bfs[col_idx];
 
-				// add links
+				// 3.1 add new links
 				for (auto &bf_link : bfs) {
 					// the same edge
 					if (bf_link->left_binding == link->left_binding && bf_link->right_binding == link->right_binding) {
@@ -208,9 +208,7 @@ void TransferGraphManager::IgnoreUnfilteredTable() {
 						                              link->right_table, link->right_binding);
 						concat_edge->protect_left = true;
 					} else if (is_left && bf_right) {
-						const auto &bf_cond = bf_link->condition->Cast<BoundComparisonExpression>();
-						cond_expr.left = bf_cond.right->Copy();
-						cond_expr.right = link->condition->Cast<BoundComparisonExpression>().right->Copy();
+						cond_expr.left = bf_link->condition->Cast<BoundComparisonExpression>().left->Copy();
 						concat_edge =
 						    make_shared_ptr<EdgeInfo>(std::move(cond), bf_link->left_table, bf_link->left_binding,
 						                              link->right_table, link->right_binding);
@@ -260,13 +258,19 @@ void TransferGraphManager::IgnoreUnfilteredTable() {
 					}
 				}
 
-				// disable current link
+				// 3.2 disable current link
 				if (is_left) {
 					link->protect_right = true;
 				} else {
 					link->protect_left = true;
 				}
 			}
+
+			// remove invalid edges
+			links.erase(std::remove_if(
+			                links.begin(), links.end(),
+			                [](const shared_ptr<EdgeInfo> &link) { return link->protect_left && link->protect_right; }),
+			            links.end());
 		}
 	}
 }
