@@ -122,7 +122,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto child = function.IsLambdaFunction();
 		if (child) {
-			return TryBindLambdaOrJson(function, depth, *func, child->Cast<LambdaExpression>().deprecated);
+			bool deprecated = child->Cast<LambdaExpression>().named_parameters.empty();
+			return TryBindLambdaOrJson(function, depth, *func, deprecated);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}

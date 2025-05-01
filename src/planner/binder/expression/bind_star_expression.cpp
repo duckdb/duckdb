@@ -204,10 +204,11 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// for other expressions -> generate a columns expression
 		// "* LIKE '%literal%'
 		// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
-		auto lhs = make_uniq<ColumnRefExpression>("__lambda_col");
-		function.children[0] = lhs->Copy();
+		vector<string> named_parameters;
+		named_parameters.push_back("__lambda_col");
+		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
 
-		auto lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(root), false);
+		auto lambda = make_uniq<LambdaExpression>(std::move(named_parameters), std::move(root));
 		vector<unique_ptr<ParsedExpression>> filter_children;
 		filter_children.push_back(std::move(star_expr));
 		filter_children.push_back(std::move(lambda));

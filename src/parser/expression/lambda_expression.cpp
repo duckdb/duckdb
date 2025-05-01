@@ -12,10 +12,24 @@ namespace duckdb {
 LambdaExpression::LambdaExpression() : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA) {
 }
 
-LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr,
-                                   const bool deprecated)
-    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)),
-      deprecated(deprecated) {
+LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr<ParsedExpression> expr)
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA),
+      named_parameters(std::move(named_parameters_p)), expr(std::move(expr)) {
+	if (named_parameters.size() == 1) {
+		lhs = make_uniq<ColumnRefExpression>(named_parameters.back());
+		return;
+	}
+	// Create a dummy row function and insert the children.
+	vector<unique_ptr<ParsedExpression>> children;
+	for (const auto &name : named_parameters) {
+		auto child = make_uniq<ColumnRefExpression>(name);
+		children.push_back(std::move(child));
+	}
+	lhs = make_uniq<FunctionExpression>("row", std::move(children));
+}
+
+LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)) {
 }
 
 vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) {
@@ -68,7 +82,7 @@ bool LambdaExpression::IsLambdaParameter(const vector<unordered_set<string>> &la
 }
 
 string LambdaExpression::ToString() const {
-	if (deprecated) {
+	if (named_parameters.empty()) {
 		return "(" + lhs->ToString() + " -> " + expr->ToString() + ")";
 	}
 	return "(LAMBDA " + lhs->ToString() + " : " + expr->ToString() + ")";
@@ -86,7 +100,13 @@ hash_t LambdaExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
-	auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy(), deprecated);
+	if (named_parameters.empty()) {
+		auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
+		copy->CopyProperties(*this);
+		return std::move(copy);
+	}
+
+	auto copy = make_uniq<LambdaExpression>(named_parameters, expr->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }

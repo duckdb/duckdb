@@ -261,8 +261,8 @@
       },
       {
         "id": 202,
-        "name": "deprecated",
-        "type": "bool"
+        "name": "named_parameters",
+        "type": "vector<string>"
       }
     ]
   },

@@ -14,18 +14,19 @@
 
 namespace duckdb {
 
-//! LambdaExpression represents either:
-//! 	1. A lambda function that can be used for, e.g., mapping an expression to a list
-//! 	2. An OperatorExpression with the "->" operator (JSON)
-//! Lambda expressions are written in the form of "params -> expr", e.g., "x -> x + 1"
+//! DuckDB 1.3. introduced a new lambda syntax: LAMBDA x, y : x + y.
+//! The new syntax resolves any ambiguity with the JSON arrow operator.
+//! Currently, we're still using a LambdaExpression for both cases.
 class LambdaExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
 
 public:
-	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr,
-	                 const bool deprecated = false);
+	LambdaExpression(vector<string> named_parameters_p, unique_ptr<ParsedExpression> expr);
+	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
+	//! The list of named lambda parameters.
+	vector<string> named_parameters;
 	//! The LHS of a lambda expression or the JSON "->"-operator. We need the context
 	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (JSON)
 	unique_ptr<ParsedExpression> lhs;
@@ -33,8 +34,6 @@ public:
 	unique_ptr<ParsedExpression> expr;
 	//! Band-aid for conflicts between lambda binding and JSON binding.
 	unique_ptr<ParsedExpression> copied_expr;
-	//! True, if the lambda function uses the deprecated -> operator.
-	bool deprecated;
 
 public:
 	//! Returns a vector to the column references in the LHS expression, and fills the error message,

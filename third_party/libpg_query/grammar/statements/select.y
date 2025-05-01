@@ -2446,21 +2446,19 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
-			| LAMBDA a_expr SINGLE_COLON a_expr
+			| LAMBDA name_list SINGLE_COLON a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
 				n->lhs = $2;
 				n->rhs = $4;
-				n->deprecated = false;
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
 			| a_expr SINGLE_ARROW a_expr
 			{
-				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				PGSingleArrowFunction *n = makeNode(PGSingleArrowFunction);
 				n->lhs = $1;
 				n->rhs = $3;
-				n->deprecated = true;
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
@@ -3148,16 +3146,8 @@ func_expr_common_subexpr:
 				}
 		;
 
-list_comprehension_lhs:
-		columnrefList
-		{
-			PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-			$$ = (PGNode *) n;
-		}
-	;
-
 list_comprehension:
-				'[' a_expr FOR list_comprehension_lhs IN_P a_expr ']'
+				'[' a_expr FOR name_list IN_P a_expr ']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
 					lambda->lhs = $4;
@@ -3166,7 +3156,7 @@ list_comprehension:
 					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda), @1);
 					$$ = (PGNode *) n;
 				}
-				| '[' a_expr FOR list_comprehension_lhs IN_P c_expr IF_P a_expr']'
+				| '[' a_expr FOR name_list IN_P c_expr IF_P a_expr']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
 					lambda->lhs = $4;
