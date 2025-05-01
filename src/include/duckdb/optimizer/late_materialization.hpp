@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 class LogicalOperator;
