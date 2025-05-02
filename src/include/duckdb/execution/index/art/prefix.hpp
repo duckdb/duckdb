@@ -45,7 +45,7 @@ public:
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
-	//! Get a new list of prefix nodes. The node reference holds the last prefix of the list.
+	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
 	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
 	//! Free the prefix and its child.
@@ -63,13 +63,6 @@ public:
 	//! Early-out, if the next prefix is a gate node.
 	static optional_idx Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
 	static optional_idx TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
-
-	//! Traverse two prefixes to find
-	//! 1. that they match.
-	//! 2. that they mismatch.
-	//! 3. that one prefix contains the other prefix.
-	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos,
-	                     const GateStatus status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.

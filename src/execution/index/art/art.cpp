@@ -21,6 +21,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
+#include "duckdb/execution/index/art/art_merger.hpp"
 
 namespace duckdb {
 
@@ -1391,7 +1393,52 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	// Traverse the allocated memory of the tree to perform a vacuum.
-	tree.Vacuum(*this, indexes);
+	auto &art = *this;
+	auto handler = [&art, &indexes](Node &node) {
+		ARTHandlingResult result;
+		const auto type = node.GetType();
+		switch (type) {
+		case NType::LEAF_INLINED:
+			return ARTHandlingResult::SKIP;
+		case NType::LEAF: {
+			if (indexes.find(Node::GetAllocatorIdx(type)) == indexes.end()) {
+				return ARTHandlingResult::SKIP;
+			}
+			Leaf::DeprecatedVacuum(art, node);
+			return ARTHandlingResult::SKIP;
+		}
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF: {
+			result = ARTHandlingResult::SKIP;
+			break;
+		}
+		case NType::PREFIX:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256: {
+			result = ARTHandlingResult::CONTINUE;
+			break;
+		}
+		default:
+			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
+		}
+
+		const auto idx = Node::GetAllocatorIdx(type);
+		auto &allocator = Node::GetAllocator(art, type);
+		const auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
+		if (needs_vacuum) {
+			const auto status = node.GetGateStatus();
+			node = allocator.VacuumPointer(node);
+			node.SetMetadata(static_cast<uint8_t>(type));
+			node.SetGateStatus(status);
+		}
+		return result;
+	};
+
+	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(*this, handler, tree);
+	scanner.Scan(handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1401,11 +1448,31 @@ void ART::Vacuum(IndexLock &state) {
 // Merging
 //===--------------------------------------------------------------------===//
 
-void ART::InitializeMerge(unsafe_vector<idx_t> &upper_bounds) {
+void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(owns_data);
 	for (auto &allocator : *allocators) {
 		upper_bounds.emplace_back(allocator->GetUpperBoundBufferId());
 	}
+}
+
+void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(node.HasMetadata());
+
+	auto handler = [&upper_bounds](Node &node) {
+		const auto type = node.GetType();
+		if (node.GetType() == NType::LEAF_INLINED) {
+			return ARTHandlingResult::CONTINUE;
+		}
+		if (type == NType::LEAF) {
+			throw InternalException("deprecated ART storage in InitMerge");
+		}
+		const auto idx = Node::GetAllocatorIdx(type);
+		node.IncreaseBufferId(upper_bounds[idx]);
+		return ARTHandlingResult::CONTINUE;
+	};
+
+	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);
+	scanner.Scan(handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
@@ -1418,8 +1485,8 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.
 			unsafe_vector<idx_t> upper_bounds;
-			InitializeMerge(upper_bounds);
-			other_art.tree.InitMerge(other_art, upper_bounds);
+			InitializeMergeUpperBounds(upper_bounds);
+			other_art.InitializeMerge(other_art.tree, upper_bounds);
 		}
 
 		// Merge the node storage.
@@ -1430,9 +1497,14 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 	// Merge the ARTs.
 	D_ASSERT(tree.GetGateStatus() == other_art.tree.GetGateStatus());
-	if (!tree.Merge(*this, other_art.tree, tree.GetGateStatus())) {
-		return false;
+	if (tree.HasMetadata()) {
+		ARTMerger merger(Allocator::Get(db), *this);
+		merger.Init(tree, other_art.tree);
+		return merger.Merge() == ARTConflictType::NO_CONFLICT;
 	}
+
+	tree = other_art.tree;
+	other_art.tree.Clear();
 	return true;
 }
 

@@ -42,7 +42,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
-      radix_bits(radix_bits), count(0), capacity(0), skip_lookups(false),
+      radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
 
 	// Append hash column to the end and initialise the row layout
@@ -248,8 +248,29 @@ idx_t GroupedAggregateHashTable::GetSinkCount() const {
 	return sink_count;
 }
 
+idx_t GroupedAggregateHashTable::GetMaterializedCount() const {
+	auto result = partitioned_data->Count();
+	if (unpartitioned_data) {
+		result += unpartitioned_data->Count();
+	}
+	return result;
+}
+
 void GroupedAggregateHashTable::SkipLookups() {
 	skip_lookups = true;
+}
+
+void GroupedAggregateHashTable::EnableHLL(bool enable) {
+	enable_hll = enable;
+}
+
+bool GroupedAggregateHashTable::HLLEnabled() const {
+	return enable_hll;
+}
+
+idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
+	D_ASSERT(enable_hll);
+	return LossyNumericCast<idx_t>((1 + HyperLogLog::GetErrorRate()) * static_cast<double>(hll.Count()));
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
@@ -258,6 +279,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	if (Count() != 0 && size < capacity) {
 		throw InternalException("Cannot downsize a non-empty hash table!");
 	}
+	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
 
 	capacity = size;
 	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
@@ -599,6 +621,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	// convert all vectors to unified format
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
+
+	if (enable_hll) {
+		hll.Update(group_hashes_v, group_hashes_v, groups.size());
+	}
 
 	group_hashes_v.Flatten(chunk_size);
 	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);

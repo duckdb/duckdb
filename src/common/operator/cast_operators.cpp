@@ -2311,12 +2311,13 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
 	double roundedValue = round(value);
 	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
-	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
+	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width] || !Value::IsFinite(roundedValue)) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", input, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = Cast::Operation<SRC, DST>(static_cast<SRC>(value));
+	// For some reason PG does not use statistical rounding here (even though it _does_ for integers...)
+	result = Cast::Operation<SRC, DST>(static_cast<SRC>(roundedValue));
 	return true;
 }
 

@@ -148,7 +148,9 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(expr));
-	return make_uniq<FunctionExpression>(fname, std::move(children));
+	auto result = make_uniq<FunctionExpression>(fname, std::move(children));
+	SetQueryLocation(*result, node.location);
+	return std::move(result);
 }
 
 } // namespace duckdb

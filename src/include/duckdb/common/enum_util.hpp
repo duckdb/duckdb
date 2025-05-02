@@ -34,9 +34,9 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
-enum class ARTScanHandling : uint8_t;
+enum class ARTHandlingResult : uint8_t;
 
-enum class ARTScanHandlingResult : uint8_t;
+enum class ARTScanHandling : uint8_t;
 
 enum class AccessMode : uint8_t;
 
@@ -125,6 +125,8 @@ enum class DatePartSpecifier : uint8_t;
 enum class DebugInitialize : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
+
+enum class DecimalBitWidth : uint8_t;
 
 enum class DefaultOrderByNullType : uint8_t;
 
@@ -292,8 +294,6 @@ enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
-enum class QuoteRule : uint8_t;
-
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
@@ -407,10 +407,10 @@ template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
-const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
 
 template<>
-const char* EnumUtil::ToChars<ARTScanHandlingResult>(ARTScanHandlingResult value);
+const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -543,6 +543,9 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
 const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification value);
+
+template<>
+const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
 
 template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
@@ -794,9 +797,6 @@ template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
-const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value);
-
-template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
@@ -963,10 +963,10 @@ template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
-ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
 
 template<>
-ARTScanHandlingResult EnumUtil::FromString<ARTScanHandlingResult>(const char *value);
+ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -1099,6 +1099,9 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value);
+
+template<>
+DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);
 
 template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
@@ -1348,9 +1351,6 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
-
-template<>
-QuoteRule EnumUtil::FromString<QuoteRule>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);

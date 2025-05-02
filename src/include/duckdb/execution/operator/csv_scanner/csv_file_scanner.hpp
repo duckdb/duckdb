@@ -92,6 +92,7 @@ public:
 	CSVIterator start_iterator;
 
 	CSVValidator validator;
+	idx_t skipped_rows = 0;
 
 	//! The started tasks and finished tasks allow us to track if all reads of the CSV file have completed
 	//! Note that the "started_tasks" starts at one - this is so we can track when the scheduling of all tasks for this
