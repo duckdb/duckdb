@@ -1133,6 +1133,23 @@ void ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, 
 	}
 }
 
+void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
+	GetPartitionStats(*GetFileMetadata(), result);
+}
+
+void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata,
+                                      vector<PartitionStatistics> &result) {
+	idx_t offset = 0;
+	for (auto &row_group : metadata.row_groups) {
+		PartitionStatistics partition_stats;
+		partition_stats.row_start = offset;
+		partition_stats.count = row_group.num_rows;
+		partition_stats.count_type = CountType::COUNT_EXACT;
+		offset += row_group.num_rows;
+		result.push_back(partition_stats);
+	}
+}
+
 bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	if (state.finished) {
 		return false;

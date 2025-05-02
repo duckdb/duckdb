@@ -46,6 +46,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	// we can do the rewrite! get the stats
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
 	auto partition_stats = get.function.get_partition_stats(context, input);
+	if (partition_stats.empty()) {
+		// no partition stats found
+		return;
+	}
 	idx_t count = 0;
 	for (auto &stats : partition_stats) {
 		if (stats.count_type == CountType::COUNT_APPROXIMATE) {

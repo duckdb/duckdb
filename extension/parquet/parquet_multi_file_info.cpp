@@ -245,6 +245,18 @@ vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<Fun
 	return result;
 }
 
+vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
+	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	vector<PartitionStatistics> result;
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE && bind_data.initial_reader) {
+		// we have read the metadata - get the partitions for this reader
+		auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
+		reader.GetPartitionStats(result);
+	}
+	// don't get stats for multiple files (yet?)
+	return result;
+}
+
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
@@ -260,6 +272,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.deserialize = ParquetScanDeserialize;
 	table_function.get_row_id_columns = ParquetGetRowIdColumns;
 	table_function.pushdown_expression = ParquetScanPushdownExpression;
+	table_function.get_partition_stats = ParquetGetPartitionStats;
 	table_function.filter_pushdown = true;
 	table_function.filter_prune = true;
 	table_function.late_materialization = true;
