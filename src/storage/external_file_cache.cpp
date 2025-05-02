@@ -70,15 +70,15 @@ void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &gua
 #endif
 }
 
-bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
+bool ExternalFileCache::IsValid(bool validate, const string &new_version_tag, time_t new_last_modified,
                                 const string &current_version_tag, time_t current_last_modified) {
 	if (!validate) {
 		return true; // Assume valid
 	}
 	if (!current_version_tag.empty()) {
-		return cached_version_tag == current_version_tag; // Validity checked by version tag (httpfs)
+		return new_version_tag == current_version_tag; // Validity checked by version tag (httpfs)
 	}
-	if (cached_last_modified != current_last_modified) {
+	if (new_last_modified != current_last_modified) {
 		return false; // The file has certainly been modified
 	}
 	// The last modified time matches. However, we cannot blindly trust this,

@@ -782,9 +782,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
-		Value metadata_cache = false;
-		context_p.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
-		if (!metadata_cache.GetValue<bool>()) {
+		if (!MetadataCacheEnabled(context_p)) {
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 			                        *encryption_util, footer_size);
 		} else {
@@ -799,6 +797,17 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		metadata = std::move(metadata_p);
 	}
 	InitializeSchema(context_p);
+}
+
+bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
+	Value metadata_cache = false;
+	context.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
+	return metadata_cache.GetValue<bool>();
+}
+
+shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
+                                                                          const OpenFileInfo &file) {
+	return ObjectCache::GetObjectCache(context).Get<ParquetFileMetadataCache>(file.path);
 }
 
 ParquetUnionData::~ParquetUnionData() {

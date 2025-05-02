@@ -101,7 +101,7 @@ public:
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
 
-	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
+	DUCKDB_API static bool IsValid(bool validate, const string &new_version_tag, time_t new_last_modified,
 	                               const string &current_version_tag, time_t current_last_modified);
 
 private:

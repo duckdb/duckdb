@@ -547,4 +547,17 @@ TimestampComponents Timestamp::GetComponents(timestamp_t timestamp) {
 	return result;
 }
 
+time_t Timestamp::ToTimeT(timestamp_t timestamp) {
+	auto components = Timestamp::GetComponents(timestamp);
+	struct tm tm {};
+	tm.tm_year = components.year - 1900;
+	tm.tm_mon = components.month - 1;
+	tm.tm_mday = components.day;
+	tm.tm_hour = components.hour;
+	tm.tm_min = components.minute;
+	tm.tm_sec = components.second;
+	tm.tm_isdst = 0;
+	return mktime(&tm);
+}
+
 } // namespace duckdb

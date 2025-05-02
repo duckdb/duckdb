@@ -252,8 +252,32 @@ vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, Get
 		// we have read the metadata - get the partitions for this reader
 		auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
 		reader.GetPartitionStats(result);
+		return result;
 	}
-	// don't get stats for multiple files (yet?)
+	// if we are reading multiple files - we check if we have caching enabled
+	if (!ParquetReader::MetadataCacheEnabled(context)) {
+		// no caching - bail
+		return result;
+	}
+	// caching is enabled - check if we have ALL of the metadata cached
+	vector<shared_ptr<ParquetFileMetadataCache>> caches;
+	for (auto &file : bind_data.file_list->Files()) {
+		auto metadata_entry = ParquetReader::GetMetadataCacheEntry(context, file);
+		if (!metadata_entry) {
+			// no cache entry found
+			return result;
+		}
+		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
+		auto is_valid = metadata_entry->IsValid(file);
+		if (is_valid != ParquetCacheValidity::VALID) {
+			return result;
+		}
+		caches.push_back(std::move(metadata_entry));
+	}
+	// all caches are valid! we can return the partition stats
+	for (auto &cache : caches) {
+		ParquetReader::GetPartitionStats(*cache->metadata, result);
+	}
 	return result;
 }
 
