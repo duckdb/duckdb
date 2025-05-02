@@ -70,16 +70,16 @@ void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &gua
 #endif
 }
 
-bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
-                                            const string &current_version_tag, time_t current_last_modified,
-                                            int64_t access_time) {
+bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
+                                const string &current_version_tag, time_t current_last_modified) {
+	const auto access_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 	if (!validate) {
 		return true; // Assume valid
 	}
 	if (!current_version_tag.empty()) {
-		return VersionTag(guard) == current_version_tag; // Validity checked by version tag (httpfs)
+		return cached_version_tag == current_version_tag; // Validity checked by version tag (httpfs)
 	}
-	if (LastModified(guard) != current_last_modified) {
+	if (cached_last_modified != current_last_modified) {
 		return false; // The file has certainly been modified
 	}
 	// The last modified time matches. However, we cannot blindly trust this,
@@ -90,6 +90,15 @@ bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &gu
 		return false; // Last modified in the future?
 	}
 	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
+}
+
+bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
+                                            const string &current_version_tag, time_t current_last_modified) {
+	if (!validate) {
+		return true; // Assume valid
+	}
+	return ExternalFileCache::IsValid(validate, VersionTag(guard), LastModified(guard), current_version_tag,
+	                                  current_last_modified);
 }
 
 idx_t &ExternalFileCache::CachedFile::FileSize(const unique_ptr<StorageLockKey> &guard) {

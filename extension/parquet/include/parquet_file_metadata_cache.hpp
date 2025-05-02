@@ -8,41 +8,35 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
 #include "geo_parquet.hpp"
-#endif
 #include "parquet_types.h"
-namespace duckdb {
 
-//! ParquetFileMetadataCache
+namespace duckdb {
+struct CachingFileHandle;
+
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
-	ParquetFileMetadataCache() : metadata(nullptr) {
-	}
-	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, time_t r_time,
-	                         unique_ptr<GeoParquetFileMetadata> geo_metadata)
-	    : metadata(std::move(file_metadata)), read_time(r_time), geo_metadata(std::move(geo_metadata)) {
-	}
-
+	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
+	                         unique_ptr<GeoParquetFileMetadata> geo_metadata);
 	~ParquetFileMetadataCache() override = default;
 
 	//! Parquet file metadata
 	unique_ptr<const duckdb_parquet::FileMetaData> metadata;
 
-	//! read time
-	time_t read_time;
-
 	//! GeoParquet metadata
 	unique_ptr<GeoParquetFileMetadata> geo_metadata;
 
 public:
-	static string ObjectType() {
-		return "parquet_metadata";
-	}
+	static string ObjectType();
+	string GetObjectType() override;
 
-	string GetObjectType() override {
-		return ObjectType();
-	}
+	bool IsValid(CachingFileHandle &new_handle);
+
+private:
+	bool validate;
+	time_t last_modified;
+	string version_tag;
 };
+
 } // namespace duckdb
