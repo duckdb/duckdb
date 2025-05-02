@@ -20,8 +20,8 @@ string ParquetFileMetadataCache::GetObjectType() {
 }
 
 bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
-	return ExternalFileCache::IsValid(validate, new_handle.GetVersionTag(), new_handle.GetLastModifiedTime(),
-	                                  version_tag, last_modified);
+	return ExternalFileCache::IsValid(validate, version_tag, last_modified, new_handle.GetVersionTag(),
+	                                  new_handle.GetLastModifiedTime());
 }
 
 ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info) const {
@@ -46,7 +46,7 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 	if (etag_entry != open_options.end()) {
 		new_etag = StringValue::Get(etag_entry->second);
 	}
-	if (ExternalFileCache::IsValid(false, new_etag, new_last_modified, version_tag, last_modified)) {
+	if (ExternalFileCache::IsValid(false, version_tag, last_modified, new_etag, new_last_modified)) {
 		return ParquetCacheValidity::VALID;
 	}
 	return ParquetCacheValidity::INVALID;
