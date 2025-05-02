@@ -31,7 +31,7 @@ public:
 	static string ObjectType();
 	string GetObjectType() override;
 
-	bool IsValid(CachingFileHandle &new_handle);
+	bool IsValid(CachingFileHandle &new_handle) const;
 
 private:
 	bool validate;

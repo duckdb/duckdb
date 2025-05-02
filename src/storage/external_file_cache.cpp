@@ -72,7 +72,6 @@ void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &gua
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
                                 const string &current_version_tag, time_t current_last_modified) {
-	const auto access_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 	if (!validate) {
 		return true; // Assume valid
 	}
@@ -86,6 +85,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	// because some file systems use a low resolution clock to set the last modified time.
 	// So, we will require that the last modified time is more than 10 seconds ago.
 	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 10;
+	const auto access_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 	if (access_time < current_last_modified) {
 		return false; // Last modified in the future?
 	}

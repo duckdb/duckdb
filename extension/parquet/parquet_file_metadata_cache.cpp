@@ -19,7 +19,7 @@ string ParquetFileMetadataCache::GetObjectType() {
 	return ObjectType();
 }
 
-bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) {
+bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
 	return ExternalFileCache::IsValid(validate, version_tag, last_modified, new_handle.GetVersionTag(),
 	                                  new_handle.GetLastModifiedTime());
 }
