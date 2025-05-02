@@ -230,14 +230,16 @@ void LambdaExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", expr);
-	serializer.WritePropertyWithDefault<vector<string>>(202, "named_parameters", named_parameters);
+	if (serializer.ShouldSerialize(5)) {
+		serializer.WritePropertyWithDefault<LambdaSyntaxType>(202, "syntax_type", syntax_type, LambdaSyntaxType::DEPRECATED_STORAGE);
+	}
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", result->lhs);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", result->expr);
-	deserializer.ReadPropertyWithDefault<vector<string>>(202, "named_parameters", result->named_parameters);
+	deserializer.ReadPropertyWithExplicitDefault<LambdaSyntaxType>(202, "syntax_type", result->syntax_type, LambdaSyntaxType::DEPRECATED_STORAGE);
 	return std::move(result);
 }
 

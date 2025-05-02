@@ -261,8 +261,10 @@
       },
       {
         "id": 202,
-        "name": "named_parameters",
-        "type": "vector<string>"
+        "name": "syntax_type",
+        "type": "LambdaSyntaxType",
+        "default": "LambdaSyntaxType::DEPRECATED_STORAGE",
+        "version": "v1.3.0"
       }
     ]
   },

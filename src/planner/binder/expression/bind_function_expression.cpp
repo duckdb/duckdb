@@ -17,14 +17,15 @@
 namespace duckdb {
 
 BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
-                                                 const bool deprecated) {
-	if (!deprecated) {
+                                                 const LambdaSyntaxType syntax_type) {
+	if (syntax_type == LambdaSyntaxType::NEW) {
 		// lambda x: x + 1 syntax.
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
 	auto &config = ClientConfig::GetConfig(context);
 	auto allow_deprecated_lambda_syntax = config.allow_deprecated_lambda_syntax;
+	bool invalid_syntax = !allow_deprecated_lambda_syntax && syntax_type == LambdaSyntaxType::DEPRECATED;
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
 	                   "Use SET allow_deprecated_lambda_syntax=true to revert to the deprecated behavior. \n"
@@ -38,7 +39,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		error = ErrorData(ex);
 	}
 
-	if (error.HasError() && error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED && !allow_deprecated_lambda_syntax) {
+	if (error.HasError() && error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED && invalid_syntax) {
 		ErrorData deprecation_error(ExceptionType::BINDER, msg);
 		deprecation_error.Throw();
 	} else if (error.HasError()) {
@@ -46,7 +47,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	}
 
 	if (!lambda_bind_result.HasError()) {
-		if (allow_deprecated_lambda_syntax) {
+		if (!invalid_syntax) {
 			return lambda_bind_result;
 		}
 		return BindResult(msg);
@@ -122,8 +123,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto child = function.IsLambdaFunction();
 		if (child) {
-			bool deprecated = child->Cast<LambdaExpression>().named_parameters.empty();
-			return TryBindLambdaOrJson(function, depth, *func, deprecated);
+			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
+			return TryBindLambdaOrJson(function, depth, *func, syntax_type);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}

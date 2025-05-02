@@ -120,6 +120,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -2076,6 +2077,25 @@ const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value) {
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	return static_cast<KeywordCategory>(StringUtil::StringToEnum(GetKeywordCategoryValues(), 5, "KeywordCategory", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLambdaSyntaxTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LambdaSyntaxType::DEPRECATED_STORAGE), "DEPRECATED_STORAGE" },
+		{ static_cast<uint32_t>(LambdaSyntaxType::DEPRECATED), "DEPRECATED" },
+		{ static_cast<uint32_t>(LambdaSyntaxType::NEW), "NEW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntaxType>(LambdaSyntaxType value) {
+	return StringUtil::EnumToString(GetLambdaSyntaxTypeValues(), 3, "LambdaSyntaxType", static_cast<uint32_t>(value));
+}
+
+template<>
+LambdaSyntaxType EnumUtil::FromString<LambdaSyntaxType>(const char *value) {
+	return static_cast<LambdaSyntaxType>(StringUtil::StringToEnum(GetLambdaSyntaxTypeValues(), 3, "LambdaSyntaxType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLimitNodeTypeValues() {

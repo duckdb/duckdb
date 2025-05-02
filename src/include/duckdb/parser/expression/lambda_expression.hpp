@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+enum class LambdaSyntaxType : uint8_t { DEPRECATED_STORAGE = 0, DEPRECATED = 1, NEW = 2 };
+
 //! DuckDB 1.3. introduced a new lambda syntax: lambda x, y: x + y.
 //! The new syntax resolves any ambiguity with the JSON arrow operator.
 //! Currently, we're still using a LambdaExpression for both cases.
@@ -34,6 +36,8 @@ public:
 	unique_ptr<ParsedExpression> expr;
 	//! Band-aid for conflicts between lambda binding and JSON binding.
 	unique_ptr<ParsedExpression> copied_expr;
+	//! The syntax type.
+	LambdaSyntaxType syntax_type;
 
 public:
 	//! Returns a vector to the column references in the LHS expression, and fills the error message,

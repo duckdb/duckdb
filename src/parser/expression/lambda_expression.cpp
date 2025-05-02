@@ -14,7 +14,7 @@ LambdaExpression::LambdaExpression() : ParsedExpression(ExpressionType::LAMBDA, 
 
 LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr<ParsedExpression> expr)
     : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA),
-      named_parameters(std::move(named_parameters_p)), expr(std::move(expr)) {
+      named_parameters(std::move(named_parameters_p)), expr(std::move(expr)), syntax_type(LambdaSyntaxType::NEW) {
 	if (named_parameters.size() == 1) {
 		lhs = make_uniq<ColumnRefExpression>(named_parameters.back());
 		return;
@@ -29,7 +29,8 @@ LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr
 }
 
 LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)
-    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)) {
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)),
+      syntax_type(LambdaSyntaxType::DEPRECATED) {
 }
 
 vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) {
@@ -112,11 +113,13 @@ hash_t LambdaExpression::Hash() const {
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	if (named_parameters.empty()) {
 		auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
+		copy->syntax_type = syntax_type;
 		copy->CopyProperties(*this);
 		return std::move(copy);
 	}
 
 	auto copy = make_uniq<LambdaExpression>(named_parameters, expr->Copy());
+	copy->syntax_type = syntax_type;
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
