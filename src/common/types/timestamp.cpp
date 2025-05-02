@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/windows.hpp"
 #include <ctime>
 
 namespace duckdb {
@@ -562,7 +563,11 @@ time_t Timestamp::ToTimeT(timestamp_t timestamp) {
 
 timestamp_t Timestamp::FromTimeT(time_t time) {
 	struct tm tm {};
+#ifdef DUCKDB_WINDOWS
+	tm = localtime(&tm);
+#else
 	localtime_r(&time, &tm);
+#endif
 
 	int32_t year = tm.tm_year + 1900;
 	int32_t month = tm.tm_mon + 1;
