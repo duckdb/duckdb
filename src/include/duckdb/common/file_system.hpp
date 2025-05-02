@@ -156,6 +156,8 @@ public:
 	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
+	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 

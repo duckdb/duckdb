@@ -1091,6 +1091,65 @@
             }
         },
         {
+            "name": "duckdb_create_map_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "map_type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "keys"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "entry_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates a map value from a map type and two arrays, one for the keys and one for the values, each of length `entry_count`.\nMust be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "map_type": "The map type",
+                    "keys": "The keys of the map",
+                    "values": "The values of the map",
+                    "entry_count": "The number of entrys (key-value pairs) in the map"
+                },
+                "return_value": "The map value, or nullptr, if the parameters are invalid."
+            }
+        },
+        {
+            "name": "duckdb_create_union_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "union_type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "tag_index"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Creates a union value from a union type, a tag index, and a value.\nMust be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "union_type": "The union type",
+                    "tag_index": "The index of the tag of the union",
+                    "value": "The value of the union"
+                },
+                "return_value": "The union value, or nullptr, if the parameters are invalid."
+            }
+        },
+        {
             "name": "duckdb_get_map_size",
             "return_type": "idx_t",
             "params": [
