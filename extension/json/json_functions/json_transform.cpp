@@ -262,8 +262,8 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 		if (!unsafe_yyjson_is_str(val)) {
 			validity.SetInvalid(i);
 			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
-				options.error_message = StringUtil::Format("Unable to cast '%s' to " + EnumUtil::ToString(target.id()),
-				                                           JSONCommon::ValToString(val, 50));
+				options.error_message = StringUtil::Format(
+				    "Unable to cast '%s' to %s", JSONCommon::ValToString(val, 50), EnumUtil::ToString(target.id()));
 				options.object_index = i;
 				success = false;
 			}
@@ -424,8 +424,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				if (found_keys[col_idx]) {
 					if (success && options.error_duplicate_key) {
 						options.error_message =
-						    StringUtil::Format("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s",
-						                       JSONCommon::ValToString(objects[i], 50));
+						    StringUtil::Format("Object %s has duplicate key \"%s\"",
+						                       JSONCommon::ValToString(objects[i], 50), string(key_ptr, key_len));
 						options.object_index = i;
 						success = false;
 					}
@@ -436,8 +436,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				}
 			} else if (success && error_unknown_key && options.error_unknown_key) {
 				options.error_message =
-				    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
-				                       JSONCommon::ValToString(objects[i], 50));
+				    StringUtil::Format("Object %s has unknown key \"%s\"", JSONCommon::ValToString(objects[i], 50),
+				                       string(key_ptr, key_len));
 				options.object_index = i;
 				success = false;
 			}
@@ -453,8 +453,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				nested_vals[col_idx][i] = nullptr;
 
 				if (success && options.error_missing_key) {
-					options.error_message = StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
-					                                           JSONCommon::ValToString(objects[i], 50));
+					options.error_message = StringUtil::Format("Object %s does not have key \"%s\"",
+					                                           JSONCommon::ValToString(objects[i], 50), names[col_idx]);
 					options.object_index = i;
 					success = false;
 				}
@@ -750,7 +750,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
 		throw ConversionException(
-		    StringUtil::Format(options.error_message + ". Cannot default to NULL, because map keys cannot be NULL"));
+		    StringUtil::Format("%s. Cannot default to NULL, because map keys cannot be NULL", options.error_message));
 	}
 
 	// Transform values
