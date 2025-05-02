@@ -2,9 +2,8 @@
 #include "duckdb/function/table/summary.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/add.hpp"
-#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
@@ -204,7 +203,10 @@ struct RangeDateTimeBindData : public TableFunctionData {
 		if (!Interval::TryGetMicro(step, increment) || !increment) {
 			return;
 		}
-		const auto delta = bounds[1] - bounds[0];
+		int64_t delta = 0;
+		if (!TrySubtractOperator::Operation(bounds[1].value, bounds[0].value, delta)) {
+			return;
+		}
 
 		cardinality = idx_t(delta / increment);
 	}

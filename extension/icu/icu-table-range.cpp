@@ -1,10 +1,10 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "unicode/calendar.h"
 #include "tz_calendar.hpp"
@@ -61,7 +61,10 @@ struct ICUTableRange {
 			if (!Interval::TryGetMicro(step, increment) || !increment) {
 				return;
 			}
-			const auto delta = bounds[1] - bounds[0];
+			int64_t delta = 0;
+			if (!TrySubtractOperator::Operation(bounds[1].value, bounds[0].value, delta)) {
+				return;
+			}
 
 			cardinality = idx_t(delta / increment);
 		}
