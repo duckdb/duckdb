@@ -573,7 +573,7 @@ struct RoundIntegerOperator {
 		if (precision < 0) {
 			//	Do all the arithmetic at higher precision
 			using POWERS_OF_TEN_CLASS = typename DecimalCastTraits<TA>::POWERS_OF_TEN_CLASS;
-			if (-precision >= POWERS_OF_TEN_CLASS::CACHED_POWERS_OF_TEN) {
+			if (precision <= -POWERS_OF_TEN_CLASS::CACHED_POWERS_OF_TEN) {
 				return 0;
 			}
 			const auto power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-precision];

@@ -38,3 +38,10 @@ ORDER BY ag_column3
 50
 100
 
+query I
+select round(100::INTEGER, int)
+from test_all_types();
+----
+0
+100
+NULL
