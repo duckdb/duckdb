@@ -8,6 +8,7 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ ARTConflictType ARTMerger::Merge() {
 		if (left_type == NType::LEAF_INLINED) {
 			// Both left and right are inlined leaves.
 			D_ASSERT(right_type == NType::LEAF_INLINED);
-			MergeInlined(entry);
+			Leaf::MergeInlined(arena, art, entry.left, entry.right, entry.status, entry.depth);
 			continue;
 		}
 
@@ -99,72 +100,14 @@ void ARTMerger::Emplace(Node &left, Node &right, const GateStatus parent_status,
 	s.emplace(left, right, GateStatus::GATE_SET, 0);
 }
 
-void ARTMerger::MergeInlined(NodeEntry &entry) {
-	D_ASSERT(entry.left.GetType() == NType::LEAF_INLINED);
-	D_ASSERT(entry.right.GetType() == NType::LEAF_INLINED);
-
-	auto new_status = GateStatus::GATE_NOT_SET;
-	if (entry.status == GateStatus::GATE_NOT_SET) {
-		// Case 1: We are outside a nested leaf,
-		// so we create a nested leaf.
-		new_status = GateStatus::GATE_SET;
-		entry.depth = 0;
-	}
-	// Otherwise, case 2: we are in a nested leaf with two 'compressed' prefixes.
-	// A 'compressed prefix' is an inlined leaf that could've been expanded to
-	// a prefix with an inlined leaf as its only child.
-
-	// Get the corresponding row IDs and their ART keys.
-	auto left_row_id = entry.left.GetRowId();
-	auto right_row_id = entry.right.GetRowId();
-	auto left_key = ARTKey::CreateARTKey<row_t>(arena, left_row_id);
-	auto right_key = ARTKey::CreateARTKey<row_t>(arena, right_row_id);
-
-	auto pos = left_key.GetMismatchPos(right_key, entry.depth);
-
-	entry.left.Clear();
-	reference<Node> node(entry.left);
-	if (pos != entry.depth) {
-		// The row IDs share a prefix.
-		Prefix::New(art, node, left_key, entry.depth, pos - entry.depth);
-	}
-
-	auto left_byte = left_key.data[pos];
-	auto right_byte = right_key.data[pos];
-
-	if (pos == Prefix::ROW_ID_COUNT) {
-		// The row IDs differ on the last byte.
-		Node7Leaf::New(art, node);
-		Node7Leaf::InsertByte(art, node, left_byte);
-		Node7Leaf::InsertByte(art, node, right_byte);
-		entry.left.SetGateStatus(new_status);
-		return;
-	}
-
-	// Create and insert the (compressed) children.
-	// We inline directly into the node, instead of creating prefixes
-	// with a single inlined leaf as their child.
-	Node4::New(art, node);
-
-	Node left_child;
-	Leaf::New(left_child, left_row_id);
-	Node4::InsertChild(art, node, left_byte, left_child);
-
-	Node right_child;
-	Leaf::New(right_child, right_row_id);
-	Node4::InsertChild(art, node, right_byte, right_child);
-
-	entry.left.SetGateStatus(new_status);
-}
-
 ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
 	D_ASSERT(entry.right.GetType() == NType::LEAF_INLINED);
 	D_ASSERT(entry.status == GateStatus::GATE_SET);
 
 	// We fall back to the ART insertion code.
 	auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, entry.right.GetRowId());
-	return art.Insert(entry.left, row_id_key, entry.depth, row_id_key, GateStatus::GATE_SET, nullptr,
-	                  IndexAppendMode::DEFAULT);
+	return ARTOperator::Insert(arena, art, entry.left, row_id_key, entry.depth, row_id_key, GateStatus::GATE_SET,
+	                           nullptr, IndexAppendMode::DEFAULT);
 }
 
 array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf) {
