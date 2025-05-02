@@ -42,7 +42,7 @@ public:
 	}
 
 	DUCKDB_API EncodingFunction(const string &encode_name, encode_t encode_function, const idx_t bytes_per_iteration,
-	                 const idx_t lookup_bytes)
+	                            const idx_t lookup_bytes)
 	    : name(encode_name), encode_function(encode_function), max_bytes_per_iteration(bytes_per_iteration),
 	      lookup_bytes(lookup_bytes) {
 		D_ASSERT(encode_function);
@@ -51,7 +51,7 @@ public:
 	};
 
 	DUCKDB_API EncodingFunction(const string &encode_name, encode_t encode_function, const idx_t bytes_per_iteration,
-	                            const idx_t lookup_bytes, const map_entry_encoding* map, const size_t map_size)
+	                            const idx_t lookup_bytes, const map_entry_encoding *map, const size_t map_size)
 	    : conversion_map(map), map_size(map_size), name(encode_name), encode_function(encode_function),
 	      max_bytes_per_iteration(bytes_per_iteration), lookup_bytes(lookup_bytes) {
 		D_ASSERT(encode_function);
@@ -75,7 +75,7 @@ public:
 	}
 
 	//! Optional convertion map, that indicates byte replacements.
-	const map_entry_encoding * conversion_map {};
+	const map_entry_encoding *conversion_map {};
 	size_t map_size {};
 
 protected:
@@ -90,8 +90,6 @@ protected:
 	//! How many bytes we have to lookup before knowing the bytes we have to output
 	idx_t lookup_bytes = 1;
 };
-
-
 
 //! The set of encoding functions
 struct EncodingFunctionSet {
