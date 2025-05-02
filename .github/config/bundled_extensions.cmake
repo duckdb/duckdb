@@ -19,6 +19,12 @@ duckdb_extension_load(json)
 duckdb_extension_load(parquet)
 duckdb_extension_load(autocomplete)
 
+duckdb_extension_load(sqlsmith
+        DONT_LINK LOAD_TESTS
+        SOURCE_DIR /Users/tania/DuckDB/duckdb-sqlsmith/
+        TEST_DIR /Users/tania/DuckDB/duckdb-sqlsmith/test/
+)
+
 #
 ## Extensions that are not linked, but we do want to test them as part of the release build
 #

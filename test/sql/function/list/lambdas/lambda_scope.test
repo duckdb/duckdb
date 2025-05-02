@@ -160,7 +160,7 @@ SELECT list_transform([1,2,3], lambda sqrt(xxx.z): xxx.z + 1) AS l ;
 <REGEX>:Parser Error.*syntax error at or near.*
 
 query I
-SELECT list_transform([1, 2, 3], LAMBDA "x.y" : "x.y" + x.y) AS l FROM (VALUES (42), (84)) x(y);
+SELECT list_transform([1, 2, 3], lambda "x.y" : "x.y" + x.y) AS l FROM (VALUES (42), (84)) x(y);
 ----
 [43, 44, 45]
 [85, 86, 87]

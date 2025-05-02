@@ -68,6 +68,7 @@ vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpression
 }
 
 string LambdaExpression::InvalidParametersErrorMessage() {
+	// FIXME: remove this once we only support the new lambda syntax.
 	return "Invalid lambda parameters! Parameters must be unqualified comma-separated names like x or (x, y).";
 }
 

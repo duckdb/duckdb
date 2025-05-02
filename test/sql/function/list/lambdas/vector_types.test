@@ -11,7 +11,7 @@ statement ok
 SET allow_deprecated_lambda_syntax=false
 
 query I
-SELECT [x FOR x IN c IF x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
+SELECT [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
 [-2147483648, 2147483647]
 []
@@ -26,7 +26,7 @@ SELECT [x FOR x IN c IF x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
 [7]
 
 query I
-SELECT [x FOR x IN c IF x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
+SELECT [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
 []
 []
