@@ -560,4 +560,20 @@ time_t Timestamp::ToTimeT(timestamp_t timestamp) {
 	return mktime(&tm);
 }
 
+timestamp_t Timestamp::FromTimeT(time_t time) {
+	struct tm tm {};
+	localtime_r(&time, &tm);
+
+	int32_t year = tm.tm_year + 1900;
+	int32_t month = tm.tm_mon + 1;
+	int32_t day = tm.tm_mday;
+	int32_t hour = tm.tm_hour;
+	int32_t min = tm.tm_min;
+	int32_t sec = tm.tm_sec;
+
+	auto dt = Date::FromDate(year, month, day);
+	auto t = Time::FromTime(hour, min, sec, 0);
+	return FromDatetime(dt, t);
+}
+
 } // namespace duckdb
