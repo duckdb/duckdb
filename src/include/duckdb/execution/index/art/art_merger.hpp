@@ -20,7 +20,7 @@ namespace duckdb {
 class ARTMerger {
 public:
 	ARTMerger() = delete;
-	ARTMerger(Allocator &allocator, ART &art) : arena(allocator), art(art) {
+	ARTMerger(ArenaAllocator &arena, ART &art) : arena(arena), art(art) {
 	}
 
 public:
@@ -46,7 +46,7 @@ private:
 	};
 
 	//! The arena holds any temporary memory allocated during the Merge phase.
-	ArenaAllocator arena;
+	ArenaAllocator &arena;
 	//! The ART holding the node memory.
 	ART &art;
 	//! The stack. While merging, NodeEntry elements are pushed onto of the stack.
@@ -58,7 +58,6 @@ private:
 	// - if left is PREFIX, then right is also PREFIX (except for PREFIX + LEAF_INLINED).
 	void Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth);
 
-	void MergeInlined(NodeEntry &entry);
 	ARTConflictType MergeNodeAndInlined(NodeEntry &entry);
 
 	array_ptr<uint8_t> GetBytes(Node &leaf);

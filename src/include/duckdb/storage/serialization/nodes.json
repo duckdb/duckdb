@@ -1086,5 +1086,25 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "TableColumn",
+    "includes": [
+      "duckdb/common/table_column.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "LogicalType"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["name", "type"]
   }
 ]

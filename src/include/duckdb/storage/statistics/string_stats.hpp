@@ -65,7 +65,7 @@ struct StringStats {
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-	                                                     array_ptr<Value> constants);
+	                                                     array_ptr<const Value> constants);
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const_data_ptr_t min_data, idx_t min_len,
 	                                                     const_data_ptr_t max_data, idx_t max_len,
 	                                                     ExpressionType comparison_type, const string &value);

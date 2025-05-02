@@ -716,3 +716,11 @@ class TestReadCSV(object):
             duckdb.BinderException, match="Unsupported parameter for THOUSANDS: should be max one character"
         ):
             con.read_csv(file, thousands=',,,')
+
+    def test_skip_comment_option(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('skip this line\n# comment\nx,y,z\n1,2,3\n4,5,6')
+        con = duckdb.connect()
+        rel = con.read_csv(file1, comment='#', skiprows=1, all_varchar=True)
+        assert rel.columns == ['x', 'y', 'z']
+        assert rel.fetchall() == [('1', '2', '3'), ('4', '5', '6')]
