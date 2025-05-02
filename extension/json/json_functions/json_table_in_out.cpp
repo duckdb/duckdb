@@ -125,7 +125,8 @@ struct JSONTableInOutLocalState : LocalTableFunctionState {
 	}
 
 	void AddRecursionNode(yyjson_val *val, optional_ptr<yyjson_val> vkey) {
-		const auto vkey_str = vkey ? string(unsafe_yyjson_get_str(vkey.get()), unsafe_yyjson_get_len(vkey.get())) : "";
+		const auto vkey_str =
+		    vkey ? "." + string(unsafe_yyjson_get_str(vkey.get()), unsafe_yyjson_get_len(vkey.get())) : "";
 		recursion_nodes.emplace_back(vkey_str, val);
 	}
 
