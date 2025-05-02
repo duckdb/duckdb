@@ -66,7 +66,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 	bool deprecated = expr.named_parameters.empty();
 	if (!deprecated && !bind_lambda_function) {
-		return BindResult("invalid LAMBDA expression");
+		return BindResult("invalid lambda expression");
 	}
 
 	if (!bind_lambda_function) {

@@ -85,7 +85,16 @@ string LambdaExpression::ToString() const {
 	if (named_parameters.empty()) {
 		return "(" + lhs->ToString() + " -> " + expr->ToString() + ")";
 	}
-	return "(LAMBDA " + lhs->ToString() + " : " + expr->ToString() + ")";
+	string lhs_str = "(lambda ";
+	for (idx_t i = 0; i < named_parameters.size(); i++) {
+		if (i == named_parameters.size() - 1) {
+			lhs_str += "\"" + named_parameters[i] + "\"";
+			continue;
+		}
+		lhs_str += "\"" + named_parameters[i] + "\"" + ", ";
+	}
+
+	return lhs_str + ": " + expr->ToString() + ")";
 }
 
 bool LambdaExpression::Equal(const LambdaExpression &a, const LambdaExpression &b) {

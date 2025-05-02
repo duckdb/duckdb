@@ -245,20 +245,23 @@ statement ok
 CREATE TABLE dummy_tbl (y INT);
 
 statement error
-SELECT list_transform([1], LAMBDA x : LAMBDA y : x + y) FROM dummy_tbl;
+SELECT list_transform([1], lambda x: lambda y: x + y) FROM dummy_tbl;
 ----
-<REGEX>:Binder Error.*invalid LAMBDA expression.*
+<REGEX>:Binder Error.*invalid lambda expression.*
 
 statement error
-SELECT list_transform([1], LAMBDA x : 1 : hello) FROM dummy_tbl;
+SELECT list_transform([1], lambda x: 1 : hello) FROM dummy_tbl;
 ----
 <REGEX>:Parser Error.*syntax error.*
+
+statement ok
+SET allow_deprecated_lambda_syntax=false
 
 statement error
 CREATE OR REPLACE function transpose(lst) AS (
 	SELECT list_transform(range(1, 1 + length(lst[1])),
 		j -> list_transform(range(1, length(lst) + 1),
-			LAMBDA i : lst[i][j]
+			lambda i: lst[i][j]
 		)
 	)
 );

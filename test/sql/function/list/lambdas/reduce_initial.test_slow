@@ -2,13 +2,16 @@
 # description: Test list_reduce function with an intial value on a larger data set
 # group: [lambdas]
 
+statement ok
+SET allow_deprecated_lambda_syntax=false
+
 # Large lists.
 
 statement ok
 CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l, 100 AS initial FROM range(10000) GROUP BY range % 4;
 
 query I
-SELECT list_reduce(l, LAMBDA (x, y) : least(x, y), initial) FROM large_lists ORDER BY g;
+SELECT list_reduce(l, lambda x, y: least(x, y), initial) FROM large_lists ORDER BY g;
 ----
 0
 1
@@ -16,7 +19,7 @@ SELECT list_reduce(l, LAMBDA (x, y) : least(x, y), initial) FROM large_lists ORD
 3
 
 query I
-SELECT list_reduce(l, LAMBDA (x, y) : x + y, initial) FROM large_lists ORDER BY g;
+SELECT list_reduce(l, lambda x, y: x + y, initial) FROM large_lists ORDER BY g;
 ----
 12495100
 12497600
@@ -27,7 +30,7 @@ SELECT list_reduce(l, LAMBDA (x, y) : x + y, initial) FROM large_lists ORDER BY 
 
 statement ok
 CREATE TABLE large_table AS
-SELECT list_reduce(range(5000), LAMBDA (x, y) : x + y, 1) AS l FROM range(1000);
+SELECT list_reduce(range(5000), lambda x, y: x + y, 1) AS l FROM range(1000);
 
 query I
 SELECT COUNT(*) FROM large_table WHERE l = 12497501;

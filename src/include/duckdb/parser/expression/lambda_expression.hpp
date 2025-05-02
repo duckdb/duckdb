@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-//! DuckDB 1.3. introduced a new lambda syntax: LAMBDA x, y : x + y.
+//! DuckDB 1.3. introduced a new lambda syntax: lambda x, y: x + y.
 //! The new syntax resolves any ambiguity with the JSON arrow operator.
 //! Currently, we're still using a LambdaExpression for both cases.
 class LambdaExpression : public ParsedExpression {

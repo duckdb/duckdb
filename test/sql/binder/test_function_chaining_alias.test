@@ -76,8 +76,8 @@ FROM varchars
 query IIII
 SELECT
 	v.split(' ') strings,
-	strings.apply(LAMBDA x : x.lower()).filter(LAMBDA x : x[1] == 't') lower,
-	strings.apply(LAMBDA x : x.upper()).filter(LAMBDA x : x[1] == 'T') upper,
+	strings.apply(lambda x: x.lower()).filter(lambda x: x[1] == 't') lower,
+	strings.apply(lambda x: x.upper()).filter(lambda x: x[1] == 'T') upper,
 	lower + upper AS mix_case_srings
 FROM varchars
 ----
@@ -105,8 +105,8 @@ INSERT INTO varchars VALUES ('Another longggggg String');
 query IIII
 SELECT
 	v.split(' ') strings,
-	strings.apply(LAMBDA x : x.lower()).filter(LAMBDA x : x[1] == 't' OR x[1] == 'a') lower,
-	strings.apply(LAMBDA x : x.upper()).filter(LAMBDA x : x[1] == 'T' OR x[1] == 'A') upper,
+	strings.apply(lambda x: x.lower()).filter(lambda x: x[1] == 't' OR x[1] == 'a') lower,
+	strings.apply(lambda x: x.upper()).filter(lambda x: x[1] == 'T' OR x[1] == 'A') upper,
 	lower + upper AS mix_case_srings
 FROM varchars
 WHERE mix_case_srings[1] = 'test'
@@ -116,8 +116,8 @@ WHERE mix_case_srings[1] = 'test'
 query IIII
 SELECT
 	v.split(' ') strings,
-	strings.apply(LAMBDA x : x.lower()).filter(LAMBDA x : x[1] == 't' OR x[1] == 'a') lower,
-	strings.apply(LAMBDA x : x.upper()).filter(LAMBDA x : x[1] == 'T' OR x[1] == 'A') upper,
+	strings.apply(lambda x: x.lower()).filter(lambda x: x[1] == 't' OR x[1] == 'a') lower,
+	strings.apply(lambda x: x.upper()).filter(lambda x: x[1] == 'T' OR x[1] == 'A') upper,
 	lower + upper AS mix_case_srings
 FROM varchars
 WHERE mix_case_srings[1] = 'another'

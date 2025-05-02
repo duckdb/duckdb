@@ -8,8 +8,8 @@ PRAGMA enable_verification;
 statement ok
 CREATE OR REPLACE function transpose(lst) AS (
 	SELECT list_transform(range(1, 1 + length(lst[1])),
-		LAMBDA j : list_transform(range(1, length(lst) + 1),
-			LAMBDA i : lst[i][j]
+		lambda j: list_transform(range(1, length(lst) + 1),
+			lambda i: lst[i][j]
 		)
 	)
 );
@@ -17,7 +17,7 @@ CREATE OR REPLACE function transpose(lst) AS (
 statement ok
 CREATE OR REPLACE function centroid(points) AS (
 	list_transform(transpose(points),
-		LAMBDA x : list_sum(x) / length(points)
+		lambda x: list_sum(x) / length(points)
 	)
 );
 

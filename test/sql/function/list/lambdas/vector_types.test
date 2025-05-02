@@ -7,6 +7,9 @@ require vector_size 2048
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET allow_deprecated_lambda_syntax=false
+
 query I
 SELECT [x FOR x IN c IF x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
@@ -39,7 +42,7 @@ SELECT [x FOR x IN c IF x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
 
 
 query I
-SELECT list_reduce(c, LAMBDA (x, y) : x + y) FROM test_vector_types(NULL::INT[]) t(c) WHERE len(c) > 0;
+SELECT list_reduce(c, lambda x, y: x + y) FROM test_vector_types(NULL::INT[]) t(c) WHERE len(c) > 0;
 ----
 -1
 NULL

@@ -2140,7 +2140,7 @@ typedef struct PGLambdaFunction {
 } PGLambdaFunction;
 
 /* ----------------------
- *		Single Arrow Operator
+ *		Single Arrow Function
  * ----------------------
  */
 

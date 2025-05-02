@@ -19,14 +19,14 @@ namespace duckdb {
 BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
                                                  const bool deprecated) {
 	if (!deprecated) {
-		// LAMBDA x : x + 1 syntax.
+		// lambda x: x + 1 syntax.
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
 	auto &config = ClientConfig::GetConfig(context);
 	auto allow_deprecated_lambda_syntax = config.allow_deprecated_lambda_syntax;
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
-	                   "i.e.., LAMBDA (x, i) : x + i, before DuckDB's 1.4.0 release. \n"
+	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
 	                   "Use SET allow_deprecated_lambda_syntax=true to revert to the deprecated behavior. \n"
 	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
 

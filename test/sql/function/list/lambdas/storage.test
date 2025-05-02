@@ -7,20 +7,23 @@ load __TEST_DIR__/lambda_storage.db
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET allow_deprecated_lambda_syntax=false
+
 # create macros containing a lambda functions
 
 statement ok
-CREATE MACRO my_transform(list) AS list_transform(list, LAMBDA x : x * x)
+CREATE MACRO my_transform(list) AS list_transform(list, lambda x: x * x)
 
 statement ok
-CREATE MACRO my_filter(list) AS list_filter(list, LAMBDA x : x > 42)
+CREATE MACRO my_filter(list) AS list_filter(list, lambda x: x > 42)
 
 statement ok
-CREATE MACRO my_reduce(list) AS list_reduce(list, LAMBDA (x, y) : x + y)
+CREATE MACRO my_reduce(list) AS list_reduce(list, lambda x, y: x + y)
 
 statement ok
-CREATE MACRO my_nested_lambdas(nested_list) AS list_filter(nested_list, LAMBDA elem : list_reduce(
-	list_transform(elem, LAMBDA x : x + 1), LAMBDA (x, y) : x + y) > 42)
+CREATE MACRO my_nested_lambdas(nested_list) AS list_filter(nested_list, lambda elem: list_reduce(
+	list_transform(elem, lambda x: x + 1), lambda x, y: x + y) > 42)
 
 query I
 SELECT my_transform([1, 2, 3])

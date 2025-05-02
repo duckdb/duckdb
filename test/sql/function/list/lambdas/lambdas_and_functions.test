@@ -5,8 +5,11 @@
 require json
 
 statement ok
+SET allow_deprecated_lambda_syntax=false
+
+statement ok
 CREATE OR REPLACE function demo(n, z) AS TABLE (
-  SELECT list_transform(range(0, n), LAMBDA x : z) AS row
+  SELECT list_transform(range(0, n), lambda x: z) AS row
 );
 
 query I
@@ -16,7 +19,7 @@ FROM demo(3, 0);
 
 statement ok
 CREATE OR REPLACE function demo(n, z) AS TABLE (
-  SELECT list_transform(range(0, n), LAMBDA x : 0 + z) AS row
+  SELECT list_transform(range(0, n), lambda x: 0 + z) AS row
 );
 
 query I
@@ -26,7 +29,7 @@ FROM demo(3, 0);
 
 statement ok
 CREATE OR REPLACE function demo(n, z) AS TABLE (
-  SELECT list_transform(range(0, n), LAMBDA x : (z -> 'a')) AS row
+  SELECT list_transform(range(0, n), lambda x: (z -> 'a')) AS row
 );
 
 query I
