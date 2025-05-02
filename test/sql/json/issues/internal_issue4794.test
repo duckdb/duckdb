@@ -1,5 +1,5 @@
 # name: test/sql/json/issues/internal_issue4794.test
-# description: Test internal issue 4794 - AFL++ issue: internal exceptiojn due to format string json key
+# description: Test internal issue 4794 - AFL++ issue: internal exception due to format string json key
 # group: [issues]
 
 require json
