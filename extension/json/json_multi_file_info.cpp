@@ -583,7 +583,6 @@ unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBind
 
 void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
                                           virtual_column_map_t &result) {
-	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
 optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,

@@ -79,9 +79,6 @@ public:
 	//! Appends data to the locked index and verifies constraint violations.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) override;
 
-	//! Internally inserts a chunk.
-	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-	                       optional_ptr<ART> delete_art, const IndexAppendMode append_mode);
 	//! Insert a chunk.
 	ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
 	//! Insert a chunk and verifies constraint violations.
@@ -129,16 +126,6 @@ private:
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
 	                      unsafe_vector<row_t> &row_ids);
-	const unsafe_optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
-
-	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                     const GateStatus status);
-	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                                  const GateStatus status, optional_ptr<ART> delete_art,
-	                                  const IndexAppendMode append_mode);
-	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                               const GateStatus status, optional_ptr<ART> delete_art,
-	                               const IndexAppendMode append_mode);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
