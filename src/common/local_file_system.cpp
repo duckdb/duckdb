@@ -1056,20 +1056,11 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-
-	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
-	FILETIME last_write;
-	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
-	}
-
+time_t FiletimeToTimeT(FILETIME file_time) {
 	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
 	ULARGE_INTEGER ul;
-	ul.LowPart = last_write.dwLowDateTime;
-	ul.HighPart = last_write.dwHighDateTime;
+	ul.LowPart = file_time.dwLowDateTime;
+	ul.HighPart = file_time.dwHighDateTime;
 	int64_t fileTime64 = ul.QuadPart;
 
 	// fileTime64 contains a 64-bit value representing the number of
@@ -1081,6 +1072,18 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
 	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 	return result;
+}
+
+time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
+	}
+	return FiletimeToTimeT(last_write);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1152,8 +1155,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                FileOpener *opener) {
+bool LocalFileSystem::ListFilesExtended(const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback,
+                                        optional_ptr<FileOpener> opener) {
 	string search_dir = JoinPath(directory, "*");
 	auto unicode_path = NormalizePathAndConvertToUnicode(search_dir);
 
@@ -1163,11 +1167,27 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		return false;
 	}
 	do {
-		string cFileName = WindowsUtil::UnicodeToUTF8(ffd.cFileName);
-		if (cFileName == "." || cFileName == "..") {
+		OpenFileInfo info(WindowsUtil::UnicodeToUTF8(ffd.cFileName));
+		auto &name = info.path;
+		if (name == "." || name == "..") {
 			continue;
 		}
-		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+		// create extended info
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		auto &options = info.extended_info->options;
+		// file type
+		Value file_type(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
+		options.emplace("type", std::move(file_type));
+		// file size
+		int64_t file_size_bytes =
+		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
+		options.emplace("file_size", Value::BIGINT(file_size_bytes);
+		// last modified time
+		auto last_modified_time = FiletimeToTimeT(ffd.ftLastWriteTime);
+		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(last_modified_time)));
+
+		// callback
+		callback(info);
 	} while (FindNextFileW(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();
