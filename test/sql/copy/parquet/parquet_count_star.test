@@ -1,0 +1,15 @@
+# name: test/sql/copy/parquet/parquet_count_star.test
+# description: Test count star
+# group: [parquet]
+
+require parquet
+
+query I
+SELECT COUNT(*) FROM 'data/parquet-testing/out_of_range_stats.parquet'
+----
+1
+
+query I
+select COUNT(*) from parquet_scan('data/parquet-testing/glob*/t?.parquet')
+----
+3
