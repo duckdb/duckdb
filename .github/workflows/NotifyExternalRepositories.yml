@@ -66,7 +66,7 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
 
   notify-jdbc-run:
@@ -81,7 +81,7 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
 
   notify-nightly-build-status:
@@ -95,5 +95,5 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
