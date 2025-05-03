@@ -816,7 +816,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 	UnifiedVectorFormat vector_format;
 	scan_vector.ToUnifiedFormat(count, vector_format);
-	auto strings = vector_format.GetData<string_t>(vector_format);
+	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 
 	EncodedInput encoded_input;
 	for (idx_t i = 0; i < count; i++) {
