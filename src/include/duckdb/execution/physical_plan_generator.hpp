@@ -35,7 +35,7 @@ public:
 
 public:
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
 		auto mem = arena.AllocateAligned(sizeof(T));
 		auto ptr = new (mem) T(std::forward<ARGS>(args)...);
@@ -91,7 +91,7 @@ public:
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
 
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 

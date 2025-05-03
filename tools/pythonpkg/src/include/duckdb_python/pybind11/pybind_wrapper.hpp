@@ -90,7 +90,7 @@ bool try_cast(const handle &object, T &result) {
 } // namespace py
 
 template <class T, typename... ARGS>
-void DefineMethod(std::vector<const char *> aliases, T &mod, ARGS &&... args) {
+void DefineMethod(std::vector<const char *> aliases, T &mod, ARGS &&...args) {
 	for (auto &alias : aliases) {
 		mod.def(alias, args...);
 	}
