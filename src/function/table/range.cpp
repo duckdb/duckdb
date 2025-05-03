@@ -105,6 +105,7 @@ static void GenerateRangeParameters(DataChunk &input, idx_t row_id, RangeFunctio
 	if (result.increment == 0) {
 		throw BinderException("interval cannot be 0!");
 	}
+	result.empty_range = false;
 	if (result.start > result.end && result.increment > 0) {
 		result.empty_range = true;
 	}
