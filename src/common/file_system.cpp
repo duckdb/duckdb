@@ -509,7 +509,6 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(con
 		    directory,
 		    [&](const OpenFileInfo &info) {
 			    bool is_dir = IsDirectory(info);
-			    ;
 			    callback(info.path, is_dir);
 		    },
 		    opener);
