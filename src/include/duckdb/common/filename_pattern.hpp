@@ -34,7 +34,7 @@ public:
 class FilenamePattern {
 public:
 	FilenamePattern();
-	FilenamePattern(string base, idx_t pos, bool uuid, vector<FileNameSegment> segments);
+	FilenamePattern(const string &base, idx_t pos, bool uuid, vector<FileNameSegment> segments);
 
 public:
 	void SetFilenamePattern(const string &pattern);

@@ -34,10 +34,10 @@ query III
 SELECT * FROM test2;
 ----
 0	0	0
-1	2	1 
+1	2	1
 2	4	4
 3	6	9
-4	8	16 
+4	8	16
 5	10	25
 6	12	36
 7	14	49
@@ -51,6 +51,23 @@ COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PA
 # the filename contains a uuid
 query III
 SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????.parquet';
+----
+18	81	9
+
+statement ok
+COPY test2 TO '__TEST_DIR__/trailing' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{uuid}_trailing");
+
+# the filename contains a uuid
+query III
+SELECT * FROM '__TEST_DIR__/trailing/a=9/????????-????-4???-????-????????????_trailing.parquet';
+----
+18	81	9
+
+statement ok
+COPY test2 TO '__TEST_DIR__/only_offset' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{i}");
+
+query III
+SELECT * FROM '__TEST_DIR__/only_offset/a=9/?.parquet';
 ----
 18	81	9
 
