@@ -192,8 +192,9 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
 	D_ASSERT(result_offset == 0);
 
+
 	auto &selvec = GetSelVec(start, scan_count);
-	result.Dictionary(*(dictionary), dictionary_size, selvec, scan_count);
+	result.Dictionary(*(dictionary), dict_count, selvec, scan_count);
 	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
 	result.Verify(result_offset + scan_count);
 }
