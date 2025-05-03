@@ -131,9 +131,7 @@ void DictFSSTCompressionStorage::StringScanPartial(ColumnSegment &segment, Colum
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 
 	auto start = segment.GetRelativeIndex(state.row_index);
-	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE ||
-	    start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0 ||
-	    scan_state.mode == DictFSSTMode::FSST_ONLY) {
+	if (!ALLOW_DICT_VECTORS || !scan_state.AllowDictionaryScan(start, scan_count)) {
 		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);
@@ -157,12 +155,30 @@ void DictFSSTCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFe
 }
 
 //===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+			   const SelectionVector &sel, idx_t sel_count) {
+	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
+	if (scan_state.mode == DictFSSTMode::FSST_ONLY) {
+		// for FSST only
+		auto start = segment.GetRelativeIndex(state.row_index);
+		scan_state.Select(result, start, sel, sel_count);
+		return;
+	}
+	// fallback: scan + slice
+	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
+	result.Slice(sel, sel_count);
+}
+
+//===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
 static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
 			   idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
-	if (scan_state.mode != DictFSSTMode::FSST_ONLY) {
+	auto start = segment.GetRelativeIndex(state.row_index);
+	if (scan_state.AllowDictionaryScan(start, vector_count)) {
 		// only pushdown filters on dictionaries
 		if (!scan_state.filter_result) {
 			// no filter result yet - apply filter to the dictionary
@@ -183,7 +199,6 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 				scan_state.filter_result[idx] = true;
 			}
 		}
-		auto start = segment.GetRelativeIndex(state.row_index);
 		auto &dict_sel = scan_state.GetSelVec(start, vector_count);
 		SelectionVector new_sel(sel_count);
 		idx_t approved_tuple_count = 0;
@@ -229,6 +244,7 @@ CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) 
 	    dict_fsst::DictFSSTCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
 	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
+	res.select = dict_fsst::DictFSSTSelect;
 	res.filter = dict_fsst::DictFSSTFilter;
 	return res;
 }

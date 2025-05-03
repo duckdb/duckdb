@@ -36,6 +36,7 @@ public:
 		                           InitCompression, Compress, FinalizeCompress, InitScan, Scan, ScanPartial, FetchRow,
 		                           Skip, InitSegment);
 		result.filter = Filter;
+		result.select = Select;
 		return result;
 	}
 
@@ -99,6 +100,9 @@ public:
 	}
 	static void Filter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
 		       idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+	}
+	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+				   const SelectionVector &sel, idx_t sel_count) {
 	}
 };
 

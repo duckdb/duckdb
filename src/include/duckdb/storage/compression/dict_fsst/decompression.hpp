@@ -26,6 +26,9 @@ public:
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
 	const SelectionVector &GetSelVec(idx_t start, idx_t scan_count);
+	void Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count);
+
+	bool AllowDictionaryScan(idx_t start, idx_t scan_count);
 
 private:
 	string_t FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx);
@@ -43,6 +46,10 @@ public:
 
 	buffer_ptr<SelectionVector> sel_vec;
 	idx_t sel_vec_size = 0;
+
+	// decompress offset/position - used for scanning without a dictionary
+	idx_t decompress_offset = 0;
+	idx_t decompress_position = 0;
 
 	vector<uint32_t> string_lengths;
 
