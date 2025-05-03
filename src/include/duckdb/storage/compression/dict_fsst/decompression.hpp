@@ -55,6 +55,8 @@ public:
 	buffer_ptr<Vector> dictionary;
 	void *decoder = nullptr;
 	bool all_values_inlined = false;
+
+	unsafe_unique_array<bool> filter_result;
 };
 
 } // namespace dict_fsst

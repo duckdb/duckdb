@@ -156,6 +156,63 @@ void DictFSSTCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFe
 	scan_state.ScanToFlatVector(result, result_idx, NumericCast<idx_t>(row_id), 1);
 }
 
+//===--------------------------------------------------------------------===//
+// Filter
+//===--------------------------------------------------------------------===//
+static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
+			   idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
+	if (scan_state.mode != DictFSSTMode::FSST_ONLY) {
+		// only pushdown filters on dictionaries
+		if (!scan_state.filter_result) {
+			// no filter result yet - apply filter to the dictionary
+			// initialize the filter result - setting everything to false
+			scan_state.filter_result = make_unsafe_uniq_array<bool>(scan_state.dict_count);
+
+			// apply the filter
+			UnifiedVectorFormat vdata;
+			scan_state.dictionary->ToUnifiedFormat(scan_state.dict_count, vdata);
+			SelectionVector dict_sel;
+			idx_t filter_count = scan_state.dict_count;
+			ColumnSegment::FilterSelection(dict_sel, *scan_state.dictionary, vdata, filter, filter_state, scan_state.dict_count,
+										   filter_count);
+
+			// now set all matching tuples to true
+			for (idx_t i = 0; i < filter_count; i++) {
+				auto idx = dict_sel.get_index(i);
+				scan_state.filter_result[idx] = true;
+			}
+		}
+		auto start = segment.GetRelativeIndex(state.row_index);
+		auto &dict_sel = scan_state.GetSelVec(start, vector_count);
+		SelectionVector new_sel(sel_count);
+		idx_t approved_tuple_count = 0;
+		for (idx_t idx = 0; idx < sel_count; idx++) {
+			auto row_idx = sel.get_index(idx);
+			auto dict_offset = dict_sel.get_index(row_idx);
+			if (!scan_state.filter_result[dict_offset]) {
+				// does not pass the filter
+				continue;
+			}
+			new_sel.set_index(approved_tuple_count++, row_idx);
+		}
+		if (approved_tuple_count < vector_count) {
+			sel.Initialize(new_sel);
+		}
+		sel_count = approved_tuple_count;
+
+		result.Dictionary(*(scan_state.dictionary), scan_state.dict_count, dict_sel, vector_count);
+		DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+		return;
+	}
+	// fallback: scan + filter
+	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
+
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(vector_count, vdata);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, vector_count, sel_count);
+}
+
 } // namespace dict_fsst
 
 //===--------------------------------------------------------------------===//
@@ -172,6 +229,7 @@ CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) 
 	    dict_fsst::DictFSSTCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
 	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
+	res.filter = dict_fsst::DictFSSTFilter;
 	return res;
 }
 
