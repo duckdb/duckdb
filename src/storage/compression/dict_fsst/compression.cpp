@@ -460,12 +460,9 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	return true;
 }
 
-bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, EncodedInput &encoded_input,
+bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, const string_t &str, bool is_null, EncodedInput &encoded_input,
                                                 const idx_t i, idx_t count) {
-	auto idx = vector_format.sel->get_index(i);
-	bool is_null = !vector_format.validity.RowIsValid(idx);
-	const auto strings = vector_format.GetData<string_t>(vector_format);
-
+	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 	idx_t lookup = DConstants::INVALID_INDEX;
 
 	//! In GetRequiredSize we will round up to ALGORITHM_GROUP_SIZE anyways
@@ -475,7 +472,6 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	        ? false
 	        : ((tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0);
 
-	const auto &str = strings[idx];
 	if (append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE || is_null) {
 		lookup = 0;
 	} else {
@@ -820,27 +816,31 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 
 	EncodedInput encoded_input;
 	for (idx_t i = 0; i < count; i++) {
-		auto &uncompressed_string = strings[vector_format.sel->get_index(i)];
+		auto idx = vector_format.sel->get_index(i);
+		auto &str = strings[idx];
+		auto is_null = !vector_format.validity.RowIsValid(idx);
 		do {
-			if (CompressInternal(vector_format, encoded_input, i, count)) {
+			if (CompressInternal(vector_format, str, is_null, encoded_input, i, count)) {
 				break;
 			}
 
 			if (append_state == DictionaryAppendState::REGULAR) {
 				append_state = TryEncode();
 				D_ASSERT(append_state != DictionaryAppendState::REGULAR);
-				if (CompressInternal(vector_format, encoded_input, i, count)) {
+				if (CompressInternal(vector_format, str, is_null, encoded_input, i, count)) {
 					break;
 				}
 			}
 			Flush(false);
 			encoded_input.data.clear();
 			encoded_input.offset = 0;
-			if (!CompressInternal(vector_format, encoded_input, i, count)) {
+			if (!CompressInternal(vector_format, str, is_null, encoded_input, i, count)) {
 				throw FatalException("Compressing directly after Flush doesn't fit");
 			}
 		} while (false);
-		UncompressedStringStorage::UpdateStringStats(current_segment->stats, uncompressed_string);
+		if (!is_null) {
+			UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
+		}
 		tuple_count++;
 	}
 }
