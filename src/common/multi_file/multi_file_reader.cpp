@@ -42,6 +42,27 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_f
 	return res;
 }
 
+unique_ptr<MultiFileReader> MultiFileReader::Copy() const {
+	return CreateDefault(function_name);
+}
+
+unique_ptr<FunctionData> MultiFileBindData::Copy() const {
+	auto result = make_uniq<MultiFileBindData>();
+	if (bind_data) {
+		result->bind_data = unique_ptr_cast<FunctionData, TableFunctionData>(bind_data->Copy());
+	}
+	result->file_list = make_uniq<SimpleMultiFileList>(file_list->GetAllFiles());
+	result->multi_file_reader = multi_file_reader->Copy();
+	result->columns = columns;
+	result->reader_bind = reader_bind;
+	result->file_options = file_options;
+	result->types = types;
+	result->names = names;
+	result->virtual_columns = virtual_columns;
+	result->table_columns = table_columns;
+	return std::move(result);
+}
+
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
 	auto res = make_uniq<MultiFileReader>();
 	res->function_name = function_name;
@@ -264,6 +285,7 @@ void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderB
 		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
 	}
 	result.insert(make_pair(COLUMN_IDENTIFIER_FILE_INDEX, TableColumn("file_index", LogicalType::UBIGINT)));
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
 void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,

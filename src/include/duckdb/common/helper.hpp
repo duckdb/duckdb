@@ -184,6 +184,12 @@ constexpr T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 
+//! Like std::clamp (C++17), returns v if within bounds, else nearest bound
+template <typename T>
+constexpr T ClampValue(T v, T min, T max) {
+	return MinValue(MaxValue(v, min), max);
+}
+
 template <typename T>
 T AbsValue(T a) {
 	return a < 0 ? -a : a;

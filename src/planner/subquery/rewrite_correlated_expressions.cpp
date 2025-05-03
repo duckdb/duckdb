@@ -33,7 +33,7 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 			VisitOperatorChildren(op);
 		}
 	}
-	// update the bindings in the correlated columns of the dependendent join
+	// update the bindings in the correlated columns of the dependent join
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &plan = op.Cast<LogicalDependentJoin>();
 		for (auto &corr : plan.correlated_columns) {

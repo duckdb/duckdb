@@ -1,4 +1,4 @@
-# name: test/optimizer/joins/get_cardinality_from_limit.test
+# name: test/optimizer/joins/get_cardinality_from_limit.test_slow
 # description: when a limit is encountered, use the limit to know the cardinality
 # group: [joins]
 

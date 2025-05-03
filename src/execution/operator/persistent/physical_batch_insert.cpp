@@ -649,6 +649,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 
 		auto &optimistic_writer = data_table.GetOptimisticWriter(context);
 		optimistic_writer.Merge(*writer);
+		optimistic_writer.FinalFlush();
 		memory_manager.FinalCheck();
 		return SinkFinalizeType::READY;
 	}
