@@ -14,7 +14,7 @@ FilenamePattern::FilenamePattern() {
 	segments.emplace_back(FileNameSegmentType::OFFSET);
 }
 
-FilenamePattern::FilenamePattern(const string &base, idx_t pos, bool uuid, vector<FileNameSegment> segments_p) {
+FilenamePattern::FilenamePattern(string base, idx_t pos, bool uuid, vector<FileNameSegment> segments_p) {
 	if (!segments_p.empty()) {
 		segments = std::move(segments_p);
 		return;
@@ -28,7 +28,9 @@ FilenamePattern::FilenamePattern(const string &base, idx_t pos, bool uuid, vecto
 	} else {
 		segments.emplace_back(FileNameSegmentType::OFFSET);
 	}
-	if (pos < base.size()) {
+	if (pos == 0 && !base.empty()) {
+		segments.emplace_back(std::move(base));
+	} else if (pos < base.size()) {
 		segments.emplace_back(base.substr(pos, base.size() - pos));
 	}
 }
