@@ -245,6 +245,42 @@ vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<Fun
 	return result;
 }
 
+vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
+	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	vector<PartitionStatistics> result;
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE && bind_data.initial_reader) {
+		// we have read the metadata - get the partitions for this reader
+		auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
+		reader.GetPartitionStats(result);
+		return result;
+	}
+	// if we are reading multiple files - we check if we have caching enabled
+	if (!ParquetReader::MetadataCacheEnabled(context)) {
+		// no caching - bail
+		return result;
+	}
+	// caching is enabled - check if we have ALL of the metadata cached
+	vector<shared_ptr<ParquetFileMetadataCache>> caches;
+	for (auto &file : bind_data.file_list->Files()) {
+		auto metadata_entry = ParquetReader::GetMetadataCacheEntry(context, file);
+		if (!metadata_entry) {
+			// no cache entry found
+			return result;
+		}
+		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
+		auto is_valid = metadata_entry->IsValid(file);
+		if (is_valid != ParquetCacheValidity::VALID) {
+			return result;
+		}
+		caches.push_back(std::move(metadata_entry));
+	}
+	// all caches are valid! we can return the partition stats
+	for (auto &cache : caches) {
+		ParquetReader::GetPartitionStats(*cache->metadata, result);
+	}
+	return result;
+}
+
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
@@ -260,6 +296,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.deserialize = ParquetScanDeserialize;
 	table_function.get_row_id_columns = ParquetGetRowIdColumns;
 	table_function.pushdown_expression = ParquetScanPushdownExpression;
+	table_function.get_partition_stats = ParquetGetPartitionStats;
 	table_function.filter_pushdown = true;
 	table_function.filter_prune = true;
 	table_function.late_materialization = true;
