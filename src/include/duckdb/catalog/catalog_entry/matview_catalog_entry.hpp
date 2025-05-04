@@ -13,7 +13,7 @@ public:
 	                    shared_ptr<DataTable> inherited_storage = nullptr);
 
 	static constexpr const CatalogType Type = CatalogType::MATVIEW_ENTRY;
-	static constexpr const char *Name = "matview";
+	static constexpr const char *Name = "materialized view";
 
 public:
 	unique_ptr<LogicalOperator> query;
