@@ -2,7 +2,7 @@
 # description: blob tests
 # group: [string]
 
-load __TEST_DIR__/test_string_compression.db
+load __TEST_DIR__/test_string_compression.db readwrite v1.0.0
 
 statement ok
 pragma verify_fetch_row
