@@ -408,14 +408,12 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 //===--------------------------------------------------------------------===//
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
 	optional_ptr<TableCatalogEntry> table;
-	CatalogType catalog_type = info ? info->Base().type : insert_table->type;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
 		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
-		table = catalog_type == CatalogType::TABLE_ENTRY ? &created_table->Cast<TableCatalogEntry>()
-		                                                 : &created_table->Cast<MatViewCatalogEntry>();
+		table = created_table->Cast<TableCatalogEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -424,10 +422,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	// heuristic - we start off by allocating 4MB of cache space per column
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
 	auto minimum_memory_per_thread = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
-	auto result =
-	    catalog_type == CatalogType::TABLE_ENTRY
-	        ? make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), minimum_memory_per_thread)
-	        : make_uniq<BatchInsertGlobalState>(context, table->Cast<MatViewCatalogEntry>(), minimum_memory_per_thread);
+	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), minimum_memory_per_thread);
 	return std::move(result);
 }
 

@@ -73,9 +73,6 @@ public:
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);
 
-	void WriteCreateMatView(const MatViewCatalogEntry &entry);
-	void WriteDropMatView(const MatViewCatalogEntry &entry);
-
 	void WriteCreateSchema(const SchemaCatalogEntry &entry);
 	void WriteDropSchema(const SchemaCatalogEntry &entry);
 

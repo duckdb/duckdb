@@ -213,26 +213,6 @@ void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 	serializer.End();
 }
 
-
-//===--------------------------------------------------------------------===//
-// CREATE MATVIEW
-//===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteCreateMatView(const MatViewCatalogEntry &entry) {
-	WriteAheadLogSerializer serializer(*this, WALType::CREATE_MATVIEW);
-	serializer.WriteProperty(101, "table", &entry);
-	serializer.End();
-}
-
-//===--------------------------------------------------------------------===//
-// DROP MATVIEW
-//===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteDropMatView(const MatViewCatalogEntry &entry) {
-	WriteAheadLogSerializer serializer(*this, WALType::DROP_MATVIEW);
-	serializer.WriteProperty(101, "schema", entry.schema.name);
-	serializer.WriteProperty(102, "name", entry.name);
-	serializer.End();
-}
-
 //===--------------------------------------------------------------------===//
 // CREATE SCHEMA
 //===--------------------------------------------------------------------===//
