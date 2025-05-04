@@ -1989,11 +1989,11 @@ typedef struct PGCreateTableAsStmt {
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTableAsStmt;
 
-typedef struct PGRefreshMatViewStmt {
+typedef struct PGRefreshMaterializedViewStmt {
 	PGNodeTag type;
-	PGRangeVar *matView;           /* target materialized view name */
+	PGRangeVar *materializedView;           /* target materialized view name */
 	PGObjectType removeType;	   /* object type */
-} PGRefreshMatViewStmt;
+} PGRefreshMaterializedViewStmt;
 
 /* ----------------------
  * Checkpoint Statement

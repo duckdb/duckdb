@@ -309,6 +309,7 @@ void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
 		WriteSequence(seq, serializer);
 		break;
 	}
+	case CatalogType::MATERIALIZED_VIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
 		auto &table = entry.Cast<TableCatalogEntry>();
 		WriteTable(table, serializer);

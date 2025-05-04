@@ -466,10 +466,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
-	case CatalogType::MATVIEW_ENTRY:
+	case CatalogType::MATERIALIZED_VIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
-		// Retain select query for CREATE MATERIALIZED VIEW for later storing to MatViewCatalogEntry
+		// Reserve select query for CREATE MATERIALIZED VIEW for later storing to MaterializedViewCatalogEntry
 		auto root = bound_info->query ? bound_info->query->Copy(context) : std::move(bound_info->query);
 
 		// create the logical operator

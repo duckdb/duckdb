@@ -35,7 +35,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
-	case CatalogType::MATVIEW_ENTRY:
+	case CatalogType::MATERIALIZED_VIEW_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
@@ -77,7 +77,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			}
 		} else {
 			switch (parent.type) {
-			case CatalogType::MATVIEW_ENTRY:
+			case CatalogType::MATERIALIZED_VIEW_ENTRY:
 			case CatalogType::TABLE_ENTRY:
 			case CatalogType::VIEW_ENTRY:
 			case CatalogType::INDEX_ENTRY:

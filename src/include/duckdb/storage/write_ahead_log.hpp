@@ -27,7 +27,6 @@ struct AlterInfo;
 class AttachedDatabase;
 class Catalog;
 class DatabaseInstance;
-class MatViewCatalogEntry;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class ScalarMacroCatalogEntry;

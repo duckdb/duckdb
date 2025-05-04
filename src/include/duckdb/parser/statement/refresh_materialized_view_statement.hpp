@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/statement/refresh_matview_statement.hpp
+// duckdb/parser/statement/refresh_materialized_view_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,17 +13,17 @@
 
 namespace duckdb {
 
-class RefreshMatViewStatement : public SQLStatement {
+class RefreshMaterializedViewStatement : public SQLStatement {
 public:
-	static constexpr const StatementType TYPE = StatementType::REFRESH_MATVIEW_STATEMENT;
+	static constexpr const StatementType TYPE = StatementType::REFRESH_MATERIALIZED_VIEW_STATEMENT;
 
 public:
-	RefreshMatViewStatement();
+	RefreshMaterializedViewStatement();
 
 	unique_ptr<CreateInfo> info;
 
 protected:
-	RefreshMatViewStatement(const RefreshMatViewStatement &other);
+	RefreshMaterializedViewStatement(const RefreshMaterializedViewStatement &other);
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;

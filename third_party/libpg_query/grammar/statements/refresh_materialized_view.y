@@ -1,14 +1,14 @@
 /*****************************************************************************
  *
  *		QUERY :
- *				REFRESH MATERIALIZED VIEW matviewname
+ *				REFRESH MATERIALIZED VIEW materialized_view_name
  *
  *****************************************************************************/
-RefreshMatViewStmt:
+RefreshMaterializedViewStmt:
 		REFRESH MATERIALIZED VIEW qualified_name
                 {
-                    PGRefreshMatViewStmt *stmt = makeNode(PGRefreshMatViewStmt);
-                    stmt->matView = $4;
+                    PGRefreshMaterializedViewStmt *stmt = makeNode(PGRefreshMaterializedViewStmt);
+                    stmt->materializedView = $4;
                     stmt->removeType = PG_OBJECT_MATVIEW;
                     $$ = (PGNode *) stmt;
                 }

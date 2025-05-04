@@ -36,7 +36,7 @@ class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
-class RefreshMatViewStatement;
+class RefreshMaterializedViewStatement;
 class SetStatement;
 class SetVariableStatement;
 class ResetVariableStatement;

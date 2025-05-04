@@ -34,8 +34,7 @@ add_library_unity(
   transaction_info.cpp
   pragma_info.cpp
   vacuum_info.cpp
-  refresh_matview_info.cpp
-)
+  refresh_materialized_view_info.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parsed_data>
     PARENT_SCOPE)

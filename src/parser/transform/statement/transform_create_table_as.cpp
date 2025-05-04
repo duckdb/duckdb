@@ -41,7 +41,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 		}
 	}
 	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
-		info->type = CatalogType::MATVIEW_ENTRY;
+		info->type = CatalogType::MATERIALIZED_VIEW_ENTRY;
 	}
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;

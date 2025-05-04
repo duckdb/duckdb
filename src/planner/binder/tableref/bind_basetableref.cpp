@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/materialized_view_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -285,12 +285,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 
 	switch (table_or_view->type) {
-	case CatalogType::MATVIEW_ENTRY:
+	case CatalogType::MATERIALIZED_VIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
-		auto &table = table_or_view->type == CatalogType::TABLE_ENTRY ? table_or_view->Cast<TableCatalogEntry>()
-		                                                              : table_or_view->Cast<MatViewCatalogEntry>();
+		auto &table = table_or_view->type == CatalogType::TABLE_ENTRY
+		                  ? table_or_view->Cast<TableCatalogEntry>()
+		                  : table_or_view->Cast<MaterializedViewCatalogEntry>();
 
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBRead(table.ParentCatalog(), context);

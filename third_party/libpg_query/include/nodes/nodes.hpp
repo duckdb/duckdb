@@ -414,7 +414,7 @@ typedef enum PGNodeTag {
 	T_PGAlterExtensionContentsStmt,
 	T_PGCreateEventTrigStmt,
 	T_PGAlterEventTrigStmt,
-	T_PGRefreshMatViewStmt,
+	T_PGRefreshMaterializedViewStmt,
 	T_PGReplicaIdentityStmt,
 	T_PGAlterSystemStmt,
 	T_PGCreatePolicyStmt,
@@ -434,7 +434,7 @@ typedef enum PGNodeTag {
 	T_PGAttachStmt,
 	T_PGDetachStmt,
 	T_PGUseStmt,
-	T_RefreshMatViewStmt,
+	T_RefreshMaterializedViewStmt,
 
 	/*
 	 * TAGS FOR PARSE TREE NODES (parsenodes.h)

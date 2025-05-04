@@ -652,8 +652,8 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_CreateEventTrigStmt";
 	case duckdb_libpgquery::T_PGAlterEventTrigStmt:
 		return "T_AlterEventTrigStmt";
-	case duckdb_libpgquery::T_PGRefreshMatViewStmt:
-		return "T_RefreshMatViewStmt";
+	case duckdb_libpgquery::T_PGRefreshMaterializedViewStmt:
+		return "T_RefreshMaterializedViewStmt";
 	case duckdb_libpgquery::T_PGReplicaIdentityStmt:
 		return "T_ReplicaIdentityStmt";
 	case duckdb_libpgquery::T_PGAlterSystemStmt:

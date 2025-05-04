@@ -37,9 +37,8 @@ PhysicalOperator &DuckCatalog::PlanCreateTableAs(ClientContext &context, Physica
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	const auto &create_info = op.info->base->Cast<CreateTableInfo>();
 	auto &catalog = op.info->schema.catalog;
-	// For MView, MATVIEW_ENTRY
 	auto catalog_type = op.info->base->type;
-	D_ASSERT(catalog_type == CatalogType::TABLE_ENTRY || catalog_type == CatalogType::MATVIEW_ENTRY);
+	D_ASSERT(catalog_type == CatalogType::TABLE_ENTRY || catalog_type == CatalogType::MATERIALIZED_VIEW_ENTRY);
 	auto existing_entry =
 	    catalog.GetEntry(context, catalog_type, create_info.schema, create_info.table, OnEntryNotFound::RETURN_NULL);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;

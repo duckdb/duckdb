@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/refresh_matview_info.hpp
+// duckdb/parser/parsed_data/refresh_materialized_view_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-struct RefreshMatViewInfo : CreateTableInfo {
-	RefreshMatViewInfo() : CreateTableInfo() {
-		this->type = CatalogType::MATVIEW_ENTRY;
+struct RefreshMaterializedViewInfo : CreateTableInfo {
+	RefreshMaterializedViewInfo() : CreateTableInfo() {
+		this->type = CatalogType::MATERIALIZED_VIEW_ENTRY;
 	}
-	RefreshMatViewInfo(string catalog, string schema, string name);
+	RefreshMaterializedViewInfo(string catalog, string schema, string name);
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

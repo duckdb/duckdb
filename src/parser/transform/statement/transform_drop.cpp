@@ -36,7 +36,7 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 		info.type = CatalogType::TYPE_ENTRY;
 		break;
 	case duckdb_libpgquery::PG_OBJECT_MATVIEW:
-		info.type = CatalogType::MATVIEW_ENTRY;
+		info.type = CatalogType::MATERIALIZED_VIEW_ENTRY;
 		break;
 	default:
 		throw NotImplementedException("Cannot drop this type yet");

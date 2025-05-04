@@ -196,8 +196,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<CopyDatabaseStatement>());
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
-	case StatementType::REFRESH_MATVIEW_STATEMENT:
-		return Bind(statement.Cast<RefreshMatViewStatement>());
+	case StatementType::REFRESH_MATERIALIZED_VIEW_STATEMENT:
+		return Bind(statement.Cast<RefreshMaterializedViewStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

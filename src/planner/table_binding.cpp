@@ -238,7 +238,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	}
 	auto entry = GetStandardEntry();
 	if (entry && !IsVirtualColumn(column_index)) {
-		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY || entry->type == CatalogType::MATVIEW_ENTRY);
+		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY || entry->type == CatalogType::MATERIALIZED_VIEW_ENTRY);
 		// Either there is no table, or the columns category has to be standard
 		auto &table_entry = entry->Cast<TableCatalogEntry>();
 		auto &column_entry = table_entry.GetColumn(LogicalIndex(column_index));

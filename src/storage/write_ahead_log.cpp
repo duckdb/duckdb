@@ -21,8 +21,6 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-#include <duckdb/catalog/catalog_entry/matview_catalog_entry.hpp>
-
 namespace duckdb {
 
 constexpr uint64_t WAL_VERSION_NUMBER = 2;

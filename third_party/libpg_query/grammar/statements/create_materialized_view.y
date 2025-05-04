@@ -1,10 +1,10 @@
 /*****************************************************************************
  *
  *		QUERY :
- *				CREATE MATERIALIZED VIEW matviewname AS PGSelectStmt [ WITH [NO] DATA ]
+ *				CREATE MATERIALIZED VIEW materialized_view_name AS PGSelectStmt [ WITH [NO] DATA ]
  *
  *****************************************************************************/
-CreateMatViewStmt:
+CreateMaterializedViewStmt:
 		CREATE_P MATERIALIZED VIEW create_as_target AS SelectStmt opt_with_data
 				{
 					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);

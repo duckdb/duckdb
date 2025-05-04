@@ -14,7 +14,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/materialized_view_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -216,7 +216,8 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (IsVirtualColumn(index)) {
 		return false;
 	}
-	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY || catalog_entry->type == CatalogType::MATVIEW_ENTRY);
+	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY ||
+	         catalog_entry->type == CatalogType::MATERIALIZED_VIEW_ENTRY);
 	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
 	return table_entry.GetColumn(LogicalIndex(index)).Generated();
 }

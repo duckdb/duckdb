@@ -10,7 +10,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/materialized_view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -143,8 +143,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
 	auto catalog_type = info.base->type;
-	if (catalog_type == CatalogType::MATVIEW_ENTRY) {
-		return CreateMatView(transaction, info);
+	if (catalog_type == CatalogType::MATERIALIZED_VIEW_ENTRY) {
+		return CreateMaterializedView(transaction, info);
 	}
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
 
@@ -172,8 +172,9 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	return entry;
 }
 
-optional_ptr<CatalogEntry> DuckSchemaEntry::CreateMatView(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto table = make_uniq<MatViewCatalogEntry>(catalog, *this, info);
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateMaterializedView(CatalogTransaction transaction,
+                                                                   BoundCreateTableInfo &info) {
+	auto table = make_uniq<MaterializedViewCatalogEntry>(catalog, *this, info);
 	for (auto &dep : info.dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
 	}
@@ -382,7 +383,7 @@ SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transact
 
 CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
-	case CatalogType::MATVIEW_ENTRY:
+	case CatalogType::MATERIALIZED_VIEW_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 		return tables;

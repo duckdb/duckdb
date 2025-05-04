@@ -134,8 +134,10 @@ private:
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGCreateFunctionStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateType(duckdb_libpgquery::PGCreateTypeStmt &stmt);
-	//! Transform a Postgres duckdb_libpgquery::T_PGGRefreshMatViewStmt node into RefreshMatViewStatement
-	unique_ptr<RefreshMatViewStatement> TransformRefreshMatView(duckdb_libpgquery::PGRefreshMatViewStmt &stmt);
+	//! Transform a Postgres duckdb_libpgquery::T_PGGRefreshMaterializedViewStmt node into
+	//! RefreshMaterializedViewStatement
+	unique_ptr<RefreshMaterializedViewStatement>
+	TransformRefreshMaterializedView(duckdb_libpgquery::PGRefreshMaterializedViewStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformCommentOn(duckdb_libpgquery::PGCommentOnStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement

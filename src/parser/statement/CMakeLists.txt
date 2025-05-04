@@ -26,8 +26,7 @@ add_library_unity(
   update_statement.cpp
   update_extensions_statement.cpp
   vacuum_statement.cpp
-  refresh_matview_statement.cpp
-)
+  refresh_materialized_view_statement.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_statement>
     PARENT_SCOPE)

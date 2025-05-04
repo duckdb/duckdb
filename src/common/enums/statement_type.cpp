@@ -65,8 +65,8 @@ string StatementTypeToString(StatementType type) {
 		return "MULTI";
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return "UPDATE_EXTENSIONS";
-	case StatementType::REFRESH_MATVIEW_STATEMENT:
-		return "REFRESH_MATVIEW";
+	case StatementType::REFRESH_MATERIALIZED_VIEW_STATEMENT:
+		return "REFRESH_MATERIALIZED_VIEW";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

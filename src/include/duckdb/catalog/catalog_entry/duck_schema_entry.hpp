@@ -44,7 +44,8 @@ public:
 	                                            OnCreateConflict on_conflict, LogicalDependencyList dependencies);
 
 	optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) override;
-	optional_ptr<CatalogEntry> CreateMatView(CatalogTransaction transaction, BoundCreateTableInfo &info) override;
+	optional_ptr<CatalogEntry> CreateMaterializedView(CatalogTransaction transaction,
+	                                                  BoundCreateTableInfo &info) override;
 	optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
 	                                       TableCatalogEntry &table) override;

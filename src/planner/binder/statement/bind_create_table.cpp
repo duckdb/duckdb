@@ -210,7 +210,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	vector<string> names;
 	vector<LogicalType> types;
 
-	D_ASSERT(base.type == CatalogType::TABLE_ENTRY || base.type == CatalogType::MATVIEW_ENTRY);
+	D_ASSERT(base.type == CatalogType::TABLE_ENTRY || base.type == CatalogType::MATERIALIZED_VIEW_ENTRY);
 	for (auto &col : base.columns.Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());

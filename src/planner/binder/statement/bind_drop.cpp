@@ -28,7 +28,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	}
 	case CatalogType::VIEW_ENTRY:
-	case CatalogType::MATVIEW_ENTRY:
+	case CatalogType::MATERIALIZED_VIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:

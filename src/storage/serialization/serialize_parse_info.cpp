@@ -20,7 +20,7 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
-#include "duckdb/parser/parsed_data/refresh_matview_info.hpp"
+#include "duckdb/parser/parsed_data/refresh_materialized_view_info.hpp"
 
 namespace duckdb {
 
@@ -68,8 +68,8 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 	case ParseInfoType::VACUUM_INFO:
 		result = VacuumInfo::Deserialize(deserializer);
 		break;
-	case ParseInfoType::REFRESH_MATVIEW_INFO:
-		result = RefreshMatViewInfo::Deserialize(deserializer);
+	case ParseInfoType::REFRESH_MATERIALIZED_VIEW_INFO:
+		result = RefreshMaterializedViewInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ParseInfo!");

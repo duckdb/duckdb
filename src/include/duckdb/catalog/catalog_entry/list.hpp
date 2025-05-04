@@ -11,4 +11,4 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/materialized_view_catalog_entry.hpp"
