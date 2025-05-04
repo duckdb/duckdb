@@ -137,8 +137,11 @@ elif len(sys.argv) >= 2:
 else:
     print_usage()
 
+directories = False
 if len(sys.argv) > 2:
     for arg in sys.argv[2:]:
+        prev_directories = directories
+        directories = False
         if arg == '--check':
             check_only = True
         elif arg == '--fix':
@@ -151,6 +154,12 @@ if len(sys.argv) > 2:
             silent = True
         elif arg == '--force':
             force = True
+        elif arg == '--directories':
+            directories = True
+            formatted_directories = []
+        elif prev_directories:
+            directories = True
+            formatted_directories += [arg]
         else:
             print_usage()
 
