@@ -48,7 +48,7 @@ public:
 	idx_t sel_vec_size = 0;
 
 	// decompress offset/position - used for scanning without a dictionary
-	idx_t decompress_offset = 0;
+	uint32_t decompress_offset = 0;
 	idx_t decompress_position = 0;
 
 	vector<uint32_t> string_lengths;

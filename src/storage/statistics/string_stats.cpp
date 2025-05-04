@@ -248,8 +248,8 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 	}
 }
 
-static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
-	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
+static uint32_t GetValidMinMaxSubstring(const_data_ptr_t data) {
+	for (uint32_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
 			return i;
 		}
@@ -259,8 +259,8 @@ static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
 
 string StringStats::ToString(const BaseStatistics &stats) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
-	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
+	uint32_t min_len = GetValidMinMaxSubstring(string_data.min);
+	uint32_t max_len = GetValidMinMaxSubstring(string_data.max);
 	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]",
 	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)),
 	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)),

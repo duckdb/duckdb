@@ -98,11 +98,12 @@ public:
 	                                                      optional_ptr<ColumnSegmentState> segment_state) {
 		return nullptr;
 	}
-	static void Filter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
-		       idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+	static void Filter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	                   SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
+	                   TableFilterState &filter_state) {
 	}
 	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-				   const SelectionVector &sel, idx_t sel_count) {
+	                   const SelectionVector &sel, idx_t sel_count) {
 	}
 };
 

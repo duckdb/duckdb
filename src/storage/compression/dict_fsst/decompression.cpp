@@ -167,7 +167,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			result_data[result_offset + i] = dictionary_values[string_number];
 		}
 	} else {
-		for(idx_t i = 0; i < scan_count; i++) {
+		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(start_offset + i);
 			if (string_number == 0) {
@@ -190,7 +190,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 	D_ASSERT(mode == DictFSSTMode::FSST_ONLY);
 	idx_t start_offset = start + 1;
 	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t i = 0; i < sel_count; i++) {
+	for (idx_t i = 0; i < sel_count; i++) {
 		// Lookup dict offset in index buffer
 		auto string_number = start_offset + sel.get_index(i);
 		if (decompress_position > string_number) {
@@ -202,7 +202,6 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 		result_data[i] = FetchStringFromDict(result, decompress_offset, string_number);
 	}
 }
-
 
 bool CompressedStringScanState::AllowDictionaryScan(idx_t start, idx_t scan_count) {
 	if (mode == DictFSSTMode::FSST_ONLY) {

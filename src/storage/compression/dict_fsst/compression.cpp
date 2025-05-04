@@ -460,8 +460,8 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	return true;
 }
 
-bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, const string_t &str, bool is_null, EncodedInput &encoded_input,
-                                                const idx_t i, idx_t count) {
+bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, const string_t &str, bool is_null,
+                                                EncodedInput &encoded_input, const idx_t i, idx_t count) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 	idx_t lookup = DConstants::INVALID_INDEX;
 
