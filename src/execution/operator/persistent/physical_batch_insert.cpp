@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -413,7 +412,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
 		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
-		table = created_table->Cast<TableCatalogEntry>();
+		table = &created_table->Cast<TableCatalogEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
