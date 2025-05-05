@@ -267,6 +267,19 @@ vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, Get
 			// no cache entry found
 			return result;
 		}
+		// check if the file has any deletes
+		if (file.extended_info) {
+			auto entry = file.extended_info->options.find("has_deletes");
+			if (entry != file.extended_info->options.end()) {
+				if (BooleanValue::Get(entry->second)) {
+					// the file has deletes - skip emitting partition stats
+					// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of
+					// `COUNT_EXACT`
+					return result;
+				}
+			}
+		}
+
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
 		auto is_valid = metadata_entry->IsValid(file);
 		if (is_valid != ParquetCacheValidity::VALID) {
