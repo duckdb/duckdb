@@ -67,6 +67,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -1801,6 +1802,26 @@ const char* EnumUtil::ToChars<FileLockType>(FileLockType value) {
 template<>
 FileLockType EnumUtil::FromString<FileLockType>(const char *value) {
 	return static_cast<FileLockType>(StringUtil::StringToEnum(GetFileLockTypeValues(), 3, "FileLockType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFileNameSegmentTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileNameSegmentType::LITERAL), "LITERAL" },
+		{ static_cast<uint32_t>(FileNameSegmentType::UUID_V4), "UUID_V4" },
+		{ static_cast<uint32_t>(FileNameSegmentType::UUID_V7), "UUID_V7" },
+		{ static_cast<uint32_t>(FileNameSegmentType::OFFSET), "OFFSET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileNameSegmentType>(FileNameSegmentType value) {
+	return StringUtil::EnumToString(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", static_cast<uint32_t>(value));
+}
+
+template<>
+FileNameSegmentType EnumUtil::FromString<FileNameSegmentType>(const char *value) {
+	return static_cast<FileNameSegmentType>(StringUtil::StringToEnum(GetFileNameSegmentTypeValues(), 4, "FileNameSegmentType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFilterPropagateResultValues() {

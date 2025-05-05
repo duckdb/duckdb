@@ -2,8 +2,8 @@
 #include "duckdb/function/table/summary.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
@@ -105,6 +105,7 @@ static void GenerateRangeParameters(DataChunk &input, idx_t row_id, RangeFunctio
 	if (result.increment == 0) {
 		throw BinderException("interval cannot be 0!");
 	}
+	result.empty_range = false;
 	if (result.start > result.end && result.increment > 0) {
 		result.empty_range = true;
 	}
@@ -184,6 +185,36 @@ unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const Functi
 //===--------------------------------------------------------------------===//
 // Range (timestamp)
 //===--------------------------------------------------------------------===//
+struct RangeDateTimeBindData : public TableFunctionData {
+	explicit RangeDateTimeBindData(const vector<Value> &inputs) : cardinality(0) {
+		timestamp_t bounds[2];
+		interval_t step;
+		for (idx_t i = 0; i < inputs.size(); i++) {
+			if (inputs[i].IsNull()) {
+				return;
+			}
+			if (i >= 2) {
+				step = inputs[i].GetValue<interval_t>();
+			} else {
+				bounds[i] = inputs[i].GetValue<timestamp_t>();
+			}
+		}
+		// Estimate cardinality using micros.
+		int64_t increment = 0;
+		if (!Interval::TryGetMicro(step, increment) || !increment) {
+			return;
+		}
+		int64_t delta = 0;
+		if (!TrySubtractOperator::Operation(bounds[1].value, bounds[0].value, delta)) {
+			return;
+		}
+
+		cardinality = idx_t(delta / increment);
+	}
+
+	idx_t cardinality;
+};
+
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
@@ -193,7 +224,18 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 	} else {
 		names.emplace_back("range");
 	}
-	return nullptr;
+	if (input.inputs.size() != 3) {
+		return nullptr;
+	}
+	return make_uniq<RangeDateTimeBindData>(input.inputs);
+}
+
+unique_ptr<NodeStatistics> RangeDateTimeCardinality(ClientContext &context, const FunctionData *bind_data_p) {
+	if (!bind_data_p) {
+		return nullptr;
+	}
+	auto &bind_data = bind_data_p->Cast<RangeDateTimeBindData>();
+	return make_uniq<NodeStatistics>(bind_data.cardinality, bind_data.cardinality);
 }
 
 struct RangeDateTimeLocalState : public LocalTableFunctionState {
@@ -347,6 +389,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL}, nullptr,
 	                           RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
+	range_in_out.cardinality = RangeDateTimeCardinality;
 	range.AddFunction(range_in_out);
 	set.AddFunction(range);
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS

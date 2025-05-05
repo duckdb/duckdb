@@ -34,10 +34,10 @@ query III
 SELECT * FROM test2;
 ----
 0	0	0
-1	2	1 
+1	2	1
 2	4	4
 3	6	9
-4	8	16 
+4	8	16
 5	10	25
 6	12	36
 7	14	49
@@ -51,6 +51,23 @@ COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PA
 # the filename contains a uuid
 query III
 SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????.parquet';
+----
+18	81	9
+
+statement ok
+COPY test2 TO '__TEST_DIR__/trailing' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{uuid}_trailing");
+
+# the filename contains a uuid
+query III
+SELECT * FROM '__TEST_DIR__/trailing/a=9/????????-????-4???-????-????????????_trailing.parquet';
+----
+18	81	9
+
+statement ok
+COPY test2 TO '__TEST_DIR__/only_offset' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{i}");
+
+query III
+SELECT * FROM '__TEST_DIR__/only_offset/a=9/?.parquet';
 ----
 18	81	9
 
@@ -114,8 +131,6 @@ COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
 Directory
 
-
-
 # Test where the FILENAME_PATTERN param has no value
 statement error
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
@@ -135,15 +150,33 @@ SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/a_file_name*.parquet';
 ----
 36	6561	9
 
-
 # Test with a combination of {i} and {uuid}
 statement ok
 COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{i}_with_{uuid}_numbers");
 
 query III sort
-SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_with_????????-????-4???-????-????????????_numbers.parquet';
+SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name?_with_????????-????-4???-????-????????????_numbers.parquet';
 ----
 25	3125	5
+
+# Test UUID v7
+statement ok
+COPY test5 TO '__TEST_DIR__/uuid_v7' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name_with_{uuidv7}");
+
+query III sort
+SELECT * FROM '__TEST_DIR__/uuid_v7/a=5/a_name_with_????????-????-7???-????-????????????.parquet';
+----
+25	3125	5
+
+# Test UUID v7 mixed with UUID v4
+statement ok
+COPY test5 TO '__TEST_DIR__/mixed_uuid_types' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{uuid}_with_{uuidv7}_numbers");
+
+query III sort
+SELECT * FROM '__TEST_DIR__/mixed_uuid_types/a=5/a_name????????-????-4???-????-????????????_with_????????-????-7???-????-????????????_numbers.parquet';
+----
+25	3125	5
+
 
 # Test "{uuid}" with per_thread_output TRUE
 statement ok

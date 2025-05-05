@@ -160,7 +160,8 @@ void InterpretedBenchmark::LoadBenchmark() {
 		}
 		// look for a command in this line
 		auto splits = StringUtil::Split(StringUtil::Lower(line), ' ');
-		if (splits[0] == "load" || splits[0] == "run" || splits[0] == "init" || splits[0] == "cleanup") {
+		if (splits[0] == "load" || splits[0] == "run" || splits[0] == "init" || splits[0] == "cleanup" ||
+		    splits[0] == "reload") {
 			if (queries.find(splits[0]) != queries.end()) {
 				throw std::runtime_error("Multiple calls to " + splits[0] + " in the same benchmark file");
 			}
@@ -243,6 +244,12 @@ void InterpretedBenchmark::LoadBenchmark() {
 			    StringUtil::EndsWith(cache_db, ".csv.gz")) {
 				cache_file = cache_db;
 				cache_db = string();
+			}
+		} else if (splits[0] == "cache_file") {
+			if (splits.size() == 2) {
+				cache_file = splits[1];
+			} else {
+				throw std::runtime_error(reader.FormatException("cache_file requires a single file"));
 			}
 		} else if (splits[0] == "storage") {
 			if (splits.size() < 2) {
@@ -431,12 +438,19 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	if (queries.find("load") != queries.end()) {
 		load_query = queries["load"];
 	}
+	string reload_query;
+	if (queries.find("reload") != queries.end()) {
+		reload_query = queries["reload"];
+	}
 
 	if (!cache_file.empty()) {
 		auto fs = FileSystem::CreateLocal();
 		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
 			// no cache or db_path specified: just run the initialization code
 			result = RunLoadQuery(*state, load_query);
+		} else if (!reload_query.empty()) {
+			// run reload query
+			result = RunLoadQuery(*state, reload_query);
 		}
 	} else if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
@@ -459,6 +473,9 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
 			result = RunLoadQuery(*state, load_query);
+		} else if (!reload_query.empty()) {
+			// succeeded: run the reload query
+			result = RunLoadQuery(*state, reload_query);
 		}
 	}
 	while (result) {
