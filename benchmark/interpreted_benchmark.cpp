@@ -204,7 +204,8 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 			}
 			if (splits.size() == 3) {
 				if (splits[2] != "load_only") {
-					throw std::runtime_error(reader.FormatException("require only supports load_only as a second parameter"));
+					throw std::runtime_error(
+					    reader.FormatException("require only supports load_only as a second parameter"));
 				}
 				load_extensions.insert(splits[1]);
 			} else {
@@ -372,7 +373,7 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				}
 				if (!found_end) {
 					throw std::runtime_error(reader.FormatException(
-						"result_query must be followed by a query and a result (separated by ----)"));
+					    "result_query must be followed by a query and a result (separated by ----)"));
 				}
 				result_query = sql;
 			} else {
@@ -479,7 +480,7 @@ void LoadExtensions(InterpretedBenchmarkState &state, const std::unordered_set<s
 			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
 			throw InvalidInputException("Extension " + extension +
-										" is not available/was not compiled. Cannot run this benchmark.");
+			                            " is not available/was not compiled. Cannot run this benchmark.");
 		}
 	}
 }
