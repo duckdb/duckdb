@@ -1610,7 +1610,7 @@ Returns the statement type of the statement to be executed
 DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 
 //===--------------------------------------------------------------------===//
-// Bind Values To Prepared Statements
+// Bind Values to Prepared Statements
 //===--------------------------------------------------------------------===//
 
 /*!

@@ -54,13 +54,12 @@ CachingFileHandle::~CachingFileHandle() {
 
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
-		const auto current_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 		file_handle = caching_file_system.file_system.OpenFile(path, flags);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!cached_file.IsValid(guard, validate, version_tag, last_modified, current_time)) {
+		if (!cached_file.IsValid(guard, validate, version_tag, last_modified)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -163,6 +162,19 @@ time_t CachingFileHandle::GetLastModifiedTime() {
 	}
 	auto guard = cached_file.lock.GetSharedLock();
 	return cached_file.LastModified(guard);
+}
+
+string CachingFileHandle::GetVersionTag() {
+	if (file_handle || validate) {
+		GetFileHandle();
+		return version_tag;
+	}
+	auto guard = cached_file.lock.GetSharedLock();
+	return cached_file.VersionTag(guard);
+}
+
+bool CachingFileHandle::Validate() const {
+	return validate;
 }
 
 bool CachingFileHandle::CanSeek() {

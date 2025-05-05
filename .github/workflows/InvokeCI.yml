@@ -126,8 +126,8 @@ jobs:
     if: ${{ inputs.git_ref == '' && always() }} 
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ github.ref }}
+      target-branch: ${{ github.ref }}
+      duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
 
@@ -138,7 +138,7 @@ jobs:
     if: ${{ inputs.git_ref != '' && always() }}
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ inputs.git_ref }}
+      target-branch: ${{ inputs.git_ref }}
+      duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
