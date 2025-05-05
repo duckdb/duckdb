@@ -78,14 +78,17 @@ public:
 private:
 	string VerifyInternal(BenchmarkState *state_p, const BenchmarkQuery &query, MaterializedQueryResult &result);
 
-	BenchmarkQuery ReadQueryFromFile(BenchmarkFileReader &reader, const string &file);
+	BenchmarkQuery ReadQueryFromFile(BenchmarkFileReader &reader, string file);
 	BenchmarkQuery ReadQueryFromReader(BenchmarkFileReader &reader, const string &sql, const string &header);
 
 	unique_ptr<QueryResult> RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query);
 
+	void ProcessFile(const string &path);
+
 private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;
+	unordered_set<string> handled_arguments;
 
 	std::unordered_map<string, string> queries;
 	string run_query;
