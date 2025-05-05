@@ -2,18 +2,12 @@
 # description: ${DESCRIPTION}
 # group: [tpcds-sf1]
 
+include benchmark/tpcds/tpcds_load.benchmark.in
+
 name DSQ${QUERY_NUMBER_PADDED}
 group tpcds
 subgroup sf${sf}
 
-require tpcds
-
-storage persistent
-
-cache tpcds_sf${sf}.duckdb
-
-load benchmark/tpcds/sf${sf}/load.sql
-
 run extension/tpcds/dsdgen/queries/${QUERY_NUMBER_PADDED}.sql
 
-result extension/tpcds/dsdgen/answers/sf${sf}/${QUERY_NUMBER_PADDED}.csv
+result extension/tpcds/dsdgen/answers/sf1/${QUERY_NUMBER_PADDED}.csv sf=1

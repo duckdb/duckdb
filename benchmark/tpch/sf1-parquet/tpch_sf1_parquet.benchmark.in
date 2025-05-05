@@ -2,37 +2,13 @@
 # description: ${DESCRIPTION}
 # group: [sf1]
 
-argument sf 1
+include benchmark/tpch/tpch_load_parquet.benchmark.in
 
 name Q${QUERY_NUMBER_PADDED}
 group tpch
 subgroup sf${sf}
 
 require tpch
-
-require parquet
-
-cache tpch_sf${sf}_parquet.duckdb
-
-load
-call dbgen(sf=${sf});
-EXPORT DATABASE '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/' (FORMAT PARQUET);
-drop table lineitem;
-drop table customer;
-drop table nation;
-drop table orders;
-drop table part;
-drop table partsupp;
-drop table region;
-drop table supplier;
-create view lineitem as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/lineitem.parquet';
-create view customer as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/customer.parquet';
-create view nation as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/nation.parquet';
-create view orders as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/orders.parquet';
-create view part as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/part.parquet';
-create view partsupp as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/partsupp.parquet';
-create view region as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/region.parquet';
-create view supplier as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/supplier.parquet';
 
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 

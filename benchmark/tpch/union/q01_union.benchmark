@@ -2,16 +2,11 @@
 # description: Union of separate tables into a single aggregate
 # group: [union]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Lineitem Union Q01
 group union
 subgroup tpch
-
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
 
 run
 SELECT
@@ -44,4 +39,4 @@ ORDER BY
     l_returnflag,
     l_linestatus;
 
-result extension/tpch/dbgen/answers/sf1/q01.csv
+result extension/tpch/dbgen/answers/sf1/q01.csv sf=1
