@@ -51,7 +51,7 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows, co
 
 	buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_blocks * sizeof(uint32_t));
 	// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
-	blocks = reinterpret_cast<uint32_t *>(64 + reinterpret_cast<uint64_t>(buf_.get()) & ~63UL);
+	blocks = reinterpret_cast<uint32_t *>((64 + reinterpret_cast<uint64_t>(buf_.get())) & ~63UL);
 	std::fill_n(blocks, num_blocks, 0);
 }
 
