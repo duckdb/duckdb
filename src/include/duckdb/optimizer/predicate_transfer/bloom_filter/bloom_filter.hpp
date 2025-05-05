@@ -40,8 +40,8 @@ static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
 static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_BLOCK_SIZE = 5;
 
-static constexpr const uint64_t SIMD_BATCH_SIZE = 32;
-static constexpr const uint64_t SIMD_ALIGNMENT = 64;
+static constexpr const int32_t SIMD_BATCH_SIZE = 32;
+static constexpr const int32_t SIMD_ALIGNMENT = 64;
 
 class BloomFilter {
 public:
@@ -111,19 +111,18 @@ private:
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
 
 		// align the address of key
-		size_t unaligned_num = (SIMD_ALIGNMENT - size_t(key) % SIMD_ALIGNMENT) / sizeof(uint64_t);
-		unaligned_num = std::min<size_t>(unaligned_num, num);
-		for (size_t i = 0; i < unaligned_num; i++) {
+		int unaligned_num = (SIMD_ALIGNMENT - reinterpret_cast<size_t>(key) % SIMD_ALIGNMENT) / sizeof(uint64_t);
+		unaligned_num = std::min<int>(unaligned_num, num);
+		for (int i = 0; i < unaligned_num; i++) {
 			out[i] = LookupOne(key[i * 2], key[i * 2 + 1], bf);
 		}
 
 		// auto vectorization
-		size_t aligned_end = (num - unaligned_num) / SIMD_BATCH_SIZE * SIMD_BATCH_SIZE + unaligned_num;
+		int aligned_end = (num - unaligned_num) / SIMD_BATCH_SIZE * SIMD_BATCH_SIZE + unaligned_num;
 		uint32_t *BF_RESTRICT aligned_key =
 		    reinterpret_cast<uint32_t * BF_RESTRICT>(BF_ASSUME_ALIGNED(&key[unaligned_num * 2], SIMD_ALIGNMENT));
 
 		for (int i = 0; i < aligned_end - unaligned_num; i += SIMD_BATCH_SIZE) {
-#pragma clang loop vectorize(enable) unroll(enable) interleave(enable)
 			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
 				int p = i + j;
 				uint32_t key_lo = aligned_key[p + p];
@@ -139,7 +138,7 @@ private:
 		}
 
 		// unaligned tail
-		for (size_t i = aligned_end; i < num; i++) {
+		for (int i = aligned_end; i < num; i++) {
 			out[i] = LookupOne(key[i * 2], key[i * 2 + 1], bf);
 		}
 		return num;
@@ -149,14 +148,14 @@ private:
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
 
 		// align the address of key
-		size_t unaligned_num = (SIMD_ALIGNMENT - size_t(key) % SIMD_ALIGNMENT) / sizeof(uint64_t);
-		unaligned_num = std::min<size_t>(unaligned_num, num);
-		for (size_t i = 0; i < unaligned_num; i++) {
+		int unaligned_num = (SIMD_ALIGNMENT - reinterpret_cast<size_t>(key) % SIMD_ALIGNMENT) / sizeof(uint64_t);
+		unaligned_num = std::min<int>(unaligned_num, num);
+		for (int i = 0; i < unaligned_num; i++) {
 			InsertOne(key[i + i], key[i + i + 1], bf);
 		}
 
 		// auto vectorization
-		size_t aligned_end = (num - unaligned_num) / SIMD_BATCH_SIZE * SIMD_BATCH_SIZE + unaligned_num;
+		int aligned_end = (num - unaligned_num) / SIMD_BATCH_SIZE * SIMD_BATCH_SIZE + unaligned_num;
 		uint32_t *BF_RESTRICT aligned_key =
 		    reinterpret_cast<uint32_t * BF_RESTRICT>(BF_ASSUME_ALIGNED(&key[unaligned_num * 2], SIMD_ALIGNMENT));
 
@@ -164,7 +163,6 @@ private:
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
 			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
 
-#pragma clang loop vectorize(enable) unroll(enable) interleave(enable)
 			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
 				int p = i + j;
 				uint32_t key_lo = aligned_key[p + p];
@@ -183,7 +181,7 @@ private:
 		}
 
 		// unaligned tail
-		for (size_t i = aligned_end; i < num; i++) {
+		for (int i = aligned_end; i < num; i++) {
 			InsertOne(key[i * 2], key[i * 2 + 1], bf);
 		}
 	}
