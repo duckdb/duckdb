@@ -1,5 +1,5 @@
-# name: benchmark/clickbench/q42.benchmark
-# description: Run query 42 from the ClickBench benchmark
+# name: benchmark/clickbench/q00.benchmark
+# description: Run query 00 from the ClickBench benchmark
 # group: [clickbench]
 
 template benchmark/clickbench/clickbench.benchmark.in

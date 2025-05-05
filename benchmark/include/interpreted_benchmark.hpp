@@ -100,6 +100,7 @@ private:
 	// can be used to test accessing data from a different db in a non-persistent connection
 	bool cache_no_connect = false;
 	std::unordered_set<string> extensions;
+	std::unordered_set<string> load_extensions;
 
 	//! Queries used to assert a given state of the data
 	vector<BenchmarkQuery> assert_queries;

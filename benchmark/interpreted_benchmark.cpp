@@ -199,10 +199,17 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 			}
 			queries[splits[0]] = query;
 		} else if (splits[0] == "require") {
-			if (splits.size() != 2) {
+			if (splits.size() < 2 || splits.size() > 3) {
 				throw std::runtime_error(reader.FormatException("require requires a single parameter"));
 			}
-			extensions.insert(splits[1]);
+			if (splits.size() == 3) {
+				if (splits[2] != "load_only") {
+					throw std::runtime_error(reader.FormatException("require only supports load_only as a second parameter"));
+				}
+				load_extensions.insert(splits[1]);
+			} else {
+				extensions.insert(splits[1]);
+			}
 		} else if (splits[0] == "resultmode") {
 			if (splits.size() < 2) {
 				ThrowResultModeError(reader);
@@ -316,9 +323,9 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 			assert_queries.push_back(ReadQueryFromReader(reader, sql, splits[1]));
 		} else if (splits[0] == "result_query" || splits[0] == "result") {
 			// count the amount of columns
-			if (splits.size() <= 1 || splits[1].size() == 0) {
+			if (splits.size() <= 1 || splits[1].empty()) {
 				throw std::runtime_error(
-				    reader.FormatException("result_query must be followed by a column count (e.g. result III)"));
+				    reader.FormatException("result must be followed by a column count (e.g. result III)"));
 			}
 			bool is_file = false;
 			for (idx_t i = 0; i < splits[1].size(); i++) {
@@ -351,33 +358,34 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 					}
 				}
 			}
+			string result_query;
+			if (splits[0] == "result_query") {
+				// read the actual query
+				bool found_end = false;
+				string sql;
+				while (reader.ReadLine(line)) {
+					if (line == "----") {
+						found_end = true;
+						break;
+					}
+					sql += "\n" + line;
+				}
+				if (!found_end) {
+					throw std::runtime_error(reader.FormatException(
+						"result_query must be followed by a query and a result (separated by ----)"));
+				}
+				result_query = sql;
+			} else {
+				//! Read directly from the answer
+				result_query = "select * from __answer";
+			}
 			BenchmarkQuery result_check;
 			if (is_file) {
 				if (matches_condition) {
 					result_check = ReadQueryFromFile(reader, splits[1]);
+					result_check.query = result_query;
 				}
 			} else {
-				string result_query;
-				if (splits[0] == "result_query") {
-					// read the actual query
-					bool found_end = false;
-					string sql;
-					while (reader.ReadLine(line)) {
-						if (line == "----") {
-							found_end = true;
-							break;
-						}
-						sql += "\n" + line;
-					}
-					if (!found_end) {
-						throw std::runtime_error(reader.FormatException(
-						    "result_query must be followed by a query and a result (separated by ----)"));
-					}
-					result_query = sql;
-				} else {
-					//! Read directly from the answer
-					result_query = "select * from __answer";
-				}
 				result_check = ReadQueryFromReader(reader, result_query, splits[1]);
 			}
 			if (matches_condition) {
@@ -464,7 +472,20 @@ void InterpretedBenchmark::LoadBenchmark() {
 	is_loaded = true;
 }
 
+void LoadExtensions(InterpretedBenchmarkState &state, const std::unordered_set<string> &extensions_to_load) {
+	for (auto &extension : extensions_to_load) {
+		auto result = ExtensionHelper::LoadExtension(state.db, extension);
+		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+			throw InvalidInputException("Unknown extension " + extension);
+		} else if (result == ExtensionLoadResult::NOT_LOADED) {
+			throw InvalidInputException("Extension " + extension +
+										" is not available/was not compiled. Cannot run this benchmark.");
+		}
+	}
+}
+
 unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query) {
+	LoadExtensions(state, load_extensions);
 	auto result = state.con.Query(load_query);
 	for (idx_t i = 0; i < retry_load; i++) {
 		if (!result->HasError()) {
@@ -490,16 +511,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	}
 	extensions.insert("core_functions");
 	extensions.insert("parquet");
-	for (auto &extension : extensions) {
-		auto result = ExtensionHelper::LoadExtension(state->db, extension);
-		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-			throw InvalidInputException("Unknown extension " + extension);
-		} else if (result == ExtensionLoadResult::NOT_LOADED) {
-			throw InvalidInputException("Extension " + extension +
-			                            " is not available/was not compiled. Cannot run this benchmark.");
-		}
-	}
 
+	LoadExtensions(*state, extensions);
 	if (queries.find("init") != queries.end()) {
 		string init_query = queries["init"];
 		result = state->con.Query(init_query);
