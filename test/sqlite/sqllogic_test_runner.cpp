@@ -495,6 +495,17 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
+	if (param == "no_latest_storage") {
+#ifdef DUCKDB_LATEST_STORAGE
+		return RequireResult::MISSING;
+#elif defined(DUCKDB_ALTERNATIVE_VERIFY)
+		//! ALTERNATIVE_VERIFY also forces latest storage
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
 	if (param == "no_block_verification") {
 #ifdef DUCKDB_BLOCK_VERIFICATION
 		return RequireResult::MISSING;

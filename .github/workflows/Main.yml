@@ -290,12 +290,12 @@ jobs:
 
       - name: Build
         shell: bash
-        run: STANDARD_VECTOR_SIZE=2 make relassert
+        run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
 
  valgrind:
     name: Valgrind

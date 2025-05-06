@@ -2,6 +2,8 @@
 # description: Test storage with Dictionary compression
 # group: [dictionary]
 
+require no_latest_storage
+
 require block_size 262144
 
 # load the DB from disk

@@ -95,8 +95,9 @@ void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<Fi
 	FindFileSystem(directory).RemoveDirectory(directory, opener);
 }
 
-bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                  FileOpener *opener) {
+bool VirtualFileSystem::ListFilesExtended(const string &directory,
+                                          const std::function<void(OpenFileInfo &info)> &callback,
+                                          optional_ptr<FileOpener> opener) {
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 

@@ -68,3 +68,10 @@ DETACH encrypted
 statement ok
 DETACH unencrypted
 
+statement error
+ATTACH '__TEST_DIR__/incompatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.2.0');
+----
+Explicit provided STORAGE_VERSION ("v1.2.0") and ENCRYPTION_KEY (storage >= v1.3.0) are not compatible
+
+statement ok
+ATTACH '__TEST_DIR__/compatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.3.0');

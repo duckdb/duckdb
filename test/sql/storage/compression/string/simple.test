@@ -49,9 +49,17 @@ select a[3] from test limit 5;
 4
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT DISTINCT ON (compression)
+    CASE WHEN '${compression}' = lower(compression)
+        THEN True::test_result
+    ELSE {
+            'expected': '${compression}',
+            'actual': compression
+        }::test_result
+    END
+FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-1
+true
 
 statement ok
 DROP TABLE test;

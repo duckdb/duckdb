@@ -303,8 +303,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				 * interchangeably */
 				bind_data->codec = duckdb_parquet::CompressionCodec::LZ4_RAW;
 			} else {
-				throw BinderException("Expected %s argument to be either [uncompressed, brotli, gzip, snappy, or zstd]",
-				                      loption);
+				throw BinderException(
+				    "Expected %s argument to be any of [uncompressed, brotli, gzip, snappy, lz4, lz4_raw or zstd]",
+				    loption);
 			}
 		} else if (loption == "field_ids") {
 			if (option.second[0].type().id() == LogicalTypeId::VARCHAR &&
