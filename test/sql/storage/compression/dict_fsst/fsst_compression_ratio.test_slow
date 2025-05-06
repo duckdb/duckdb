@@ -76,7 +76,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE l_comment_uncompressed AS SELECT l_comment FROM lineitem;
+CREATE TABLE l_comment_uncompressed AS SELECT l_orderkey % 27 as k, l_comment FROM lineitem;
 
 statement ok
 checkpoint
@@ -85,7 +85,7 @@ statement ok
 PRAGMA force_compression='dict_fsst'
 
 statement ok
-CREATE TABLE l_comment_compressed AS SELECT l_comment FROM lineitem;
+CREATE TABLE l_comment_compressed AS SELECT l_orderkey % 27 as k, l_comment FROM lineitem;
 
 statement ok
 checkpoint
@@ -115,3 +115,13 @@ FROM (
 ) AS blocks_tbl;
 ----
 true
+
+query I
+SELECT COUNT(DISTINCT l_comment) FROM l_comment_compressed WHERE k = 13
+----
+21983
+
+query I
+SELECT COUNT(*) FROM l_comment_compressed WHERE contains(l_comment, 'fox')
+----
+27771
