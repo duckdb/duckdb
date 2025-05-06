@@ -1,0 +1,12 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpch]
+
+argument sf 1
+
+require tpch
+
+cache tpch_sf${sf}.duckdb
+
+load
+CALL dbgen(sf=${sf});
