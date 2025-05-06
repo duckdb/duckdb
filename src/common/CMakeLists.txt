@@ -36,6 +36,7 @@ add_library_unity(
   cgroups.cpp
   complex_json.cpp
   compressed_file_system.cpp
+  buffered_file_handle.cpp
   constants.cpp
   checksum.cpp
   encryption_state.cpp

@@ -671,6 +671,10 @@ FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags fla
     : file_system(file_system), path(std::move(path_p)), flags(flags) {
 }
 
+WrappedFileHandle::WrappedFileHandle(unique_ptr<FileHandle> handle)
+    : FileHandle(handle->GetFileSystem(), handle->GetPath(), handle->GetFlags()), inner(std::move(handle)) {
+}
+
 FileHandle::~FileHandle() {
 }
 
@@ -714,6 +718,10 @@ FileCompressionType FileHandle::GetFileCompressionType() {
 	return FileCompressionType::UNCOMPRESSED;
 }
 
+FileCompressionType WrappedFileHandle::GetFileCompressionType() {
+	return inner->GetFileCompressionType();
+}
+
 bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
 }
@@ -740,6 +748,10 @@ idx_t FileHandle::GetFileSize() {
 	return NumericCast<idx_t>(file_system.GetFileSize(*this));
 }
 
+idx_t WrappedFileHandle::GetFileSize() {
+	return inner->GetFileSize();
+}
+
 void FileHandle::Sync() {
 	file_system.FileSync(*this);
 }
@@ -753,6 +765,10 @@ FileType FileHandle::GetType() {
 }
 
 idx_t FileHandle::GetProgress() {
+	throw NotImplementedException("GetProgress is not implemented for this file handle");
+}
+
+idx_t WrappedFileHandle::GetProgress() {
 	throw NotImplementedException("GetProgress is not implemented for this file handle");
 }
 

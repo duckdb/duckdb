@@ -60,17 +60,17 @@ public:
 
 	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
 	// File offset will be changed, which advances for number of bytes read.
-	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
-	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API virtual int64_t Read(void *buffer, idx_t nr_bytes);
+	DUCKDB_API virtual int64_t Write(void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
-	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void Write(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API virtual void Read(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API virtual void Write(void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
 	DUCKDB_API idx_t SeekPosition();
-	DUCKDB_API void Sync();
-	DUCKDB_API void Truncate(int64_t new_size);
+	DUCKDB_API virtual void Sync();
+	DUCKDB_API virtual void Truncate(int64_t new_size);
 	DUCKDB_API string ReadLine();
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 	DUCKDB_API virtual idx_t GetProgress();
@@ -79,18 +79,21 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
-	DUCKDB_API idx_t GetFileSize();
+	DUCKDB_API virtual idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
 
-	string GetPath() const {
+	virtual string GetPath() const {
 		return path;
 	}
 
 	FileOpenFlags GetFlags() const {
 		return flags;
+	}
+	FileSystem &GetFileSystem() const {
+		return file_system;
 	}
 
 	template <class TARGET>
@@ -108,6 +111,64 @@ public:
 	FileSystem &file_system;
 	string path;
 	FileOpenFlags flags;
+};
+
+struct WrappedFileHandle : public FileHandle {
+public:
+	DUCKDB_API explicit WrappedFileHandle(unique_ptr<FileHandle> inner);
+	WrappedFileHandle(const WrappedFileHandle &) = delete;
+	DUCKDB_API ~WrappedFileHandle() override {};
+
+	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
+	// File offset will be changed, which advances for number of bytes read.
+	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes) override = 0;
+	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location) override = 0;
+	// Read at [nr_bytes] bytes into [buffer].
+	// File offset will not be changed.
+
+	DUCKDB_API void Seek(idx_t location);
+	DUCKDB_API void Reset();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Sync() override {
+		inner->Sync();
+	}
+	DUCKDB_API string ReadLine();
+	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
+	DUCKDB_API idx_t GetProgress() override;
+	DUCKDB_API FileCompressionType GetFileCompressionType() override;
+	DUCKDB_API void Truncate(int64_t new_size) override = 0;
+
+	DUCKDB_API bool CanSeek();
+	DUCKDB_API bool IsPipe();
+	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t GetFileSize() override;
+	DUCKDB_API FileType GetType();
+
+	string GetPath() const override {
+		return inner->GetPath();
+	}
+
+	FileOpenFlags GetFlags() const {
+		return inner->GetFlags();
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	FileHandle &GetInner() {
+		return *inner;
+	}
+
+public:
+	unique_ptr<FileHandle> inner;
 };
 
 class FileSystem {
