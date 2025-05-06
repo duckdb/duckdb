@@ -7,6 +7,15 @@ load __TEST_DIR__/test_dictionary.db
 
 require no_latest_storage
 
+statement ok
+create type test_result as UNION(
+    ok BOOL,
+    err STRUCT(
+        expected VARCHAR,
+        actual VARCHAR
+    )
+);
+
 foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false
@@ -44,15 +53,6 @@ select a[3] from test limit 5;
 2
 3
 4
-
-statement ok
-create type test_result as UNION(
-    ok BOOL,
-    err STRUCT(
-        expected VARCHAR,
-        actual VARCHAR
-    )
-);
 
 query I
 SELECT DISTINCT ON (compression)
