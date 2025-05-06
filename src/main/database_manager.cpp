@@ -77,10 +77,18 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
-	if (!databases->DropEntry(context, name, false, true)) {
+	auto entry = databases->GetEntry(context, name);
+	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
+		return;
+	}
+	auto &db = entry->Cast<AttachedDatabase>();
+	db.OnDetach(context);
+
+	if (!databases->DropEntry(context, name, false, true)) {
+		throw InternalException("Failed to drop attached database");
 	}
 }
 

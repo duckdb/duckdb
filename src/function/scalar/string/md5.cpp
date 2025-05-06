@@ -26,7 +26,7 @@ struct MD5Number128Operator {
 		MD5Context context;
 		context.Add(input);
 		context.Finish(digest);
-		return *reinterpret_cast<hugeint_t *>(digest);
+		return *reinterpret_cast<uhugeint_t *>(digest);
 	}
 };
 
@@ -39,7 +39,7 @@ static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result)
 static void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnaryExecutor::Execute<string_t, hugeint_t, MD5Number128Operator>(input, result, args.size());
+	UnaryExecutor::Execute<string_t, uhugeint_t, MD5Number128Operator>(input, result, args.size());
 }
 
 ScalarFunctionSet MD5Fun::GetFunctions() {
@@ -51,8 +51,8 @@ ScalarFunctionSet MD5Fun::GetFunctions() {
 
 ScalarFunctionSet MD5NumberFun::GetFunctions() {
 	ScalarFunctionSet set("md5_number");
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::HUGEINT, MD5NumberFunction));
-	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::HUGEINT, MD5NumberFunction));
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::UHUGEINT, MD5NumberFunction));
+	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::UHUGEINT, MD5NumberFunction));
 	return set;
 }
 

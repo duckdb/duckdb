@@ -226,6 +226,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
 
     hdrlen = sdsHdrSize(type);
     assert(hdrlen + newlen + 1 > reqlen);  /* Catch size_t overflow */
+    (void)reqlen;
     if (oldtype==type) {
         newsh = realloc(sh, hdrlen+newlen+1);
         if (newsh == NULL) return NULL;
