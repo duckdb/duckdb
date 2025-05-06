@@ -463,11 +463,11 @@ namespace pdqsort_detail {
             // If we got a highly unbalanced partition we shuffle elements to break many patterns.
             if (highly_unbalanced) {
                 // If we had too many bad partitions, switch to heapsort to guarantee O(n log n).
-                if (--bad_allowed == 0) {
-                    std::make_heap(begin, end, comp);
-                    std::sort_heap(begin, end, comp);
-                    return;
-                }
+                // if (--bad_allowed == 0) {
+                //     std::make_heap(begin, end, comp);
+                //     std::sort_heap(begin, end, comp);
+                //     return;
+                // }
 
                 if (l_size >= insertion_sort_threshold) {
                     std::iter_swap(begin,             begin + l_size / 4);

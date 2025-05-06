@@ -137,7 +137,7 @@ private:
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 
 	//! States for every iterator type
-	unsafe_vector<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
+	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
 	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>> fixed_external_states;
 	//! TODO: other iterator types
 
@@ -275,7 +275,7 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	// Compute the end partition boundaries (lock-free)
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		ComputePartitionBoundariesSwitch<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
+		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
 		    gstate, fixed_in_memory_states);
 		break;
 	case BlockIteratorStateType::FIXED_EXTERNAL:
@@ -440,7 +440,7 @@ bool SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		MergePartitionSwitch<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(gstate, chunk);
+		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(gstate, chunk);
 		break;
 	case BlockIteratorStateType::FIXED_EXTERNAL:
 		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(gstate, chunk);
@@ -529,7 +529,7 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 void SortedRunMergerLocalState::CreateOrDestroyTournamentTree(bool create) {
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		CreateOrDestroyTournamentTreeSwitch<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
+		CreateOrDestroyTournamentTreeSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
 		    create, fixed_in_memory_states);
 		break;
 	case BlockIteratorStateType::FIXED_EXTERNAL:

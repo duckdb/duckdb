@@ -91,10 +91,10 @@ public:
 	}
 
 private:
-	static unsafe_vector<const data_ptr_t> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs);
+	static unsafe_vector<data_ptr_t> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs);
 
 private:
-	const unsafe_vector<const data_ptr_t> block_ptrs;
+	const unsafe_vector<data_ptr_t> block_ptrs;
 	const FastMod<idx_t> fast_mod;
 	const idx_t tuple_count;
 };

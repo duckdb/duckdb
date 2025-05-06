@@ -16,9 +16,8 @@ FixedInMemoryBlockIteratorState::FixedInMemoryBlockIteratorState(const TupleData
       tuple_count(key_data.Count()) {
 }
 
-unsafe_vector<const data_ptr_t>
-FixedInMemoryBlockIteratorState::ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs) {
-	unsafe_vector<const data_ptr_t> converted_block_ptrs;
+unsafe_vector<data_ptr_t> FixedInMemoryBlockIteratorState::ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs) {
+	unsafe_vector<data_ptr_t> converted_block_ptrs;
 	converted_block_ptrs.reserve(block_ptrs.size());
 	for (const auto &block_ptr : block_ptrs) {
 		converted_block_ptrs.emplace_back(block_ptr);
