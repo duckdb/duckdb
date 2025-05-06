@@ -4,13 +4,20 @@
 
 require json
 
+statement ok
+pragma enable_verification
+
+# some larger-than-vector-size tests
 query I
 select count(*) from json_each(range(3000));
 ----
 3000
 
-# statement ok
-# pragma enable_verification
+# this should be equal to the 3000th triangular number
+query I
+select count(*) = 3000*(3000+1)//2 from range(1, 3001), json_each(range(range));
+----
+true
 
 ##### SQLITE TESTS #####
 
