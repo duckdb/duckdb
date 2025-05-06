@@ -46,13 +46,13 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows, co
 	bound_cols_built = built;
 
 	uint32_t min_bits = std::max<uint32_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
-	num_blocks = std::min(CeilPowerOfTwo(min_bits) >> LOG_BLOCK_SIZE, MAX_NUM_BLOCKS);
-	num_blocks_log = static_cast<uint32_t>(std::log2(num_blocks));
+	num_sectors = std::min(CeilPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
+	num_sectors_log = static_cast<uint32_t>(std::log2(num_sectors));
 
-	buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_blocks * sizeof(uint32_t));
+	buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
 	// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
 	blocks = reinterpret_cast<uint32_t *>((64 + reinterpret_cast<uint64_t>(buf_.get())) & ~63UL);
-	std::fill_n(blocks, num_blocks, 0);
+	std::fill_n(blocks, num_sectors, 0);
 }
 
 int BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results) {
