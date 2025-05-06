@@ -203,6 +203,10 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
+	if (!handle) {
+		throw IOException("Cannot create database \"%s\" due to problems opening the file handle", path);
+	}
+
 	header_buffer.Clear();
 
 	options.version_number = GetVersionNumber();
