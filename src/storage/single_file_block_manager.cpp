@@ -44,11 +44,11 @@ void MainHeader::Write(WriteStream &ser) {
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
-		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
 	}
 	handle.Read(magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
-		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
 	}
 }
 
