@@ -219,7 +219,7 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 
 			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
 			// a full table.
-			if (selectivity > 0.4) {
+			if (selectivity > 0.2) {
 				is_successful = false;
 				return true;
 			}

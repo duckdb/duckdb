@@ -37,7 +37,7 @@ namespace duckdb {
 
 static constexpr const uint32_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
-static constexpr const uint32_t MIN_NUM_BITS = 8192;
+static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_SECTOR_SIZE = 5;
 
 static constexpr const int32_t SIMD_BATCH_SIZE = 32;
