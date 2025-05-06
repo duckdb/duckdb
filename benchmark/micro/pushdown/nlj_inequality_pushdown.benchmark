@@ -1,0 +1,18 @@
+# name: benchmark/micro/pushdown/nlj_inequality_pushdown.benchmark
+# description: Show the performance of not using rowid pushdown
+# group: [pushdown]
+
+name NestedLoopJoinInequalityPushdown
+group micro
+subgroup pushdown
+
+require tpch
+
+cache tpch_sf10.duckdb
+
+load
+CALL dbgen(sf=10);
+
+run
+FROM lineitem 
+WHERE l_orderkey > (SELECT MAX(l_orderkey) - 100 FROM lineitem);

@@ -97,18 +97,20 @@ public:
 		created_directories.insert(dir_path);
 	}
 
-	string GetOrCreateDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                            string path, FileSystem &fs) {
+	string GetOrCreateDirectory(const vector<idx_t> &cols, bool hive_file_pattern, const vector<string> &names,
+	                            const vector<Value> &values, string path, FileSystem &fs) {
 		CreateDir(path, fs);
-		for (idx_t i = 0; i < cols.size(); i++) {
-			const auto &partition_col_name = names[cols[i]];
-			const auto &partition_value = values[i];
-			string p_dir;
-			p_dir += HivePartitioning::Escape(partition_col_name);
-			p_dir += "=";
-			p_dir += HivePartitioning::Escape(partition_value.ToString());
-			path = fs.JoinPath(path, p_dir);
-			CreateDir(path, fs);
+		if (hive_file_pattern) {
+			for (idx_t i = 0; i < cols.size(); i++) {
+				const auto &partition_col_name = names[cols[i]];
+				const auto &partition_value = values[i];
+				string p_dir;
+				p_dir += HivePartitioning::Escape(partition_col_name);
+				p_dir += "=";
+				p_dir += HivePartitioning::Escape(partition_value.ToString());
+				path = fs.JoinPath(path, p_dir);
+				CreateDir(path, fs);
+			}
 		}
 		return path;
 	}
@@ -167,14 +169,19 @@ public:
 			}
 		}
 		idx_t offset = 0;
-		auto prev_offset = previous_partitions.find(values);
-		if (prev_offset != previous_partitions.end()) {
-			offset = prev_offset->second;
+		if (op.hive_file_pattern) {
+			auto prev_offset = previous_partitions.find(values);
+			if (prev_offset != previous_partitions.end()) {
+				offset = prev_offset->second;
+			}
+		} else {
+			offset = global_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
-		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string hive_path =
+		    GetOrCreateDirectory(op.partition_columns, op.hive_file_pattern, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset));
 		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 			// when appending, we first check if the file exists
@@ -226,6 +233,7 @@ private:
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
 	vector_of_value_map_t<idx_t> previous_partitions;
+	idx_t global_offset = 0;
 };
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
