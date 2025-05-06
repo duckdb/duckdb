@@ -17,13 +17,14 @@ namespace duckdb {
 //! There are three types of leaves.
 //! 1. LEAF_INLINED: Inlines a row ID in a Node pointer.
 //! 2. LEAF: Deprecated. A list of Leaf nodes containing row IDs.
-//! 3. Nested leaves indicated by gate nodes. If an ART key contains multiple row IDs, then we use the row IDs as keys
-//! and create a nested ART behind the gate node. As row IDs are always unique, these nested ARTs never contain
-//! duplicates themselves.
+//! 3. Nested leaves indicated by gate nodes. If an ART key contains multiple row IDs,
+//! then we use the row IDs as keys and create a nested ART behind the gate node.
+//! As row IDs are always unique, these nested ARTs never contain duplicates themselves.
 class Leaf {
 public:
 	static constexpr NType LEAF = NType::LEAF;
 	static constexpr NType INLINED = NType::LEAF_INLINED;
+
 	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
 
 public:
@@ -39,15 +40,9 @@ private:
 public:
 	//! Inline a row ID into a node pointer.
 	static void New(Node &node, const row_t row_id);
-	//! Get a new non-inlined nested leaf node.
-	static void New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
-	                const idx_t count);
 
-	//! Merge two leaves. r_node must be INLINED.
-	static void MergeInlined(ART &art, Node &l_node, Node &r_node);
-
-	//! Insert a row ID into an inlined leaf.
-	static void InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const GateStatus status);
+	//! Merge two inlined leaf nodes.
+	static void MergeInlined(ArenaAllocator &arena, ART &art, Node &left, Node &right, GateStatus status, idx_t depth);
 
 	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, Node &node);

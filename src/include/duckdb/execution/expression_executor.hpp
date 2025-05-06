@@ -64,6 +64,9 @@ public:
 	//! only be used with a single boolean expression
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
 
+	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &result_sel,
+	                                  optional_ptr<SelectionVector> current_sel, idx_t current_count);
+
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value

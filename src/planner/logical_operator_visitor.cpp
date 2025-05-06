@@ -140,9 +140,25 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
+		auto &join = op.Cast<LogicalDependentJoin>();
+		for (auto &expr : join.duplicate_eliminated_columns) {
+			callback(&expr);
+		}
+		for (auto &cond : join.conditions) {
+			callback(&cond.left);
+			callback(&cond.right);
+		}
+		for (auto &expr : join.arbitrary_expressions) {
+			callback(&expr);
+		}
+		for (auto &expr : join.expression_children) {
+			callback(&expr);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		for (auto &expr : join.duplicate_eliminated_columns) {
@@ -151,6 +167,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &cond : join.conditions) {
 			callback(&cond.left);
 			callback(&cond.right);
+		}
+		if (join.predicate) {
+			callback(&join.predicate);
 		}
 		break;
 	}

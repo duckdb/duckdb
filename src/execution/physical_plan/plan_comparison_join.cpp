@@ -94,7 +94,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	if (PhysicalNestedLoopJoin::IsSupported(op.conditions, op.join_type)) {
 		// inequality join: use nested loop
 		return Make<PhysicalNestedLoopJoin>(op, left, right, std::move(op.conditions), op.join_type,
-		                                    op.estimated_cardinality);
+		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 
 	for (auto &cond : op.conditions) {

@@ -21,7 +21,7 @@ struct ReadCSVData;
 class CSVFileScan;
 
 struct CSVUnionData : public BaseUnionData {
-	explicit CSVUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	explicit CSVUnionData(OpenFileInfo file_p) : BaseUnionData(std::move(file_p)) {
 	}
 	~CSVUnionData() override;
 
@@ -33,12 +33,12 @@ class CSVFileScan : public BaseFileReader {
 public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
-	CSVFileScan(ClientContext &context, const string &file_path, CSVReaderOptions options,
+	CSVFileScan(ClientContext &context, const OpenFileInfo &file, CSVReaderOptions options,
 	            const MultiFileOptions &file_options, const vector<string> &names, const vector<LogicalType> &types,
 	            CSVSchema &file_schema, bool per_file_single_threaded,
 	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
-	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options,
+	CSVFileScan(ClientContext &context, const OpenFileInfo &file, const CSVReaderOptions &options,
 	            const MultiFileOptions &file_options);
 
 public:
@@ -92,6 +92,7 @@ public:
 	CSVIterator start_iterator;
 
 	CSVValidator validator;
+	idx_t skipped_rows = 0;
 
 	//! The started tasks and finished tasks allow us to track if all reads of the CSV file have completed
 	//! Note that the "started_tasks" starts at one - this is so we can track when the scheduling of all tasks for this

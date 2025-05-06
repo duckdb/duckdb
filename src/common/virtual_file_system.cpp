@@ -9,19 +9,19 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenFlags flags,
-                                                   optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+                                                           optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
-		auto lower_path = StringUtil::Lower(path);
+		auto lower_path = StringUtil::Lower(file.path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		if (IsFileCompressed(path, FileCompressionType::GZIP)) {
+		if (IsFileCompressed(file.path, FileCompressionType::GZIP)) {
 			compression = FileCompressionType::GZIP;
-		} else if (IsFileCompressed(path, FileCompressionType::ZSTD)) {
+		} else if (IsFileCompressed(file.path, FileCompressionType::ZSTD)) {
 			compression = FileCompressionType::ZSTD;
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
@@ -29,7 +29,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
 	}
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
-	auto file_handle = FindFileSystem(path).OpenFile(path, flags, opener);
+	auto file_handle = FindFileSystem(file.path).OpenFile(file, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
@@ -68,6 +68,9 @@ int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 time_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
+string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
+	return handle.file_system.GetVersionTag(handle);
+}
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
@@ -92,8 +95,9 @@ void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<Fi
 	FindFileSystem(directory).RemoveDirectory(directory, opener);
 }
 
-bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                  FileOpener *opener) {
+bool VirtualFileSystem::ListFilesExtended(const string &directory,
+                                          const std::function<void(OpenFileInfo &info)> &callback,
+                                          optional_ptr<FileOpener> opener) {
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 
@@ -117,7 +121,7 @@ string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path).PathSeparator(path);
 }
 
-vector<string> VirtualFileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *opener) {
 	return FindFileSystem(path).Glob(path, opener);
 }
 

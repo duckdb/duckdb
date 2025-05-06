@@ -53,6 +53,21 @@ ArrowDateTimeType ArrowDateTimeInfo::GetDateTimeType() const {
 }
 
 //===--------------------------------------------------------------------===//
+// ArrowDecimalInfo
+//===--------------------------------------------------------------------===//
+
+ArrowDecimalInfo::ArrowDecimalInfo(DecimalBitWidth bit_width)
+    : ArrowTypeInfo(ArrowTypeInfoType::DECIMAL), bit_width(bit_width) {
+}
+
+ArrowDecimalInfo::~ArrowDecimalInfo() {
+}
+
+DecimalBitWidth ArrowDecimalInfo::GetBitWidth() const {
+	return bit_width;
+}
+
+//===--------------------------------------------------------------------===//
 // ArrowStringInfo
 //===--------------------------------------------------------------------===//
 

@@ -1,2 +1,2 @@
-count
-1530334
+count(DISTINCT SearchPhrase)
+6019103

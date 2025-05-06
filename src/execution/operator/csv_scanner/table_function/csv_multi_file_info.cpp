@@ -68,7 +68,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 
 	idx_t total_number_of_rows = 0;
 	idx_t current_file = 0;
-	options.file_path = file_paths[current_file];
+	options.file_path = file_paths[current_file].path;
 
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, false);
 	idx_t only_header_or_empty_files = 0;
@@ -79,7 +79,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		idx_t rows_read = sniffer.LinesSniffed() -
 		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
 
-		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read,
+		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0].path, rows_read,
 		                     result.buffer_manager->GetBuffer(0)->actual_size == 0);
 		total_number_of_rows += sniffer.LinesSniffed();
 		current_file++;
@@ -93,7 +93,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
-		option_copy.file_path = file_paths[current_file];
+		option_copy.file_path = file_paths[current_file].path;
 		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
 		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
 		// reader
@@ -279,7 +279,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 }
 
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                                          const string &filename, idx_t file_idx,
+                                                          const OpenFileInfo &file, idx_t file_idx,
                                                           const MultiFileBindData &bind_data) {
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
@@ -288,27 +288,28 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
 		options.auto_detect = false;
 	}
+
 	shared_ptr<CSVBufferManager> buffer_manager;
 	if (file_idx == 0) {
 		buffer_manager = csv_data.buffer_manager;
-		if (buffer_manager && buffer_manager->GetFilePath() != filename) {
+		if (buffer_manager && buffer_manager->GetFilePath() != file.path) {
 			buffer_manager.reset();
 		}
 	}
-	return make_shared_ptr<CSVFileScan>(context, filename, std::move(options), bind_data.file_options, bind_data.names,
+	return make_shared_ptr<CSVFileScan>(context, file, std::move(options), bind_data.file_options, bind_data.names,
 	                                    bind_data.types, csv_data.csv_schema, gstate.SingleThreadedRead(),
 	                                    std::move(buffer_manager), false);
 }
 
-shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                           CSVReaderOptions &options,
                                                           const MultiFileOptions &file_options) {
-	return make_shared_ptr<CSVFileScan>(context, filename, options, file_options);
+	return make_shared_ptr<CSVFileScan>(context, file, options, file_options);
 }
 
 shared_ptr<BaseUnionData> CSVMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
 	auto &scan = scan_p->Cast<CSVFileScan>();
-	auto data = make_shared_ptr<CSVUnionData>(scan_p->GetFileName());
+	auto data = make_shared_ptr<CSVUnionData>(scan_p->file);
 	if (file_idx == 0) {
 		data->options = scan.options;
 		data->names = scan.GetNames();
@@ -403,7 +404,6 @@ double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFil
 }
 
 void CSVMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
-	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
 } // namespace duckdb

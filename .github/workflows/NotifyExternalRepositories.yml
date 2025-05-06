@@ -12,6 +12,18 @@ on:
         required: true
         default: ''
         type: 'string'
+      triggering-event:
+        description: 'Which event triggered the run'
+        default: ''
+        type: 'string'
+      should-publish:
+        description: 'Should the called workflow push updates or not'
+        default: 'false'
+        type: 'string'
+      is-success:
+        description: 'True, if all the builds in InvokeCI had succeeded'
+        default: 'false'
+        type: 'string'
   workflow_dispatch:
     inputs:
       duckdb-sha:
@@ -24,6 +36,18 @@ on:
         required: true
         default: ''
         type: 'string'
+      triggering-event:
+        description: 'Which event triggered the run'
+        default: ''
+        type: 'string'
+      should-publish:
+        description: 'Should the called workflow push updates'
+        default: 'false'
+        type: 'string'
+      is-success:
+        description: 'True, if all the builds in InvokeCI had succeeded'
+        default: 'false'
+        type: 'string'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -33,6 +57,7 @@ jobs:
   notify-odbc-run:
     name: Run ODBC Vendor
     runs-on: ubuntu-latest
+    if: ${{ inputs.is-success == 'true' }}
     env:
       PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -41,5 +66,34 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+
+  notify-jdbc-run:
+    name: Run JDBC Vendor
+    runs-on: ubuntu-latest
+    if: ${{ inputs.is-success == 'true' }}
+    env:
+      PAT_USER: ${{ secrets.PAT_USERNAME }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    steps:
+      - name: Run JDBC Vendor
+        if: ${{ github.repository == 'duckdb/duckdb' }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+
+  notify-nightly-build-status:
+    name: Run Nightly build status
+    runs-on: ubuntu-latest
+    env:
+      PAT_USER: ${{ secrets.PAT_USERNAME }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    steps:
+      - name: Run Nightly build status
+        if: ${{ github.repository == 'duckdb/duckdb' }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"

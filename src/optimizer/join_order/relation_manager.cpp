@@ -418,7 +418,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// create dummy aggregation for the duplicate elimination
 		auto dummy_aggr = make_uniq<LogicalAggregate>(DConstants::INVALID_INDEX - 1, DConstants::INVALID_INDEX,
 		                                              vector<unique_ptr<Expression>>());
+		dummy_aggr->grouping_sets.emplace_back();
 		for (auto &delim_col : delim_join.duplicate_eliminated_columns) {
+			dummy_aggr->grouping_sets.back().insert(dummy_aggr->groups.size());
 			dummy_aggr->groups.push_back(delim_col->Copy());
 		}
 		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
@@ -428,6 +430,36 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
 		rhs_optimizer.AddDelimScanStats(lhs_delim_stats);
 		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), rhs_stats);
+
+		RelationStats dj_stats;
+		switch (delim_join.join_type) {
+		case JoinType::LEFT:
+		case JoinType::INNER:
+		case JoinType::OUTER:
+		case JoinType::SINGLE:
+		case JoinType::MARK:
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			dj_stats = lhs_stats;
+			break;
+		case JoinType::RIGHT:
+		case JoinType::RIGHT_SEMI:
+		case JoinType::RIGHT_ANTI:
+			dj_stats = rhs_stats;
+			break;
+		default:
+			throw NotImplementedException("Unsupported join type");
+		}
+
+		if (delim_join.join_type == JoinType::SEMI || delim_join.join_type == JoinType::ANTI ||
+		    delim_join.join_type == JoinType::RIGHT_SEMI || delim_join.join_type == JoinType::RIGHT_ANTI) {
+			dj_stats.cardinality =
+			    MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(dj_stats.cardinality) /
+			                                            CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY),
+			                    1);
+		}
+
+		AddAggregateOrWindowRelation(input_op, parent, dj_stats, op->type);
 
 		return false;
 	}

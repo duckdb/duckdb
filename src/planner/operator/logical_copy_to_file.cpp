@@ -67,6 +67,8 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(215, "return_type", return_type);
 	serializer.WritePropertyWithDefault(216, "write_partition_columns", write_partition_columns, true);
 	serializer.WritePropertyWithDefault(217, "write_empty_file", write_empty_file, true);
+	serializer.WritePropertyWithDefault(218, "preserve_order", preserve_order, PreserveOrderType::AUTOMATIC);
+	serializer.WritePropertyWithDefault(219, "hive_file_pattern", hive_file_pattern, true);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -112,6 +114,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	    deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
 	auto write_partition_columns = deserializer.ReadPropertyWithExplicitDefault(216, "write_partition_columns", true);
 	auto write_empty_file = deserializer.ReadPropertyWithExplicitDefault(217, "write_empty_file", true);
+	auto preserve_order =
+	    deserializer.ReadPropertyWithExplicitDefault(218, "preserve_order", PreserveOrderType::AUTOMATIC);
+	auto hive_file_pattern = deserializer.ReadPropertyWithExplicitDefault(219, "hive_file_pattern", true);
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -140,6 +145,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->return_type = return_type;
 	result->write_partition_columns = write_partition_columns;
 	result->write_empty_file = write_empty_file;
+	result->preserve_order = preserve_order;
+	result->hive_file_pattern = hive_file_pattern;
 
 	return std::move(result);
 }

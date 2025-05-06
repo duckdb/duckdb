@@ -416,7 +416,7 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// Read the data into a buffer handle.
-			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 
@@ -738,7 +738,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
 	PersistentCollectionData data;
 	deserializer.Set<DatabaseInstance &>(db.GetDatabase());
-	CompressionInfo compression_info(block_manager.GetBlockSize());
+	CompressionInfo compression_info(block_manager);
 	deserializer.Set<const CompressionInfo &>(compression_info);
 	deserializer.ReadProperty(101, "row_group_data", data);
 	deserializer.Unset<const CompressionInfo>();
