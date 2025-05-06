@@ -2,6 +2,8 @@
 # description: Test large storage with string compression (many row groups)
 # group: [string]
 
+require no_latest_storage
+
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
 

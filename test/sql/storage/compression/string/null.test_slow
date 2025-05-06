@@ -2,6 +2,8 @@
 # description: Test storage of string columns with compression and many null values
 # group: [string]
 
+require no_latest_storage
+
 # load the DB from disk
 load __TEST_DIR__/test_rle.db
 

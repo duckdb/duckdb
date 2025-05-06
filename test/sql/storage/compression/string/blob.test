@@ -2,8 +2,7 @@
 # description: blob tests
 # group: [string]
 
-# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
-require no_alternative_verify
+require no_latest_storage
 
 load __TEST_DIR__/test_string_compression.db
 

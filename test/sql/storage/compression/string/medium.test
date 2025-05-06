@@ -2,8 +2,7 @@
 # description: Test medium storage with string compression(> vector size)
 # group: [string]
 
-# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
-require no_alternative_verify
+require no_latest_storage
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
