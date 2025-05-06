@@ -93,8 +93,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
-
-	if (!initialize_dictionary) {
+	if (!initialize_dictionary || mode == DictFSSTMode::FSST_ONLY) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;
 	}
@@ -168,22 +167,56 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			result_data[result_offset + i] = dictionary_values[string_number];
 		}
 	} else {
-		// This path is taken for fetch, where we don't want to decompress the full dictionary
-		D_ASSERT(scan_count == 1);
-
-		// Lookup dict offset in index buffer
-		auto string_number = selvec.get_index(start_offset);
-		if (string_number == 0) {
-			validity.SetInvalid(result_offset);
+		for (idx_t i = 0; i < scan_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = selvec.get_index(start_offset + i);
+			if (string_number == 0) {
+				validity.SetInvalid(result_offset);
+			}
+			if (decompress_position > string_number) {
+				throw InternalException("DICT_FSST: not performing a sequential scan?");
+			}
+			for (; decompress_position < string_number; decompress_position++) {
+				decompress_offset += string_lengths[decompress_position];
+			}
+			result_data[result_offset + i] = FetchStringFromDict(result, decompress_offset, string_number);
 		}
-
-		uint32_t offset = 0;
-		for (idx_t i = 0; i < string_number; i++) {
-			offset += string_lengths[i];
-		}
-		result_data[result_offset] = FetchStringFromDict(result, offset, string_number);
 	}
 	result.Verify(result_offset + scan_count);
+}
+
+void CompressedStringScanState::Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count) {
+	D_ASSERT(!dictionary);
+	D_ASSERT(mode == DictFSSTMode::FSST_ONLY);
+	idx_t start_offset = start + 1;
+	auto result_data = FlatVector::GetData<string_t>(result);
+	for (idx_t i = 0; i < sel_count; i++) {
+		// Lookup dict offset in index buffer
+		auto string_number = start_offset + sel.get_index(i);
+		if (decompress_position > string_number) {
+			throw InternalException("DICT_FSST: not performing a sequential scan?");
+		}
+		for (; decompress_position < string_number; decompress_position++) {
+			decompress_offset += string_lengths[decompress_position];
+		}
+		result_data[i] = FetchStringFromDict(result, decompress_offset, string_number);
+	}
+}
+
+bool CompressedStringScanState::AllowDictionaryScan(idx_t start, idx_t scan_count) {
+	if (mode == DictFSSTMode::FSST_ONLY) {
+		return false;
+	}
+	if (start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
+		return false;
+	}
+	if (scan_count != STANDARD_VECTOR_SIZE) {
+		return false;
+	}
+	if (!dictionary) {
+		return false;
+	}
+	return true;
 }
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,

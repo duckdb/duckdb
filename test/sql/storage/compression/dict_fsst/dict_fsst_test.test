@@ -40,3 +40,13 @@ select count(distinct a) from compressed_data;
 query I nosort expected_result
 select * from compressed_data order by i;
 ----
+
+query I
+select count(distinct a) from compressed_data where contains(a, '11')
+----
+20
+
+query I
+select count(distinct a) from compressed_data where i%10=0
+----
+20
