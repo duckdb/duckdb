@@ -2,6 +2,9 @@
 # description: Test string compression with big strings, which are currently unsupported by the compression algorithms
 # group: [string]
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 # load the DB from disk
 load __TEST_DIR__/test_string_compression.db
 

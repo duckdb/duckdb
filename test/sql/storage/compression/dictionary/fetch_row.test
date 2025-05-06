@@ -2,6 +2,9 @@
 # description: Test storage with Dictionary compression
 # group: [dictionary]
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 require block_size 262144
 
 # load the DB from disk

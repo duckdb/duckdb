@@ -2,6 +2,9 @@
 # description: Test forcing dictionary encoding as the compression scheme
 # group: [dictionary]
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 require vector_size 2048
 
 load __TEST_DIR__/force_dictionary.db

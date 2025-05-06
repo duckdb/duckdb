@@ -5,6 +5,9 @@
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false
@@ -43,10 +46,27 @@ select a[3] from test limit 5;
 3
 4
 
+statement ok
+create type test_result as UNION(
+    ok BOOL,
+    err STRUCT(
+        expected VARCHAR,
+        actual VARCHAR
+    )
+);
+
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT DISTINCT ON (compression)
+    CASE WHEN '${compression}' = lower(compression)
+        THEN True::test_result
+    ELSE {
+            'expected': '${compression}',
+            'actual': compression
+        }::test_result
+    END
+FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-1
+true
 
 statement ok
 DROP TABLE test;

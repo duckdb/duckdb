@@ -2,6 +2,9 @@
 # description: Tests a table copy on a table spanning multiple segments
 # group: [string]
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 require tpch
 
 # load the DB from disk

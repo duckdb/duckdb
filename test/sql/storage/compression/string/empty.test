@@ -2,6 +2,9 @@
 # description: Test empty strings with string compression
 # group: [string]
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 require vector_size 512
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db

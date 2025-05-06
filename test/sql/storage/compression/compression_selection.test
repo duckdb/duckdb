@@ -2,6 +2,9 @@
 # description: Test that the right scheme is chosen for the right data.
 # group: [compression]
 
+# ALTERNATIVE_VERIFY forces latest storage, where fsst/dictionary are disabled
+require no_alternative_verify
+
 require vector_size 2048
 
 load __TEST_DIR__/test_compression_simple.db
