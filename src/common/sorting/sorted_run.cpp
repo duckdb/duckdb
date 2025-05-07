@@ -4,6 +4,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "pdqsort.h"
+#include "ska_sort.hpp"
 
 namespace duckdb {
 
@@ -60,14 +61,39 @@ void SortedRun::Sink(DataChunk &key, DataChunk &payload) {
 	}
 }
 
+template <class SORT_KEY>
+struct ExtractKey {
+	using result_type = uint64_t;
+	const result_type &operator()(const SORT_KEY &key) const {
+		return key.part0;
+	}
+};
+
 template <SortKeyType SORT_KEY_TYPE>
-static void TemplatedSort(const TupleDataCollection &key_data) {
+static void TemplatedSortFixed(const TupleDataCollection &key_data) {
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>;
+
 	const BLOCK_ITERATOR_STATE state(key_data);
-	auto begin = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>(state, 0);
-	auto end = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>(state, key_data.Count());
+	auto begin = BLOCK_ITERATOR(state, 0);
+	auto end = BLOCK_ITERATOR(state, key_data.Count());
+
+	duckdb_ska_sort::ska_sort(begin, end, ExtractKey<SORT_KEY>());
+}
+
+template <SortKeyType SORT_KEY_TYPE>
+static void TemplatedSortVariable(const TupleDataCollection &key_data) {
+	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>;
+
+	const BLOCK_ITERATOR_STATE state(key_data);
+	auto begin = BLOCK_ITERATOR(state, 0);
+	auto end = BLOCK_ITERATOR(state, key_data.Count());
+
 	duckdb_pdqsort::pdqsort_branchless(begin, end);
 }
 
@@ -75,19 +101,19 @@ static void Sort(const TupleDataCollection &key_data) {
 	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_8>(key_data);
+		return TemplatedSortFixed<SortKeyType::NO_PAYLOAD_FIXED_8>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_16>(key_data);
+		return TemplatedSortFixed<SortKeyType::NO_PAYLOAD_FIXED_16>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
+		return TemplatedSortFixed<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
+		return TemplatedSortVariable<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_16>(key_data);
+		return TemplatedSortFixed<SortKeyType::PAYLOAD_FIXED_16>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_32>(key_data);
+		return TemplatedSortFixed<SortKeyType::PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedSort<SortKeyType::PAYLOAD_VARIABLE_32>(key_data);
+		return TemplatedSortVariable<SortKeyType::PAYLOAD_VARIABLE_32>(key_data);
 	default:
 		throw NotImplementedException("TemplatedSort for %s", EnumUtil::ToString(sort_key_type));
 	}

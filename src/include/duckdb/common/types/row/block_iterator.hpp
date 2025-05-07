@@ -53,37 +53,33 @@ public:
 	}
 
 	void Add(idx_t &block_idx, idx_t &tuple_idx, const idx_t &value) const {
-		if (tuple_idx + value < fast_mod.GetDivisor()) {
-			tuple_idx += value;
-			return;
+		tuple_idx += value;
+		if (tuple_idx >= fast_mod.GetDivisor()) {
+			const auto div = fast_mod.Div(tuple_idx);
+			tuple_idx -= div * fast_mod.GetDivisor();
+			block_idx += div;
 		}
-
-		const auto index = GetIndex(block_idx, tuple_idx) + value;
-		RandomAccess(block_idx, tuple_idx, index);
 	}
 
 	void Subtract(idx_t &block_idx, idx_t &tuple_idx, const idx_t &value) const {
-		if (tuple_idx >= value) {
-			tuple_idx -= value;
-			return;
+		tuple_idx -= value;
+		if (tuple_idx >= fast_mod.GetDivisor()) {
+			const auto div = fast_mod.Div(-tuple_idx);
+			tuple_idx += (div + 1) * fast_mod.GetDivisor();
+			block_idx -= div + 1;
 		}
-
-		const auto index = GetIndex(block_idx, tuple_idx) - value;
-		RandomAccess(block_idx, tuple_idx, index);
 	}
 
 	void Increment(idx_t &block_idx, idx_t &tuple_idx) const {
-		if (++tuple_idx == fast_mod.GetDivisor()) {
-			++block_idx;
-			tuple_idx = 0;
-		}
+		const auto passed_boundary = ++tuple_idx == fast_mod.GetDivisor();
+		block_idx += passed_boundary;
+		tuple_idx *= !passed_boundary;
 	}
 
 	void Decrement(idx_t &block_idx, idx_t &tuple_idx) const {
-		if (--tuple_idx == DConstants::INVALID_INDEX) {
-			--block_idx;
-			tuple_idx = fast_mod.GetDivisor() - 1;
-		}
+		const auto crossed_boundary = tuple_idx-- == 0;
+		block_idx -= crossed_boundary;
+		tuple_idx += crossed_boundary * fast_mod.GetDivisor();
 	}
 
 	idx_t GetIndex(const idx_t &block_idx, const idx_t &tuple_idx) const {
@@ -127,37 +123,33 @@ public:
 	}
 
 	void Add(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) const {
-		if (tuple_idx + value < STANDARD_VECTOR_SIZE) {
-			tuple_idx += value;
-			return;
+		tuple_idx += value;
+		if (tuple_idx >= STANDARD_VECTOR_SIZE) {
+			const auto div = tuple_idx / STANDARD_VECTOR_SIZE;
+			tuple_idx -= div * STANDARD_VECTOR_SIZE;
+			chunk_idx += div;
 		}
-
-		const auto index = GetIndex(chunk_idx, tuple_idx) + value;
-		RandomAccess(chunk_idx, tuple_idx, index);
 	}
 
 	void Subtract(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) const {
-		if (tuple_idx >= value) {
-			tuple_idx -= value;
-			return;
+		tuple_idx -= value;
+		if (tuple_idx >= STANDARD_VECTOR_SIZE) {
+			const auto div = -tuple_idx / STANDARD_VECTOR_SIZE;
+			tuple_idx += (div + 1) * STANDARD_VECTOR_SIZE;
+			chunk_idx -= div + 1;
 		}
-
-		const auto index = GetIndex(chunk_idx, tuple_idx) - value;
-		RandomAccess(chunk_idx, tuple_idx, index);
 	}
 
 	void Increment(idx_t &chunk_idx, idx_t &tuple_idx) const {
-		if (++tuple_idx == STANDARD_VECTOR_SIZE) {
-			++chunk_idx;
-			tuple_idx = 0;
-		}
+		const auto passed_boundary = ++tuple_idx == STANDARD_VECTOR_SIZE;
+		chunk_idx += passed_boundary;
+		tuple_idx *= !passed_boundary;
 	}
 
 	void Decrement(idx_t &chunk_idx, idx_t &tuple_idx) const {
-		if (--tuple_idx == DConstants::INVALID_INDEX) {
-			--chunk_idx;
-			tuple_idx = STANDARD_VECTOR_SIZE - 1;
-		}
+		const auto crossed_boundary = tuple_idx-- == 0;
+		chunk_idx -= crossed_boundary;
+		tuple_idx += crossed_boundary * STANDARD_VECTOR_SIZE;
 	}
 
 	idx_t GetIndex(const idx_t &chunk_idx, const idx_t &tuple_idx) const {
