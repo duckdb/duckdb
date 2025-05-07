@@ -114,6 +114,13 @@ SELECT COUNT(*) FROM generate_series(TIMESTAMPTZ '1992-01-01 00:00:00-08', TIMES
 ----
 10228
 
+
+statement error
+explain
+from range('290309-12-22 (BC) 00:00:00'::TIMESTAMPTZ, '294247-01-10 04:00:54.775806'::TIMESTAMPTZ, interval '1 hour');
+----
+ICU date overflows timestamp range
+
 # zero interval not supported
 statement error
 SELECT d FROM range(TIMESTAMPTZ '1992-01-01 00:00:00-08', TIMESTAMPTZ '1992-12-31 12:00:00-08', INTERVAL '0 MONTH') tbl(d)

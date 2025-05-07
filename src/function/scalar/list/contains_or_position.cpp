@@ -6,14 +6,20 @@
 
 namespace duckdb {
 
-template <bool RETURN_POSITION>
+template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto target_count = input.size();
-	auto &list_vec = input.data[0];
-	auto &source_vec = ListVector::GetEntry(list_vec);
-	auto &target_vec = input.data[1];
+	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
 
-	ListSearchOp<RETURN_POSITION>(list_vec, source_vec, target_vec, result, target_count);
+	auto target_count = input.size();
+	auto &input_list = input.data[0];
+	auto &list_child = ListVector::GetEntry(input_list);
+	auto &target = input.data[1];
+
+	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);
 
 	if (target_count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -29,6 +35,13 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 
 	const auto &list = arguments[0]->return_type;
 	const auto &value = arguments[1]->return_type;
+
+	if (list.id() == LogicalTypeId::SQLNULL) {
+		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.arguments[1] = LogicalTypeId::UNKNOWN;
+		bound_function.return_type = LogicalType::SQLNULL;
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	}
 
 	const auto list_is_param = list.id() == LogicalTypeId::UNKNOWN;
 	const auto value_is_param = value.id() == LogicalTypeId::UNKNOWN;
@@ -54,17 +67,20 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 		bound_function.arguments[0] = LogicalType::LIST(max_child_type);
 		bound_function.arguments[1] = max_child_type;
 	}
+
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 ScalarFunction ListContainsFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::BOOLEAN,
-	                      ListSearchFunction<false>, ListSearchBind);
+	                      ListSearchFunction<bool>, ListSearchBind);
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
-	                      ListSearchFunction<true>, ListSearchBind);
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
+	                          ListSearchFunction<int32_t, true>, ListSearchBind);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 } // namespace duckdb

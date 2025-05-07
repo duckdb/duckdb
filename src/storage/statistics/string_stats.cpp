@@ -190,7 +190,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                array_ptr<Value> constants) {
+                                                array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());

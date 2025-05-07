@@ -2,21 +2,16 @@
 # description: lineitem pivot over l_returnflag
 # group: [pivot]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Lineitem Pivot (l_returnflag)
 group pivot
 subgroup tpch
 
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
-
 run
 FROM (PIVOT lineitem ON l_returnflag USING SUM(l_extendedprice) GROUP BY l_shipdate) ORDER BY l_shipdate LIMIT 10
 
-result IIII
+result IIII sf=1
 1992-01-02	98400.35	NULL	496508.01
 1992-01-03	628803.06	NULL	941612.09
 1992-01-04	908754.78	NULL	759225.87

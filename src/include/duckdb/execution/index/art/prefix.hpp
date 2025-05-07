@@ -40,7 +40,6 @@ public:
 	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
 	}
-	static idx_t GetMismatchWithOther(const Prefix &l_prefix, const Prefix &r_prefix, const idx_t max_count);
 	static optional_idx GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth);
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
@@ -68,15 +67,12 @@ public:
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
 	static void Reduce(ART &art, Node &node, const idx_t pos);
 	//! Splits the prefix at pos.
-	//! prefix_node points to the node that replaces the split byte.
-	//! child_node points to the remaining node after the split.
-	//! Returns INSIDE, if a gate node was freed, else OUTSIDE.
+	//! node references the node that replaces the split byte.
+	//! child references the remaining node after the split.
+	//! Returns GATE_SET, if a gate node was freed, else GATE_NOT_SET.
+	//! If it returns GATE_SET, then the caller must set the gate for the node replacing the split byte,
+	//! after its creation.
 	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
-
-	//! Insert a key into a prefix.
-	static ARTConflictType Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
-	                              const GateStatus status, optional_ptr<ART> delete_art,
-	                              const IndexAppendMode append_mode);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);

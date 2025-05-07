@@ -729,6 +729,12 @@ virtual_column_map_t TableScanGetVirtualColumns(ClientContext &context, optional
 	return bind_data.table.GetVirtualColumns();
 }
 
+vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	vector<column_t> result;
+	result.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	return result;
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -751,6 +757,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.deserialize = TableScanDeserialize;
 	scan_function.pushdown_expression = TableScanPushdownExpression;
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
+	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	return scan_function;
 }
 

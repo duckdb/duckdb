@@ -3629,7 +3629,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
-	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
+	for (iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
 		const char *z = azArg[iName];
 		if (optionMatch(z, "new")) {
 			newFlag = true;

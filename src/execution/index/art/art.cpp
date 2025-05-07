@@ -23,6 +23,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/art_merger.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -453,7 +454,14 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 		if (row_id_count == 1) {
 			Leaf::New(ref, row_ids[section.start].GetRowId());
 		} else {
-			Leaf::New(*this, ref, row_ids, section.start, row_id_count);
+			// Loop and insert the row IDs.
+			// We cannot use Construct in the leaf because row IDs are not sorted.
+			ArenaAllocator arena(BufferAllocator::Get(db));
+			for (idx_t i = section.start; i < section.start + row_id_count; i++) {
+				ARTOperator::Insert(arena, *this, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, nullptr,
+				                    IndexAppendMode::DEFAULT);
+			}
+			ref.get().SetGateStatus(GateStatus::GATE_SET);
 		}
 		return true;
 	}
@@ -510,10 +518,10 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	auto row_count = chunk.size();
 
-	ArenaAllocator allocator(BufferAllocator::Get(db));
+	ArenaAllocator arena(BufferAllocator::Get(db));
 	unsafe_vector<ARTKey> keys(row_count);
 	unsafe_vector<ARTKey> row_id_keys(row_count);
-	GenerateKeyVectors(allocator, chunk, row_ids, keys, row_id_keys);
+	GenerateKeyVectors(arena, chunk, row_ids, keys, row_id_keys);
 
 	optional_ptr<ART> delete_art;
 	if (info.delete_index) {
@@ -529,7 +537,8 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 		if (keys[i].Empty()) {
 			continue;
 		}
-		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art, info.append_mode);
+		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
+		                                    delete_art, info.append_mode);
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -567,7 +576,7 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 		if (keys[i].Empty()) {
 			continue;
 		}
-		D_ASSERT(Lookup(tree, keys[i], 0));
+		D_ASSERT(ARTOperator::Lookup(*this, tree, keys[i], 0));
 	}
 #endif
 	return ErrorData();
@@ -601,148 +610,6 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 	}
 	ConflictManager local_manager(VerifyExistenceType::APPEND, chunk.size());
 	VerifyConstraint(chunk, info, local_manager);
-}
-
-void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                          const GateStatus status) {
-	D_ASSERT(depth <= key.len);
-	D_ASSERT(!node.HasMetadata());
-
-	if (status == GateStatus::GATE_SET) {
-		Leaf::New(node, row_id.GetRowId());
-		return;
-	}
-
-	reference<Node> ref(node);
-	auto count = key.len - depth;
-
-	Prefix::New(*this, ref, key, depth, count);
-	Leaf::New(ref, row_id.GetRowId());
-}
-
-ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                                       const GateStatus status, optional_ptr<ART> delete_art,
-                                       const IndexAppendMode append_mode) {
-
-	if (!IsUnique() || append_mode == IndexAppendMode::INSERT_DUPLICATES) {
-		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
-		return ARTConflictType::NO_CONFLICT;
-	}
-
-	if (!delete_art) {
-		if (append_mode == IndexAppendMode::IGNORE_DUPLICATES) {
-			return ARTConflictType::NO_CONFLICT;
-		}
-		return ARTConflictType::CONSTRAINT;
-	}
-
-	// Lookup in the delete_art.
-	auto delete_leaf = delete_art->Lookup(delete_art->tree, key, 0);
-	if (!delete_leaf) {
-		return ARTConflictType::CONSTRAINT;
-	}
-
-	// The row ID has changed.
-	// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
-	D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-	auto deleted_row_id = delete_leaf->GetRowId();
-	auto this_row_id = node.GetRowId();
-	if (deleted_row_id != this_row_id) {
-		return ARTConflictType::CONSTRAINT;
-	}
-
-	// The deleted key and its row ID match the current key and its row ID.
-	Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
-	return ARTConflictType::NO_CONFLICT;
-}
-
-ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                                    const GateStatus status, optional_ptr<ART> delete_art,
-                                    const IndexAppendMode append_mode) {
-	D_ASSERT(depth < key.len);
-	auto child = node.GetChildMutable(*this, key[depth]);
-
-	// Recurse, if a child exists at key[depth].
-	if (child) {
-		D_ASSERT(child->HasMetadata());
-		auto conflict_type = Insert(*child, key, depth + 1, row_id, status, delete_art, append_mode);
-		node.ReplaceChild(*this, key[depth], *child);
-		return conflict_type;
-	}
-
-	// Create an inlined prefix at key[depth].
-	if (status == GateStatus::GATE_SET) {
-		Node remainder;
-		auto byte = key[depth];
-		auto conflict_type = Insert(remainder, key, depth + 1, row_id, status, delete_art, append_mode);
-		Node::InsertChild(*this, node, byte, remainder);
-		return conflict_type;
-	}
-
-	// Insert an inlined leaf at key[depth].
-	Node leaf;
-	reference<Node> ref(leaf);
-
-	// Create the prefix.
-	if (depth + 1 < key.len) {
-		auto count = key.len - depth - 1;
-		Prefix::New(*this, ref, key, depth + 1, count);
-	}
-
-	// Create the inlined leaf.
-	Leaf::New(ref, row_id.GetRowId());
-	Node::InsertChild(*this, node, key[depth], leaf);
-	return ARTConflictType::NO_CONFLICT;
-}
-
-ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-                            optional_ptr<ART> delete_art, const IndexAppendMode append_mode) {
-	if (!node.HasMetadata()) {
-		InsertIntoEmpty(node, key, depth, row_id, status);
-		return ARTConflictType::NO_CONFLICT;
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && node.GetGateStatus() == GateStatus::GATE_SET) {
-		if (IsUnique()) {
-			// Unique indexes can have duplicates, if another transaction DELETE + INSERT
-			// the same key. In that case, the previous value must be kept alive until all
-			// other transactions do not depend on it anymore.
-
-			// We restrict this transactionality to two-value leaves, so any subsequent
-			// incoming transaction must fail here.
-			return ARTConflictType::TRANSACTION;
-		}
-		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET, delete_art, append_mode);
-	}
-
-	auto type = node.GetType();
-	switch (type) {
-	case NType::LEAF_INLINED: {
-		return InsertIntoInlined(node, key, depth, row_id, status, delete_art, append_mode);
-	}
-	case NType::LEAF: {
-		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id, status, delete_art, append_mode);
-	}
-	case NType::NODE_7_LEAF:
-	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF: {
-		// Row IDs are unique, so there are never any duplicate byte conflicts here.
-		auto byte = key[Prefix::ROW_ID_COUNT];
-		Node::InsertChild(*this, node, byte);
-		return ARTConflictType::NO_CONFLICT;
-	}
-	case NType::NODE_4:
-	case NType::NODE_16:
-	case NType::NODE_48:
-	case NType::NODE_256:
-		return InsertIntoNode(node, key, depth, row_id, status, delete_art, append_mode);
-	case NType::PREFIX:
-		return Prefix::Insert(*this, node, key, depth, row_id, status, delete_art, append_mode);
-	default:
-		throw InternalException("Invalid node type for ART::Insert.");
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -787,7 +654,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		auto leaf = Lookup(tree, keys[i], 0);
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
 		if (leaf && leaf->GetType() == NType::LEAF_INLINED) {
 			D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
 		}
@@ -894,45 +761,8 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 // Point and range lookups
 //===--------------------------------------------------------------------===//
 
-const unsafe_optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
-	reference<const Node> ref(node);
-	while (ref.get().HasMetadata()) {
-
-		// Return the leaf.
-		if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
-			return unsafe_optional_ptr<const Node>(ref.get());
-		}
-
-		// Traverse the prefix.
-		if (ref.get().GetType() == NType::PREFIX) {
-			auto pos = Prefix::Traverse(*this, ref, key, depth);
-			if (pos.IsValid()) {
-				// Prefix mismatch, return nullptr.
-				return nullptr;
-			}
-			continue;
-		}
-
-		// Get the child node.
-		D_ASSERT(depth < key.len);
-		auto child = ref.get().GetChild(*this, key[depth]);
-
-		// No child at the matching byte, return nullptr.
-		if (!child) {
-			return nullptr;
-		}
-
-		// Continue in the child.
-		ref = *child;
-		D_ASSERT(ref.get().HasMetadata());
-		depth++;
-	}
-
-	return nullptr;
-}
-
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids) {
-	auto leaf = Lookup(tree, key, 0);
+	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
 		return true;
 	}
@@ -1089,7 +919,7 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	// All leaves in the delete ART are inlined.
 	unsafe_optional_ptr<const Node> deleted_leaf;
 	if (delete_art) {
-		deleted_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+		deleted_leaf = ARTOperator::Lookup(*delete_art, delete_art->tree, key, 0);
 	}
 
 	// The leaf is inlined, and there is no deleted leaf with the same key.
@@ -1187,7 +1017,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 			continue;
 		}
 
-		auto leaf = Lookup(tree, keys[i], 0);
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
 		if (!leaf) {
 			if (manager.AddMiss(i)) {
 				conflict_idx = i;
@@ -1464,7 +1294,7 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 			return ARTHandlingResult::CONTINUE;
 		}
 		if (type == NType::LEAF) {
-			throw InternalException("deprecated ART storage in InitMerge");
+			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
 		const auto idx = Node::GetAllocatorIdx(type);
 		node.IncreaseBufferId(upper_bounds[idx]);
@@ -1498,7 +1328,8 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	// Merge the ARTs.
 	D_ASSERT(tree.GetGateStatus() == other_art.tree.GetGateStatus());
 	if (tree.HasMetadata()) {
-		ARTMerger merger(Allocator::Get(db), *this);
+		ArenaAllocator arena(Allocator::Get(db));
+		ARTMerger merger(arena, *this);
 		merger.Init(tree, other_art.tree);
 		return merger.Merge() == ARTConflictType::NO_CONFLICT;
 	}
