@@ -21,6 +21,9 @@ public:
 
 public:
 	PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
+	               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
+	               unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
 	               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	vector<LogicalType> join_key_types;

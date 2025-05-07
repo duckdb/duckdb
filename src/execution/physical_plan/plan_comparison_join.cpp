@@ -84,7 +84,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	if (can_iejoin) {
-		return Make<PhysicalIEJoin>(op, left, right, std::move(op.conditions), op.join_type, op.estimated_cardinality);
+		return Make<PhysicalIEJoin>(op, left, right, std::move(op.conditions), op.join_type, op.estimated_cardinality,
+		                            std::move(op.filter_pushdown));
 	}
 	if (can_merge) {
 		// range join: use piecewise merge join
