@@ -976,6 +976,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
+		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
 		if (CompressionTypeIsDeprecated(compression_type)) {
 			throw ParserException("Attempted to force a deprecated compression type (%s)",
 			                      CompressionTypeToString(compression_type));

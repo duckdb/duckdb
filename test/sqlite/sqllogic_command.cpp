@@ -231,8 +231,8 @@ UnzipCommand::UnzipCommand(SQLLogicTestRunner &runner, string &input, string &ou
     : Command(runner), input_path(input), extraction_path(output) {
 }
 
-LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly)
-    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly) {
+LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly, const string &version)
+    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly), version(version) {
 }
 
 struct ParallelExecuteContext {
@@ -542,8 +542,19 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 		runner.config->options.access_mode = AccessMode::AUTOMATIC;
 	}
 	if (runner.db) {
-		runner.config->options.serialization_compatibility =
-		    runner.db->instance->config.options.serialization_compatibility;
+		if (version.empty()) {
+			//! No version was provided, use the default of the main db.
+			runner.config->options.serialization_compatibility =
+			    runner.db->instance->config.options.serialization_compatibility;
+		} else {
+			try {
+				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+			} catch (std::exception &ex) {
+				ErrorData err(ex);
+				SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+				FAIL();
+			}
+		}
 	}
 	// now create the database file
 	runner.LoadDatabase(resolved_path, true);

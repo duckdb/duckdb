@@ -1,0 +1,22 @@
+# name: test/sql/storage/compression/dictionary/dictionary_read.test_slow
+# group: [dictionary]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/dictionary.db.gz __TEST_DIR__/dictionary.db
+
+load __TEST_DIR__/dictionary.db readonly
+
+query I
+select count(street) from tbl;
+----
+397527
+
+query I nosort res
+select street from tbl;
+----
+
+query I
+SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type == 'VARCHAR' AND compression != 'Dictionary';
+----

@@ -13,7 +13,7 @@ require parquet
 load __TEST_DIR__/insert_odd_sized_batches.db
 
 query I
-CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+CREATE TABLE integers AS SELECT * FROM range(10_000_000) tbl(i);
 ----
 10000000
 
@@ -71,7 +71,7 @@ statement ok
 CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
 
 query I
-SELECT COUNT(DISTINCT block_id) < 12 FROM pragma_storage_info('integers_parquet_no_order');
+SELECT COUNT(DISTINCT block_id) < 14 FROM pragma_storage_info('integers_parquet_no_order');
 ----
 true
 

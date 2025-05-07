@@ -59,8 +59,8 @@ public:
 
 class ColumnDataCheckpointer {
 public:
-	ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &states, DatabaseInstance &db, RowGroup &row_group,
-	                       ColumnCheckpointInfo &checkpoint_info);
+	ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &states, StorageManager &storage_manager,
+	                       RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info);
 
 public:
 	void Checkpoint();
@@ -78,7 +78,7 @@ private:
 
 private:
 	vector<reference<ColumnCheckpointState>> &checkpoint_states;
-	DatabaseInstance &db;
+	StorageManager &storage_manager;
 	RowGroup &row_group;
 	Vector intermediate;
 	ColumnCheckpointInfo &checkpoint_info;
