@@ -393,6 +393,72 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 	return WrapValue(array_value);
 }
 
+duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
+                                     idx_t entry_count) {
+	if (!map_type || !keys || !values) {
+		return nullptr;
+	}
+	const auto &map_logical_type = UnwrapType(map_type);
+	if (map_logical_type.id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	if (duckdb::TypeVisitor::Contains(map_logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(map_logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
+
+	const auto &key_logical_type = duckdb::MapType::KeyType(map_logical_type);
+	const auto &value_logical_type = duckdb::MapType::ValueType(map_logical_type);
+	duckdb::vector<duckdb::Value> unwrapped_keys;
+	duckdb::vector<duckdb::Value> unwrapped_values;
+	for (idx_t i = 0; i < entry_count; i++) {
+		const auto key = keys[i];
+		const auto value = values[i];
+		if (!key || !value) {
+			return nullptr;
+		}
+		unwrapped_keys.emplace_back(UnwrapValue(key));
+		unwrapped_values.emplace_back(UnwrapValue(value));
+	}
+	duckdb::Value *map_value = new duckdb::Value;
+	try {
+		*map_value = duckdb::Value::MAP(key_logical_type, value_logical_type, std::move(unwrapped_keys),
+		                                std::move(unwrapped_values));
+	} catch (...) {
+		delete map_value;
+		return nullptr;
+	}
+	return WrapValue(map_value);
+}
+
+duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value) {
+	if (!union_type || !value) {
+		return nullptr;
+	}
+	const auto &union_logical_type = UnwrapType(union_type);
+	if (union_logical_type.id() != duckdb::LogicalTypeId::UNION) {
+		return nullptr;
+	}
+	idx_t member_count = duckdb::UnionType::GetMemberCount(union_logical_type);
+	if (tag_index >= member_count) {
+		return nullptr;
+	}
+	const auto &member_type = duckdb::UnionType::GetMemberType(union_logical_type, tag_index);
+	const auto &unwrapped_value = UnwrapValue(value);
+	if (unwrapped_value.type() != member_type) {
+		return nullptr;
+	}
+	const auto member_types = duckdb::UnionType::CopyMemberTypes(union_logical_type);
+	duckdb::Value *union_value = new duckdb::Value;
+	try {
+		*union_value = duckdb::Value::UNION(member_types, duckdb::NumericCast<uint8_t>(tag_index), unwrapped_value);
+	} catch (...) {
+		delete union_value;
+		return nullptr;
+	}
+	return WrapValue(union_value);
+}
+
 idx_t duckdb_get_map_size(duckdb_value value) {
 	if (!value) {
 		return 0;

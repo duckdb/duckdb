@@ -219,6 +219,13 @@
         "scope": "global"
     },
     {
+        "name": "debug_verify_vector",
+        "description": "DEBUG SETTING: enable vector verification",
+        "type": "VARCHAR",
+        "return_type": "DebugVectorVerification",
+        "scope": "global"
+    },
+    {
         "name": "debug_window_mode",
         "description": "DEBUG SETTING: switch window mode to use",
         "type": "VARCHAR",
@@ -272,6 +279,12 @@
         "custom_implementation": true
     },
     {
+        "name": "disable_timestamptz_casts",
+        "description": "Disable casting from timestamp to timestamptz ",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "disabled_compression_methods",
         "description": "Disable a specific set of compression methods (comma separated)",
         "type": "VARCHAR",
@@ -323,6 +336,13 @@
             "set",
             "reset"
         ]
+    },
+    {
+        "name": "enable_external_file_cache",
+        "description": "Allow the database to cache external files (e.g., Parquet) in memory.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "enable_fsst_vectors",
@@ -729,6 +749,12 @@
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",
         "scope": "local"
+    },
+    {
+        "name": "scheduler_process_partial",
+        "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
+        "type": "BOOLEAN",
+        "scope": "global"
     },
     {
         "name": "schema",

@@ -1,0 +1,112 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow
+# description: Test the external file cache for Parquet
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+copy (
+    select range % 1500000 l_orderkey,
+    range % 200000 l_partkey,
+    range % 10000 l_suppkey,
+    range % 7 l_linenumber,
+    from range(6_000_000)
+) to '__TEST_DIR__/test_efc_lineitem.parquet' (row_group_size 6_000_000);
+
+# this is empty since we didn't query anything yet
+# throughout this file we round the bytes to whole MBs due to small differences between OSs somehow
+query II
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() order by location;
+----
+
+
+# for now, caching is only triggered when prefetching (mainly used for remote files), so let's force it
+statement ok
+set prefetch_all_parquet_files=true;
+
+statement ok
+create view lineitem as from '__TEST_DIR__/test_efc_lineitem.parquet';
+
+# we require that the last modified time is more than 10 seconds in the past
+# otherwise, we run into problems with file systems with low time resolution for last modified time
+sleep 11 seconds
+
+# creating the view has loaded the footer
+query I
+select loaded from duckdb_external_file_cache() order by location;
+----
+true
+
+# select the first column
+statement ok
+select l_orderkey from lineitem;
+
+query II
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 100000;
+----
+23.0	true
+
+# select the third column (not contiguous with the first column so it should have two cache entries)
+statement ok
+select l_suppkey from lineitem;
+
+query II
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 100000 order by location;
+----
+23.0	1
+10.0	1
+
+# select the first four columns (contiguous, and supersede the previous two cache entries, should merge into one entry)
+statement ok
+select l_orderkey, l_partkey, l_suppkey, l_linenumber from lineitem;
+
+query II
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 100000 order by location;
+----
+47.0	1
+
+# shows up in duckdb_memory under its own tag
+# this is slightly higher than the sum of nr_bytes above due buffers having a header and are rounded up to sector size
+query I
+select round(memory_usage_bytes / 1048576) from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE';
+----
+47.0
+
+# set the memory so low that the ~3MB entry should be unloaded
+statement ok
+set memory_limit='100kb';
+
+# set it back to something reasonable so we can actually do the following queries
+statement ok
+set memory_limit='500mb';
+
+# loaded should now be "false" for the large buffer
+query II
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where location = 4;
+----
+47.0	0
+
+# disabling the file cache should empty it
+statement ok
+set enable_external_file_cache=false;
+
+query II
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() order by location;
+----
+
+
+# test that we notice cache invalidation by rapidly overwriting
+statement ok
+set enable_external_file_cache=true;
+
+loop i 0 100
+
+statement ok
+copy (select ${i} i) to '__TEST_DIR__/test_efc_i.parquet';
+
+query I
+select i = ${i} from '__TEST_DIR__/test_efc_i.parquet';
+----
+true
+
+endloop

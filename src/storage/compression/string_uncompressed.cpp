@@ -32,7 +32,7 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<StringAnalyzeState>(info);
 }
 
@@ -221,7 +221,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 
-	CompressionInfo info(segment.GetBlockManager().GetBlockSize());
+	CompressionInfo info(segment.GetBlockManager());
 	if (total_size >= info.GetCompactionFlushLimit()) {
 		// the block is full enough, don't bother moving around the dictionary
 		return segment.SegmentSize();
@@ -260,9 +260,7 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	auto &block_manager = segment.GetBlockManager();
-	for (auto &block_id : state.on_disk_blocks) {
-		block_manager.MarkBlockAsModified(block_id);
-	}
+	state.Cleanup(block_manager);
 }
 
 //===--------------------------------------------------------------------===//

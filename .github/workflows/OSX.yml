@@ -162,8 +162,9 @@ jobs:
         run: |
           python scripts/amalgamation.py
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+          gzip -9 -k -n -c build/release/duckdb > duckdb_cli-osx-universal.gz
           zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz
 
       - uses: actions/upload-artifact@v4
         with:
@@ -213,6 +214,7 @@ jobs:
     env:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
+      # TODO check here as well
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:

@@ -42,7 +42,10 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		case VectorType::CONSTANT_VECTOR: {
 			if (ConstantVector::IsNull(args.data[idx])) {
 				// input is constant null, return constant null
-				result.Reference(info.value);
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
+				auto &result_mask = ConstantVector::Validity(result);
+				auto &input_mask = ConstantVector::Validity(args.data[idx]);
+				result_mask.Initialize(input_mask);
 				ConstantVector::SetNull(result, true);
 				return;
 			}

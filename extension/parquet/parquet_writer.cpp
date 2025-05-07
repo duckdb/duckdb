@@ -352,18 +352,19 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       encryption_config(std::move(encryption_config_p)), dictionary_size_limit(dictionary_size_limit_p),
       string_dictionary_page_size_limit(string_dictionary_page_size_limit_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
-      debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version) {
+      debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version), total_written(0), num_row_groups(0) {
 
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+
 	if (encryption_config) {
 		auto &config = DBConfig::GetConfig(context);
 		if (config.encryption_util && debug_use_openssl) {
 			// Use OpenSSL
 			encryption_util = config.encryption_util;
 		} else {
-			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 		}
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
@@ -373,6 +374,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		// parquet files start with the string "PAR1"
 		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	}
+
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(std::make_shared<MyTransport>(*writer));
 
@@ -542,6 +544,9 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
+
+	total_written = writer->GetTotalWritten();
+	num_row_groups++;
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer) {

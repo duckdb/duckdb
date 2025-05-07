@@ -119,6 +119,17 @@ enum class TimestampCastResult : uint8_t {
 	STRICT_UTC
 };
 
+struct TimestampComponents {
+	int32_t year;
+	int32_t month;
+	int32_t day;
+
+	int32_t hour;
+	int32_t minute;
+	int32_t second;
+	int32_t microsecond;
+};
+
 //! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
 public:
@@ -204,6 +215,11 @@ public:
 	DUCKDB_API static int64_t GetEpochRounded(timestamp_t timestamp, const int64_t power_of_ten);
 	//! Convert a timestamp to a Julian Day
 	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
+
+	//! Decompose a timestamp into its components
+	DUCKDB_API static TimestampComponents GetComponents(timestamp_t timestamp);
+	DUCKDB_API static time_t ToTimeT(timestamp_t);
+	DUCKDB_API static timestamp_t FromTimeT(time_t);
 
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
 

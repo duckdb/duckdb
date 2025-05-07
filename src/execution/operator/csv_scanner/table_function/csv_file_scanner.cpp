@@ -6,17 +6,17 @@
 
 namespace duckdb {
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
-                         const MultiFileReaderOptions &file_options, const vector<string> &names,
+CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSVReaderOptions options_p,
+                         const MultiFileOptions &file_options, const vector<string> &names,
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
-    : BaseFileReader(file_path_p), buffer_manager(std::move(buffer_manager_p)),
+    : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
 
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
-		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name, per_file_single_threaded);
+		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file, per_file_single_threaded);
 	}
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
@@ -33,7 +33,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 		} else if (file_schema.Empty()) {
 			throw InternalException("CSV File Scanner cannot be created without a schema");
 		} else if (buffer_manager->file_handle->FileSize() > 0) {
-			options.file_path = file_name;
+			options.file_path = file.path;
 			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.AdaptiveSniff(file_schema);
 			SetNamesAndTypes(result.names, result.return_types);
@@ -50,11 +50,11 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 }
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p,
-                         const MultiFileReaderOptions &file_options)
-    : BaseFileReader(file_name), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, const CSVReaderOptions &options_p,
+                         const MultiFileOptions &file_options)
+    : BaseFileReader(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name);
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -84,25 +84,25 @@ CSVUnionData::~CSVUnionData() {
 
 void CSVFileScan::SetStart() {
 	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
-	rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
-	                                          state_machine->dialect_options.header.GetValue());
+
 	if (rows_to_skip == 0) {
 		start_iterator.first_one = true;
 		return;
 	}
 	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, rows_to_skip);
 	skip_scanner.ParseChunk();
+	skipped_rows = skip_scanner.GetLinesRead() - rows_to_skip;
 	start_iterator = skip_scanner.GetIterator();
 }
 
 void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
 	names = names_p;
 	types = types_p;
-	columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
-	if (reader_data.empty_columns && reader_data.column_ids.empty()) {
+	if (column_ids.empty()) {
 		// This means that the columns from this file are irrelevant.
 		// just read the first column
 		file_types.emplace_back(LogicalType::VARCHAR);
@@ -111,24 +111,24 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		return;
 	}
 
-	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = MultiFileLocalIndex(i);
-		auto column_id = reader_data.column_ids[col_idx];
+		auto column_id = column_ids[col_idx];
 		file_types.emplace_back(types[column_id.GetId()]);
 		projected_columns.insert(column_id.GetId());
 		projection_ids.emplace_back(column_id.GetId(), col_idx);
 	}
 
-	if (reader_data.column_ids.empty()) {
+	if (column_ids.empty()) {
 		file_types = types;
 	}
 
 	// We need to be sure that our types are also following the cast_map
-	if (!reader_data.cast_map.empty()) {
-		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+	if (!cast_map.empty()) {
+		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto local_idx = MultiFileLocalIndex(i);
-			auto entry = reader_data.cast_map.find(reader_data.column_ids[local_idx]);
-			if (entry != reader_data.cast_map.end()) {
+			auto entry = cast_map.find(column_ids[local_idx].GetId());
+			if (entry != cast_map.end()) {
 				file_types[i] = entry->second;
 			}
 		}
@@ -152,9 +152,7 @@ const vector<LogicalType> &CSVFileScan::GetTypes() {
 
 void CSVFileScan::InitializeProjection() {
 	for (idx_t i = 0; i < options.dialect_options.num_cols; i++) {
-		reader_data.column_ids.push_back(MultiFileLocalColumnId(i));
-		//! FIXME: where is this mapping to???
-		reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
+		column_ids.push_back(MultiFileLocalColumnId(i));
 	}
 }
 

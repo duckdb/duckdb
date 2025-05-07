@@ -48,7 +48,8 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(ClientContext &context)
-	    : initialized(false), rows_copied(0), last_file_offset(0) {
+	    : initialized(false), rows_copied(0), last_file_offset(0),
+	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
 		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
 	StorageLock lock;
@@ -64,6 +65,8 @@ public:
 	vector<unique_ptr<CopyToFileInfo>> written_files;
 	//! Max open files
 	idx_t max_open_files;
+	//! If rotate is true, this lock is used
+	unique_ptr<StorageLock> file_write_lock_if_rotating;
 
 	void Initialize(ClientContext &context, const PhysicalCopyToFile &op) {
 		if (initialized) {
@@ -94,18 +97,20 @@ public:
 		created_directories.insert(dir_path);
 	}
 
-	string GetOrCreateDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                            string path, FileSystem &fs) {
+	string GetOrCreateDirectory(const vector<idx_t> &cols, bool hive_file_pattern, const vector<string> &names,
+	                            const vector<Value> &values, string path, FileSystem &fs) {
 		CreateDir(path, fs);
-		for (idx_t i = 0; i < cols.size(); i++) {
-			const auto &partition_col_name = names[cols[i]];
-			const auto &partition_value = values[i];
-			string p_dir;
-			p_dir += HivePartitioning::Escape(partition_col_name);
-			p_dir += "=";
-			p_dir += HivePartitioning::Escape(partition_value.ToString());
-			path = fs.JoinPath(path, p_dir);
-			CreateDir(path, fs);
+		if (hive_file_pattern) {
+			for (idx_t i = 0; i < cols.size(); i++) {
+				const auto &partition_col_name = names[cols[i]];
+				const auto &partition_value = values[i];
+				string p_dir;
+				p_dir += HivePartitioning::Escape(partition_col_name);
+				p_dir += "=";
+				p_dir += HivePartitioning::Escape(partition_value.ToString());
+				path = fs.JoinPath(path, p_dir);
+				CreateDir(path, fs);
+			}
 		}
 		return path;
 	}
@@ -164,14 +169,19 @@ public:
 			}
 		}
 		idx_t offset = 0;
-		auto prev_offset = previous_partitions.find(values);
-		if (prev_offset != previous_partitions.end()) {
-			offset = prev_offset->second;
+		if (op.hive_file_pattern) {
+			auto prev_offset = previous_partitions.find(values);
+			if (prev_offset != previous_partitions.end()) {
+				offset = prev_offset->second;
+			}
+		} else {
+			offset = global_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
-		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string hive_path =
+		    GetOrCreateDirectory(op.partition_columns, op.hive_file_pattern, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset));
 		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 			// when appending, we first check if the file exists
@@ -223,6 +233,7 @@ private:
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
 	vector_of_value_map_t<idx_t> previous_partitions;
+	idx_t global_offset = 0;
 };
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
@@ -238,6 +249,7 @@ public:
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
+	idx_t total_rows_copied = 0;
 
 	//! Buffers the tuples in partitions before writing
 	unique_ptr<HivePartitionedColumnData> part_buffer;
@@ -472,6 +484,43 @@ PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction f
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
+void PhysicalCopyToFile::WriteRotateInternal(ExecutionContext &context, GlobalSinkState &global_state,
+                                             const std::function<void(GlobalFunctionData &)> &fun) const {
+	auto &g = global_state.Cast<CopyToFunctionGlobalState>();
+
+	// Loop until we can write (synchronize using locks when using parallel writes to the same files and "rotate")
+	while (true) {
+		// Grab global lock and dereference the current file state (and corresponding lock)
+		auto global_guard = g.lock.GetExclusiveLock();
+		auto &file_state = *g.global_state;
+		auto &file_lock = *g.file_write_lock_if_rotating;
+		if (rotate && function.rotate_next_file(file_state, *bind_data, file_size_bytes)) {
+			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
+			auto owned_gstate = std::move(g.global_state);
+			g.global_state = CreateFileState(context.client, *sink_state, *global_guard);
+			auto owned_lock = std::move(g.file_write_lock_if_rotating);
+			g.file_write_lock_if_rotating = make_uniq<StorageLock>();
+			global_guard.reset();
+
+			// This thread now waits for the exclusive lock on this file while other threads complete their writes
+			// Note that new writes can still start, as there is already a new global state
+			auto file_guard = owned_lock->GetExclusiveLock();
+			function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
+		} else {
+			// Get shared file write lock while holding global lock,
+			// so file can't be rotated before we get the write lock
+			auto file_guard = file_lock.GetSharedLock();
+
+			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
+			global_guard.reset();
+
+			// Sink/Combine!
+			fun(file_state);
+			break;
+		}
+	}
+}
+
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
@@ -480,7 +529,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		// if we are only writing the file when there are rows to write we need to initialize here
 		g.Initialize(context.client, *this);
 	}
-	g.rows_copied += chunk.size();
+	l.total_rows_copied += chunk.size();
 
 	if (partition_output) {
 		l.AppendToPartition(context, *this, g, chunk);
@@ -507,20 +556,9 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	// FILE_SIZE_BYTES/rotate is set, but threads write to the same file, synchronize using lock
-	auto &gstate = g.global_state;
-	auto global_lock = g.lock.GetExclusiveLock();
-	if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
-		auto owned_gstate = std::move(gstate);
-		gstate = CreateFileState(context.client, *sink_state, *global_lock);
-		global_lock.reset();
-		function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
-	} else {
-		global_lock.reset();
-	}
-
-	global_lock = g.lock.GetSharedLock();
-	function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
+	WriteRotateInternal(context, input.global_state, [&](GlobalFunctionData &gstate) {
+		function.copy_to_sink(context, *bind_data, gstate, *l.local_state, chunk);
+	});
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -528,6 +566,11 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
+	if (l.total_rows_copied == 0) {
+		// no rows copied
+		return SinkCombineResultType::FINISHED;
+	}
+	g.rows_copied += l.total_rows_copied;
 
 	if (partition_output) {
 		// flush all remaining partitions
@@ -540,9 +583,9 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 				function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 			}
 		} else if (rotate) {
-			// File in global state may change with FILE_SIZE_BYTES/rotate, need to grab lock
-			auto lock = g.lock.GetSharedLock();
-			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
+			WriteRotateInternal(context, input.global_state, [&](GlobalFunctionData &gstate) {
+				function.copy_to_combine(context, *bind_data, gstate, *l.local_state);
+			});
 		} else if (g.global_state) {
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 		}
@@ -551,9 +594,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                              OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
+SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, GlobalSinkState &global_state) const {
+	auto &gstate = global_state.Cast<CopyToFunctionGlobalState>();
 	if (partition_output) {
 		// finalize any outstanding partitions
 		gstate.FinalizePartitions(context, *this);
@@ -581,6 +623,11 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		}
 	}
 	return SinkFinalizeType::READY;
+}
+
+SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                              OperatorSinkFinalizeInput &input) const {
+	return FinalizeInternal(context, input.global_state);
 }
 
 //===--------------------------------------------------------------------===//

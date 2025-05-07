@@ -60,7 +60,7 @@
 
 enum mbedtls_cipher_base_index : uint8_t {
     MBEDTLS_CIPHER_BASE_INDEX_AES = 0,
-    MBEDTLS_CIPHER_BASE_INDEX_GCM_AES = 3,
+    MBEDTLS_CIPHER_BASE_INDEX_GCM_AES = 1,
 };
 
 #if defined(MBEDTLS_GCM_C) && \

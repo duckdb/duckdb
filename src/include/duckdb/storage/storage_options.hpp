@@ -20,6 +20,10 @@ struct StorageOptions {
 	optional_idx row_group_size;
 	//! Target storage version (if any)
 	optional_idx storage_version;
+	//! Block header size (only used for encryption)
+	optional_idx block_header_size;
+	//! Whether the database is encrypted
+	bool encryption = false;
 };
 
 } // namespace duckdb

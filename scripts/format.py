@@ -9,6 +9,8 @@ import inspect
 import subprocess
 import difflib
 import re
+import tempfile
+import uuid
 import concurrent.futures
 from python_helpers import open_utf8
 
@@ -135,8 +137,11 @@ elif len(sys.argv) >= 2:
 else:
     print_usage()
 
+directories = False
 if len(sys.argv) > 2:
     for arg in sys.argv[2:]:
+        prev_directories = directories
+        directories = False
         if arg == '--check':
             check_only = True
         elif arg == '--fix':
@@ -149,6 +154,12 @@ if len(sys.argv) > 2:
             silent = True
         elif arg == '--force':
             force = True
+        elif arg == '--directories':
+            directories = True
+            formatted_directories = []
+        elif prev_directories:
+            directories = True
+            formatted_directories += [arg]
         else:
             print_usage()
 
@@ -387,34 +398,36 @@ def format_file(f, full_path, directory, ext):
             print(total_diff)
             difference_files.append(full_path)
     else:
-        tmpfile = full_path + ".tmp"
+        tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         with open_utf8(tmpfile, 'w+') as f:
             f.write(new_text)
         os.rename(tmpfile, full_path)
 
 
+class ToFormatFile:
+    def __init__(self, filename, full_path, directory):
+        self.filename = filename
+        self.full_path = full_path
+        self.directory = directory
+        self.ext = '.' + filename.split('.')[-1]
+
+
 def format_directory(directory):
     files = os.listdir(directory)
     files.sort()
-
-    def process_file(f):
+    result = []
+    for f in files:
         full_path = os.path.join(directory, f)
         if os.path.isdir(full_path):
             if f in ignored_directories or full_path in ignored_directories:
-                return
-            if not silent:
-                print(full_path)
-            format_directory(full_path)
+                continue
+            result += format_directory(full_path)
         elif can_format_file(full_path):
-            format_file(f, full_path, directory, '.' + f.split('.')[-1])
-
-    # Create thread for each file
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        threads = [executor.submit(process_file, f) for f in files]
-        # Wait for all tasks to complete
-        concurrent.futures.wait(threads)
+            result += [ToFormatFile(f, full_path, directory)]
+    return result
 
 
+files = []
 if format_all:
     try:
         os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
@@ -422,15 +435,31 @@ if format_all:
         pass
 
     for direct in formatted_directories:
-        format_directory(direct)
+        files += format_directory(direct)
 
 else:
     for full_path in changed_files:
         splits = full_path.split(os.path.sep)
         fname = splits[-1]
         dirname = os.path.sep.join(splits[:-1])
-        ext = '.' + full_path.split('.')[-1]
-        format_file(fname, full_path, dirname, ext)
+        files.append(ToFormatFile(fname, full_path, dirname))
+
+
+def process_file(f):
+    if not silent:
+        print(f.full_path)
+    format_file(f.filename, f.full_path, f.directory, f.ext)
+
+
+# Create thread for each file
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    try:
+        threads = [executor.submit(process_file, f) for f in files]
+        # Wait for all tasks to complete
+        concurrent.futures.wait(threads)
+    except KeyboardInterrupt:
+        executor.shutdown(wait=True, cancel_futures=True)
+        raise
 
 if check_only:
     if len(difference_files) > 0:

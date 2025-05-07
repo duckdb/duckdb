@@ -1,0 +1,10 @@
+# name: test/parquet/concatenated_gzip_members.test
+# description: Test reading Parquet file with concatenated GZIP members
+# group: [parquet]
+
+require parquet
+
+query I
+from 'data/parquet-testing/concatenated_gzip_members.parquet' offset 512;
+----
+513

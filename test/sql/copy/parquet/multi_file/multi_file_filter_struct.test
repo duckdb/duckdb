@@ -1,0 +1,81 @@
+# name: test/sql/copy/parquet/multi_file/multi_file_filter_struct.test
+# description: Test multi file filters on structs
+# group: [multi_file]
+
+require parquet
+
+# statement ok
+# PRAGMA enable_verification
+
+statement ok
+COPY (SELECT {'f': f, 'i': i} struct_val FROM (VALUES ('f1', 42::INT), ('f1', 8::INT), ('f1', NULL::INT)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'
+
+statement ok
+COPY (SELECT {'i': i, 'f2': f} struct_val FROM (VALUES (42::BIGINT, 'f2'), (124::BIGINT, 'f2'), (NULL::BIGINT, 'f2')) t(i, f)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
+
+# the schema of the file depends on the first file read
+statement ok
+CREATE VIEW integer_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f1.parquet', '__TEST_DIR__/multi_file_filter_f2.parquet'])
+
+statement ok
+CREATE VIEW bigint_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f2.parquet', '__TEST_DIR__/multi_file_filter_f1.parquet'])
+
+# projection pushdown
+query I
+SELECT struct_val.i
+FROM integer_file_first
+ORDER BY ALL
+----
+8
+42
+42
+124
+NULL
+NULL
+
+# equality
+query II
+SELECT struct_val.f, struct_val.i
+FROM integer_file_first
+WHERE struct_val.i='042'
+----
+f1	42
+NULL	42
+
+query I
+SELECT struct_val.i
+FROM bigint_file_first
+WHERE struct_val.i='042'
+ORDER BY ALL
+----
+42
+42
+
+# greater than
+query II
+SELECT struct_val.f, struct_val.i
+FROM integer_file_first
+WHERE struct_val.i>10
+ORDER BY ALL
+----
+f1	42
+NULL	42
+NULL	124
+
+query I
+SELECT struct_val.i
+FROM bigint_file_first
+WHERE struct_val.i>'10'
+ORDER BY ALL
+----
+42
+42
+124
+
+query II
+SELECT struct_val.f, struct_val.i
+FROM integer_file_first
+WHERE struct_val.i IS NULL
+----
+f1	NULL
+NULL	NULL

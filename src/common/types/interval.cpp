@@ -313,6 +313,25 @@ int64_t Interval::GetMilli(const interval_t &val) {
 	return milli;
 }
 
+bool Interval::TryGetMicro(const interval_t &val, int64_t &micro_total) {
+	int64_t micro_month, micro_day;
+	micro_total = val.micros;
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, micro_month)) {
+		return false;
+	}
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, micro_day)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_month, micro_total)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_day, micro_total)) {
+		return false;
+	}
+
+	return true;
+}
+
 int64_t Interval::GetMicro(const interval_t &val) {
 	int64_t micro_month, micro_day, micro_total;
 	micro_total = val.micros;
@@ -342,38 +361,20 @@ int64_t Interval::GetNanoseconds(const interval_t &val) {
 	return nano;
 }
 
-interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
-	D_ASSERT(Timestamp::IsFinite(timestamp_1) && Timestamp::IsFinite(timestamp_2));
-	date_t date1, date2;
-	dtime_t time1, time2;
+interval_t Interval::GetAge(TimestampComponents ts1, TimestampComponents ts2, bool is_negative) {
+	// perform the differences
+	auto year_diff = ts1.year - ts2.year;
+	auto month_diff = ts1.month - ts2.month;
+	auto day_diff = ts1.day - ts2.day;
 
-	Timestamp::Convert(timestamp_1, date1, time1);
-	Timestamp::Convert(timestamp_2, date2, time2);
-
-	// and from date extract the years, months and days
-	int32_t year1, month1, day1;
-	int32_t year2, month2, day2;
-	Date::Convert(date1, year1, month1, day1);
-	Date::Convert(date2, year2, month2, day2);
-	// finally perform the differences
-	auto year_diff = year1 - year2;
-	auto month_diff = month1 - month2;
-	auto day_diff = day1 - day2;
-
-	// and from time extract hours, minutes, seconds and milliseconds
-	int32_t hour1, min1, sec1, micros1;
-	int32_t hour2, min2, sec2, micros2;
-	Time::Convert(time1, hour1, min1, sec1, micros1);
-	Time::Convert(time2, hour2, min2, sec2, micros2);
-	// finally perform the differences
-	auto hour_diff = hour1 - hour2;
-	auto min_diff = min1 - min2;
-	auto sec_diff = sec1 - sec2;
-	auto micros_diff = micros1 - micros2;
+	auto hour_diff = ts1.hour - ts2.hour;
+	auto min_diff = ts1.minute - ts2.minute;
+	auto sec_diff = ts1.second - ts2.second;
+	auto micros_diff = ts1.microsecond - ts2.microsecond;
 
 	// flip sign if necessary
 	bool sign_flipped = false;
-	if (timestamp_1 < timestamp_2) {
+	if (is_negative) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
 		day_diff = -day_diff;
@@ -401,11 +402,11 @@ interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 		day_diff--;
 	}
 	while (day_diff < 0) {
-		if (timestamp_1 < timestamp_2) {
-			day_diff += Date::IsLeapYear(year1) ? Date::LEAP_DAYS[month1] : Date::NORMAL_DAYS[month1];
+		if (is_negative) {
+			day_diff += Date::IsLeapYear(ts1.year) ? Date::LEAP_DAYS[ts1.month] : Date::NORMAL_DAYS[ts1.month];
 			month_diff--;
 		} else {
-			day_diff += Date::IsLeapYear(year2) ? Date::LEAP_DAYS[month2] : Date::NORMAL_DAYS[month2];
+			day_diff += Date::IsLeapYear(ts2.year) ? Date::LEAP_DAYS[ts2.month] : Date::NORMAL_DAYS[ts2.month];
 			month_diff--;
 		}
 	}
@@ -430,6 +431,15 @@ interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	interval.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return interval;
+}
+
+interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_1) && Timestamp::IsFinite(timestamp_2));
+
+	auto ts_component1 = Timestamp::GetComponents(timestamp_1);
+	auto ts_component2 = Timestamp::GetComponents(timestamp_2);
+
+	return Interval::GetAge(ts_component1, ts_component2, timestamp_1 < timestamp_2);
 }
 
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {

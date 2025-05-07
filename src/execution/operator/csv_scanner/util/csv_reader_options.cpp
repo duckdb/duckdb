@@ -3,7 +3,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/set.hpp"
 
 namespace duckdb {
@@ -331,6 +331,16 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		rejects_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
+	} else if (loption == "thousands") {
+		if (!value.IsNull()) {
+			auto thousands_separator_string = ParseString(value, loption);
+			if (thousands_separator_string.size() > 1) {
+				throw BinderException("Unsupported parameter for THOUSANDS: should be max one character");
+			}
+			if (!thousands_separator_string.empty()) {
+				thousands_separator = thousands_separator_string[0];
+			}
+		}
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -537,7 +547,7 @@ bool StoreUserDefinedParameter(const string &option) {
 	return true;
 }
 
-void CSVReaderOptions::Verify(MultiFileReaderOptions &file_options) {
+void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	if (rejects_table_name.IsSetByUser() && !store_rejects.GetValue() && store_rejects.IsSetByUser()) {
 		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
 	}
@@ -596,7 +606,7 @@ string CSVReaderOptions::GetUserDefinedParameters() const {
 }
 
 void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
-                                           MultiFileReaderOptions &file_options) {
+                                           MultiFileOptions &file_options) {
 	for (auto &kv : in) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (MultiFileReader().ParseOption(loption, kv.second, file_options, context)) {

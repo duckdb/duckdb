@@ -318,7 +318,9 @@ struct LogicalType {
 	}
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
+	DUCKDB_API bool IsFloating() const;
 	DUCKDB_API bool IsNumeric() const;
+	DUCKDB_API static bool IsNumeric(LogicalTypeId type);
 	DUCKDB_API bool IsTemporal() const;
 	DUCKDB_API hash_t Hash() const;
 	DUCKDB_API void SetAlias(string alias);

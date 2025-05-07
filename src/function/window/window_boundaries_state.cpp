@@ -346,6 +346,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			// Secondary orders need to know where the frame is
 			result.insert(FRAME_BEGIN);
 			result.insert(FRAME_END);
+			result.insert(PEER_BEGIN);
 		}
 		break;
 	case ExpressionType::WINDOW_RANK_DENSE:
@@ -361,6 +362,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			// Secondary orders need to know where the frame is
 			result.insert(FRAME_BEGIN);
 			result.insert(FRAME_END);
+			result.insert(PEER_BEGIN);
 		}
 		break;
 	case ExpressionType::WINDOW_CUME_DIST:
@@ -372,6 +374,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			// Secondary orders need to know where the frame is
 			result.insert(FRAME_BEGIN);
 			result.insert(FRAME_END);
+			result.insert(PEER_END);
 		}
 		break;
 	case ExpressionType::WINDOW_LEAD:

@@ -14,6 +14,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
 
 #include <algorithm>
@@ -164,7 +165,7 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 
 			auto &child_info = child->GetProfilingInfo();
 			auto value = child_info.metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>();
-			info.AddToMetric(MetricsType::OPERATOR_CARDINALITY, value);
+			info.MetricSum(MetricsType::OPERATOR_CARDINALITY, value);
 		}
 	}
 }
@@ -174,16 +175,26 @@ void QueryProfiler::StartExplainAnalyze() {
 }
 
 template <class METRIC_TYPE>
-static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, MetricsType child_metric,
+                            const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
 	auto &info = node.GetProfilingInfo();
-	info.metrics[cumulative_metric] = info.metrics[child_metric];
+	info.metrics[aggregated_metric] = info.metrics[child_metric];
 
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
 		auto child = node.GetChild(i);
-		GetCumulativeMetric<METRIC_TYPE>(*child, cumulative_metric, child_metric);
-		auto value = child->GetProfilingInfo().metrics[cumulative_metric].GetValue<METRIC_TYPE>();
-		info.AddToMetric(cumulative_metric, value);
+		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
+
+		auto &child_info = child->GetProfilingInfo();
+		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
+		info.MetricUpdate<METRIC_TYPE>(aggregated_metric, value, update_fun);
 	}
+}
+
+template <class METRIC_TYPE>
+static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+	AggregateMetric<METRIC_TYPE>(
+	    node, cumulative_metric, child_metric,
+	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
 }
 
 Value GetCumulativeOptimizers(ProfilingNode &node) {
@@ -224,8 +235,8 @@ void QueryProfiler::EndQuery() {
 			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
 
 			auto &settings = info.expanded_settings;
-			if (info.Enabled(settings, MetricsType::BLOCKED_THREAD_TIME)) {
-				info.metrics[MetricsType::BLOCKED_THREAD_TIME] = query_info.blocked_thread_time;
+			for (const auto &global_info_entry : query_info.query_global_info.metrics) {
+				info.metrics[global_info_entry.first] = global_info_entry.second;
 			}
 			if (info.Enabled(settings, MetricsType::LATENCY)) {
 				info.metrics[MetricsType::LATENCY] = main_query.Elapsed();
@@ -411,6 +422,14 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
 			info.AddResultSetSize(result_set_size);
 		}
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_BUFFER_MEMORY)) {
+			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
+			info.UpdateSystemPeakBufferManagerMemory(used_memory);
+		}
+		if (ProfilingInfo::Enabled(settings, MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
+			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
+			info.UpdateSystemPeakTempDirectorySize(used_swap);
+		}
 	}
 	active_operator = nullptr;
 }
@@ -481,10 +500,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		auto &info = tree_node.GetProfilingInfo();
 
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_TIMING)) {
-			info.AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
+			info.MetricSum<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_CARDINALITY)) {
-			info.AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements_returned);
+			info.MetricSum<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements_returned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_ROWS_SCANNED)) {
 			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
@@ -494,16 +513,24 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 				if (bind_data && scan_op.function.cardinality) {
 					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
 					if (cardinality && cardinality->has_estimated_cardinality) {
-						info.AddToMetric<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
+						info.MetricSum<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
 					}
 				}
 			}
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::RESULT_SET_SIZE)) {
-			info.AddToMetric<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
+			info.MetricSum<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::EXTRA_INFO)) {
 			info.extra_info = node.second.extra_info;
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MEMORY)) {
+			query_info.query_global_info.MetricMax(MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
+			                                       node.second.system_peak_buffer_manager_memory);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
+			query_info.query_global_info.MetricMax(MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+			                                       node.second.system_peak_temp_directory_size);
 		}
 	}
 	profiler.operator_infos.clear();
@@ -516,11 +543,9 @@ void QueryProfiler::SetInfo(const double &blocked_thread_time) {
 	}
 
 	auto &info = root->GetProfilingInfo();
-	auto metric_enabled = info.Enabled(info.expanded_settings, MetricsType::BLOCKED_THREAD_TIME);
-	if (!metric_enabled) {
-		return;
+	if (info.Enabled(info.expanded_settings, MetricsType::BLOCKED_THREAD_TIME)) {
+		query_info.query_global_info.metrics[MetricsType::BLOCKED_THREAD_TIME] = blocked_thread_time;
 	}
-	query_info.blocked_thread_time = blocked_thread_time;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -779,7 +804,7 @@ profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {
 
 	for (auto &setting : settings) {
 		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting) ||
-		    setting == MetricsType::BLOCKED_THREAD_TIME) {
+		    MetricsUtils::IsQueryGlobalMetric(setting)) {
 			phase_timing_settings_to_erase.insert(setting);
 		}
 	}
@@ -808,7 +833,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	if (depth != 0) {
 		info.metrics[MetricsType::OPERATOR_NAME] = root_p.GetName();
-		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
+		info.MetricSum<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
 	}
 	if (info.Enabled(info.settings, MetricsType::EXTRA_INFO)) {
 		info.extra_info = root_p.ParamsToString();

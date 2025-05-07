@@ -43,7 +43,7 @@ enum CSVErrorType : uint8_t {
 	SNIFFING = 5,          //! If something went wrong during sniffing and was not possible to find suitable candidates
 	MAXIMUM_LINE_SIZE = 6, //! Maximum line size was exceeded by a line in the CSV File
 	NULLPADDED_QUOTED_NEW_VALUE = 7, //! If the null_padding option is set, and we have quoted new values in parallel
-	INVALID_UNICODE = 8,             //! If we have invalid unicode values
+	INVALID_ENCODING = 8,            //! If we have invalid UTF-8 encoded values
 	INVALID_STATE = 9                //! If our CSV Scanner ended up in an invalid state
 };
 
@@ -134,6 +134,7 @@ public:
 	//! Returns true if there are any errors
 	bool AnyErrors();
 	bool HasError(CSVErrorType error_type);
+	CSVError GetFirstError(CSVErrorType error_type);
 	idx_t GetMaxLineLength();
 
 	void DontPrintErrorLine();

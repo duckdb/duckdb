@@ -50,6 +50,12 @@ public:
 		return false;
 	}
 
+	//! Returns a pointer to the bytes in the leaf.
+	//! The pointer's data is valid as long as the leaf is valid.
+	array_ptr<uint8_t> GetBytes() {
+		return array_ptr<uint8_t>(key, count);
+	}
+
 	//! Get the first byte greater than or equal to the byte.
 	//! Returns true, if such a byte exists, else false.
 	bool GetNextByte(uint8_t &byte) const {

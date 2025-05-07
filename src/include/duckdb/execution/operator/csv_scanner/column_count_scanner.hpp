@@ -31,7 +31,8 @@ struct ColumnCount {
 
 class ColumnCountResult : public ScannerResult {
 public:
-	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
+	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size,
+	                  CSVErrorHandler &error_handler);
 	inline ColumnCount &operator[](size_t index) {
 		return column_counts[index];
 	}
@@ -40,12 +41,13 @@ public:
 	idx_t current_column_count = 0;
 	bool error = false;
 	idx_t result_position = 0;
-	bool cur_line_starts_as_comment = false;
 
 	idx_t cur_buffer_idx = 0;
 	idx_t current_buffer_size = 0;
 	//! How many rows fit a given column count
 	map<idx_t, idx_t> rows_per_column_count;
+	CSVErrorHandler &error_handler;
+	map<idx_t, shared_ptr<CSVBufferHandle>> buffer_handles;
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
 	//! Adds a Row to the result

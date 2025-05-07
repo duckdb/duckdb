@@ -28,7 +28,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -83,7 +83,7 @@ jobs:
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
-        quay.io/pypa/manylinux2014_${{ matrix.config.image }}                  \
+        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
         bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make -C $PWD"
 
     - name: Print platform
@@ -107,6 +107,7 @@ jobs:
         path: |
           libduckdb-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Test
       shell: bash

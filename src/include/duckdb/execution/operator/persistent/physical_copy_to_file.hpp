@@ -52,6 +52,7 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool write_empty_file;
+	bool hive_file_pattern;
 	vector<idx_t> partition_columns;
 	vector<string> names;
 	vector<LogicalType> expected_types;
@@ -71,6 +72,7 @@ public:
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
+	SinkFinalizeType FinalizeInternal(ClientContext &context, GlobalSinkState &gstate) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
@@ -97,5 +99,7 @@ public:
 private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
 	                                               StorageLockKey &global_lock) const;
+	void WriteRotateInternal(ExecutionContext &context, GlobalSinkState &global_state,
+	                         const std::function<void(GlobalFunctionData &)> &fun) const;
 };
 } // namespace duckdb

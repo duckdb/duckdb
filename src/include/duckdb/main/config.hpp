@@ -37,6 +37,7 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
@@ -266,6 +267,8 @@ struct DBConfigOptions {
 	bool old_implicit_casting = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
+	//! The default block header size for new duckdb database files.
+	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.
@@ -280,6 +283,8 @@ struct DBConfigOptions {
 	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
+	//! Vector verification to enable (debug setting only)
+	DebugVectorVerification debug_verify_vector = DebugVectorVerification::NONE;
 	//! The maximum amount of vacuum tasks to schedule during a checkpoint
 	idx_t max_vacuum_tasks = 100;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
@@ -288,6 +293,14 @@ struct DBConfigOptions {
 	set<string> allowed_directories;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
+	//! Whether to enable external file caching using CachingFileSystem
+	bool enable_external_file_cache = true;
+	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	bool scheduler_process_partial = true;
+#else
+	bool scheduler_process_partial = false;
+#endif
 
 	bool operator==(const DBConfigOptions &other) const;
 };
