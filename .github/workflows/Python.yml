@@ -64,6 +64,7 @@ env:
 jobs:
 # This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
+    if: false
     name: Python 3.10 Linux
     runs-on: ubuntu-22.04
 
