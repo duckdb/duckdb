@@ -3,8 +3,10 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
+
 #include "pdqsort.h"
 #include "ska_sort.hpp"
+#include "vergesort.h"
 
 namespace duckdb {
 
@@ -65,12 +67,12 @@ template <class SORT_KEY>
 struct ExtractKey {
 	using result_type = uint64_t;
 	const result_type &operator()(const SORT_KEY &key) const {
-		return key.part0;
+		return key.part0; // FIXME: this should only be used if there is a part0
 	}
 };
 
 template <SortKeyType SORT_KEY_TYPE>
-static void TemplatedSortFixed(const TupleDataCollection &key_data) {
+static void TemplatedSortThin(const TupleDataCollection &key_data) {
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
@@ -80,11 +82,14 @@ static void TemplatedSortFixed(const TupleDataCollection &key_data) {
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
-	duckdb_ska_sort::ska_sort(begin, end, ExtractKey<SORT_KEY>());
+	const auto fallback = [](BLOCK_ITERATOR fb_begin, BLOCK_ITERATOR fb_end) {
+		duckdb_ska_sort::ska_sort(std::move(fb_begin), std::move(fb_end), ExtractKey<SORT_KEY>());
+	};
+	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
 }
 
 template <SortKeyType SORT_KEY_TYPE>
-static void TemplatedSortVariable(const TupleDataCollection &key_data) {
+static void TemplatedSortWide(const TupleDataCollection &key_data) {
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
@@ -94,26 +99,29 @@ static void TemplatedSortVariable(const TupleDataCollection &key_data) {
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
-	duckdb_pdqsort::pdqsort_branchless(begin, end);
+	const auto fallback = [](BLOCK_ITERATOR fb_begin, BLOCK_ITERATOR fb_end) {
+		duckdb_pdqsort::pdqsort_branchless(std::move(fb_begin), std::move(fb_end));
+	};
+	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
 }
 
 static void Sort(const TupleDataCollection &key_data) {
 	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedSortFixed<SortKeyType::NO_PAYLOAD_FIXED_8>(key_data);
+		return TemplatedSortThin<SortKeyType::NO_PAYLOAD_FIXED_8>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedSortFixed<SortKeyType::NO_PAYLOAD_FIXED_16>(key_data);
+		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_FIXED_16>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedSortFixed<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
+		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedSortVariable<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
+		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedSortFixed<SortKeyType::PAYLOAD_FIXED_16>(key_data);
+		return TemplatedSortThin<SortKeyType::PAYLOAD_FIXED_16>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedSortFixed<SortKeyType::PAYLOAD_FIXED_32>(key_data);
+		return TemplatedSortWide<SortKeyType::PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedSortVariable<SortKeyType::PAYLOAD_VARIABLE_32>(key_data);
+		return TemplatedSortWide<SortKeyType::PAYLOAD_VARIABLE_32>(key_data);
 	default:
 		throw NotImplementedException("TemplatedSort for %s", EnumUtil::ToString(sort_key_type));
 	}

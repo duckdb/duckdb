@@ -209,15 +209,18 @@ public:
 	using traits = std::iterator_traits<block_iterator_t>;
 
 public:
-	explicit block_iterator_t(STATE &state_p) : state(state_p), block_idx(0), tuple_idx(0) {
+	explicit block_iterator_t(STATE &state_p) : state(&state_p), block_idx(0), tuple_idx(0) {
 	}
 
-	block_iterator_t(STATE &state_p, const idx_t &index) : state(state_p) {
-		state.get().RandomAccess(block_idx, tuple_idx, index);
+	explicit block_iterator_t() : state(nullptr), block_idx(0), tuple_idx(0) {
+	}
+
+	block_iterator_t(STATE &state_p, const idx_t &index) : state(&state_p) {
+		state->RandomAccess(block_idx, tuple_idx, index);
 	}
 
 	block_iterator_t(STATE &state_p, const idx_t &block_idx_p, const idx_t &tuple_idx_p)
-	    : state(state_p), block_idx(block_idx_p), tuple_idx(tuple_idx_p) {
+	    : state(&state_p), block_idx(block_idx_p), tuple_idx(tuple_idx_p) {
 	}
 
 	block_iterator_t(const block_iterator_t &other)
@@ -234,7 +237,7 @@ public:
 public:
 	//! (De-)referencing
 	reference operator*() const {
-		return state.get().template GetValueAtIndex<T>(block_idx, tuple_idx);
+		return state->template GetValueAtIndex<T>(block_idx, tuple_idx);
 	}
 	pointer operator->() const {
 		return &operator*();
@@ -242,7 +245,7 @@ public:
 
 	//! Prefix and postfix increment and decrement
 	block_iterator_t &operator++() {
-		state.get().Increment(block_idx, tuple_idx);
+		state->Increment(block_idx, tuple_idx);
 		return *this;
 	}
 	block_iterator_t operator++(int) {
@@ -251,7 +254,7 @@ public:
 		return tmp;
 	}
 	block_iterator_t &operator--() {
-		state.get().Decrement(block_idx, tuple_idx);
+		state->Decrement(block_idx, tuple_idx);
 		return *this;
 	}
 	block_iterator_t operator--(int) {
@@ -262,34 +265,33 @@ public:
 
 	//! Random access
 	block_iterator_t &operator+=(const difference_type &n) {
-		state.get().Add(block_idx, tuple_idx, n);
+		state->Add(block_idx, tuple_idx, n);
 		return *this;
 	}
 	block_iterator_t &operator-=(const difference_type &n) {
-		state.get().Subtract(block_idx, tuple_idx, n);
+		state->Subtract(block_idx, tuple_idx, n);
 		return *this;
 	}
 	block_iterator_t operator+(const difference_type &n) const {
 		idx_t new_block_idx = block_idx;
 		idx_t new_tuple_idx = tuple_idx;
-		state.get().Add(new_block_idx, new_tuple_idx, n);
-		return block_iterator_t(state, new_block_idx, new_tuple_idx);
+		state->Add(new_block_idx, new_tuple_idx, n);
+		return block_iterator_t(*state, new_block_idx, new_tuple_idx);
 	}
 	block_iterator_t operator-(const difference_type &n) const {
 		idx_t new_block_idx = block_idx;
 		idx_t new_tuple_idx = tuple_idx;
-		state.get().Subtract(new_block_idx, new_tuple_idx, n);
-		return block_iterator_t(state, new_block_idx, new_tuple_idx);
+		state->Subtract(new_block_idx, new_tuple_idx, n);
+		return block_iterator_t(*state, new_block_idx, new_tuple_idx);
 	}
 
 	reference operator[](const difference_type &n) const {
-		return state.get().template GetValueAtIndex<T>(n);
+		return state->template GetValueAtIndex<T>(n);
 	}
 
 	//! Difference between iterators
 	difference_type operator-(const block_iterator_t &other) const {
-		return state.get().GetIndex(block_idx, tuple_idx) -
-		       other.state.get().GetIndex(other.block_idx, other.tuple_idx);
+		return state->GetIndex(block_idx, tuple_idx) - other.state->GetIndex(other.block_idx, other.tuple_idx);
 	}
 
 	//! Comparison operators
@@ -313,7 +315,7 @@ public:
 	}
 
 private:
-	std::reference_wrapper<STATE> state;
+	STATE *state;
 	idx_t block_idx; // Or chunk index
 	idx_t tuple_idx;
 };
