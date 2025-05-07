@@ -32,8 +32,8 @@ Changelog = "https://github.com/duckdb/duckdb/releases"
 
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]
-dependency-versions = "latest"
-before-build = 'pip install numpy>=2.0 virtualenv<=20.30'
+dependency-versions = "pinned"
+before-build = 'pip install numpy>=2.0'
 before-test = 'python scripts/optional_requirements.py'
 test-requires = ["pytest", "google-cloud-storage", "mypy"]
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
