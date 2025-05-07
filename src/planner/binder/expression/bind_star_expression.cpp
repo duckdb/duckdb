@@ -301,7 +301,21 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				new_list.push_back(std::move(expanded_expr));
 			}
 			if (new_list.empty()) {
-				auto err = StringUtil::Format("No matching columns found that match regex \"%s\"", regex_str);
+				vector<string> candidates;
+				for (auto &expanded_expr : star_list) {
+					auto child_expr = GetResolvedColumnExpression(*expanded_expr);
+					if (!child_expr) {
+						continue;
+					}
+					auto &colref = child_expr->Cast<ColumnRefExpression>();
+					candidates.push_back(colref.GetColumnName());
+				}
+				string candidate_str;
+				if (!candidates.empty()) {
+					candidate_str = "\n" + StringUtil::CandidatesErrorMessage(candidates, regex_str, "Did you mean");
+				}
+				auto err =
+				    StringUtil::Format("No matching columns found that match regex \"%s\"%s", regex_str, candidate_str);
 				throw BinderException(*star, err);
 			}
 			star_list = std::move(new_list);
