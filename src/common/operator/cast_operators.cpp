@@ -46,11 +46,11 @@ ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, Phys
 			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
 		}
 	}
-	return ConversionException(query_location, "Unsupported type for cast (%s -> %s)", source, target);
+	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
 }
 
 string TryCast::UnimplementedCastMessage(const LogicalType &source, const LogicalType &target) {
-	return StringUtil::Format("Unsupported type for cast (%s -> %s)", source, target);
+	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source, target);
 }
 
 //===--------------------------------------------------------------------===//
