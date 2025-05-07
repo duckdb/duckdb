@@ -77,6 +77,24 @@ void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpg
 	}
 }
 
+string ExtractFormat(const string &file_path) {
+	auto format = StringUtil::Lower(file_path);
+	// We first remove extension suffixes
+	if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::GZIP))) {
+		format = format.substr(0, format.size() - 3);
+	} else if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
+		format = format.substr(0, format.size() - 4);
+	}
+	// Now lets check for the last .
+	size_t dot_pos = format.rfind('.');
+    if (dot_pos == std::string::npos || dot_pos == format.length() - 1) {
+    	// No format found
+        return "";
+    }
+	// We found something
+    return format.substr(dot_pos + 1);
+}
+
 unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopyStmt &stmt) {
 	auto result = make_uniq<CopyStatement>();
 	auto &info = *result->info;
@@ -91,13 +109,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 		info.file_path = stmt.filename;
 	}
 
-	if (ReplacementScan::CanReplace(info.file_path, {"parquet"})) {
-		info.format = "parquet";
-	} else if (ReplacementScan::CanReplace(info.file_path, {"json", "jsonl", "ndjson"})) {
-		info.format = "json";
-	} else {
-		info.format = "csv";
-	}
+	info.format = ExtractFormat(info.file_path);
 
 	// get select_list
 	if (stmt.attlist) {

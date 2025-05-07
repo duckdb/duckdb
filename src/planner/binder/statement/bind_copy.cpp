@@ -29,9 +29,16 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 }
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
+	// Let's first bind our format
+	auto entry =
+		    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format, OnEntryNotFound::RETURN_NULL);
+	if (!entry){
+		// If we did not find an entry, we default to a CSV
+		entry =
+		    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv", OnEntryNotFound::THROW_EXCEPTION);
+	}
 	// lookup the format in the catalog
-	auto &copy_function =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
+	auto &copy_function = *entry;
 	if (copy_function.function.plan) {
 		// plan rewrite COPY TO
 		return copy_function.function.plan(*this, stmt);
@@ -322,7 +329,16 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	// Let's first bind our format
+	auto entry =
+		    catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format, OnEntryNotFound::RETURN_NULL);
+	if (!entry){
+		// If we did not find an entry, we default to a CSV
+		entry =
+		    catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv", OnEntryNotFound::THROW_EXCEPTION);
+	}
+	// lookup the format in the catalog
+	auto &copy_function = *entry;
 	if (!copy_function.function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
