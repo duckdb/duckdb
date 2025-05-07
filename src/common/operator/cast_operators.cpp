@@ -1753,6 +1753,9 @@ struct HugeIntegerCastOperation {
 
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
+			if (e < -38) {
+				return false;
+			}
 			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent);
 		} else {
