@@ -13,10 +13,10 @@ description = "DuckDB in-process database"
 readme = "README.md"
 keywords = ["DuckDB", "Database", "SQL", "OLAP"]
 requires-python = ">=3.7.0"
+license = "MIT"
 classifiers = [
     "Topic :: Database :: Database Engines/Servers",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License"
+    "Intended Audience :: Developers"
 ]
 authors = [
 	{name = "Hannes Muehleisen", email = "hannes@cwi.nl"}
