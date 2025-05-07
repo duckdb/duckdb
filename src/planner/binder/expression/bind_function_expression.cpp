@@ -56,18 +56,25 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
 			// the schema is set - check if we can turn this the schema into a column ref
-			ErrorData error;
-			unique_ptr<ColumnRefExpression> colref;
-			if (function.catalog.empty()) {
-				colref = make_uniq<ColumnRefExpression>(function.schema);
-			} else {
-				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
-			}
-			auto new_colref = QualifyColumnName(*colref, error);
-			bool is_col = !error.HasError();
-			bool is_col_alias = QualifyColumnAlias(*colref);
-
-			if (is_col || is_col_alias) {
+			// does this function exist in the system catalog?
+			func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			if (func) {
+				// the function exists in the system catalog - turn this into a dot call
+				ErrorData error;
+				unique_ptr<ColumnRefExpression> colref;
+				if (function.catalog.empty()) {
+					colref = make_uniq<ColumnRefExpression>(function.schema);
+				} else {
+					colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
+				}
+				auto new_colref = QualifyColumnName(*colref, error);
+				if (error.HasError()) {
+					// could not find the column - try to qualify the alias
+					if (!QualifyColumnAlias(*colref)) {
+						// no alias found either - throw
+						error.Throw();
+					}
+				}
 				// we can! transform this into a function call on the column
 				// i.e. "x.lower()" becomes "lower(x)"
 				function.children.insert(function.children.begin(), std::move(colref));
@@ -76,7 +83,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 		// rebind the function
-		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		if (!func) {
+			func =
+			    GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		}
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
