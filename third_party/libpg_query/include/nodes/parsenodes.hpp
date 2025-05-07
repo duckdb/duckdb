@@ -2129,15 +2129,27 @@ typedef struct PGLimitPercent {
 } PGLimitPercent;
 
 /* ----------------------
- *		Lambda Function (or Arrow Operator)
+ *		Lambda Function
  * ----------------------
  */
 typedef struct PGLambdaFunction {
 	PGNodeTag type;
-	PGNode *lhs;                 /* parameter expression */
+	PGList *lhs;                 /* parameter list */
 	PGNode *rhs;                 /* lambda expression */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;
+
+/* ----------------------
+ *		Single Arrow Function
+ * ----------------------
+ */
+
+typedef struct PGSingleArrowFunction {
+	PGNodeTag type;
+	PGNode *lhs;
+	PGNode *rhs;
+	int location;                /* token location, or -1 if unknown */
+} PGSingleArrowFunction;
 
 /* ----------------------
  *		Positional Reference

@@ -16,10 +16,44 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func) {
+BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
+                                                 const LambdaSyntaxType syntax_type) {
+	if (syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD) {
+		// lambda x: x + 1 syntax.
+		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	}
 
-	auto lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	auto &config = ClientConfig::GetConfig(context);
+	auto setting = config.lambda_syntax;
+	bool invalid_syntax =
+	    setting == LambdaSyntax::DISABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
+	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
+	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
+	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior. \n"
+	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
+
+	BindResult lambda_bind_result;
+	ErrorData error;
+	try {
+		lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	} catch (const std::exception &ex) {
+		error = ErrorData(ex);
+	}
+
+	if (error.HasError() && error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED && invalid_syntax) {
+		ErrorData deprecation_error(ExceptionType::BINDER, msg);
+		deprecation_error.Throw();
+	} else if (error.HasError()) {
+		error.Throw();
+	}
+
 	if (!lambda_bind_result.HasError()) {
+		if (!invalid_syntax) {
+			return lambda_bind_result;
+		}
+		return BindResult(msg);
+	}
+	if (StringUtil::Contains(lambda_bind_result.error.RawMessage(), "Deprecated lambda arrow (->) detected.")) {
 		return lambda_bind_result;
 	}
 
@@ -88,8 +122,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		if (function.IsLambdaFunction()) {
-			return TryBindLambdaOrJson(function, depth, *func);
+		auto child = function.IsLambdaFunction();
+		if (child) {
+			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
+			return TryBindLambdaOrJson(function, depth, *func, syntax_type);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
