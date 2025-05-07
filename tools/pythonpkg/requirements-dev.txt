@@ -16,4 +16,3 @@ tensorflow
 cxxheaderparser
 pcpp
 pyspark
-virtualenv<=20.30
