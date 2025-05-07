@@ -737,6 +737,7 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 		{ static_cast<uint32_t>(CatalogType::COLLATION_ENTRY), "COLLATION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TYPE_ENTRY), "TYPE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::MATERIALIZED_VIEW_ENTRY), "MATERIALIZED_VIEW_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
@@ -756,12 +757,12 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
-	return StringUtil::EnumToString(GetCatalogTypeValues(), 23, "CatalogType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCatalogTypeValues(), 24, "CatalogType", static_cast<uint32_t>(value));
 }
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
-	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 23, "CatalogType", value));
+	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 24, "CatalogType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
@@ -2860,19 +2861,20 @@ const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
 		{ static_cast<uint32_t>(ParseInfoType::COMMENT_ON_INFO), "COMMENT_ON_INFO" },
 		{ static_cast<uint32_t>(ParseInfoType::COMMENT_ON_COLUMN_INFO), "COMMENT_ON_COLUMN_INFO" },
 		{ static_cast<uint32_t>(ParseInfoType::COPY_DATABASE_INFO), "COPY_DATABASE_INFO" },
-		{ static_cast<uint32_t>(ParseInfoType::UPDATE_EXTENSIONS_INFO), "UPDATE_EXTENSIONS_INFO" }
+		{ static_cast<uint32_t>(ParseInfoType::UPDATE_EXTENSIONS_INFO), "UPDATE_EXTENSIONS_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::REFRESH_MATERIALIZED_VIEW_INFO), "REFRESH_MATERIALIZED_VIEW_INFO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
-	return StringUtil::EnumToString(GetParseInfoTypeValues(), 17, "ParseInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetParseInfoTypeValues(), 18, "ParseInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
-	return static_cast<ParseInfoType>(StringUtil::StringToEnum(GetParseInfoTypeValues(), 17, "ParseInfoType", value));
+	return static_cast<ParseInfoType>(StringUtil::StringToEnum(GetParseInfoTypeValues(), 18, "ParseInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {
@@ -3787,19 +3789,20 @@ const StringUtil::EnumStringLiteral *GetStatementTypeValues() {
 		{ static_cast<uint32_t>(StatementType::DETACH_STATEMENT), "DETACH_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::MULTI_STATEMENT), "MULTI_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::COPY_DATABASE_STATEMENT), "COPY_DATABASE_STATEMENT" },
-		{ static_cast<uint32_t>(StatementType::UPDATE_EXTENSIONS_STATEMENT), "UPDATE_EXTENSIONS_STATEMENT" }
+		{ static_cast<uint32_t>(StatementType::UPDATE_EXTENSIONS_STATEMENT), "UPDATE_EXTENSIONS_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::REFRESH_MATERIALIZED_VIEW_STATEMENT), "REFRESH_MATERIALIZED_VIEW_STATEMENT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value) {
-	return StringUtil::EnumToString(GetStatementTypeValues(), 30, "StatementType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStatementTypeValues(), 31, "StatementType", static_cast<uint32_t>(value));
 }
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value) {
-	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), 30, "StatementType", value));
+	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), 31, "StatementType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatisticsTypeValues() {
