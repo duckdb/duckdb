@@ -68,6 +68,7 @@ void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpg
 				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
 			}
 			info.format = StringUtil::Lower(format_val->val.str);
+			info.is_format_auto_detected = false;
 			continue;
 		}
 
@@ -87,12 +88,12 @@ string ExtractFormat(const string &file_path) {
 	}
 	// Now lets check for the last .
 	size_t dot_pos = format.rfind('.');
-    if (dot_pos == std::string::npos || dot_pos == format.length() - 1) {
-    	// No format found
-        return "";
-    }
+	if (dot_pos == std::string::npos || dot_pos == format.length() - 1) {
+		// No format found
+		return "";
+	}
 	// We found something
-    return format.substr(dot_pos + 1);
+	return format.substr(dot_pos + 1);
 }
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopyStmt &stmt) {

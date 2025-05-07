@@ -30,12 +30,14 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
 	// Let's first bind our format
-	auto entry =
-		    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format, OnEntryNotFound::RETURN_NULL);
-	if (!entry){
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	auto entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA,
+	                                                         stmt.info->format, on_entry_do);
+	if (!entry) {
 		// If we did not find an entry, we default to a CSV
-		entry =
-		    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv", OnEntryNotFound::THROW_EXCEPTION);
+		entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv",
+		                                                    OnEntryNotFound::THROW_EXCEPTION);
 	}
 	// lookup the format in the catalog
 	auto &copy_function = *entry;
@@ -329,13 +331,15 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	// Let's first bind our format
-	auto entry =
-		    catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format, OnEntryNotFound::RETURN_NULL);
-	if (!entry){
+	auto entry = catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format,
+	                                                        on_entry_do);
+	if (!entry) {
 		// If we did not find an entry, we default to a CSV
-		entry =
-		    catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv", OnEntryNotFound::THROW_EXCEPTION);
+		entry = catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv",
+		                                                   OnEntryNotFound::THROW_EXCEPTION);
 	}
 	// lookup the format in the catalog
 	auto &copy_function = *entry;
