@@ -21,6 +21,7 @@ classifiers = [
 authors = [
 	{name = "Hannes Muehleisen", email = "hannes@cwi.nl"}
 ]
+dynamic = ["version"]
 
 [project.urls]
 Documentation = "https://duckdb.org/docs/stable/clients/python/overview"
