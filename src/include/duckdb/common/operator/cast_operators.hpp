@@ -31,8 +31,7 @@ class Vector;
 struct TryCast {
 	static ConversionException UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
 	                                                     optional_ptr<CastParameters> parameters);
-	static string UnimplementedCastMessage(const LogicalType &source, const LogicalType &target,
-	                                       CastParameters &parameters);
+	static string UnimplementedCastMessage(const LogicalType &source, const LogicalType &target);
 
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
@@ -83,14 +82,8 @@ struct Cast {
 struct HandleCastError {
 	static void AssignError(const string &error_message, CastParameters &parameters);
 	static void AssignError(const string &error_message, string *error_message_ptr,
-	                        optional_idx error_location = optional_idx()) {
-		if (!error_message_ptr) {
-			throw ConversionException(error_location, error_message);
-		}
-		if (error_message_ptr->empty()) {
-			*error_message_ptr = error_message;
-		}
-	}
+	                        optional_ptr<const Expression> cast_source = nullptr,
+	                        optional_idx error_location = optional_idx());
 };
 
 //===--------------------------------------------------------------------===//
