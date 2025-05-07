@@ -1989,6 +1989,12 @@ typedef struct PGCreateTableAsStmt {
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTableAsStmt;
 
+typedef struct PGRefreshMaterializedViewStmt {
+	PGNodeTag type;
+	PGRangeVar *materializedView;           /* target materialized view name */
+	PGObjectType removeType;	   /* object type */
+} PGRefreshMaterializedViewStmt;
+
 /* ----------------------
  * Checkpoint Statement
  * ----------------------

@@ -12,6 +12,7 @@ CreateTypeStmt
 CreateFunctionStmt
 CreateSchemaStmt
 CreateSeqStmt
+CreateMaterializedViewStmt
 CreateStmt
 CommentOnStmt
 DeallocateStmt
@@ -29,6 +30,7 @@ LoadStmt
 PragmaStmt
 PrepareStmt
 RenameStmt
+RefreshMaterializedViewStmt
 SelectStmt
 TransactionStmt
 UpdateStmt
