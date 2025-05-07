@@ -29,25 +29,28 @@ struct ValidityMask;
 class Vector;
 
 struct TryCast {
+	static ConversionException UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
+	                                                     optional_ptr<CastParameters> parameters);
+	static string UnimplementedCastMessage(const LogicalType &source, const LogicalType &target,
+	                                       CastParameters &parameters);
+
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
-		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+		throw UnimplementedErrorMessage(GetTypeId<SRC>(), GetTypeId<DST>(), nullptr);
 	}
 };
 
 struct TryCastErrorMessage {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
-		                              GetTypeId<SRC>(), GetTypeId<DST>());
+		throw TryCast::UnimplementedErrorMessage(GetTypeId<SRC>(), GetTypeId<DST>(), parameters);
 	}
 };
 
 struct TryCastErrorMessageCommaSeparated {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
-		                              GetTypeId<SRC>(), GetTypeId<DST>());
+		throw TryCast::UnimplementedErrorMessage(GetTypeId<SRC>(), GetTypeId<DST>(), parameters);
 	}
 };
 

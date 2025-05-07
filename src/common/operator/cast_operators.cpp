@@ -30,8 +30,33 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <duckdb/planner/expression.hpp>
 
 namespace duckdb {
+
+ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
+                                                       optional_ptr<CastParameters> parameters) {
+	optional_idx query_location;
+	if (parameters) {
+		query_location = parameters->query_location;
+		if (parameters->cast_source && parameters->cast_target) {
+			auto &source_expr = *parameters->cast_source;
+			auto &target_expr = *parameters->cast_target;
+			return ConversionException(query_location, UnimplementedCastMessage(source_expr.return_type,
+			                                                                    target_expr.return_type, *parameters));
+		}
+	}
+	return ConversionException(query_location, "Unsupported type for cast (%s -> %s)", source, target);
+}
+
+string TryCast::UnimplementedCastMessage(const LogicalType &source, const LogicalType &target,
+                                         CastParameters &parameters) {
+	string column;
+	if (parameters.cast_target && parameters.cast_target->HasAlias()) {
+		column = " from source column " + parameters.cast_target->alias;
+	}
+	return StringUtil::Format("Unsupported type for cast (%s -> %s)%s", source, target, column);
+}
 
 //===--------------------------------------------------------------------===//
 // Cast bool -> Numeric

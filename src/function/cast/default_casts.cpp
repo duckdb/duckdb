@@ -36,15 +36,12 @@ void HandleCastError::AssignError(const string &error_message, CastParameters &p
 	AssignError(error_message, parameters.error_message, parameters.query_location);
 }
 
-static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
-	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
-}
-
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
 	if (VectorOperations::HasNotNull(source, count)) {
-		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
+		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType(), parameters),
+		                             parameters);
 		success = false;
 	}
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
