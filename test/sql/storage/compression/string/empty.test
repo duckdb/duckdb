@@ -2,6 +2,8 @@
 # description: Test empty strings with string compression
 # group: [string]
 
+require skip_reload
+
 require no_latest_storage
 
 require vector_size 512

@@ -2,6 +2,8 @@
 # description: Fetch from compressed string column with index
 # group: [string]
 
+require skip_reload
+
 statement ok
 pragma verify_fetch_row
 

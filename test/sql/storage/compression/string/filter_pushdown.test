@@ -2,6 +2,8 @@
 # description: Filter pushdown with string compressed columns
 # group: [string]
 
+require skip_reload
+
 statement ok
 pragma verify_fetch_row
 

@@ -2,6 +2,8 @@
 # description: blob tests
 # group: [string]
 
+require skip_reload
+
 statement ok
 pragma verify_fetch_row
 
