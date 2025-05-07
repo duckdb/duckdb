@@ -263,7 +263,7 @@
         "id": 202,
         "name": "syntax_type",
         "type": "LambdaSyntaxType",
-        "default": "LambdaSyntaxType::DEPRECATED_STORAGE",
+        "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
         "version": "v1.3.0"
       }
     ]

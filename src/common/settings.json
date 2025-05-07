@@ -44,12 +44,6 @@
         ]
     },
     {
-        "name": "allow_deprecated_lambda_syntax",
-        "description": "Enables the deprecated usage of the single arrow operator (->) for lambda functions.",
-        "type": "BOOLEAN",
-        "scope": "local"
-    },
-    {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",
@@ -554,6 +548,13 @@
         "description": "Whether or not the / operator defaults to integer division, or to floating point division",
         "type": "BOOLEAN",
         "scope": "local"
+    },
+    {
+        "name": "lambda_syntax",
+        "description": "Configures the use of the deprecated single arrow operator (->) for lambda functions.",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "late_materialization_max_rows",

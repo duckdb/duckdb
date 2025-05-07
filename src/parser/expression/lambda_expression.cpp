@@ -14,7 +14,8 @@ LambdaExpression::LambdaExpression() : ParsedExpression(ExpressionType::LAMBDA, 
 
 LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr<ParsedExpression> expr)
     : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA),
-      named_parameters(std::move(named_parameters_p)), expr(std::move(expr)), syntax_type(LambdaSyntaxType::NEW) {
+      named_parameters(std::move(named_parameters_p)), expr(std::move(expr)),
+      syntax_type(LambdaSyntaxType::LAMBDA_KEYWORD) {
 	if (named_parameters.size() == 1) {
 		lhs = make_uniq<ColumnRefExpression>(named_parameters.back());
 		return;
@@ -30,7 +31,7 @@ LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr
 
 LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)
     : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)),
-      syntax_type(LambdaSyntaxType::DEPRECATED) {
+      syntax_type(LambdaSyntaxType::SINGLE_ARROW) {
 }
 
 vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) {

@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-SET allow_deprecated_lambda_syntax=true
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
 
 statement ok
 ATTACH '__TEST_DIR__/deprecated_syntax.db';

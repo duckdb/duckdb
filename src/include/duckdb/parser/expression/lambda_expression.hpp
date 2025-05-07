@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-enum class LambdaSyntaxType : uint8_t { DEPRECATED_STORAGE = 0, DEPRECATED = 1, NEW = 2 };
+enum class LambdaSyntax : uint8_t { DEFAULT = 0, ENABLE_SINGLE_ARROW = 1, DISABLE_SINGLE_ARROW = 2 };
+enum class LambdaSyntaxType : uint8_t { SINGLE_ARROW_STORAGE = 0, SINGLE_ARROW = 1, LAMBDA_KEYWORD = 2 };
 
 //! DuckDB 1.3. introduced a new lambda syntax: lambda x, y: x + y.
 //! The new syntax resolves any ambiguity with the JSON arrow operator.

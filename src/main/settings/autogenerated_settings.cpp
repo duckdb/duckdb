@@ -79,23 +79,6 @@ Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) 
 }
 
 //===----------------------------------------------------------------------===//
-// Allow Deprecated Lambda Syntax
-//===----------------------------------------------------------------------===//
-void AllowDeprecatedLambdaSyntaxSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.allow_deprecated_lambda_syntax = input.GetValue<bool>();
-}
-
-void AllowDeprecatedLambdaSyntaxSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).allow_deprecated_lambda_syntax = ClientConfig().allow_deprecated_lambda_syntax;
-}
-
-Value AllowDeprecatedLambdaSyntaxSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.allow_deprecated_lambda_syntax);
-}
-
-//===----------------------------------------------------------------------===//
 // Allow Extensions Metadata Mismatch
 //===----------------------------------------------------------------------===//
 void AllowExtensionsMetadataMismatchSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET allow_deprecated_lambda_syntax=false
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
 
 # Test NULLs and simple cases.
 

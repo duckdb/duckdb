@@ -18,17 +18,18 @@ namespace duckdb {
 
 BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
                                                  const LambdaSyntaxType syntax_type) {
-	if (syntax_type == LambdaSyntaxType::NEW) {
+	if (syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD) {
 		// lambda x: x + 1 syntax.
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
 	auto &config = ClientConfig::GetConfig(context);
-	auto allow_deprecated_lambda_syntax = config.allow_deprecated_lambda_syntax;
-	bool invalid_syntax = !allow_deprecated_lambda_syntax && syntax_type == LambdaSyntaxType::DEPRECATED;
+	auto setting = config.lambda_syntax;
+	bool invalid_syntax =
+	    setting == LambdaSyntax::DISABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
-	                   "Use SET allow_deprecated_lambda_syntax=true to revert to the deprecated behavior. \n"
+	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior. \n"
 	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
 
 	BindResult lambda_bind_result;
