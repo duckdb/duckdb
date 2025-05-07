@@ -28,8 +28,8 @@ public:
 	LambdaExpression(vector<string> named_parameters_p, unique_ptr<ParsedExpression> expr);
 	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
-	//! The list of named lambda parameters.
-	vector<string> named_parameters;
+	//! The syntax type.
+	LambdaSyntaxType syntax_type;
 	//! The LHS of a lambda expression or the JSON "->"-operator. We need the context
 	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (JSON)
 	unique_ptr<ParsedExpression> lhs;
@@ -37,13 +37,11 @@ public:
 	unique_ptr<ParsedExpression> expr;
 	//! Band-aid for conflicts between lambda binding and JSON binding.
 	unique_ptr<ParsedExpression> copied_expr;
-	//! The syntax type.
-	LambdaSyntaxType syntax_type;
 
 public:
 	//! Returns a vector to the column references in the LHS expression, and fills the error message,
 	//! if the LHS is not a valid lambda parameter list
-	vector<reference<ParsedExpression>> ExtractColumnRefExpressions(string &error_message);
+	vector<reference<const ParsedExpression>> ExtractColumnRefExpressions(string &error_message) const;
 	//! Returns the error message for an invalid lambda parameter list
 	static string InvalidParametersErrorMessage();
 	//! Returns true, if the column_name is a lambda parameter name

@@ -35,7 +35,7 @@ idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const Bou
 	return offset;
 }
 
-void ExtractParameter(ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
 
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
 	if (column_ref.IsQualified()) {
@@ -64,8 +64,7 @@ void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vec
 
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
-	bool deprecated = expr.named_parameters.empty();
-	if (!deprecated && !bind_lambda_function) {
+	if (expr.syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD && !bind_lambda_function) {
 		return BindResult("invalid lambda expression");
 	}
 

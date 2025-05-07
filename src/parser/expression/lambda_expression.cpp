@@ -13,16 +13,15 @@ LambdaExpression::LambdaExpression() : ParsedExpression(ExpressionType::LAMBDA, 
 }
 
 LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr<ParsedExpression> expr)
-    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA),
-      named_parameters(std::move(named_parameters_p)), expr(std::move(expr)),
-      syntax_type(LambdaSyntaxType::LAMBDA_KEYWORD) {
-	if (named_parameters.size() == 1) {
-		lhs = make_uniq<ColumnRefExpression>(named_parameters.back());
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), syntax_type(LambdaSyntaxType::LAMBDA_KEYWORD),
+      expr(std::move(expr)) {
+	if (named_parameters_p.size() == 1) {
+		lhs = make_uniq<ColumnRefExpression>(named_parameters_p.back());
 		return;
 	}
 	// Create a dummy row function and insert the children.
 	vector<unique_ptr<ParsedExpression>> children;
-	for (const auto &name : named_parameters) {
+	for (const auto &name : named_parameters_p) {
 		auto child = make_uniq<ColumnRefExpression>(name);
 		children.push_back(std::move(child));
 	}
@@ -30,15 +29,15 @@ LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr
 }
 
 LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)
-    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)),
-      syntax_type(LambdaSyntaxType::SINGLE_ARROW) {
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), syntax_type(LambdaSyntaxType::SINGLE_ARROW),
+      lhs(std::move(lhs)), expr(std::move(expr)) {
 }
 
-vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) {
+vector<reference<const ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) const {
 
 	// we return an error message because we can't throw a binder exception here,
 	// since we can't distinguish between a lambda function and the JSON operator yet
-	vector<reference<ParsedExpression>> column_refs;
+	vector<reference<const ParsedExpression>> column_refs;
 
 	if (lhs->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// single column reference
@@ -85,19 +84,25 @@ bool LambdaExpression::IsLambdaParameter(const vector<unordered_set<string>> &la
 }
 
 string LambdaExpression::ToString() const {
-	if (named_parameters.empty()) {
+	if (syntax_type != LambdaSyntaxType::LAMBDA_KEYWORD) {
 		return "(" + lhs->ToString() + " -> " + expr->ToString() + ")";
 	}
-	string lhs_str = "(lambda ";
-	for (idx_t i = 0; i < named_parameters.size(); i++) {
-		if (i == named_parameters.size() - 1) {
-			lhs_str += "\"" + named_parameters[i] + "\"";
+
+	string str = "";
+	auto column_refs = ExtractColumnRefExpressions(str);
+
+	str = "(lambda ";
+	for (idx_t i = 0; i < column_refs.size(); i++) {
+		auto &column_ref = column_refs[i].get();
+		auto &cast_column_ref = column_ref.Cast<ColumnRefExpression>();
+
+		if (i == column_refs.size() - 1) {
+			str += cast_column_ref.ToString();
 			continue;
 		}
-		lhs_str += "\"" + named_parameters[i] + "\"" + ", ";
+		str += cast_column_ref.ToString() + ", ";
 	}
-
-	return lhs_str + ": " + expr->ToString() + ")";
+	return str + ": " + expr->ToString() + ")";
 }
 
 bool LambdaExpression::Equal(const LambdaExpression &a, const LambdaExpression &b) {
@@ -112,14 +117,7 @@ hash_t LambdaExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
-	if (named_parameters.empty()) {
-		auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
-		copy->syntax_type = syntax_type;
-		copy->CopyProperties(*this);
-		return std::move(copy);
-	}
-
-	auto copy = make_uniq<LambdaExpression>(named_parameters, expr->Copy());
+	auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
 	copy->syntax_type = syntax_type;
 	copy->CopyProperties(*this);
 	return std::move(copy);
