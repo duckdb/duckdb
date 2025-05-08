@@ -25,6 +25,13 @@ SELECT list_value({'a': 1, 'b': 'a'}, {'a': 2, 'b': 'b'}, {'a': NULL, 'b': 'c'})
 ----
 [{'a': 1, 'b': a}, {'a': 2, 'b': b}, {'a': NULL, 'b': c}]
 
+# Test with two different structs
+query I
+SELECT list_value({'a': 1, 'b': 'a'}, {'x': 2, 'y': 'b'});
+----
+[{'a': 1, 'b': a, 'y': NULL, 'x': NULL}, {'a': NULL, 'b': NULL, 'y': b, 'x': 2}]
+
+
 statement ok
 CREATE TABLE tbl (s struct(a int, b varchar));
 
