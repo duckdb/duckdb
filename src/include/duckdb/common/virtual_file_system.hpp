@@ -18,6 +18,7 @@ namespace duckdb {
 class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
+	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;

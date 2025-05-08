@@ -22,7 +22,7 @@ SELECT COLUMNS([x for x in (*) if x <> 'i']) FROM integers
 
 # short-hand, allow directly specifying the lambda
 query I
-SELECT COLUMNS(x -> x <> 'i') FROM integers
+SELECT COLUMNS(lambda x: x <> 'i') FROM integers
 ----
 84
 14

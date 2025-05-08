@@ -3629,7 +3629,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
-	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
+	for (iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
 		const char *z = azArg[iName];
 		if (optionMatch(z, "new")) {
 			newFlag = true;
@@ -4902,6 +4902,16 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
+		} else if (strcmp(z, "-storage_version") == 0) {
+			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
+			if (storage_version != "latest") {
+				utf8_printf(
+				    stderr,
+				    "%s: Error: unknown argument (%s) for '-storage_version', only 'latest' is supported currently\n",
+				    program_name, storage_version.c_str());
+			} else {
+				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
+			}
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		}
@@ -5065,6 +5075,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				free(azCmd);
 				return rc;
 			}
+		} else if (strcmp(z, "-storage_version") == 0) {
+			// already processed on start-up
 		} else {
 			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");

@@ -1,0 +1,99 @@
+# name: test/sql/function/list/lambdas/arrow/list_comprehension_deprecated.test
+# description: Test different examples that can be found when searching for python list comprehension examples
+# group: [arrow]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
+
+# even squares
+query I
+SELECT list_transform(list_filter([0, 1, 2, 3, 4, 5], x -> x % 2 = 0), y -> y * y)
+----
+[0, 4, 16]
+
+query I
+SELECT [x * x for x in [0, 1, 2, 3, 4, 5] if x%2=0]
+----
+[0, 4, 16]
+
+# divisible by 2 and 5
+query I
+SELECT list_filter(list_filter([2, 4, 3, 1, 20, 10, 3, 30], x -> x % 2 == 0), y -> y % 5 == 0)
+----
+[20, 10, 30]
+
+query I
+SELECT [x for x in [x for x in [2, 4, 3, 1, 20, 10, 3, 30] if x % 2 == 0] if x % 5 == 0]
+----
+[20, 10, 30]
+
+query I
+SELECT list_filter(['apple', 'banana', 'cherry', 'kiwi', 'mango'], fruit -> contains(fruit, 'a'))
+----
+[apple, banana, mango]
+
+
+query I
+SELECT [fruit for fruit in ['apple', 'banana', 'cherry', 'kiwi', 'mango'] if contains(fruit, 'a')]
+----
+[apple, banana, mango]
+
+statement ok
+CREATE TABLE fruit_tbl AS SELECT ['apple', 'banana', 'cherry', 'kiwi', 'mango'] fruits
+
+query I
+SELECT [fruit for fruit in fruits if contains(fruit, 'a')] FROM fruit_tbl
+----
+[apple, banana, mango]
+
+query I
+SELECT list_transform([[1, NULL, 2], [3, NULL]], a -> list_filter(a, x -> x IS NOT NULL))
+----
+[[1, 2], [3]]
+
+query I
+SELECT [len(x) for x in ['goodbye', 'cruel', 'world']]
+----
+[7, 5, 5]
+
+statement ok
+CREATE TABLE word_tbl AS SELECT ['goodbye', 'cruel', 'world'] words
+
+query I
+SELECT [len(x) for x in words] from word_tbl
+----
+[7, 5, 5]
+
+query I
+with base as (
+	select [4,5,6] as l
+)
+select [x for x,i in l if i != 2] as filtered from base;
+----
+[4, 6]
+
+query I
+select [x+i for x, i in [10, 9, 8, 7, 6]]
+----
+[11, 11, 11, 11, 11]
+
+query I
+with base as (
+	select [4,5,6] as l
+)
+select [x + 5 for x in l] as filtered from base;
+----
+[9, 10, 11]
+
+statement error
+select [a for a, b, c in [1,2,3]];
+----
+This lambda function only supports up to two lambda parameters!
+
+statement error
+select [a for a[1], b[2] in [1,2,3,4]];
+----
+Parser Error: syntax error at or near "["

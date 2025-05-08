@@ -121,6 +121,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -895,6 +896,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "COMPRESSION_DICT_FSST" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
@@ -902,12 +904,12 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
-	return StringUtil::EnumToString(GetCompressionTypeValues(), 16, "CompressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCompressionTypeValues(), 17, "CompressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
-	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 16, "CompressionType", value));
+	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 17, "CompressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressionValidityValues() {
@@ -2118,6 +2120,44 @@ const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value) {
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	return static_cast<KeywordCategory>(StringUtil::StringToEnum(GetKeywordCategoryValues(), 5, "KeywordCategory", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLambdaSyntaxValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LambdaSyntax::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(LambdaSyntax::ENABLE_SINGLE_ARROW), "ENABLE_SINGLE_ARROW" },
+		{ static_cast<uint32_t>(LambdaSyntax::DISABLE_SINGLE_ARROW), "DISABLE_SINGLE_ARROW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntax>(LambdaSyntax value) {
+	return StringUtil::EnumToString(GetLambdaSyntaxValues(), 3, "LambdaSyntax", static_cast<uint32_t>(value));
+}
+
+template<>
+LambdaSyntax EnumUtil::FromString<LambdaSyntax>(const char *value) {
+	return static_cast<LambdaSyntax>(StringUtil::StringToEnum(GetLambdaSyntaxValues(), 3, "LambdaSyntax", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLambdaSyntaxTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LambdaSyntaxType::SINGLE_ARROW_STORAGE), "SINGLE_ARROW_STORAGE" },
+		{ static_cast<uint32_t>(LambdaSyntaxType::SINGLE_ARROW), "SINGLE_ARROW" },
+		{ static_cast<uint32_t>(LambdaSyntaxType::LAMBDA_KEYWORD), "LAMBDA_KEYWORD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntaxType>(LambdaSyntaxType value) {
+	return StringUtil::EnumToString(GetLambdaSyntaxTypeValues(), 3, "LambdaSyntaxType", static_cast<uint32_t>(value));
+}
+
+template<>
+LambdaSyntaxType EnumUtil::FromString<LambdaSyntaxType>(const char *value) {
+	return static_cast<LambdaSyntaxType>(StringUtil::StringToEnum(GetLambdaSyntaxTypeValues(), 3, "LambdaSyntaxType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLimitNodeTypeValues() {
