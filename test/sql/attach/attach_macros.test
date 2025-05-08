@@ -2,8 +2,6 @@
 # description: Tests for macro functions in attached databases
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 

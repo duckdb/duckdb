@@ -5,12 +5,13 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
 #include <list>
 #include <thread>
-#include "duckdb/main/stream_query_result.hpp"
 #include <chrono>
 
 namespace duckdb {
@@ -55,6 +56,35 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 	}
 }
 
+bool CanRestart(Connection &conn) {
+	auto &connection_manager = conn.context->db->GetConnectionManager();
+	auto &db_manager = DatabaseManager::Get(*conn.context->db);
+	auto &connection_list = connection_manager.GetConnectionListReference();
+
+	auto databases = db_manager.GetDatabases();
+	idx_t database_count = 0;
+	for (auto &db_ref : databases) {
+		auto &db = db_ref.get();
+		if (db.IsSystem()) {
+			continue;
+		}
+		database_count++;
+	}
+	if (database_count > 1) {
+		return false;
+	}
+	for (auto &conn_ref : connection_list) {
+		auto &conn = conn_ref.first.get();
+		if (!conn.client_data->prepared_statements.empty()) {
+			return false;
+		}
+		if (conn.transaction.HasActiveTransaction()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, string sql_query) const {
 	if (context.is_parallel) {
 		// cannot restart in parallel
@@ -67,18 +97,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	} catch (...) {
 		query_fail = true;
 	}
-	bool can_restart = true;
-	auto &connection_manager = connection->context->db->GetConnectionManager();
-	auto &connection_list = connection_manager.GetConnectionListReference();
-	for (auto &conn_ref : connection_list) {
-		auto &conn = conn_ref.first.get();
-		if (!conn.client_data->prepared_statements.empty()) {
-			can_restart = false;
-		}
-		if (conn.transaction.HasActiveTransaction()) {
-			can_restart = false;
-		}
-	}
+	bool can_restart = CanRestart(*connection);
 	if (!query_fail && can_restart && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_uniq<RestartCommand>(runner, true);

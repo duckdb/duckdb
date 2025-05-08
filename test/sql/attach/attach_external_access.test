@@ -2,8 +2,6 @@
 # description: Test ATTACH with enable external access set to false
 # group: [attach]
 
-require skip_reload
-
 statement ok
 SET enable_external_access=false
 

@@ -2,8 +2,6 @@
 # description: Tests attaching database files with different block allocation sizes.
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
