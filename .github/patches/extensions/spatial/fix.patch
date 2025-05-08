@@ -148,7 +148,7 @@ index 6079be1..e629e5b 100644
  			}
  		}
 diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index 7143df8..b62bb6b 100644
+index 7143df8..ae3ea27 100644
 --- a/src/spatial/modules/gdal/gdal_module.cpp
 +++ b/src/spatial/modules/gdal/gdal_module.cpp
 @@ -375,7 +375,7 @@ public:
@@ -160,7 +160,18 @@ index 7143df8..b62bb6b 100644
  			files.AddString(tmp.c_str());
  		}
  		return files.StealList();
-@@ -1153,9 +1153,9 @@ struct ST_Read_Meta {
+@@ -1105,7 +1105,9 @@ struct ST_Read : ArrowTableFunction {
+ 		func.named_parameters["keep_wkb"] = LogicalType::BOOLEAN;
+ 		ExtensionUtil::RegisterFunction(db, func);
+ 
+-		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read", DOCUMENTATION, EXAMPLE, {{"ext", "spatial"}});
++		InsertionOrderPreservingMap<string> tags;
++		tags.insert("ext", "spatial");
++		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read", DOCUMENTATION, EXAMPLE, tags);
+ 
+ 		// Replacement scan
+ 		auto &config = DBConfig::GetConfig(db);
+@@ -1153,9 +1155,9 @@ struct ST_Read_Meta {
  	// Bind
  	//------------------------------------------------------------------------------------------------------------------
  	struct BindData final : TableFunctionData {
@@ -172,7 +183,7 @@ index 7143df8..b62bb6b 100644
  		}
  	};
  
-@@ -1276,8 +1276,8 @@ struct ST_Read_Meta {
+@@ -1276,8 +1278,8 @@ struct ST_Read_Meta {
  		auto out_size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.file_names.size() - state.current_idx);
  
  		for (idx_t out_idx = 0; out_idx < out_size; out_idx++, state.current_idx++) {
@@ -183,7 +194,7 @@ index 7143df8..b62bb6b 100644
  
  			GDALDatasetUniquePtr dataset;
  			try {
-@@ -1290,7 +1290,7 @@ struct ST_Read_Meta {
+@@ -1290,7 +1292,7 @@ struct ST_Read_Meta {
  				continue;
  			}
  
@@ -192,6 +203,60 @@ index 7143df8..b62bb6b 100644
  			output.data[1].SetValue(out_idx, dataset->GetDriver()->GetDescription());
  			output.data[2].SetValue(out_idx, dataset->GetDriver()->GetMetadataItem(GDAL_DMD_LONGNAME));
  			output.data[3].SetValue(out_idx, GetLayerData(dataset));
+@@ -1326,7 +1328,9 @@ struct ST_Read_Meta {
+ 		const TableFunction func("ST_Read_Meta", {LogicalType::VARCHAR}, Execute, Bind, Init);
+ 		ExtensionUtil::RegisterFunction(db, MultiFileReader::CreateFunctionSet(func));
+ 
+-		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read_Meta", DESCRIPTION, EXAMPLE, {{"ext", "spatial"}});
++		InsertionOrderPreservingMap<string> tags;
++		tags.insert("ext", "spatial");
++		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read_Meta", DESCRIPTION, EXAMPLE, tags);
+ 	}
+ };
+ 
+@@ -1447,7 +1451,9 @@ struct ST_Drivers {
+ 		const TableFunction func("ST_Drivers", {}, Execute, Bind, Init);
+ 		ExtensionUtil::RegisterFunction(db, func);
+ 
+-		FunctionBuilder::AddTableFunctionDocs(db, "ST_Drivers", DESCRIPTION, EXAMPLE, {{"ext", "spatial"}});
++		InsertionOrderPreservingMap<string> tags;
++		tags.insert("ext", "spatial");
++		FunctionBuilder::AddTableFunctionDocs(db, "ST_Drivers", DESCRIPTION, EXAMPLE, tags);
+ 	}
+ };
+ 
+diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
+index e5b11a7..2530526 100644
+--- a/src/spatial/modules/main/spatial_functions_table.cpp
++++ b/src/spatial/modules/main/spatial_functions_table.cpp
+@@ -134,7 +134,10 @@ struct ST_GeneratePoints {
+ 		generate_points.arguments = {GeoTypes::BOX_2D(), LogicalType::BIGINT, LogicalType::BIGINT};
+ 		set.AddFunction(generate_points);
+ 		ExtensionUtil::RegisterFunction(db, set);
+-		FunctionBuilder::AddTableFunctionDocs(db, "ST_GeneratePoints", DESCRIPTION, EXAMPLE, {{"ext", "spatial"}});
++
++		InsertionOrderPreservingMap<string> tags;
++		tags.insert("ext", "spatial");
++		FunctionBuilder::AddTableFunctionDocs(db, "ST_GeneratePoints", DESCRIPTION, EXAMPLE, tags);
+ 	}
+ };
+ 
+diff --git a/src/spatial/modules/osm/osm_module.cpp b/src/spatial/modules/osm/osm_module.cpp
+index e59b776..397c952 100644
+--- a/src/spatial/modules/osm/osm_module.cpp
++++ b/src/spatial/modules/osm/osm_module.cpp
+@@ -900,7 +900,10 @@ void RegisterOSMModule(DatabaseInstance &db) {
+ 	read.table_scan_progress = Progress;
+ 
+ 	ExtensionUtil::RegisterFunction(db, read);
+-	FunctionBuilder::AddTableFunctionDocs(db, "ST_ReadOSM", DOC_DESCRIPTION, DOC_EXAMPLE, {{"ext", "spatial"}});
++
++	InsertionOrderPreservingMap<string> tags;
++	tags.insert("ext", "spatial");
++	FunctionBuilder::AddTableFunctionDocs(db, "ST_ReadOSM", DOC_DESCRIPTION, DOC_EXAMPLE, tags);
+ 
+ 	// Replacement scan
+ 	auto &config = DBConfig::GetConfig(db);
 diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
 index 4b51d75..a0bf5cb 100644
 --- a/src/spatial/modules/shapefile/shapefile_module.cpp
@@ -246,7 +311,7 @@ index 4b51d75..a0bf5cb 100644
  			for (size_t shape_type_idx = 0; shape_type_idx < sizeof(shape_type_map) / sizeof(ShapeTypeEntry);
  			     shape_type_idx++) {
 diff --git a/src/spatial/util/function_builder.cpp b/src/spatial/util/function_builder.cpp
-index 1b1b634..f938f92 100644
+index 1b1b634..cc24db8 100644
 --- a/src/spatial/util/function_builder.cpp
 +++ b/src/spatial/util/function_builder.cpp
 @@ -169,7 +169,7 @@ void FunctionBuilder::Register(DatabaseInstance &db, const char *name, MacroFunc
@@ -258,6 +323,19 @@ index 1b1b634..f938f92 100644
  
  	auto &catalog = Catalog::GetSystemCatalog(db);
  	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+@@ -185,7 +185,10 @@ void FunctionBuilder::AddTableFunctionDocs(DatabaseInstance &db, const char *nam
+ 	function_description.description = RemoveIndentAndTrailingWhitespace(desc);
+ 	function_description.examples.push_back(RemoveIndentAndTrailingWhitespace(example));
+ 	func_entry.descriptions.push_back(function_description);
+-	func_entry.tags.insert(tags.begin(), tags.end());
++
++	for (const auto &tag : tags) {
++		func_entry.tags.insert(tag.first, tag.second);
++	}
+ }
+ 
+ } // namespace duckdb
+\ No newline at end of file
 diff --git a/src/spatial/util/function_builder.hpp b/src/spatial/util/function_builder.hpp
 index 7b84ce4..d58db78 100644
 --- a/src/spatial/util/function_builder.hpp
