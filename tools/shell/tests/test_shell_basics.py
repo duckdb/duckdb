@@ -182,6 +182,11 @@ def test_exit(shell, alias):
     test = ShellTest(shell).statement(f".{alias}")
     result = test.run()
 
+def test_exit_rc(shell):
+    test = ShellTest(shell).statement(f".exit 17")
+    result = test.run()
+    assert result.status_code == 17
+
 def test_print(shell):
     test = ShellTest(shell).statement(".print asdf")
     result = test.run()

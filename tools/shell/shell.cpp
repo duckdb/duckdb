@@ -3139,7 +3139,7 @@ MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg >= 2) {
+	if (nArg > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	int rc = 0;
