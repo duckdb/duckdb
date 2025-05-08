@@ -116,7 +116,7 @@ inline std::uint32_t to_unsigned_or_bool(float f)
         float f;
         std::uint32_t u;
     } as_union = { f };
-    std::uint32_t sign_bit = duckdb::UnsafeNumericCast<std::uint32_t>(-std::int32_t(as_union.u >> 31));
+    std::uint32_t sign_bit = static_cast<std::uint32_t>(-std::int32_t(as_union.u >> 31));
     return as_union.u ^ (sign_bit | 0x80000000);
 }
 inline std::uint64_t to_unsigned_or_bool(double f)
@@ -126,7 +126,7 @@ inline std::uint64_t to_unsigned_or_bool(double f)
         double d;
         std::uint64_t u;
     } as_union = { f };
-    std::uint64_t sign_bit = duckdb::UnsafeNumericCast<std::uint64_t>(-std::int64_t(as_union.u >> 63));
+    std::uint64_t sign_bit = static_cast<std::uint64_t>(-std::int64_t(as_union.u >> 63));
     return as_union.u ^ (sign_bit | 0x8000000000000000);
 }
 template<typename T>
@@ -1101,7 +1101,7 @@ struct UnsignedInplaceSorter
     template<typename T>
     inline static uint8_t current_byte(T && elem, void * sort_data)
     {
-        return duckdb::UnsafeNumericCast<uint8_t>(CurrentSubKey::sub_key(elem, sort_data) >> ShiftAmount);
+        return static_cast<uint8_t>(CurrentSubKey::sub_key(elem, sort_data) >> ShiftAmount);
     }
     template<typename It, typename ExtractKey>
     static void sort(It begin, It end, size_t num_elements, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * sort_data)
@@ -1131,7 +1131,7 @@ struct UnsignedInplaceSorter
             partitions[i].offset = total;
             total += count;
             partitions[i].next_offset = total;
-            remaining_partitions[num_partitions] = duckdb::UnsafeNumericCast<uint8_t>(i);
+            remaining_partitions[num_partitions] = static_cast<uint8_t>(i);
             ++num_partitions;
         }
         if (num_partitions > 1)
@@ -1211,7 +1211,7 @@ struct UnsignedInplaceSorter
             {
                 partitions[i].offset = total;
                 total += count;
-                remaining_partitions[num_partitions] = duckdb::UnsafeNumericCast<uint8_t>(i);
+                remaining_partitions[num_partitions] = static_cast<uint8_t>(i);
                 ++num_partitions;
             }
             partitions[i].next_offset = total;

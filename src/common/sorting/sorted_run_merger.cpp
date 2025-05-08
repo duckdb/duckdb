@@ -456,6 +456,7 @@ bool SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	for (const auto &run_boundary : run_boundaries) {
 		debug_to_scan += run_boundary.end - run_boundary.begin;
 	}
+	debug_scanned = 0;
 #endif
 
 	return true;

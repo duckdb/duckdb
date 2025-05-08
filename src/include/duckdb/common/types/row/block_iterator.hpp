@@ -215,7 +215,7 @@ public:
 	explicit block_iterator_t() : state(nullptr), block_idx(0), tuple_idx(0) {
 	}
 
-	block_iterator_t(STATE &state_p, const idx_t &index) : state(&state_p) {
+	block_iterator_t(STATE &state_p, const idx_t &index) : state(&state_p) { // NOLINT: uninitialized on purpose
 		state->RandomAccess(block_idx, tuple_idx, index);
 	}
 
@@ -228,7 +228,7 @@ public:
 	}
 
 	block_iterator_t &operator=(const block_iterator_t &other) {
-		D_ASSERT(RefersToSameObject(state, other.state));
+		D_ASSERT(!state || RefersToSameObject(*state, *other.state));
 		block_idx = other.block_idx;
 		tuple_idx = other.tuple_idx;
 		return *this;

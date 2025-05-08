@@ -53,7 +53,7 @@ public:
 	explicit tournament_tree_t(const vector<pair<iterator, iterator>> &sorted_runs) // NOLINT: match stl case
 	    : num_leaf_nodes(sorted_runs.size()), num_internal_nodes(NextPowerOfTwo(num_leaf_nodes) - 1) {
 		leaf_nodes.reserve(num_leaf_nodes);
-		internal_nodes.resize(num_internal_nodes);
+		internal_nodes.resize(num_internal_nodes, num_leaf_nodes - 1);
 
 		for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
 			leaf_nodes.emplace_back(sorted_runs[leaf_idx]);
