@@ -59,7 +59,10 @@ struct ColumnIndex {
 		this->child_indexes.push_back(std::move(new_index));
 	}
 	bool IsRowIdColumn() const {
-		return index == DConstants::INVALID_INDEX;
+		return index == COLUMN_IDENTIFIER_ROW_ID;
+	}
+	bool IsEmptyColumn() const {
+		return index == COLUMN_IDENTIFIER_EMPTY;
 	}
 	bool IsVirtualColumn() const {
 		return index >= VIRTUAL_COLUMN_START;
