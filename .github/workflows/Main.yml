@@ -274,6 +274,15 @@ jobs:
       GEN: ninja
 
     steps:
+      - name: Clean up the disc space
+        shell: bash
+        run: |
+          echo "Disk usage before clean up:"
+          df -h
+          rm -rf /opt/hostedtoolcache/CodeQL Java* Pypy Ruby go node
+          echo "Disk usage after clean up:"
+          df -h
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -290,12 +299,12 @@ jobs:
 
       - name: Build
         shell: bash
-        run: STANDARD_VECTOR_SIZE=2 make relassert
+        run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
 
  valgrind:
     name: Valgrind

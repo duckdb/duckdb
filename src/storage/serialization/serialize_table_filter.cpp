@@ -13,6 +13,7 @@
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
@@ -35,6 +36,9 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 		break;
 	case TableFilterType::DYNAMIC_FILTER:
 		result = DynamicFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::EXPRESSION_FILTER:
+		result = ExpressionFilter::Deserialize(deserializer);
 		break;
 	case TableFilterType::IN_FILTER:
 		result = InFilter::Deserialize(deserializer);
@@ -98,6 +102,17 @@ void DynamicFilter::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableFilter> DynamicFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DynamicFilter>(new DynamicFilter());
+	return std::move(result);
+}
+
+void ExpressionFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "expr", expr);
+}
+
+unique_ptr<TableFilter> ExpressionFilter::Deserialize(Deserializer &deserializer) {
+	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "expr");
+	auto result = duckdb::unique_ptr<ExpressionFilter>(new ExpressionFilter(std::move(expr)));
 	return std::move(result);
 }
 

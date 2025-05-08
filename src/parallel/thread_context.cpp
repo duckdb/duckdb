@@ -11,12 +11,22 @@ ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 	log_context.connection_id = context.GetConnectionId();
 	if (context.transaction.HasActiveTransaction()) {
 		log_context.transaction_id = context.transaction.ActiveTransaction().global_transaction_id;
-		log_context.query_id = context.transaction.GetActiveQuery();
+		auto query_id = context.transaction.GetActiveQuery();
+		if (query_id == DConstants::INVALID_INDEX) {
+			log_context.query_id = optional_idx();
+		} else {
+			log_context.query_id = query_id;
+		}
 	}
 
 	log_context.thread_id = TaskScheduler::GetEstimatedCPUId();
 	if (context.transaction.HasActiveTransaction()) {
-		log_context.transaction_id = context.transaction.GetActiveQuery();
+		auto query_id = context.transaction.GetActiveQuery();
+		if (query_id == DConstants::INVALID_INDEX) {
+			log_context.transaction_id = optional_idx();
+		} else {
+			log_context.transaction_id = query_id;
+		}
 	}
 	logger = context.db->GetLogManager().CreateLogger(log_context, true);
 }

@@ -222,6 +222,13 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 	type = AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
+void AttachedDatabase::OnDetach(ClientContext &context) {
+	if (!catalog) {
+		return;
+	}
+	catalog->OnDetach(context);
+}
+
 void AttachedDatabase::Close() {
 	D_ASSERT(catalog);
 	if (is_closed) {

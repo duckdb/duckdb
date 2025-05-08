@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_fsst_only.test_slow
+# description: Assert fsst compression ratio is within reasonable margins
+# group: [dict_fsst]
+
+# load the DB from disk
+load __TEST_DIR__/test_dict_fsst_unique.db readwrite v1.3.0
+
+require tpch
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+SET force_compression='dict_fsst'
+
+statement ok
+CREATE TABLE lineitem_unique AS SELECT row_number() OVER () % 27 AS k, * FROM (SELECT DISTINCT l_comment FROM lineitem)
+
+query I
+SELECT COUNT(DISTINCT l_comment) FROM lineitem_unique WHERE k = 13
+----
+133731
+
+query I
+SELECT COUNT(*) FROM lineitem_unique WHERE contains(l_comment, 'fox')
+----
+197137

@@ -189,17 +189,31 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+void FileNameSegment::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<FileNameSegmentType>(200, "type", type);
+	serializer.WritePropertyWithDefault<string>(201, "data", data);
+}
+
+FileNameSegment FileNameSegment::Deserialize(Deserializer &deserializer) {
+	FileNameSegment result;
+	deserializer.ReadProperty<FileNameSegmentType>(200, "type", result.type);
+	deserializer.ReadPropertyWithDefault<string>(201, "data", result.data);
+	return result;
+}
+
 void FilenamePattern::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(200, "base", base);
-	serializer.WritePropertyWithDefault<idx_t>(201, "pos", pos);
-	serializer.WritePropertyWithDefault<bool>(202, "uuid", uuid);
+	serializer.WritePropertyWithDefault<string>(200, "base", SerializeBase());
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", SerializePos());
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", HasUUID());
+	serializer.WritePropertyWithDefault<vector<FileNameSegment>>(203, "segments", SerializeSegments());
 }
 
 FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
-	FilenamePattern result;
-	deserializer.ReadPropertyWithDefault<string>(200, "base", result.base);
-	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result.pos);
-	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result.uuid);
+	auto base = deserializer.ReadPropertyWithDefault<string>(200, "base");
+	auto pos = deserializer.ReadPropertyWithDefault<idx_t>(201, "pos");
+	auto uuid = deserializer.ReadPropertyWithDefault<bool>(202, "uuid");
+	auto segments = deserializer.ReadPropertyWithDefault<vector<FileNameSegment>>(203, "segments");
+	FilenamePattern result(std::move(base), pos, uuid, std::move(segments));
 	return result;
 }
 
