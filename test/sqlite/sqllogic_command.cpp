@@ -129,7 +129,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		query_fail = true;
 	}
 	bool can_restart = CanRestart(*connection);
-	if (!query_fail && can_restart && !runner.skip_reload) {
+	if (!query_fail && can_restart && !runner.skip_reload && !runner.dbpath.empty()) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_uniq<RestartCommand>(runner, true);
 		runner.ExecuteCommand(std::move(command));
