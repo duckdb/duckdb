@@ -1979,6 +1979,7 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetHTTPStatusCodeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPStatusCode::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(HTTPStatusCode::Continue_100), "Continue_100" },
 		{ static_cast<uint32_t>(HTTPStatusCode::SwitchingProtocol_101), "SwitchingProtocol_101" },
 		{ static_cast<uint32_t>(HTTPStatusCode::Processing_102), "Processing_102" },
@@ -2048,12 +2049,12 @@ const StringUtil::EnumStringLiteral *GetHTTPStatusCodeValues() {
 
 template<>
 const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value) {
-	return StringUtil::EnumToString(GetHTTPStatusCodeValues(), 63, "HTTPStatusCode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", static_cast<uint32_t>(value));
 }
 
 template<>
 HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value) {
-	return static_cast<HTTPStatusCode>(StringUtil::StringToEnum(GetHTTPStatusCodeValues(), 63, "HTTPStatusCode", value));
+	return static_cast<HTTPStatusCode>(StringUtil::StringToEnum(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexAppendModeValues() {
