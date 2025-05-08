@@ -309,15 +309,20 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 		frames.resize(1);
 		auto &frame = frames[0];
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
+			int64_t offset = 1;
+			if (wexpr.offset_expr) {
+				if (leadlag_offset.CellIsNull(i)) {
+					FlatVector::SetNull(result, i, true);
+					continue;
+				}
+				offset = leadlag_offset.GetCell<int64_t>(i);
+			}
+
 			// (1) compute the ROW_NUMBER of the own row
 			frame = FrameBounds(frame_begin[i], frame_end[i]);
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
-			int64_t offset = 1;
-			if (wexpr.offset_expr) {
-				offset = leadlag_offset.GetCell<int64_t>(i);
-			}
 			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 				val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 			} else {
@@ -368,6 +373,12 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	for (idx_t i = 0; i < count;) {
 		int64_t offset = 1;
 		if (wexpr.offset_expr) {
+			if (leadlag_offset.CellIsNull(i)) {
+				FlatVector::SetNull(result, i, true);
+				++i;
+				++row_idx;
+				continue;
+			}
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
