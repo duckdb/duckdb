@@ -91,11 +91,6 @@ set(generated_loader_obj_files
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 
-if(${EXIT_TIME_DESTRUCTORS_WARNING})
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
-endif()
-
 add_library(
   duckdb_main_extension OBJECT
   extension_alias.cpp extension_helper.cpp extension_install.cpp

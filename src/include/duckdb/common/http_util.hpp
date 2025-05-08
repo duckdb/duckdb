@@ -16,6 +16,7 @@ class DatabaseInstance;
 class HTTPLogger;
 
 enum class HTTPStatusCode : uint16_t {
+	INVALID = 0,
 	// Information responses
 	Continue_100 = 100,
 	SwitchingProtocol_101 = 101,
@@ -155,5 +156,6 @@ public:
 	                                         optional_ptr<HTTPLogger> http_logger);
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
+	static HTTPStatusCode ToStatusCode(int32_t status_code);
 };
 } // namespace duckdb
