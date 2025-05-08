@@ -24,7 +24,7 @@ public:
 				auto result = make_uniq<CreateViewInfo>();
 				result->schema = DEFAULT_SCHEMA;
 				result->view_name = entry;
-				result->sql = "SELECT * FROM '" + file + "'";
+				result->sql = "SELECT * FROM '" + StringUtil::Replace(file, "'", "''") + "'";
 				auto view_info = CreateViewInfo::FromSelect(context, std::move(result));
 				return make_uniq_base<CatalogEntry, ViewCatalogEntry>(catalog, schema, *view_info);
 			}
