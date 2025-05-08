@@ -313,6 +313,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
+	if (config.options.database_type == "duckdb") {
+		config.options.database_type = string();
+	}
 	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
