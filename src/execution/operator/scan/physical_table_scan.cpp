@@ -61,6 +61,8 @@ public:
 	DataChunk input_chunk;
 	//! Combined table filters, if we have dynamic filters
 	unique_ptr<TableFilterSet> table_filters;
+	//! Where to continue the ordinality sequence in between chunks
+	idx_t ordinality_idx = 1;
 
 	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
 		return table_filters ? table_filters.get() : op.table_filters.get();
@@ -110,6 +112,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		function.in_out_function_final(context, data, chunk);
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
+
 	case OperatorResultType::BLOCKED: {
 		auto guard = g_state.Lock();
 		return g_state.BlockSource(guard, input.interrupt_state);
@@ -118,6 +121,12 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
 		// might be relying on current behaviour. Needs a rework that is not in scope
 		break;
+	}
+
+	if (function.ordinality_data.ordinality_request == Ordinality_request_t::REQUESTED) {
+		idx_t ordinality = chunk.size();
+		function.ordinality_data.SetOrdinality(chunk, g_state.ordinality_idx, ordinality);
+		g_state.ordinality_idx += ordinality;
 	}
 
 	if (chunk.size() == 0 && function.in_out_function_final) {
