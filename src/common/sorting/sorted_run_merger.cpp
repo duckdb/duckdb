@@ -8,6 +8,10 @@
 
 namespace duckdb {
 
+#ifdef D_ASSERT_IS_ENABLED
+#define DUCKDB_VERIFY_SORTED_RUN_MERGER
+#endif
+
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger Utility
 //===--------------------------------------------------------------------===//
@@ -136,6 +140,11 @@ private:
 	//! Computed run boundaries
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 
+#ifdef DUCKDB_VERIFY_SORTED_RUN_MERGER
+	idx_t debug_to_scan;
+	idx_t debug_scanned;
+#endif
+
 	//! States for every iterator type
 	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
 	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>> fixed_external_states;
@@ -252,6 +261,14 @@ void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, 
 	case SortedRunMergerTask::MERGE_PARTITION:
 		MergePartition(gstate, chunk);
 		if (chunk.size() == 0) {
+#ifdef DUCKDB_VERIFY_SORTED_RUN_MERGER
+			if (debug_scanned != debug_to_scan) {
+				throw InternalException("Data lost in sort merge!");
+			}
+#endif
+			auto guard = gstate.Lock();
+			Printer::PrintF("%llu (%llu/%llu)", partition_idx.GetIndex(), gstate.next_partition_idx,
+			                gstate.num_partitions);
 			task = SortedRunMergerTask::FINISHED;
 			partition_idx = optional_idx::Invalid();
 			CreateOrDestroyTournamentTree(false);
@@ -434,6 +451,13 @@ bool SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	run_boundaries = current_partition.GetRunBoundaries(guard);
 	guard.unlock();
 
+#ifdef DUCKDB_VERIFY_SORTED_RUN_MERGER
+	debug_to_scan = 0;
+	for (const auto &run_boundary : run_boundaries) {
+		debug_to_scan += run_boundary.end - run_boundary.begin;
+	}
+#endif
+
 	return true;
 }
 
@@ -488,6 +512,9 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 	const auto key_ptrs = FlatVector::GetData<SORT_KEY *>(sort_key_ptrs);
 	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_row_ptrs);
 	const auto count = tree.get_batch(key_ptrs, STANDARD_VECTOR_SIZE);
+#ifdef DUCKDB_VERIFY_SORTED_RUN_MERGER
+	debug_scanned += count;
+#endif
 	chunk.SetCardinality(count);
 
 	if (count == 0) {
@@ -647,5 +674,9 @@ ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gs
 	res.invalid = false;
 	return res;
 }
+
+#ifdef DUCKDB_VERIFY_SORTED_RUN_MERGER
+#undef DUCKDB_VERIFY_SORTED_RUN_MERGER
+#endif
 
 } // namespace duckdb

@@ -82,8 +82,8 @@ static void TemplatedSortThin(const TupleDataCollection &key_data) {
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
-	const auto fallback = [](BLOCK_ITERATOR fb_begin, BLOCK_ITERATOR fb_end) {
-		duckdb_ska_sort::ska_sort(std::move(fb_begin), std::move(fb_end), ExtractKey<SORT_KEY>());
+	static const auto fallback = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ExtractKey<SORT_KEY>());
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
 }
@@ -99,10 +99,15 @@ static void TemplatedSortWide(const TupleDataCollection &key_data) {
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
-	const auto fallback = [](BLOCK_ITERATOR fb_begin, BLOCK_ITERATOR fb_end) {
-		duckdb_pdqsort::pdqsort_branchless(std::move(fb_begin), std::move(fb_end));
+	static const auto fallback1 = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+		duckdb_ska_sort::ska_sort(std::move(fb_begin), std::move(fb_end), ExtractKey<SORT_KEY>());
 	};
-	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
+	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback1);
+
+	static const auto fallback2 = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+		duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end);
+	};
+	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback2);
 }
 
 static void Sort(const TupleDataCollection &key_data) {

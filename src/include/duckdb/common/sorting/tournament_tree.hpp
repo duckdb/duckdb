@@ -32,7 +32,7 @@ public:
 		}
 
 		void advance() { // NOLINT: match stl case
-			current += current != end;
+			++current;
 		}
 
 		value_type &value() const { // NOLINT: match stl case
@@ -79,6 +79,7 @@ public:
 
 	idx_t get_batch(value_type **const values, const idx_t &batch_size) { // NOLINT: match stl case
 		if (empty()) {
+			VerifyEmpty();
 			return 0;
 		}
 		idx_t count;
@@ -89,7 +90,9 @@ public:
 		} else {
 			count = get_batch_internal(values, batch_size);
 		}
-		D_ASSERT(count == batch_size || empty());
+		if (count != batch_size) {
+			VerifyEmpty();
+		}
 		return count;
 	}
 
@@ -158,6 +161,16 @@ private:
 			left_leaf_idx = internal_nodes[left_child(internal_idx)];
 			right_leaf_idx = internal_nodes[right_child(internal_idx)];
 		}
+	}
+
+	void VerifyEmpty() {
+#ifdef D_ASSERT_IS_ENABLED
+		for (const auto &leaf_node : leaf_nodes) {
+			if (leaf_node.has_value()) {
+				throw InternalException("oops");
+			}
+		}
+#endif
 	}
 
 private:

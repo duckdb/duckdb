@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "pdqsort.h"
+#include "vergesort.h"
 
 namespace duckdb_ska_sort {
 
@@ -24,12 +25,17 @@ void counting_sort_impl(It begin, It end, OutIt out_begin, ExtractKey && extract
     {
         ++counts[extract_key(*it)];
     }
+    count_type nonzero = 0;
     count_type total = 0;
     for (count_type * it = counts, * end_it = counts + 256; it != end_it; ++it)
     {
         count_type old_count = *it;
+        nonzero += old_count != 0;
         *it = total;
         total += old_count;
+    }
+    if (nonzero == 1) {
+        return; // LNK: skip moving data if all belong to same bucket
     }
     for (; begin != end; ++begin)
     {
@@ -748,9 +754,11 @@ inline void unroll_loop_four_times(It begin, size_t iteration_count, Func && to_
     case 3:
         to_call(begin);
         ++begin;
+        DUCKDB_EXPLICIT_FALLTHROUGH;
     case 2:
         to_call(begin);
         ++begin;
+        DUCKDB_EXPLICIT_FALLTHROUGH;
     case 1:
         to_call(begin);
     }
@@ -1065,7 +1073,11 @@ struct ListElementSubKey : SubKey<typename std::decay<decltype(std::declval<T>()
 template<typename It, typename ExtractKey>
 inline void StdSortFallback(It begin, It end, ExtractKey & extract_key)
 {
-    duckdb_pdqsort::pdqsort_branchless(begin, end, [&](const typename std::remove_reference<decltype(*begin)>::type & l, const typename std::remove_reference<decltype(*begin)>::type & r){ return extract_key(l) < extract_key(r); });
+    static const auto comp = [&](const typename std::remove_reference<decltype(*begin)>::type & l, const typename std::remove_reference<decltype(*begin)>::type & r){ return extract_key(l) < extract_key(r); };
+    static const auto fallback = [](const It &fb_begin, const It &fb_end) {
+        duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end, comp);
+    };
+    duckdb_vergesort::vergesort(begin, end, comp, fallback);
 }
 
 template<std::ptrdiff_t StdSortThreshold, typename It, typename ExtractKey>
@@ -1119,7 +1131,7 @@ struct UnsignedInplaceSorter
             partitions[i].offset = total;
             total += count;
             partitions[i].next_offset = total;
-            remaining_partitions[num_partitions] = i;
+            remaining_partitions[num_partitions] = duckdb::UnsafeNumericCast<uint8_t>(i);
             ++num_partitions;
         }
         if (num_partitions > 1)
@@ -1170,7 +1182,7 @@ struct UnsignedInplaceSorter
             {
                 size_t end_offset = partitions[*it].next_offset;
                 It partition_end = begin + end_offset;
-                std::ptrdiff_t num_elements = end_offset - start_offset;
+                std::ptrdiff_t num_elements = duckdb::UnsafeNumericCast<std::ptrdiff_t>(end_offset - start_offset);
                 if (!StdSortIfLessThanThreshold<StdSortThreshold>(partition_begin, partition_end, num_elements, extract_key))
                 {
                     UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, NumBytes, Offset + 1>::sort(partition_begin, partition_end, num_elements, extract_key, next_sort, sort_data);
@@ -1199,7 +1211,7 @@ struct UnsignedInplaceSorter
             {
                 partitions[i].offset = total;
                 total += count;
-                remaining_partitions[num_partitions] = i;
+                remaining_partitions[num_partitions] = duckdb::UnsafeNumericCast<uint8_t>(i);
                 ++num_partitions;
             }
             partitions[i].next_offset = total;
@@ -1232,7 +1244,7 @@ struct UnsignedInplaceSorter
                 size_t end_offset = partitions[partition].next_offset;
                 It partition_begin = begin + start_offset;
                 It partition_end = begin + end_offset;
-                std::ptrdiff_t num_elements = end_offset - start_offset;
+                std::ptrdiff_t num_elements = duckdb::UnsafeNumericCast<std::ptrdiff_t>(end_offset - start_offset);
                 if (!StdSortIfLessThanThreshold<StdSortThreshold>(partition_begin, partition_end, num_elements, extract_key))
                 {
                     UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, NumBytes, Offset + 1>::sort(partition_begin, partition_end, num_elements, extract_key, next_sort, sort_data);
