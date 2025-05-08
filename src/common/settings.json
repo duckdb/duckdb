@@ -623,13 +623,13 @@
     },
     {
         "name": "merge_join_threshold",
-        "description": "The number of rows we need on either table to choose a merge join",
+        "description": "The maximum number of rows on either table to choose a merge join",
         "type": "UBIGINT",
         "scope": "local"
     },
     {
         "name": "nested_loop_join_threshold",
-        "description": "The number of rows we need on either table to choose a nested loop join",
+        "description": "The maximum number of rows on either table to choose a nested loop join",
         "type": "UBIGINT",
         "scope": "local"
     },
