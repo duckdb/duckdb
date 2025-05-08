@@ -1,0 +1,20 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index fe85e48..325fb0a 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -1082,12 +1082,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
+ unique_ptr<ParsedExpression> StatementGenerator::GenerateLambda() {
+ 	// generate the lambda name and add the lambda column names to the set of possibly-generated column names
+ 	auto lambda_parameter = GenerateIdentifier();
+-	// generate the lhs
+-	auto lhs = make_uniq<ColumnRefExpression>(lambda_parameter);
++    vector<string> named_parameters;
++    named_parameters.push_back(lambda_parameter);
+ 	auto rhs = GenerateExpression();
+ 	current_column_names.erase(std::find(current_column_names.begin(), current_column_names.end(), lambda_parameter));
+ 
+-	return make_uniq<LambdaExpression>(std::move(lhs), std::move(rhs));
++    return make_uniq<LambdaExpression>(std::move(named_parameters), std::move(rhs));
+ }
+ 
+ string StatementGenerator::GenerateDataBaseName() {

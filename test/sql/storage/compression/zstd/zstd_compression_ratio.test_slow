@@ -28,7 +28,7 @@ set variable dataset_size = 100_000;
 statement ok
 create table test_compressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select
@@ -54,7 +54,7 @@ select setseed(0.42);
 statement ok
 CREATE TABLE test_uncompressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select

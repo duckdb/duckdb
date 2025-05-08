@@ -192,6 +192,9 @@ public:
 	explicit OutOfMemoryException(const string &msg, ARGS... params)
 	    : OutOfMemoryException(ConstructMessage(msg, params...)) {
 	}
+
+private:
+	string ExtendOutOfMemoryError(const string &msg);
 };
 
 class SyntaxException : public Exception {
