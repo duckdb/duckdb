@@ -641,6 +641,15 @@ def test_mode_insert(shell):
     result.check_not_exist('3.139999')
     result.check_not_exist('2.710000')
 
+def test_mode_insert_table(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode insert my_table")
+        .statement("SELECT 42;")
+    )
+    result = test.run()
+    result.check_stdout('my_table')
+
 def test_mode_line(shell):
     test = (
         ShellTest(shell)
