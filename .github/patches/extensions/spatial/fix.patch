@@ -245,3 +245,55 @@ index 4b51d75..a0bf5cb 100644
  			shape_type_data[out_idx] = 0;
  			for (size_t shape_type_idx = 0; shape_type_idx < sizeof(shape_type_map) / sizeof(ShapeTypeEntry);
  			     shape_type_idx++) {
+diff --git a/src/spatial/util/function_builder.cpp b/src/spatial/util/function_builder.cpp
+index 1b1b634..f938f92 100644
+--- a/src/spatial/util/function_builder.cpp
++++ b/src/spatial/util/function_builder.cpp
+@@ -169,7 +169,7 @@ void FunctionBuilder::Register(DatabaseInstance &db, const char *name, MacroFunc
+ }
+ 
+ void FunctionBuilder::AddTableFunctionDocs(DatabaseInstance &db, const char *name, const char *desc,
+-                                           const char *example, const unordered_map<string, string> &tags) {
++                                           const char *example, const InsertionOrderPreservingMap<string> &tags) {
+ 
+ 	auto &catalog = Catalog::GetSystemCatalog(db);
+ 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+diff --git a/src/spatial/util/function_builder.hpp b/src/spatial/util/function_builder.hpp
+index 7b84ce4..d58db78 100644
+--- a/src/spatial/util/function_builder.hpp
++++ b/src/spatial/util/function_builder.hpp
+@@ -4,6 +4,7 @@
+ #include "duckdb/function/function_set.hpp"
+ #include "duckdb/function/scalar_function.hpp"
+ #include "duckdb/parser/parsed_data/create_function_info.hpp"
++#include "duckdb/common/insertion_order_preserving_map.hpp"
+ 
+ #include <duckdb/catalog/default/default_functions.hpp>
+ 
+@@ -30,7 +31,7 @@ public:
+ 
+ 	// TODO:
+ 	static void AddTableFunctionDocs(DatabaseInstance &db, const char *name, const char *desc, const char *example,
+-	                                 const unordered_map<string, string> &tags);
++	                                 const InsertionOrderPreservingMap<string> &tags);
+ 
+ 	static string RemoveIndentAndTrailingWhitespace(const char *str);
+ 
+@@ -114,7 +115,7 @@ private:
+ 
+ 	ScalarFunctionSet set;
+ 	vector<FunctionDescription> descriptions = {};
+-	unordered_map<string, string> tags = {};
++	InsertionOrderPreservingMap<string> tags = {};
+ 
+ 	// If not set by a variant
+ 	string default_description;
+@@ -192,7 +193,7 @@ private:
+ 	}
+ 	string description;
+ 	string example;
+-	unordered_map<string, string> tags;
++	InsertionOrderPreservingMap<string> tags;
+ 	AggregateFunctionSet set;
+ };
+ 
