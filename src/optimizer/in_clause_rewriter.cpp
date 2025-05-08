@@ -14,8 +14,18 @@ namespace duckdb {
 
 unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_FILTER: {
+	case LogicalOperatorType::LOGICAL_FILTER: 
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op->children[0]->Cast<LogicalGet>();
+			if (get.function.to_string) {
+				TableFunctionToStringInput input(get.function, get.bind_data.get());
+				if (get.function.to_string(input)["__text__"] == "REMOTE") {
+					return op;
+				}
+			}
+		}
+		DUCKDB_EXPLICIT_FALLTHROUGH;
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		current_op = op.get();
 		root = std::move(op->children[0]);
 		VisitOperatorExpressions(*op);
