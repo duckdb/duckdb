@@ -43,10 +43,6 @@ public:
 
 	//! Whether this run has been finalized
 	bool finalized;
-
-	//! Min/max values (set after sort is complete)
-	Value min;
-	Value max;
 };
 
 } // namespace duckdb
