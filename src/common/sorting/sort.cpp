@@ -297,7 +297,7 @@ SinkFinalizeType Sort::Finalize(Pipeline &pipeline, Event &event, ClientContext 
 		gstate.total_count += sorted_run->Count();
 		maximum_run_count = MaxValue(maximum_run_count, sorted_run->Count());
 	}
-	gstate.partition_size = (maximum_run_count + 1) / 2; // TODO: pick a better partition size
+	gstate.partition_size = MinValue<idx_t>(gstate.total_count, 122800); // Same as our row group size
 
 	// TODO: Keep a "Value" min/max per sorted run:
 	//  1. Allows runs to be concatenated without merging

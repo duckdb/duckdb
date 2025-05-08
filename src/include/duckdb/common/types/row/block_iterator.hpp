@@ -86,6 +86,10 @@ public:
 		return block_idx * fast_mod.GetDivisor() + tuple_idx;
 	}
 
+	void Unpin() {
+		// NOP
+	}
+
 private:
 	static unsafe_vector<data_ptr_t> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs);
 
@@ -156,13 +160,22 @@ public:
 		return chunk_idx * STANDARD_VECTOR_SIZE + tuple_idx;
 	}
 
+	void Unpin() {
+		pins.clear();
+	}
+
 private:
 	template <class T>
 	void InitializeChunk(const idx_t &chunk_idx) {
+		key_scan_state.pin_state.row_handles.acquire_handles(pins);
+		key_scan_state.pin_state.heap_handles.acquire_handles(pins);
 		key_data.FetchChunk(key_scan_state, 0, chunk_idx, false);
 		if (payload_data) {
+			payload_scan_state.pin_state.row_handles.acquire_handles(pins);
+			payload_scan_state.pin_state.heap_handles.acquire_handles(pins);
 			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
 			const auto sort_keys = FlatVector::GetData<T *>(key_scan_state.chunk_state.row_locations);
+			payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
 			const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_scan_state.chunk_state.row_locations);
 			for (idx_t i = 0; i < chunk_count; i++) {
 				sort_keys[i]->SetPayload(payload_ptrs[i]);
@@ -181,6 +194,8 @@ private:
 
 	optional_ptr<TupleDataCollection> payload_data;
 	TupleDataScanState payload_scan_state;
+
+	vector<BufferHandle> pins;
 };
 
 class VariableExternalBlockIteratorState {};

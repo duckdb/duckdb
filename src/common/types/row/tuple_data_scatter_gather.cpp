@@ -1227,19 +1227,30 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
-	for (idx_t i = 0; i < scan_count; i++) {
-		const auto &source_row = source_locations[scan_sel.get_index(i)];
-		const auto target_idx = target_sel.get_index(i);
-		target_data[target_idx] = Load<T>(source_row + offset_in_row);
-		ValidityBytes row_mask(source_row, layout.ColumnCount());
-		if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
-			target_validity.SetInvalid(target_idx);
+	const auto column_count = layout.ColumnCount();
+	if (!scan_sel.IsSet() && !target_sel.IsSet()) {
+		for (idx_t i = 0; i < scan_count; i++) {
+			const auto &source_row = source_locations[i];
+			target_data[i] = Load<T>(source_row + offset_in_row);
+			ValidityBytes row_mask(source_row, column_count);
+			if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				target_validity.SetInvalid(i);
+			} else {
+				TupleDataValueVerify<T>(target.GetType(), target_data[i]);
+			}
 		}
-#ifdef DEBUG
-		else {
-			TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+	} else {
+		for (idx_t i = 0; i < scan_count; i++) {
+			const auto &source_row = source_locations[scan_sel.get_index(i)];
+			const auto target_idx = target_sel.get_index(i);
+			target_data[target_idx] = Load<T>(source_row + offset_in_row);
+			ValidityBytes row_mask(source_row, column_count);
+			if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				target_validity.SetInvalid(target_idx);
+			} else {
+				TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+			}
 		}
-#endif
 	}
 }
 

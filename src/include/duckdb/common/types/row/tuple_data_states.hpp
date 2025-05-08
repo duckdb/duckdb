@@ -74,6 +74,13 @@ public:
 		handles.clear();
 	}
 
+	void acquire_handles(vector<BufferHandle> &pins) {
+		for (auto &handle : handles) {
+			pins.emplace_back(std::move(handle.second));
+		}
+		handles.clear();
+	}
+
 private:
 	unsafe_vector<pair<uint32_t, BufferHandle>> handles;
 };
