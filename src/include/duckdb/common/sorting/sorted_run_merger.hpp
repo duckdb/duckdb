@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+class TupleDataLayout;
 struct ProgressData;
 class SortedRun;
 class SortedRunMergerLocalState;

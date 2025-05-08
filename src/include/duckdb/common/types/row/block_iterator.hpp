@@ -149,7 +149,7 @@ public:
 	void Decrement(idx_t &chunk_idx, idx_t &tuple_idx) const {
 		const auto crossed_boundary = tuple_idx-- == 0;
 		chunk_idx -= crossed_boundary;
-		tuple_idx += crossed_boundary * STANDARD_VECTOR_SIZE;
+		tuple_idx += crossed_boundary * static_cast<idx_t>(STANDARD_VECTOR_SIZE);
 	}
 
 	idx_t GetIndex(const idx_t &chunk_idx, const idx_t &tuple_idx) const {
@@ -229,8 +229,10 @@ public:
 
 	block_iterator_t &operator=(const block_iterator_t &other) {
 		D_ASSERT(!state || RefersToSameObject(*state, *other.state));
-		block_idx = other.block_idx;
-		tuple_idx = other.tuple_idx;
+		if (this != &other) {
+			block_idx = other.block_idx;
+			tuple_idx = other.tuple_idx;
+		}
 		return *this;
 	}
 
