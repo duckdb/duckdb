@@ -37,12 +37,12 @@ public:
 public:
 	template <class T>
 	T &GetValueAtIndex(const idx_t &block_idx, const idx_t &tuple_idx) const {
+		D_ASSERT(GetIndex(block_idx, tuple_idx) < tuple_count);
 		return reinterpret_cast<T *const>(block_ptrs[block_idx])[tuple_idx];
 	}
 
 	template <class T>
 	T &GetValueAtIndex(const idx_t &n) const {
-		D_ASSERT(n < tuple_count);
 		const auto quotient = fast_mod.Div(n);
 		return GetValueAtIndex<T>(quotient, fast_mod.Mod(n, quotient));
 	}

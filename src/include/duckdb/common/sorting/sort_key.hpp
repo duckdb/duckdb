@@ -143,7 +143,7 @@ public:
 		auto comp_res = memcmp(&lhs.part0, &rhs.part0, SORT_KEY::INLINE_LENGTH);
 		// If inlined is not equal, we can return already
 		if (comp_res != 0) {
-			return comp_res;
+			return comp_res < 0;
 		}
 
 		// Inlined is equal. If either string is inlined, it is considered "less than"
