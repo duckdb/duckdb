@@ -52,6 +52,8 @@ public:
 		return false;
 	}
 
+	virtual string TaskType() const = 0;
+
 public:
 	optional_ptr<ProducerToken> token;
 };

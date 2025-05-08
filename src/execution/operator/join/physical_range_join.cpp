@@ -102,6 +102,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "RangeJoinMergeTask";
+	}
+
 private:
 	ClientContext &context;
 	GlobalSortedTable &table;
