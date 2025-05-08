@@ -10,6 +10,7 @@
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -871,6 +872,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					string_set->insert(current_string);
 					string_set->erase("");
 				}
+			} else if (token.parameters[0] == "seed") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("set seed requires a single seed value");
+				}
+				Value seed(token.parameters[1]);
+				if (!seed.DefaultTryCastAs(LogicalType::DOUBLE)) {
+					parser.Fail("set seed requires a floating point parameter");
+				}
+				auto res = con->Query("SELECT SETSEED(" + seed.ToString() + ")");
+				if (res->HasError()) {
+					parser.Fail("Failed to set seed: %s", res->GetError());
+				}
+				skip_reload = true;
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
