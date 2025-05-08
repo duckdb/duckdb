@@ -834,6 +834,17 @@ struct IntegerDivisionSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LambdaSyntaxSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "lambda_syntax";
+	static constexpr const char *Description =
+	    "Configures the use of the deprecated single arrow operator (->) for lambda functions.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LateMaterializationMaxRowsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "late_materialization_max_rows";

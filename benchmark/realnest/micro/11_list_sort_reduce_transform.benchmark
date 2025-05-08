@@ -17,8 +17,8 @@ run
 SELECT list_sort(
     array_agg(
         list_reduce(
-            list_transform(Photon, x -> x.pt),
-        (x, y, z) -> (x + y)^z)
+            list_transform(Photon, lambda x: x.pt),
+        lambda x, y, z: (x + y)^z)
         )
     ) AS List
 FROM run2012B_singleMu
