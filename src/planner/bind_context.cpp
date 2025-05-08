@@ -265,6 +265,18 @@ optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
+string GetCandidateAlias(const BindingAlias &main_alias, const BindingAlias &new_alias) {
+	string candidate;
+	if (!main_alias.GetCatalog().empty() && !new_alias.GetCatalog().empty()) {
+		candidate += new_alias.GetCatalog() + ".";
+	}
+	if (!main_alias.GetSchema().empty() && !new_alias.GetSchema().empty()) {
+		candidate += new_alias.GetSchema() + ".";
+	}
+	candidate += new_alias.GetAlias();
+	return candidate;
+}
+
 vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, ErrorData &out_error) {
 	if (!alias.IsSet()) {
 		throw InternalException("BindingAlias is not set");
@@ -279,12 +291,13 @@ vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, E
 		// alias not found in this BindContext
 		vector<string> candidates;
 		for (auto &binding : bindings_list) {
-			candidates.push_back(binding->alias.GetAlias());
+			candidates.push_back(GetCandidateAlias(alias, binding->alias));
 		}
-		string candidate_str = StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, alias.GetAlias()),
-		                                                     "Candidate tables");
-		out_error = ErrorData(ExceptionType::BINDER, StringUtil::Format("Referenced table \"%s\" not found!%s",
-		                                                                alias.GetAlias(), candidate_str));
+		auto main_alias = GetCandidateAlias(alias, alias);
+		string candidate_str =
+		    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, main_alias), "Candidate tables");
+		out_error = ErrorData(ExceptionType::BINDER,
+		                      StringUtil::Format("Referenced table \"%s\" not found!%s", main_alias, candidate_str));
 	}
 	return matching_bindings;
 }
