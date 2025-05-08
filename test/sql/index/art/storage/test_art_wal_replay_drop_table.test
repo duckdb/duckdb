@@ -1,0 +1,60 @@
+# name: test/sql/index/art/storage/test_art_wal_replay_drop_table.test
+# description: Test replaying the WAL after creating an index in a transaction, and then dropping the table.
+# group: [storage]
+
+load __TEST_DIR__/art_wal_replay_drop_table.db
+
+statement ok
+SET threads=1;
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT range + 42 FROM range(100);
+
+statement ok
+CREATE TABLE alter_test (a INTEGER);
+
+statement ok
+INSERT INTO alter_test SELECT range + 42 FROM range(100);
+
+# Let's also have an index outside the transaction.
+statement ok
+CREATE INDEX other_idx ON test(a);
+
+statement ok
+BEGIN TRANSACTION
+
+# We add this to the UndoBuffer on commit.
+statement ok
+INSERT INTO test VALUES (0), (1);
+
+statement ok
+INSERT INTO alter_test VALUES (0), (1);
+
+# We add this to the UndoBuffer immediately.
+statement ok
+CREATE UNIQUE INDEX i_index ON test(a);
+
+statement ok
+ALTER TABLE alter_test ADD PRIMARY KEY(a);
+
+# Now drop the tables in the transaction.
+
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TABLE alter_test;
+
+statement ok
+COMMIT;
+
+restart
