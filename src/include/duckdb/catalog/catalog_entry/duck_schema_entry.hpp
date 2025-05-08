@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/catalog_entry/dschema_catalog_entry.hpp
+// duckdb/catalog/catalog_entry/duck_schema_entry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -70,11 +70,10 @@ public:
 
 	void Verify(Catalog &catalog) override;
 
-private:
-	void OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry);
-
-private:
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);
+
+private:
+	void OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry);
 };
 } // namespace duckdb

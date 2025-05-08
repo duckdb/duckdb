@@ -46,7 +46,7 @@ public:
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
-	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info,
+	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info,
 	                                              const AttachOptions &options);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);

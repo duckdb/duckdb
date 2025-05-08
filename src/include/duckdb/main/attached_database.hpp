@@ -60,7 +60,7 @@ public:
 	                 const AttachOptions &options);
 	//! Create an attached database instance with the specified storage extension.
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
-	                 const AttachInfo &info, const AttachOptions &options);
+	                 AttachInfo &info, const AttachOptions &options);
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.

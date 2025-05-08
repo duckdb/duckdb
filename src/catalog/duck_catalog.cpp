@@ -30,6 +30,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);
 
 	if (load_builtin) {
