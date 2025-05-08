@@ -22,6 +22,8 @@
 
 #include <algorithm>
 
+#include "duckdb/main/extension_entries.hpp"
+
 namespace duckdb {
 
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
@@ -32,15 +34,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	// Let's first bind our format
 	auto on_entry_do =
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	auto entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA,
-	                                                         stmt.info->format, on_entry_do);
+	CatalogEntryRetriever entry_retriever {context};
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+
 	if (!entry) {
 		// If we did not find an entry, we default to a CSV
-		entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv",
-		                                                    OnEntryNotFound::THROW_EXCEPTION);
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	// lookup the format in the catalog
-	auto &copy_function = *entry;
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	if (copy_function.function.plan) {
 		// plan rewrite COPY TO
 		return copy_function.function.plan(*this, stmt);
@@ -333,16 +338,16 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto on_entry_do =
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	// Let's first bind our format
-	auto entry = catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format,
-	                                                        on_entry_do);
+	CatalogEntryRetriever entry_retriever {context};
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
 	if (!entry) {
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, "csv",
-		                                                   OnEntryNotFound::THROW_EXCEPTION);
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	// lookup the format in the catalog
-	auto &copy_function = *entry;
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	if (!copy_function.function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
