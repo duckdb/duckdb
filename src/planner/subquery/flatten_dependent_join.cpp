@@ -922,13 +922,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			get.projected_input.push_back(this->delim_offset + i);
 		}
-		// if (get.GetColumnIds().empty()) {
-		// 	// Table in/out WITH projection pushdown - skipped initialization of ColumnIds in bind_table_function.cpp
-		// 	// Must be initialized here, otherwise the offsets are off. OK cause columns will be removed later anyway!
-		// 	for (idx_t i = 0; i < get.returned_types.size(); i++) {
-		// 		get.AddColumnId(i);
-		// 	}
-		// }
 		this->delim_offset = get.GetColumnIds().size();
 		this->data_offset = 0;
 
