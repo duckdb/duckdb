@@ -108,18 +108,6 @@ statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
 ----
 
-# CREATE TEMPORARY TYPE
-statement ok
-CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
-
-query I
-select ['happy','ok','ok']::mood[]
-----
-[happy, ok, ok]
-
-statement ok
-DROP TYPE mood
-
 #Enums in structs/lists/maps
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
@@ -196,3 +184,17 @@ query I
 SELECT enum_range(NULL::mood) AS my_enum_range;
 ----
 []
+
+require skip_reload
+
+# CREATE TEMPORARY TYPE
+statement ok
+CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+select ['happy','ok','ok']::mood[]
+----
+[happy, ok, ok]
+
+statement ok
+DROP TYPE mood
