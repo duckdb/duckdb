@@ -29,6 +29,7 @@
 #include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/common/http_util.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -47,6 +48,7 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
+	http_util = make_uniq<HTTPUtil>();
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {

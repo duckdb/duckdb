@@ -1,5 +1,3 @@
-include_directories(../../../third_party/httplib/)
-
 # To link extensions into DuckDB and auto-load them on startup, we generated an
 # include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
 # parameter.
