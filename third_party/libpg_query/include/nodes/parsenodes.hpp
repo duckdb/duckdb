@@ -2176,6 +2176,7 @@ typedef struct PGCreateTypeStmt
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
     PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTypeStmt;
 
 /* ----------------------
