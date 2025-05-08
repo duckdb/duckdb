@@ -116,7 +116,7 @@ inline std::uint32_t to_unsigned_or_bool(float f)
         float f;
         std::uint32_t u;
     } as_union = { f };
-    std::uint32_t sign_bit = -std::int32_t(as_union.u >> 31);
+    std::uint32_t sign_bit = duckdb::UnsafeNumericCast<std::uint32_t>(-std::int32_t(as_union.u >> 31));
     return as_union.u ^ (sign_bit | 0x80000000);
 }
 inline std::uint64_t to_unsigned_or_bool(double f)
@@ -126,7 +126,7 @@ inline std::uint64_t to_unsigned_or_bool(double f)
         double d;
         std::uint64_t u;
     } as_union = { f };
-    std::uint64_t sign_bit = -std::int64_t(as_union.u >> 63);
+    std::uint64_t sign_bit = duckdb::UnsafeNumericCast<std::uint64_t>(-std::int64_t(as_union.u >> 63));
     return as_union.u ^ (sign_bit | 0x8000000000000000);
 }
 template<typename T>
@@ -159,7 +159,7 @@ struct SizedRadixSorter<2>
     template<typename It, typename OutIt, typename ExtractKey>
     static bool sort(It begin, It end, OutIt buffer_begin, ExtractKey && extract_key)
     {
-        std::ptrdiff_t num_elements = end - begin;
+        size_t num_elements = end - begin;
         if (num_elements <= (1ll << 32))
             return sort_inline<uint32_t>(begin, end, buffer_begin, buffer_begin + num_elements, extract_key);
         else
@@ -210,7 +210,7 @@ struct SizedRadixSorter<4>
     template<typename It, typename OutIt, typename ExtractKey>
     static bool sort(It begin, It end, OutIt buffer_begin, ExtractKey && extract_key)
     {
-        std::ptrdiff_t num_elements = end - begin;
+        size_t num_elements = end - begin;
         if (num_elements <= (1ll << 32))
             return sort_inline<uint32_t>(begin, end, buffer_begin, buffer_begin + num_elements, extract_key);
         else
@@ -282,7 +282,7 @@ struct SizedRadixSorter<8>
     template<typename It, typename OutIt, typename ExtractKey>
     static bool sort(It begin, It end, OutIt buffer_begin, ExtractKey && extract_key)
     {
-        std::ptrdiff_t num_elements = end - begin;
+        size_t num_elements = end - begin;
         if (num_elements <= (1ll << 32))
             return sort_inline<uint32_t>(begin, end, buffer_begin, buffer_begin + num_elements, extract_key);
         else
@@ -1033,7 +1033,7 @@ struct BaseListSortData
 template<typename It, typename ExtractKey>
 struct ListSortData : BaseListSortData
 {
-    void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *);
+    void (*next_sort)(It, It, size_t, ExtractKey &, void *);
 };
 
 template<typename CurrentSubKey, typename T>
@@ -1080,8 +1080,8 @@ inline void StdSortFallback(It begin, It end, ExtractKey & extract_key)
     duckdb_vergesort::vergesort(begin, end, comp, fallback);
 }
 
-template<std::ptrdiff_t StdSortThreshold, typename It, typename ExtractKey>
-inline bool StdSortIfLessThanThreshold(It begin, It end, std::ptrdiff_t num_elements, ExtractKey & extract_key)
+template<size_t StdSortThreshold, typename It, typename ExtractKey>
+inline bool StdSortIfLessThanThreshold(It begin, It end, size_t num_elements, ExtractKey & extract_key)
 {
     if (num_elements <= 1)
         return true;
@@ -1091,20 +1091,20 @@ inline bool StdSortIfLessThanThreshold(It begin, It end, std::ptrdiff_t num_elem
     return true;
 }
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType = typename CurrentSubKey::sub_key_type>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType = typename CurrentSubKey::sub_key_type>
 struct InplaceSorter;
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, size_t NumBytes, size_t Offset = 0>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, size_t NumBytes, size_t Offset = 0>
 struct UnsignedInplaceSorter
 {
     static constexpr size_t ShiftAmount = (((NumBytes - 1) - Offset) * 8);
     template<typename T>
     inline static uint8_t current_byte(T && elem, void * sort_data)
     {
-        return CurrentSubKey::sub_key(elem, sort_data) >> ShiftAmount;
+        return duckdb::UnsafeNumericCast<uint8_t>(CurrentSubKey::sub_key(elem, sort_data) >> ShiftAmount);
     }
     template<typename It, typename ExtractKey>
-    static void sort(It begin, It end, std::ptrdiff_t num_elements, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * sort_data)
+    static void sort(It begin, It end, size_t num_elements, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * sort_data)
     {
         if (num_elements < AmericanFlagSortThreshold)
             american_flag_sort(begin, end, extract_key, next_sort, sort_data);
@@ -1113,7 +1113,7 @@ struct UnsignedInplaceSorter
     }
 
     template<typename It, typename ExtractKey>
-    static void american_flag_sort(It begin, It end, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * sort_data)
+    static void american_flag_sort(It begin, It end, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * sort_data)
     {
         PartitionInfo partitions[256];
         for (It it = begin; it != end; ++it)
@@ -1182,7 +1182,7 @@ struct UnsignedInplaceSorter
             {
                 size_t end_offset = partitions[*it].next_offset;
                 It partition_end = begin + end_offset;
-                std::ptrdiff_t num_elements = duckdb::UnsafeNumericCast<std::ptrdiff_t>(end_offset - start_offset);
+                size_t num_elements = end_offset - start_offset;
                 if (!StdSortIfLessThanThreshold<StdSortThreshold>(partition_begin, partition_end, num_elements, extract_key))
                 {
                     UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, NumBytes, Offset + 1>::sort(partition_begin, partition_end, num_elements, extract_key, next_sort, sort_data);
@@ -1194,7 +1194,7 @@ struct UnsignedInplaceSorter
     }
 
     template<typename It, typename ExtractKey>
-    static void ska_byte_sort(It begin, It end, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * sort_data)
+    static void ska_byte_sort(It begin, It end, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * sort_data)
     {
         PartitionInfo partitions[256];
         for (It it = begin; it != end; ++it)
@@ -1244,7 +1244,7 @@ struct UnsignedInplaceSorter
                 size_t end_offset = partitions[partition].next_offset;
                 It partition_begin = begin + start_offset;
                 It partition_end = begin + end_offset;
-                std::ptrdiff_t num_elements = duckdb::UnsafeNumericCast<std::ptrdiff_t>(end_offset - start_offset);
+                size_t num_elements = end_offset - start_offset;
                 if (!StdSortIfLessThanThreshold<StdSortThreshold>(partition_begin, partition_end, num_elements, extract_key))
                 {
                     UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, NumBytes, Offset + 1>::sort(partition_begin, partition_end, num_elements, extract_key, next_sort, sort_data);
@@ -1254,11 +1254,11 @@ struct UnsignedInplaceSorter
     }
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, size_t NumBytes>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, size_t NumBytes>
 struct UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, NumBytes, NumBytes>
 {
     template<typename It, typename ExtractKey>
-    inline static void sort(It begin, It end, std::ptrdiff_t num_elements, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * next_sort_data)
+    inline static void sort(It begin, It end, size_t num_elements, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * next_sort_data)
     {
         next_sort(begin, end, num_elements, extract_key, next_sort_data);
     }
@@ -1295,7 +1295,7 @@ size_t CommonPrefix(It begin, It end, size_t start_index, ExtractKey && extract_
     return largest_match;
 }
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, typename ListType>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, typename ListType>
 struct ListInplaceSorter
 {
     using ElementSubKey = ListElementSubKey<CurrentSubKey, ListType>;
@@ -1317,21 +1317,21 @@ struct ListInplaceSorter
         {
             return current_key(elem).size() <= current_index;
         });
-        std::ptrdiff_t num_shorter_ones = end_of_shorter_ones - begin;
+        size_t num_shorter_ones = end_of_shorter_ones - begin;
         if (sort_data->next_sort && !StdSortIfLessThanThreshold<StdSortThreshold>(begin, end_of_shorter_ones, num_shorter_ones, extract_key))
         {
             sort_data->next_sort(begin, end_of_shorter_ones, num_shorter_ones, extract_key, next_sort_data);
         }
-        std::ptrdiff_t num_elements = end - end_of_shorter_ones;
+        size_t num_elements = end - end_of_shorter_ones;
         if (!StdSortIfLessThanThreshold<StdSortThreshold>(end_of_shorter_ones, end, num_elements, extract_key))
         {
-            void (*sort_next_element)(It, It, std::ptrdiff_t, ExtractKey &, void *) = static_cast<void (*)(It, It, std::ptrdiff_t, ExtractKey &, void *)>(&sort_from_recursion);
+            void (*sort_next_element)(It, It, size_t, ExtractKey &, void *) = static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&sort_from_recursion);
             InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, ElementSubKey>::sort(end_of_shorter_ones, end, num_elements, extract_key, sort_next_element, sort_data);
         }
     }
 
     template<typename It, typename ExtractKey>
-    static void sort_from_recursion(It begin, It end, std::ptrdiff_t, ExtractKey & extract_key, void * next_sort_data)
+    static void sort_from_recursion(It begin, It end, size_t, ExtractKey & extract_key, void * next_sort_data)
     {
         ListSortData<It, ExtractKey> offset = *static_cast<ListSortData<It, ExtractKey> *>(next_sort_data);
         ++offset.current_index;
@@ -1347,7 +1347,7 @@ struct ListInplaceSorter
     }
 
     template<typename It, typename ExtractKey>
-    static void sort(It begin, It end, std::ptrdiff_t, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * next_sort_data)
+    static void sort(It begin, It end, size_t, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * next_sort_data)
     {
         ListSortData<It, ExtractKey> offset;
         offset.current_index = 0;
@@ -1358,11 +1358,11 @@ struct ListInplaceSorter
     }
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, bool>
 {
     template<typename It, typename ExtractKey>
-    static void sort(It begin, It end, std::ptrdiff_t, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * sort_data)
+    static void sort(It begin, It end, size_t, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * sort_data)
     {
         It middle = std::partition(begin, end, [&](typename std::remove_reference<decltype(*begin)>::type & a){ return !CurrentSubKey::sub_key(extract_key(a), sort_data); });
         if (next_sort)
@@ -1373,64 +1373,64 @@ struct InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey,
     }
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, uint8_t> : UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, 1>
 {
 };
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, uint16_t> : UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, 2>
 {
 };
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, uint32_t> : UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, 4>
 {
 };
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, uint64_t> : UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, 8>
 {
 };
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType, typename Enable = void>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType, typename Enable = void>
 struct FallbackInplaceSorter;
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType>
 struct InplaceSorter : FallbackInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, SubKeyType>
 {
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType>
 struct FallbackInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, SubKeyType, typename std::enable_if<has_subscript_operator<SubKeyType>::value>::type>
     : ListInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, SubKeyType>
 {
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct SortStarter;
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold>
 struct SortStarter<StdSortThreshold, AmericanFlagSortThreshold, SubKey<void>>
 {
     template<typename It, typename ExtractKey>
-    static void sort(It, It, std::ptrdiff_t, ExtractKey &, void *)
+    static void sort(It, It, size_t, ExtractKey &, void *)
     {
     }
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename CurrentSubKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey>
 struct SortStarter
 {
     template<typename It, typename ExtractKey>
-    static void sort(It begin, It end, std::ptrdiff_t num_elements, ExtractKey & extract_key, void * next_sort_data = nullptr)
+    static void sort(It begin, It end, size_t num_elements, ExtractKey & extract_key, void * next_sort_data = nullptr)
     {
         if (StdSortIfLessThanThreshold<StdSortThreshold>(begin, end, num_elements, extract_key))
             return;
 
-        void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *) = static_cast<void (*)(It, It, std::ptrdiff_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, typename CurrentSubKey::next>::sort);
-        if (next_sort == static_cast<void (*)(It, It, std::ptrdiff_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, SubKey<void>>::sort))
+        void (*next_sort)(It, It, size_t, ExtractKey &, void *) = static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, typename CurrentSubKey::next>::sort);
+        if (next_sort == static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, SubKey<void>>::sort))
             next_sort = nullptr;
         InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey>::sort(begin, end, num_elements, extract_key, next_sort, next_sort_data);
     }
 };
 
-template<std::ptrdiff_t StdSortThreshold, std::ptrdiff_t AmericanFlagSortThreshold, typename It, typename ExtractKey>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename It, typename ExtractKey>
 void inplace_radix_sort(It begin, It end, ExtractKey & extract_key)
 {
     typedef SubKey<decltype(extract_key(*begin))> SubKeyType;
@@ -1462,7 +1462,7 @@ static void ska_sort(It begin, It end)
 template<typename It, typename OutIt, typename ExtractKey>
 bool ska_sort_copy(It begin, It end, OutIt buffer_begin, ExtractKey && key)
 {
-    std::ptrdiff_t num_elements = end - begin;
+    size_t num_elements = end - begin;
     if (num_elements < 128 || detail::RadixSortPassCount<typename std::result_of<ExtractKey(decltype(*begin))>::type>::value >= 8)
     {
         ska_sort(begin, end, key);

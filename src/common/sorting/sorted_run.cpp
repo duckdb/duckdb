@@ -82,6 +82,7 @@ static void TemplatedSortThin(const TupleDataCollection &key_data) {
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
+	// Key is 8 bytes, just use ska
 	static const auto fallback = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ExtractKey<SORT_KEY>());
 	};
@@ -99,11 +100,13 @@ static void TemplatedSortWide(const TupleDataCollection &key_data) {
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
+	// Key is 8 bytes or more, start with ska
 	static const auto fallback1 = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_ska_sort::ska_sort(std::move(fb_begin), std::move(fb_end), ExtractKey<SORT_KEY>());
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback1);
 
+	// Finish with pdq
 	static const auto fallback2 = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end);
 	};
