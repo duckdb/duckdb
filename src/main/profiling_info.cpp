@@ -39,6 +39,8 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {MetricsType::QUERY_NAME,
 	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
+	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 	        MetricsType::CPU_TIME,
 	        MetricsType::EXTRA_INFO,
 	        MetricsType::CUMULATIVE_CARDINALITY,
