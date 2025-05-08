@@ -24,3 +24,8 @@ query I
 SELECT * FROM attached_parquet
 ----
 42
+
+statement error
+ATTACH 'duckdb:__TEST_DIR__/file.parquet' AS duck_attach
+----
+not a valid DuckDB database file
