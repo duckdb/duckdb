@@ -53,10 +53,6 @@ public:
 		unique_ptr<Index> index;
 		string table_schema;
 		string table_name;
-
-		//		ReplayIndexInfo(ReplayIndexInfo &&other) noexcept = default;
-		//		ReplayIndexInfo& operator=(ReplayIndexInfo &&other) noexcept = default;
-		//		~ReplayIndexInfo() noexcept = default;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -413,7 +409,7 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 		return;
 	}
 
-	// Remove any potential replay indexes.
+	// Remove any replay indexes of this table.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
 		                                              return replay_info.table_schema == info.schema &&
@@ -726,7 +722,7 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 		return;
 	}
 
-	// Remove any potential replay indexes.
+	// Remove the replay index, if any.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
 		                                              return replay_info.table_schema == info.schema &&
