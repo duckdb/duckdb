@@ -22,6 +22,10 @@ public:
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
+
+	string TaskType() const override {
+		return "PipelineInitializeTask";
+	}
 };
 
 void PipelineInitializeEvent::Schedule() {
