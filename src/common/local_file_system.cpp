@@ -905,7 +905,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		share_mode = FILE_SHARE_READ;
 		break;
 	case FileLockType::WRITE_LOCK:
-		share_mode = 0;
+		share_mode = FILE_SHARE_READ;
 		break;
 	default:
 		throw InternalException("Unknown FileLockType");
