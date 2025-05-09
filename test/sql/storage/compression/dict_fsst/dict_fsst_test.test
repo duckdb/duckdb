@@ -1,0 +1,52 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_test.test
+# group: [dict_fsst]
+
+load __TEST_DIR__/dict_fsst_test readwrite v1.3.0
+
+statement ok
+pragma force_compression='uncompressed';
+
+statement ok
+create table uncompressed_data as
+select
+	i, repeat(
+		(i % 200)::INTEGER::VARCHAR,
+		2047 // len((i % 200)::INTEGER::VARCHAR)
+	) a
+from range(20000) t(i);
+
+statement ok
+checkpoint;
+
+query I nosort expected_result
+select * from uncompressed_data order by i;
+----
+
+statement ok
+pragma force_compression='dict_fsst';
+
+statement ok
+create table compressed_data as select * from uncompressed_data;
+
+statement ok
+checkpoint;
+
+# 11 and 111 produce the same string so it's 199 not 200
+query I
+select count(distinct a) from compressed_data;
+----
+199
+
+query I nosort expected_result
+select * from compressed_data order by i;
+----
+
+query I
+select count(distinct a) from compressed_data where contains(a, '11')
+----
+20
+
+query I
+select count(distinct a) from compressed_data where i%10=0
+----
+20

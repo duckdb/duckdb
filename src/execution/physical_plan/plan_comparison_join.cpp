@@ -89,7 +89,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	if (can_merge) {
 		// range join: use piecewise merge join
 		return Make<PhysicalPiecewiseMergeJoin>(op, left, right, std::move(op.conditions), op.join_type,
-		                                        op.estimated_cardinality);
+		                                        op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 	if (PhysicalNestedLoopJoin::IsSupported(op.conditions, op.join_type)) {
 		// inequality join: use nested loop

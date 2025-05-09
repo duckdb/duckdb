@@ -2,8 +2,6 @@
 # description: The error messages that suggest possible alternative mixed with ATTACH
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
 

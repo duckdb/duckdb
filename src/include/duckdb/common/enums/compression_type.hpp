@@ -10,8 +10,11 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
+
+class StorageManager;
 
 enum class CompressionType : uint8_t {
 	COMPRESSION_AUTO = 0,
@@ -29,10 +32,12 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_ZSTD = 12,
 	COMPRESSION_ROARING = 13,
 	COMPRESSION_EMPTY = 14, // internal only
-	COMPRESSION_COUNT       // This has to stay the last entry of the type!
+	COMPRESSION_DICT_FSST = 15,
+	COMPRESSION_COUNT // This has to stay the last entry of the type!
 };
 
-bool CompressionTypeIsDeprecated(CompressionType compression_type);
+bool CompressionTypeIsDeprecated(CompressionType compression_type,
+                                 optional_ptr<StorageManager> storage_manager = nullptr);
 vector<string> ListCompressionTypes(void);
 CompressionType CompressionTypeFromString(const string &str);
 string CompressionTypeToString(CompressionType type);

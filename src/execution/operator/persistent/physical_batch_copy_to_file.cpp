@@ -265,6 +265,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "ProcessRemainingBatchesTask";
+	}
+
 private:
 	const PhysicalBatchCopyToFile &op;
 	FixedBatchCopyGlobalState &gstate;

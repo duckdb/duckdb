@@ -7,13 +7,11 @@ string QualifiedName::ToString() const {
 	return ParseInfo::QualifierToString(catalog, schema, name);
 }
 
-QualifiedName QualifiedName::Parse(const string &input) {
-	string catalog;
-	string schema;
-	string name;
+vector<string> QualifiedName::ParseComponents(const string &input) {
+	vector<string> result;
 	idx_t idx = 0;
-	vector<string> entries;
 	string entry;
+
 normal:
 	//! quote
 	for (; idx < input.size(); idx++) {
@@ -27,7 +25,7 @@ normal:
 	}
 	goto end;
 separator:
-	entries.push_back(entry);
+	result.push_back(entry);
 	entry = "";
 	idx++;
 	goto normal;
@@ -41,22 +39,38 @@ quoted:
 		}
 		entry += input[idx];
 	}
-	throw ParserException("Unterminated quote in qualified name!");
+	throw ParserException("Unterminated quote in qualified name! (input: %s)", input);
 end:
+	if (!entry.empty()) {
+		result.push_back(entry);
+	}
+	return result;
+}
+
+QualifiedName QualifiedName::Parse(const string &input) {
+	string catalog;
+	string schema;
+	string name;
+
+	auto entries = ParseComponents(input);
 	if (entries.empty()) {
 		catalog = INVALID_CATALOG;
 		schema = INVALID_SCHEMA;
-		name = entry;
 	} else if (entries.size() == 1) {
 		catalog = INVALID_CATALOG;
-		schema = entries[0];
-		name = entry;
+		schema = INVALID_SCHEMA;
+		name = entries[0];
 	} else if (entries.size() == 2) {
+		catalog = INVALID_CATALOG;
+		schema = entries[0];
+		name = entries[1];
+	} else if (entries.size() == 3) {
 		catalog = entries[0];
 		schema = entries[1];
-		name = entry;
+		name = entries[2];
 	} else {
-		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found");
+		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
+		                      input);
 	}
 	return QualifiedName {catalog, schema, name};
 }

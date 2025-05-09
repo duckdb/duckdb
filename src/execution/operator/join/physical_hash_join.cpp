@@ -469,6 +469,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "HashJoinTableInitTask";
+	}
+
 private:
 	HashJoinGlobalSinkState &sink;
 	idx_t entry_idx_from;
@@ -523,6 +527,9 @@ public:
 		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+	string TaskType() const override {
+		return "HashJoinFinalizeTask";
 	}
 
 private:
@@ -605,6 +612,10 @@ public:
 		local_ht.Repartition(global_ht);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "HashJoinRepartitionTask";
 	}
 
 private:

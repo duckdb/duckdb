@@ -2,8 +2,6 @@
 # description: Test file path roundtripping and concurrency
 # group: [attach]
 
-require noforcestorage
-
 require notwindows
 
 statement ok

@@ -95,7 +95,17 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_ONLY_IF: self.decorator_onlyif,
         }
         self.FOREACH_COLLECTIONS = {
-            "<compression>": ["none", "uncompressed", "rle", "bitpacking", "dictionary", "fsst", "alp", "alprd"],
+            "<compression>": [
+                "none",
+                "uncompressed",
+                "rle",
+                "bitpacking",
+                "dictionary",
+                "fsst",
+                "dict_fsst",
+                "alp",
+                "alprd",
+            ],
             "<alltypes>": ["bool", "interval", "varchar"],
             "<numeric>": ["float", "double"],
             "<integral>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
@@ -326,7 +336,7 @@ class SQLLogicParser:
         parameters = header.parameters
         if len(parameters) < 1:
             self.fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)")
-        accepted_options = ['ignore_error_messages', 'always_fail_error_messages']
+        accepted_options = ['ignore_error_messages', 'always_fail_error_messages', 'seed']
         if parameters[0] in accepted_options:
             error_messages = []
             # Parse the parameter list as a comma separated list of strings that can contain spaces

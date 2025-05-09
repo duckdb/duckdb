@@ -10,6 +10,7 @@
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -240,6 +241,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bitpacking");
 		result.push_back("dictionary");
 		result.push_back("fsst");
+		result.push_back("dict_fsst");
 		result.push_back("alp");
 		result.push_back("alprd");
 		collection = true;
@@ -488,6 +490,17 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_latest_storage") {
+#ifdef DUCKDB_LATEST_STORAGE
+		return RequireResult::MISSING;
+#elif defined(DUCKDB_ALTERNATIVE_VERIFY)
+		//! ALTERNATIVE_VERIFY also forces latest storage
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -859,6 +872,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					string_set->insert(current_string);
 					string_set->erase("");
 				}
+			} else if (token.parameters[0] == "seed") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("set seed requires a single seed value");
+				}
+				Value seed(token.parameters[1]);
+				if (!seed.DefaultTryCastAs(LogicalType::DOUBLE)) {
+					parser.Fail("set seed requires a floating point parameter");
+				}
+				auto res = con->Query("SELECT SETSEED(" + seed.ToString() + ")");
+				if (res->HasError()) {
+					parser.Fail("Failed to set seed: %s", res->GetError());
+				}
+				skip_reload = true;
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
@@ -943,14 +969,33 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
-			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			bool is_read_only = false;
+			if (token.parameters.size() > 1) {
+				auto param = token.parameters[1];
+				if (StringUtil::CIEquals("readonly", param)) {
+					is_read_only = true;
+				} else if (StringUtil::CIEquals("readwrite", param)) {
+					is_read_only = false;
+				} else {
+					parser.Fail(StringUtil::Format(
+					    "parameter to 'load' is invalid, received '%s', accepted options are 'readonly' and 'readwrite",
+					    param));
+				}
+			}
+
+			string version;
+			if (token.parameters.size() > 2) {
+				version = token.parameters[2];
+			}
+
 			string load_db_path;
 			if (!token.parameters.empty()) {
 				load_db_path = ReplaceKeywords(token.parameters[0]);
 			} else {
 				load_db_path = string();
 			}
-			auto command = make_uniq<LoadCommand>(*this, load_db_path, readonly);
+
+			auto command = make_uniq<LoadCommand>(*this, load_db_path, is_read_only, version);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
 			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");

@@ -56,6 +56,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
+class HTTPUtil;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -350,6 +351,8 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! HTTP Request utility functions
+	unique_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 
