@@ -230,6 +230,11 @@ FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> 
 	if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
 		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
+
+	if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(true))) {
+		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
+	}
+
 	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
 	    ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
