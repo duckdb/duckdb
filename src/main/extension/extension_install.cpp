@@ -12,15 +12,6 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 
-#ifndef DISABLE_DUCKDB_REMOTE_INSTALL
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-#include "httplib.hpp"
-#ifndef DUCKDB_NO_THREADS
-#include <chrono>
-#include <thread>
-#endif
-#endif
-#endif
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <fstream>
@@ -354,17 +345,6 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
                                                            const string &local_extension_path,
                                                            ExtensionInstallOptions &options,
                                                            optional_ptr<HTTPLogger> http_logger) {
-	string no_http = StringUtil::Replace(url, "http://", "");
-
-	idx_t next = no_http.find('/', 0);
-	if (next == string::npos) {
-		throw IOException("No slash in URL template");
-	}
-
-	// Push the substring [last, next) on to splits
-	auto hostname_without_http = no_http.substr(0, next);
-	auto url_local_part = no_http.substr(next);
-
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
 		auto fs = FileSystem::CreateLocal();
@@ -381,98 +361,41 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		}
 	}
 
-	auto url_base = "http://" + hostname_without_http;
-	// FIXME: the retry logic should be unified with the retry logic in the httpfs client
-	static constexpr idx_t MAX_RETRY_COUNT = 3;
-	static constexpr uint64_t RETRY_WAIT_MS = 100;
-	static constexpr double RETRY_BACKOFF = 4;
-	idx_t retry_count = 0;
-	duckdb_httplib::Result res;
-	while (true) {
-		duckdb_httplib::Client cli(url_base.c_str());
-		if (!db.config.options.http_proxy.empty()) {
-			idx_t port;
-			string host;
-			HTTPUtil::ParseHTTPProxyHost(db.config.options.http_proxy, host, port);
-			cli.set_proxy(host, NumericCast<int>(port));
-		}
-
-		if (!db.config.options.http_proxy_username.empty() || !db.config.options.http_proxy_password.empty()) {
-			cli.set_proxy_basic_auth(db.config.options.http_proxy_username, db.config.options.http_proxy_password);
-		}
-
-		if (http_logger) {
-			cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
-		}
-
-		duckdb_httplib::Headers headers = {
-		    {"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())}};
-
-		if (options.use_etags && install_info && !install_info->etag.empty()) {
-			headers.insert({"If-None-Match", StringUtil::Format("%s", install_info->etag)});
-		}
-
-		res = cli.Get(url_local_part.c_str(), headers);
-		if (install_info && res && res->status == 304) {
-			return install_info;
-		}
-
-		if (res && res->status == 200) {
-			// success!
-			break;
-		}
-		// failure - check if we should retry
-		bool should_retry = false;
-		if (res.error() == duckdb_httplib::Error::Success) {
-			switch (res->status) {
-			case 408: // Request Timeout
-			case 418: // Server is pretending to be a teapot
-			case 429: // Rate limiter hit
-			case 500: // Server has error
-			case 503: // Server has error
-			case 504: // Server has error
-				should_retry = true;
-				break;
-			default:
-				break;
-			}
-		} else {
-			// always retry on duckdb_httplib::Error::Error
-			should_retry = true;
-		}
-		retry_count++;
-		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
-			// if we should not retry or exceeded the number of retries - bubble up the error
-			string message;
-			ExtensionHelper::CreateSuggestions(extension_name, message);
-
-			auto documentation_link = ExtensionHelper::ExtensionInstallDocumentationLink(extension_name);
-			if (!documentation_link.empty()) {
-				message += "\nFor more info, visit " + documentation_link;
-			}
-			if (res.error() == duckdb_httplib::Error::Success) {
-				throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",
-				                    extension_name, url_base, url_local_part, res->status, message);
-			} else {
-				throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s (ERROR %s)", extension_name,
-				                  url_base, url_local_part, message, to_string(res.error()));
-			}
-		}
-#ifndef DUCKDB_NO_THREADS
-		// retry
-		// sleep first
-		uint64_t sleep_amount = static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) *
-		                                              pow(RETRY_BACKOFF, static_cast<double>(retry_count) - 1));
-		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
-#endif
+	HTTPHeaders headers(db);
+	if (options.use_etags && install_info && !install_info->etag.empty()) {
+		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
-	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
+	auto &http_util = HTTPUtil::Get(db);
+	auto response = http_util.Request(db, url, headers, http_logger);
+	if (!response->Success()) {
+		// if we should not retry or exceeded the number of retries - bubble up the error
+		string message;
+		ExtensionHelper::CreateSuggestions(extension_name, message);
+
+		auto documentation_link = ExtensionHelper::ExtensionInstallDocumentationLink(extension_name);
+		if (!documentation_link.empty()) {
+			message += "\nFor more info, visit " + documentation_link;
+		}
+		if (response->HasRequestError()) {
+			// request error - this means something went wrong performing the request
+			throw IOException("Failed to download extension \"%s\" at URL \"%s\"\n%s (ERROR %s)", extension_name, url,
+			                  message, response->GetRequestError());
+		}
+		// if this was not a request error this means the server responded - report the response status and response
+		throw HTTPException(*response, "Failed to download extension \"%s\" at URL \"%s\" (HTTP %n)\n%s",
+		                    extension_name, url, int(response->status), message);
+	}
+	if (response->status == HTTPStatusCode::NotModified_304 && install_info) {
+		return install_info;
+	}
+
+	auto decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
 
 	ExtensionInstallInfo info;
 	CheckExtensionMetadataOnInstall(db, (void *)decompressed_body.data(), decompressed_body.size(), info,
 	                                extension_name);
-	if (res->has_header("ETag")) {
-		info.etag = res->get_header_value("ETag");
+	if (response->HasHeader("ETag")) {
+		info.etag = response->GetHeaderValue("ETag");
 	}
 
 	if (options.repository) {
