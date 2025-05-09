@@ -1,7 +1,5 @@
 #include "duckdb/common/types/row/block_iterator.hpp"
 
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
-
 namespace duckdb {
 
 BlockIteratorStateType GetBlockIteratorStateType(const bool &external) {

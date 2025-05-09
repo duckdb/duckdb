@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "tuple_data_collection.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 
 namespace duckdb {
@@ -18,9 +17,9 @@ namespace duckdb {
 class TupleDataCollection;
 
 enum class BlockIteratorStateType : int8_t {
-	//! For fixed_in_memory_block_iterator_state_t
+	//! For InMemoryBlockIteratorState
 	IN_MEMORY,
-	//! For fixed_external_block_iterator_state_t
+	//! For ExternalBlockIteratorState
 	EXTERNAL,
 };
 
@@ -98,8 +97,6 @@ private:
 	const FastMod<idx_t> fast_mod;
 	const idx_t tuple_count;
 };
-
-class VariableInMemoryBlockIteratorState {};
 
 class ExternalBlockIteratorState {
 public:
@@ -216,14 +213,12 @@ private:
 	vector<BufferHandle> pins;
 };
 
-class VariableExternalBlockIteratorState {};
-
 //! Utility so we can get the state using the type
 template <BlockIteratorStateType T>
 using BlockIteratorState = typename std::conditional<
     T == BlockIteratorStateType::IN_MEMORY, InMemoryBlockIteratorState,
     typename std::conditional<T == BlockIteratorStateType::EXTERNAL, ExternalBlockIteratorState,
-                              void // Throws error if we get here
+                              void // Compiler throws error if we get here
                               >::type>::type;
 
 //! Iterator for data spread out over multiple blocks
@@ -238,28 +233,31 @@ public:
 	using traits = std::iterator_traits<block_iterator_t>;
 
 public:
-	explicit block_iterator_t(STATE &state_p) : state(&state_p), block_idx(0), tuple_idx(0) {
+	explicit block_iterator_t(STATE &state_p) : state(&state_p), block_or_chunk_idx(0), tuple_idx(0) {
 	}
 
-	explicit block_iterator_t() : state(nullptr), block_idx(0), tuple_idx(0) {
+	explicit block_iterator_t()
+	    : state(nullptr), block_or_chunk_idx(DConstants::INVALID_INDEX), tuple_idx(DConstants::INVALID_INDEX) {
+		// Ideally, we wouldn't have a default constructor, because we always need a state.
+		// However, some sorting algorithms use the default constructor before initializing, so we need this
 	}
 
 	block_iterator_t(STATE &state_p, const idx_t &index) : state(&state_p) { // NOLINT: uninitialized on purpose
-		state->RandomAccess(block_idx, tuple_idx, index);
+		state->RandomAccess(block_or_chunk_idx, tuple_idx, index);
 	}
 
 	block_iterator_t(STATE &state_p, const idx_t &block_idx_p, const idx_t &tuple_idx_p)
-	    : state(&state_p), block_idx(block_idx_p), tuple_idx(tuple_idx_p) {
+	    : state(&state_p), block_or_chunk_idx(block_idx_p), tuple_idx(tuple_idx_p) {
 	}
 
 	block_iterator_t(const block_iterator_t &other)
-	    : state(other.state), block_idx(other.block_idx), tuple_idx(other.tuple_idx) {
+	    : state(other.state), block_or_chunk_idx(other.block_or_chunk_idx), tuple_idx(other.tuple_idx) {
 	}
 
 	block_iterator_t &operator=(const block_iterator_t &other) {
 		D_ASSERT(!state || RefersToSameObject(*state, *other.state));
-		if (this != &other) {
-			block_idx = other.block_idx;
+		if (this != &other) { // This check is needed to shut clang-tidy up
+			block_or_chunk_idx = other.block_or_chunk_idx;
 			tuple_idx = other.tuple_idx;
 		}
 		return *this;
@@ -268,7 +266,7 @@ public:
 public:
 	//! (De-)referencing
 	reference operator*() const {
-		return state->template GetValueAtIndex<T>(block_idx, tuple_idx);
+		return state->template GetValueAtIndex<T>(block_or_chunk_idx, tuple_idx);
 	}
 	pointer operator->() const {
 		return &operator*();
@@ -276,7 +274,7 @@ public:
 
 	//! Prefix and postfix increment and decrement
 	block_iterator_t &operator++() {
-		state->Increment(block_idx, tuple_idx);
+		state->Increment(block_or_chunk_idx, tuple_idx);
 		return *this;
 	}
 	block_iterator_t operator++(int) {
@@ -285,7 +283,7 @@ public:
 		return tmp;
 	}
 	block_iterator_t &operator--() {
-		state->Decrement(block_idx, tuple_idx);
+		state->Decrement(block_or_chunk_idx, tuple_idx);
 		return *this;
 	}
 	block_iterator_t operator--(int) {
@@ -296,21 +294,21 @@ public:
 
 	//! Random access
 	block_iterator_t &operator+=(const difference_type &n) {
-		state->Add(block_idx, tuple_idx, n);
+		state->Add(block_or_chunk_idx, tuple_idx, n);
 		return *this;
 	}
 	block_iterator_t &operator-=(const difference_type &n) {
-		state->Subtract(block_idx, tuple_idx, n);
+		state->Subtract(block_or_chunk_idx, tuple_idx, n);
 		return *this;
 	}
 	block_iterator_t operator+(const difference_type &n) const {
-		idx_t new_block_idx = block_idx;
+		idx_t new_block_idx = block_or_chunk_idx;
 		idx_t new_tuple_idx = tuple_idx;
 		state->Add(new_block_idx, new_tuple_idx, n);
 		return block_iterator_t(*state, new_block_idx, new_tuple_idx);
 	}
 	block_iterator_t operator-(const difference_type &n) const {
-		idx_t new_block_idx = block_idx;
+		idx_t new_block_idx = block_or_chunk_idx;
 		idx_t new_tuple_idx = tuple_idx;
 		state->Subtract(new_block_idx, new_tuple_idx, n);
 		return block_iterator_t(*state, new_block_idx, new_tuple_idx);
@@ -322,32 +320,37 @@ public:
 
 	//! Difference between iterators
 	difference_type operator-(const block_iterator_t &other) const {
-		return state->GetIndex(block_idx, tuple_idx) - other.state->GetIndex(other.block_idx, other.tuple_idx);
+		return state->GetIndex(block_or_chunk_idx, tuple_idx) -
+		       other.state->GetIndex(other.block_or_chunk_idx, other.tuple_idx);
 	}
 
 	//! Comparison operators
 	bool operator==(const block_iterator_t &other) const {
-		return block_idx == other.block_idx && tuple_idx == other.tuple_idx;
+		return block_or_chunk_idx == other.block_or_chunk_idx && tuple_idx == other.tuple_idx;
 	}
 	bool operator!=(const block_iterator_t &other) const {
-		return block_idx != other.block_idx || tuple_idx != other.tuple_idx;
+		return block_or_chunk_idx != other.block_or_chunk_idx || tuple_idx != other.tuple_idx;
 	}
 	bool operator<(const block_iterator_t &other) const {
-		return block_idx == other.block_idx ? tuple_idx < other.tuple_idx : block_idx < other.block_idx;
+		return block_or_chunk_idx == other.block_or_chunk_idx ? tuple_idx < other.tuple_idx
+		                                                      : block_or_chunk_idx < other.block_or_chunk_idx;
 	}
 	bool operator>(const block_iterator_t &other) const {
-		return block_idx == other.block_idx ? tuple_idx > other.tuple_idx : block_idx > other.block_idx;
+		return block_or_chunk_idx == other.block_or_chunk_idx ? tuple_idx > other.tuple_idx
+		                                                      : block_or_chunk_idx > other.block_or_chunk_idx;
 	}
 	bool operator<=(const block_iterator_t &other) const {
-		return block_idx == other.block_idx ? tuple_idx <= other.tuple_idx : block_idx <= other.block_idx;
+		return block_or_chunk_idx == other.block_or_chunk_idx ? tuple_idx <= other.tuple_idx
+		                                                      : block_or_chunk_idx <= other.block_or_chunk_idx;
 	}
 	bool operator>=(const block_iterator_t &other) const {
-		return block_idx == other.block_idx ? tuple_idx >= other.tuple_idx : block_idx >= other.block_idx;
+		return block_or_chunk_idx == other.block_or_chunk_idx ? tuple_idx >= other.tuple_idx
+		                                                      : block_or_chunk_idx >= other.block_or_chunk_idx;
 	}
 
 private:
 	STATE *state;
-	idx_t block_idx; // Or chunk index
+	idx_t block_or_chunk_idx;
 	idx_t tuple_idx;
 };
 
