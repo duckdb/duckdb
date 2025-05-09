@@ -469,7 +469,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	}
 }
 void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, SelectionVector &not_found,
-                                          idx_t not_found_count, const TupleDataLayout &layout,
+                                          idx_t &not_found_count, const TupleDataLayout &layout,
                                           const idx_t base_col_offset) {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
@@ -505,8 +505,9 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 						continue;
 					}
 				}
-				not_found.set_index(not_found_count++, idx);
+				not_found.set_index(next_not_found_count++, idx);
 			}
+			not_found_count = next_not_found_count;
 			break;
 		}
 		case PhysicalType::LIST:
@@ -522,8 +523,9 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 					heap_locations[idx] = Load<data_ptr_t>(list_ptr_location);
 					continue;
 				}
-				not_found.set_index(not_found_count++, idx);
+				not_found.set_index(next_not_found_count++, idx);
 			}
+			not_found_count = next_not_found_count;
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -536,7 +538,6 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 		default:
 			break;
 		}
-		not_found_count = next_not_found_count;
 	}
 }
 

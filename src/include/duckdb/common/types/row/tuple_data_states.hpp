@@ -120,6 +120,8 @@ struct TupleDataChunkState {
 	Vector heap_locations = Vector(LogicalType::POINTER);
 	Vector heap_sizes = Vector(LogicalType::UBIGINT);
 
+	SelectionVector utility = SelectionVector(STANDARD_VECTOR_SIZE);
+
 	vector<unique_ptr<Vector>> cached_cast_vectors;
 	vector<unique_ptr<VectorCache>> cached_cast_vector_cache;
 

@@ -82,7 +82,7 @@ public:
 	static void RecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
 	                                  const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
 	                                  const idx_t count, const TupleDataLayout &layout, const idx_t base_col_offset);
-	static void FindHeapPointers(TupleDataChunkState &chunk_state, SelectionVector &not_found, idx_t not_found_count,
+	static void FindHeapPointers(TupleDataChunkState &chunk_state, SelectionVector &not_found, idx_t &not_found_count,
 	                             const TupleDataLayout &layout, const idx_t base_col_offset);
 	//! Releases or stores any handles in the management state that are no longer required
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment, TupleDataChunk &chunk,

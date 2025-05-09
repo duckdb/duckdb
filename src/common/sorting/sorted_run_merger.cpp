@@ -103,14 +103,16 @@ public:
 
 private:
 	//! Computes upper partition boundaries using K-way Merge Path
-	void ComputePartitionBoundaries(SortedRunMergerGlobalState &gstate);
+	void ComputePartitionBoundaries(SortedRunMergerGlobalState &gstate, const optional_idx &p_idx);
 	template <class STATE>
-	void ComputePartitionBoundariesSwitch(SortedRunMergerGlobalState &gstate, unsafe_vector<STATE> &states);
+	void ComputePartitionBoundariesSwitch(SortedRunMergerGlobalState &gstate, const optional_idx &p_idx,
+	                                      unsafe_vector<STATE> &states);
 	template <class STATE, SortKeyType SORT_KEY_TYPE>
-	void TemplatedComputePartitionBoundaries(SortedRunMergerGlobalState &gstate, unsafe_vector<STATE> &states);
+	void TemplatedComputePartitionBoundaries(SortedRunMergerGlobalState &gstate, const optional_idx &p_idx,
+	                                         unsafe_vector<STATE> &states);
 
 	//! Acquires lower partition boundaries from the global state
-	bool AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate);
+	void AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate);
 
 	//! Merge the partition to obtain the next chunk
 	void MergePartition(SortedRunMergerGlobalState &gstate);
@@ -243,13 +245,12 @@ void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, 
 	D_ASSERT(task != SortedRunMergerTask::FINISHED);
 	switch (task) {
 	case SortedRunMergerTask::COMPUTE_BOUNDARIES:
-		ComputePartitionBoundaries(gstate);
+		ComputePartitionBoundaries(gstate, partition_idx);
 		task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
 		break;
 	case SortedRunMergerTask::ACQUIRE_BOUNDARIES:
-		if (AcquirePartitionBoundaries(gstate)) {
-			task = SortedRunMergerTask::MERGE_PARTITION;
-		}
+		AcquirePartitionBoundaries(gstate);
+		task = SortedRunMergerTask::MERGE_PARTITION;
 		break;
 	case SortedRunMergerTask::MERGE_PARTITION:
 		MergePartition(gstate);
@@ -267,8 +268,9 @@ void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, 
 	}
 }
 
-void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobalState &gstate) {
-	D_ASSERT(partition_idx.IsValid());
+void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobalState &gstate,
+                                                           const optional_idx &p_idx) {
+	D_ASSERT(p_idx.IsValid());
 	D_ASSERT(task == SortedRunMergerTask::COMPUTE_BOUNDARIES);
 
 	// Copy over the run boundaries from the assigned partition (under lock)
@@ -281,11 +283,11 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
 		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
-		    gstate, fixed_in_memory_states);
+		    gstate, p_idx, fixed_in_memory_states);
 		break;
 	case BlockIteratorStateType::FIXED_EXTERNAL:
 		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(
-		    gstate, fixed_external_states);
+		    gstate, p_idx, fixed_external_states);
 		break;
 	default:
 		// TODO: switch on other types
@@ -295,8 +297,8 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 
 	// The computed boundaries of the current partition may be the start boundaries of the next partition
 	// Another thread depends on this, set them first
-	if (partition_idx.GetIndex() != gstate.num_partitions - 1) {
-		auto &next_partition = *gstate.partitions[partition_idx.GetIndex() + 1];
+	if (p_idx.GetIndex() != gstate.num_partitions - 1) {
+		auto &next_partition = *gstate.partitions[p_idx.GetIndex() + 1];
 		guard = next_partition.Lock();
 		auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(guard);
 		for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
@@ -320,22 +322,23 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 
 template <class STATE>
 void SortedRunMergerLocalState::ComputePartitionBoundariesSwitch(SortedRunMergerGlobalState &gstate,
+                                                                 const optional_idx &p_idx,
                                                                  unsafe_vector<STATE> &states) {
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, p_idx, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, p_idx, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, p_idx, states);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, p_idx, states);
 	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, p_idx, states);
 	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, p_idx, states);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_VARIABLE_32>(gstate, states);
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_VARIABLE_32>(gstate, p_idx, states);
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::ComputePartitionBoundariesSwitch for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -351,6 +354,7 @@ static idx_t ComputeBoundaryDelta(const idx_t &total_remaining, const idx_t &k,
 
 template <class STATE, SortKeyType SORT_KEY_TYPE>
 void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMergerGlobalState &gstate,
+                                                                    const optional_idx &p_idx,
                                                                     unsafe_vector<STATE> &states) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<STATE, SORT_KEY>;
@@ -358,7 +362,7 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	D_ASSERT(run_boundaries.size() == gstate.num_runs);
 
 	// Check if last partition: boundary is always end of each sorted run
-	if (partition_idx == gstate.num_partitions - 1) {
+	if (p_idx == gstate.num_partitions - 1) {
 		for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 			run_boundaries[run_idx].begin = gstate.merger.sorted_runs[run_idx]->Count();
 		}
@@ -366,7 +370,7 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	}
 
 	// Initialize "total_remaining", i.e., how much we still need to update the boundaries until we're done
-	idx_t total_remaining = (partition_idx.GetIndex() + 1) * gstate.merger.partition_size;
+	idx_t total_remaining = (p_idx.GetIndex() + 1) * gstate.merger.partition_size;
 
 	// Initialize iterators, and track of which runs are actively being used in the computation, i.e., not yet fixed
 	unsafe_vector<BLOCK_ITERATOR> run_iterators;
@@ -429,20 +433,27 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	}
 }
 
-bool SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate) {
+void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate) {
 	D_ASSERT(partition_idx.IsValid());
 	D_ASSERT(task == SortedRunMergerTask::ACQUIRE_BOUNDARIES);
 	auto &current_partition = *gstate.partitions[partition_idx.GetIndex()];
 	auto guard = current_partition.Lock();
-	if (!current_partition.GetStartComputed(guard)) {
-		return false; // Start has not yet been computed
+	if (current_partition.GetStartComputed(guard)) {
+		// Start has been computed, boundaries are ready to use. Copy to local
+		run_boundaries = current_partition.GetRunBoundaries(guard);
+		return;
 	}
-
-	// Start has been computed, boundaries are ready to use. Copy to local
-	run_boundaries = current_partition.GetRunBoundaries(guard);
 	guard.unlock();
 
-	return true;
+	// Start has not yet been computed by another thread, just let this thread do it
+	task = SortedRunMergerTask::COMPUTE_BOUNDARIES;
+	ComputePartitionBoundaries(gstate, partition_idx.GetIndex() - 1);
+	task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
+
+	// Copy to local
+	guard.lock();
+	D_ASSERT(current_partition.GetStartComputed(guard));
+	run_boundaries = current_partition.GetRunBoundaries(guard);
 }
 
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate) {
@@ -631,10 +642,7 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 		}
 	}
 
-	// TODO this should return BLOCKED when previous thread has not computed boundaries yet
-	//  Otherwise we will spinlock here, and potentially deadlock (e.g., OOM by previous thread)
 	gstate.total_scanned += chunk.size();
-
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
