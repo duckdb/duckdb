@@ -29,7 +29,7 @@ static void TupleDataValueStore(const T &source, const data_ptr_t &row_location,
 template <>
 inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_location, const idx_t offset_in_row,
                                 data_ptr_t &heap_location) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
 	if (source.IsInlined()) {
@@ -50,7 +50,7 @@ static void TupleDataWithinListValueStore(const T &source, const data_ptr_t &loc
 template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
@@ -60,14 +60,14 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 
 template <class T>
 void TupleDataValueVerify(const LogicalType &, const T &) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// NOP
 #endif
 }
 
 template <>
 inline void TupleDataValueVerify(const LogicalType &type, const string_t &value) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		value.Verify();
 	}
@@ -88,7 +88,7 @@ inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 }
 
 static void ResetCombinedListData(vector<TupleDataVectorFormat> &vector_data) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	for (auto &vd : vector_data) {
 		vd.combined_list_data = nullptr;
 		ResetCombinedListData(vd.children);
@@ -388,7 +388,7 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			auto &struct_source = *struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 			D_ASSERT(!struct_format.combined_list_data);
 #endif
 			if (!struct_format.combined_list_data) {
@@ -454,7 +454,7 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 
 	D_ASSERT(source_format.children.size() == 1);
 	auto &child_format = source_format.children[0];
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// In debug mode this should be deleted by ResetCombinedListData
 	D_ASSERT(!child_format.combined_list_data);
 #endif
@@ -586,7 +586,7 @@ static void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	Vector heap_locations_copy(LogicalType::POINTER);
 	if (!layout.AllConstant()) {
 		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
@@ -623,7 +623,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		}
 	}
 
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// Verify that the size of the data written to the heap is the same as the size we computed it would be
 	if (!layout.AllConstant()) {
 		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);

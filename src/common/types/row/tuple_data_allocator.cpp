@@ -256,7 +256,7 @@ static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t h
 	}
 
 	// Verify total size
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	idx_t total_heap_size = 0;
 	for (idx_t i = 0; i < next; i++) {
 		auto idx = offset + i;
@@ -337,7 +337,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTypeId type_id,
                                  const data_ptr_t row_locations[], const idx_t col_idx, const idx_t base_col_offset,
                                  const idx_t col_offset, const idx_t offset, const idx_t count) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	if (type_id != LogicalTypeId::VARCHAR) {
 		// Make sure we don't verify BLOB / AGGREGATE_STATE
 		return;

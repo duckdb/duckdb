@@ -62,7 +62,7 @@ public:
 
 private:
 	void VerifyLock(const unique_lock<mutex> &guard) const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 		D_ASSERT(guard.mutex() && RefersToSameObject(*guard.mutex(), lock));
 #endif
 	}
@@ -380,7 +380,8 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	unsafe_vector<idx_t> active_run_idxs(gstate.num_runs);
 	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 		auto &state = states[run_idx];
-		state.Unpin();
+		state.SetKeepPinned(false);
+		state.SetPinPayload(false);
 
 		run_iterators.emplace_back(state);
 		active_run_idxs[run_idx] = run_idx;
@@ -515,13 +516,16 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 
 	idx_t active_runs = 0;
 	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
-		// Unpin previously held pins
 		auto &state = states[run_idx];
-		state.Unpin();
+		state.SetKeepPinned(true);
+		state.SetPinPayload(true);
 
 		// Keep track of how many runs are actively being merged
 		const auto &run_boundary = run_boundaries[run_idx];
-		active_runs += run_boundary.end != run_boundary.begin;
+		if (run_boundary.begin == run_boundary.end) {
+			continue;
+		}
+		active_runs++;
 
 		for (auto it = BLOCK_ITERATOR(state, run_boundary.begin); it != BLOCK_ITERATOR(state, run_boundary.end); ++it) {
 			merged_partition_keys[merged_partition_count++] = *it;

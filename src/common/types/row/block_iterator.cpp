@@ -25,8 +25,8 @@ unsafe_vector<data_ptr_t> InMemoryBlockIteratorState::ConvertBlockPointers(const
 ExternalBlockIteratorState::ExternalBlockIteratorState(TupleDataCollection &key_data_p,
                                                        optional_ptr<TupleDataCollection> payload_data_p)
     : tuple_count(key_data_p.Count()), current_chunk_idx(DConstants::INVALID_INDEX), key_data(key_data_p),
-      key_ptrs(FlatVector::GetData<data_ptr_t>(key_scan_state.chunk_state.row_locations)),
-      payload_data(payload_data_p) {
+      key_ptrs(FlatVector::GetData<data_ptr_t>(key_scan_state.chunk_state.row_locations)), payload_data(payload_data_p),
+      keep_pinned(false), pin_payload(false) {
 	key_data.InitializeScan(key_scan_state);
 	if (payload_data) {
 		payload_data->InitializeScan(payload_scan_state);

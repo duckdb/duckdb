@@ -82,7 +82,11 @@ public:
 		return block_idx * fast_mod.GetDivisor() + tuple_idx;
 	}
 
-	void Unpin() {
+	void SetKeepPinned(const bool &) {
+		// NOP
+	}
+
+	void SetPinPayload(const bool &) {
 		// NOP
 	}
 
@@ -155,20 +159,36 @@ public:
 		return chunk_idx * STANDARD_VECTOR_SIZE + tuple_idx;
 	}
 
-	void Unpin() {
-		pins.clear();
+	void SetKeepPinned(const bool &enable) {
+		keep_pinned = enable;
+		if (!keep_pinned) {
+			pins.clear();
+			key_scan_state.pin_state.row_handles.clear();
+			key_scan_state.pin_state.heap_handles.clear();
+			payload_scan_state.pin_state.row_handles.clear();
+			payload_scan_state.pin_state.heap_handles.clear();
+			current_chunk_idx = DConstants::INVALID_INDEX;
+		}
+	}
+
+	void SetPinPayload(const bool &enable) {
+		pin_payload = enable;
 	}
 
 private:
 	template <class T>
 	void InitializeChunk(const idx_t &chunk_idx) {
 		current_chunk_idx = chunk_idx;
-		key_scan_state.pin_state.row_handles.acquire_handles(pins);
-		key_scan_state.pin_state.heap_handles.acquire_handles(pins);
+		if (keep_pinned) {
+			key_scan_state.pin_state.row_handles.acquire_handles(pins);
+			key_scan_state.pin_state.heap_handles.acquire_handles(pins);
+		}
 		key_data.FetchChunk(key_scan_state, 0, chunk_idx, false);
-		if (payload_data) {
-			payload_scan_state.pin_state.row_handles.acquire_handles(pins);
-			payload_scan_state.pin_state.heap_handles.acquire_handles(pins);
+		if (pin_payload && payload_data) {
+			if (keep_pinned) {
+				payload_scan_state.pin_state.row_handles.acquire_handles(pins);
+				payload_scan_state.pin_state.heap_handles.acquire_handles(pins);
+			}
 			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
 			const auto sort_keys = reinterpret_cast<T **const>(key_ptrs);
 			payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
@@ -191,6 +211,8 @@ private:
 	optional_ptr<TupleDataCollection> payload_data;
 	TupleDataScanState payload_scan_state;
 
+	bool keep_pinned;
+	bool pin_payload;
 	vector<BufferHandle> pins;
 };
 

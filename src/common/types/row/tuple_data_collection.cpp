@@ -108,7 +108,7 @@ vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
 
 // LCOV_EXCL_START
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		if (std::find(column_ids.begin(), column_ids.end(), col_idx) != column_ids.end()) {
 			continue;
@@ -329,7 +329,7 @@ void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkStat
 // LCOV_EXCL_START
 void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes[], const SelectionVector &append_sel,
                      const idx_t append_count, const idx_t heap_size_offset) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = append_sel.get_index(i);
 		const auto stored_heap_size = Load<idx_t>(source_locations[idx] + heap_size_offset);
@@ -640,7 +640,7 @@ void TupleDataCollection::Print() {
 }
 
 void TupleDataCollection::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (const auto &segment : segments) {
@@ -654,7 +654,7 @@ void TupleDataCollection::Verify() const {
 }
 
 void TupleDataCollection::VerifyEverythingPinned() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	for (const auto &segment : segments) {
 		segment.VerifyEverythingPinned();
 	}

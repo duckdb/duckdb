@@ -346,7 +346,7 @@ void PartitionedTupleData::GetSizesAndCounts(vector<idx_t> &partition_sizes, vec
 }
 
 void PartitionedTupleData::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (auto &partition : partitions) {
