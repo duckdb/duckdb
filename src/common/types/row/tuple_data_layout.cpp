@@ -42,6 +42,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	aggr_destructor_idxs.clear();
 	types = std::move(types_p);
 	all_constant = true;
+	variable_columns.clear();
 
 	// Null mask at the front - 1 bit per value.
 	flag_width = ValidityBytes::ValidityMaskSize(types.size());
@@ -63,9 +64,14 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 			}
 			auto struct_entry = struct_layouts->emplace(col_idx, TupleDataLayout());
 			struct_entry.first->second.Initialize(std::move(child_type_vector), false, false);
-			all_constant = all_constant && struct_entry.first->second.AllConstant();
-		} else {
-			all_constant = all_constant && TypeIsConstantSize(type.InternalType());
+
+			if (!struct_entry.first->second.AllConstant()) {
+				all_constant = false;
+				variable_columns.push_back(col_idx);
+			}
+		} else if (!TypeIsConstantSize(type.InternalType())) {
+			all_constant = false;
+			variable_columns.push_back(col_idx);
 		}
 	}
 

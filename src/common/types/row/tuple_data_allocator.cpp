@@ -400,7 +400,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+	for (const auto &col_idx : layout.GetVariableColumns()) {
 		const auto &col_offset = layout.GetOffsets()[col_idx];
 
 		// Precompute mask indexes
@@ -476,7 +476,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+	for (const auto &col_idx : layout.GetVariableColumns()) {
 		if (not_found_count == 0) {
 			return;
 		}

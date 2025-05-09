@@ -95,6 +95,9 @@ public:
 	inline bool AllConstant() const {
 		return all_constant;
 	}
+	inline const vector<idx_t> &GetVariableColumns() const {
+		return variable_columns;
+	}
 	//! Gets offset to where heap size is stored
 	inline idx_t GetHeapSizeOffset() const {
 		return heap_size_offset;
@@ -131,6 +134,8 @@ private:
 	vector<idx_t> offsets;
 	//! Whether all columns in this layout are constant size
 	bool all_constant;
+	//! Indices of the variable columns
+	vector<idx_t> variable_columns;
 	//! Offset to the heap size of every row
 	idx_t heap_size_offset;
 	//! Indices of aggregate functions that have a destructor

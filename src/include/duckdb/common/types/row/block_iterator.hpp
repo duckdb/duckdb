@@ -25,6 +25,8 @@ enum class BlockIteratorStateType : int8_t {
 
 BlockIteratorStateType GetBlockIteratorStateType(const bool &external);
 
+//! State for iterating over blocks of an in-memory TupleDataCollection
+//! Multiple iterators can share the same state, everything is const
 class InMemoryBlockIteratorState {
 public:
 	explicit InMemoryBlockIteratorState(const TupleDataCollection &key_data);
@@ -98,6 +100,8 @@ private:
 	const idx_t tuple_count;
 };
 
+//! State for iterating over blocks of an external (larger-than-memory) TupleDataCollection
+//! This state cannot be shared by multiple iterators, it is stateful
 class ExternalBlockIteratorState {
 public:
 	explicit ExternalBlockIteratorState(TupleDataCollection &key_data, optional_ptr<TupleDataCollection> payload_data);
@@ -117,12 +121,12 @@ public:
 		return GetValueAtIndex<T>(n / STANDARD_VECTOR_SIZE, n % STANDARD_VECTOR_SIZE);
 	}
 
-	void RandomAccess(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &index) const {
+	static void RandomAccess(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &index) {
 		chunk_idx = index / STANDARD_VECTOR_SIZE;
 		tuple_idx = index % STANDARD_VECTOR_SIZE;
 	}
 
-	void Add(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) const {
+	static void Add(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) {
 		tuple_idx += value;
 		if (tuple_idx >= STANDARD_VECTOR_SIZE) {
 			const auto div = tuple_idx / STANDARD_VECTOR_SIZE;
@@ -131,7 +135,7 @@ public:
 		}
 	}
 
-	void Subtract(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) const {
+	static void Subtract(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) {
 		tuple_idx -= value;
 		if (tuple_idx >= STANDARD_VECTOR_SIZE) {
 			const auto div = -tuple_idx / STANDARD_VECTOR_SIZE;
@@ -140,32 +144,31 @@ public:
 		}
 	}
 
-	void Increment(idx_t &chunk_idx, idx_t &tuple_idx) const {
+	static void Increment(idx_t &chunk_idx, idx_t &tuple_idx) {
 		const auto passed_boundary = ++tuple_idx == STANDARD_VECTOR_SIZE;
 		chunk_idx += passed_boundary;
 		tuple_idx *= !passed_boundary;
 	}
 
-	void Decrement(idx_t &chunk_idx, idx_t &tuple_idx) const {
+	static void Decrement(idx_t &chunk_idx, idx_t &tuple_idx) {
 		const auto crossed_boundary = tuple_idx-- == 0;
 		chunk_idx -= crossed_boundary;
 		tuple_idx += crossed_boundary * static_cast<idx_t>(STANDARD_VECTOR_SIZE);
 	}
 
-	idx_t GetIndex(const idx_t &chunk_idx, const idx_t &tuple_idx) const {
+	static idx_t GetIndex(const idx_t &chunk_idx, const idx_t &tuple_idx) {
 		return chunk_idx * STANDARD_VECTOR_SIZE + tuple_idx;
 	}
 
 	void SetKeepPinned(const bool &enable) {
 		keep_pinned = enable;
-		if (!keep_pinned) {
-			pins.clear();
-			key_scan_state.pin_state.row_handles.clear();
-			key_scan_state.pin_state.heap_handles.clear();
-			payload_scan_state.pin_state.row_handles.clear();
-			payload_scan_state.pin_state.heap_handles.clear();
-			current_chunk_idx = DConstants::INVALID_INDEX;
-		}
+		// Always start with a clean slate when toggling
+		pins.clear();
+		key_scan_state.pin_state.row_handles.clear();
+		key_scan_state.pin_state.heap_handles.clear();
+		payload_scan_state.pin_state.row_handles.clear();
+		payload_scan_state.pin_state.heap_handles.clear();
+		current_chunk_idx = DConstants::INVALID_INDEX;
 	}
 
 	void SetPinPayload(const bool &enable) {

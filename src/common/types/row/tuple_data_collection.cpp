@@ -360,18 +360,32 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 
 		// Check if we need to copy anything at all
 		idx_t total_heap_size = 0;
-		for (idx_t i = 0; i < append_count; i++) {
-			auto idx = append_sel.get_index(i);
-			total_heap_size += heap_sizes[idx];
+		if (!append_sel.IsSet()) {
+			// Fast path
+			for (idx_t i = 0; i < append_count; i++) {
+				total_heap_size += heap_sizes[i];
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				auto idx = append_sel.get_index(i);
+				total_heap_size += heap_sizes[idx];
+			}
 		}
 		if (total_heap_size == 0) {
 			return;
 		}
 
 		// Copy heap
-		for (idx_t i = 0; i < append_count; i++) {
-			auto idx = append_sel.get_index(i);
-			FastMemcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+		if (!append_sel.IsSet()) {
+			// Fast path
+			for (idx_t i = 0; i < append_count; i++) {
+				FastMemcpy(target_heap_locations[i], source_heap_locations[i], heap_sizes[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				auto idx = append_sel.get_index(i);
+				FastMemcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+			}
 		}
 
 		// Recompute pointers after copying the data

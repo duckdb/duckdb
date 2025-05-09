@@ -134,12 +134,26 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	case PhysicalType::VARCHAR: {
 		// Only non-inlined strings are stored in the heap
 		const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			if (source_validity.RowIsValid(source_idx)) {
-				heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+		if (source_validity.AllValid()) {
+			if (!append_sel.IsSet() && !source_sel.IsSet()) {
+				// Fast path
+				for (idx_t i = 0; i < append_count; i++) {
+					heap_sizes[i] += StringHeapSize(source_data[i]);
+				}
 			} else {
-				heap_sizes[i] += StringHeapSize(NullValue<string_t>());
+				for (idx_t i = 0; i < append_count; i++) {
+					const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+				}
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+				if (source_validity.RowIsValid(source_idx)) {
+					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+				} else {
+					heap_sizes[i] += StringHeapSize(NullValue<string_t>());
+				}
 			}
 		}
 		break;
@@ -669,9 +683,16 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	if (validity.AllValid()) {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+		if (!append_sel.IsSet() && !source_sel.IsSet()) {
+			// Fast path
+			for (idx_t i = 0; i < append_count; i++) {
+				TupleDataValueStore<T>(data[i], target_locations[i], offset_in_row, target_heap_locations[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+				TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < append_count; i++) {
@@ -1235,6 +1256,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	const auto column_count = layout.ColumnCount();
 	if (!scan_sel.IsSet() && !target_sel.IsSet()) {
+		// Fast path
 		for (idx_t i = 0; i < scan_count; i++) {
 			const auto &source_row = source_locations[i];
 			target_data[i] = Load<T>(source_row + offset_in_row);
