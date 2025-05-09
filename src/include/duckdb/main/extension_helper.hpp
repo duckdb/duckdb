@@ -253,6 +253,8 @@ private:
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 
+	static ExtensionLoadResult TryLoadStaticExtension(DatabaseInstance &db, const std::string &extension);
+
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);
 };

@@ -206,6 +206,9 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
+	if (TryLoadStaticExtension(*context.db, extension_name) == ExtensionLoadResult::LOADED_EXTENSION) {
+		return true;
+	}
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
@@ -233,6 +236,9 @@ static string GetAutoInstallExtensionsRepository(const DBConfigOptions &options)
 
 bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
 	if (instance.ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	if (TryLoadStaticExtension(instance, extension_name) == ExtensionLoadResult::LOADED_EXTENSION) {
 		return true;
 	}
 	auto &dbconfig = DBConfig::GetConfig(instance);
@@ -384,6 +390,9 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		// Avoid downloading again
 		return;
 	}
+	if (TryLoadStaticExtension(db, extension_name) == ExtensionLoadResult::LOADED_EXTENSION) {
+		return;
+	}
 	auto &dbconfig = DBConfig::GetConfig(db);
 	try {
 		auto fs = FileSystem::CreateLocal();
@@ -427,6 +436,16 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
 	return LoadExtensionInternal(db, extension, false);
+}
+
+ExtensionLoadResult ExtensionHelper::TryLoadStaticExtension(DatabaseInstance &db, const std::string &extension) {
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
+	DuckDB ddb(db);
+	if (TryLoadLinkedExtension(ddb, extension)) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+#endif
+	return ExtensionLoadResult::NOT_LOADED;
 }
 
 ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension,
