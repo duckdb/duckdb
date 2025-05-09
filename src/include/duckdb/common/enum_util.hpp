@@ -196,6 +196,8 @@ enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
+enum class HTTPStatusCode : uint16_t;
+
 enum class IndexAppendMode : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
@@ -654,6 +656,9 @@ const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
+
+template<>
+const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
@@ -1219,6 +1224,9 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
+
+template<>
+HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
 
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);

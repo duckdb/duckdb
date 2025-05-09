@@ -2,24 +2,12 @@
 
 namespace duckdb {
 
-static inline string_t ValueFromVal(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &mask, idx_t idx) {
-	switch (yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-		mask.SetInvalid(idx);
-		return string_t {};
-	default:
-		return JSONCommon::WriteVal<yyjson_val>(val, alc);
-	}
-}
-
 static void ValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::BinaryExecute<string_t>(args, state, result, ValueFromVal);
+	JSONExecutors::BinaryExecute<string_t>(args, state, result, JSONCommon::JSONValue);
 }
 
 static void ValueManyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::ExecuteMany<string_t>(args, state, result, ValueFromVal);
+	JSONExecutors::ExecuteMany<string_t>(args, state, result, JSONCommon::JSONValue);
 }
 
 static void GetValueFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {

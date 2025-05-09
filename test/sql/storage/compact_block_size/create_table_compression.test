@@ -6,8 +6,6 @@
 # because the bitpacking groups fit the blocks.
 require block_size 16384
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 

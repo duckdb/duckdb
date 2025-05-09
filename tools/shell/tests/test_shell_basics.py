@@ -182,6 +182,11 @@ def test_exit(shell, alias):
     test = ShellTest(shell).statement(f".{alias}")
     result = test.run()
 
+def test_exit_rc(shell):
+    test = ShellTest(shell).statement(f".exit 17")
+    result = test.run()
+    assert result.status_code == 17
+
 def test_print(shell):
     test = ShellTest(shell).statement(".print asdf")
     result = test.run()
@@ -635,6 +640,15 @@ def test_mode_insert(shell):
     result.check_not_exist('2.709999')
     result.check_not_exist('3.139999')
     result.check_not_exist('2.710000')
+
+def test_mode_insert_table(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode insert my_table")
+        .statement("SELECT 42;")
+    )
+    result = test.run()
+    result.check_stdout('my_table')
 
 def test_mode_line(shell):
     test = (

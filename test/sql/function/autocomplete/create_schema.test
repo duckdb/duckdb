@@ -24,8 +24,6 @@ FROM sql_auto_complete('CREATE SCHEMA IF NOT EX') LIMIT 1;
 ----
 EXISTS 	21
 
-require skip_reload
-
 # attached database
 # suggest a catalog
 statement ok

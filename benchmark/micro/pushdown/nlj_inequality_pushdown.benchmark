@@ -1,5 +1,5 @@
 # name: benchmark/micro/pushdown/nlj_inequality_pushdown.benchmark
-# description: Show the performance of not using rowid pushdown
+# description: Show the performance of using pushdown with NestedLoopJoin
 # group: [pushdown]
 
 name NestedLoopJoinInequalityPushdown
@@ -8,10 +8,12 @@ subgroup pushdown
 
 require tpch
 
-cache tpch_sf10.duckdb
+argument sf 10
+
+cache tpch_sf${sf}.duckdb
 
 load
-CALL dbgen(sf=10);
+CALL dbgen(sf=${sf});
 
 run
 FROM lineitem 

@@ -2,8 +2,6 @@
 # description: Test cross-catalog dependencies in macros
 # group: [function]
 
-require skip_reload
-
 statement ok
 CREATE MACRO my_first_macro() AS (84)
 

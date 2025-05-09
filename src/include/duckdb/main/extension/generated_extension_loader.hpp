@@ -21,8 +21,8 @@ namespace duckdb {
 //! Looks through the CMake-generated list of extensions that are linked into DuckDB currently to try load <extension>
 bool TryLoadLinkedExtension(DuckDB &db, const string &extension);
 
-const vector<string> &LinkedExtensions();
-const vector<string> &LoadedExtensionTestPaths();
+vector<string> LinkedExtensions();
+vector<string> LoadedExtensionTestPaths();
 
 } // namespace duckdb
 #endif

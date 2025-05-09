@@ -8,8 +8,7 @@ PRAGMA enable_verification
 statement ok
 PRAGMA verify_external
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 CREATE TABLE tbl(

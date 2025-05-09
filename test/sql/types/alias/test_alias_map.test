@@ -2,8 +2,6 @@
 # description: Test alias with map
 # group: [alias]
 
-require skip_reload
-
 statement ok
 CREATE TYPE MAPPOINT AS MAP(INTEGER,INTEGER);
 
