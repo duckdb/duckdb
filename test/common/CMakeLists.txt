@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   test_cast.cpp
   test_checksum.cpp
+  test_file_locking.cpp
   test_file_system.cpp
   test_hyperlog.cpp
   test_numeric_cast.cpp
