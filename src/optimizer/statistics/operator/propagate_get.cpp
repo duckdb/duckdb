@@ -18,8 +18,9 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		// handle the filter before updating the statistics
 		// otherwise the filter can be pruned by the updated statistics
+		auto copy_expr = filter_expr->Copy();
 		auto propagate_result = HandleFilter(filter_expr);
-		UpdateFilterStatistics(*filter_expr->Copy());
+		UpdateFilterStatistics(*copy_expr);
 		return propagate_result;
 	}
 	return filter.CheckStatistics(stats);
