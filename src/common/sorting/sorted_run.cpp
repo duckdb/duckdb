@@ -34,7 +34,7 @@ static void TemplatedSetPayloadPointer(Vector &key_locations, Vector &payload_lo
 	const auto payload_locations_ptr = FlatVector::GetData<data_ptr_t>(payload_locations);
 
 	for (idx_t i = 0; i < count; i++) {
-		key_locations_ptr[i]->payload_ptr = payload_locations_ptr[i];
+		key_locations_ptr[i]->SetPayload(payload_locations_ptr[i]);
 	}
 }
 
@@ -43,6 +43,8 @@ static void SetPayloadPointer(Vector &key_locations, Vector &payload_locations, 
 	switch (sort_key_type) {
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_16>(key_locations, payload_locations, count);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_24>(key_locations, payload_locations, count);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_32>(key_locations, payload_locations, count);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -75,14 +77,14 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSortThin(const TupleDataCollection &key_data) {
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::IN_MEMORY>;
 	using BLOCK_ITERATOR = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>;
 
 	const BLOCK_ITERATOR_STATE state(key_data);
 	auto begin = BLOCK_ITERATOR(state, 0);
 	auto end = BLOCK_ITERATOR(state, key_data.Count());
 
-	// Key is 8 bytes, just use ska
+	// Key is 8 bytes, use ska
 	static const auto fallback = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ExtractKey<SORT_KEY>());
 	};
@@ -93,7 +95,7 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSortWide(const TupleDataCollection &key_data) {
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::IN_MEMORY>;
 	using BLOCK_ITERATOR = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>;
 
 	const BLOCK_ITERATOR_STATE state(key_data);
@@ -120,12 +122,16 @@ static void Sort(const TupleDataCollection &key_data) {
 		return TemplatedSortThin<SortKeyType::NO_PAYLOAD_FIXED_8>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_FIXED_16>(key_data);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_FIXED_24>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedSortThin<SortKeyType::PAYLOAD_FIXED_16>(key_data);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedSortWide<SortKeyType::PAYLOAD_FIXED_24>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedSortWide<SortKeyType::PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -178,7 +184,7 @@ static void ReorderPayloadData(TupleDataCollection &new_payload_data,
 template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedReorder(unique_ptr<TupleDataCollection> &key_data, unique_ptr<TupleDataCollection> &payload_data) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::IN_MEMORY>;
 
 	// Initialize new key data (if necessary)
 	unique_ptr<TupleDataCollection> new_key_data;
@@ -243,6 +249,8 @@ static void Reorder(unique_ptr<TupleDataCollection> &key_data, unique_ptr<TupleD
 		return TemplatedReorder<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data, payload_data);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedReorder<SortKeyType::PAYLOAD_FIXED_16>(key_data, payload_data);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedReorder<SortKeyType::PAYLOAD_FIXED_24>(key_data, payload_data);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedReorder<SortKeyType::PAYLOAD_FIXED_32>(key_data, payload_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:

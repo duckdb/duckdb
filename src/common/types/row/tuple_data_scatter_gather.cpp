@@ -1141,6 +1141,9 @@ TupleDataScatterFunction GetSortKeyScatterFunctionInternal(SortKeyType sort_key_
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
 		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
+		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
 		break;
@@ -1149,6 +1152,9 @@ TupleDataScatterFunction GetSortKeyScatterFunctionInternal(SortKeyType sort_key_
 		break;
 	case SortKeyType::PAYLOAD_FIXED_16:
 		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_24>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_32:
 		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_32>;
@@ -1712,6 +1718,9 @@ TupleDataGatherFunction GetSortKeyGatherFunctionInternal(SortKeyType sort_key_ty
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
 		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
+		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
 		break;
@@ -1720,6 +1729,9 @@ TupleDataGatherFunction GetSortKeyGatherFunctionInternal(SortKeyType sort_key_ty
 		break;
 	case SortKeyType::PAYLOAD_FIXED_16:
 		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_24>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_32:
 		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_32>;

@@ -138,10 +138,9 @@ private:
 	//! Computed run boundaries
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 
-	//! States for every iterator type
-	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
-	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>> fixed_external_states;
-	//! TODO: other iterator types
+	//! States for the iterator types
+	unsafe_vector<BlockIteratorState<BlockIteratorStateType::IN_MEMORY>> in_memory_states;
+	unsafe_vector<BlockIteratorState<BlockIteratorStateType::EXTERNAL>> external_states;
 
 	//! Allocation for the partition
 	AllocatedData merged_partition;
@@ -160,7 +159,7 @@ public:
 	explicit SortedRunMergerGlobalState(ClientContext &context_p, const SortedRunMerger &merger_p)
 	    : context(context_p), merger(merger_p), num_runs(merger.sorted_runs.size()),
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
-	      iterator_state_type(GetBlockIteratorStateType(merger.fixed_blocks, merger.external)),
+	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
@@ -211,12 +210,12 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
-		case BlockIteratorStateType::FIXED_IN_MEMORY:
-			fixed_in_memory_states.push_back(BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>(key_data));
+		case BlockIteratorStateType::IN_MEMORY:
+			in_memory_states.push_back(BlockIteratorState<BlockIteratorStateType::IN_MEMORY>(key_data));
 			break;
-		case BlockIteratorStateType::FIXED_EXTERNAL:
-			fixed_external_states.push_back(
-			    BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>(key_data, run->payload_data.get()));
+		case BlockIteratorStateType::EXTERNAL:
+			external_states.push_back(
+			    BlockIteratorState<BlockIteratorStateType::EXTERNAL>(key_data, run->payload_data.get()));
 			break;
 		default:
 			throw NotImplementedException("SortedRunMergerLocalState::SortedRunMergerLocalState for %s",
@@ -281,16 +280,15 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 
 	// Compute the end partition boundaries (lock-free)
 	switch (iterator_state_type) {
-	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
-		    gstate, p_idx, fixed_in_memory_states);
+	case BlockIteratorStateType::IN_MEMORY:
+		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::IN_MEMORY>>(gstate, p_idx,
+		                                                                                        in_memory_states);
 		break;
-	case BlockIteratorStateType::FIXED_EXTERNAL:
-		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(
-		    gstate, p_idx, fixed_external_states);
+	case BlockIteratorStateType::EXTERNAL:
+		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::EXTERNAL>>(gstate, p_idx,
+		                                                                                       external_states);
 		break;
 	default:
-		// TODO: switch on other types
 		throw NotImplementedException(
 		    "SortedRunMergerLocalState::ComputePartitionBoundaries for SortedRunIteratorType");
 	}
@@ -329,12 +327,16 @@ void SortedRunMergerLocalState::ComputePartitionBoundariesSwitch(SortedRunMerger
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, p_idx, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, p_idx, states);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, p_idx, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, p_idx, states);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, p_idx, states);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, p_idx, states);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, p_idx, states);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, p_idx, states);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -458,15 +460,13 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate) {
 	switch (iterator_state_type) {
-	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(gstate,
-		                                                                                  fixed_in_memory_states);
+	case BlockIteratorStateType::IN_MEMORY:
+		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::IN_MEMORY>>(gstate, in_memory_states);
 		break;
-	case BlockIteratorStateType::FIXED_EXTERNAL:
-		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(gstate, fixed_external_states);
+	case BlockIteratorStateType::EXTERNAL:
+		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::EXTERNAL>>(gstate, external_states);
 		break;
 	default:
-		// TODO: switch on other types
 		throw NotImplementedException("SortedRunMergerLocalState::MergePartition for %s",
 		                              EnumUtil::ToString(iterator_state_type));
 	}
@@ -479,12 +479,16 @@ void SortedRunMergerLocalState::MergePartitionSwitch(SortedRunMergerGlobalState 
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, states);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, states);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, states);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, states);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, states);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, states);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -542,12 +546,16 @@ void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate
 		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, chunk);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, chunk);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedScanPartition<SortKeyType::PAYLOAD_FIXED_16>(gstate, chunk);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedScanPartition<SortKeyType::PAYLOAD_FIXED_24>(gstate, chunk);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedScanPartition<SortKeyType::PAYLOAD_FIXED_32>(gstate, chunk);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -614,10 +622,10 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 SortedRunMerger::SortedRunMerger(shared_ptr<TupleDataLayout> key_layout_p,
                                  vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  const vector<SortProjectionColumn> &output_projection_columns_p,
-                                 idx_t partition_size_p, bool external_p, bool fixed_blocks_p)
+                                 idx_t partition_size_p, bool external_p)
     : key_layout(std::move(key_layout_p)), sorted_runs(std::move(sorted_runs_p)),
       output_projection_columns(output_projection_columns_p), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p), fixed_blocks(fixed_blocks_p) {
+      partition_size(partition_size_p), external(external_p) {
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,

@@ -183,6 +183,9 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	} else if (temp_row_width <= 16) {
 		row_width = 16;
 		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_16 : SortKeyType::NO_PAYLOAD_FIXED_16;
+	} else if (temp_row_width <= 24) {
+		row_width = 24;
+		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_24 : SortKeyType::NO_PAYLOAD_FIXED_24;
 	} else if (temp_row_width <= 32) {
 		row_width = 32;
 		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_32 : SortKeyType::NO_PAYLOAD_FIXED_32;
@@ -190,7 +193,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 		row_width = 32;
 		sort_key_type = has_payload ? SortKeyType::PAYLOAD_VARIABLE_32 : SortKeyType::NO_PAYLOAD_VARIABLE_32;
 
-		// Variable-size sort key, also set these
+		// Variable-size sort key, also set these properties
 		all_constant = false;
 		heap_size_offset = has_payload ? SortKey<SortKeyType::PAYLOAD_VARIABLE_32>::HEAP_SIZE_OFFSET
 		                               : SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::HEAP_SIZE_OFFSET;

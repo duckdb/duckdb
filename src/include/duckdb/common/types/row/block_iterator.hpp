@@ -19,20 +19,16 @@ class TupleDataCollection;
 
 enum class BlockIteratorStateType : int8_t {
 	//! For fixed_in_memory_block_iterator_state_t
-	FIXED_IN_MEMORY,
-	//! For variable_in_memory_block_iterator_state_t
-	VARIABLE_IN_MEMORY,
+	IN_MEMORY,
 	//! For fixed_external_block_iterator_state_t
-	FIXED_EXTERNAL,
-	//! For variable_external_block_iterator_state_t
-	VARIABLE_EXTERNAL,
+	EXTERNAL,
 };
 
-BlockIteratorStateType GetBlockIteratorStateType(const bool &fixed_blocks, const bool &external);
+BlockIteratorStateType GetBlockIteratorStateType(const bool &external);
 
-class FixedInMemoryBlockIteratorState {
+class InMemoryBlockIteratorState {
 public:
-	explicit FixedInMemoryBlockIteratorState(const TupleDataCollection &key_data);
+	explicit InMemoryBlockIteratorState(const TupleDataCollection &key_data);
 
 public:
 	template <class T>
@@ -101,10 +97,9 @@ private:
 
 class VariableInMemoryBlockIteratorState {};
 
-class FixedExternalBlockIteratorState {
+class ExternalBlockIteratorState {
 public:
-	explicit FixedExternalBlockIteratorState(TupleDataCollection &key_data,
-	                                         optional_ptr<TupleDataCollection> payload_data);
+	explicit ExternalBlockIteratorState(TupleDataCollection &key_data, optional_ptr<TupleDataCollection> payload_data);
 
 public:
 	template <class T>
@@ -204,14 +199,10 @@ class VariableExternalBlockIteratorState {};
 //! Utility so we can get the state using the type
 template <BlockIteratorStateType T>
 using BlockIteratorState = typename std::conditional<
-    T == BlockIteratorStateType::FIXED_IN_MEMORY, FixedInMemoryBlockIteratorState,
-    typename std::conditional<
-        T == BlockIteratorStateType::VARIABLE_IN_MEMORY, VariableInMemoryBlockIteratorState,
-        typename std::conditional<T == BlockIteratorStateType::FIXED_EXTERNAL, FixedExternalBlockIteratorState,
-                                  typename std::conditional<T == BlockIteratorStateType::VARIABLE_EXTERNAL,
-                                                            VariableExternalBlockIteratorState,
-                                                            void // Throws error if we get here
-                                                            >::type>::type>::type>::type;
+    T == BlockIteratorStateType::IN_MEMORY, InMemoryBlockIteratorState,
+    typename std::conditional<T == BlockIteratorStateType::EXTERNAL, ExternalBlockIteratorState,
+                              void // Throws error if we get here
+                              >::type>::type;
 
 //! Iterator for data spread out over multiple blocks
 template <class STATE, class T>

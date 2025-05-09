@@ -369,7 +369,7 @@ void SortKeyRecomputeHeapPointers(const data_ptr_t row_locations[], Vector &new_
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto idx = offset + i;
-		sort_keys[idx]->data = new_heap_locations[new_heap_sel.get_index(idx)];
+		sort_keys[idx]->SetData(new_heap_locations[new_heap_sel.get_index(idx)]);
 	}
 }
 

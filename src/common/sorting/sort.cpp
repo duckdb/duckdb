@@ -119,7 +119,7 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), active_threads(0),
 	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
-	      partition_size(1), any_concatenated(false) {
+	      partition_size(1) {
 	}
 
 public:
@@ -183,8 +183,6 @@ public:
 	idx_t total_count;
 	//! Partition size (for the source phase)
 	idx_t partition_size;
-	//! Whether we have concatenated any sorted runs based on statistics (skipping the merge, also for source phase)
-	bool any_concatenated;
 };
 
 unique_ptr<LocalSinkState> Sort::GetLocalSinkState(ExecutionContext &context) const {
@@ -329,7 +327,7 @@ class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
 	    : sink(sink_p), merger(sort.key_layout, std::move(sink.sorted_runs), sort.output_projection_columns,
-	                           sink.partition_size, sink.external, !sink.any_concatenated),
+	                           sink.partition_size, sink.external),
 	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
 	}
 

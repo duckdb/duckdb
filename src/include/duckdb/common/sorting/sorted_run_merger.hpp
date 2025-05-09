@@ -26,8 +26,7 @@ class SortedRunMerger {
 
 public:
 	SortedRunMerger(shared_ptr<TupleDataLayout> key_layout, vector<unique_ptr<SortedRun>> &&sorted_runs,
-	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external,
-	                bool fixed_blocks);
+	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external);
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -48,7 +47,6 @@ public:
 
 	const idx_t partition_size;
 	const bool external;
-	const bool fixed_blocks;
 };
 
 } // namespace duckdb

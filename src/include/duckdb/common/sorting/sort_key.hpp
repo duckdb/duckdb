@@ -21,12 +21,22 @@ enum class SortKeyType : uint8_t {
 	//! Without payload
 	NO_PAYLOAD_FIXED_8 = 1,
 	NO_PAYLOAD_FIXED_16 = 2,
-	NO_PAYLOAD_FIXED_32 = 3,
-	NO_PAYLOAD_VARIABLE_32 = 4,
+	NO_PAYLOAD_FIXED_24 = 3,
+	NO_PAYLOAD_FIXED_32 = 4,
+	NO_PAYLOAD_VARIABLE_32 = 5,
 	//! With payload (requires row pointer in key)
-	PAYLOAD_FIXED_16 = 5,
-	PAYLOAD_FIXED_32 = 6,
-	PAYLOAD_VARIABLE_32 = 7,
+	PAYLOAD_FIXED_16 = 6,
+	PAYLOAD_FIXED_24 = 7,
+	PAYLOAD_FIXED_32 = 8,
+	PAYLOAD_VARIABLE_32 = 9,
+};
+
+//! Forces a pointer size of 8 bytes (even on 32-bit)
+struct sort_key_ptr_t { // NOLINT: match stl case
+	union {
+		data_ptr_t ptr;
+		uint64_t pad;
+	} u;
 };
 
 template <class SORT_KEY>
@@ -118,20 +128,25 @@ public:
 		}
 		memcpy(&sort_key.part0, val.GetData(), val.GetSize());
 		sort_key.size = val.GetSize();
-		sort_key.data = heap_ptr;
+		sort_key.data.u.ptr = heap_ptr;
 		if (sort_key.size > SORT_KEY::INLINE_LENGTH) {
-			memcpy(sort_key.data, val.GetData(), val.GetSize());
+			memcpy(sort_key.data.u.ptr, val.GetData(), val.GetSize());
 			heap_ptr += val.GetSize();
 		}
 	}
 
-	void Construct(const int64_t &val, data_ptr_t &) {
+	void Construct(const int64_t &, data_ptr_t &) {
 		throw InternalException("VariableSortKey::Construct() called with an int64_t");
 	}
 
 	data_ptr_t GetData() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
-		return sort_key.data;
+		return sort_key.data.u.ptr;
+	}
+
+	void SetData(const data_ptr_t &data) {
+		auto &sort_key = static_cast<SORT_KEY &>(*this);
+		sort_key.data.u.ptr = data;
 	}
 
 	idx_t GetSize() const {
@@ -152,7 +167,7 @@ public:
 		}
 
 		// Both strings are non-inlined
-		comp_res = memcmp(lhs.data, rhs.data, MinValue(lhs.size, rhs.size));
+		comp_res = memcmp(lhs.data.u.ptr, rhs.data.u.ptr, MinValue(lhs.size, rhs.size));
 		return comp_res < 0 || (comp_res == 0 && lhs.size < rhs.size);
 	}
 };
@@ -170,7 +185,7 @@ public:
 		throw InternalException("GetPayload() called on a SortKeyNoPayload");
 	}
 
-	void SetPayload(const data_ptr_t &payload_ptr) {
+	void SetPayload(const data_ptr_t &payload) {
 		throw InternalException("SetPayload() called on a SortKeyNoPayload");
 	}
 };
@@ -186,12 +201,12 @@ public:
 
 	data_ptr_t GetPayload() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
-		return sort_key.payload_ptr;
+		return sort_key.payload.u.ptr;
 	}
 
-	void SetPayload(const data_ptr_t &payload_ptr) {
+	void SetPayload(const data_ptr_t &payload) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		sort_key.payload_ptr = payload_ptr;
+		sort_key.payload.u.ptr = payload;
 	}
 };
 
@@ -203,7 +218,7 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_8> : FixedSortKey<SortKey<SortKeyTy
                                                   SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>> {
 	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
-	uint64_t part0 = 0;
+	uint64_t part0;
 };
 
 template <>
@@ -211,8 +226,18 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyT
                                                    SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>> {
 	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
-	uint64_t part0 = 0;
-	uint64_t part1 = 0;
+	uint64_t part0;
+	uint64_t part1;
+};
+
+template <>
+struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>>,
+                                                   SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>> {
+	static constexpr idx_t PARTS = 3;
+	static constexpr idx_t INLINE_LENGTH = 24;
+	uint64_t part0;
+	uint64_t part1;
+	uint64_t part2;
 };
 
 template <>
@@ -220,10 +245,10 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyT
                                                    SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>> {
 	static constexpr idx_t PARTS = 4;
 	static constexpr idx_t INLINE_LENGTH = 32;
-	uint64_t part0 = 0;
-	uint64_t part1 = 0;
-	uint64_t part2 = 0;
-	uint64_t part3 = 0;
+	uint64_t part0;
+	uint64_t part1;
+	uint64_t part2;
+	uint64_t part3;
 };
 
 template <>
@@ -232,10 +257,10 @@ struct SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32> : VariableSortKey<SortKey<So
 	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
 	static constexpr idx_t HEAP_SIZE_OFFSET = 16;
-	uint64_t part0 = 0;
-	uint64_t part1 = 0;
-	uint64_t size = 0;
-	data_ptr_t data = nullptr;
+	uint64_t part0;
+	uint64_t part1;
+	uint64_t size;
+	sort_key_ptr_t data;
 };
 
 template <>
@@ -243,8 +268,18 @@ struct SortKey<SortKeyType::PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyType
                                                 SortKeyPayload<SortKey<SortKeyType::PAYLOAD_FIXED_16>> {
 	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
-	uint64_t part0 = 0;
-	data_ptr_t payload_ptr = nullptr;
+	uint64_t part0;
+	sort_key_ptr_t payload;
+};
+
+template <>
+struct SortKey<SortKeyType::PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_24>>,
+                                                SortKeyPayload<SortKey<SortKeyType::PAYLOAD_FIXED_24>> {
+	static constexpr idx_t PARTS = 2;
+	static constexpr idx_t INLINE_LENGTH = 16;
+	uint64_t part0;
+	uint64_t part1;
+	sort_key_ptr_t payload;
 };
 
 template <>
@@ -252,10 +287,10 @@ struct SortKey<SortKeyType::PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyType
                                                 SortKeyPayload<SortKey<SortKeyType::PAYLOAD_FIXED_32>> {
 	static constexpr idx_t PARTS = 3;
 	static constexpr idx_t INLINE_LENGTH = 24;
-	uint64_t part0 = 0;
-	uint64_t part1 = 0;
-	uint64_t part2 = 0;
-	data_ptr_t payload_ptr = nullptr;
+	uint64_t part0;
+	uint64_t part1;
+	uint64_t part2;
+	sort_key_ptr_t payload;
 };
 
 template <>
@@ -264,17 +299,19 @@ struct SortKey<SortKeyType::PAYLOAD_VARIABLE_32> : VariableSortKey<SortKey<SortK
 	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
 	static constexpr idx_t HEAP_SIZE_OFFSET = 8;
-	uint64_t part0 = 0;
-	uint64_t size = 0;
-	data_ptr_t data = nullptr;
-	data_ptr_t payload_ptr = nullptr;
+	uint64_t part0;
+	uint64_t size;
+	sort_key_ptr_t data;
+	sort_key_ptr_t payload;
 };
 
 static_assert(sizeof(SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>) == 8, "NO_PAYLOAD_FIXED_8 must be 8 wide");
 static_assert(sizeof(SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>) == 16, "NO_PAYLOAD_FIXED_16 must be 16 wide");
+static_assert(sizeof(SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>) == 24, "NO_PAYLOAD_FIXED_24 must be 24 wide");
 static_assert(sizeof(SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>) == 32, "NO_PAYLOAD_FIXED_32 must be 32 wide");
 static_assert(sizeof(SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>) == 32, "NO_PAYLOAD_VARIABLE_32 must be 32 wide");
 static_assert(sizeof(SortKey<SortKeyType::PAYLOAD_FIXED_16>) == 16, "PAYLOAD_FIXED_16 must be 16 wide");
+static_assert(sizeof(SortKey<SortKeyType::PAYLOAD_FIXED_24>) == 24, "PAYLOAD_FIXED_24 must be 24 wide");
 static_assert(sizeof(SortKey<SortKeyType::PAYLOAD_FIXED_32>) == 32, "PAYLOAD_FIXED_32 must be 32 wide");
 static_assert(sizeof(SortKey<SortKeyType::PAYLOAD_VARIABLE_32>) == 32, "PAYLOAD_VARIABLE_32 must be 32 wide");
 
@@ -285,12 +322,16 @@ struct SortKeyUtils {
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>::INLINE_LENGTH;
 		case SortKeyType::NO_PAYLOAD_FIXED_16:
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>::INLINE_LENGTH;
+		case SortKeyType::NO_PAYLOAD_FIXED_24:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>::INLINE_LENGTH;
 		case SortKeyType::NO_PAYLOAD_FIXED_32:
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>::INLINE_LENGTH;
 		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 			return SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::INLINE_LENGTH;
 		case SortKeyType::PAYLOAD_FIXED_16:
 			return SortKey<SortKeyType::PAYLOAD_FIXED_16>::INLINE_LENGTH;
+		case SortKeyType::PAYLOAD_FIXED_24:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_24>::INLINE_LENGTH;
 		case SortKeyType::PAYLOAD_FIXED_32:
 			return SortKey<SortKeyType::PAYLOAD_FIXED_32>::INLINE_LENGTH;
 		case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -306,12 +347,16 @@ struct SortKeyUtils {
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>::CONSTANT_SIZE;
 		case SortKeyType::NO_PAYLOAD_FIXED_16:
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>::CONSTANT_SIZE;
+		case SortKeyType::NO_PAYLOAD_FIXED_24:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>::CONSTANT_SIZE;
 		case SortKeyType::NO_PAYLOAD_FIXED_32:
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>::CONSTANT_SIZE;
 		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 			return SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::CONSTANT_SIZE;
 		case SortKeyType::PAYLOAD_FIXED_16:
 			return SortKey<SortKeyType::PAYLOAD_FIXED_16>::CONSTANT_SIZE;
+		case SortKeyType::PAYLOAD_FIXED_24:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_24>::CONSTANT_SIZE;
 		case SortKeyType::PAYLOAD_FIXED_32:
 			return SortKey<SortKeyType::PAYLOAD_FIXED_32>::CONSTANT_SIZE;
 		case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -327,12 +372,16 @@ struct SortKeyUtils {
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>::HAS_PAYLOAD;
 		case SortKeyType::NO_PAYLOAD_FIXED_16:
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>::HAS_PAYLOAD;
+		case SortKeyType::NO_PAYLOAD_FIXED_24:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>::HAS_PAYLOAD;
 		case SortKeyType::NO_PAYLOAD_FIXED_32:
 			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>::HAS_PAYLOAD;
 		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 			return SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::HAS_PAYLOAD;
 		case SortKeyType::PAYLOAD_FIXED_16:
 			return SortKey<SortKeyType::PAYLOAD_FIXED_16>::HAS_PAYLOAD;
+		case SortKeyType::PAYLOAD_FIXED_24:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_24>::HAS_PAYLOAD;
 		case SortKeyType::PAYLOAD_FIXED_32:
 			return SortKey<SortKeyType::PAYLOAD_FIXED_32>::HAS_PAYLOAD;
 		case SortKeyType::PAYLOAD_VARIABLE_32:

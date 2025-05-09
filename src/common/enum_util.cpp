@@ -618,22 +618,20 @@ BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetBlockIteratorStateTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BlockIteratorStateType::FIXED_IN_MEMORY), "FIXED_IN_MEMORY" },
-		{ static_cast<uint32_t>(BlockIteratorStateType::VARIABLE_IN_MEMORY), "VARIABLE_IN_MEMORY" },
-		{ static_cast<uint32_t>(BlockIteratorStateType::FIXED_EXTERNAL), "FIXED_EXTERNAL" },
-		{ static_cast<uint32_t>(BlockIteratorStateType::VARIABLE_EXTERNAL), "VARIABLE_EXTERNAL" }
+		{ static_cast<uint32_t>(BlockIteratorStateType::IN_MEMORY), "IN_MEMORY" },
+		{ static_cast<uint32_t>(BlockIteratorStateType::EXTERNAL), "EXTERNAL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType value) {
-	return StringUtil::EnumToString(GetBlockIteratorStateTypeValues(), 4, "BlockIteratorStateType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetBlockIteratorStateTypeValues(), 2, "BlockIteratorStateType", static_cast<uint32_t>(value));
 }
 
 template<>
 BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *value) {
-	return static_cast<BlockIteratorStateType>(StringUtil::StringToEnum(GetBlockIteratorStateTypeValues(), 4, "BlockIteratorStateType", value));
+	return static_cast<BlockIteratorStateType>(StringUtil::StringToEnum(GetBlockIteratorStateTypeValues(), 2, "BlockIteratorStateType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBlockStateValues() {
@@ -3725,9 +3723,11 @@ const StringUtil::EnumStringLiteral *GetSortKeyTypeValues() {
 		{ static_cast<uint32_t>(SortKeyType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_8), "NO_PAYLOAD_FIXED_8" },
 		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_16), "NO_PAYLOAD_FIXED_16" },
+		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_24), "NO_PAYLOAD_FIXED_24" },
 		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_32), "NO_PAYLOAD_FIXED_32" },
 		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_VARIABLE_32), "NO_PAYLOAD_VARIABLE_32" },
 		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_FIXED_16), "PAYLOAD_FIXED_16" },
+		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_FIXED_24), "PAYLOAD_FIXED_24" },
 		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_FIXED_32), "PAYLOAD_FIXED_32" },
 		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_VARIABLE_32), "PAYLOAD_VARIABLE_32" }
 	};
@@ -3736,12 +3736,12 @@ const StringUtil::EnumStringLiteral *GetSortKeyTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value) {
-	return StringUtil::EnumToString(GetSortKeyTypeValues(), 8, "SortKeyType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSortKeyTypeValues(), 10, "SortKeyType", static_cast<uint32_t>(value));
 }
 
 template<>
 SortKeyType EnumUtil::FromString<SortKeyType>(const char *value) {
-	return static_cast<SortKeyType>(StringUtil::StringToEnum(GetSortKeyTypeValues(), 8, "SortKeyType", value));
+	return static_cast<SortKeyType>(StringUtil::StringToEnum(GetSortKeyTypeValues(), 10, "SortKeyType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
