@@ -439,11 +439,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string
 }
 
 ExtensionLoadResult ExtensionHelper::TryLoadStaticExtension(DatabaseInstance &db, const std::string &extension) {
+#if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 	DuckDB ddb(db);
 	if (TryLoadLinkedExtension(ddb, extension)) {
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
+#endif
 #endif
 	return ExtensionLoadResult::NOT_LOADED;
 }
