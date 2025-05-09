@@ -171,7 +171,7 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 }
 
 unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
-                                                                      const AttachOptions &options) {
+                                                                      AttachOptions &options) {
 	unique_ptr<AttachedDatabase> attached_database;
 	auto &catalog = Catalog::GetSystemCatalog(*this);
 
