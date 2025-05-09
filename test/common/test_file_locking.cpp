@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/common/file_system.hpp"
 
+#include <iostream>
 #include <thread>
 #include <atomic>
 
@@ -24,7 +25,9 @@ static void read_file(FileSystem *fs, const string &path) {
 			// Keep file open briefly to increase chance of concurrent access
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			handle.reset();
-		} catch (...) {
+		} catch (std::exception &e) {
+			// Catch any exceptions to avoid crashing the test
+			std::cerr << "Error reading file " << path << ": " << e.what() << std::endl;
 			encountered_error = true;
 		}
 	}
@@ -42,7 +45,9 @@ static void write_file(FileSystem *fs, const string &path) {
 			// Keep file open briefly to increase chance of concurrent access
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			handle.reset();
-		} catch (...) {
+		} catch (std::exception &e) {
+			// Catch any exceptions to avoid crashing the test
+			std::cerr << "Error reading file " << path << ": " << e.what() << std::endl;
 			encountered_error = true;
 		}
 	}
@@ -63,7 +68,9 @@ static void read_then_write_file(FileSystem *fs, const string &path) {
 			string data = "test data " + to_string(i);
 			handle->Write((void *)data.data(), data.size(), 0);
 			handle.reset();
-		} catch (...) {
+		} catch (std::exception &e) {
+			// Catch any exceptions to avoid crashing the test
+			std::cerr << "Error reading file " << path << ": " << e.what() << std::endl;
 			encountered_error = true;
 		}
 	}
@@ -78,7 +85,8 @@ TEST_CASE("Test concurrent writers block each other", "[file_lock]") {
 	// Create initial file
 	auto handle = fs->OpenFile(test_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                          FileLockType::WRITE_LOCK);
-	string initial_data = "initial";
+	// Write 1024 bytes of initial data
+	string initial_data(1024, 'a');
 	handle->Write((void *)initial_data.data(), initial_data.size(), 0);
 	handle.reset();
 
@@ -109,7 +117,8 @@ TEST_CASE("Test concurrent readers can access simultaneously", "[file_lock]") {
 	// Create initial file
 	auto handle = fs->OpenFile(test_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                          FileLockType::WRITE_LOCK);
-	string initial_data = "initial";
+	// Write 1024 bytes of initial data
+	string initial_data(1024, 'a');
 	handle->Write((void *)initial_data.data(), initial_data.size(), 0);
 	handle.reset();
 
@@ -140,7 +149,8 @@ TEST_CASE("Test writers block readers and vice versa", "[file_lock]") {
 	// Create initial file
 	auto handle = fs->OpenFile(test_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                          FileLockType::WRITE_LOCK);
-	string initial_data = "initial";
+	// Write 1024 bytes of initial data
+	string initial_data(1024, 'a');
 	handle->Write((void *)initial_data.data(), initial_data.size(), 0);
 	handle.reset();
 
@@ -175,7 +185,8 @@ TEST_CASE("Test read lock to write lock upgrade", "[file_lock]") {
 	// Create initial file
 	auto handle = fs->OpenFile(test_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                          FileLockType::WRITE_LOCK);
-	string initial_data = "initial";
+	// Write 1024 bytes of initial data
+	string initial_data(1024, 'a');
 	handle->Write((void *)initial_data.data(), initial_data.size(), 0);
 	handle.reset();
 
