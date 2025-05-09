@@ -124,7 +124,7 @@ static void ListValueStructFunction(DataChunk &args, Vector &result) {
 		}
 	}
 
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	const auto result_data = FlatVector::GetData<list_entry_t>(result);
 	auto &result_list_validity = FlatVector::Validity(result_list);
 
 	const auto args_unified_format = args.ToUnifiedFormat();
@@ -146,6 +146,7 @@ static void ListValueStructFunction(DataChunk &args, Vector &result) {
 
 	for (idx_t c = 0; c < result_entries.size(); c++) {
 		result_entries[c]->Slice(sel, result_child_size);
+		result_entries[c]->Flatten(result_child_size);
 	}
 
 	ListVector::SetListSize(result, result_child_size);
