@@ -178,6 +178,11 @@ public:
 
 	void AddVirtualColumn(column_t virtual_column_id) override;
 
+	void GetPartitionStats(vector<PartitionStatistics> &result);
+	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result);
+	static bool MetadataCacheEnabled(ClientContext &context);
+	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
+
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,

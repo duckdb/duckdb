@@ -29,8 +29,7 @@ if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG ed18629fa56a97e0796a3582110b51ddd125159d
-            APPLY_PATCHES
+            GIT_TAG 712514078247b4b71f51d0c9eb862bec3928742c
     )
 endif()
 
@@ -79,20 +78,18 @@ duckdb_extension_load(excel
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
-if (FALSE)
 IF (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
 else ()
     set(LOAD_ICEBERG_TESTS "")
 endif()
 
-if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 2db98c685f67373b347c3a8c435ef2e01c509697
+            GIT_TAG dd8617d636b6aa8bd83fa219cd238fc9823df4e3
             )
-endif()
 endif()
 
 ################# INET

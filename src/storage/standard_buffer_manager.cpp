@@ -90,12 +90,8 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
 }
 
-idx_t StandardBufferManager::GetUsedSwap() {
-	lock_guard<mutex> guard(temporary_directory.lock);
-	if (!temporary_directory.handle) {
-		return 0;
-	}
-	return temporary_directory.handle->GetTempFile().GetTotalUsedSpaceInBytes();
+idx_t StandardBufferManager::GetUsedSwap() const {
+	return temporary_directory.size_on_disk.load(std::memory_order_relaxed);
 }
 
 optional_idx StandardBufferManager::GetMaxSwap() const {
@@ -370,6 +366,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 			// now we can actually load the current block
 			D_ASSERT(handle->Readers() == 0);
 			buf = handle->Load(std::move(reusable_buffer));
+			if (!buf.IsValid()) {
+				reservation.Resize(0);
+				return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
+			}
 			auto &memory_charge = handle->GetMemoryCharge(lock);
 			memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.
@@ -489,8 +489,8 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	lock_guard<mutex> guard(temporary_directory.lock);
 	if (!temporary_directory.handle) {
 		// temp directory has not been created yet: initialize it
-		temporary_directory.handle =
-		    make_uniq<TemporaryDirectoryHandle>(db, temporary_directory.path, temporary_directory.maximum_swap_space);
+		temporary_directory.handle = make_uniq<TemporaryDirectoryHandle>(
+		    db, temporary_directory.path, temporary_directory.size_on_disk, temporary_directory.maximum_swap_space);
 	}
 }
 

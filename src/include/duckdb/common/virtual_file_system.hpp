@@ -18,6 +18,7 @@ namespace duckdb {
 class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
+	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -40,9 +41,6 @@ public:
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-
-	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-	               FileOpener *opener = nullptr) override;
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 
@@ -73,6 +71,13 @@ protected:
 	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener) override;
 	bool SupportsOpenFileExtended() const override {
+		return true;
+	}
+
+	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+	                       optional_ptr<FileOpener> opener) override;
+
+	bool SupportsListFilesExtended() const override {
 		return true;
 	}
 

@@ -404,7 +404,6 @@ double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFil
 }
 
 void CSVMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
-	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
 } // namespace duckdb

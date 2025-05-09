@@ -80,6 +80,8 @@ struct MultiFileBindData : public TableFunctionData {
 	void Initialize(ClientContext &, BaseUnionData &union_data) {
 		Initialize(std::move(union_data.reader));
 	}
+
+	unique_ptr<FunctionData> Copy() const override;
 };
 
 //! Per-file data for the multi file reader

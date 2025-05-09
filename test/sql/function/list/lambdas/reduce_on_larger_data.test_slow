@@ -2,13 +2,16 @@
 # description: Test list_reduce function on larger data
 # group: [lambdas]
 
-# large lists
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+# Large lists.
 
 statement ok
 CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
 
 query I
-SELECT list_reduce(l, (x, y) -> least(x, y)) FROM large_lists ORDER BY g;
+SELECT list_reduce(l, lambda x, y: least(x, y)) FROM large_lists ORDER BY g;
 ----
 0
 1
@@ -16,19 +19,20 @@ SELECT list_reduce(l, (x, y) -> least(x, y)) FROM large_lists ORDER BY g;
 3
 
 query I
-SELECT list_reduce(l, (x, y) -> x + y) FROM large_lists ORDER BY g;
+SELECT list_reduce(l, lambda x, y: x + y) FROM large_lists ORDER BY g;
 ----
 12495000
 12497500
 12500000
 12502500
 
-# large table
+# Large table.
 
 statement ok
-CREATE TABLE large_table AS SELECT list_reduce(range(5000), (x, y) -> x + y) as l FROM range(1000);
+CREATE TABLE large_table AS
+SELECT list_reduce(range(5000), lambda x, y: x + y) AS l FROM range(1000);
 
 query I
-SELECT count(*) from large_table where l = 12497500;
+SELECT COUNT(*) FROM large_table WHERE l = 12497500;
 ----
 1000

@@ -62,7 +62,7 @@ public:
 		void Verify(const unique_ptr<StorageLockKey> &guard) const;
 		//! Whether the CachedFile is still valid given the current modified/version tag
 		bool IsValid(const unique_ptr<StorageLockKey> &guard, bool validate, const string &current_version_tag,
-		             time_t current_last_modified, int64_t access_time);
+		             time_t current_last_modified);
 
 		//! Get reference to properties (must hold the lock)
 		idx_t &FileSize(const unique_ptr<StorageLockKey> &guard);
@@ -100,6 +100,9 @@ public:
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
+
+	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
+	                               const string &current_version_tag, time_t current_last_modified);
 
 private:
 	//! The BufferManager used to cache files

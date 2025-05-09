@@ -57,6 +57,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
 	bool write_empty_file = true;
+	bool hive_file_pattern = true;
+	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -122,6 +124,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
+		} else if (loption == "preserve_order") {
+			if (GetBooleanArg(context, option.second)) {
+				preserve_order = PreserveOrderType::PRESERVE_ORDER;
+			} else {
+				preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
+			}
 		} else if (loption == "return_stats") {
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
@@ -130,6 +138,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			write_partition_columns = GetBooleanArg(context, option.second);
 		} else if (loption == "write_empty_file") {
 			write_empty_file = GetBooleanArg(context, option.second);
+		} else if (loption == "hive_file_pattern") {
+			hive_file_pattern = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
@@ -263,6 +273,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	copy->partition_columns = std::move(partition_cols);
 	copy->write_empty_file = write_empty_file;
 	copy->return_type = return_type;
+	copy->preserve_order = preserve_order;
+	copy->hive_file_pattern = hive_file_pattern;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;

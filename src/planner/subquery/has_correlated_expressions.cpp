@@ -43,7 +43,7 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpr
 	}
 	// correlated column reference
 	D_ASSERT(expr.depth == lateral_depth + 1);
-	has_correlated_expressions = found_match;
+	has_correlated_expressions |= found_match;
 	return nullptr;
 }
 

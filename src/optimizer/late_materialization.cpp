@@ -21,24 +21,37 @@ LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optim
 	max_row_count = ClientConfig::GetConfig(optimizer.context).late_materialization_max_rows;
 }
 
-idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {
+vector<idx_t> LateMaterialization::GetOrInsertRowIds(LogicalGet &get) {
 	auto &column_ids = get.GetMutableColumnIds();
-	// check if it is already projected
-	for (idx_t i = 0; i < column_ids.size(); ++i) {
-		if (column_ids[i].IsRowIdColumn()) {
-			// already projected - return the id
-			return i;
+
+	vector<idx_t> result;
+	for (idx_t r_idx = 0; r_idx < row_id_column_ids.size(); ++r_idx) {
+		// check if it is already projected
+		auto row_id_column_id = row_id_column_ids[r_idx];
+		auto &row_id_column = row_id_columns[r_idx];
+		optional_idx row_id_index;
+		for (idx_t i = 0; i < column_ids.size(); ++i) {
+			if (column_ids[i].GetPrimaryIndex() == row_id_column_id) {
+				// already projected - return the id
+				row_id_index = i;
+				break;
+			}
 		}
+		if (row_id_index.IsValid()) {
+			result.push_back(row_id_index.GetIndex());
+			continue;
+		}
+		// row id is not yet projected - push it and return the new index
+		column_ids.push_back(ColumnIndex(row_id_column_id));
+		if (!get.projection_ids.empty()) {
+			get.projection_ids.push_back(column_ids.size() - 1);
+		}
+		if (!get.types.empty()) {
+			get.types.push_back(row_id_column.type);
+		}
+		result.push_back(column_ids.size() - 1);
 	}
-	// row id is not yet projected - push it and return the new index
-	column_ids.push_back(ColumnIndex(COLUMN_IDENTIFIER_ROW_ID));
-	if (!get.projection_ids.empty()) {
-		get.projection_ids.push_back(column_ids.size() - 1);
-	}
-	if (!get.types.empty()) {
-		get.types.push_back(row_id_type);
-	}
-	return column_ids.size() - 1;
+	return result;
 }
 
 unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
@@ -51,7 +64,7 @@ unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
 	return new_get;
 }
 
-ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op) {
+vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op) {
 	// traverse down until we reach the LogicalGet
 	vector<reference<LogicalOperator>> stack;
 	reference<LogicalOperator> child = *op->children[0];
@@ -62,21 +75,28 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	}
 	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
 	auto &get = child.get().Cast<LogicalGet>();
-	auto row_id_idx = GetOrInsertRowId(get);
+	auto row_id_indexes = GetOrInsertRowIds(get);
 	idx_t column_count = get.projection_ids.empty() ? get.GetColumnIds().size() : get.projection_ids.size();
 	D_ASSERT(column_count == get.GetColumnBindings().size());
 
 	// the row id has been projected - now project it up the stack
-	ColumnBinding row_id_binding(get.table_index, row_id_idx);
+	vector<ColumnBinding> row_id_bindings;
+	for (auto &row_id_index : row_id_indexes) {
+		row_id_bindings.emplace_back(get.table_index, row_id_index);
+	}
 	for (idx_t i = stack.size(); i > 0; i--) {
 		auto &op = stack[i - 1].get();
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &proj = op.Cast<LogicalProjection>();
-			// push a projection of the row-id column
-			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>("rowid", row_id_type, row_id_binding));
-			// modify the row-id-binding to push to the new projection
-			row_id_binding = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			// push projection of the row-id columns
+			for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+				auto &r_col = row_id_columns[r_idx];
+				proj.expressions.push_back(
+				    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]));
+				// modify the row-id-binding to the new projection
+				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			}
 			column_count = proj.expressions.size();
 			break;
 		}
@@ -93,7 +113,7 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
 		}
 	}
-	return row_id_binding;
+	return row_id_bindings;
 }
 
 void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t new_index) {
@@ -243,11 +263,21 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		// this function does not support late materialization
 		return false;
 	}
-	auto entry = get.virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
-	if (entry == get.virtual_columns.end()) {
-		throw InternalException("Table function supports late materialization but does not expose a rowid column");
+	if (!get.function.get_row_id_columns) {
+		throw InternalException("Function supports late materialization but not get_row_id_columns");
 	}
-	row_id_type = entry->second.type;
+	row_id_column_ids = get.function.get_row_id_columns(optimizer.context, get.bind_data.get());
+	if (row_id_column_ids.empty()) {
+		throw InternalException("Row Id Columns must not be empty");
+	}
+	row_id_columns.clear();
+	for (auto &col_id : row_id_column_ids) {
+		auto entry = get.virtual_columns.find(col_id);
+		if (entry == get.virtual_columns.end()) {
+			throw InternalException("Row id column id not found in virtual column list");
+		}
+		row_id_columns.push_back(entry->second);
+	}
 	// we benefit from late materialization
 	// we need to transform this plan into a semi-join with the row-id
 	// we need to ensure the operator returns exactly the same column bindings as before
@@ -258,8 +288,11 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	auto &lhs_get = *lhs;
 	auto lhs_index = lhs_get.table_index;
 	auto lhs_columns = lhs_get.GetColumnIds().size();
-	auto lhs_row_idx = GetOrInsertRowId(lhs_get);
-	ColumnBinding lhs_binding(lhs_index, lhs_row_idx);
+	auto lhs_row_indexes = GetOrInsertRowIds(lhs_get);
+	vector<ColumnBinding> lhs_bindings;
+	for (auto &lhs_row_index : lhs_row_indexes) {
+		lhs_bindings.emplace_back(lhs_index, lhs_row_index);
+	}
 
 	// after constructing the LHS but before constructing the RHS we construct the final projections/orders
 	// - we do this before constructing the RHS because that alter the original plan
@@ -297,33 +330,47 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		}
 	} else {
 		// for limit/sample we order by row-id
-		auto row_id_expr = make_uniq<BoundColumnRefExpression>("rowid", row_id_type, lhs_binding);
-		final_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(row_id_expr));
+		for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+			auto &row_id_col = row_id_columns[r_idx];
+			auto row_id_expr =
+			    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]);
+			final_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(row_id_expr));
+		}
 	}
 
 	// construct the RHS for the join
 	// this is essentially the old pipeline, but with the `rowid` column added
 	// note that the purpose of this optimization is to remove columns from the RHS
 	// we don't do that here yet though - we do this in a later step using the RemoveUnusedColumns optimizer
-	auto rhs_binding = ConstructRHS(op);
+	auto rhs_bindings = ConstructRHS(op);
 
 	// the final table index emitted must be the table index of the original operator
 	// this ensures any upstream operators that refer to the original get will keep on referring to the correct columns
-	auto final_index = rhs_binding.table_index;
+	auto final_index = rhs_bindings[0].table_index;
 
 	// we need to replace any references to "rhs_binding.table_index" in the rhs to a new table index
-	rhs_binding.table_index = optimizer.binder.GenerateTableIndex();
-	ReplaceTopLevelTableIndex(*op, rhs_binding.table_index);
+	auto rhs_table_index = optimizer.binder.GenerateTableIndex();
+	for (auto &rhs_binding : rhs_bindings) {
+		rhs_binding.table_index = rhs_table_index;
+	}
+	ReplaceTopLevelTableIndex(*op, rhs_table_index);
+	if (rhs_bindings.size() != lhs_bindings.size()) {
+		throw InternalException("Mismatch in late materialization binding sizes");
+	}
 
 	// construct a semi join between the lhs and rhs
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
 	join->children.push_back(std::move(lhs));
 	join->children.push_back(std::move(op));
-	JoinCondition condition;
-	condition.comparison = ExpressionType::COMPARE_EQUAL;
-	condition.left = make_uniq<BoundColumnRefExpression>("rowid", row_id_type, lhs_binding);
-	condition.right = make_uniq<BoundColumnRefExpression>("rowid", row_id_type, rhs_binding);
-	join->conditions.push_back(std::move(condition));
+
+	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+		auto &row_id_col = row_id_columns[r_idx];
+		JoinCondition condition;
+		condition.comparison = ExpressionType::COMPARE_EQUAL;
+		condition.left = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]);
+		condition.right = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]);
+		join->conditions.push_back(std::move(condition));
+	}
 
 	// push a projection that removes the row id again from the lhs
 	// this is the final projection - so it should have the final table index

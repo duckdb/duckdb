@@ -12,7 +12,6 @@ fsspec
 pyarrow>=8.0
 torch
 polars
-adbc_driver_manager
 tensorflow
 cxxheaderparser
 pcpp

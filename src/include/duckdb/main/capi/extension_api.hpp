@@ -474,6 +474,11 @@ typedef struct {
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
+	// New value functions that are added
+
+	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
+	                                        idx_t entry_count);
+	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	// An API to create new vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
@@ -900,6 +905,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_value_to_string = duckdb_value_to_string;
+	result.duckdb_create_map_value = duckdb_create_map_value;
+	result.duckdb_create_union_value = duckdb_create_union_value;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;

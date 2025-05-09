@@ -5,6 +5,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/main/database.hpp"
 #include "zstd.h"
 
 namespace duckdb {
@@ -268,6 +269,9 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	if (db.config.options.use_direct_io) {
+		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+	}
 	handle = fs.OpenFile(path, open_flags);
 }
 
@@ -415,8 +419,9 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 //===--------------------------------------------------------------------===//
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
-TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(0), max_swap_space(0) {
+TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
+                                           atomic<idx_t> &size_on_disk_p)
+    : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -505,7 +510,7 @@ bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {
 }
 
 idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() const {
-	return size_on_disk.load();
+	return size_on_disk.load(std::memory_order_relaxed);
 }
 
 optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
@@ -643,8 +648,10 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
-TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
+TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
+                                                   optional_idx max_swap_space)
+    : db(db), temp_directory(std::move(path_p)),
+      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, size_on_disk)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	D_ASSERT(!temp_directory.empty());
 	if (!fs.DirectoryExists(temp_directory)) {

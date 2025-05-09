@@ -35,6 +35,7 @@ private:
 	ReaderInitializeType EvaluateConstantFilters(ResultColumnMapping &mapping,
 	                                             map<idx_t, reference<TableFilter>> &remaining_filters);
 	Value GetConstantValue(idx_t global_index);
+	bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant);
 
 private:
 	ClientContext &context;

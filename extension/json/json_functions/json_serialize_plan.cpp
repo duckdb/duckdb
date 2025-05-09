@@ -111,7 +111,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op, string &operator_
 
 static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = local_state.json_allocator.GetYYAlc();
+	auto alc = local_state.json_allocator->GetYYAlc();
 	auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();

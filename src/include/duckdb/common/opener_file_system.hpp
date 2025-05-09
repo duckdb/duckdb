@@ -76,13 +76,6 @@ public:
 		return GetFileSystem().RemoveDirectory(directory, GetOpener());
 	}
 
-	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-	               FileOpener *opener = nullptr) override {
-		VerifyNoOpener(opener);
-		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
-	}
-
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(source);
@@ -157,6 +150,17 @@ protected:
 	}
 
 	bool SupportsOpenFileExtended() const override {
+		return true;
+	}
+
+	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+	                       optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
+		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
+	}
+
+	bool SupportsListFilesExtended() const override {
 		return true;
 	}
 

@@ -262,8 +262,8 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 		if (!unsafe_yyjson_is_str(val)) {
 			validity.SetInvalid(i);
 			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
-				options.error_message = StringUtil::Format("Unable to cast '%s' to " + EnumUtil::ToString(target.id()),
-				                                           JSONCommon::ValToString(val, 50));
+				options.error_message = StringUtil::Format(
+				    "Unable to cast '%s' to %s", JSONCommon::ValToString(val, 50), EnumUtil::ToString(target.id()));
 				options.object_index = i;
 				success = false;
 			}
@@ -424,8 +424,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				if (found_keys[col_idx]) {
 					if (success && options.error_duplicate_key) {
 						options.error_message =
-						    StringUtil::Format("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s",
-						                       JSONCommon::ValToString(objects[i], 50));
+						    StringUtil::Format("Object %s has duplicate key \"%s\"",
+						                       JSONCommon::ValToString(objects[i], 50), string(key_ptr, key_len));
 						options.object_index = i;
 						success = false;
 					}
@@ -436,8 +436,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				}
 			} else if (success && error_unknown_key && options.error_unknown_key) {
 				options.error_message =
-				    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
-				                       JSONCommon::ValToString(objects[i], 50));
+				    StringUtil::Format("Object %s has unknown key \"%s\"", JSONCommon::ValToString(objects[i], 50),
+				                       string(key_ptr, key_len));
 				options.object_index = i;
 				success = false;
 			}
@@ -453,8 +453,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				nested_vals[col_idx][i] = nullptr;
 
 				if (success && options.error_missing_key) {
-					options.error_message = StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
-					                                           JSONCommon::ValToString(objects[i], 50));
+					options.error_message = StringUtil::Format("Object %s does not have key \"%s\"",
+					                                           JSONCommon::ValToString(objects[i], 50), names[col_idx]);
 					options.object_index = i;
 					success = false;
 				}
@@ -750,7 +750,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
 		throw ConversionException(
-		    StringUtil::Format(options.error_message + ". Cannot default to NULL, because map keys cannot be NULL"));
+		    StringUtil::Format("%s. Cannot default to NULL, because map keys cannot be NULL", options.error_message));
 	}
 
 	// Transform values
@@ -974,12 +974,14 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
 		throw InvalidInputException(options.error_message);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
@@ -1008,8 +1010,8 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = true;

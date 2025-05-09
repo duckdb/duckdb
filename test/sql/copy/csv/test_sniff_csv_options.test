@@ -162,19 +162,19 @@ SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv');
 query I
 SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', ignore_errors=true);
 ----
-,
+;
 
 query I
 SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', store_rejects=true);
 ----
-,
+;
 
 query I
 SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', rejects_scan='a_1');
 ----
-,
+;
 
 query I
 SELECT delimiter FROM sniff_csv('data/csv/ignore_errors.csv', rejects_table='a_2');
 ----
-,
+;

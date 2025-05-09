@@ -14,7 +14,7 @@ namespace duckdb {
 
 using JSONPathType = JSONCommon::JSONPathType;
 
-static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, size_t &len) {
 	if (path_val.IsNull()) {
 		throw BinderException("JSON path cannot be NULL");
 	}
@@ -113,7 +113,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+		if (JSONReadFunctionData::CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
 			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
 		}
 	}
@@ -121,7 +121,8 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
+JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
+    : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
 JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
@@ -140,7 +141,7 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLo
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
+	lstate.json_allocator->Reset();
 	return lstate;
 }
 
@@ -200,6 +201,12 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+
+	// Table in-out
+	functions.push_back(GetJSONEachFunction());
+	functions.push_back(GetJSONTreeFunction());
+
+	// Serialized plan
 	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;
@@ -226,8 +233,8 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(

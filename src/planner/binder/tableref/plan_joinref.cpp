@@ -214,9 +214,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
-		for (auto &condition : conditions) {
-			arbitrary_expressions.push_back(JoinCondition::CreateExpression(std::move(condition)));
-		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
 		auto any_join = make_uniq<LogicalAnyJoin>(type);
@@ -225,8 +222,21 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 		any_join->children.push_back(std::move(right_child));
 		// AND all the arbitrary expressions together
 		// do the same with any remaining conditions
-		any_join->condition = std::move(arbitrary_expressions[0]);
-		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+		idx_t start_idx = 0;
+		if (conditions.empty()) {
+			// no conditions, just use the arbitrary expressions
+			any_join->condition = std::move(arbitrary_expressions[0]);
+			start_idx = 1;
+		} else {
+			// we have some conditions as well
+			any_join->condition = JoinCondition::CreateExpression(std::move(conditions[0]));
+			for (idx_t i = 1; i < conditions.size(); i++) {
+				any_join->condition = make_uniq<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition),
+				    JoinCondition::CreateExpression(std::move(conditions[i])));
+			}
+		}
+		for (idx_t i = start_idx; i < arbitrary_expressions.size(); i++) {
 			any_join->condition = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
 		}
@@ -313,22 +323,13 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		std::swap(left, right);
 	}
 	if (ref.lateral) {
-		if (!is_outside_flattened) {
-			// If outer dependent joins is yet to be flattened, only plan the lateral
-			has_unplanned_dependent_joins = true;
-			return LogicalDependentJoin::Create(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-			                                    std::move(ref.condition));
-		} else {
-			// All outer dependent joins have been planned and flattened, so plan and flatten lateral and recursively
-			// plan the children
-			auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-			                                std::move(ref.condition));
-			if (has_unplanned_dependent_joins) {
-				RecursiveDependentJoinPlanner plan(*this);
-				plan.VisitOperator(*new_plan);
-			}
-			return new_plan;
+		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+		                                std::move(ref.condition));
+		if (has_unplanned_dependent_joins) {
+			RecursiveDependentJoinPlanner plan(*this);
+			plan.VisitOperator(*new_plan);
 		}
+		return new_plan;
 	}
 	switch (ref.ref_type) {
 	case JoinRefType::CROSS:

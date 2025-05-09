@@ -1,8 +1,6 @@
 # name: test/sql/attach/attach_encryption_block_header.test
 # group: [attach]
 
-require noforcestorage
-
 # workaround - alternative verify always forces the latest storage
 require no_alternative_verify
 
@@ -68,3 +66,10 @@ DETACH encrypted
 statement ok
 DETACH unencrypted
 
+statement error
+ATTACH '__TEST_DIR__/incompatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.2.0');
+----
+Explicit provided STORAGE_VERSION ("v1.2.0") and ENCRYPTION_KEY (storage >= v1.3.0) are not compatible
+
+statement ok
+ATTACH '__TEST_DIR__/compatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.3.0');
