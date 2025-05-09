@@ -2,8 +2,6 @@
 # description: Test running TPC-H over a database attached over S3
 # group: [attach]
 
-require skip_reload
-
 require httpfs
 
 require tpch

@@ -1,0 +1,15 @@
+# name: test/sql/catalog/table/test_concurrent_constraints.test_slow
+# group: [table]
+
+statement ok
+CREATE TABLE tbl_constraints(pk INT PRIMARY KEY, u INT UNIQUE, s INT CHECK (s > 42), d INT CHECK (d + 1 < 42));
+
+
+concurrentloop threadid 0 100
+
+statement ok
+SELECT c.oid,c.*,t.relname as tabrelname, case when c.contype='c' then substring(pg_get_constraintdef(c.oid), 7) else null end consrc_copy
+      FROM pg_catalog.pg_constraint c
+      INNER JOIN pg_catalog.pg_class t ON t.oid=c.conrelid limit 5;
+
+endloop

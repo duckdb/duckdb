@@ -12,6 +12,17 @@
 
 namespace duckdb {
 
+static duckdb::unique_ptr<FunctionData> ICUBindIntervalMonths(ClientContext &context, ScalarFunction &bound_function,
+                                                              vector<duckdb::unique_ptr<Expression>> &arguments) {
+	auto result = ICUDateFunc::Bind(context, bound_function, arguments);
+	auto &info = result->Cast<ICUDateFunc::BindData>();
+	TZCalendar calendar(*info.calendar, info.cal_setting);
+	if (!calendar.SupportsIntervals()) {
+		throw NotImplementedException("INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.");
+	}
+	return std::move(result);
+}
+
 struct ICUCalendarAdd {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
@@ -228,7 +239,7 @@ struct ICUDateAdd : public ICUDateFunc {
 	template <typename TA, typename TR, typename OP>
 	inline static ScalarFunction GetUnaryDateFunction(const LogicalTypeId &left_type,
 	                                                  const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, Bind);
+		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, ICUBindIntervalMonths);
 	}
 
 	template <typename TA, typename TB, typename TR, typename OP>
@@ -247,7 +258,8 @@ struct ICUDateAdd : public ICUDateFunc {
 	template <typename TA, typename TB, typename TR, typename OP>
 	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
 	                                                   const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>, Bind);
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>,
+		                      ICUBindIntervalMonths);
 	}
 
 	template <typename TA, typename TB, typename OP>

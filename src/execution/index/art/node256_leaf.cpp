@@ -41,6 +41,21 @@ bool Node256Leaf::HasByte(uint8_t &byte) {
 	return v_mask.RowIsValid(byte);
 }
 
+array_ptr<uint8_t> Node256Leaf::GetBytes(ArenaAllocator &arena) {
+	auto mem = arena.AllocateAligned(sizeof(uint8_t) * count);
+	array_ptr<uint8_t> bytes(mem, count);
+
+	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
+	uint16_t ptr_idx = 0;
+	for (uint16_t i = 0; i < CAPACITY; i++) {
+		if (v_mask.RowIsValid(i)) {
+			bytes[ptr_idx++] = UnsafeNumericCast<uint8_t>(i);
+		}
+	}
+
+	return bytes;
+}
+
 bool Node256Leaf::GetNextByte(uint8_t &byte) {
 	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
 	for (uint16_t i = byte; i < CAPACITY; i++) {

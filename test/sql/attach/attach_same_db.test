@@ -2,8 +2,6 @@
 # description: Test attaching of the same database
 # group: [attach]
 
-require skip_reload
-
 require notwindows
 
 statement ok

@@ -26,7 +26,8 @@ public:
 	void InitializePage();
 	idx_t Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset);
 	void Skip(uint8_t *defines, idx_t skip_count);
-	bool CanFilter(const TableFilter &filter);
+	bool CanFilter(const TableFilter &filter, TableFilterState &filter_state);
+	bool DictionarySupportsFilter(const TableFilter &filter, TableFilterState &filter_state);
 	void Filter(uint8_t *defines, idx_t read_count, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
 	bool HasFilter() const {
 		return filter_result.get();

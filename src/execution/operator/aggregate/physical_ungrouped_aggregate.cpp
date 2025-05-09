@@ -445,6 +445,10 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
+	string TaskType() const override {
+		return "UngroupedDistinctAggregateFinalizeTask";
+	}
+
 private:
 	TaskExecutionResult AggregateDistinct();
 

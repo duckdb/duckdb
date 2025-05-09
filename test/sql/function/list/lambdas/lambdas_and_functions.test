@@ -5,31 +5,34 @@
 require json
 
 statement ok
-create or replace function demo(n, z) as table (
-  select list_transform(range(0,n), x -> z) as row
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), lambda x: z) AS row
 );
 
 query I
-from demo(3,0);
+FROM demo(3, 0);
 ----
 [0, 0, 0]
 
 statement ok
-create or replace function demo(n, z) as table (
-  select list_transform(range(0,n), x -> 0+z) as row
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), lambda x: 0 + z) AS row
 );
 
 query I
-from demo(3,0);
+FROM demo(3, 0);
 ----
 [0, 0, 0]
 
 statement ok
-create or replace function demo(n, z) as table (
-  select list_transform(range(0,n), x -> (z->'a')) as row
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), lambda x: (z -> 'a')) AS row
 );
 
 query I
-from demo(3, {'a': 2});
+FROM demo(3, {'a': 2});
 ----
 [2, 2, 2]

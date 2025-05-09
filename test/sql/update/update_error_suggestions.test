@@ -1,0 +1,19 @@
+# name: test/sql/update/update_error_suggestions.test
+# description: Test suggestions on UPDATE statement
+# group: [update]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(mycol INTEGER)
+
+statement error
+UPDATE tbl SET myco=42
+----
+"mycol"
+
+statement error
+UPDATE tbl SET tbl.mycol=42
+----
+not supported

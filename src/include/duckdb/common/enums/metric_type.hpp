@@ -34,6 +34,8 @@ enum class MetricsType : uint8_t {
     LATENCY,
     ROWS_RETURNED,
     OPERATOR_NAME,
+    SYSTEM_PEAK_BUFFER_MEMORY,
+    SYSTEM_PEAK_TEMP_DIR_SIZE,
     ALL_OPTIMIZERS,
     CUMULATIVE_OPTIMIZER_TIMING,
     PLANNER,
@@ -90,6 +92,7 @@ public:
 
     static bool IsOptimizerMetric(MetricsType type);
     static bool IsPhaseTimingMetric(MetricsType type);
+    static bool IsQueryGlobalMetric(MetricsType type);
 };
 
 } // namespace duckdb

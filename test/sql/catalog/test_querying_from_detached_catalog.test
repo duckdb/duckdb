@@ -2,8 +2,6 @@
 # description: Test switching from detached catalog to another catalog
 # group: [catalog]
 
-require skip_reload
-
 statement ok con1
 ATTACH ':memory:' AS db1;
 

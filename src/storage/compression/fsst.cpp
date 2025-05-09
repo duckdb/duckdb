@@ -98,7 +98,13 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	auto &storage_manager = col_data.GetStorageManager();
+	if (storage_manager.GetStorageVersion() >= 5) {
+		// dict_fsst introduced - disable fsst
+		return nullptr;
+	}
+
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
@@ -238,7 +244,7 @@ public:
 		auto &type = checkpoint_data.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockSize());
+		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 		Reset();
 	}

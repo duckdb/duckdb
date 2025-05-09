@@ -198,7 +198,7 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 	}
 }
 
-UndoBufferPointer UpdateSegment::GetUpdateNode(idx_t vector_idx) const {
+UndoBufferPointer UpdateSegment::GetUpdateNode(StorageLockKey &, idx_t vector_idx) const {
 	if (!root) {
 		return UndoBufferPointer();
 	}
@@ -210,7 +210,7 @@ UndoBufferPointer UpdateSegment::GetUpdateNode(idx_t vector_idx) const {
 
 void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
-	auto node = GetUpdateNode(vector_index);
+	auto node = GetUpdateNode(*lock_handle, vector_index);
 	if (!node.IsSet()) {
 		return;
 	}
@@ -280,7 +280,7 @@ static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(Physi
 
 void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
-	auto node = GetUpdateNode(vector_index);
+	auto node = GetUpdateNode(*lock_handle, vector_index);
 	if (!node.IsSet()) {
 		return;
 	}
@@ -387,8 +387,9 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 
+	auto lock_handle = lock.GetSharedLock();
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
-		auto entry = GetUpdateNode(vector_idx);
+		auto entry = GetUpdateNode(*lock_handle, vector_idx);
 		if (!entry.IsSet()) {
 			continue;
 		}
@@ -483,7 +484,8 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 
 void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
 	idx_t vector_index = (row_id - column_data.start) / STANDARD_VECTOR_SIZE;
-	auto entry = GetUpdateNode(vector_index);
+	auto lock_handle = lock.GetSharedLock();
+	auto entry = GetUpdateNode(*lock_handle, vector_index);
 	if (!entry.IsSet()) {
 		return;
 	}
@@ -556,7 +558,7 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	auto entry = GetUpdateNode(info.vector_index);
+	auto entry = GetUpdateNode(*lock_handle, info.vector_index);
 	if (!entry.IsSet()) {
 		return;
 	}
@@ -1292,12 +1294,12 @@ bool UpdateSegment::HasUpdates() const {
 
 bool UpdateSegment::HasUpdates(idx_t vector_index) const {
 	auto read_lock = lock.GetSharedLock();
-	return GetUpdateNode(vector_index).IsSet();
+	return GetUpdateNode(*read_lock, vector_index).IsSet();
 }
 
 bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 	auto read_lock = lock.GetSharedLock();
-	auto entry = GetUpdateNode(vector_index);
+	auto entry = GetUpdateNode(*read_lock, vector_index);
 	if (!entry.IsSet()) {
 		return false;
 	}
@@ -1317,7 +1319,7 @@ bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 	idx_t base_vector_index = start_row_index / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_index = end_row_index / STANDARD_VECTOR_SIZE;
 	for (idx_t i = base_vector_index; i <= end_vector_index; i++) {
-		auto entry = GetUpdateNode(i);
+		auto entry = GetUpdateNode(*read_lock, i);
 		if (entry.IsSet()) {
 			return true;
 		}

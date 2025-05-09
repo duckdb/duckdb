@@ -42,6 +42,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->name = qualified_name.name;
+	info->temporary = !stmt.typeName->relpersistence;
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
 	switch (stmt.kind) {
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {

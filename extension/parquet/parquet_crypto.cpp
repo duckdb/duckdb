@@ -41,12 +41,13 @@ string ParquetKeys::GetObjectType() {
 	return ObjectType();
 }
 
-ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p) : context(context_p) {
+ParquetEncryptionConfig::ParquetEncryptionConfig() {
 }
 
-ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p, const Value &arg)
-    : ParquetEncryptionConfig(context_p) {
+ParquetEncryptionConfig::ParquetEncryptionConfig(string footer_key_p) : footer_key(std::move(footer_key_p)) {
+}
 
+ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const Value &arg) {
 	if (arg.type().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Parquet encryption_config must be of type STRUCT");
 	}
@@ -62,7 +63,11 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p, const
 				    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
 				    footer_key_name);
 			}
-			footer_key = footer_key_name;
+			// footer key name provided - read the key from the config
+			const auto &keys = ParquetKeys::Get(context);
+			footer_key = keys.GetKey(footer_key_name);
+		} else if (StringUtil::Lower(struct_key) == "footer_key_value") {
+			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
 		} else if (StringUtil::Lower(struct_key) == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
@@ -76,10 +81,7 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 }
 
 const string &ParquetEncryptionConfig::GetFooterKey() const {
-	const auto &keys = ParquetKeys::Get(context);
-	D_ASSERT(!footer_key.empty());
-	D_ASSERT(keys.HasKey(footer_key));
-	return keys.GetKey(footer_key);
+	return footer_key;
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
@@ -89,7 +91,7 @@ using duckdb_apache::thrift::transport::TTransport;
 class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState(&key)),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
 	}
@@ -170,7 +172,7 @@ private:
 class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState(&key)),
 	      read_buffer_size(0), read_buffer_offset(0) {
 		Initialize(key);
 	}
@@ -203,21 +205,9 @@ public:
 		}
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
-
-		if (aes->IsOpenSSL()) {
-			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
-			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-			}
-		} else {
-			// For mbedtls, computed_tag is an output argument for aes->Finalize()
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-			}
-			VerifyTag(computed_tag);
+		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
+		if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context out");
 		}
 
 		if (transport_remaining != 0) {
@@ -263,14 +253,6 @@ private:
 		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 #endif
 		read_buffer_offset = 0;
-	}
-
-	void VerifyTag(data_t *computed_tag) {
-		data_t read_tag[ParquetCrypto::TAG_BYTES];
-		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
-		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
-		}
 	}
 
 private:

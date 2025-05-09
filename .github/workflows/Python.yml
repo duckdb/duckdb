@@ -62,17 +62,21 @@ env:
   CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
-# This is just a sanity check of Python 3.10 running with Arrow
+# This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
     name: Python 3.10 Linux
     runs-on: ubuntu-22.04
 
     env:
-      CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose && USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
+      CIBW_BUILD: 'cp310-*'
+      CIBW_ARCHS: 'x86_64'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
+      # FIXME: add this back to CIBW_TEST_COMMAND '&& USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
       PYTEST_TIMEOUT: '600'
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
       CIBW_BEFORE_ALL: 'cd {project} && ./scripts/install_spark_in_cibuildwheels_linux_container.sh'
+      CIBW_MANYLINUX_X86_64_IMAGE: 'manylinux_2_28'
+      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: 'manylinux_2_28'
 
     steps:
     - uses: actions/checkout@v4
@@ -96,7 +100,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.11'
 
     - name: Install
       shell: bash
@@ -123,74 +127,21 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
 
-  manylinux-extensions-x64:
-    name: Linux Extensions (linux_amd64_gcc4)
-    needs: linux-python3-10
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64_gcc4]
-        vcpkg_triplet: [x64-linux]
-  
-    env:
-      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
-      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-      GEN: ninja
-      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: 'duckdb'
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: ./duckdb/.github/actions/build_extensions_dockerized
-        with:
-          vcpkg_target_triplet: x64-linux
-          duckdb_arch: linux_amd64_gcc4
-          run_tests: ${{ inputs.skip_tests != 'true' }}
-          override_git_describe: ${{ inputs.override_git_describe }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-extensions-${{ matrix.duckdb_arch }}
-          path: |
-            build/release/extension/*/*.duckdb_extension
-
-  upload-linux-extensions-gcc4:
-    name: Upload Linux Extensions (gcc4)
-    needs: manylinux-extensions-x64
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64_gcc4]
-    uses: ./.github/workflows/_sign_deploy_extensions.yml
-    secrets: inherit
-    with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
-      duckdb_sha: ${{ github.sha }}
-
   linux-python3:
     name: Python 3 Linux
-    needs: manylinux-extensions-x64
     runs-on: ubuntu-22.04
+    needs: linux-python3-10
     strategy:
       fail-fast: false
       matrix:
-        duckdb_arch: [linux_amd64_gcc4]
+        duckdb_arch: [linux_amd64]
         arch: [x86_64, aarch64]
-        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
-        manylinux: [manylinux2014, manylinux_2_28]
+        python_build: [ cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
+        manylinux: [manylinux_2_28]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
-          # For now we don't distribute the 2_28 wheels on x64
-          - arch: x86_64
-            manylinux: manylinux_2_28
           # Speed things up a bit for non-releases
-          - isRelease: false
-            python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
           - isRelease: false
@@ -203,7 +154,7 @@ jobs:
             arch: aarch64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_SKIP: '*-musllinux_aarch64 cp37-musllinux* cp38-musllinux*'
+      CIBW_SKIP: '*-musllinux_aarch64'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
       CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: ${{ matrix.manylinux }}
@@ -247,17 +198,6 @@ jobs:
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-    - uses: actions/download-artifact@v4
-      if: ${{ matrix.arch == 'x86_64' }}
-      with:
-        name: duckdb-extensions-${{ matrix.duckdb_arch }}
-        path: tools/pythonpkg
-
-    - name: List extensions to be tested
-      shell: bash
-      run: |
-        find tools/pythonpkg -maxdepth 2 -type f -name "*.duckdb_extension"
-
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
       with:
@@ -296,7 +236,7 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
+        python_build: [cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
@@ -354,11 +294,11 @@ jobs:
 
   win-python3:
       name: Python 3 Windows
-      needs: linux-python3-10
       runs-on: windows-2019
+      needs: linux-python3-10
       strategy:
        matrix:
-        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
+        python_build: [cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:

@@ -134,14 +134,14 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	auto paths = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
-	if (paths.size() > 1) {
+	auto files = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
+	if (files.size() > 1) {
 		throw NotImplementedException("sniff_csv does not operate on more than one file yet");
 	}
 
 	// We must run the sniffer.
 	auto sniffer_options = data.options;
-	sniffer_options.file_path = paths[0];
+	sniffer_options.file_path = files[0].path;
 
 	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
 	if (sniffer_options.name_list.empty()) {
@@ -238,7 +238,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	std::ostringstream csv_read;
 
 	// Base, Path and auto_detect=false
-	csv_read << "FROM read_csv('" << paths[0] << "'" << separator << "auto_detect=false" << separator;
+	csv_read << "FROM read_csv('" << files[0].path << "'" << separator << "auto_detect=false" << separator;
 	// 10.1. Delimiter
 	if (!sniffer_options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		csv_read << "delim="

@@ -16,12 +16,25 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
-class FilenamePattern {
-	friend Deserializer;
+enum class FileNameSegmentType : uint8_t { LITERAL, UUID_V4, UUID_V7, OFFSET };
+
+struct FileNameSegment {
+	FileNameSegment() = default;
+	explicit FileNameSegment(string data);
+	explicit FileNameSegment(FileNameSegmentType type);
+
+	FileNameSegmentType type;
+	string data;
 
 public:
-	FilenamePattern() : base("data_"), pos(base.length()), uuid(false) {
-	}
+	void Serialize(Serializer &serializer) const;
+	static FileNameSegment Deserialize(Deserializer &deserializer);
+};
+
+class FilenamePattern {
+public:
+	FilenamePattern();
+	FilenamePattern(string base, idx_t pos, bool uuid, vector<FileNameSegment> segments);
 
 public:
 	void SetFilenamePattern(const string &pattern);
@@ -30,14 +43,16 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static FilenamePattern Deserialize(Deserializer &deserializer);
 
-	bool HasUUID() const {
-		return uuid;
-	}
+	bool HasUUID() const;
+
+public:
+	// serialization code for backwards compatibility
+	string SerializeBase() const;
+	idx_t SerializePos() const;
+	vector<FileNameSegment> SerializeSegments() const;
 
 private:
-	string base;
-	idx_t pos;
-	bool uuid;
+	vector<FileNameSegment> segments;
 };
 
 } // namespace duckdb

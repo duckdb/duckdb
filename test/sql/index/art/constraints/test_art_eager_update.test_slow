@@ -1,0 +1,50 @@
+# name: test/sql/index/art/constraints/test_art_eager_update.test_slow
+# description: Test ART BIGINT key type
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE t (
+	s UUID,
+	payload STRUCT(k VARCHAR)[],
+	p STRUCT(e VARCHAR, s DOUBLE),
+	payload2 STRUCT(x INT)[],
+	other VARCHAR
+);
+
+statement ok
+CREATE OR REPLACE TABLE t2 (
+	s UUID,
+	payload STRUCT(k VARCHAR)[],
+	p STRUCT(e VARCHAR, s DOUBLE),
+	payload2 STRUCT(x INT)[]
+);
+
+statement ok
+INSERT INTO t(s, other) (
+	SELECT s, SUBSTRING(s::VARCHAR, 1, 8) AS other
+	FROM (SELECT uuid() AS s FROM range(300000))
+);
+
+statement ok
+INSERT INTO t2 (
+	SELECT
+		s,
+		[struct_pack(k := 'aaaa'), struct_pack(k := 'rrrr')],
+		struct_pack(e := 'ddd', s := -9.0),
+		[struct_pack(x := 99), struct_pack(x := 100), struct_pack(x := 101)]
+	FROM t WHERE rowid % 2 = 0
+);
+
+statement ok
+ALTER TABLE t ADD PRIMARY KEY (s);
+
+statement ok
+ALTER TABLE t2 ADD PRIMARY KEY (s);
+
+statement ok
+UPDATE t
+SET payload = t2.payload, p = t2.p, payload2 = t2.payload2
+FROM t2 WHERE t.s = t2.s;

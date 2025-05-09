@@ -119,7 +119,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			all_tests_passed = all_tests_passed && RunFull(csv_file, skip, add_parameters);
+			all_tests_passed = all_tests_passed && RunFull(csv_file.path, skip, add_parameters);
 		}
 	}
 	REQUIRE(all_tests_passed);

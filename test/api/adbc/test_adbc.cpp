@@ -1020,7 +1020,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	REQUIRE(StringUtil::Contains(adbc_error.message, "Catalog \"bla\" does not exist"));
 	adbc_error.release(&adbc_error);
 
-	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "memory", "main", "duckdb_indexes", &arrow_schema,
+	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "system", "main", "duckdb_indexes", &arrow_schema,
 	                                             &adbc_error)));
 	REQUIRE((arrow_schema.n_children == 14));
 	arrow_schema.release(&arrow_schema);
@@ -1433,12 +1433,13 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result order by catalog_name asc");
+		res = db.Query("Select catalog_name, list_sort(catalog_db_schemas) as catalog_db_schemas from result order by "
+		               "catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(1, 0).ToString() ==
-		         "[{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}, {'db_schema_name': information_schema, "
-		         "'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}]"));
+		         "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
+		         "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]"));
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,

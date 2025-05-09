@@ -144,5 +144,21 @@
     "enum": "DYNAMIC_FILTER",
     "members": [
     ]
+  },
+  {
+    "class": "ExpressionFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/expression_filter.hpp"
+    ],
+    "enum": "EXPRESSION_FILTER",
+    "members": [
+      {
+        "id": 200,
+        "name": "expr",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["expr"]
   }
 ]

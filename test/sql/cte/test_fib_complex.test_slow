@@ -1,0 +1,227 @@
+# name: test/sql/cte/test_fib_complex.test_slow
+# description: Very complex recursive CTE with several corner cases
+# group: [cte]
+
+query IIIIIIIII
+SELECT "input".*,
+       "result".*
+FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
+       LATERAL (WITH RECURSIVE
+                  "loop"(".iteration", ".mark", ".thread.this", ".label.this", ".thread.parent", ".label.parent", "fib.n", "fib.result.0") AS (
+                    (SELECT CAST((0) AS INT) AS ".iteration",
+                            CAST((0) AS INT) AS ".mark",
+                            CAST((0) AS INT) AS ".thread.this",
+                            'fib' AS ".label.this",
+                            CAST((NULL) AS INT) AS ".thread.parent",
+                            CAST((NULL) AS TEXT) AS ".label.parent",
+                            CAST(("input"."n") AS int) AS "fib.n",
+                            CAST((NULL) AS int) AS "fib.result.0"
+                    )
+                      UNION ALL
+                    (WITH
+                       "fib.assignment.1"(".iteration", ".mark", ".thread.this", ".label.parent", "k", "n") AS NOT MATERIALIZED (
+                         SELECT "input".".iteration",
+                                "input".".mark",
+                                "input".".thread.this",
+                                "input".".label.parent",
+                                CAST(("input"."fib.n" <= 1) AS bool) AS "k",
+                                "input"."fib.n"
+                         FROM   "loop" AS "input"
+                         WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib'
+                       ),
+                       "fib.call.1.prepare"(".iteration", ".mark", ".thread.this", ".label.this", ".thread.parent", ".label.parent", "argument.0") AS NOT MATERIALIZED (
+                         SELECT "input".".iteration",
+                                "input".".mark",
+                                (SELECT COALESCE(MAX("loop".".thread.this"), 0)
+                                 FROM   "loop"
+                                 WHERE  ("loop".".label.parent" IS NOT DISTINCT FROM "input".".label.parent" OR
+                                         "loop".".label.this" IS NOT DISTINCT FROM 'fib.call.1')) + ROW_NUMBER() OVER () AS ".thread.this",
+                                'fib.call.1' AS ".label.this",
+                                "input".".thread.this" AS ".thread.parent",
+                                "input".".label.parent",
+                                CAST(("fork"."n") AS int) AS "argument.0"
+                         FROM   "loop" AS "input",
+                         LATERAL (SELECT "input"."fib.n" - i FROM generate_series(1,2) AS _(i)) AS "fork"("n")
+                         WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib.mark.1'
+                       ),
+                       "fib.wait.1.decide"(".iteration", ".mark", ".thread.this", ".label.parent", ".done", "n") AS NOT MATERIALIZED (
+                         SELECT "input".".iteration",
+                                MIN("input".".mark") OVER (
+                                  PARTITION BY "input".".iteration",
+                                               "input".".thread.this"
+                                  ROWS BETWEEN UNBOUNDED PRECEDING
+                                       AND     UNBOUNDED FOLLOWING
+                                       ) AS ".mark",
+                                "input".".thread.this",
+                                "input".".label.parent",
+                                NOT EXISTS(SELECT 1 AS "dummy"
+                                           FROM   "loop"
+                                           WHERE  "loop".".mark" > "input".".mark"
+                                           AND    ("loop".".thread.this" IS NOT DISTINCT FROM "input".".thread.this" OR
+                                                   "loop".".thread.parent" IS NOT DISTINCT FROM "input".".thread.this"))
+                                 AS ".done",
+                                "input"."n"
+                         FROM   ((SELECT "input".".iteration",
+                                         "input".".mark" - 1 AS ".mark",
+                                         "input".".thread.parent",
+                                         "input".".label.parent",
+                                         "return"."fib.result.0"
+                                 FROM   "loop" AS "input", "loop" AS "return"
+                                 WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib.call.1'
+                                 AND    "return".".label.this" IS NULL
+                                 AND    "return".".label.parent" IS NOT DISTINCT FROM 'fib.call.1'
+                                 AND    "return".".thread.this" IS NOT DISTINCT FROM "input".".thread.this")
+                                 UNION ALL
+                                 (SELECT "input".".iteration",
+                                         "input".".mark",
+                                         "input".".thread.this",
+                                         "input".".label.parent",
+                                         "input"."fib.n"
+                                 FROM   "loop" AS "input"
+                                 WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib.wait.1')) AS "input"(".iteration", ".mark", ".thread.this", ".label.parent", "n")
+                       )
+                     (SELECT "input".".iteration" + 1,
+                             "input".".mark" + 1,
+                             "input".".thread.this",
+                             'fib.mark.1' AS ".label.this",
+                             CAST((NULL) AS int),
+                             "input".".label.parent",
+                             "input"."n" AS "fib.n",
+                             CAST((NULL) AS int) AS "fib.result.0"
+                      FROM   "fib.assignment.1" AS "input"
+                      WHERE  NOT "input"."k")
+                       UNION ALL
+                     (SELECT "sink".".iteration" + 1,
+                             "sink".".mark",
+                             "sink".".thread.this",
+                             "sink".".label.this",
+                             "sink".".thread.parent",
+                             "sink".".label.parent",
+                             CAST((NULL) AS int) AS "fib.n",
+                             CAST((NULL) AS int) AS "fib.result.0"
+                      FROM   "fib.call.1.prepare" AS "sink")
+                       UNION ALL
+                     (SELECT "input".".iteration" + 1,
+                             "input".".mark",
+                             "input".".thread.this",
+                             "input".".label.this",
+                             "input".".thread.parent",
+                             "input".".label.parent",
+                             CAST((NULL) AS int) AS "fib.n",
+                             CAST((NULL) AS int) AS "fib.result.0"
+                      FROM   "loop" AS "input"
+                      WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib.call.1'
+                      AND    EXISTS(SELECT 1 AS "dummy"
+                                    FROM   "loop"
+                                    WHERE  "loop".".label.this" IS NOT NULL
+                                    AND    "loop".".label.parent" IS NOT DISTINCT FROM 'fib.call.1'
+                                    AND    ("loop".".thread.this" IS NOT DISTINCT FROM "input".".thread.this" AND
+                                            "loop".".thread.parent" IS NULL OR
+                                            "loop".".thread.parent" IS NOT DISTINCT FROM "input".".thread.this")))
+                       UNION ALL
+                     (SELECT "input".".iteration" + 1,
+                             "input".".mark",
+                             "input".".thread.this",
+                             'fib.wait.1' AS ".label.this",
+                             CAST((NULL) AS int),
+                             "input".".label.parent",
+                             "input"."n" AS "fib.n",
+                             CAST((NULL) AS int) AS "fib.result.0"
+                      FROM   "fib.wait.1.decide" AS "input"
+                      WHERE  NOT "input".".done")
+                       UNION ALL
+                     (SELECT "input".".iteration" + 1,
+                             "input".".mark",
+                             "input".".thread.this",
+                             CAST((NULL) AS TEXT) AS ".label.this",
+                             CAST((NULL) AS INT) AS ".thread.parent",
+                             "input".".label.parent",
+                             CAST((NULL) AS int) AS "fib.n",
+                             CAST(("input"."n") AS int)
+                      FROM   "fib.assignment.1" AS "input"
+                      WHERE  "input"."k")
+                       UNION ALL
+                     (SELECT "key".".iteration" + 1,
+                             "key".".mark",
+                             "key".".thread.this",
+                             CAST((NULL) AS TEXT) AS ".label.this",
+                             CAST((NULL) AS INT) AS ".thread.parent",
+                             "key".".label.parent",
+                             CAST((NULL) AS int) AS "fib.n",
+                             CAST(("aggregate"."n") AS int)
+                      FROM   (SELECT MIN("key".".mark") AS ".mark",
+                                    "key".".iteration",
+                                    "key".".thread.this",
+                                    "key".".label.parent"
+                             FROM   "fib.wait.1.decide" AS "key"
+                             WHERE "key".".done"
+                             GROUP  BY "key".".iteration",
+                                     "key".".thread.this",
+                                     "key".".label.parent"
+                             ) AS "key"(".mark", ".iteration", ".thread.this", ".label.parent"),
+                             LATERAL (SELECT SUM(CAST(("input"."n") AS INT))
+                                     FROM   "fib.wait.1.decide" AS "input"
+                                     WHERE  "input".".done"
+                                     AND    "key".".iteration" IS NOT DISTINCT FROM "input".".iteration"
+                                     AND    "key".".thread.this" IS NOT DISTINCT FROM "input".".thread.this"
+                                     AND    "key".".label.parent" IS NOT DISTINCT FROM "input".".label.parent") AS "aggregate"("n")
+                      WHERE  "key".".mark" IS NOT NULL)
+                       UNION ALL
+                     (SELECT "input".".iteration" + 1,
+                             "input".".mark",
+                             "input".".thread.this",
+                             'fib' AS ".label.this",
+                             "input".".thread.this" AS ".thread.parent",
+                             'fib.call.1' AS ".label.parent",
+                             "input"."argument.0" AS "fib.n",
+                             CAST((NULL) AS int) AS "fib.result.0"
+                      FROM   "fib.call.1.prepare" AS "input"))
+                  )
+                TABLE loop) AS "result"
+ORDER BY ALL
+----
+2	0	0	0	fib	NULL	NULL	2	NULL
+2	1	1	0	fib.mark.1	NULL	NULL	2	NULL
+2	2	1	1	fib	1	fib.call.1	1	NULL
+2	2	1	1	fib.call.1	0	NULL	NULL	NULL
+2	2	1	2	fib	2	fib.call.1	0	NULL
+2	2	1	2	fib.call.1	0	NULL	NULL	NULL
+2	3	1	1	fib.call.1	0	NULL	NULL	NULL
+2	3	1	1	NULL	NULL	fib.call.1	NULL	1
+2	3	1	2	fib.call.1	0	NULL	NULL	NULL
+2	3	1	2	NULL	NULL	fib.call.1	NULL	0
+2	4	0	0	fib.wait.1	NULL	NULL	0	NULL
+2	4	0	0	fib.wait.1	NULL	NULL	1	NULL
+2	5	0	0	NULL	NULL	NULL	NULL	1
+3	0	0	0	fib	NULL	NULL	3	NULL
+3	1	1	0	fib.mark.1	NULL	NULL	3	NULL
+3	2	1	1	fib	1	fib.call.1	2	NULL
+3	2	1	1	fib.call.1	0	NULL	NULL	NULL
+3	2	1	2	fib	2	fib.call.1	1	NULL
+3	2	1	2	fib.call.1	0	NULL	NULL	NULL
+3	3	1	1	fib.call.1	0	NULL	NULL	NULL
+3	3	1	2	fib.call.1	0	NULL	NULL	NULL
+3	3	1	2	NULL	NULL	fib.call.1	NULL	1
+3	3	2	1	fib.mark.1	NULL	fib.call.1	2	NULL
+3	4	0	0	fib.wait.1	NULL	NULL	1	NULL
+3	4	1	1	fib.call.1	0	NULL	NULL	NULL
+3	4	2	3	fib	3	fib.call.1	1	NULL
+3	4	2	3	fib.call.1	1	fib.call.1	NULL	NULL
+3	4	2	4	fib	4	fib.call.1	0	NULL
+3	4	2	4	fib.call.1	1	fib.call.1	NULL	NULL
+3	5	0	0	fib.wait.1	NULL	NULL	1	NULL
+3	5	1	1	fib.call.1	0	NULL	NULL	NULL
+3	5	2	3	fib.call.1	1	fib.call.1	NULL	NULL
+3	5	2	3	NULL	NULL	fib.call.1	NULL	1
+3	5	2	4	fib.call.1	1	fib.call.1	NULL	NULL
+3	5	2	4	NULL	NULL	fib.call.1	NULL	0
+3	6	0	0	fib.wait.1	NULL	NULL	1	NULL
+3	6	1	1	fib.call.1	0	NULL	NULL	NULL
+3	6	1	1	fib.wait.1	NULL	fib.call.1	0	NULL
+3	6	1	1	fib.wait.1	NULL	fib.call.1	1	NULL
+3	7	0	0	fib.wait.1	NULL	NULL	1	NULL
+3	7	1	1	fib.call.1	0	NULL	NULL	NULL
+3	7	1	1	NULL	NULL	fib.call.1	NULL	1
+3	8	0	0	fib.wait.1	NULL	NULL	1	NULL
+3	8	0	0	fib.wait.1	NULL	NULL	1	NULL
+3	9	0	0	NULL	NULL	NULL	NULL	2

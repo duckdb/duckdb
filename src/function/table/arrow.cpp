@@ -241,6 +241,8 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
+			return false;
+		case PhysicalType::INT128:
 			return true;
 		default:
 			return false;

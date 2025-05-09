@@ -3,32 +3,26 @@
 # group: [general]
 
 statement ok
-pragma enable_verification;
+PRAGMA enable_verification;
 
 statement ok
-create or replace function transpose(lst) as (
-	select list_transform(
-		range(1, 1+length(lst[1])),
-		j -> list_transform(
-			range(1, length(lst)+1),
-			i -> lst[i][j]
+CREATE OR REPLACE function transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		lambda j: list_transform(range(1, length(lst) + 1),
+			lambda i: lst[i][j]
 		)
 	)
 );
 
 statement ok
-create or replace function centroid(points) as (
-	list_transform(
-		transpose(points),
-		x -> list_sum(x) / length(points)
+CREATE OR REPLACE function centroid(points) AS (
+	list_transform(transpose(points),
+		lambda x: list_sum(x) / length(points)
 	)
 );
 
 query II
-select
-	points,
-	centroid(points)
-from
-	unnest([[[1], [2], [3]]]) t(points);
+SELECT points, centroid(points)
+FROM UNNEST([[[1], [2], [3]]]) t(points);
 ----
 [[1], [2], [3]]	[2.0]

@@ -1,0 +1,30 @@
+# name: test/sql/function/list/lambdas/test_lambda_storage.test
+# description: Test loading a database file with the old lambda syntax.
+# group: [lambdas]
+
+# With DuckDB 1.2.2:
+# CREATE TABLE tbl AS SELECT range AS i FROM range(100);
+# CREATE VIEW lambda_view AS SELECT list_transform([i], x -> x + 1) AS list_i FROM tbl;
+# CREATE MACRO lambda_macro(c1, c2) AS list_transform([c1, c2], (x, i) -> x + i + 1);
+
+# The file has a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/lambda_storage.db.gz __TEST_DIR__/lambda_storage.db
+
+load __TEST_DIR__/lambda_storage.db readonly
+
+# We need to ensure backwards compatibility, even if we eventually stop allowing the deprecated syntax.
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+query I
+SELECT SUM(list_i[1]) FROM lambda_view;
+----
+5050
+
+query I
+SELECT lambda_macro(1, 2);
+----
+[3, 5]
+

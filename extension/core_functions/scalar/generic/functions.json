@@ -119,5 +119,12 @@
         "description": "Whether or not the provided value is the histogram \"other\" bin (used for values not belonging to any provided bin)",
         "example": "is_histogram_other_bin(v)",
         "type": "scalar_function"
+    },
+    {
+        "name": "cast_to_type",
+        "parameters": "param,type",
+        "description": "Casts the first argument to the type of the second argument",
+        "example": "cast_to_type('42', NULL::INTEGER)",
+        "type": "scalar_function"
     }
 ]

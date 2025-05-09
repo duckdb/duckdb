@@ -249,7 +249,7 @@ SELECT CAST($$["   hello","          \"'  world", "!         "]$$ AS VARCHAR[]);
 ['   hello', '          "\'  world', '!         ']
 
 query I
-SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);     
+SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
 ----
 [hello, world, !]
 
@@ -486,7 +486,7 @@ statement ok
 COPY (SELECT [8,7,6], $$[hello, Duck\\'DB]$$, '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv' (Header 0);
 
 statement ok
-COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv';
+COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv' (ESCAPE '\');
 
 query III
 SELECT * FROM assorted_lists;

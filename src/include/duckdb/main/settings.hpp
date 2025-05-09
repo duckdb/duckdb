@@ -440,6 +440,16 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DisableTimestamptzCastsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "disable_timestamptz_casts";
+	static constexpr const char *Description = "Disable casting from timestamp to timestamptz ";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DisabledCompressionMethodsSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "disabled_compression_methods";
@@ -512,6 +522,16 @@ struct EnableExternalAccessSetting {
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct EnableExternalFileCacheSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_external_file_cache";
+	static constexpr const char *Description = "Allow the database to cache external files (e.g., Parquet) in memory.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -809,6 +829,17 @@ struct IntegerDivisionSetting {
 	static constexpr const char *Description =
 	    "Whether or not the / operator defaults to integer division, or to floating point division";
 	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct LambdaSyntaxSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "lambda_syntax";
+	static constexpr const char *Description =
+	    "Configures the use of the deprecated single arrow operator (->) for lambda functions.";
+	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);

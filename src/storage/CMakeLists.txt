@@ -11,11 +11,13 @@ add_library_unity(
   OBJECT
   arena_allocator.cpp
   buffer_manager.cpp
+  caching_file_system.cpp
   checkpoint_manager.cpp
   temporary_memory_manager.cpp
   block.cpp
   data_pointer.cpp
   data_table.cpp
+  external_file_cache.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp

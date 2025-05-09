@@ -309,9 +309,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
+		virtual_column_map_t virtual_columns;
+		if (scan_function.get_virtual_columns) {
+			virtual_columns = scan_function.get_virtual_columns(context, bind_data.get());
+		} else {
+			virtual_columns = table.GetVirtualColumns();
+		}
 		auto logical_get =
 		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), table.GetVirtualColumns());
+		                          std::move(return_names), std::move(virtual_columns));
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {

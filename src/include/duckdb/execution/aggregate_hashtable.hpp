@@ -14,6 +14,7 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 
 namespace duckdb {
 
@@ -105,10 +106,18 @@ public:
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
 	idx_t GetRadixBits() const;
-	//! Get the total amount of data sunk into this HT
+	//! Get the total number of tuples sunk into this HT
 	idx_t GetSinkCount() const;
+	//! Get the total number of tuples materialized currently in this HT
+	idx_t GetMaterializedCount() const;
 	//! Skips lookups from here on out
 	void SkipLookups();
+	//! Enable/disable HLL
+	void EnableHLL(bool enable);
+	//! Whether HLL is enabled
+	bool HLLEnabled() const;
+	//! Get HLL count
+	idx_t GetHLLUpperBound() const;
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
@@ -160,6 +169,10 @@ private:
 	idx_t sink_count;
 	//! If true, we just append, skipping HT lookups
 	bool skip_lookups;
+	//! Whether to enable HLL counting the hashes
+	bool enable_hll;
+	//! The associated HLL
+	HyperLogLog hll;
 
 	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;

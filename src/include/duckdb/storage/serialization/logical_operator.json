@@ -406,6 +406,11 @@
         "name": "delim_flipped",
         "type": "bool",
         "default": "false"
+      },
+      {
+        "id": 208,
+        "name": "predicate",
+        "type": "Expression*"
       }
     ],
     "constructor": ["join_type", "type"]
@@ -944,17 +949,43 @@
       {
         "id": 200,
         "name": "base",
-        "type": "string"
+        "type": "string",
+        "serialize_property": "SerializeBase()"
       },
       {
         "id": 201,
         "name": "pos",
-        "type": "idx_t"
+        "type": "idx_t",
+        "serialize_property": "SerializePos()"
       },
       {
         "id": 202,
         "name": "uuid",
-        "type": "bool"
+        "type": "bool",
+        "serialize_property": "HasUUID()"
+      },
+      {
+        "id": 203,
+        "name": "segments",
+        "type": "vector<FileNameSegment>",
+        "serialize_property": "SerializeSegments()"
+      }
+    ],
+    "constructor": ["base", "pos", "uuid", "segments"]
+  },
+  {
+    "class": "FileNameSegment",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "FileNameSegmentType"
+      },
+      {
+        "id": 201,
+        "name": "data",
+        "type": "string"
       }
     ]
   }

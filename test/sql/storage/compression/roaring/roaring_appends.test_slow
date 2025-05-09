@@ -3,10 +3,7 @@
 
 require block_size 262144
 
-statement ok
-SET storage_compatibility_version='v1.2.0'
-
-load __TEST_DIR__/test_roaring_appends.db
+load __TEST_DIR__/test_roaring_appends.db readwrite v1.2.0
 
 statement ok
 PRAGMA force_compression='roaring';

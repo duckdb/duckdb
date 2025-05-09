@@ -41,6 +41,40 @@ SELECT i, list_position(i,4.0) from TEST;
 statement ok
 DROP table TEST;
 
+# test for list_position with nulls and a non-const element
+statement ok
+create table TEST(i int[], j int);
+
+statement ok
+insert into TEST values ([2,1,3], 2), ([2,3,4], 5), ([1], NULL), ([1, NULL, 2], NULL);
+
+query TTT
+SELECT i, j, list_position(i,j) from TEST;
+----
+[2, 1, 3]	2	1
+[2, 3, 4]	5	NULL
+[1]	NULL	NULL
+[1, NULL, 2]	NULL	2
+
+statement ok
+DROP table TEST;
+
+statement ok
+CREATE TABLE NULL_TABLE (n int[], i int);
+
+statement ok
+INSERT INTO NULL_TABLE VALUES (NULL, 1), (NULL, 2), (NULL, 3);
+
+query I
+SELECT list_contains(n, i) FROM NULL_TABLE;
+----
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE NULL_TABLE;
+
 statement ok
 create table STR_TEST (i string[]);
 
@@ -83,6 +117,23 @@ SELECT i, list_position(i,NULL) from STR_TEST;
 statement ok
 DROP table STR_TEST;
 
+# test for list_position with nulls and a non-const element in strings
+statement ok
+create table STR_TEST (i string[], j string);
+
+statement ok
+insert into STR_TEST values (['a','b','c'], 'a'), (['d','a','e'], 'b'), (['b'], NULL), (['aa', NULL, 'bb'], NULL);
+
+query TTT
+SELECT i, j, list_position(i,j) from STR_TEST;
+----
+[a, b, c]	a	1
+[d, a, e]	b	NULL
+[b]	NULL	NULL
+[aa, NULL, bb]	NULL	2
+
+statement ok
+DROP table STR_TEST;
 
 # basic functionality
 query T
@@ -139,7 +190,6 @@ SELECT list_position(NULL,NULL)
 ----
 NULL
 
-
 query T
 SELECT list_position([7], 5)
 ----
@@ -185,7 +235,6 @@ SELECT list_position(['test', 'notest'],'a')
 ----
 NULL
 
-# Null types
 query T
 SELECT list_position(NULL,1)
 ----
@@ -200,12 +249,12 @@ NULL
 query T
 SELECT list_position([NULL],NULL)
 ----
-NULL
+1
 
 query T
 SELECT list_position([NULL, 1],NULL)
 ----
-NULL
+1
 
 query T
 SELECT list_position([NULL, 1],1)
@@ -323,6 +372,11 @@ SELECT list_position([[1,NULL],[1], [1,2,3]],[0,NULL])
 ----
 NULL
 
+query T
+SELECT list_position([NULL, [1], [1,2,3]], [NULL])
+----
+NULL
+
 # nested types
 query T
 SELECT list_position([{a: 1}, {a: 2}], {a: 2})
@@ -354,6 +408,24 @@ SELECT list_position([MAP([1], [2])], MAP([1], [3]))
 ----
 NULL
 
+# test nested lists in tables
+statement ok
+CREATE TABLE test0 (i int[][], j int[]);
+
+statement ok
+INSERT INTO test0 VALUES ([[2,1,3],[1,2]], [1, 2]), ([[2,3,4],[1,2]], [1, 3]), ([[1]], NULL), ([[1, NULL, 2], [NULL]], [NULL]);
+
+query TTT
+SELECT i, j, list_position(i,j) from test0
+----
+[[2, 1, 3], [1, 2]]	[1, 2]	2
+[[2, 3, 4], [1, 2]]	[1, 3]	NULL
+[[1]]	NULL	NULL
+[[1, NULL, 2], [NULL]]	[NULL]	2
+
+statement ok
+DROP TABLE test0;
+
 statement ok
 PRAGMA debug_force_external=true
 
@@ -361,7 +433,7 @@ loop i 0 2
 
 foreach type float double
 
-# list tests
+# test floats and doubles
 statement ok
 CREATE TABLE test0 (i ${type}[])
 
@@ -378,6 +450,24 @@ NULL
 NULL
 NULL
 NULL
+
+statement ok
+DROP TABLE test0
+
+# with nulls and non-const element
+statement ok
+CREATE TABLE test0 (i ${type}[], j ${type})
+
+statement ok
+INSERT INTO test0 VALUES ([2.0,1.0,3.0], 2.0), ([2.0,3.0,4.0], 5.0), ([1.0], NULL), ([1.0, NULL, 2.0], NULL);
+
+query TTT
+SELECT i, j, list_position(i,j) from test0
+----
+[2.0, 1.0, 3.0]	2.0	1
+[2.0, 3.0, 4.0]	5.0	NULL
+[1.0]	NULL	NULL
+[1.0, NULL, 2.0]	NULL	2
 
 statement ok
 DROP TABLE test0

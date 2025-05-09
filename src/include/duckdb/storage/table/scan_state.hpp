@@ -124,7 +124,7 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
+	ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
 
 	idx_t scan_column_index;
 	idx_t table_column_index;

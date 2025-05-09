@@ -43,6 +43,18 @@ public:
 	optional_ptr<TableCatalogEntry> current_table;
 	MetaBlockPointer checkpoint_id;
 	idx_t wal_version = 1;
+
+	struct ReplayIndexInfo {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const string &table_schema,
+		                const string &table_name)
+		    : index_list(index_list), index(std::move(index)), table_schema(table_schema), table_name(table_name) {};
+
+		reference<TableIndexList> index_list;
+		unique_ptr<Index> index;
+		string table_schema;
+		string table_name;
+	};
+	vector<ReplayIndexInfo> replay_index_infos;
 };
 
 class WriteAheadLogDeserializer {
@@ -242,6 +254,13 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
+
+				// Commit any outstanding indexes.
+				for (auto &info : state.replay_index_infos) {
+					info.index_list.get().AddIndex(std::move(info.index));
+				}
+				state.replay_index_infos.clear();
+
 				successful_offset = reader.offset;
 				// check if the file is exhausted
 				if (reader.Finished()) {
@@ -390,6 +409,14 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 		return;
 	}
 
+	// Remove any replay indexes of this table.
+	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
+	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
+		                                              return replay_info.table_schema == info.schema &&
+		                                                     replay_info.table_name == info.name;
+	                                              }),
+	                               state.replay_index_infos.end());
+
 	catalog.DropEntry(context, info);
 }
 
@@ -416,7 +443,7 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// Read the data into a buffer handle.
-			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 
@@ -488,7 +515,10 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
-	storage.AddIndex(std::move(index_instance));
+
+	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.schema,
+	                                      table_info.name);
 
 	catalog.Alter(context, alter_info);
 }
@@ -665,7 +695,11 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
+	const auto schema_name = create_info->schema;
+	const auto table_name = info.table;
+
+	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);
 
@@ -674,7 +708,9 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	// add the index to the storage
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
-	storage.AddIndex(std::move(unbound_index));
+
+	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name, table_name);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -685,6 +721,14 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 	if (DeserializeOnly()) {
 		return;
 	}
+
+	// Remove the replay index, if any.
+	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
+	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
+		                                              return replay_info.table_schema == info.schema &&
+		                                                     replay_info.index->GetIndexName() == info.name;
+	                                              }),
+	                               state.replay_index_infos.end());
 
 	catalog.DropEntry(context, info);
 }
@@ -738,7 +782,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
 	PersistentCollectionData data;
 	deserializer.Set<DatabaseInstance &>(db.GetDatabase());
-	CompressionInfo compression_info(block_manager.GetBlockSize());
+	CompressionInfo compression_info(block_manager);
 	deserializer.Set<const CompressionInfo &>(compression_info);
 	deserializer.ReadProperty(101, "row_group_data", data);
 	deserializer.Unset<const CompressionInfo>();

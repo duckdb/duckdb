@@ -104,7 +104,13 @@ CREATE TABLE hits
     HasGCLID SMALLINT NOT NULL,
     RefererHash BIGINT NOT NULL,
     URLHash BIGINT NOT NULL,
-    CLID INTEGER NOT NULL,
-    PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID)
+    CLID INTEGER NOT NULL
 );
-INSERT INTO hits SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/hits.parquet');
+INSERT INTO hits BY NAME
+SELECT *
+    REPLACE (
+        make_date(EventDate) AS EventDate,
+        epoch_ms(EventTime * 1000) AS EventTime,
+        epoch_ms(ClientEventTime * 1000) AS ClientEventTime,
+        epoch_ms(LocalEventTime * 1000) AS LocalEventTime)
+FROM read_parquet([format('https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet', x) for x in range(0, 100)], binary_as_string=True);

@@ -1,0 +1,59 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_parquet_tpch.test_slow
+# description: Test TPC-H SF1 with Parquet (forced external file cache)
+# group: [external_file_cache]
+
+require tpch
+
+require parquet
+
+# for now, caching is only triggered when prefetching (mainly used for remote files), so let's force it
+statement ok
+set prefetch_all_parquet_files=true;
+
+# generate TPC-H in a schema and export to Parquet before dropping the schema again
+statement ok
+CREATE SCHEMA tpch;
+
+statement ok
+CALL dbgen(sf=1, schema='tpch');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+statement ok
+COPY tpch.${tpch_tbl} TO '__TEST_DIR__/efc_${tpch_tbl}.parquet';
+
+endloop
+
+statement ok
+DROP SCHEMA tpch CASCADE;
+
+# we require that the last modified time is more than 10 seconds in the past
+# otherwise, we run into problems with file systems with low time resolution for last modified time
+sleep 11 seconds
+
+# load the schema as views
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+statement ok
+CREATE VIEW ${tpch_tbl} AS FROM read_parquet('__TEST_DIR__/efc_${tpch_tbl}.parquet');
+
+endloop
+
+# run the benchmark
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

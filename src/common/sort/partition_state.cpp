@@ -581,6 +581,10 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
+	string TaskType() const override {
+		return "PartitionMergeTask";
+	}
+
 private:
 	struct ExecutorCallback : public PartitionGlobalMergeStates::Callback {
 		explicit ExecutorCallback(Executor &executor) : executor(executor) {

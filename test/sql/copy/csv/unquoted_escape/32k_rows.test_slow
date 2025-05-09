@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE pseudorandom_fields AS SELECT i, list_select(
     [E'\\', E'\t', E'\n', E'\\\\', E'\\\t', E'\\\n', E'\t\\', E'\t\t', E'\t\n', E'\n\\', E'\n\t', E'\n\n', '',  'a', 'b', 'c'],
-    list_transform([hash(i), hash(i * 7 + 251), hash(i * i + 4093)], x -> (x % 16 + 1)::int)
+    list_transform([hash(i), hash(i * 7 + 251), hash(i * i + 4093)], lambda x: (x % 16 + 1)::int)
 ) AS s FROM range(32 << 10) t(i);
 
 statement ok

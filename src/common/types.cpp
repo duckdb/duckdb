@@ -659,7 +659,11 @@ bool LogicalType::IsFloating() const {
 }
 
 bool LogicalType::IsNumeric() const {
-	switch (id_) {
+	return IsNumeric(id_);
+}
+
+bool LogicalType::IsNumeric(const LogicalTypeId type) {
+	switch (type) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:

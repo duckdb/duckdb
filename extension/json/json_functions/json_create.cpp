@@ -547,8 +547,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::DOUBLE:
 		TemplatedCreateValues<double, double>(doc, vals, value_v, count);
 		break;
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		TemplatedCreateValues<string_t, string_t>(doc, vals, value_v, count);
 		break;
@@ -567,6 +565,8 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::ARRAY:
 		CreateValuesArray(names, doc, vals, value_v, count);
 		break;
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:
@@ -621,7 +621,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	// Initialize values
 	const idx_t count = args.size();
@@ -646,13 +646,15 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	// Initialize arrays
 	const idx_t count = args.size();
@@ -678,6 +680,8 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
@@ -704,13 +708,15 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR || count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc);
 }
@@ -771,8 +777,8 @@ public:
 
 static bool AnyToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 	const auto &names = parameters.cast_data->Cast<NestedToJSONCastData>().const_struct_names;
 
 	ToJSONFunctionInternal(names, source, count, result, alc);

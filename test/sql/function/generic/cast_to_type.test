@@ -1,0 +1,56 @@
+# name: test/sql/function/generic/cast_to_type.test
+# description: Test cast_to_type function
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT cast_to_type('  42', NULL::INT)
+----
+42
+
+statement error
+SELECT cast_to_type('hello', NULL::INT)
+----
+Conversion Error
+
+statement ok
+CREATE OR REPLACE MACRO try_trim_null(s) AS CASE WHEN typeof(s)=='VARCHAR' THEN cast_to_type(nullif(trim(s::VARCHAR), ''), s) ELSE s END;
+
+query III
+SELECT try_trim_null(42) as trim_int, try_trim_null('  col  ') as trim_varchar, try_trim_null('') as trim_empty;
+----
+42	col	NULL
+
+statement ok
+create table tbl(i int, v varchar);
+
+statement ok
+insert into tbl values (42, ' hello '), (100, '   ');
+
+query II
+SELECT try_trim_null(COLUMNS(*)) FROM tbl
+----
+42	hello
+100	NULL
+
+# prepared statements
+statement ok
+PREPARE v1 AS SELECT cast_to_type(' 42', ?);
+
+query I
+EXECUTE v1(NULL::INT)
+----
+42
+
+query I
+EXECUTE v1(NULL::VARCHAR)
+----
+ 42
+
+# cast to NULL
+statement error
+SELECT cast_to_type(42, NULL);
+----
+cannot be used to cast to NULL

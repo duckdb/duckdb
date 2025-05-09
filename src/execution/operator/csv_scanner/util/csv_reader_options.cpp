@@ -331,6 +331,16 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		rejects_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
+	} else if (loption == "thousands") {
+		if (!value.IsNull()) {
+			auto thousands_separator_string = ParseString(value, loption);
+			if (thousands_separator_string.size() > 1) {
+				throw BinderException("Unsupported parameter for THOUSANDS: should be max one character");
+			}
+			if (!thousands_separator_string.empty()) {
+				thousands_separator = thousands_separator_string[0];
+			}
+		}
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

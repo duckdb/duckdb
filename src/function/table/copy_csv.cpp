@@ -85,6 +85,9 @@ void BaseCSVData::Finalize() {
 	SubstringDetection(options.dialect_options.state_machine_options.comment.GetValue(), delimiter_string, "COMMENT",
 	                   "DELIMITER");
 
+	// quote and delimiter must not be substrings of each other
+	SubstringDetection(options.thousands_separator, options.decimal_separator, "THOUSANDS", "DECIMAL_SEPARATOR");
+
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
 		if (!null_str.empty()) {

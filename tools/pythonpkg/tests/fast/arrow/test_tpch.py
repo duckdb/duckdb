@@ -1,3 +1,4 @@
+import pytest
 import duckdb
 
 try:
@@ -32,6 +33,7 @@ def check_result(result, answers):
     return True
 
 
+@pytest.mark.skip(reason="Test needs to be adapted to missing TPCH extension")
 class TestTPCHArrow(object):
     def test_tpch_arrow(self, duckdb_cursor):
         if not can_run:

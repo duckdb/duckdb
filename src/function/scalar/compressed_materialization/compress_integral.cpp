@@ -46,7 +46,11 @@ static void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Ve
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },
+#if defined(D_ASSERT_IS_ENABLED)
+	    FunctionErrors::CAN_THROW_RUNTIME_ERROR); // Can only throw a runtime error when assertions are enabled
+#else
 	    FunctionErrors::CANNOT_ERROR);
+#endif
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>

@@ -2,8 +2,6 @@
 # description: Test that we revert the global storage correctly after a constraint violation
 # group: [transactions]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 

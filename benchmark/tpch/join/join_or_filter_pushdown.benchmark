@@ -2,21 +2,16 @@
 # description: Join filter pushdown
 # group: [join]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Join Or Filter Pushdown
 group join
 subgroup tpch
 
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
-
 run
 SELECT * from lineitem WHERE l_orderkey IN (SELECT UNNEST([MIN(l_orderkey), MAX(l_orderkey)]) FROM lineitem) ORDER BY ALL
 
-result IIIIIIIIIIIIIIII
+result IIIIIIIIIIIIIIII sf=1
 1	2132	4633	4	28.00	28955.64	0.09	0.06	N	O	1996-04-21	1996-03-30	1996-05-16	NONE	AIR	s cajole busily above t
 1	15635	638	6	32.00	49620.16	0.07	0.02	N	O	1996-01-30	1996-02-07	1996-02-03	DELIVER IN PERSON	MAIL	rouches. special
 1	24027	1534	5	24.00	22824.48	0.10	0.04	N	O	1996-03-30	1996-03-14	1996-04-01	NONE	FOB	 the regular, regular pa

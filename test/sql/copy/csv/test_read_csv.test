@@ -5,6 +5,12 @@
 statement ok
 PRAGMA enable_verification
 
+query III
+FROM read_csv('data/csv/comments/comment_skip.csv', comment = '#', delim = ',', skip=1, auto_detect = false, header = 1, columns = {'x':'varchar','y':'varchar','z':'varchar'})
+----
+1	2	3
+4	5	6
+
 query II
 FROM read_csv('data/csv/multi_quote.csv', null_padding = true)
 ----

@@ -25,13 +25,13 @@ true
 
 # Transform example
 query I
-SELECT list_transform(array_value(3,2,1), x -> x + 1) = list_transform([3,2,1], x -> x + 1);
+SELECT list_transform(array_value(3,2,1), lambda x: x + 1) = list_transform([3,2,1], lambda x: x + 1);
 ----
 true
 
 # Filter example
 query I
-SELECT list_filter(array_value(3,2,1), x -> x > 1) = list_filter([3,2,1], x -> x > 1);
+SELECT list_filter(array_value(3,2,1), lambda x: x > 1) = list_filter([3,2,1], lambda x: x > 1);
 ----
 true
 

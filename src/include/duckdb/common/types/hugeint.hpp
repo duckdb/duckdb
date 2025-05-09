@@ -171,7 +171,8 @@ public:
 		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
 
-	static const hugeint_t POWERS_OF_TEN[40];
+	static constexpr uint8_t CACHED_POWERS_OF_TEN = 39;
+	static const hugeint_t POWERS_OF_TEN[CACHED_POWERS_OF_TEN];
 };
 
 template <>

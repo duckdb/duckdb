@@ -70,7 +70,7 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
-
+    
   Wasm:
     uses: ./.github/workflows/Wasm.yml
     secrets: inherit
@@ -87,9 +87,9 @@ jobs:
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
 
-  notify-external-repos-main:
-    uses: ./.github/workflows/NotifyExternalRepositories.yml
-    secrets: inherit
+  prepare-status:
+    runs-on: ubuntu-latest
+    if: always()
     needs:
       - osx
       - linux-release
@@ -99,24 +99,46 @@ jobs:
       - R
       - Wasm
       - static-libraries
-    if: ${{ inputs.git_ref == '' }}
+    outputs:
+      is-success: ${{ steps.set-output.outputs.success }}
+    steps:
+      - id: set-output
+        shell: bash
+        run: |
+          if [[ "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.linux-release.result }}" == "success" && \
+                "${{ needs.linux-release.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.python.result }}" == "success" && \
+                "${{ needs.pyodide.result }}" == "success" && \
+                "${{ needs.R.result }}" == "success" && \
+                "${{ needs.Wasm.result }}" == "success" && \
+                "${{ needs.static-libraries.result }}" == "success" ]]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+    
+  notify-external-repos-main:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs: prepare-status  
+    if: ${{ inputs.git_ref == '' && always() }} 
     with:
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ github.ref }}
+      is-success: ${{ needs.prepare-status.outputs.is-success }}
+      target-branch: ${{ github.ref }}
+      duckdb-sha: ${{ github.sha }}
+      triggering-event: ${{ github.event_name }}
+      should-publish: 'true'
 
   notify-specific-branch-on-external-repos:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
-    needs:
-      - osx
-      - linux-release
-      - windows
-      - python
-      - pyodide
-      - R
-      - Wasm
-      - static-libraries
-    if: ${{ inputs.git_ref != '' }}
+    needs: prepare-status
+    if: ${{ inputs.git_ref != '' && always() }}
     with:
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ inputs.git_ref }}
+      is-success: ${{ needs.prepare-status.outputs.is-success }}
+      target-branch: ${{ inputs.git_ref }}
+      duckdb-sha: ${{ github.sha }}
+      triggering-event: ${{ github.event_name }}
+      should-publish: 'true'

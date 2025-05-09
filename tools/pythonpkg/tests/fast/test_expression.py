@@ -884,7 +884,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
-        assert res == [(1, 'a'), (1, 'b'), (2, 'b')]
+        assert res == [(1, 'a'), (2, 'b'), (1, 'b')]
 
     def test_filter_not_in(self, filter_rel):
         expr = ColumnExpression("a")

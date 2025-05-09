@@ -2,8 +2,10 @@
 # description: Test storage with Dictionary compression
 # group: [dictionary]
 
+require no_latest_storage
+
 # load the DB from disk
-load __TEST_DIR__/test_dictionary.db
+load __TEST_DIR__/test_dictionary.db readwrite v1.0.0
 
 statement ok
 PRAGMA force_compression = 'dictionary'

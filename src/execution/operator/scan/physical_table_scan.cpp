@@ -49,7 +49,7 @@ public:
 			}
 			input_chunk.Initialize(context, input_types);
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
-				input_chunk.data[c].SetValue(0, op.parameters[c]);
+				input_chunk.data[c].Reference(op.parameters[c]);
 			}
 			input_chunk.SetCardinality(1);
 		}

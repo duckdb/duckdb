@@ -40,6 +40,7 @@ size_t GetSummaryCounter();
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
+string TestJoinPath(string path1, string path2);
 void TestDeleteFile(string path);
 void TestChangeDirectory(string path);
 

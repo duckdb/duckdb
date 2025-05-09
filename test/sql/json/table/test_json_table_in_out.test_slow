@@ -1,0 +1,726 @@
+# name: test/sql/json/table/test_json_table_in_out.test_slow
+# description: Test JSON table in/out functions (json_each/json_tree)
+# group: [table]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# some larger-than-vector-size tests
+query I
+select count(*) from json_each(range(3000));
+----
+3000
+
+# this should be equal to the 3000th triangular number
+query I
+select count(*) = 3000*(3000+1)//2 from range(1, 3001), json_each(range(range));
+----
+true
+
+##### SQLITE TESTS #####
+
+### JSON101-5 ###
+statement ok
+CREATE OR REPLACE TABLE j2(id INTEGER PRIMARY KEY, json JSON, src VARCHAR);
+
+statement ok
+INSERT INTO j2(id,json,src)
+VALUES(1,'{
+"firstName": "John",
+"lastName": "Smith",
+"isAlive": true,
+"age": 25,
+"address": {
+  "streetAddress": "21 2nd Street",
+  "city": "New York",
+  "state": "NY",
+  "postalCode": "10021-3100"
+},
+"phoneNumbers": [
+  {
+    "type": "home",
+    "number": "212 555-1234"
+  },
+  {
+    "type": "office",
+    "number": "646 555-4567"
+  }
+],
+"children": [],
+"spouse": null
+}','https://en.wikipedia.org/wiki/JSON');
+
+statement ok
+INSERT INTO j2(id,json,src)
+VALUES(2, '{
+"id": "0001",
+"type": "donut",
+"name": "Cake",
+"ppu": 0.55,
+"batters":
+    {
+        "batter":
+            [
+                { "id": "1001", "type": "Regular" },
+                { "id": "1002", "type": "Chocolate" },
+                { "id": "1003", "type": "Blueberry" },
+                { "id": "1004", "type": "Devil''s Food" }
+            ]
+    },
+"topping":
+    [
+        { "id": "5001", "type": "None" },
+        { "id": "5002", "type": "Glazed" },
+        { "id": "5005", "type": "Sugar" },
+        { "id": "5007", "type": "Powdered Sugar" },
+        { "id": "5006", "type": "Chocolate with Sprinkles" },
+        { "id": "5003", "type": "Chocolate" },
+        { "id": "5004", "type": "Maple" }
+    ]
+}','https://adobe.github.io/Spry/samples/data_region/JSONDataSetSample.html');
+
+statement ok
+INSERT INTO j2(id,json,src)
+VALUES(3,'[
+{
+    "id": "0001",
+    "type": "donut",
+    "name": "Cake",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" },
+                    { "id": "1002", "type": "Chocolate" },
+                    { "id": "1003", "type": "Blueberry" },
+                    { "id": "1004", "type": "Devil''s Food" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5005", "type": "Sugar" },
+            { "id": "5007", "type": "Powdered Sugar" },
+            { "id": "5006", "type": "Chocolate with Sprinkles" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+},
+{
+    "id": "0002",
+    "type": "donut",
+    "name": "Raised",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5005", "type": "Sugar" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+},
+{
+    "id": "0003",
+    "type": "donut",
+    "name": "Old Fashioned",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" },
+                    { "id": "1002", "type": "Chocolate" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+}
+]','https://adobe.github.io/Spry/samples/data_region/JSONDataSetSample.html');
+
+query I
+select count(*) from j2, json_tree(j2.json);
+----
+154
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_tree(j2.json) AS jx
+WHERE fullkey!=(path || CASE WHEN TRY_CAST(key AS UBIGINT) IS NOT NULL THEN '['||key||']'
+                            ELSE '.'||key END);
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_each(j2.json) AS jx
+WHERE fullkey!=(path || CASE WHEN TRY_CAST(key AS UBIGINT) IS NOT NULL THEN '['||key||']'
+                            ELSE '.'||key END);
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_each(j2.json) AS jx
+WHERE jx.json<>j2.json;
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_tree(j2.json) AS jx
+WHERE jx.json<>j2.json;
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_each(j2.json) AS jx
+WHERE jx.value<>jx.atom AND type NOT IN ('ARRAY','OBJECT');
+----
+
+
+query IIIII
+SELECT j2.rowid, jx.rowid, fullkey, path, key
+FROM j2, json_tree(j2.json) AS jx
+WHERE jx.value<>jx.atom AND type NOT IN ('ARRAY','OBJECT');
+----
+
+
+### JSON101-13 ###
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE OR REPLACE TABLE t1(id INTEGER, json JSON);
+
+statement ok
+INSERT INTO t1(id,json) VALUES(1,'{"items":[3,5]}');
+
+statement ok
+CREATE OR REPLACE TABLE t2(id INTEGER, json JSON);
+
+statement ok
+INSERT INTO t2(id,json) VALUES(2,'{"value":2}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(3,'{"value":3}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(4,'{"value":4}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(5,'{"value":5}');
+
+statement ok
+INSERT INTO t2(id,json) VALUES(6,'{"value":6}');
+
+query I
+select count(*) from t2, json_each(t2.json) je;
+----
+5
+
+query I
+select je.rowid from t2, json_each(t2.json) je;
+----
+0
+0
+0
+0
+0
+
+# our result here differs from SQLite because our correlated subquery behavior is different
+query IIII rowsort
+SELECT * FROM t1 CROSS JOIN t2
+WHERE EXISTS(SELECT 1 FROM json_each(t1.json,'$.items') AS Z
+             WHERE Z.value==t2.id);
+----
+1	{"items":[3,5]}	3	{"value":3}
+1	{"items":[3,5]}	5	{"value":5}
+
+query IIII rowsort
+SELECT * FROM t2 CROSS JOIN t1
+WHERE EXISTS(SELECT 1 FROM json_each(t1.json,'$.items') AS Z
+             WHERE Z.value==t2.id);
+----
+3	{"value":3}	1	{"items":[3,5]}
+5	{"value":5}	1	{"items":[3,5]}
+
+### JSON101-14 ###
+query I
+SELECT fullkey FROM json_each('123');
+----
+$
+
+query I
+SELECT fullkey FROM json_each('123.56');
+----
+$
+
+query I
+SELECT fullkey FROM json_each('"hello"');
+----
+$
+
+query I
+SELECT fullkey FROM json_each('null');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('123');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('123.56');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('"hello"');
+----
+$
+
+query I
+SELECT fullkey FROM json_tree('null');
+----
+$
+
+### JSON101-15 ###
+query IIIIIIII
+SELECT * FROM JSON_EACH('{"a":1, "b":2}');
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+query IIIIIIII
+SELECT xyz.* FROM JSON_EACH('{"a":1, "b":2}') AS xyz;
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+query IIIIIIII
+SELECT * FROM (FROM JSON_EACH('{"a":1, "b":2}'));
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+query IIIIIIII
+SELECT xyz.* FROM (FROM JSON_EACH('{"a":1, "b":2}')) AS xyz;
+----
+a	1	UBIGINT	1	2	NULL	$.a	$
+b	2	UBIGINT	2	4	NULL	$.b	$
+
+### JSON101-17 ###
+query I
+SELECT count(*) FROM json_each(NULL);
+----
+0
+
+query I
+SELECT count(*) FROM json_tree(NULL);
+----
+0
+
+### JSON102-1000 ###
+statement ok
+CREATE OR REPLACE TABLE user(name VARCHAR,phone JSON);
+
+statement ok
+INSERT INTO user(name,phone) VALUES
+   ('Alice','["919-555-2345","804-555-3621"]'),
+   ('Bob','["201-555-8872"]'),
+   ('Cindy','["704-555-9983"]'),
+   ('Dave','["336-555-8421","704-555-4321","803-911-4421"]');
+
+query I rowsort
+SELECT DISTINCT user.name
+  FROM user, json_each(user.phone)
+ WHERE json_each.value LIKE '"704-%'
+ ORDER BY 1;
+----
+Cindy
+Dave
+
+statement ok
+UPDATE user
+   SET phone=json_extract(phone,'$[0]')
+ WHERE json_array_length(phone)<2;
+
+query II rowsort
+SELECT name, substr(phone,1,5) FROM user ORDER BY name;
+----
+Alice	["919
+Bob	"201-
+Cindy	"704-
+Dave	["336
+
+query I rowsort
+SELECT name FROM user WHERE phone LIKE '"704-%'
+UNION
+SELECT user.name
+  FROM user, json_each(user.phone)
+ WHERE json_valid(user.phone)
+   AND json_each.value LIKE '"704-%';
+----
+Cindy
+Dave
+
+### JSON102-1010 ###
+statement ok
+CREATE OR REPLACE TABLE big(json JSON);
+
+statement ok
+INSERT INTO big(json) VALUES('{
+"id":123,
+"stuff":[1,2,3,4],
+"partlist":[
+   {"uuid":"bb108722-572e-11e5-9320-7f3b63a4ca74"},
+   {"uuid":"c690dc14-572e-11e5-95f9-dfc8861fd535"},
+   {"subassembly":[
+      {"uuid":"6fa5181e-5721-11e5-a04e-57f3d7b32808"}
+   ]}
+]
+}');
+
+statement ok
+INSERT INTO big(json) VALUES('{
+"id":456,
+"stuff":["hello","world","xyzzy"],
+"partlist":[
+   {"uuid":false},
+   {"uuid":"c690dc14-572e-11e5-95f9-dfc8861fd535"}
+]
+}');
+
+query III nosort q0
+SELECT big.rowid, fullkey, value
+  FROM big, json_tree(big.json)
+ WHERE json_tree.type NOT IN ('OBJECT','ARRAY')
+ ORDER BY +big.rowid, +json_tree.id;
+----
+0	$.id	123
+0	$stuff[0]	1
+0	$stuff[1]	2
+0	$stuff[2]	3
+0	$stuff[3]	4
+0	$partlist.uuid	"bb108722-572e-11e5-9320-7f3b63a4ca74"
+0	$partlist.uuid	"c690dc14-572e-11e5-95f9-dfc8861fd535"
+0	$partlistsubassembly.uuid	"6fa5181e-5721-11e5-a04e-57f3d7b32808"
+1	$.id	456
+1	$stuff[0]	"hello"
+1	$stuff[1]	"world"
+1	$stuff[2]	"xyzzy"
+1	$partlist.uuid	false
+1	$partlist.uuid	"c690dc14-572e-11e5-95f9-dfc8861fd535"
+
+query III nosort q0
+SELECT big.rowid, fullkey, atom
+  FROM big, json_tree(big.json)
+ WHERE atom IS NOT NULL
+ ORDER BY +big.rowid, +json_tree.id
+----
+
+query I
+SELECT DISTINCT json_extract(big.json,'$.id')
+FROM big, json_tree(big.json,'$.partlist')
+WHERE json_tree.key='uuid'
+ AND json_tree.value='"6fa5181e-5721-11e5-a04e-57f3d7b32808"';
+----
+123
+
+query I
+SELECT DISTINCT json_extract(big.json,'$.id')
+FROM big, json_tree(big.json,'$')
+WHERE json_tree.key='uuid'
+ AND json_tree.value='"6fa5181e-5721-11e5-a04e-57f3d7b32808"';
+----
+123
+
+query I
+SELECT DISTINCT json_extract(big.json,'$.id')
+FROM big, json_tree(big.json)
+WHERE json_tree.key='uuid'
+ AND json_tree.value='"6fa5181e-5721-11e5-a04e-57f3d7b32808"';
+----
+123
+
+### JSON107 ###
+query II
+SELECT key, value FROM json_tree('{"a":123,"b":456}')
+  WHERE atom;
+----
+a	123
+b	456
+
+### JSON502 ###
+statement ok
+CREATE OR REPLACE TABLE t1(x JSON);
+
+statement ok
+INSERT INTO t1(x) VALUES('{"a":{"b":{"c":"hello",},},}');
+
+query I
+SELECT fullkey FROM t1, json_tree(x);
+----
+$
+$.a
+$.a.b
+$.a.b.c
+
+### JOIN-23 ###
+statement ok
+CREATE OR REPLACE TABLE a(value TEXT);
+
+statement ok
+INSERT INTO a(value) SELECT value FROM json_each('["a", "b", null]');
+
+statement ok
+CREATE OR REPLACE TABLE b(value TEXT);
+
+statement ok
+INSERT INTO b(value) SELECT value FROM json_each('["a", "c", null]');
+
+query II rowsort q1
+SELECT a.value, b.value FROM a RIGHT JOIN b ON a.value = b.value;
+----
+"a"	"a"
+null	null
+NULL	"c"
+
+query II rowsort q1
+SELECT a.value, b.value FROM b LEFT JOIN a ON a.value = b.value;
+----
+
+
+query II rowsort q1
+SELECT a.value, b.value
+  FROM json_each('["a", "c", null]') AS b
+       LEFT JOIN
+       json_each('["a", "b", null]') AS a ON a.value = b.value;
+----
+
+
+query II rowsort q1
+SELECT a.value, b.value
+  FROM json_each('["a", "b", null]') AS a
+       RIGHT JOIN
+       json_each('["a", "c", null]') AS b ON a.value = b.value;
+----
+
+
+query II rowsort q1
+SELECT a.value, b.value
+  FROM json_each('["a", "b", null]') AS a
+       RIGHT JOIN
+       b ON a.value = b.value;
+----
+
+
+query II rowsort q1
+SELECT a.value, b.value
+  FROM a
+       RIGHT JOIN
+       json_each('["a", "c", null]') AS b ON a.value = b.value;
+----
+
+### JOIN8-6000 ###
+statement ok
+CREATE OR REPLACE TABLE t1(a INTEGER PRIMARY KEY, b TEXT, c TEXT, d REAL);
+
+statement ok
+INSERT INTO t1 VALUES(0,'A','aa',2.5);
+
+query IIII
+SELECT * FROM t1 AS t2 NATURAL RIGHT JOIN t1 AS t3
+ WHERE (a,b) IN (SELECT rowid, b FROM t1);
+----
+0	A	aa	2.5
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE OR REPLACE TABLE t1(a INT PRIMARY KEY, b TEXT, c TEXT, d INT);
+
+statement ok
+INSERT INTO t1 VALUES(15,'xray','baker',42);
+
+query IIIII
+SELECT value, t1.* FROM json_each('7') RIGHT JOIN t1 USING (rowid)
+ WHERE (a,b) IN (SELECT a, b FROM t1);
+----
+7	15	xray	baker	42
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE OR REPLACE TABLE t1(a INTEGER PRIMARY KEY,b INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES(0,NULL),(1,2);
+
+query III
+SELECT value, t1.* FROM json_each('null') RIGHT JOIN t1 USING (rowid)
+ WHERE (a,b) IN (SELECT rowid, b FROM t1);
+----
+NULL	1	2
+
+statement ok
+CREATE OR REPLACE TABLE a(key TEXT);
+
+statement ok
+INSERT INTO a(key) VALUES('a'),('b');
+
+query II
+SELECT to_json(a.key), b.value
+  FROM a RIGHT JOIN json_each('["a","c"]') AS b ON to_json(a.key)=b.value;
+----
+"a"	"a"
+NULL	"c"
+
+### WindowB-11 ###
+query I
+SELECT value FROM json_each('[1,2,3,4,5]');
+----
+1
+2
+3
+4
+5
+
+query II
+SELECT key, value FROM json_each('[1,2,3,4,5]');
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+
+query II
+SELECT rowid, value FROM json_each('[1,2,3,4,5]');
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+
+query I
+SELECT sum(value::int) OVER (ORDER BY rowid) FROM json_each('[1,2,3,4,5]')
+----
+1
+3
+6
+10
+15
+
+query I
+SELECT sum(value::int) OVER (
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+) FROM json_each('[1,2,3,4,5]')
+----
+1
+3
+6
+10
+15
+
+query I
+SELECT sum(value::int) OVER (ORDER BY rowid DESC) FROM json_each('[1,2,3,4,5]')
+----
+5
+9
+12
+14
+15
+
+query I
+SELECT sum(value::int) OVER (ORDER BY value ASC) FROM json_each('[2,1,4,3,5]')
+----
+1
+3
+6
+10
+15
+
+### WhereF-6 ###
+statement ok
+CREATE OR REPLACE TABLE t6(x JSON);
+
+query I
+SELECT * FROM t6 WHERE 1 IN (SELECT value FROM json_each(x));
+----
+
+
+statement ok
+DROP TABLE t6;
+
+statement ok
+CREATE OR REPLACE TABLE t6(a int,b int,c json);
+
+statement ok
+INSERT INTO t6 VALUES
+ (0,null,'{"a":0,"b":[3,4,5],"c":{"x":4.5,"y":7.8}}'),
+ (1,null,'{"a":1,"b":[3,4,5],"c":{"x":4.5,"y":7.8}}'),
+ (2,null,'{"a":9,"b":[3,4,5],"c":{"x":4.5,"y":7.8}}');
+
+query III
+SELECT * FROM t6
+ WHERE (EXISTS (SELECT 1 FROM json_each(t6.c) AS x WHERE x.type = 'UBIGINT' AND x.value=1));
+----
+1	NULL	{"a":1,"b":[3,4,5],"c":{"x":4.5,"y":7.8}}
+
+# Another test case derived from a posting by Wout Mertens on the
+# sqlite-users mailing list on 2017-10-04.
+
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+CREATE OR REPLACE TABLE t(json JSON);
+
+query I
+SELECT * FROM t
+ WHERE(EXISTS(SELECT 1 FROM json_each(t.json,'$.foo') j
+               WHERE j.value = 'meep'));
+----
+
+
+statement ok
+INSERT INTO t VALUES('{"xyzzy":null}');
+
+statement ok
+INSERT INTO t VALUES('{"foo":"meep","other":12345}');
+
+statement ok
+INSERT INTO t VALUES('{"foo":"bingo","alt":5.25}');
+
+query I
+SELECT * FROM t
+ WHERE(EXISTS(SELECT 1 FROM json_each(t.json,'$.foo') j
+               WHERE j.value = '"meep"'));
+----
+{"foo":"meep","other":12345}

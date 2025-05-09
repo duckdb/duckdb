@@ -215,7 +215,7 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 
 template <class T>
 FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
-                                            array_ptr<Value> constants) {
+                                            array_ptr<const Value> constants) {
 	T min_value = NumericStats::GetMinUnsafe<T>(stats);
 	T max_value = NumericStats::GetMaxUnsafe<T>(stats);
 	for (auto &constant_value : constants) {
@@ -233,7 +233,7 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 }
 
 FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                 array_ptr<Value> constants) {
+                                                 array_ptr<const Value> constants) {
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

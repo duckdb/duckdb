@@ -965,7 +965,9 @@ py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) 
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
-	return result->FetchArrowCapsule();
+	auto res = result->FetchArrowCapsule();
+	result = nullptr;
+	return res;
 }
 
 PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size) {

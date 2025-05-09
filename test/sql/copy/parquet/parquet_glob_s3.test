@@ -23,6 +23,12 @@ require-env DUCKDB_S3_USE_SSL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+# this test was written before we implemented the external file cache
+# when it is enabled, the request counts are different
+# we disable it so this test still makes sense
+statement ok
+set enable_external_file_cache=false;
+
 # Copy files to S3 before beginning tests
 statement ok
 COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t1.parquet';

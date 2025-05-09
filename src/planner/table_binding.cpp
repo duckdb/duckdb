@@ -237,7 +237,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
 	auto entry = GetStandardEntry();
-	if (entry && column_index != COLUMN_IDENTIFIER_ROW_ID) {
+	if (entry && !IsVirtualColumn(column_index)) {
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 		// Either there is no table, or the columns category has to be standard
 		auto &table_entry = entry->Cast<TableCatalogEntry>();

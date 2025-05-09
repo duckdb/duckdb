@@ -2,10 +2,6 @@
 # description: Test over-eager constraint checking for foreign keys.
 # group: [foreignkey]
 
-require noforcestorage
-
-require skip_reload
-
 statement ok
 PRAGMA enable_verification;
 

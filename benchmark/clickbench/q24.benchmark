@@ -2,6 +2,7 @@
 # description: Run query 24 from the ClickBench benchmark
 # group: [clickbench]
 
-template benchmark/clickbench/clickbench.benchmark.in
+template benchmark/clickbench/clickbench-noresult.benchmark.in
 QUERY_NUMBER=24
 QUERY_NUMBER_PADDED=24
+RESULT_QUERY=SELECT * FROM (SELECT * FROM __answer LIMIT 4) ORDER BY SearchPhrase

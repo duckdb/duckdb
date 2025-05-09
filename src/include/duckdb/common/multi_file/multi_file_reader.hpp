@@ -34,6 +34,15 @@ struct MultiFileReader {
 public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
 	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_NUMBER = UINT64_C(9223372036854775809);
+	static constexpr column_t COLUMN_IDENTIFIER_FILE_INDEX = UINT64_C(9223372036854775810);
+	// Reserved field id used for the "_file" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
+	// Reserved field id used for the "_pos" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t FILENAME_FIELD_ID = 2147483646;
+	// Reserved field id used for the "_row_id" field according to the iceberg spec
+	static constexpr int32_t ROW_ID_FIELD_ID = 2147483540;
+	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
+	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
 
 public:
 	virtual ~MultiFileReader();
@@ -102,7 +111,7 @@ public:
 	DUCKDB_API virtual ReaderInitializeType
 	CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
 	              const vector<MultiFileColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
-	              optional_ptr<TableFilterSet> filters, const string &initial_file,
+	              optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
 	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
@@ -168,14 +177,15 @@ public:
 		}
 	}
 
-	ReaderInitializeType InitializeReader(
-	    MultiFileReaderData &reader_data, const MultiFileOptions &options, const MultiFileReaderBindData &bind_data,
-	    const virtual_column_map_t &virtual_columns, const vector<MultiFileColumnDefinition> &global_columns,
-	    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
-	    const string &initial_file, ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
-		FinalizeBind(reader_data, options, bind_data, global_columns, global_column_ids, context, global_state);
-		return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, initial_file,
-		                     bind_data, virtual_columns);
+	virtual ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
+	                                              const vector<MultiFileColumnDefinition> &global_columns,
+	                                              const vector<ColumnIndex> &global_column_ids,
+	                                              optional_ptr<TableFilterSet> table_filters, ClientContext &context,
+	                                              optional_ptr<MultiFileReaderGlobalState> global_state) {
+		FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids,
+		             context, global_state);
+		return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
+		                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
 	}
 
 	template <class BIND_DATA>
@@ -188,7 +198,7 @@ public:
 		}
 
 		for (const auto &file : file_list.Files()) {
-			file_set.insert(file);
+			file_set.insert(file.path);
 		}
 
 		if (data.initial_reader) {
@@ -218,6 +228,20 @@ public:
 	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,
 	                                                       const MultiFileReaderBindData &bind_data,
 	                                                       TableFunctionPartitionInput &input);
+
+	//! Get a constant expression for the given virtual column, if this can be handled by the MultiFileReader
+	//! This expression is constant for the entire file
+	DUCKDB_API virtual unique_ptr<Expression> GetConstantVirtualColumn(MultiFileReaderData &reader_data,
+	                                                                   idx_t column_id, const LogicalType &type);
+
+	//! Gets an expression to evaluate the given virtual column
+	DUCKDB_API virtual unique_ptr<Expression>
+	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
+	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
+	                           const LogicalType &type, MultiFileLocalIndex local_index,
+	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference);
+
+	DUCKDB_API virtual unique_ptr<MultiFileReader> Copy() const;
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader

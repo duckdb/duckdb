@@ -18,11 +18,11 @@ Maximum line size of 2000000 bytes exceeded
 statement error
 COPY T1(name) from 'data/csv/line_too_long_with_newline.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
-Be sure that the maximum line size is set to an appropriate value
+Possible Solution: Change the maximum length size, e.g., max_line_size=2097165
 
 statement error
 COPY T1(name) from 'data/csv/multiple_line_too_long.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
-Be sure that the maximum line size is set to an appropriate value
+Possible Solution: Change the maximum length size, e.g., max_line_size=2097165
 
 endloop

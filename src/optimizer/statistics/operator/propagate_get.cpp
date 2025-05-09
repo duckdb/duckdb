@@ -1,12 +1,22 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
-FilterPropagateResult StatisticsPropagator::PropagateTableFilter(BaseStatistics &stats, TableFilter &filter) {
+FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
+                                                                 TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto column_ref = make_uniq<BoundColumnRefExpression>(stats.GetType(), stats_binding);
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
+		UpdateFilterStatistics(*filter_expr);
+		return HandleFilter(filter_expr);
+	}
 	return filter.CheckStatistics(stats);
 }
 
@@ -76,7 +86,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// fetch the table filter
 		D_ASSERT(get.table_filters.filters.count(table_filter_column) > 0);
 		auto &filter = get.table_filters.filters[table_filter_column];
-		auto propagate_result = PropagateTableFilter(stats, *filter);
+		auto propagate_result = PropagateTableFilter(stats_binding, stats, *filter);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it

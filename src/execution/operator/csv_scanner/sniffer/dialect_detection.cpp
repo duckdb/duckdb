@@ -18,20 +18,13 @@ vector<string> DialectCandidates::GetDefaultDelimiter() {
 	return {",", "|", ";", "\t"};
 }
 
-vector<vector<char>> DialectCandidates::GetDefaultQuote() {
-	return {{'\0'}, {'\"', '\''}, {'\"'}};
-}
-
-vector<QuoteRule> DialectCandidates::GetDefaultQuoteRule() {
-	return {QuoteRule::NO_QUOTES, QuoteRule::QUOTES_OTHER, QuoteRule::QUOTES_RFC};
-}
-
-vector<vector<char>> DialectCandidates::GetDefaultEscape() {
-	return {{'\0'}, {'\\'}, {'\"', '\0', '\''}};
+vector<QuoteEscapeCombination> DialectCandidates::GetDefaultQuoteEscapeCombination() {
+	return {{'\0', '\0'}, {'\"', '\0'}, {'\"', '\"'}, {'\"', '\''}, {'\"', '\\'},
+	        {'\'', '\0'}, {'\'', '\''}, {'\'', '\"'}, {'\'', '\\'}};
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
-	return {'#', '\0'};
+	return {'\0', '#'};
 }
 
 string DialectCandidates::Print() {
@@ -46,33 +39,23 @@ string DialectCandidates::Print() {
 	}
 	search_space << "\n";
 	search_space << "Quote/Escape Candidates: ";
-	for (uint8_t i = 0; i < static_cast<uint8_t>(quote_rule_candidates.size()); i++) {
-		auto quote_candidate = quote_candidates_map[i];
-		auto escape_candidate = escape_candidates_map[i];
-		for (idx_t j = 0; j < quote_candidate.size(); j++) {
-			for (idx_t k = 0; k < escape_candidate.size(); k++) {
-				search_space << "[\'";
-				if (quote_candidate[j] == '\0') {
-					search_space << "(no quote)";
-				} else {
-					search_space << quote_candidate[j];
-				}
-				search_space << "\',\'";
-				if (escape_candidate[k] == '\0') {
-					search_space << "(no escape)";
-				} else {
-					search_space << escape_candidate[k];
-				}
-				search_space << "\']";
-				if (k < escape_candidate.size() - 1) {
-					search_space << ",";
-				}
-			}
-			if (j < quote_candidate.size() - 1) {
-				search_space << ",";
-			}
+	for (idx_t i = 0; i < quote_escape_candidates.size(); i++) {
+		const auto quote_candidate = quote_escape_candidates[i].quote;
+		const auto escape_candidate = quote_escape_candidates[i].escape;
+		search_space << "[\'";
+		if (quote_candidate == '\0') {
+			search_space << "(no quote)";
+		} else {
+			search_space << quote_candidate;
 		}
-		if (i < quote_rule_candidates.size() - 1) {
+		search_space << "\',\'";
+		if (escape_candidate == '\0') {
+			search_space << "(no escape)";
+		} else {
+			search_space << escape_candidate;
+		}
+		search_space << "\']";
+		if (i < quote_escape_candidates.size() - 1) {
 			search_space << ",";
 		}
 	}
@@ -92,17 +75,9 @@ string DialectCandidates::Print() {
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	// assert that quotes escapes and rules have equal size
-	const auto default_quote = GetDefaultQuote();
-	const auto default_escape = GetDefaultEscape();
-	const auto default_quote_rule = GetDefaultQuoteRule();
 	const auto default_delimiter = GetDefaultDelimiter();
 	const auto default_comment = GetDefaultComment();
-
-	D_ASSERT(default_quote.size() == default_quote_rule.size() && default_quote_rule.size() == default_escape.size());
-	// fill the escapes
-	for (idx_t i = 0; i < default_quote_rule.size(); i++) {
-		escape_candidates_map[static_cast<uint8_t>(default_quote_rule[i])] = default_escape[i];
-	}
+	const auto default_quote_escape = GetDefaultQuoteEscapeCombination();
 
 	if (options.delimiter.IsSetByUser()) {
 		// user provided a delimiter: use that delimiter
@@ -111,6 +86,7 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		// no delimiter provided: try standard/common delimiters
 		delim_candidates = default_delimiter;
 	}
+
 	if (options.comment.IsSetByUser()) {
 		// user provided comment character: use that as a comment
 		comment_candidates = {options.comment.GetValue()};
@@ -118,32 +94,41 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		// no comment provided: try standard/common comments
 		comment_candidates = default_comment;
 	}
-	if (options.quote.IsSetByUser()) {
-		// user provided quote: use that quote rule
-		for (auto &quote_rule : default_quote_rule) {
-			quote_candidates_map[static_cast<uint8_t>(quote_rule)] = {options.quote.GetValue()};
+
+	if (options.quote.IsSetByUser() && options.escape.IsSetByUser()) {
+		// User set quote and escape, that's our only candidate then
+		quote_escape_candidates.push_back({options.quote.GetValue(), options.escape.GetValue()});
+	} else if (options.quote.IsSetByUser()) {
+		// Only quote is set, look for escape matches.
+		for (auto &candidate : default_quote_escape) {
+			if (candidate.quote == options.quote.GetValue()) {
+				quote_escape_candidates.push_back(candidate);
+			}
 		}
-		// also add it as an escape rule
-		if (!IsQuoteDefault(options.quote.GetValue())) {
-			escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)].emplace_back(options.quote.GetValue());
+		if (quote_escape_candidates.empty()) {
+			// This is an uncommon quote
+			quote_escape_candidates.push_back({options.quote.GetValue(), options.quote.GetValue()});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\0'});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\\'});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\"'});
+			quote_escape_candidates.push_back({options.quote.GetValue(), '\''});
+		}
+	} else if (options.escape.IsSetByUser()) {
+		// Only Escape is set, look for quote matches
+		for (auto &candidate : default_quote_escape) {
+			if (candidate.escape == options.escape.GetValue()) {
+				quote_escape_candidates.push_back(candidate);
+			}
+		}
+		if (quote_escape_candidates.empty()) {
+			// This is an uncommon escape
+			quote_escape_candidates.push_back({options.escape.GetValue(), options.escape.GetValue()});
+			quote_escape_candidates.push_back({'\"', options.escape.GetValue()});
+			quote_escape_candidates.push_back({'\'', options.escape.GetValue()});
 		}
 	} else {
-		// no quote rule provided: use standard/common quotes
-		for (idx_t i = 0; i < default_quote_rule.size(); i++) {
-			quote_candidates_map[static_cast<uint8_t>(default_quote_rule[i])] = {default_quote[i]};
-		}
-	}
-	if (options.escape.IsSetByUser()) {
-		// user provided escape: use that escape rule
-		if (options.escape == '\0') {
-			quote_rule_candidates = {QuoteRule::QUOTES_RFC};
-		} else {
-			quote_rule_candidates = {QuoteRule::QUOTES_OTHER};
-		}
-		escape_candidates_map[static_cast<uint8_t>(quote_rule_candidates[0])] = {options.escape.GetValue()};
-	} else {
-		// no escape provided: try standard/common escapes
-		quote_rule_candidates = default_quote_rule;
+		// Nothing is set
+		quote_escape_candidates = default_quote_escape;
 	}
 }
 
@@ -158,36 +143,30 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
-	for (const auto quote_rule : dialect_candidates.quote_rule_candidates) {
-		const auto &quote_candidates = dialect_candidates.quote_candidates_map.at(static_cast<uint8_t>(quote_rule));
-		for (const auto &quote : quote_candidates) {
+	for (const auto &comment : dialect_candidates.comment_candidates) {
+		for (const auto quote_escape_candidate : dialect_candidates.quote_escape_candidates) {
 			for (const auto &delimiter : dialect_candidates.delim_candidates) {
-				const auto &escape_candidates =
-				    dialect_candidates.escape_candidates_map.at(static_cast<uint8_t>(quote_rule));
-				for (const auto &escape : escape_candidates) {
-					for (const auto &comment : dialect_candidates.comment_candidates) {
-						D_ASSERT(buffer_manager);
-						CSVStateMachineOptions state_machine_options(
-						    delimiter, quote, escape, comment, new_line_id,
-						    options.dialect_options.state_machine_options.strict_mode.GetValue());
-						auto sniffing_state_machine =
-						    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
-						if (options.dialect_options.skip_rows.IsSetByUser()) {
-							if (!iterator_set) {
-								first_iterator = BaseScanner::SkipCSVRows(buffer_manager, sniffing_state_machine,
-								                                          options.dialect_options.skip_rows.GetValue());
-								iterator_set = true;
-							}
-							column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
-							    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
-							    CSVReaderOptions::sniff_size, first_iterator));
-							continue;
-						}
-						column_count_scanners.emplace_back(
-						    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
-						                                  detection_error_handler, CSVReaderOptions::sniff_size));
+
+				D_ASSERT(buffer_manager);
+				CSVStateMachineOptions state_machine_options(
+				    delimiter, quote_escape_candidate.quote, quote_escape_candidate.escape, comment, new_line_id,
+				    options.dialect_options.state_machine_options.strict_mode.GetValue());
+				auto sniffing_state_machine =
+				    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
+				if (options.dialect_options.skip_rows.IsSetByUser()) {
+					if (!iterator_set) {
+						first_iterator = BaseScanner::SkipCSVRows(buffer_manager, sniffing_state_machine,
+						                                          options.dialect_options.skip_rows.GetValue());
+						iterator_set = true;
 					}
+					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
+					    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
+					    CSVReaderOptions::sniff_size, first_iterator));
+					continue;
 				}
+				column_count_scanners.emplace_back(
+				    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
+				                                  detection_error_handler, CSVReaderOptions::sniff_size));
 			}
 		}
 	}
@@ -226,7 +205,10 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool
 		}
 		return false;
 	}
-
+	if (result.state_machine.state_machine_options.comment.GetValue() != '\0' &&
+	    valid_comments / detected_comments >= min_majority) {
+		return true;
+	}
 	return valid_comments / detected_comments >= min_majority;
 }
 
@@ -238,9 +220,15 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t dirty_notes = 0;
 	idx_t dirty_notes_minus_comments = 0;
 	if (sniffed_column_counts.error) {
+		if (!scanner->error_handler->HasError(MAXIMUM_LINE_SIZE)) {
+			all_fail_max_line_size = false;
+		} else {
+			line_error = scanner->error_handler->GetFirstError(MAXIMUM_LINE_SIZE);
+		}
 		// This candidate has an error (i.e., over maximum line size or never unquoting quoted values)
 		return;
 	}
+	all_fail_max_line_size = false;
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	const bool ignore_errors = options.ignore_errors.GetValue();
@@ -302,6 +290,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 				dirty_notes = row;
+				dirty_notes_minus_comments = dirty_notes - comment_rows;
+				num_cols = sniffed_column_counts[row].number_of_columns;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
 				ignored_rows++;
@@ -408,7 +398,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			return;
 		}
 		if (max_columns_found > 1 && num_cols > max_columns_found && consistent_rows < best_consistent_rows / 2 &&
-		    options.null_padding) {
+		    (options.null_padding || ignore_errors)) {
 			// When null_padding is true, we only give preference to a max number of columns if null padding is at least
 			// 50% as consistent as the best case scenario
 			return;
@@ -443,7 +433,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
 		} else if (!options.null_padding) {
-			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
+			sniffing_state_machine.dialect_options.skip_rows = dirty_notes_minus_comments;
 		}
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
@@ -531,25 +521,36 @@ void CSVSniffer::RefineCandidates() {
 	// that have actually quoted values, otherwise we will choose quotes = \0
 	vector<unique_ptr<ColumnCountScanner>> successful_candidates = std::move(candidates);
 	if (!successful_candidates.empty()) {
+		bool ever_quoted = false;
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
 			unique_ptr<ColumnCountScanner> cc_best_candidate = std::move(successful_candidates[i]);
-			if (cc_best_candidate->state_machine->state_machine_options.quote != '\0' &&
-			    cc_best_candidate->ever_quoted) {
-				// If we have multiple candidates with the same quote, but different escapes
-				for (idx_t j = i + 1; j < successful_candidates.size(); j++) {
-					// we give preference if it has the same character between escape and quote
-					if (successful_candidates[j]->state_machine->state_machine_options.escape ==
-					    successful_candidates[j]->state_machine->state_machine_options.quote) {
-						cc_best_candidate = std::move(successful_candidates[j]);
-						break;
-					}
+			if (cc_best_candidate->ever_quoted) {
+				if (cc_best_candidate->ever_escaped) {
+					// It can't be better than this
+					candidates.clear();
+					candidates.push_back(std::move(cc_best_candidate));
+					return;
 				}
-				candidates.clear();
+				if (!ever_quoted) {
+					ever_quoted = true;
+					candidates.clear();
+				}
 				candidates.push_back(std::move(cc_best_candidate));
+			} else if (!ever_quoted) {
+				candidates.push_back(std::move(cc_best_candidate));
+			}
+		}
+	}
+	if (candidates.size() > 1) {
+		successful_candidates = std::move(candidates);
+		for (idx_t i = 0; i < successful_candidates.size(); i++) {
+			if (successful_candidates[i]->state_machine->state_machine_options.quote ==
+			    successful_candidates[i]->state_machine->state_machine_options.escape) {
+				candidates.push_back(std::move(std::move(successful_candidates[i])));
 				return;
 			}
-			candidates.push_back(std::move(cc_best_candidate));
 		}
+		candidates.push_back(std::move(std::move(successful_candidates[0])));
 	}
 }
 
@@ -608,7 +609,12 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
+		CSVError error;
+		if (all_fail_max_line_size) {
+			error = line_error;
+		} else {
+			error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
+		}
 		error_handler->Error(error, true);
 	}
 }

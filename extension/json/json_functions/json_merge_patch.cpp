@@ -52,9 +52,9 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 //! Follows MySQL behaviour
 static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
-	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYAlc());
+	auto doc = JSONCommon::CreateDocument(alc);
 	const auto count = args.size();
 
 	// Read the first json arg
@@ -93,6 +93,8 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {

@@ -391,6 +391,12 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	             write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
 
+	if (write_info.compressed_buf) {
+		// if the data has been compressed, we no longer need the uncompressed data
+		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
+		write_info.temp_writer.reset();
+	}
+
 	// insert the dictionary page as the first page to write for this column
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }

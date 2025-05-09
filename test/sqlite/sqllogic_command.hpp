@@ -183,10 +183,11 @@ private:
 
 class LoadCommand : public Command {
 public:
-	LoadCommand(SQLLogicTestRunner &runner, string dbpath, bool readonly);
+	LoadCommand(SQLLogicTestRunner &runner, string dbpath, bool readonly, const string &version = "");
 
 	string dbpath;
 	bool readonly;
+	string version;
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;

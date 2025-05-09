@@ -11,7 +11,7 @@ DynamicFilter::DynamicFilter(shared_ptr<DynamicFilterData> filter_data_p)
     : TableFilter(TableFilterType::DYNAMIC_FILTER), filter_data(std::move(filter_data_p)) {
 }
 
-FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (!filter_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

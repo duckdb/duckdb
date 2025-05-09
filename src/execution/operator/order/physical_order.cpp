@@ -127,6 +127,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "PhysicalOrderMergeTask";
+	}
+
 private:
 	ClientContext &context;
 	OrderGlobalSinkState &state;

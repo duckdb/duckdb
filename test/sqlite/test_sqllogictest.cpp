@@ -43,7 +43,9 @@ static void testRunner() {
 		auto storage_name = StringUtil::Replace(name, "/", "_");
 		storage_name = StringUtil::Replace(storage_name, ".", "_");
 		storage_name = StringUtil::Replace(storage_name, "\\", "_");
-		initial_dbpath = TestCreatePath(storage_name + ".db");
+		auto db_directory = TestCreatePath(storage_name);
+		TestCreateDirectory(db_directory);
+		initial_dbpath = TestJoinPath(db_directory, "memory.db");
 	}
 	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();

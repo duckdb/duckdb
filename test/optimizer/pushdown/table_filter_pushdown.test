@@ -2,9 +2,6 @@
 # description: Test Table Filter Push Down
 # group: [pushdown]
 
-require skip_reload
-
-
 statement ok
 CREATE TABLE integers(i integer, j integer, k integer)
 
@@ -26,11 +23,36 @@ EXPLAIN SELECT k FROM integers where j=5
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
+# complex filters are also pushed down
+query I
+SELECT k FROM integers where j::VARCHAR SIMILAR TO '[0-9]*'
+----
+5
+10
+
 # multiple filters pushed down
 query II
 EXPLAIN SELECT k FROM integers where j = 5 and i = 10
 ----
 logical_opt	<!REGEX>:.*FILTER.*
+
+# complex filter is pushed down: no filter remaining
+query II
+EXPLAIN SELECT k FROM integers where j::VARCHAR SIMILAR TO '[0-9]*'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# we cannot push down expressions that can throw errors
+query I
+SELECT k FROM integers where j%50=j
+----
+5
+10
+
+query II
+EXPLAIN SELECT k FROM integers where j%50=j
+----
+logical_opt	<REGEX>:.*FILTER.*
 
 # test different data types
 foreach type <numeric>
@@ -105,7 +127,7 @@ EXPLAIN SELECT i FROM tablinho where i <= 'bla'
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
-# more complex filters cannot be pushed down
+# more complex filters can be pushed down as long as they only involve one column
 query II
 EXPLAIN SELECT i FROM tablinho where i like 'bl_a%'
 ----
@@ -114,12 +136,12 @@ logical_opt	<REGEX>:.*FILTER.*
 query II
 EXPLAIN SELECT i FROM tablinho where i like '%bla'
 ----
-logical_opt	<REGEX>:.*FILTER.*
+logical_opt	<!REGEX>:.*FILTER.*
 
 query II
 EXPLAIN SELECT i FROM tablinho where i like '_bla'
 ----
-logical_opt	<REGEX>:.*FILTER.*
+logical_opt	<!REGEX>:.*FILTER.*
 
 # test Q6 pushdown
 statement ok

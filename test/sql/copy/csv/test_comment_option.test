@@ -5,6 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
+# Test comment and skip option
+query III
+FROM read_csv('data/csv/comments/17226.csv', comment='#', all_varchar=True, skip=0, ignore_errors=True)
+----
+1	2	3
+4	5	6
+
 # Comment must be different than quote and delimiter options
 statement error
 FROM  read_csv('data/csv/comments/mixed_options.csv', delim = ',', comment = ',', auto_detect = false, columns= {'a':'integer'})
@@ -84,7 +91,6 @@ endloop
 query II
 FROM read_csv('data/csv/comments/simple.csv', skip = 2);
 ----
-1	3
 6	7
 
 # Test we can detect comments and skip rows at the same time
@@ -97,13 +103,13 @@ FROM 'data/csv/comments/invalid_rows.csv';
 query II
 select SkipRows, Comment FROM sniff_csv('data/csv/comments/invalid_rows.csv');
 ----
-5	#
+2	#
 
 # Test ignore errors
 statement error
 select count(*) FROM 'data/csv/comments/error.csv';
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+Expected Number of Columns: 2 Found: 1
 
 query I
 select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = true);

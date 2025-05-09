@@ -22,14 +22,13 @@ statement ok
 PRAGMA enable_verification
 
 # MODE is very unstable on this data
-query IIII
-SELECT SUM(s), SUM(q), SUM(m), ROUND(SUM(d), -4)
+query III
+SELECT SUM(s), SUM(q), SUM(m)
 FROM (
 	SELECT
 		SUM(l_extendedprice) OVER w AS s,
 		QUANTILE(l_extendedprice, 0.5) OVER w AS q,
 		MAD(l_extendedprice) OVER w AS m,
-		MODE(l_linenumber) OVER w AS d,
 	FROM lineitem
 	WINDOW w AS (
 		PARTITION BY l_suppkey 
@@ -38,4 +37,4 @@ FROM (
 	)
 ) t;
 ----
-871183083803.67	20718441622.70	9873496927.55	1050000.0
+871183083803.67	20718441622.70	9873496927.55

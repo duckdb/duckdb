@@ -57,7 +57,7 @@ public:
 	//! (optional) comment on this entry
 	Value comment;
 	//! (optional) extra data associated with this entry
-	unordered_map<string, string> tags;
+	InsertionOrderPreservingMap<string> tags;
 
 private:
 	//! Child entry

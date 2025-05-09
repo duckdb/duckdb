@@ -342,8 +342,75 @@ def create_function_typedef(function_obj):
     return f'#define {function_name} {DUCKDB_EXT_API_VAR_NAME}.{function_name}\n'
 
 
+def headline_capitalize(s, i):
+    if i > 0 and s in [
+        "a",
+        "an",
+        "the",
+        "and",
+        "but",
+        "or",
+        "nor",
+        "for",
+        "so",
+        "yet",
+        "about",
+        "above",
+        "across",
+        "after",
+        "against",
+        "along",
+        "among",
+        "around",
+        "at",
+        "before",
+        "behind",
+        "below",
+        "beneath",
+        "beside",
+        "between",
+        "beyond",
+        "by",
+        "despite",
+        "down",
+        "during",
+        "except",
+        "for",
+        "from",
+        "in",
+        "inside",
+        "into",
+        "like",
+        "near",
+        "of",
+        "off",
+        "on",
+        "onto",
+        "out",
+        "outside",
+        "over",
+        "past",
+        "since",
+        "through",
+        "throughout",
+        "to",
+        "toward",
+        "under",
+        "underneath",
+        "until",
+        "up",
+        "upon",
+        "with",
+        "within",
+        "without",
+    ]:
+        return s
+    else:
+        return s.capitalize()
+
+
 def to_camel_case(snake_str):
-    return " ".join(x.capitalize() for x in snake_str.lower().split("_"))
+    return " ".join(headline_capitalize(s, i) for i, s in enumerate(snake_str.lower().split("_")))
 
 
 def parse_semver(version):

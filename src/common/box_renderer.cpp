@@ -1027,7 +1027,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	auto collections = FetchRenderCollections(context, result, top_rows, bottom_rows);
 	auto column_names = names;
 	auto result_types = result.Types();
-	if (config.render_mode == RenderMode::COLUMNS) {
+	if (config.render_mode == RenderMode::COLUMNS && rows_to_render > 0) {
 		collections = PivotCollections(context, std::move(collections), column_names, result_types, row_count);
 	}
 

@@ -4,8 +4,6 @@
 
 require tpcds
 
-require skip_reload
-
 load __TEST_DIR__/test_dsdgen_ro.db
 
 statement ok

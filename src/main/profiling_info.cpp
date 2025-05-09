@@ -93,6 +93,8 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::OPERATOR_CARDINALITY:
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
 		case MetricsType::OPERATOR_ROWS_SCANNED:
+		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
+		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		case MetricsType::EXTRA_INFO:
@@ -217,7 +219,9 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::OPERATOR_ROWS_SCANNED: {
+		case MetricsType::OPERATOR_ROWS_SCANNED:
+		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
+		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}

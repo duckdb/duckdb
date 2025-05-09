@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
+#include "duckdb/common/open_file_info.hpp"
 
 namespace duckdb {
 class MultiFileList;
@@ -37,14 +38,14 @@ private:
 
 		optional_ptr<MultiFileList> file_list;
 		MultiFileListScanData file_scan_data;
-		string current_file;
+		OpenFileInfo current_file;
 
 	public:
 		DUCKDB_API void Next();
 
 		DUCKDB_API MultiFileListIterator &operator++();
 		DUCKDB_API bool operator!=(const MultiFileListIterator &other) const;
-		DUCKDB_API const string &operator*() const;
+		DUCKDB_API const OpenFileInfo &operator*() const;
 	};
 
 public:
@@ -68,11 +69,11 @@ struct MultiFilePushdownInfo {
 //! NOTE: subclasses are responsible for ensuring thread-safety
 class MultiFileList {
 public:
-	explicit MultiFileList(vector<string> paths, FileGlobOptions options);
+	explicit MultiFileList(vector<OpenFileInfo> paths, FileGlobOptions options);
 	virtual ~MultiFileList();
 
 	//! Returns the raw, unexpanded paths, pre-filter
-	const vector<string> GetPaths() const;
+	const vector<OpenFileInfo> GetPaths() const;
 
 	//! Get Iterator over the files for pretty for loops
 	MultiFileListIterationHelper Files();
@@ -80,10 +81,10 @@ public:
 	//! Initialize a sequential scan over a file list
 	void InitializeScan(MultiFileListScanData &iterator);
 	//! Scan the next file into result_file, returns false when out of files
-	bool Scan(MultiFileListScanData &iterator, string &result_file);
+	bool Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file);
 
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
-	string GetFirstFile();
+	OpenFileInfo GetFirstFile();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
 
@@ -98,7 +99,7 @@ public:
 	                                                        const vector<column_t> &column_ids,
 	                                                        TableFilterSet &filters) const;
 
-	virtual vector<string> GetAllFiles() = 0;
+	virtual vector<OpenFileInfo> GetAllFiles() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
 	virtual idx_t GetTotalFileCount() = 0;
 
@@ -106,11 +107,11 @@ public:
 
 protected:
 	//! Get the i-th expanded file
-	virtual string GetFile(idx_t i) = 0;
+	virtual OpenFileInfo GetFile(idx_t i) = 0;
 
 protected:
 	//! The unexpanded input paths
-	const vector<string> paths;
+	const vector<OpenFileInfo> paths;
 	//! Whether paths can expand to 0 files
 	const FileGlobOptions glob_options;
 
@@ -132,7 +133,7 @@ public:
 class SimpleMultiFileList : public MultiFileList {
 public:
 	//! Construct a SimpleMultiFileList from a list of already expanded files
-	explicit SimpleMultiFileList(vector<string> paths);
+	explicit SimpleMultiFileList(vector<OpenFileInfo> paths);
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
@@ -143,19 +144,19 @@ public:
 	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
-	vector<string> GetAllFiles() override;
+	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
 
 protected:
 	//! Main MultiFileList API
-	string GetFile(idx_t i) override;
+	OpenFileInfo GetFile(idx_t i) override;
 };
 
 //! MultiFileList that takes a list of paths and produces a list of files with all globs expanded
 class GlobMultiFileList : public MultiFileList {
 public:
-	GlobMultiFileList(ClientContext &context, vector<string> paths, FileGlobOptions options);
+	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobOptions options);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
@@ -166,20 +167,20 @@ public:
 	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
-	vector<string> GetAllFiles() override;
+	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
 
 protected:
 	//! Main MultiFileList API
-	string GetFile(idx_t i) override;
+	OpenFileInfo GetFile(idx_t i) override;
 
 	//! Get the i-th expanded file
-	string GetFileInternal(idx_t i);
+	OpenFileInfo GetFileInternal(idx_t i);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	bool ExpandNextPath();
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal(idx_t &current_path, vector<string> &result) const;
+	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
 
@@ -188,7 +189,7 @@ protected:
 	//! The current path to expand
 	idx_t current_path;
 	//! The expanded files
-	vector<string> expanded_files;
+	vector<OpenFileInfo> expanded_files;
 
 	mutable mutex lock;
 };

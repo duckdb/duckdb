@@ -8,6 +8,7 @@ PRAGMA enable_verification
 # requires notwindows because tests will return \r\n to be used in the parameters
 require notwindows
 
+# This has a row with an extra column, so with ignore_errors we give preference to that
 query II
 SELECT quote, escape from sniff_csv('data/csv/16857.csv', ignore_errors = true);
 ----
@@ -130,11 +131,11 @@ FROM read_csv('data/csv/auto/backslash_escape.csv', auto_detect=false, delim='|'
 query IIIIIIIIIIII
 FROM sniff_csv('data/csv/comments/simple.csv');
 ----
-;	(empty)	(empty)	\n	#	2	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=2, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
+;	(empty)	(empty)	\n	#	0	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 
 # Test Prompt
 query II
-FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='"', escape='"', new_line='\n', skip=2, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
+FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 ----
 1	3
 6	7

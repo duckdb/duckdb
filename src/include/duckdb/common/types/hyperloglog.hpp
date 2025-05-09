@@ -10,6 +10,7 @@
 
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,10 @@ public:
 	static constexpr idx_t Q = 64 - P;
 	static constexpr idx_t M = 1 << P;
 	static constexpr double ALPHA = 0.721347520444481703680; // 1 / (2 log(2))
+
+	static double GetErrorRate() {
+		return std::sqrt(PI / 2.0) / sqrt(M);
+	}
 
 public:
 	HyperLogLog() {

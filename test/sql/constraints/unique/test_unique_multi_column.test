@@ -5,8 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-require skip_reload
-
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER, j INTEGER)
 

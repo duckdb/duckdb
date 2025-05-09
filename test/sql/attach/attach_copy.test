@@ -2,8 +2,6 @@
 # description: Test attach mixed with the COPY statement
 # group: [attach]
 
-require skip_reload
-
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
 

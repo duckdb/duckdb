@@ -1,1 +1,1 @@
-SELECT COUNT(DISTINCT SearchPhrase) FROM hits;
+SELECT MIN(EventDate), MAX(EventDate) FROM hits;

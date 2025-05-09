@@ -110,7 +110,7 @@ statement ok
 select list_intersect(l1, l2) from large_lists;
 
 query I
-select list_intersect(list_filter([1,2,3,4], x -> x > 2), list_filter([4,5,6,7], x -> x > 2));
+select list_intersect(list_filter([1, 2, 3, 4], lambda x: x > 2), list_filter([4, 5, 6, 7], lambda x: x > 2));
 ----
 [4]
 

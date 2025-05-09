@@ -50,9 +50,6 @@ public:
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Recursively remove a directory and all files in it
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
-	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-	               FileOpener *opener = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;
@@ -67,7 +64,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 
 	//! Runs a glob on the file system, returning a list of matching files
-	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
@@ -99,12 +96,20 @@ public:
 	// returns a C-string of the path that trims any file:/ prefix
 	static const char *NormalizeLocalPath(const string &path);
 
+protected:
+	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+	                       optional_ptr<FileOpener> opener) override;
+
+	bool SupportsListFilesExtended() const override {
+		return true;
+	}
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
 
-	vector<string> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
+	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
 };
 
 } // namespace duckdb

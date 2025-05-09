@@ -15,6 +15,8 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
 
+#include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
@@ -45,7 +47,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
-		this->plan = std::move(bound_statement.plan);
+		this->plan = FlattenDependentJoins::DecorrelateIndependent(*binder, std::move(bound_statement.plan));
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);

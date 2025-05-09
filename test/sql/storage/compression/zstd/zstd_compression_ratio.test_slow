@@ -18,8 +18,7 @@ set logging_level='info';
 statement ok
 PRAGMA force_compression='zstd'
 
-statement ok
-select setseed(0.42);
+set seed 0.42
 
 statement ok
 set variable dataset_size = 100_000;
@@ -28,7 +27,7 @@ set variable dataset_size = 100_000;
 statement ok
 create table test_compressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select
@@ -48,13 +47,12 @@ FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 23080
 statement ok
 PRAGMA force_compression='uncompressed'
 
-statement ok
-select setseed(0.42);
+set seed 0.42
 
 statement ok
 CREATE TABLE test_uncompressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select

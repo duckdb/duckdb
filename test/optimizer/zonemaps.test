@@ -2,9 +2,6 @@
 # description: Test if zonemaps are correctly used
 # group: [optimizer]
 
-require skip_reload
-
-
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 

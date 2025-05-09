@@ -23,6 +23,7 @@
 #include "thrift/Thrift.h"
 #include "thrift/transport/TTransportException.h"
 #include <memory>
+#include <cstdint>
 #include <string>
 
 namespace duckdb_apache {

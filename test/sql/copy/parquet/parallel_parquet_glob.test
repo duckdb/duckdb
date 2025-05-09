@@ -34,3 +34,16 @@ query I
 select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
 ----
 2
+
+statement ok
+SET parquet_metadata_cache=true
+
+query I
+select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
+----
+2
+
+query I
+select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
+----
+2

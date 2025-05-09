@@ -52,6 +52,59 @@ static void TemplatedListValueFunction(DataChunk &args, Vector &result) {
 	ListVector::SetListSize(result, args.size() * list_size);
 }
 
+static void ListValueListFunction(DataChunk &args, Vector &result) {
+	const idx_t list_size = args.ColumnCount();
+	ListVector::Reserve(result, args.size() * list_size);
+
+	vector<idx_t> col_offsets;
+	idx_t offset_sum = 0;
+	for (idx_t i = 0; i < list_size; i++) {
+		col_offsets.push_back(offset_sum);
+		auto &list = args.data[i];
+		const auto length = ListVector::GetListSize(list);
+		offset_sum += length;
+	}
+
+	auto &result_list = ListVector::GetEntry(result);
+	ListVector::Reserve(result_list, offset_sum);
+
+	auto &result_child_vector = ListVector::GetEntry(result_list);
+	for (idx_t i = 0; i < list_size; i++) {
+		auto list = args.data[i];
+		const auto length = ListVector::GetListSize(list);
+		if (length == 0) {
+			continue;
+		}
+		auto &child_vector = ListVector::GetEntry(list);
+		VectorOperations::Copy(child_vector, result_child_vector, length, 0, col_offsets[i]);
+	}
+
+	const auto result_data = FlatVector::GetData<list_entry_t>(result);
+	const auto result_list_data = FlatVector::GetData<list_entry_t>(result_list);
+	auto &result_list_validity = FlatVector::Validity(result_list);
+
+	const auto args_unified_format = args.ToUnifiedFormat();
+	for (idx_t r = 0; r < args.size(); r++) {
+		for (idx_t c = 0; c < list_size; c++) {
+			const auto input_idx = args_unified_format[c].sel->get_index(r);
+			const auto result_idx = r * list_size + c;
+			const auto input_data = UnifiedVectorFormat::GetData<list_entry_t>(args_unified_format[c]);
+			if (args_unified_format[c].validity.RowIsValid(input_idx)) {
+				const auto length = input_data[input_idx].length;
+				const auto offset = col_offsets[c] + input_data[input_idx].offset;
+				result_list_data[result_idx] = list_entry_t(offset, length);
+			} else {
+				result_list_validity.SetInvalid(result_idx);
+			}
+		}
+		result_data[r].offset = r * list_size;
+		result_data[r].length = list_size;
+	}
+
+	ListVector::SetListSize(result, args.size() * list_size);
+	ListVector::SetListSize(result_list, offset_sum);
+}
+
 static void TemplatedListValueFunctionFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -124,6 +177,9 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedListValueFunction<string_t, ListValueStringAssign>(args, result);
+		break;
+	case PhysicalType::LIST:
+		ListValueListFunction(args, result);
 		break;
 	default: {
 		TemplatedListValueFunctionFallback(args, result);

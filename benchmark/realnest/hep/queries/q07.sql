@@ -7,13 +7,13 @@ WITH matching_jets AS (
     len(
         filter(
             Electron,
-            x -> x.pt > 10 AND
+            lambda x: x.pt > 10 AND
                  sqrt( (j.eta - x.eta) * (j.eta - x.eta) +
                        pow( (j.phi - x.phi + pi()) % (2 * pi()) - pi(), 2) ) < 0.4)) = 0 AND
     len(
         filter(
             Muon,
-            x -> x.pt > 10 AND
+            lambda x: x.pt > 10 AND
                  sqrt( (j.eta - x.eta) * (j.eta - x.eta) +
                        pow( (j.phi - x.phi + pi()) % (2 * pi()) - pi(), 2) ) < 0.4)) = 0
   GROUP BY rowid

@@ -185,4 +185,14 @@ struct IsHistogramOtherBinFun {
 	static ScalarFunction GetFunction();
 };
 
+struct CastToTypeFun {
+	static constexpr const char *Name = "cast_to_type";
+	static constexpr const char *Parameters = "param,type";
+	static constexpr const char *Description = "Casts the first argument to the type of the second argument";
+	static constexpr const char *Example = "cast_to_type('42', NULL::INTEGER)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

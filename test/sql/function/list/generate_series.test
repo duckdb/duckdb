@@ -211,3 +211,57 @@ query I
 SELECT range(NULL, NULL, NULL)
 ----
 NULL
+
+query II
+SELECT * FROM (SELECT 1 UNION ALL SELECT 0 UNION ALL SELECT 2) AS _(x), generate_series(1, x) AS __(y) ORDER BY x, y
+----
+1	1
+2	1
+2	2
+
+# Check that explain cardinalities are correct
+query II
+EXPLAIN FROM range(0);
+----
+physical_plan	<REGEX>:.*~0 Rows.*
+
+query II
+EXPLAIN FROM range(-1);
+----
+physical_plan	<REGEX>:.*~0 Rows.*
+
+query II
+EXPLAIN FROM range(-5, -20, -1);
+----
+physical_plan	<REGEX>:.*~15 Rows.*
+
+query II
+EXPLAIN FROM range(1, 4, 2);
+----
+physical_plan	<REGEX>:.*~2 Rows.*
+
+query II
+EXPLAIN FROM range(1, 5, 2);
+----
+physical_plan	<REGEX>:.*~2 Rows.*
+
+query II
+EXPLAIN FROM generate_series(0);
+----
+physical_plan	<REGEX>:.*~1 Rows.*
+
+query II
+EXPLAIN FROM generate_series(1);
+----
+physical_plan	<REGEX>:.*~2 Rows.*
+
+query II
+EXPLAIN FROM generate_series(1, 4, 2);
+----
+physical_plan	<REGEX>:.*~2 Rows.*
+
+query II
+EXPLAIN FROM generate_series(1, 5, 2);
+----
+physical_plan	<REGEX>:.*~3 Rows.*
+

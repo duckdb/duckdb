@@ -66,7 +66,6 @@
 %type <boolean> opt_ordinality
 %type <list>	func_arg_list
 %type <node>	func_arg_expr
-%type <node>	list_comprehension_lhs
 %type <node>	list_comprehension
 %type <list>	row qualified_row type_list colid_type_list
 %type <node>	case_expr case_arg when_clause case_default

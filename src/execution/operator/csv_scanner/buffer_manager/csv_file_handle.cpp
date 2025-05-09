@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-CSVFileHandle::CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handle_p, const string &path_p,
+CSVFileHandle::CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handle_p, const OpenFileInfo &file_p,
                              const CSVReaderOptions &options)
     : compression_type(options.compression), file_handle(std::move(file_handle_p)),
-      encoder(config, options.encoding, options.buffer_size_option.GetValue()), path(path_p) {
+      encoder(config, options.encoding, options.buffer_size_option.GetValue()), file(file_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
@@ -18,9 +18,9 @@ CSVFileHandle::CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handl
 	compression_type = file_handle->GetFileCompressionType();
 }
 
-unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
+unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
                                                      FileCompressionType compression) {
-	auto file_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | compression);
+	auto file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | compression);
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
@@ -28,9 +28,9 @@ unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &
 }
 
 unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(DBConfig &config, FileSystem &fs, Allocator &allocator,
-                                                  const string &path, const CSVReaderOptions &options) {
-	auto file_handle = OpenFileHandle(fs, allocator, path, options.compression);
-	return make_uniq<CSVFileHandle>(config, std::move(file_handle), path, options);
+                                                  const OpenFileInfo &file, const CSVReaderOptions &options) {
+	auto file_handle = OpenFileHandle(fs, allocator, file, options.compression);
+	return make_uniq<CSVFileHandle>(config, std::move(file_handle), file, options);
 }
 
 double CSVFileHandle::GetProgress() const {
@@ -120,7 +120,7 @@ string CSVFileHandle::ReadLine() {
 }
 
 string CSVFileHandle::GetFilePath() {
-	return path;
+	return file.path;
 }
 
 } // namespace duckdb

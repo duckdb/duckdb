@@ -8,7 +8,7 @@ OptionalFilter::OptionalFilter(unique_ptr<TableFilter> filter)
     : TableFilter(TableFilterType::OPTIONAL_FILTER), child_filter(std::move(filter)) {
 }
 
-FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) const {
 	return child_filter->CheckStatistics(stats);
 }
 

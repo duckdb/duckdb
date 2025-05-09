@@ -35,6 +35,8 @@ struct CSVEncoderBuffer {
 	idx_t cur_pos = 0;
 	//! The actual encoded buffer size, from the last file_handle read.
 	idx_t actual_encoded_buffer_size = 0;
+	//! If this is the last buffer
+	bool last_buffer = false;
 
 private:
 	//! The encoded buffer, we only have one per file, so we cache it and make sure to pass over unused bytes.
@@ -58,5 +60,8 @@ private:
 	CSVEncoderBuffer remaining_bytes_buffer;
 	//! Actual Encoding Function
 	optional_ptr<EncodingFunction> encoding_function;
+	//! Pass-on Byte, used to check if we are done with the file, but must be appended to next buffer
+	char pass_on_byte;
+	bool has_pass_on_byte = false;
 };
 } // namespace duckdb

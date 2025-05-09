@@ -11,13 +11,18 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/optimizer/column_lifetime_analyzer.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -209,13 +214,14 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	if (expr.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		auto &child_expr = func.children[0];
-		auto child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 		if (func.function.name == "struct_extract") {
+			auto &child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 			string child_name = child_value.GetValue<string>();
 			auto child_index = StructType::GetChildIndexUnsafe(func.children[0]->return_type, child_name);
 			inner_filter = make_uniq<StructFilter>(child_index, child_name, std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		} else if (func.function.name == "struct_extract_at") {
+			auto &child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 			inner_filter = make_uniq<StructFilter>(child_value.GetValue<idx_t>() - 1, "", std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		}
@@ -286,14 +292,12 @@ bool TypeSupportsConstantFilter(const LogicalType &type) {
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
-                                                               const vector<ColumnIndex> &column_ids,
-                                                               column_t column_id,
+                                                               const vector<ColumnIndex> &column_ids, column_t expr_id,
                                                                vector<ExpressionValueInformation> &info_list) {
 	if (info_list.empty()) {
 		// no constants - already removed
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto filter_exp = equivalence_map.end();
 	auto &constant_info = info_list[0];
 	// check if the type is supported
 	if (!TypeSupportsConstantFilter(constant_info.constant.type())) {
@@ -304,8 +308,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	//! Here we check if these filters are column references
-	filter_exp = equivalence_map.find(column_id);
-
+	auto filter_exp = equivalence_map.find(expr_id);
 	if (filter_exp->second.size() != 1) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
@@ -326,6 +329,48 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 		table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, std::move(constant_filter)));
 	}
 	equivalence_map.erase(filter_exp);
+	return FilterPushdownResult::PUSHED_DOWN_FULLY;
+}
+
+void ReplaceWithBoundReference(unique_ptr<Expression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		expr = make_uniq<BoundReferenceExpression>(expr->return_type, 0ULL);
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { ReplaceWithBoundReference(child); });
+}
+
+FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
+	if (!get.function.pushdown_expression) {
+		// the scan does not support pushing down generic expressions
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	// extract the column bindings from this expression
+	vector<ColumnBinding> bindings;
+	ColumnLifetimeAnalyzer::ExtractColumnBindings(expr, bindings);
+	if (bindings.empty()) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	// we can only pushdown expressions that refer to exactly one column
+	for (idx_t i = 1; i < bindings.size(); i++) {
+		if (bindings[i] != bindings[0]) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+	}
+	if (!get.function.pushdown_expression(context, get, expr)) {
+		// the scan does not support pushing down THIS expression
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	// replace the BoundColumnRefExpression with a BoundReference
+	auto filter_expr = expr.Copy();
+	ReplaceWithBoundReference(filter_expr);
+
+	// push the expression filter
+	auto &column_ids = get.GetColumnIds();
+	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
+	auto &column_index = column_ids[bindings[0].column_index];
+	get.table_filters.PushFilter(column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
@@ -579,11 +624,14 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table
 	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids) {
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
+                                                        vector<FilterPushdownResult> &pushdown_results) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
-		TryPushdownConstantFilter(table_filters, column_ids, constant_value.first, constant_value.second);
+		auto expr_id = constant_value.first;
+		auto &const_list = constant_value.second;
+		TryPushdownConstantFilter(table_filters, column_ids, expr_id, const_list);
 	}
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
@@ -592,6 +640,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
 			// the filter has been pushed down entirely - we can prune it
 			remaining_filters.erase_at(rem_fil_idx--);
+		} else {
+			pushdown_results.push_back(pushdown_result);
 		}
 	}
 	return table_filters;

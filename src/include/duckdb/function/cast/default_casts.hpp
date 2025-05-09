@@ -75,6 +75,10 @@ struct CastParameters {
 	bool strict = false;
 	// out: error message in case cast has failed
 	string *error_message = nullptr;
+	//! Source expression
+	optional_ptr<const Expression> cast_source;
+	//! Target expression
+	optional_ptr<const Expression> cast_target;
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
 	//! Query location (if any)

@@ -42,9 +42,9 @@ struct CSVMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-	                                               const string &filename, idx_t file_idx,
+	                                               const OpenFileInfo &file, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
 	                                               CSVReaderOptions &options, const MultiFileOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);

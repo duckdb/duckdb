@@ -4,8 +4,6 @@
 
 require parquet
 
-require noforcestorage
-
 statement ok
 attach '__TEST_DIR__/test.db' as ddb (default_table 'my_table')
 

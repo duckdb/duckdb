@@ -89,6 +89,7 @@ public:
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
+	void OnDetach(ClientContext &context);
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);

@@ -42,7 +42,7 @@ struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
 	ColumnDataScanState scan_state;
 
 	MultiFileListScanData file_list_scan;
-	string current_file;
+	OpenFileInfo current_file;
 
 public:
 	static void BindMetaData(vector<LogicalType> &return_types, vector<string> &names);
@@ -51,11 +51,13 @@ public:
 	static void BindFileMetaData(vector<LogicalType> &return_types, vector<string> &names);
 	static void BindBloomProbe(vector<LogicalType> &return_types, vector<string> &names);
 
-	void LoadRowGroupMetadata(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
-	void LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
-	void LoadKeyValueMetaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
-	void LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
-	void ExecuteBloomProbe(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path,
+	void LoadRowGroupMetadata(ClientContext &context, const vector<LogicalType> &return_types,
+	                          const OpenFileInfo &file);
+	void LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types, const OpenFileInfo &file);
+	void LoadKeyValueMetaData(ClientContext &context, const vector<LogicalType> &return_types,
+	                          const OpenFileInfo &file);
+	void LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types, const OpenFileInfo &file);
+	void ExecuteBloomProbe(ClientContext &context, const vector<LogicalType> &return_types, const OpenFileInfo &file,
 	                       const string &column_name, const Value &probe);
 };
 
@@ -209,10 +211,10 @@ Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &sc
 }
 
 void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, const vector<LogicalType> &return_types,
-                                                       const string &file_path) {
+                                                       const OpenFileInfo &file) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	ParquetReader reader(context, file_path, parquet_options);
+	ParquetReader reader(context, file.path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -242,7 +244,7 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			auto &column_type = column_schema.type;
 
 			// file_name, LogicalType::VARCHAR
-			current_chunk.SetValue(0, count, file_path);
+			current_chunk.SetValue(0, count, file.path);
 
 			// row_group_id, LogicalType::BIGINT
 			current_chunk.SetValue(1, count, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_idx)));
@@ -452,10 +454,10 @@ Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool i
 }
 
 void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types,
-                                                 const string &file_path) {
+                                                 const OpenFileInfo &file) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file.path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -464,7 +466,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 		auto &column = meta_data->schema[col_idx];
 
 		// file_name, LogicalType::VARCHAR
-		current_chunk.SetValue(0, count, file_path);
+		current_chunk.SetValue(0, count, file.path);
 
 		// name, LogicalType::VARCHAR
 		current_chunk.SetValue(1, count, column.name);
@@ -526,10 +528,10 @@ void ParquetMetaDataOperatorData::BindKeyValueMetaData(vector<LogicalType> &retu
 }
 
 void ParquetMetaDataOperatorData::LoadKeyValueMetaData(ClientContext &context, const vector<LogicalType> &return_types,
-                                                       const string &file_path) {
+                                                       const OpenFileInfo &file) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file.path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -538,7 +540,7 @@ void ParquetMetaDataOperatorData::LoadKeyValueMetaData(ClientContext &context, c
 	for (idx_t col_idx = 0; col_idx < meta_data->key_value_metadata.size(); col_idx++) {
 		auto &entry = meta_data->key_value_metadata[col_idx];
 
-		current_chunk.SetValue(0, count, Value(file_path));
+		current_chunk.SetValue(0, count, Value(file.path));
 		current_chunk.SetValue(1, count, Value::BLOB_RAW(entry.key));
 		current_chunk.SetValue(2, count, Value::BLOB_RAW(entry.value));
 
@@ -583,16 +585,16 @@ void ParquetMetaDataOperatorData::BindFileMetaData(vector<LogicalType> &return_t
 }
 
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
-                                                   const string &file_path) {
+                                                   const OpenFileInfo &file) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file.path, parquet_options);
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
 	auto meta_data = reader->GetFileMetadata();
 
 	//	file_name
-	current_chunk.SetValue(0, 0, Value(file_path));
+	current_chunk.SetValue(0, 0, Value(file.path));
 	//	created_by
 	current_chunk.SetValue(1, 0, ParquetElementStringVal(meta_data->created_by, meta_data->__isset.created_by));
 	//	num_rows
@@ -628,11 +630,11 @@ void ParquetMetaDataOperatorData::BindBloomProbe(vector<LogicalType> &return_typ
 }
 
 void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, const vector<LogicalType> &return_types,
-                                                    const string &file_path, const string &column_name,
+                                                    const OpenFileInfo &file, const string &column_name,
                                                     const Value &probe) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file.path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -646,11 +648,11 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 	}
 
 	if (!probe_column_idx.IsValid()) {
-		throw InvalidInputException("Column %s not found in %s", column_name, file_path);
+		throw InvalidInputException("Column %s not found in %s", column_name, file.path);
 	}
 
 	auto &allocator = Allocator::DefaultAllocator();
-	auto transport = std::make_shared<ThriftFileTransport>(allocator, reader->GetHandle(), false);
+	auto transport = std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 
@@ -664,7 +666,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 
 		auto bloom_excludes =
 		    ParquetStatisticsUtils::BloomFilterExcludes(filter, column.meta_data, *protocol, allocator);
-		current_chunk.SetValue(0, count, Value(file_path));
+		current_chunk.SetValue(0, count, Value(file.path));
 		current_chunk.SetValue(1, count, Value::BIGINT(NumericCast<int64_t>(row_group_idx)));
 		current_chunk.SetValue(2, count, Value::BOOLEAN(bloom_excludes));
 

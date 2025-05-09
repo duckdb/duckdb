@@ -2,10 +2,6 @@
 # description: Concurrently checkpoint the same database
 # group: [attach]
 
-require noforcestorage
-
-require skip_reload
-
 statement ok
 ATTACH '__TEST_DIR__/concurrent_checkpoint.db' AS db
 

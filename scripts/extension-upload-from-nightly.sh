@@ -28,10 +28,10 @@ CLOUDFRONT_DISTRIBUTION_ID=E2Z28NDMI4PVXP
 
 ### COPY THE FILES
 ## REAL_RUN is to be used to move non-Wasm extensions
-REAL_RUN="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.gz' --acl public-read"
+REAL_RUN="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.gz' --acl public-read --region us-east-2"
 DRY_RUN="$REAL_RUN --dryrun"
 ## REAL_RUN_WASM is to be used to move Wasm extensions to new style path (no extra duckdb-wasm)
-REAL_RUN_WASM="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.wasm' --acl public-read --content-encoding br --content-type='application/wasm'"
+REAL_RUN_WASM="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.wasm' --acl public-read --content-encoding br --content-type='application/wasm' --region us-east-2"
 DRY_RUN_WASM="$REAL_RUN_WASM --dryrun"
 
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then

@@ -120,7 +120,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	} else {
 		idx_t data_start = GZIP_HEADER_MINSIZE;
 		auto read_count = file.child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
-		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, NumericCast<idx_t>(read_count));
+		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, NumericCast<idx_t>(read_count), &file);
 		// Skip over the extra field if necessary
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			uint8_t gzip_xlen[2];
@@ -157,7 +157,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		auto body_ptr = sd.in_buff_start + GZIP_FOOTER_SIZE;
 		uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 		memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
-		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE, nullptr);
 		body_ptr += GZIP_HEADER_MINSIZE;
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			auto xlen = NumericCast<idx_t>((uint8_t)*body_ptr | (uint8_t) * (body_ptr + 1) << 8);
@@ -306,19 +306,22 @@ public:
 	GZipFileSystem gzip_fs;
 };
 
-void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count) {
+void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count, optional_ptr<CompressedFile> source_file) {
+	// include the filename in the error message if known
+	string file_info = source_file ? ": " + source_file->path : "";
+
 	// check for incorrectly formatted files
 	if (read_count != GZIP_HEADER_MINSIZE) {
-		throw IOException("Input is not a GZIP stream");
+		throw IOException("Input is not a GZIP stream" + file_info);
 	}
 	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
-		throw IOException("Input is not a GZIP stream");
+		throw IOException("Input is not a GZIP stream" + file_info);
 	}
 	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
-		throw IOException("Unsupported GZIP compression method");
+		throw IOException("Unsupported GZIP compression method" + file_info);
 	}
 	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-		throw IOException("Unsupported GZIP archive");
+		throw IOException("Unsupported GZIP archive" + file_info);
 	}
 }
 
@@ -360,7 +363,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	}
 	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
 	body_ptr += GZIP_HEADER_MINSIZE;
-	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE, nullptr);
 
 	if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 		throw IOException("Extra field in a GZIP stream unsupported");

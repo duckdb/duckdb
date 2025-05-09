@@ -1,0 +1,8 @@
+{
+  "version": "unstable_new_value_functions",
+  "description": "New value functions that are added",
+  "entries": [
+      "duckdb_create_map_value",
+      "duckdb_create_union_value"
+  ]
+}

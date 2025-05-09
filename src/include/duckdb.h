@@ -1610,7 +1610,7 @@ Returns the statement type of the statement to be executed
 DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 
 //===--------------------------------------------------------------------===//
-// Bind Values To Prepared Statements
+// Bind Values to Prepared Statements
 //===--------------------------------------------------------------------===//
 
 /*!
@@ -2463,6 +2463,31 @@ Must be destroyed with `duckdb_destroy_value`.
 DUCKDB_C_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
+Creates a map value from a map type and two arrays, one for the keys and one for the values, each of length
+`entry_count`. Must be destroyed with `duckdb_destroy_value`.
+
+* @param map_type The map type
+* @param keys The keys of the map
+* @param values The values of the map
+* @param entry_count The number of entrys (key-value pairs) in the map
+* @return The map value, or nullptr, if the parameters are invalid.
+*/
+DUCKDB_C_API duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value *keys,
+                                                  duckdb_value *values, idx_t entry_count);
+
+/*!
+Creates a union value from a union type, a tag index, and a value.
+Must be destroyed with `duckdb_destroy_value`.
+
+* @param union_type The union type
+* @param tag_index The index of the tag of the union
+* @param value The value of the union
+* @return The union value, or nullptr, if the parameters are invalid.
+*/
+DUCKDB_C_API duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, idx_t tag_index,
+                                                    duckdb_value value);
+
+/*!
 Returns the number of elements in a MAP value.
 
 * @param value The MAP value.
@@ -2914,6 +2939,18 @@ DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size
 //===--------------------------------------------------------------------===//
 
 /*!
+Creates a flat vector.
+
+*/
+DUCKDB_C_API duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity);
+
+/*!
+Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.
+
+*/
+DUCKDB_C_API void duckdb_destroy_vector(duckdb_vector *vector);
+
+/*!
 Retrieves the column type of the specified vector.
 
 The result must be destroyed with `duckdb_destroy_logical_type`.
@@ -3059,6 +3096,17 @@ The resulting vector happens to be a dictionary vector.
 * @param len The length of the selection vector
 */
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+
+/*!
+Copies the value from `value` to `vector`.
+*/
+DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
+
+/*!
+References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer
+
+*/
+DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

@@ -80,6 +80,11 @@ void TestCreateDirectory(string path) {
 	fs->CreateDirectory(path);
 }
 
+string TestJoinPath(string path1, string path2) {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	return fs->JoinPath(path1, path2);
+}
+
 void SetTestDirectory(string path) {
 	custom_test_directory = path;
 }
@@ -157,8 +162,7 @@ void ClearTestDirectory() {
 }
 
 string TestCreatePath(string suffix) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	return fs->JoinPath(TestDirectoryPath(), suffix);
+	return TestJoinPath(TestDirectoryPath(), suffix);
 }
 
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error) {

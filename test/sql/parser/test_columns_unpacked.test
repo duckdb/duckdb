@@ -60,7 +60,7 @@ select first(amount ORDER BY *COLUMNS('date|priority') ASC) from sales;
 
 # Using a lambda in *COLUMNS
 query I
-select COALESCE(*COLUMNS(c -> c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
+select COALESCE(*COLUMNS(lambda c: c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
 ----
 3
 
@@ -156,12 +156,12 @@ select CONCAT(*COLUMNS(*), *COLUMNS(*)) from data
 
 # *COLUMNS inside COLUMNS lambda
 statement error
-select COLUMNS(col -> *COLUMNS('id')) from data
+select COLUMNS(lambda col: *COLUMNS('id')) from data
 ----
 COLUMNS expression is not allowed inside another COLUMNS expression
 
 statement error
-select *COLUMNS(col -> *COLUMNS(*)) from data
+select *COLUMNS(lambda col: *COLUMNS(*)) from data
 ----
 COLUMNS expression is not allowed inside another COLUMNS expression
 
