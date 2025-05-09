@@ -74,7 +74,7 @@ index 28ad64f..638c17f 100644
  	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
  	Read(handle, buffer, nr_bytes, hfh.file_offset);
 -	hfh.file_offset += nr_bytes;
-+	hfh.file_offset += nr_bytes; // This is done twice now?
++   //
 +	DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, hfh.file_offset - nr_bytes);
  	return nr_bytes;
  }
