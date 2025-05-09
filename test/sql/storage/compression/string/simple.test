@@ -2,8 +2,6 @@
 # description: Test dictionary compression
 # group: [string]
 
-require skip_reload
-
 statement ok
 ATTACH '__TEST_DIR__/test_blob_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 

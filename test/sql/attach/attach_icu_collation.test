@@ -2,8 +2,6 @@
 # description: ATTACH to a database that uses ICU collations in types
 # group: [attach]
 
-require skip_reload
-
 require icu
 
 # The database is written with a vector size of 2048.
