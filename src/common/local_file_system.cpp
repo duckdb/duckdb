@@ -60,6 +60,15 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 
 namespace duckdb {
 #ifndef _WIN32
+
+bool FileOpenFlags::PlatformEnforcesLocksWithinProcess() {
+	return false;
+}
+
+bool FileOpenFlags::PlatformSupportsMandatoryLocks() {
+	return false;
+}
+
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = NormalizeLocalPath(filename);
@@ -91,6 +100,15 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 }
 
 #else
+
+bool FileOpenFlags::PlatformEnforcesLocksWithinProcess() {
+	return true;
+}
+
+bool FileOpenFlags::PlatformSupportsMandatoryLocks() {
+	return true;
+}
+
 static std::wstring NormalizePathAndConvertToUnicode(const string &path) {
 	string normalized_path_copy;
 	const char *normalized_path;

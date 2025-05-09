@@ -106,7 +106,11 @@ TEST_CASE("Test concurrent writers block each other", "[file_lock]") {
 	// All threads finished
 	REQUIRE(finished_threads == THREAD_COUNT);
 	// Should have encountered some errors due to lock conflicts
-	REQUIRE(encountered_error);
+	if (FileOpenFlags::PlatformSupportsMandatoryLocks() && FileOpenFlags::PlatformEnforcesLocksWithinProcess()) {
+		REQUIRE(encountered_error);
+	} else {
+		REQUIRE(!encountered_error);
+	}
 }
 
 // Multiple readers should work concurrently
@@ -174,7 +178,11 @@ TEST_CASE("Test writers block readers and vice versa", "[file_lock]") {
 	// All threads finished
 	REQUIRE(finished_threads == THREAD_COUNT);
 	// Should have encountered some errors due to lock conflicts
-	REQUIRE(encountered_error);
+	if (FileOpenFlags::PlatformSupportsMandatoryLocks() && FileOpenFlags::PlatformEnforcesLocksWithinProcess()) {
+		REQUIRE(encountered_error);
+	} else {
+		REQUIRE(!encountered_error);
+	}
 }
 
 // Test upgrading from read lock to write lock
@@ -206,5 +214,9 @@ TEST_CASE("Test read lock to write lock upgrade", "[file_lock]") {
 	// All threads finished
 	REQUIRE(finished_threads == THREAD_COUNT);
 	// Should have encountered some errors due to lock conflicts during upgrades
-	REQUIRE(encountered_error);
+	if (FileOpenFlags::PlatformSupportsMandatoryLocks() && FileOpenFlags::PlatformEnforcesLocksWithinProcess()) {
+		REQUIRE(encountered_error);
+	} else {
+		REQUIRE(!encountered_error);
+	}
 }
