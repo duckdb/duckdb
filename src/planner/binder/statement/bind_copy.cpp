@@ -30,6 +30,17 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
+void IsFormatExtensionKnown(const string &format) {
+	for (auto &file_postfixes : EXTENSION_FILE_POSTFIXES) {
+		if (format == file_postfixes.name + 1) {
+			// It's a match, we must throw
+			throw CatalogException(
+			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
+			    file_postfixes.extension);
+		}
+	}
+}
+
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
 	// Let's first bind our format
 	auto on_entry_do =
@@ -40,6 +51,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
 
 	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
 		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
 		                         OnEntryNotFound::THROW_EXCEPTION);
@@ -342,6 +354,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
 	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
 	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
 		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
 		                         OnEntryNotFound::THROW_EXCEPTION);

@@ -13,6 +13,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
