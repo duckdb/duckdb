@@ -93,3 +93,8 @@ query I
 select pg_typeof(1);
 ----
 integer
+
+statement error
+SELECT temp.current_user()
+----
+main.current_user
