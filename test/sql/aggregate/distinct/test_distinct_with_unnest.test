@@ -1,0 +1,28 @@
+# name: test/sql/aggregate/distinct/test_distinct_with_unnest.test
+# description: Test DISTINCT ON UNNEST(...)
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl (a STRUCT(m1 INT, m2 INT));
+
+statement ok
+INSERT INTO tbl VALUES ({'m1': '0', 'm2': '0'}), ({'m1': '0', 'm2': '1'});
+
+query II
+SELECT DISTINCT UNNEST(a)
+FROM tbl
+ORDER BY ALL
+----
+0	0
+0	1
+
+query II
+SELECT DISTINCT UNNEST(a)
+FROM (SELECT {'m1': '0', 'm2': '0'} AS a UNION ALL SELECT {'m1': '0', 'm2': '1'})
+ORDER BY ALL
+----
+0	0
+0	1
