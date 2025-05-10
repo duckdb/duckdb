@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/join_order/statistics_extractor.hpp
+// duckdb/optimizer/join_order/relation_statistics_helper.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -2,6 +2,8 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
+#include "duckdb/execution/operator/filter/physical_filter.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <chrono>
@@ -521,11 +523,37 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 	return pipeline.sink->Sink(context, chunk, input);
 }
 
+bool PipelineExecutor::StopBuildingBF(const DataChunk &result) const {
+	// Only the pipeline that has a CREATE_BF can be canceled.
+	if (!pipeline.is_building_bf) {
+		return false;
+	}
+
+	// This pipeline has been checked.
+	if (pipeline.is_selectivity_checked) {
+		auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
+		return !bf_creator.is_successful;
+	}
+
+	// Collect pipeline source statistics
+	++pipeline.num_source_chunks;
+	pipeline.num_source_rows += static_cast<int64_t>(result.size());
+	if (pipeline.num_source_chunks > 32) {
+		pipeline.is_selectivity_checked = true;
+	}
+
+	return false;
+}
+
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(*pipeline.source);
 
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
+
+	if (StopBuildingBF(result)) {
+		res = SourceResultType::FINISHED;
+	}
 
 	// Ensures sources only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);

@@ -988,5 +988,31 @@
         "type": "string"
       }
     ]
+  },
+  {
+    "class": "LogicalUseBF",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_USE_BF",
+    "members": [
+      {
+        "id": 200,
+        "name": "filter_plan",
+        "type": "shared_ptr<FilterPlan>"
+      }
+    ],
+    "constructor": ["filter_plan"]
+  },
+  {
+    "class": "LogicalCreateBF",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CREATE_BF",
+    "members": [
+      {
+        "id": 200,
+        "name": "filter_plans",
+        "type": "vector<shared_ptr<FilterPlan>>"
+      }
+    ],
+    "constructor": ["filter_plans"]
   }
 ]

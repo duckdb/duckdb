@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/execution/transfer_bf_linker.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -10,6 +11,8 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
 
@@ -27,6 +30,10 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator>
 
 PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
+
+	// Create and link BloomFilters for UseBFOperator and CreateBFOperator
+	TransferBFLinker linker;
+	linker.LinkBFOperators(*op);
 
 	// Resolve the column references.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING);
@@ -169,6 +176,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return CreatePlan(op.Cast<LogicalSimple>());
+	case LogicalOperatorType::LOGICAL_CREATE_BF:
+		return CreatePlan(op.Cast<LogicalCreateBF>());
+	case LogicalOperatorType::LOGICAL_USE_BF:
+		return CreatePlan(op.Cast<LogicalUseBF>());
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &extension_op = op.Cast<LogicalExtensionOperator>();
 		return extension_op.CreatePlan(context, *this);
