@@ -2,6 +2,7 @@
 
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 
 namespace duckdb {
 
@@ -17,10 +18,23 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 void DBPathAndType::CheckMagicBytes(FileSystem &fs, string &path, string &db_type) {
 	// if there isn't - check the magic bytes of the file (if any)
 	auto file_type = MagicBytes::CheckMagicBytes(fs, path);
-	if (file_type == DataFileType::SQLITE_FILE) {
+	db_type = string();
+	switch (file_type) {
+	case DataFileType::SQLITE_FILE:
 		db_type = "sqlite";
-	} else {
-		db_type = "";
+		break;
+	case DataFileType::PARQUET_FILE:
+	case DataFileType::UNKNOWN_FILE: {
+		// FIXME: we should get this from the registered replacement scans instead of hardcoding it here
+		vector<string> supported_suffixes {"parquet", "csv", "json", "jsonl", "ndjson"};
+		if (ReplacementScan::CanReplace(path, supported_suffixes)) {
+			db_type = "__open_file__";
+			break;
+		}
+		break;
+	}
+	default:
+		break;
 	}
 }
 

@@ -1060,5 +1060,12 @@ def test_prepared_statement(shell):
     result = test.run()
     result.check_stderr("Prepared statement parameters cannot be used directly")
 
+def test_shell_csv_file(shell):
+    test = (
+        ShellTest(shell, ['data/csv/dates.csv'])
+        .statement('SELECT * FROM dates')
+    )
+    result = test.run()
+    result.check_stdout("2008-08-10")
 
 # fmt: on

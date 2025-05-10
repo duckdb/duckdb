@@ -721,6 +721,11 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	}
 }
 
+void CatalogSet::SetDefaultGenerator(unique_ptr<DefaultGenerator> defaults_p) {
+	lock_guard<mutex> lock(catalog_lock);
+	defaults = std::move(defaults_p);
+}
+
 void CatalogSet::Verify(Catalog &catalog_p) {
 	D_ASSERT(&catalog_p == &catalog);
 	vector<reference<CatalogEntry>> entries;
