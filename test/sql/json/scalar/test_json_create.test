@@ -7,6 +7,17 @@ require json
 statement ok
 pragma enable_verification
 
+# issue #17329
+query T
+select json_object('foo', 0/0)
+----
+{"foo":null}
+
+query T
+select json_object('foo', CAST('nan' as DOUBLE), 'bar', 42)
+----
+{"foo":null,"bar":42}
+
 # issue #7727
 query T
 SELECT TRY_CAST('{{P{P{{{{ASD{AS{D{' AS JSON);

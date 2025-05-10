@@ -207,6 +207,9 @@ struct CreateJSONValue<INPUT_TYPE, int64_t> {
 template <class INPUT_TYPE>
 struct CreateJSONValue<INPUT_TYPE, double> {
 	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const INPUT_TYPE &input) {
+		if (Value::IsNan(input)) {
+			return yyjson_mut_null(doc);
+		}
 		return yyjson_mut_real(doc, input);
 	}
 };
