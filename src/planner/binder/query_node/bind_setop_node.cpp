@@ -243,6 +243,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		}
 	}
 
+	if (!statement.setop_all) {
+		statement.modifiers.insert(statement.modifiers.begin(), make_uniq<DistinctModifier>());
+	}
+
 	SelectBindState bind_state;
 	if (!statement.modifiers.empty()) {
 		// handle the ORDER BY/DISTINCT clauses
