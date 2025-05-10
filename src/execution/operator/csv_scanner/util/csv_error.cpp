@@ -60,7 +60,7 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 
 void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
+	if (!force_error && (ignore_errors || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex())))) {
 		// We store this error, we can't throw it now, or we are ignoring it
 		errors.push_back(csv_error);
 		return;
