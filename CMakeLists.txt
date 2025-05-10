@@ -653,6 +653,9 @@ if(OS_NAME STREQUAL "windows")
   endif()
 endif()
 
+if (OS_NAME STREQUAL "linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug" AND "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+  add_compile_options(-fstandalone-debug)
+endif()
 
 include_directories(src/include)
 include_directories(third_party/fsst)
