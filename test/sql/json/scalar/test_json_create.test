@@ -18,6 +18,17 @@ select json_object('foo', CAST('nan' as DOUBLE), 'bar', 42)
 ----
 {"foo":null,"bar":42}
 
+query T
+select json_object('foo', CAST('-inf' as DOUBLE))
+----
+{"foo":null}
+
+query T
+select json_object('foo', CAST('inf' as DOUBLE))
+----
+{"foo":null}
+
+
 # issue #7727
 query T
 SELECT TRY_CAST('{{P{P{{{{ASD{AS{D{' AS JSON);
