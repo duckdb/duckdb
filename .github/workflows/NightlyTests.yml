@@ -349,7 +349,7 @@ jobs:
      - name: Run Python SQLLogicTester
        shell: bash
        run: |
-         python3 tools/pythonpkg/scripts/sqllogictest_python.py
+         python3 -m pytest './tools/pythonpkg/sqllogic/' --verbose --test-dir './test'
 
   sqllogic:
      name: Sqllogic tests
