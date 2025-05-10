@@ -129,6 +129,13 @@ void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
 	}
 }
 
+void MbedTlsWrapper::SHA256State::AddSalt(unsigned char *salt, size_t salt_len) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	if (mbedtls_sha256_update(context, salt, salt_len)) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
 std::string MbedTlsWrapper::SHA256State::Finalize() {
 	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
 
@@ -256,7 +263,13 @@ MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(duckdb::data_ptr_t data, duckdb::idx_t len) {
+
+#ifdef DEBUG
+	duckdb::RandomEngine random_engine(1);
+#else
 	duckdb::RandomEngine random_engine(duckdb::Timestamp::GetCurrentTimestamp().value);
+#endif
+
 	while (len != 0) {
 		const auto random_integer = random_engine.NextRandomInteger();
 		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
@@ -265,7 +278,6 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(duckdb::data_ptr_
 		len -= next;
 	}
 }
-
 
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
 	GenerateRandomDataStatic(data, len);

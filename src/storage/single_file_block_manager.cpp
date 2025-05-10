@@ -2,6 +2,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -11,13 +12,21 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #include <algorithm>
 #include <cstring>
 
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#endif
+
 namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
+const char MainHeader::CANARY[] = "DUCKKEY";
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
@@ -26,9 +35,83 @@ void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	ser.WriteData(version, MainHeader::MAX_VERSION_SIZE);
 }
 
+void SerializeSalt(WriteStream &ser, data_ptr_t salt_p) {
+	data_t salt[MainHeader::SALT_LEN];
+	memset(salt, 0, MainHeader::SALT_LEN);
+	memcpy(salt, salt_p, MainHeader::SALT_LEN);
+	ser.WriteData(salt, MainHeader::SALT_LEN);
+}
+
+void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_p) {
+	data_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
+	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
+	memcpy(metadata, metadata_p, MainHeader::ENCRYPTION_METADATA_LEN);
+	ser.WriteData(metadata, MainHeader::ENCRYPTION_METADATA_LEN);
+}
+
 void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
 	memset(dest, 0, MainHeader::MAX_VERSION_SIZE);
 	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
+}
+
+void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
+	memset(dest, 0, size);
+	stream.ReadData(dest, size);
+}
+
+shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
+	auto encryption_util = db.GetDatabase().config.encryption_util;
+
+	if (encryption_util) {
+		encryption_util = db.GetDatabase().config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
+}
+
+void GenerateSalt(AttachedDatabase &db, uint8_t *salt, StorageManagerOptions &options) {
+	memset(salt, 0, MainHeader::SALT_LEN);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(salt, MainHeader::SALT_LEN);
+}
+
+void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
+                   const string *derived_key) {
+
+	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
+
+	// we zero-out the iv and the (not yet) encrypted canary
+	uint8_t iv[16];
+	memset(iv, 0, sizeof(iv));
+	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
+
+	encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
+	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
+	                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+
+	main_header.SetEncryptedCanary(canary_buffer);
+}
+
+void DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
+                   const string *derived_key) {
+	// just zero-out the iv
+	uint8_t iv[16];
+	memset(iv, 0, sizeof(iv));
+
+	//! allocate a buffer for the decrypted canary
+	data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
+	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
+
+	//! Decrypt the canary
+	encryption_state->InitializeDecryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
+	encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
+	                          MainHeader::CANARY_BYTE_SIZE);
+
+	//! compare if the decrypted canary is correct
+	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
+		throw IOException("Wrong encryption key used to open the database file");
+	}
 }
 
 void MainHeader::Write(WriteStream &ser) {
@@ -37,8 +120,15 @@ void MainHeader::Write(WriteStream &ser) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
+
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
+
+	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		SerializeEncryptionMetadata(ser, encryption_metadata);
+		SerializeSalt(ser, salt);
+		SerializeEncryptionMetadata(ser, encrypted_canary);
+	}
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
@@ -88,6 +178,12 @@ MainHeader MainHeader::Read(ReadStream &source) {
 
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
+
+	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		DeserializeEncryptionData(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
+		DeserializeEncryptionData(source, header.salt, MainHeader::SALT_LEN);
+		DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
+	}
 	return header;
 }
 
@@ -159,6 +255,30 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
       iteration_count(0), options(options) {
 }
 
+void SingleFileBlockManager::LockEncryptionKey() {
+	auto &derived_key = options.encryption_options.derived_key;
+
+#if defined(_WIN32)
+	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
+#else
+	mlock(derived_key.data(), derived_key.size());
+#endif
+}
+
+void SingleFileBlockManager::UnlockEncryptionKey() {
+	auto &derived_key = options.encryption_options.derived_key;
+
+#if defined(_WIN32)
+	VirtualUnlock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
+#else
+	munlock(derived_key.data(), derived_key.size());
+#endif
+	if (!derived_key.empty()) {
+		memset(&derived_key[0], 0, derived_key.size());
+		derived_key.clear();
+	}
+}
+
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	FileOpenFlags result;
 	if (options.read_only) {
@@ -197,7 +317,51 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
-void SingleFileBlockManager::CreateNewDatabase() {
+void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, StorageManagerOptions &options) {
+	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_options.derived_key);
+
+	// Encrypt or decrypt canary with derived key
+	EncryptCanary(main_header, encryption_state, &options.encryption_options.derived_key);
+}
+
+void StoreSalt(MainHeader &main_header, data_ptr_t salt) {
+	main_header.SetSalt(salt);
+}
+
+void StoreEncryptionMetadata(MainHeader &main_header, StorageManagerOptions &options) {
+	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
+	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
+	data_ptr_t offset = metadata;
+	//! first byte is the key derivation function used (kdf)
+	//! second byte is for the salt type
+	//! third byte is for the cipher used
+	//! the subsequent byte is empty
+	//! the last 4 bytes are the key length
+	Store<uint8_t>(options.encryption_options.kdf, offset);
+	offset++;
+	Store<uint8_t>(options.encryption_options.cipher, offset);
+	offset += 3;
+	Store<uint32_t>(options.encryption_options.key_length, offset);
+
+	main_header.SetEncryptionMetadata(metadata);
+}
+
+string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt) {
+	//! For now, we are only using SHA256 for key derivation
+	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
+	state.AddSalt(salt, MainHeader::SALT_LEN);
+	state.AddString(user_key);
+	auto derived_key = state.Finalize();
+	//! key_length is hardcoded to 32 bytes
+	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	return derived_key;
+}
+
+string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt) {
+	return KeyDerivationFunctionSHA256(user_key, salt);
+}
+
+void SingleFileBlockManager::CreateNewDatabase(string *encryption_key) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -211,9 +375,20 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 
-	if (options.NeedsEncryption()) {
-		//! set database flag if encryption is required
+	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+
+		//! we generate a random salt for each password
+		uint8_t salt[MainHeader::SALT_LEN];
+		GenerateSalt(db, salt, options);
+		options.encryption_options.derived_key = DeriveKey(*encryption_key, salt);
+
+		//! Store all metadata in the main header
+		StoreEncryptionMetadata(main_header, options);
+		StoreSalt(main_header, salt);
+		StoreEncryptedCanary(db, main_header, options);
+		//! avoid swapping the key to disk
+		LockEncryptionKey();
 	}
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
@@ -257,7 +432,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(string *encryption_key) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -279,12 +454,25 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 
-	if (main_header.IsEncrypted() && !options.NeedsEncryption()) {
+	if (main_header.IsEncrypted() && !options.encryption_options.encryption_enabled) {
 		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 	}
-	if (!main_header.IsEncrypted() && options.NeedsEncryption()) {
+	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		// database is not encrypted, but is tried to be opened with a key
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
+	} else if (main_header.IsEncrypted()) {
+
+		//! Maybe create a separate method for this
+		uint8_t salt[MainHeader::SALT_LEN];
+		memset(salt, 0, MainHeader::SALT_LEN);
+
+		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+
+		options.encryption_options.derived_key = DeriveKey(*encryption_key, salt);
+		auto &derived_key = options.encryption_options.derived_key;
+		//! Check if the correct key is used to decrypt the database
+		DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key), &derived_key);
+		LockEncryptionKey();
 	}
 
 	options.version_number = main_header.version_number;
@@ -312,20 +500,97 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	LoadFreeList();
 }
 
+void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const {
+	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
+
+	const auto &derived_key = options.encryption_options.derived_key;
+	auto encryption_util = GetEncryptionUtil(db);
+	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
+
+	uint8_t tag[MainHeader::AES_TAG_LEN];
+	memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+	//! a nonce is randomly generated for every block
+	uint8_t nonce[MainHeader::AES_IV_LEN];
+	memset(nonce, 0, MainHeader::AES_IV_LEN);
+	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
+
+	//! store the nonce at the start of the block
+	memcpy(block_offset_internal, nonce, MainHeader::AES_NONCE_LEN);
+	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, &derived_key);
+
+	auto checksum_offset = block.InternalBuffer() + delta;
+	auto encryption_checksum_offset = block_offset_internal + delta;
+	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+	//! encrypt the data including the checksum
+	auto aes_res = encryption_state->Process(checksum_offset, size, encryption_checksum_offset, size);
+
+	if (aes_res != size) {
+		throw IOException("Encryption failure: in- and output size differ");
+	}
+
+	//! Finalize and extract the tag
+	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
+	                                     MainHeader::AES_TAG_LEN);
+
+	//! store the generated tag after consequetively the nonce
+	memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
+}
+
+void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
+	const auto &derived_key = options.encryption_options.derived_key;
+	//! initialize encryption state
+	auto encryption_util = GetEncryptionUtil(db);
+	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
+
+	//! load the stored nonce
+	uint8_t nonce[MainHeader::AES_IV_LEN];
+	memset(nonce, 0, MainHeader::AES_IV_LEN);
+	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_NONCE_LEN);
+
+	//! load the tag for verification
+	uint8_t tag[MainHeader::AES_TAG_LEN];
+	memcpy(tag, block.InternalBuffer() + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
+
+	//! Initialize the decryption
+	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
+
+	auto checksum_offset = block.InternalBuffer() + delta;
+	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+	//! decrypt the block including the checksum
+	auto aes_res = encryption_state->Process(checksum_offset, size, checksum_offset, size);
+
+	if (aes_res != block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE) {
+		throw IOException("Encryption failure: in- and output size differ");
+	}
+
+	//! check the tag
+	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
+	                                     MainHeader::AES_TAG_LEN);
+}
+
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
+	// read the buffer from disk
+	block.Read(*handle, location);
+
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
-	// read the buffer from disk
-	block.Read(*handle, location);
+	if (options.encryption_options.encryption_enabled && !skip_block_header) {
+		DecryptBuffer(block, delta);
+	}
+
 	uint64_t stored_checksum;
 	uint64_t computed_checksum;
 
 	if (skip_block_header && delta > 0) {
-		// This happens ONLY for the main database header
+		//! Even with encryption enabled, the main header should be plaintext
 		stored_checksum = Load<uint64_t>(block.InternalBuffer());
 		computed_checksum = Checksum(block.buffer - delta, block.Size() + delta);
 	} else {
+		//! We do have to decrypt other headers
 		stored_checksum = Load<uint64_t>(block.InternalBuffer() + delta);
 		computed_checksum = Checksum(block.buffer, block.Size());
 	}
@@ -342,8 +607,10 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	uint64_t checksum;
+
 	if (skip_block_header && delta > 0) {
-		//! This happens only for the Main Database Header
+		//! This happens only for the main database header
+		//! We do not encrypt the main database header
 		memmove(block.InternalBuffer() + Storage::DEFAULT_BLOCK_HEADER_SIZE, block.buffer, block.Size());
 		//! zero out the last bytes of the block
 		memset(block.InternalBuffer() + block.Size() + Storage::DEFAULT_BLOCK_HEADER_SIZE, 0, delta);
@@ -355,8 +622,16 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 
 	Store<uint64_t>(checksum, block.InternalBuffer() + delta);
 
-	// now write the buffer
-	block.Write(*handle, location);
+	// encrypt if required
+	unique_ptr<FileBuffer> temp_buffer_manager;
+	if (options.encryption_options.encryption_enabled && !skip_block_header) {
+		temp_buffer_manager =
+		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		EncryptBuffer(block, *temp_buffer_manager, delta);
+		temp_buffer_manager->Write(*handle, location);
+	} else {
+		block.Write(*handle, location);
+	}
 }
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {

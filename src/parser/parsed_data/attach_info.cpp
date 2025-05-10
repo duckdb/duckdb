@@ -7,6 +7,13 @@
 
 namespace duckdb {
 
+bool ValidKey(const string &key) {
+	if (key == "true" || key == "false" || key.empty() || key.size() < 4) {
+		return false;
+	}
+	return true;
+}
+
 StorageOptions AttachInfo::GetStorageOptions() const {
 	StorageOptions storage_options;
 	string storage_version_user_provided = "";
@@ -16,6 +23,11 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			// even though the corresponding option we expose to the user is called "block_size".
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "encryption_key") {
+			if (!ValidKey(entry.second.ToString())) {
+				throw BinderException("\"%s\" is not a valid key. A key must be equal to or larger then 4 characters.",
+				                      entry.second.ToString());
+			}
+			storage_options.encryption_key = entry.second.ToString();
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
 		} else if (entry.first == "row_group_size") {

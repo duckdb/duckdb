@@ -1,4 +1,4 @@
-# name: test/sql/copy/encryption/simple_encryption.test
+# name: test/sql/copy/encryption/encryption_storage_versions.test
 # group: [encryption]
 
 require noforcestorage
