@@ -64,13 +64,13 @@ class WriteAheadLogDeserializer {
 public:
 	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(nullptr),
-	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only) {
+	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only), size(0) {
 		deserializer.Set<Catalog &>(catalog);
 	}
 	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
 	                          bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
-	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
+	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only), size(size) {
 		deserializer.Set<Catalog &>(catalog);
 	}
 
@@ -139,8 +139,13 @@ public:
 			return info;
 		}
 		auto e = ReplayEntry(wal_type);
+		e->size = size;
 		deserializer.End();
 		return e;
+	}
+
+	idx_t Size() {
+		return size;
 	}
 
 protected:
@@ -180,6 +185,7 @@ private:
 	MemoryStream stream;
 	BinaryDeserializer deserializer;
 	bool deserialize_only;
+	idx_t size;
 };
 
 //===--------------------------------------------------------------------===//
