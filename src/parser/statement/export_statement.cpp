@@ -27,7 +27,7 @@ string ExportStatement::ToString() const {
 	auto &options = info->options;
 	auto &format = info->format;
 	result += StringUtil::Format(" '%s'", path);
-	result += CopyInfo::CopyOptionsToString(format, options);
+	result += CopyInfo::CopyOptionsToString(format, info->is_format_auto_detected, options);
 	result += ";";
 	return result;
 }

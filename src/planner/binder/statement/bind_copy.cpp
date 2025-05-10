@@ -22,16 +22,42 @@
 
 #include <algorithm>
 
+#include "duckdb/main/extension_entries.hpp"
+
 namespace duckdb {
 
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
+void IsFormatExtensionKnown(const string &format) {
+	for (auto &file_postfixes : EXTENSION_FILE_POSTFIXES) {
+		if (format == file_postfixes.name + 1) {
+			// It's a match, we must throw
+			throw CatalogException(
+			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
+			    file_postfixes.extension);
+		}
+	}
+}
+
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
+	// Let's first bind our format
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	CatalogEntryRetriever entry_retriever {context};
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+
+	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
+		// If we did not find an entry, we default to a CSV
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
+	}
 	// lookup the format in the catalog
-	auto &copy_function =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	if (copy_function.function.plan) {
 		// plan rewrite COPY TO
 		return copy_function.function.plan(*this, stmt);
@@ -326,7 +352,19 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	CatalogEntryRetriever entry_retriever {context};
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
+		// If we did not find an entry, we default to a CSV
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
+	}
+	// lookup the format in the catalog
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	if (!copy_function.function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
