@@ -153,7 +153,7 @@ public:
 	static HTTPUtil &Get(DatabaseInstance &db);
 
 	virtual unique_ptr<HTTPResponse> Request(DatabaseInstance &db, const string &url, const HTTPHeaders &headers,
-	                                         optional_ptr<HTTPLogger> http_logger);
+	                                         optional_ptr<ClientContext> context);
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
 	static HTTPStatusCode ToStatusCode(int32_t status_code);

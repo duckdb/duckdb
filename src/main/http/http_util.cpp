@@ -2,7 +2,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/logging/http_logger.hpp"
+#include "duckdb/logging/httplib_logger.hpp"
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
@@ -212,7 +212,7 @@ HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(DatabaseInstance &db, const string &url, const HTTPHeaders &headers,
-                                           optional_ptr<HTTPLogger> http_logger) {
+                                           optional_ptr<ClientContext> context) {
 	string no_http = StringUtil::Replace(url, "http://", "");
 
 	idx_t next = no_http.find('/', 0);
@@ -250,8 +250,10 @@ unique_ptr<HTTPResponse> HTTPUtil::Request(DatabaseInstance &db, const string &u
 			cli.set_proxy_basic_auth(db.config.options.http_proxy_username, db.config.options.http_proxy_password);
 		}
 
-		if (http_logger) {
-			cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
+		unique_ptr<HTTPLibLogger> http_logger;
+		if (context && HTTPLibLogger::ShouldLog(*context)) {
+			http_logger = make_uniq<HTTPLibLogger>(*context);
+			cli.set_logger(http_logger->GetHTTPLibCallback<duckdb_httplib::Request, duckdb_httplib::Response>());
 		}
 
 		res = cli.Get(url_local_part.c_str(), httplib_headers);
