@@ -281,10 +281,14 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 
 	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
 	//  JoinType::SINGLE yet, and JoinType::MARK is a special case
+	bool is_strict_not_equal = false;
 	if (delim_join.join_type == JoinType::SINGLE || delim_join.join_type == JoinType::MARK) {
 		bool has_one_equality = false;
 		for (auto &cond : join_conditions) {
 			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
+			if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+				is_strict_not_equal = true;
+			}
 		}
 		if (!has_one_equality) {
 			return false;
@@ -349,6 +353,17 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 					}
 				}
 				delim_condition.comparison = FlipComparisonExpression(join_comparison);
+				// join condition was a not equal and filtered out all NULLS.
+				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
+				// comparison expression type.
+				if (delim_join.join_type != JoinType::MARK) {
+					if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_NOTEQUAL;
+					}
+					if (delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_EQUAL;
+					}
+				}
 				found = true;
 				break;
 			}
