@@ -97,7 +97,7 @@ static unique_ptr<GlobalTableFunctionState> JSONTableInOutInitGlobal(ClientConte
 			}
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 struct JSONTableInOutRecursionNode {
