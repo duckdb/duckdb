@@ -23,6 +23,7 @@ body:
             * [AWS extension](https://github.com/duckdb/duckdb-aws/issues/new)
             * [Azure extension](https://github.com/duckdb/duckdb-azure/issues/new)
             * [Delta extension](https://github.com/duckdb/duckdb-delta/issues/new)
+            * [Encodings extension](https://github.com/duckdb/duckdb-encodings/issues/new)
             * [Excel extension](https://github.com/duckdb/duckdb-excel/issues/new)
             * [fts (full text search) extension](https://github.com/duckdb/duckdb-fts/issues/new)
             * [httpfs extension](https://github.com/duckdb/duckdb-httpfs/issues/new)

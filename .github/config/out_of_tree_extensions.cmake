@@ -177,3 +177,12 @@ duckdb_extension_load(fts
         GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
         TEST_DIR test/sql
 )
+
+################# ENCODINGS
+duckdb_extension_load(encodings
+        LOAD_TESTS
+        DONT_LINK
+        GIT_URL https://github.com/duckdb/duckdb-encodings
+        GIT_TAG ef5d6eeda1f1fa4aca186c402d3d6d555016d506
+        TEST_DIR test/sql
+)

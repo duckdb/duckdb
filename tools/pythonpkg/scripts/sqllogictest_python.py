@@ -70,6 +70,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             "aws",
             "autocomplete",
             "excel",
+            "encodings",
             "fts",
             "httpfs",
             "json",
