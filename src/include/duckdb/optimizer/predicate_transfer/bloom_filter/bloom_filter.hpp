@@ -24,24 +24,13 @@
 #endif
 #endif
 
-#ifndef BF_ASSUME_ALIGNED
-#if defined(__GNUC__) || defined(__clang__)
-#define BF_ASSUME_ALIGNED(x, align) __builtin_assume_aligned(x, align)
-#else
-// Fallback: just return the pointer as-is
-#define BF_ASSUME_ALIGNED(x, align) (x)
-#endif
-#endif
-
 namespace duckdb {
 
 static constexpr const uint32_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
 static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_SECTOR_SIZE = 5;
-
-static constexpr const int32_t SIMD_BATCH_SIZE = 32;
-static constexpr const size_t MEMORY_ALIGNMENT = 64;
+static constexpr const int32_t SIMD_BATCH_SIZE = 16;
 
 class BloomFilter {
 public:
@@ -109,41 +98,27 @@ private:
 	int BloomFilterLookup(int num, const uint64_t *BF_RESTRICT key64, const uint32_t *BF_RESTRICT bf,
 	                      uint32_t *BF_RESTRICT out) const {
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
+		for (int i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
+			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
+			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
 
-		// align the address of key
-		int unaligned_num =
-		    static_cast<int>((MEMORY_ALIGNMENT - reinterpret_cast<size_t>(key) % MEMORY_ALIGNMENT) / sizeof(uint64_t));
-		unaligned_num = std::min(unaligned_num, num);
-		for (int i = 0; i < unaligned_num; i++) {
-			out[i] = LookupOne(key[i + i], key[i + i + 1], bf);
-		}
-
-		if (unaligned_num == num) {
-			return num;
-		}
-
-		// auto vectorization
-		int aligned_end = (num - unaligned_num) / SIMD_BATCH_SIZE * SIMD_BATCH_SIZE + unaligned_num;
-		const uint32_t *BF_RESTRICT aligned_key = reinterpret_cast<const uint32_t * BF_RESTRICT>(
-		    BF_ASSUME_ALIGNED(&key[unaligned_num + unaligned_num], MEMORY_ALIGNMENT));
-
-		for (int i = 0; i < aligned_end - unaligned_num; i += SIMD_BATCH_SIZE) {
 			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
 				int p = i + j;
-				uint32_t key_lo = aligned_key[p + p];
-				uint32_t key_hi = aligned_key[p + p + 1];
+				uint32_t key_lo = key[p + p];
+				uint32_t key_hi = key[p + p + 1];
+				block1[j] = GetSector1(key_lo, key_hi);
+				mask1[j] = GetMask1(key_lo);
+				block2[j] = GetSector2(key_hi, block1[j]);
+				mask2[j] = GetMask2(key_hi);
+			}
 
-				uint32_t sector1 = GetSector1(key_lo, key_hi);
-				uint32_t mask1 = GetMask1(key_lo);
-				uint32_t sector2 = GetSector2(key_hi, sector1);
-				uint32_t mask2 = GetMask2(key_hi);
-
-				out[i + unaligned_num + j] = ((bf[sector1] & mask1) == mask1) & ((bf[sector2] & mask2) == mask2);
+			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
+				out[i + j] = ((bf[block1[j]] & mask1[j]) == mask1[j]) & ((bf[block2[j]] & mask2[j]) == mask2[j]);
 			}
 		}
 
 		// unaligned tail
-		for (int i = aligned_end; i < num; i++) {
+		for (int i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
 			out[i] = LookupOne(key[i + i], key[i + i + 1], bf);
 		}
 		return num;
@@ -151,47 +126,28 @@ private:
 
 	void BloomFilterInsert(int num, const uint64_t *BF_RESTRICT key64, uint32_t *BF_RESTRICT bf) const {
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
-
-		// align the address of key
-		int unaligned_num =
-		    static_cast<int>((MEMORY_ALIGNMENT - reinterpret_cast<size_t>(key) % MEMORY_ALIGNMENT) / sizeof(uint64_t));
-		unaligned_num = std::min(unaligned_num, num);
-		for (int i = 0; i < unaligned_num; i++) {
-			InsertOne(key[i + i], key[i + i + 1], bf);
-		}
-
-		if (unaligned_num == num) {
-			return;
-		}
-
-		// auto vectorization
-		int aligned_end = (num - unaligned_num) / SIMD_BATCH_SIZE * SIMD_BATCH_SIZE + unaligned_num;
-		const uint32_t *BF_RESTRICT aligned_key = reinterpret_cast<const uint32_t * BF_RESTRICT>(
-		    BF_ASSUME_ALIGNED(&key[unaligned_num + unaligned_num], MEMORY_ALIGNMENT));
-
-		for (int i = 0; i < aligned_end - unaligned_num; i += SIMD_BATCH_SIZE) {
-			uint32_t sector1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
-			uint32_t sector2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
+		for (int i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
+			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
+			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
 
 			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
 				int p = i + j;
-				uint32_t key_lo = aligned_key[p + p];
-				uint32_t key_hi = aligned_key[p + p + 1];
-
-				sector1[j] = GetSector1(key_lo, key_hi);
+				uint32_t key_lo = key[p + p];
+				uint32_t key_hi = key[p + p + 1];
+				block1[j] = GetSector1(key_lo, key_hi);
 				mask1[j] = GetMask1(key_lo);
-				sector2[j] = GetSector2(key_hi, sector1[j]);
+				block2[j] = GetSector2(key_hi, block1[j]);
 				mask2[j] = GetMask2(key_hi);
 			}
 
 			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
-				bf[sector1[j]] |= mask1[j];
-				bf[sector2[j]] |= mask2[j];
+				bf[block1[j]] |= mask1[j];
+				bf[block2[j]] |= mask2[j];
 			}
 		}
 
 		// unaligned tail
-		for (int i = aligned_end; i < num; i++) {
+		for (int i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
 			InsertOne(key[i + i], key[i + i + 1], bf);
 		}
 	}
