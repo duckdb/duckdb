@@ -11,6 +11,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cstdint>
+#include <mutex>
 
 #ifndef BF_RESTRICT
 #if defined(_MSC_VER)
@@ -26,7 +27,7 @@
 namespace duckdb {
 
 static constexpr const uint32_t MAX_NUM_SECTORS = (1ULL << 26);
-static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 12;
+static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
 static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_SECTOR_SIZE = 5;
 static constexpr const int32_t SIMD_BATCH_SIZE = 16;
@@ -51,7 +52,8 @@ public:
 	uint32_t num_sectors;
 	uint32_t num_sectors_log;
 
-	atomic<uint32_t> *blocks;
+	std::mutex insert_lock;
+	uint32_t *blocks;
 
 private:
 	// key_lo |5:bit3|5:bit2|5:bit1|  13:block    |4:sector1 | bit layout (32:total)
@@ -76,13 +78,13 @@ private:
 		return block1 ^ (8 + (key_hi & 7));
 	}
 
-	inline void InsertOne(uint32_t key_lo, uint32_t key_hi, atomic<uint32_t> *BF_RESTRICT bf) const {
+	inline void InsertOne(uint32_t key_lo, uint32_t key_hi, uint32_t *BF_RESTRICT bf) const {
 		uint32_t sector1 = GetSector1(key_lo, key_hi);
 		uint32_t mask1 = GetMask1(key_lo);
 		uint32_t sector2 = GetSector2(key_hi, sector1);
 		uint32_t mask2 = GetMask2(key_hi);
-		bf[sector1].fetch_or(mask1, std::memory_order_relaxed);
-		bf[sector2].fetch_or(mask2, std::memory_order_relaxed);
+		bf[sector1] |= mask1;
+		bf[sector2] |= mask2;
 	}
 	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *BF_RESTRICT bf) const {
 		uint32_t sector1 = GetSector1(key_lo, key_hi);
@@ -122,7 +124,7 @@ private:
 		return num;
 	}
 
-	void BloomFilterInsert(int num, const uint64_t *BF_RESTRICT key64, atomic<uint32_t> *BF_RESTRICT bf) const {
+	void BloomFilterInsert(int num, const uint64_t *BF_RESTRICT key64, uint32_t *BF_RESTRICT bf) const {
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
 		for (int i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
@@ -139,8 +141,8 @@ private:
 			}
 
 			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
-				bf[block1[j]].fetch_or(mask1[j], std::memory_order_relaxed);
-				bf[block2[j]].fetch_or(mask2[j], std::memory_order_relaxed);
+				bf[block1[j]] |= mask1[j];
+				bf[block2[j]] |= mask2[j];
 			}
 		}
 
