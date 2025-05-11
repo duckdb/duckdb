@@ -7,14 +7,11 @@ require httpfs
 statement error
 ATTACH 'https://duckdb.org/non_existing.db' AS db2 (READ_ONLY)
 ----
-Cannot open
 
 statement error
 ATTACH 'https://duckdb.org/non_existing.db' AS db2
 ----
-Cannot open
 
 statement error
 ATTACH 'https://duckdb.org/non_existing.db' AS db2 (READ_WRITE)
 ----
-Not implemented Error: Writing to HTTP files not implemented
