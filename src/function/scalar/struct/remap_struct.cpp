@@ -36,8 +36,72 @@ public:
 	}
 };
 
-static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
-                        const vector<RemapColumnInfo> &remap_info) {
+static void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t result_size, const vector<RemapColumnInfo> &remap_info);
+
+static void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t result_size, const vector<RemapColumnInfo> &remap_info) {
+	auto &input_vector = ListVector::GetEntry(input);
+	auto &result_vector = ListVector::GetEntry(result);
+	auto list_size = ListVector::GetListSize(input);
+	ListVector::SetListSize(result, list_size);
+
+	bool has_top_level_null = false;
+	// copy over the NULL values from the input vector
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result, true);
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			return;
+		}
+	} else {
+		UnifiedVectorFormat format;
+		input.ToUnifiedFormat(result_size, format);
+		if (!format.validity.AllValid()) {
+			auto &result_validity = FlatVector::Validity(result);
+			for (idx_t i = 0; i < result_size; i++) {
+				auto input_idx = format.sel->get_index(i);
+				if (!format.validity.RowIsValid(input_idx)) {
+					result_validity.SetInvalid(i);
+				}
+			}
+			has_top_level_null = !result_validity.AllValid();
+		}
+		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
+		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		memcpy(result_list_data, list_data, sizeof(list_entry_t) * result_size);
+	}
+
+	// set up the correct vector references
+	D_ASSERT(remap_info.size() == 1);
+	auto &remap = remap_info[0];
+	if (remap.index.IsValid() && !remap.child_remap_info.empty()) {
+		// nested remap - recurse
+		reference<Vector> child_default = default_vector;
+		if (remap.default_index.IsValid()) {
+			auto &defaults = StructVector::GetEntries(default_vector);
+			child_default = *defaults[remap.default_index.GetIndex()];
+		}
+		RemapNested(input_vector, child_default.get(), result_vector, list_size, remap.child_remap_info);
+		return;
+	}
+	// root remap
+	if (remap.default_index.IsValid()) {
+		auto &defaults = StructVector::GetEntries(default_vector);
+		result_vector.Reference(*defaults[remap.default_index.GetIndex()]);
+		if (result_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			throw InternalException("Default value in remap struct must be a constant");
+		}
+		if (has_top_level_null && !ConstantVector::IsNull(result_vector)) {
+			// if we have any top-level NULL values and the default value is not NULL, we need to propagate the NULL
+			// values to the default value
+			result_vector.Flatten(list_size);
+			FlatVector::SetValidity(result_vector, FlatVector::Validity(result));
+		}
+	} else {
+		result_vector.Reference(input_vector);
+	}
+}
+
+static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t result_size, const vector<RemapColumnInfo> &remap_info) {
 	auto &input_vectors = StructVector::GetEntries(input);
 	auto &result_vectors = StructVector::GetEntries(result);
 	if (result_vectors.size() != remap_info.size()) {
@@ -76,7 +140,7 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 				auto &defaults = StructVector::GetEntries(default_vector);
 				child_default = *defaults[remap.default_index.GetIndex()];
 			}
-			RemapStruct(input_vector, child_default.get(), *result_vectors[i], result_size, remap.child_remap_info);
+			RemapNested(input_vector, child_default.get(), *result_vectors[i], result_size, remap.child_remap_info);
 			continue;
 		}
 		// root remap
@@ -98,13 +162,26 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 	}
 }
 
+static void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t result_size, const vector<RemapColumnInfo> &remap_info) {
+	auto &source_type = input.GetType();
+	D_ASSERT(source_type.IsNested());
+	switch (source_type.InternalType()) {
+		case PhysicalType::STRUCT:
+			return RemapStruct(input, default_vector, result, result_size, remap_info);
+		case PhysicalType::LIST:
+			return RemapList(input, default_vector, result, result_size, remap_info);
+		default:
+			throw InvalidInputException("Can't RemapNested for type '%s'", source_type.ToString());
+	}
+}
+
 static void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RemapStructBindData>();
 
 	auto &input = args.data[0];
 
-	RemapStruct(input, args.data[3], result, args.size(), info.remap_info);
+	RemapNested(input, args.data[3], result, args.size(), info.remap_info);
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
