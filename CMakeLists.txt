@@ -158,7 +158,7 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-option(CLANG_STAND_DEBUG "add clang compile option -fstandalone-debug" FALSE)
+option(STANDALONE_DEBUG "add clang compile option -fstandalone-debug" FALSE)
 
 if((BUILD_PYTHON)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
@@ -552,7 +552,7 @@ if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
-if(CLANG_STAND_DEBUG)
+if(STANDALONE_DEBUG)
   if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
     message(FATAL_ERROR "Only clang compiler supports -fstandalone-debug")
   endif()
