@@ -117,10 +117,23 @@ struct RemapIndex {
 
 	static case_insensitive_map_t<RemapIndex> GetMap(const LogicalType &type) {
 		case_insensitive_map_t<RemapIndex> result;
-		auto &children = StructType::GetChildTypes(type);
-		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-			auto &child = children[child_idx];
-			result.emplace(child.first, GetIndex(child_idx, child.second));
+		switch (type.InternalType()) {
+			case PhysicalType::STRUCT: {
+				auto &children = StructType::GetChildTypes(type);
+				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+					auto &child = children[child_idx];
+					result.emplace(child.first, GetIndex(child_idx, child.second));
+				}
+				break;
+			}
+			case PhysicalType::LIST: {
+				auto &child = ListType::GetChildType(type);
+				result.emplace("list", GetIndex(0, child));
+				break;
+			}
+			default:
+				throw BinderException("Can't remap type %s", type.ToString());
+
 		}
 		return result;
 	}
@@ -129,7 +142,7 @@ struct RemapIndex {
 		RemapIndex index;
 		index.index = idx;
 		index.type = type;
-		if (type.id() == LogicalTypeId::STRUCT) {
+		if (type.IsNested()) {
 			index.child_map = make_uniq<case_insensitive_map_t<RemapIndex>>(GetMap(type));
 		}
 		return index;
@@ -244,25 +257,50 @@ struct RemapEntry {
 
 	static vector<RemapColumnInfo> ConstructMap(const LogicalType &type,
 	                                            const case_insensitive_map_t<RemapEntry> &remap_map) {
-		auto &target_children = StructType::GetChildTypes(type);
-		vector<RemapColumnInfo> result;
-		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
-			auto &target_name = target_children[target_idx].first;
-			auto &child_type = target_children[target_idx].second;
-			auto entry = remap_map.find(target_name);
-			if (entry == remap_map.end()) {
-				throw BinderException("Missing target value %s for remap", target_name);
+		D_ASSERT(type.IsNested());
+		switch (type.InternalType()) {
+			case PhysicalType::STRUCT: {
+				auto &target_children = StructType::GetChildTypes(type);
+				vector<RemapColumnInfo> result;
+				for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
+					auto &target_name = target_children[target_idx].first;
+					auto &child_type = target_children[target_idx].second;
+					auto entry = remap_map.find(target_name);
+					if (entry == remap_map.end()) {
+						throw BinderException("Missing target value %s for remap", target_name);
+					}
+					RemapColumnInfo info;
+					info.index = entry->second.index;
+					info.default_index = entry->second.default_index;
+					if (child_type.id() == LogicalTypeId::STRUCT) {
+						// recurse
+						info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
+					}
+					result.push_back(std::move(info));
+				}
+				return result;
 			}
-			RemapColumnInfo info;
-			info.index = entry->second.index;
-			info.default_index = entry->second.default_index;
-			if (child_type.id() == LogicalTypeId::STRUCT) {
-				// recurse
-				info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
+			case PhysicalType::LIST: {
+				vector<RemapColumnInfo> result;
+				auto &child_type = ListType::GetChildType(type);
+				auto target_name = "list";
+				auto entry = remap_map.find(target_name);
+				if (entry == remap_map.end()) {
+					throw BinderException("Missing target value %s for remap", target_name);
+				}
+				RemapColumnInfo info;
+				info.index = entry->second.index;
+				info.default_index = entry->second.default_index;
+				if (child_type.IsNested()) {
+					// recurse
+					info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
+				}
+				result.push_back(std::move(info));
+				return result;
 			}
-			result.push_back(std::move(info));
+			default:
+				throw BinderException("Can't ConstructMap for type '%s'", type.ToString());
 		}
-		return result;
 	}
 
 	static LogicalType RemapCast(const LogicalType &type, const case_insensitive_map_t<RemapEntry> &remap_map) {
@@ -273,30 +311,54 @@ struct RemapEntry {
 			}
 		}
 
-		auto &source_children = StructType::GetChildTypes(type);
-		child_list_t<LogicalType> new_source_children;
-		for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
-			auto &child_name = source_children[source_idx].first;
-			auto &child_type = source_children[source_idx].second;
-			auto entry = source_name_map.find(source_idx);
-			if (entry != source_name_map.end()) {
-				auto remap_entry = remap_map.find(entry->second);
-				D_ASSERT(remap_entry != remap_map.end());
-				// this entry is remapped - fetch the target type
-				if (child_type.id() == LogicalTypeId::STRUCT) {
-					// struct - recurse
-					new_source_children.emplace_back(child_name,
-					                                 RemapCast(child_type, *remap_entry->second.child_remaps));
-				} else {
-					new_source_children.emplace_back(child_name, remap_entry->second.target_type);
+		switch (type.InternalType()) {
+			case PhysicalType::STRUCT: {
+				auto &source_children = StructType::GetChildTypes(type);
+				child_list_t<LogicalType> new_source_children;
+				for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
+					auto &child_name = source_children[source_idx].first;
+					auto &child_type = source_children[source_idx].second;
+					auto entry = source_name_map.find(source_idx);
+					if (entry != source_name_map.end()) {
+						auto remap_entry = remap_map.find(entry->second);
+						D_ASSERT(remap_entry != remap_map.end());
+						// this entry is remapped - fetch the target type
+						if (child_type.id() == LogicalTypeId::STRUCT) {
+							// struct - recurse
+							new_source_children.emplace_back(child_name,
+															RemapCast(child_type, *remap_entry->second.child_remaps));
+						} else {
+							new_source_children.emplace_back(child_name, remap_entry->second.target_type);
+						}
+					} else {
+						// entry is not remapped - keep the original type
+						new_source_children.push_back(source_children[source_idx]);
+					}
 				}
-			} else {
-				// entry is not remapped - keep the original type
-				new_source_children.push_back(source_children[source_idx]);
-			}
-		}
 
-		return LogicalType::STRUCT(std::move(new_source_children));
+				return LogicalType::STRUCT(std::move(new_source_children));
+			}
+			case PhysicalType::LIST: {
+				auto &child_type = ListType::GetChildType(type);
+				auto entry = source_name_map.find(0);
+				if (entry != source_name_map.end()) {
+					auto remap_entry = remap_map.find(entry->second);
+					D_ASSERT(remap_entry != remap_map.end());
+					// this entry is remapped - fetch the target type
+					if (child_type.IsNested()) {
+						// nested - recurse
+						return LogicalType::LIST(RemapCast(child_type, *remap_entry->second.child_remaps));
+					} else {
+						return LogicalType::LIST(remap_entry->second.target_type);
+					}
+				} else {
+					// entry is not remapped - keep the original type
+					return type;
+				}
+			}
+			default:
+				throw BinderException("Can't RemapCast for type '%s'", type.ToString());
+		}
 	}
 };
 
@@ -307,13 +369,13 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->return_type.id() != LogicalTypeId::STRUCT) {
+		if (!arg->return_type.IsNested()) {
 			if (arg_idx == 3 && arg->return_type.id() == LogicalTypeId::SQLNULL) {
 				// defaults can be NULL
 			} else {
 				throw BinderException("Struct remap can only remap structs");
 			}
-		} else if (StructType::IsUnnamed(arg->return_type)) {
+		} else if (arg->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->return_type)) {
 			throw BinderException("Struct remap can only remap named structs");
 		}
 	}
