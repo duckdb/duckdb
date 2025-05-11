@@ -437,6 +437,6 @@ statement ok
 INSERT INTO list_of_list VALUES ([NULL], [NULL]);
 
 query I
-SELECT list_filter(l1, (x) -> list_contains(l2, x)) FROM list_of_list;
+SELECT list_filter(l1, lambda x: list_contains(l2, x)) FROM list_of_list;
 ----
 []

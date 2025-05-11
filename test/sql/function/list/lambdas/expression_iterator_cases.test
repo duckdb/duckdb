@@ -7,111 +7,114 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
 # this BOUND_AGGREGATE is a constant, so we can allow it inside lambda functions
 
 query I
-SELECT list_transform([10], x -> sum(1) + x)
+SELECT list_transform([10], lambda x: sum(1) + x)
 ----
 [11]
 
 query I
-SELECT list_filter([10], x -> sum(1) > 0)
+SELECT list_filter([10], lambda x: sum(1) > 0)
 ----
 [10]
 
 # BOUND_BETWEEN
 
 query I
-SELECT list_transform([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+SELECT list_transform([NULL, DATE '1992-09-20', DATE '2021-09-20'], lambda elem: extract('year' FROM elem) BETWEEN 2000 AND 2022)
 ----
 [NULL, false, true]
 
 query I
-SELECT list_filter([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+SELECT list_filter([NULL, DATE '1992-09-20', DATE '2021-09-20'], lambda elem: extract('year' FROM elem) BETWEEN 2000 AND 2022)
 ----
 [2021-09-20]
 
 # BOUND_CASE
 
 query I
-SELECT list_transform(['hello', 'duck', 'sunshine'], str -> CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END)
+SELECT list_transform(['hello', 'duck', 'sunshine'], lambda str: CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END)
 ----
 [e, other, e]
 
 query I
-SELECT list_filter(['hello', 'duck', 'sunshine'], str -> (CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END) LIKE 'e')
+SELECT list_filter(['hello', 'duck', 'sunshine'], lambda str: (CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END) LIKE 'e')
 ----
 [hello, sunshine]
 
 # BOUND_CAST
 
 query I
-SELECT list_transform([2.0::DOUBLE], x -> x::INTEGER)
+SELECT list_transform([2.0::DOUBLE], lambda x: x::INTEGER)
 ----
 [2]
 
 query I
-SELECT list_filter([2], x -> x::DOUBLE == 2)
+SELECT list_filter([2], lambda x: x::DOUBLE == 2)
 ----
 [2]
 
 # BOUND_COMPARISON
 
 query I
-SELECT list_transform([2.4, NULL, -4.7], x -> x != 10.4)
+SELECT list_transform([2.4, NULL, -4.7], lambda x: x != 10.4)
 ----
 [true, NULL, true]
 
 query I
-SELECT list_filter([2.4, NULL, -4.7], x -> x != -4.7)
+SELECT list_filter([2.4, NULL, -4.7], lambda x: x != -4.7)
 ----
 [2.4]
 
 # BOUND_CONJUNCTION
 
 query I
-SELECT list_transform([True, False, NULL], x -> x AND true)
+SELECT list_transform([True, False, NULL], lambda x: x AND true)
 ----
 [true, false, NULL]
 
 query I
-SELECT list_filter([True, False, NULL], x -> x AND true)
+SELECT list_filter([True, False, NULL], lambda x: x AND true)
 ----
 [true]
 
 # BOUND_FUNCTION
 
 query I
-SELECT list_transform([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x))
+SELECT list_transform([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], lambda x: century(x))
 ----
 [20, 3, 17]
 
 query I
-SELECT list_filter([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x) > 16)
+SELECT list_filter([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], lambda x: century(x) > 16)
 ----
 ['1992-03-22 00:00:00', '1700-03-22 00:00:00']
 
 # BOUND_OPERATOR
 
 query I
-SELECT list_transform([2], x -> x + x)
+SELECT list_transform([2], lambda x: x + x)
 ----
 [4]
 
 query I
-SELECT list_filter([2], x -> x + x = 4)
+SELECT list_filter([2], lambda x: x + x = 4)
 ----
 [2]
 
 # BOUND_SUBQUERY
 
 statement error
-SELECT list_transform([2], x -> (SELECT 1 - x) * x)
+SELECT list_transform([2], lambda x: (SELECT 1 - x) * x)
 ----
 <REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
 
 statement error
-SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)
+SELECT list_filter([2], lambda x: (SELECT 1 - x) * x > 2)
 ----
 <REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
 
@@ -119,19 +122,19 @@ statement ok
 CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
 
 statement error
-SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
+SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], lambda x: list_contains_macro(x, 3))
 ----
 <REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
 
 # BOUND_UNNEST
 
 statement error
-SELECT list_transform([1], x -> x = UNNEST([1]));
+SELECT list_transform([1], lambda x: x = UNNEST([1]));
 ----
 <REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
 statement error
-SELECT list_filter([1], x -> x = UNNEST([1]));
+SELECT list_filter([1], lambda x: x = UNNEST([1]));
 ----
 <REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
@@ -144,7 +147,7 @@ statement ok
 INSERT INTO my_window VALUES ([1], 1, 1), ([1, NULL, 2], 1, 2), ([], 2, 3), (NULL, NULL, NULL), ([1, 2], 2, 4)
 
 query I
-SELECT list(list_transform(l, e -> e + 1)) OVER (PARTITION BY g ORDER BY o) 
+SELECT list(list_transform(l, lambda e: e + 1)) OVER (PARTITION BY g ORDER BY o)
 FROM my_window
 ORDER BY ALL
 ----

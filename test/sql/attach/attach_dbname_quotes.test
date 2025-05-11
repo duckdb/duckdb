@@ -2,8 +2,6 @@
 # description: Test ATTACH with a quoted database name
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 ATTACH ':memory:' as "my""db";
 

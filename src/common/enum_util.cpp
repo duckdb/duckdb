@@ -68,6 +68,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/filename_pattern.hpp"
+#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -121,6 +122,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -895,6 +897,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "COMPRESSION_DICT_FSST" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
@@ -902,12 +905,12 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
-	return StringUtil::EnumToString(GetCompressionTypeValues(), 16, "CompressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCompressionTypeValues(), 17, "CompressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
-	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 16, "CompressionType", value));
+	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 17, "CompressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressionValidityValues() {
@@ -1974,6 +1977,86 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 	return static_cast<HLLStorageType>(StringUtil::StringToEnum(GetHLLStorageTypeValues(), 2, "HLLStorageType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetHTTPStatusCodeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(HTTPStatusCode::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Continue_100), "Continue_100" },
+		{ static_cast<uint32_t>(HTTPStatusCode::SwitchingProtocol_101), "SwitchingProtocol_101" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Processing_102), "Processing_102" },
+		{ static_cast<uint32_t>(HTTPStatusCode::EarlyHints_103), "EarlyHints_103" },
+		{ static_cast<uint32_t>(HTTPStatusCode::OK_200), "OK_200" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Created_201), "Created_201" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Accepted_202), "Accepted_202" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NonAuthoritativeInformation_203), "NonAuthoritativeInformation_203" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NoContent_204), "NoContent_204" },
+		{ static_cast<uint32_t>(HTTPStatusCode::ResetContent_205), "ResetContent_205" },
+		{ static_cast<uint32_t>(HTTPStatusCode::PartialContent_206), "PartialContent_206" },
+		{ static_cast<uint32_t>(HTTPStatusCode::MultiStatus_207), "MultiStatus_207" },
+		{ static_cast<uint32_t>(HTTPStatusCode::AlreadyReported_208), "AlreadyReported_208" },
+		{ static_cast<uint32_t>(HTTPStatusCode::IMUsed_226), "IMUsed_226" },
+		{ static_cast<uint32_t>(HTTPStatusCode::MultipleChoices_300), "MultipleChoices_300" },
+		{ static_cast<uint32_t>(HTTPStatusCode::MovedPermanently_301), "MovedPermanently_301" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Found_302), "Found_302" },
+		{ static_cast<uint32_t>(HTTPStatusCode::SeeOther_303), "SeeOther_303" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NotModified_304), "NotModified_304" },
+		{ static_cast<uint32_t>(HTTPStatusCode::UseProxy_305), "UseProxy_305" },
+		{ static_cast<uint32_t>(HTTPStatusCode::unused_306), "unused_306" },
+		{ static_cast<uint32_t>(HTTPStatusCode::TemporaryRedirect_307), "TemporaryRedirect_307" },
+		{ static_cast<uint32_t>(HTTPStatusCode::PermanentRedirect_308), "PermanentRedirect_308" },
+		{ static_cast<uint32_t>(HTTPStatusCode::BadRequest_400), "BadRequest_400" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Unauthorized_401), "Unauthorized_401" },
+		{ static_cast<uint32_t>(HTTPStatusCode::PaymentRequired_402), "PaymentRequired_402" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Forbidden_403), "Forbidden_403" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NotFound_404), "NotFound_404" },
+		{ static_cast<uint32_t>(HTTPStatusCode::MethodNotAllowed_405), "MethodNotAllowed_405" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NotAcceptable_406), "NotAcceptable_406" },
+		{ static_cast<uint32_t>(HTTPStatusCode::ProxyAuthenticationRequired_407), "ProxyAuthenticationRequired_407" },
+		{ static_cast<uint32_t>(HTTPStatusCode::RequestTimeout_408), "RequestTimeout_408" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Conflict_409), "Conflict_409" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Gone_410), "Gone_410" },
+		{ static_cast<uint32_t>(HTTPStatusCode::LengthRequired_411), "LengthRequired_411" },
+		{ static_cast<uint32_t>(HTTPStatusCode::PreconditionFailed_412), "PreconditionFailed_412" },
+		{ static_cast<uint32_t>(HTTPStatusCode::PayloadTooLarge_413), "PayloadTooLarge_413" },
+		{ static_cast<uint32_t>(HTTPStatusCode::UriTooLong_414), "UriTooLong_414" },
+		{ static_cast<uint32_t>(HTTPStatusCode::UnsupportedMediaType_415), "UnsupportedMediaType_415" },
+		{ static_cast<uint32_t>(HTTPStatusCode::RangeNotSatisfiable_416), "RangeNotSatisfiable_416" },
+		{ static_cast<uint32_t>(HTTPStatusCode::ExpectationFailed_417), "ExpectationFailed_417" },
+		{ static_cast<uint32_t>(HTTPStatusCode::ImATeapot_418), "ImATeapot_418" },
+		{ static_cast<uint32_t>(HTTPStatusCode::MisdirectedRequest_421), "MisdirectedRequest_421" },
+		{ static_cast<uint32_t>(HTTPStatusCode::UnprocessableContent_422), "UnprocessableContent_422" },
+		{ static_cast<uint32_t>(HTTPStatusCode::Locked_423), "Locked_423" },
+		{ static_cast<uint32_t>(HTTPStatusCode::FailedDependency_424), "FailedDependency_424" },
+		{ static_cast<uint32_t>(HTTPStatusCode::TooEarly_425), "TooEarly_425" },
+		{ static_cast<uint32_t>(HTTPStatusCode::UpgradeRequired_426), "UpgradeRequired_426" },
+		{ static_cast<uint32_t>(HTTPStatusCode::PreconditionRequired_428), "PreconditionRequired_428" },
+		{ static_cast<uint32_t>(HTTPStatusCode::TooManyRequests_429), "TooManyRequests_429" },
+		{ static_cast<uint32_t>(HTTPStatusCode::RequestHeaderFieldsTooLarge_431), "RequestHeaderFieldsTooLarge_431" },
+		{ static_cast<uint32_t>(HTTPStatusCode::UnavailableForLegalReasons_451), "UnavailableForLegalReasons_451" },
+		{ static_cast<uint32_t>(HTTPStatusCode::InternalServerError_500), "InternalServerError_500" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NotImplemented_501), "NotImplemented_501" },
+		{ static_cast<uint32_t>(HTTPStatusCode::BadGateway_502), "BadGateway_502" },
+		{ static_cast<uint32_t>(HTTPStatusCode::ServiceUnavailable_503), "ServiceUnavailable_503" },
+		{ static_cast<uint32_t>(HTTPStatusCode::GatewayTimeout_504), "GatewayTimeout_504" },
+		{ static_cast<uint32_t>(HTTPStatusCode::HttpVersionNotSupported_505), "HttpVersionNotSupported_505" },
+		{ static_cast<uint32_t>(HTTPStatusCode::VariantAlsoNegotiates_506), "VariantAlsoNegotiates_506" },
+		{ static_cast<uint32_t>(HTTPStatusCode::InsufficientStorage_507), "InsufficientStorage_507" },
+		{ static_cast<uint32_t>(HTTPStatusCode::LoopDetected_508), "LoopDetected_508" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NotExtended_510), "NotExtended_510" },
+		{ static_cast<uint32_t>(HTTPStatusCode::NetworkAuthenticationRequired_511), "NetworkAuthenticationRequired_511" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value) {
+	return StringUtil::EnumToString(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", static_cast<uint32_t>(value));
+}
+
+template<>
+HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value) {
+	return static_cast<HTTPStatusCode>(StringUtil::StringToEnum(GetHTTPStatusCodeValues(), 64, "HTTPStatusCode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetIndexAppendModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(IndexAppendMode::DEFAULT), "DEFAULT" },
@@ -2118,6 +2201,44 @@ const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value) {
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	return static_cast<KeywordCategory>(StringUtil::StringToEnum(GetKeywordCategoryValues(), 5, "KeywordCategory", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLambdaSyntaxValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LambdaSyntax::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(LambdaSyntax::ENABLE_SINGLE_ARROW), "ENABLE_SINGLE_ARROW" },
+		{ static_cast<uint32_t>(LambdaSyntax::DISABLE_SINGLE_ARROW), "DISABLE_SINGLE_ARROW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntax>(LambdaSyntax value) {
+	return StringUtil::EnumToString(GetLambdaSyntaxValues(), 3, "LambdaSyntax", static_cast<uint32_t>(value));
+}
+
+template<>
+LambdaSyntax EnumUtil::FromString<LambdaSyntax>(const char *value) {
+	return static_cast<LambdaSyntax>(StringUtil::StringToEnum(GetLambdaSyntaxValues(), 3, "LambdaSyntax", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLambdaSyntaxTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LambdaSyntaxType::SINGLE_ARROW_STORAGE), "SINGLE_ARROW_STORAGE" },
+		{ static_cast<uint32_t>(LambdaSyntaxType::SINGLE_ARROW), "SINGLE_ARROW" },
+		{ static_cast<uint32_t>(LambdaSyntaxType::LAMBDA_KEYWORD), "LAMBDA_KEYWORD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntaxType>(LambdaSyntaxType value) {
+	return StringUtil::EnumToString(GetLambdaSyntaxTypeValues(), 3, "LambdaSyntaxType", static_cast<uint32_t>(value));
+}
+
+template<>
+LambdaSyntaxType EnumUtil::FromString<LambdaSyntaxType>(const char *value) {
+	return static_cast<LambdaSyntaxType>(StringUtil::StringToEnum(GetLambdaSyntaxTypeValues(), 3, "LambdaSyntaxType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLimitNodeTypeValues() {

@@ -98,6 +98,12 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	auto &storage_manager = col_data.GetStorageManager();
+	if (storage_manager.GetStorageVersion() >= 5) {
+		// dict_fsst introduced - disable fsst
+		return nullptr;
+	}
+
 	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<FSSTAnalyzeState>(info);
 }

@@ -230,6 +230,13 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 	return result;
 }
 
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases() {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	result.push_back(*system);
+	return result;
+}
+
 void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
 	vector<reference<AttachedDatabase>> result;
 	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });

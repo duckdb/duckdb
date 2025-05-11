@@ -922,7 +922,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			get.projected_input.push_back(this->delim_offset + i);
 		}
-		this->delim_offset = get.returned_types.size();
+		this->delim_offset = get.GetColumnIds().size();
 		this->data_offset = 0;
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);

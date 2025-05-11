@@ -330,10 +330,10 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, const string &colu
 	if (!options.WasTypeManuallySet(column_idx)) {
 		how_to_fix_it << "This type was auto-detected from the CSV file." << '\n';
 		how_to_fix_it << "Possible solutions:" << '\n';
-		how_to_fix_it << "* Override the type for this column manually by setting the type explicitly, e.g. types={'"
+		how_to_fix_it << "* Override the type for this column manually by setting the type explicitly, e.g., types={'"
 		              << column_name << "': 'VARCHAR'}" << '\n';
 		how_to_fix_it
-		    << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. "
+		    << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g., "
 		       "sample_size=-1"
 		    << '\n';
 		how_to_fix_it << "* Use a COPY statement to automatically derive types from an existing table." << '\n';

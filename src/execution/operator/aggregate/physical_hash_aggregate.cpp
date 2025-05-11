@@ -488,6 +488,10 @@ public:
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
+	string TaskType() const override {
+		return "HashAggregateFinalizeTask";
+	}
+
 private:
 	ClientContext &context;
 	Pipeline &pipeline;
@@ -546,6 +550,10 @@ public:
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+
+	string TaskType() const override {
+		return "HashAggregateDistinctFinalizeTask";
+	}
 
 private:
 	TaskExecutionResult AggregateDistinctGrouping(const idx_t grouping_idx);

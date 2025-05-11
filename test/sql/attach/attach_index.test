@@ -2,11 +2,6 @@
 # description: Issue #6666 - ATTACH fails on duckdb database with INDEX
 # group: [attach]
 
-# USE memory is no longer correct when we load a different database
-require noforcestorage
-
-require skip_reload
-
 statement ok
 ATTACH '__TEST_DIR__/attach_index_db.db'
 

@@ -285,7 +285,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 			current_container = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
 			                                                               number_of_runs, segments, data_ptr);
 		} else {
-			D_ASSERT(AlignValue<sizeof(RunContainerRLEPair)>(data_ptr) == data_ptr);
+			D_ASSERT(AlignPointer<sizeof(RunContainerRLEPair)>(data_ptr) == data_ptr);
 			current_container =
 			    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
 		}
@@ -302,7 +302,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 				    container_index, container_size, cardinality, segments, data_ptr);
 			}
 		} else {
-			D_ASSERT(AlignValue<sizeof(uint16_t)>(data_ptr) == data_ptr);
+			D_ASSERT(AlignPointer<sizeof(uint16_t)>(data_ptr) == data_ptr);
 			if (metadata.IsInverted()) {
 				current_container =
 				    make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size, cardinality, data_ptr);

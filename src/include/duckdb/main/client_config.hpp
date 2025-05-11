@@ -15,6 +15,7 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,9 @@ struct ClientConfig {
 	bool order_by_non_integer_literal = false;
 	//! Disable casting from timestamp => timestamptz (naïve timestamps)
 	bool disable_timestamptz_casts = false;
+	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda
+	//! functions. Otherwise, DISABLE_SINGLE_ARROW.
+	LambdaSyntax lambda_syntax = LambdaSyntax::DEFAULT;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;
