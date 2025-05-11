@@ -280,6 +280,9 @@ endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 1)
         CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
+ifeq (${CLANG_STAND_DEBUG}, 1)
+        CMAKE_VARS:=${CMAKE_VARS} -DCLANG_STAND_DEBUG=1
+endif
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )

@@ -158,6 +158,8 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
+option(CLANG_STAND_DEBUG "add clang compile option -fstandalone-debug" FALSE)
+
 if((BUILD_PYTHON)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
@@ -550,6 +552,13 @@ if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
+if(CLANG_STAND_DEBUG)
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+    message(FATAL_ERROR "Only clang compiler supports -fstandalone-debug")
+  endif()
+  add_compile_options(-fstandalone-debug)
+endif()
+
 function(is_number input_string return_var)
     if("${input_string}" MATCHES "^[0-9]+$")
         set(${return_var} TRUE PARENT_SCOPE)
@@ -651,10 +660,6 @@ if(OS_NAME STREQUAL "windows")
     # have to throw an error because this will crash at runtime
     message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
   endif()
-endif()
-
-if (OS_NAME STREQUAL "linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug" AND "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-  add_compile_options(-fstandalone-debug)
 endif()
 
 include_directories(src/include)
