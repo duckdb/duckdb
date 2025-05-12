@@ -367,7 +367,8 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 		auto &name = map_components[i].first;
 		auto &global_component = map_components[i].second;
 
-		auto map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, i, global_component, local_key_value);
+		auto map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, i,
+		                                        global_component, local_key_value);
 		if (map_result.column_index) {
 			child_indexes.push_back(std::move(*map_result.column_index));
 			mapping->child_mapping.insert(make_pair(i, std::move(map_result.mapping)));
