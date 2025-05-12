@@ -117,6 +117,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 				return;
 			}
 
+			// TODO: support mark join
 			// if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
 			//     child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			// 	auto &join = child->Cast<LogicalComparisonJoin>();
@@ -135,6 +136,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			LogicalOperator *child = op->children[0].get();
 
+			// TODO: support mark join
 			// if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
 			//     child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			// 	auto &join = child->Cast<LogicalComparisonJoin>();
