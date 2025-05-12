@@ -334,7 +334,7 @@ private:
 		return result;
 	}
 
-	unique_ptr<HTTPResponse> TransformResult(duckdb_httplib::Result &&res) {
+	unique_ptr<HTTPResponse> TransformResult(const duckdb_httplib::Result &res) {
 		if (res.error() == duckdb_httplib::Error::Success) {
 			auto &response = res.value();
 			return TransformResponse(response);
@@ -442,7 +442,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		if (tries <= params.retries) {
 			if (tries > 1) {
 #ifndef DUCKDB_NO_THREADS
-				uint64_t sleep_amount = (uint64_t)((float)params.retry_wait_ms * pow(params.retry_backoff, tries - 2));
+				uint64_t sleep_amount = (uint64_t)((double)params.retry_wait_ms *
+				                                   pow(params.retry_backoff, static_cast<double>(tries - 2)));
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
 #endif
 			}
