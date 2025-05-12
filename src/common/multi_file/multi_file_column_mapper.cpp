@@ -359,30 +359,22 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 	auto &global_key = global_column.children[0];
 	auto &global_value = global_column.children[1];
 
-	//! Key mapping
-	{
-		auto key_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 0,
-		                                            global_key, local_key_value);
-		if (key_map_result.column_index) {
-			child_indexes.push_back(std::move(*key_map_result.column_index));
-			mapping->child_mapping.insert(make_pair(0, std::move(key_map_result.mapping)));
+	child_list_t<reference<const MultiFileColumnDefinition>> map_components;
+	map_components.emplace_back("key", global_key);
+	map_components.emplace_back("value", global_value);
+
+	for (idx_t i = 0; i < map_components.size(); i++) {
+		auto &name = map_components[i].first;
+		auto &global_component = map_components[i].second;
+
+		auto map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, i, global_component, local_key_value);
+		if (map_result.column_index) {
+			child_indexes.push_back(std::move(*map_result.column_index));
+			mapping->child_mapping.insert(make_pair(i, std::move(map_result.mapping)));
 		}
-		if (!key_map_result.column_map.IsNull()) {
-			// found a column mapping for the key - emplace it
-			column_mapping.emplace_back("key", std::move(key_map_result.column_map));
-		}
-	}
-	//! Value mapping
-	{
-		auto value_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 1,
-		                                              global_value, local_key_value);
-		if (value_map_result.column_index) {
-			child_indexes.push_back(std::move(*value_map_result.column_index));
-			mapping->child_mapping.insert(make_pair(1, std::move(value_map_result.mapping)));
-		}
-		if (!value_map_result.column_map.IsNull()) {
-			// found a column mapping for the value - emplace it
-			column_mapping.emplace_back("value", std::move(value_map_result.column_map));
+		if (!map_result.column_map.IsNull()) {
+			// found a column mapping for the component - emplace it
+			column_mapping.emplace_back(name, std::move(map_result.column_map));
 		}
 	}
 
