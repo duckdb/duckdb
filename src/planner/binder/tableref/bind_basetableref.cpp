@@ -134,19 +134,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			auto &cte = found_cte.get();
 			auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
 			if (ctebinding && (cte.query->node->type == QueryNodeType::RECURSIVE_CTE_NODE ||
-			                   cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS)) {
+			                   cte.materialized != CTEMaterialize::CTE_MATERIALIZE_NEVER)) {
 				// There is a CTE binding in the BindContext.
 				// This can only be the case if there is a recursive CTE,
 				// or a materialized CTE present.
 				auto index = GenerateTableIndex();
 				auto materialized = cte.materialized;
-				if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-					materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-#else
-					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-#endif
-				}
+				//				if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
+				//#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				//					materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+				//#else
+				//					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+				//#endif
+				//				}
 
 				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
 					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
