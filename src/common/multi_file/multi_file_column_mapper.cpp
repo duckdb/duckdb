@@ -301,6 +301,106 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	return result;
 }
 
+static ColumnMapResult MapColumnMapComponent(ClientContext &context, const unordered_map<idx_t, const_reference<ColumnIndex>> &selected_children, const ColumnIndex &global_index, const ColumnMapper &nested_mapper, idx_t component_idx, const MultiFileColumnDefinition &component, const MultiFileColumnDefinition &local_map_column) {
+	bool is_selected = true;
+	const_reference<ColumnIndex> child_index = global_index;
+	if (!selected_children.empty()) {
+		auto entry = selected_children.find(component_idx);
+		if (entry != selected_children.end()) {
+			// the column is relevent - set the child index
+			child_index = entry->second;
+		} else {
+			// not relevant - ignore the column
+			is_selected = false;
+		}
+	}
+
+	ColumnMapResult child_map;
+	if (is_selected) {
+		child_map = MapColumn(context, component, child_index.get(), local_map_column.children, nested_mapper);
+	} else {
+		// column is not relevant for the query - push a NULL value
+		child_map.default_value = make_uniq<BoundConstantExpression>(Value(component.type));
+	}
+	return child_map;
+}
+
+ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefinition &global_column,
+                              const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
+                              const MultiFileLocalColumnId &local_id, const ColumnMapper &mapper,
+                              unique_ptr<MultiFileIndexMapping> mapping, const bool is_root) {
+	const idx_t expected_map_children = 2;
+	if (global_column.children.size() != expected_map_children) {
+		throw InvalidInputException(
+		    "Mismatch between field id children in global_column.children (%d) and map children in type",
+		    global_column.children.size());
+	}
+
+	D_ASSERT(local_column.children.size() == 1);
+	D_ASSERT(local_column.children[0].name == "key_value");
+	auto &local_key_value = local_column.children[0];
+
+	auto nested_mapper = mapper.Create(local_key_value.children);
+	child_list_t<Value> column_mapping;
+	unique_ptr<Expression> default_expression;
+	unordered_map<idx_t, const_reference<ColumnIndex>> selected_children;
+	if (global_index.HasChildren()) {
+		//! FIXME: is this expected for maps??
+		for (auto &index : global_index.GetChildIndexes()) {
+			selected_children.emplace(index.GetPrimaryIndex(), index);
+		}
+	}
+
+	vector<ColumnIndex> child_indexes;
+	auto &global_key = global_column.children[0];
+	auto &global_value = global_column.children[1];
+
+	//! Key mapping
+	{
+		auto key_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 0, global_key, local_key_value);
+		if (key_map_result.column_index) {
+			child_indexes.push_back(std::move(*key_map_result.column_index));
+			mapping->child_mapping.insert(make_pair(0, std::move(key_map_result.mapping)));
+		}
+		if (!key_map_result.column_map.IsNull()) {
+			// found a column mapping for the key - emplace it
+			column_mapping.emplace_back("key", std::move(key_map_result.column_map));
+		}
+	}
+	//! Value mapping
+	{
+		auto value_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 1, global_value, local_key_value);
+		if (value_map_result.column_index) {
+			child_indexes.push_back(std::move(*value_map_result.column_index));
+			mapping->child_mapping.insert(make_pair(1, std::move(value_map_result.mapping)));
+		}
+		if (!value_map_result.column_map.IsNull()) {
+			// found a column mapping for the value - emplace it
+			column_mapping.emplace_back("value", std::move(value_map_result.column_map));
+		}
+	}
+
+	ColumnMapResult result;
+	result.local_column = local_column;
+	if (!column_mapping.empty()) {
+		// we have column mappings at this level - construct the struct
+		result.column_map = Value::STRUCT(std::move(column_mapping));
+		if (!is_root) {
+			// if this is nested we need to refer to the current column at this level
+			child_list_t<Value> child_list;
+			child_list.emplace_back(string(), Value(local_column.name));
+			child_list.emplace_back(string(), std::move(result.column_map));
+			result.column_map = Value::STRUCT(std::move(child_list));
+		}
+	}
+	vector<ColumnIndex> map_indexes;
+	map_indexes.emplace_back(0, std::move(child_indexes));
+
+	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), std::move(map_indexes));
+	result.mapping = std::move(mapping);
+	return result;
+}
+
 ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                 const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                 const MultiFileLocalColumnId &local_id, const ColumnMapper &mapper,
@@ -429,18 +529,21 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 
 	// nested type - check if the field identifiers match and if we need to remap
 	D_ASSERT(global_column.type.IsNested());
-	switch (global_column.type.InternalType()) {
-	case PhysicalType::STRUCT:
+	switch (global_column.type.id()) {
+	case LogicalTypeId::STRUCT:
 		return MapColumnStruct(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
 		                       is_root);
-	case PhysicalType::LIST:
+	case LogicalTypeId::LIST:
 		return MapColumnList(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
 		                     is_root);
-	case PhysicalType::ARRAY: {
+	case LogicalTypeId::MAP:
+		return MapColumnMap(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
+		                     is_root);
+	case LogicalTypeId::ARRAY: {
 		throw NotImplementedException("Can't map an ARRAY with nested children!");
 	}
 	default:
-		throw InternalException("MapColumn for children of type %s not implemented", global_column.type.ToString());
+		throw NotImplementedException("MapColumn for children of type %s not implemented", global_column.type.ToString());
 	}
 }
 
