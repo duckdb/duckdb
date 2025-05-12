@@ -786,7 +786,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 
 DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<string> &column_path,
                                           const string &new_name, idx_t depth) {
-	if (type.IsNested()) {
+	if (!type.IsNested()) {
 		throw CatalogException("Cannot rename field from column \"%s\" - not a nested type", column_path[0]);
 	}
 	auto &rename_entry = column_path[depth];
