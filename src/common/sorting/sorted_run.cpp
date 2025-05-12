@@ -286,6 +286,13 @@ void SortedRun::Finalize(bool external) {
 	finalized = true;
 }
 
+void SortedRun::DestroyData(const idx_t begin_tuple_idx, const idx_t end_tuple_idx) {
+	key_data->DestroyData(begin_tuple_idx, end_tuple_idx);
+	if (payload_data) {
+		payload_data->DestroyData(begin_tuple_idx, end_tuple_idx);
+	}
+}
+
 idx_t SortedRun::Count() const {
 	return key_data->Count();
 }

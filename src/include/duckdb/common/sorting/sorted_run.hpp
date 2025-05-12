@@ -29,6 +29,8 @@ public:
 	void Sink(DataChunk &key, DataChunk &payload);
 	//! Sorts the data (physically reorder data if external)
 	void Finalize(bool external);
+	//! Destroy data between these tuple indices
+	void DestroyData(idx_t begin_idx, idx_t end_idx);
 	//! Number of tuples
 	idx_t Count() const;
 	//! Size of this sorted run
