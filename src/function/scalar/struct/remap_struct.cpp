@@ -39,7 +39,10 @@ public:
 static void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
                         const vector<RemapColumnInfo> &remap_info);
 
-static void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &input_vectors, const vector<reference<Vector>> &result_vectors, const vector<RemapColumnInfo> &remap_info, Vector &default_vector, const bool has_top_level_null, idx_t count) {
+static void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &input_vectors,
+                              const vector<reference<Vector>> &result_vectors,
+                              const vector<RemapColumnInfo> &remap_info, Vector &default_vector,
+                              const bool has_top_level_null, idx_t count) {
 	// set up the correct vector references
 	for (idx_t i = 0; i < remap_info.size(); i++) {
 		auto &remap = remap_info[i];
@@ -74,7 +77,7 @@ static void RemapChildVectors(const Vector &result, const vector<reference<Vecto
 }
 
 static void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
-                      const vector<RemapColumnInfo> &remap_info) {
+                     const vector<RemapColumnInfo> &remap_info) {
 	auto &input_key_vector = MapVector::GetKeys(input);
 	auto &input_value_vector = MapVector::GetValues(input);
 
@@ -207,7 +210,8 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 		result_vectors.emplace_back(*child);
 	}
 
-	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null, result_size);
+	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null,
+	                  result_size);
 }
 
 static void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
@@ -389,7 +393,8 @@ struct RemapEntry {
 		}
 	}
 
-	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> target_children, const case_insensitive_map_t<RemapEntry> &remap_map) {
+	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> target_children,
+	                                                        const case_insensitive_map_t<RemapEntry> &remap_map) {
 		vector<RemapColumnInfo> result;
 		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 			auto &target_name = target_children[target_idx].first;
@@ -437,7 +442,9 @@ struct RemapEntry {
 		}
 	}
 
-	static child_list_t<LogicalType> RemapCastChildren(const child_list_t<LogicalType> source_children, const case_insensitive_map_t<RemapEntry> &remap_map, const unordered_map<idx_t, string> &source_name_map) {
+	static child_list_t<LogicalType> RemapCastChildren(const child_list_t<LogicalType> source_children,
+	                                                   const case_insensitive_map_t<RemapEntry> &remap_map,
+	                                                   const unordered_map<idx_t, string> &source_name_map) {
 		child_list_t<LogicalType> new_source_children;
 		for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
 			auto &child_name = source_children[source_idx].first;
@@ -450,7 +457,7 @@ struct RemapEntry {
 				if (child_type.IsNested()) {
 					// nested - recurse
 					new_source_children.emplace_back(child_name,
-														RemapCast(child_type, *remap_entry->second.child_remaps));
+					                                 RemapCast(child_type, *remap_entry->second.child_remaps));
 				} else {
 					new_source_children.emplace_back(child_name, remap_entry->second.target_type);
 				}

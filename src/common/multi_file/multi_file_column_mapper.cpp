@@ -301,7 +301,11 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	return result;
 }
 
-static ColumnMapResult MapColumnMapComponent(ClientContext &context, const unordered_map<idx_t, const_reference<ColumnIndex>> &selected_children, const ColumnIndex &global_index, const ColumnMapper &nested_mapper, idx_t component_idx, const MultiFileColumnDefinition &component, const MultiFileColumnDefinition &local_map_column) {
+static ColumnMapResult
+MapColumnMapComponent(ClientContext &context,
+                      const unordered_map<idx_t, const_reference<ColumnIndex>> &selected_children,
+                      const ColumnIndex &global_index, const ColumnMapper &nested_mapper, idx_t component_idx,
+                      const MultiFileColumnDefinition &component, const MultiFileColumnDefinition &local_map_column) {
 	bool is_selected = true;
 	const_reference<ColumnIndex> child_index = global_index;
 	if (!selected_children.empty()) {
@@ -326,9 +330,9 @@ static ColumnMapResult MapColumnMapComponent(ClientContext &context, const unord
 }
 
 ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefinition &global_column,
-                              const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
-                              const MultiFileLocalColumnId &local_id, const ColumnMapper &mapper,
-                              unique_ptr<MultiFileIndexMapping> mapping, const bool is_root) {
+                             const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
+                             const MultiFileLocalColumnId &local_id, const ColumnMapper &mapper,
+                             unique_ptr<MultiFileIndexMapping> mapping, const bool is_root) {
 	const idx_t expected_map_children = 2;
 	if (global_column.children.size() != expected_map_children) {
 		throw InvalidInputException(
@@ -357,7 +361,8 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 
 	//! Key mapping
 	{
-		auto key_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 0, global_key, local_key_value);
+		auto key_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 0,
+		                                            global_key, local_key_value);
 		if (key_map_result.column_index) {
 			child_indexes.push_back(std::move(*key_map_result.column_index));
 			mapping->child_mapping.insert(make_pair(0, std::move(key_map_result.mapping)));
@@ -369,7 +374,8 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 	}
 	//! Value mapping
 	{
-		auto value_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 1, global_value, local_key_value);
+		auto value_map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, 1,
+		                                              global_value, local_key_value);
 		if (value_map_result.column_index) {
 			child_indexes.push_back(std::move(*value_map_result.column_index));
 			mapping->child_mapping.insert(make_pair(1, std::move(value_map_result.mapping)));
@@ -538,12 +544,13 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 		                     is_root);
 	case LogicalTypeId::MAP:
 		return MapColumnMap(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
-		                     is_root);
+		                    is_root);
 	case LogicalTypeId::ARRAY: {
 		throw NotImplementedException("Can't map an ARRAY with nested children!");
 	}
 	default:
-		throw NotImplementedException("MapColumn for children of type %s not implemented", global_column.type.ToString());
+		throw NotImplementedException("MapColumn for children of type %s not implemented",
+		                              global_column.type.ToString());
 	}
 }
 
