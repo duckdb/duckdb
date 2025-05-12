@@ -3454,11 +3454,11 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetRequestTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(RequestType::GET_REQUEST), "GET_REQUEST" },
-		{ static_cast<uint32_t>(RequestType::PUT_REQUEST), "PUT_REQUEST" },
-		{ static_cast<uint32_t>(RequestType::HEAD_REQUEST), "HEAD_REQUEST" },
-		{ static_cast<uint32_t>(RequestType::DELETE_REQUEST), "DELETE_REQUEST" },
-		{ static_cast<uint32_t>(RequestType::POST_REQUEST), "POST_REQUEST" }
+		{ static_cast<uint32_t>(RequestType::GET_REQUEST), "GET" },
+		{ static_cast<uint32_t>(RequestType::PUT_REQUEST), "PUT" },
+		{ static_cast<uint32_t>(RequestType::HEAD_REQUEST), "HEAD" },
+		{ static_cast<uint32_t>(RequestType::DELETE_REQUEST), "DELETE" },
+		{ static_cast<uint32_t>(RequestType::POST_REQUEST), "POST" }
 	};
 	return values;
 }

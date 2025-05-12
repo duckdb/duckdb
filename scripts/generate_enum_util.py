@@ -47,6 +47,13 @@ overrides = {
         "LOG_ERROR": "ERROR",
         "LOG_FATAL": "FATAL",
     },
+    "RequestType": {
+        "GET_REQUEST": "GET",
+        "PUT_REQUEST": "PUT",
+        "HEAD_REQUEST": "HEAD",
+        "DELETE_REQUEST": "DELETE",
+        "POST_REQUEST": "POST",
+    },
 }
 
 # get all the headers
