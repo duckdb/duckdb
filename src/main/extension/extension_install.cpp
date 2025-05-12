@@ -16,6 +16,9 @@
 
 #include <fstream>
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x)  STRINGIFY(x)
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -71,6 +74,24 @@ duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	res = fs.JoinPath(res, ".duckdb");
 	res = fs.JoinPath(res, "extensions");
 	return res;
+}
+
+void stripTrailingNulls(std::string &str) {
+	while (!str.empty() && str.back() == '\0') {
+		str.pop_back();
+	}
+}
+
+duckdb::string ExtensionHelper::DefaultSecondaryExtensionFolder(FileSystem &fs) {
+#ifdef DUCKDB_SECONDARY_EXTENSION_DIRECTORY
+	// TODO: Why do we get trailing nulls here (on Linux)?
+	const char *secondary_dir = TOSTRING(DUCKDB_SECONDARY_EXTENSION_DIRECTORY);
+	std::string s_secondary_dir(secondary_dir);
+	stripTrailingNulls(s_secondary_dir);
+	return s_secondary_dir;
+#else
+	return "";
+#endif
 }
 
 string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
