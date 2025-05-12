@@ -10,6 +10,8 @@
 #include "duckdb/main/extension_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
+#include <iostream>
+
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
 #endif // DUCKDB_NO_THREADS
@@ -349,19 +351,38 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		filename = address;
 #else
 
+		// Local function to process local path
+		auto ComputeLocalExtensionPath = [&fs](const string &base_path, const string &extension_name) -> string {
+			// convert random separators to platform-canonic
+			string local_path = fs.ConvertSeparators(base_path);
+			// expand ~ in extension directory
+			local_path = fs.ExpandPath(local_path);
+			auto path_components = PathComponents();
+			for (auto &path_ele : path_components) {
+				local_path = fs.JoinPath(local_path, path_ele);
+			}
+			return fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+			;
+		};
+
 		string local_path = !db.config.options.extension_directory.empty()
 		                        ? db.config.options.extension_directory
 		                        : ExtensionHelper::DefaultExtensionFolder(fs);
 
-		// convert random separators to platform-canonic
-		local_path = fs.ConvertSeparators(local_path);
-		// expand ~ in extension directory
-		local_path = fs.ExpandPath(local_path);
-		auto path_components = PathComponents();
-		for (auto &path_ele : path_components) {
-			local_path = fs.JoinPath(local_path, path_ele);
+		filename = ComputeLocalExtensionPath(local_path, extension_name);
+
+		// Check if the extension is in the secondary extension directory
+		// This is a fallback for extensions that are not in the main extension directory
+		// and are installed via a package manager.
+		string secondary_path = !db.config.options.secondary_extension_directory.empty()
+		                            ? db.config.options.secondary_extension_directory
+		                            : ExtensionHelper::DefaultSecondaryExtensionFolder(fs);
+		if (!fs.FileExists(filename) && !secondary_path.empty()) {
+			string secondary_filename = ComputeLocalExtensionPath(secondary_path, extension_name);
+			if (fs.FileExists(secondary_filename)) {
+				filename = secondary_filename;
+			}
 		}
-		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
 	} else {
 		direct_load = true;
