@@ -240,7 +240,7 @@ void duckdb_scalar_function_get_client_context(duckdb_bind_info info, duckdb_cli
 		return;
 	}
 	auto &bind_info = GetCScalarFunctionBindInfo(info);
-	auto wrapper = new CClientContextWrapper(bind_info.context);
+	auto wrapper = new duckdb::CClientContextWrapper(bind_info.context);
 	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
