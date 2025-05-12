@@ -457,8 +457,9 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 	StructMappingInfo result;
 	auto child_list = GetChildList(type);
 	auto &current_component = column_path[depth];
+	bool last_entry = depth + 1 == column_path.size();
 
-	if (column_path.size() == depth + 1) {
+	if (last_entry) {
 		if (type.id() != LogicalTypeId::STRUCT) {
 			throw BinderException("Column %s is not a struct - ALTER TABLE can only add fields to structs",
 			                      current_component);
@@ -702,10 +703,15 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 	for (auto &entry : child_types) {
 		Value mapping_value;
 		LogicalType type_value;
-		if (StringUtil::CIEquals(entry.first, dropped_entry)) {
+		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(dropped_entry, "element")) ||
+		    StringUtil::CIEquals(entry.first, dropped_entry)) {
 			// this is the entry we are dropping
 			found = true;
 			if (last_entry) {
+				if (type.id() != LogicalTypeId::STRUCT) {
+					throw CatalogException("Cannot drop field '%s' from column '%s' - it's not a struct",
+					                       column_path.back(), column_path.front());
+				}
 				// we are dropping this entry in its entirety - just skip
 				if (child_types.size() == 1) {
 					throw CatalogException("Cannot drop field %s from column %s - it is the last field of the struct",
@@ -799,6 +805,11 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			// this is the entry we are renaming
 			found = true;
 			if (last_entry) {
+				if (type.id() != LogicalTypeId::STRUCT) {
+					throw CatalogException(
+					    "Cannot rename field '%s' from column '%s' - can only rename fields inside a struct",
+					    column_path.back(), column_path.front());
+				}
 				// we are renaming this entry
 				for (auto &sub_entry : child_types) {
 					if (StringUtil::CIEquals(new_name, sub_entry.first)) {

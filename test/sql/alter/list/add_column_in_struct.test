@@ -81,3 +81,9 @@ select * from test;
 ----
 {'a': [{'i': 1, 'j': 1, 'k': NULL}]}
 {'a': [{'i': 2, 'j': 2, 'k': NULL}]}
+
+# attempt to add a field to a list
+statement error
+ALTER TABLE test ADD COLUMN s.a.not_element INTEGER
+----
+Binder Error: Column a is not a struct - ALTER TABLE can only add fields to structs
