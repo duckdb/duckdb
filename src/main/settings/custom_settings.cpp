@@ -829,6 +829,39 @@ Value ForceVariantShredding::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Extension Directory
+//===----------------------------------------------------------------------===//
+void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.extension_directories.clear();
+
+	if (input.type() == LogicalType::VARCHAR) {
+		// Backward compatibility: This options once was a single string.
+		auto value = input.GetValue<string>();
+		if (!value.empty()) {
+			config.options.extension_directories.emplace_back(value);
+		}
+	} else {
+		auto &list = ListValue::GetChildren(input);
+		for (auto &val : list) {
+			config.options.extension_directories.emplace_back(val.GetValue<string>());
+		}
+	}
+}
+
+void ExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.extension_directories = DBConfig().options.extension_directories;
+}
+
+Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> extension_directories;
+	for (auto &dir : config.options.extension_directories) {
+		extension_directories.emplace_back(dir);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(extension_directories));
+}
+
+//===----------------------------------------------------------------------===//
 // Logging Mode
 //===----------------------------------------------------------------------===//
 Value LoggingMode::GetSetting(const ClientContext &context) {

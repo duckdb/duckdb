@@ -99,6 +99,10 @@ add_library(
   extension_alias.cpp extension_helper.cpp extension_install.cpp
   extension_load.cpp extension_loader.cpp)
 
+target_compile_definitions(
+  duckdb_main_extension
+  PRIVATE DUCKDB_EXTENSION_DIRECTORIES="${EXTENSION_DIRECTORIES}")
+
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
     ${ALL_OBJECT_FILES} ${generated_loader_obj_files}

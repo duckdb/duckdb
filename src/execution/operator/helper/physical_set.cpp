@@ -59,7 +59,7 @@ SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChu
 		}
 	}
 
-	Value input_val = value.CastAs(context.client, DBConfig::ParseLogicalType(option->parameter_type));
+	Value input_val = DBConfig::CastOptionIfNecessary(context.client, value, *option);
 	if (option->default_value) {
 		if (option->set_callback) {
 			SettingCallbackInfo info(context.client, variable_scope);

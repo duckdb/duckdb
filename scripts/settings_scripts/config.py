@@ -3,7 +3,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Set, List
+from typing import Set, List, Optional
 from functools import total_ordering
 
 # define file paths and global variables
@@ -30,6 +30,7 @@ class Setting:
         name: str,
         description: str,
         sql_type: str,
+        alternative_sql_type: Optional[str],
         scope: str,
         internal_setting: str,
         on_callbacks: List[str],
@@ -42,8 +43,13 @@ class Setting:
         self.name = self._get_valid_name(name)
         self.description = description
         self.sql_type = self._get_sql_type(sql_type)
-        self.return_type = self._get_setting_type(sql_type)
         self.is_enum = sql_type.startswith('ENUM')
+        if alternative_sql_type:
+            self.alternative_sql_type = self._get_sql_type(alternative_sql_type)
+            self.return_type = self._get_setting_type(alternative_sql_type)
+        else:
+            self.alternative_sql_type = None
+            self.return_type = self._get_setting_type(sql_type)
         self.internal_setting = internal_setting
         self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)

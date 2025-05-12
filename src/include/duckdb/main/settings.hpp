@@ -34,6 +34,7 @@ struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -45,6 +46,7 @@ struct AllocatorBackgroundThreadsSetting {
 	static constexpr const char *Name = "allocator_background_threads";
 	static constexpr const char *Description = "Whether to enable the allocator background thread.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -58,6 +60,7 @@ struct AllocatorBulkDeallocationFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "If a bulk deallocation larger than this occurs, flush outstanding allocations.";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -69,6 +72,7 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -79,6 +83,7 @@ struct AllowCommunityExtensionsSetting {
 	static constexpr const char *Name = "allow_community_extensions";
 	static constexpr const char *Description = "Allow to load community built extensions";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -91,6 +96,7 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
 	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -100,6 +106,7 @@ struct AllowParserOverrideExtensionSetting {
 	static constexpr const char *Name = "allow_parser_override_extension";
 	static constexpr const char *Description = "Allow extensions to override the current parser";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -113,6 +120,7 @@ struct AllowPersistentSecretsSetting {
 	static constexpr const char *Description =
 	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -123,6 +131,7 @@ struct AllowUnredactedSecretsSetting {
 	static constexpr const char *Name = "allow_unredacted_secrets";
 	static constexpr const char *Description = "Allow printing unredacted secrets";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -135,6 +144,7 @@ struct AllowUnsignedExtensionsSetting {
 	static constexpr const char *Name = "allow_unsigned_extensions";
 	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -148,6 +158,7 @@ struct AllowedDirectoriesSetting {
 	static constexpr const char *Description = "List of directories/prefixes that are ALWAYS allowed to be queried - "
 	                                           "even when enable_external_access is false";
 	static constexpr const char *InputType = "VARCHAR[]";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -159,6 +170,7 @@ struct AllowedPathsSetting {
 	static constexpr const char *Description =
 	    "List of files that are ALWAYS allowed to be queried - even when enable_external_access is false";
 	static constexpr const char *InputType = "VARCHAR[]";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -170,6 +182,7 @@ struct ArrowLargeBufferSizeSetting {
 	static constexpr const char *Description =
 	    "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -181,6 +194,7 @@ struct ArrowLosslessConversionSetting {
 	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
 	    "with a duckdb.type_name extension name.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -191,6 +205,7 @@ struct ArrowOutputListViewSetting {
 	static constexpr const char *Description =
 	    "Whether export to Arrow format should use ListView as the physical layout for LIST columns";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -201,6 +216,7 @@ struct ArrowOutputVersionSetting {
 	static constexpr const char *Description =
 	    "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "1.0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -212,6 +228,7 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr const char *Description =
 	    "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "64";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -222,6 +239,7 @@ struct AutoinstallExtensionRepositorySetting {
 	static constexpr const char *Description =
 	    "Overrides the custom endpoint for extension installation on autoloading";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -233,6 +251,7 @@ struct AutoinstallKnownExtensionsSetting {
 	static constexpr const char *Description =
 	    "Whether known extensions are allowed to be automatically installed when a query depends on them";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -244,6 +263,7 @@ struct AutoloadKnownExtensionsSetting {
 	static constexpr const char *Description =
 	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -266,6 +286,7 @@ struct CatalogErrorMaxSchemasSetting {
 	static constexpr const char *Description =
 	    "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "100";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -276,6 +297,7 @@ struct CheckpointThresholdSetting {
 	static constexpr const char *Description =
 	    "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -286,6 +308,7 @@ struct CustomExtensionRepositorySetting {
 	static constexpr const char *Name = "custom_extension_repository";
 	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -296,6 +319,7 @@ struct CustomProfilingSettingsSetting {
 	static constexpr const char *Name = "custom_profiling_settings";
 	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -306,6 +330,7 @@ struct CustomUserAgentSetting {
 	static constexpr const char *Name = "custom_user_agent";
 	static constexpr const char *Description = "Metadata from DuckDB callers";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -316,6 +341,7 @@ struct DebugAsofIejoinSetting {
 	static constexpr const char *Name = "debug_asof_iejoin";
 	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -326,6 +352,7 @@ struct DebugCheckpointAbortSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "NONE";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -337,6 +364,7 @@ struct DebugForceExternalSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -348,6 +376,7 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -368,6 +397,7 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
 	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -386,6 +416,7 @@ struct DebugVerifyVectorSetting {
 	static constexpr const char *Name = "debug_verify_vector";
 	static constexpr const char *Description = "DEBUG SETTING: enable vector verification";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "NONE";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -396,6 +427,7 @@ struct DebugWindowModeSetting {
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "WINDOW";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -407,6 +439,7 @@ struct DefaultBlockSizeSetting {
 	static constexpr const char *Description =
 	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -417,6 +450,7 @@ struct DefaultCollationSetting {
 	static constexpr const char *Name = "default_collation";
 	static constexpr const char *Description = "The collation setting used when none is specified";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -427,6 +461,7 @@ struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description = "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "NULLS_LAST";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -437,6 +472,7 @@ struct DefaultOrderSetting {
 	static constexpr const char *Name = "default_order";
 	static constexpr const char *Description = "The order type used when none is specified (ASC or DESC)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "ASCENDING";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -447,6 +483,7 @@ struct DefaultSecretStorageSetting {
 	static constexpr const char *Name = "default_secret_storage";
 	static constexpr const char *Description = "Allows switching the default storage for secrets";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -459,6 +496,7 @@ struct DisableDatabaseInvalidationSetting {
 	    "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, "
 	    "as DuckDB cannot guarantee correct behavior after a fatal error.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -471,6 +509,7 @@ struct DisableTimestamptzCastsSetting {
 	static constexpr const char *Name = "disable_timestamptz_casts";
 	static constexpr const char *Description = "Disable casting from timestamp to timestamptz ";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -480,6 +519,7 @@ struct DisabledCompressionMethodsSetting {
 	static constexpr const char *Name = "disabled_compression_methods";
 	static constexpr const char *Description = "Disable a specific set of compression methods (comma separated)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -490,6 +530,7 @@ struct DisabledFilesystemsSetting {
 	static constexpr const char *Name = "disabled_filesystems";
 	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -500,6 +541,7 @@ struct DisabledLogTypes {
 	static constexpr const char *Name = "disabled_log_types";
 	static constexpr const char *Description = "Sets the list of disabled loggers";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -510,6 +552,7 @@ struct DisabledOptimizersSetting {
 	static constexpr const char *Name = "disabled_optimizers";
 	static constexpr const char *Description = "DEBUG SETTING: disable a specific set of optimizers (comma separated)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -520,6 +563,7 @@ struct DuckDBAPISetting {
 	static constexpr const char *Name = "duckdb_api";
 	static constexpr const char *Description = "DuckDB API surface";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -531,6 +575,7 @@ struct DynamicOrFilterThresholdSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of OR filters we generate dynamically from a hash join";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "50";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -542,6 +587,7 @@ struct EnableExternalAccessSetting {
 	    "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV "
 	    "readers, pandas replacement scans, etc)";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -554,6 +600,7 @@ struct EnableExternalFileCacheSetting {
 	static constexpr const char *Name = "enable_external_file_cache";
 	static constexpr const char *Description = "Allow the database to cache external files (e.g., Parquet) in memory.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -565,6 +612,7 @@ struct EnableFSSTVectorsSetting {
 	static constexpr const char *Description =
 	    "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -574,6 +622,7 @@ struct EnableHTTPLoggingSetting {
 	static constexpr const char *Name = "enable_http_logging";
 	static constexpr const char *Description = "(deprecated) Enables HTTP logging";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -584,6 +633,7 @@ struct EnableHTTPMetadataCacheSetting {
 	static constexpr const char *Name = "enable_http_metadata_cache";
 	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -594,6 +644,7 @@ struct EnableLogging {
 	static constexpr const char *Name = "enable_logging";
 	static constexpr const char *Description = "Enables the logger";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -605,6 +656,7 @@ struct EnableMacroDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created MACROs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -614,6 +666,7 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -624,6 +677,7 @@ struct EnableProfilingSetting {
 	static constexpr const char *Description =
 	    "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -635,6 +689,7 @@ struct EnableProgressBarSetting {
 	static constexpr const char *Description =
 	    "Enables the progress bar, printing progress to the terminal for long queries";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static bool OnLocalSet(ClientContext &context, const Value &input);
@@ -648,6 +703,7 @@ struct EnableProgressBarPrintSetting {
 	static constexpr const char *Description =
 	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -659,6 +715,7 @@ struct EnableViewDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -668,6 +725,7 @@ struct EnabledLogTypes {
 	static constexpr const char *Name = "enabled_log_types";
 	static constexpr const char *Description = "Sets the list of enabled loggers";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -678,6 +736,7 @@ struct ErrorsAsJSONSetting {
 	static constexpr const char *Name = "errors_as_json";
 	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -688,6 +747,7 @@ struct ExperimentalMetadataReuseSetting {
 	static constexpr const char *Name = "experimental_metadata_reuse";
 	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -697,16 +757,18 @@ struct ExplainOutputSetting {
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
 struct ExtensionDirectorySetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "extension_directory";
 	static constexpr const char *Description = "Set the directory to store extensions in";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = "VARCHAR[]";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -717,6 +779,7 @@ struct ExternalThreadsSetting {
 	static constexpr const char *Name = "external_threads";
 	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
@@ -729,6 +792,7 @@ struct FileSearchPathSetting {
 	static constexpr const char *Name = "file_search_path";
 	static constexpr const char *Description = "A comma separated list of directories to search for input files";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -739,6 +803,7 @@ struct ForceBitpackingModeSetting {
 	static constexpr const char *Name = "force_bitpacking_mode";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific bitpacking mode";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -749,6 +814,7 @@ struct ForceCompressionSetting {
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -770,6 +836,7 @@ struct HomeDirectorySetting {
 	static constexpr const char *Name = "home_directory";
 	static constexpr const char *Description = "Sets the home directory used by the system";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -781,6 +848,7 @@ struct HTTPLoggingOutputSetting {
 	static constexpr const char *Description =
 	    "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -791,6 +859,7 @@ struct HTTPProxySetting {
 	static constexpr const char *Name = "http_proxy";
 	static constexpr const char *Description = "HTTP proxy host";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -801,6 +870,7 @@ struct HTTPProxyPasswordSetting {
 	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -811,6 +881,7 @@ struct HTTPProxyUsernameSetting {
 	static constexpr const char *Name = "http_proxy_username";
 	static constexpr const char *Description = "Username for HTTP proxy";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -822,6 +893,7 @@ struct IeeeFloatingPointOpsSetting {
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -832,6 +904,7 @@ struct ImmediateTransactionModeSetting {
 	static constexpr const char *Description =
 	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -843,6 +916,7 @@ struct IndexScanMaxCountSetting {
 	    "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
 	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "2048";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -854,6 +928,7 @@ struct IndexScanPercentageSetting {
 	    "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
 	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
 	static constexpr const char *InputType = "DOUBLE";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "0.001";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -865,6 +940,7 @@ struct IntegerDivisionSetting {
 	static constexpr const char *Description =
 	    "Whether or not the / operator defaults to integer division, or to floating point division";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -875,6 +951,7 @@ struct LambdaSyntaxSetting {
 	static constexpr const char *Description =
 	    "Configures the use of the deprecated single arrow operator (->) for lambda functions.";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -886,6 +963,7 @@ struct LateMaterializationMaxRowsSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "50";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -895,6 +973,7 @@ struct LockConfigurationSetting {
 	static constexpr const char *Name = "lock_configuration";
 	static constexpr const char *Description = "Whether or not the configuration can be altered";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -906,6 +985,7 @@ struct LogQueryPathSetting {
 	static constexpr const char *Description =
 	    "Specifies the path to which queries should be logged (default: NULL, queries are not logged)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -916,6 +996,7 @@ struct LoggingLevel {
 	static constexpr const char *Name = "logging_level";
 	static constexpr const char *Description = "The log level which will be recorded in the log";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -926,6 +1007,7 @@ struct LoggingMode {
 	static constexpr const char *Name = "logging_mode";
 	static constexpr const char *Description = "Determines which types of log messages are logged";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -936,6 +1018,7 @@ struct LoggingStorage {
 	static constexpr const char *Name = "logging_storage";
 	static constexpr const char *Description = "Set the logging storage (memory/stdout/file/<custom>)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -948,6 +1031,7 @@ struct MaxExpressionDepthSetting {
 	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
 	    "expressions might lead to stack overflow errors.";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -958,6 +1042,7 @@ struct MaxMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -969,6 +1054,7 @@ struct MaxTempDirectorySizeSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -979,6 +1065,7 @@ struct MaxVacuumTasksSetting {
 	static constexpr const char *Name = "max_vacuum_tasks";
 	static constexpr const char *Description = "The maximum vacuum tasks to schedule during a checkpoint.";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "100";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -988,6 +1075,7 @@ struct MergeJoinThresholdSetting {
 	static constexpr const char *Name = "merge_join_threshold";
 	static constexpr const char *Description = "The maximum number of rows on either table to choose a merge join";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "1000";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -998,6 +1086,7 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr const char *Description =
 	    "The maximum number of rows on either table to choose a nested loop join";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1007,6 +1096,7 @@ struct OldImplicitCastingSetting {
 	static constexpr const char *Name = "old_implicit_casting";
 	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -1017,6 +1107,7 @@ struct OrderByNonIntegerLiteralSetting {
 	static constexpr const char *Description =
 	    "Allow ordering by non-integer literals - ordering by such literals has no effect.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1026,6 +1117,7 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr const char *Name = "ordered_aggregate_threshold";
 	static constexpr const char *Description = "The number of rows to accumulate before sorting, used for tuning";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "262144";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -1037,6 +1129,7 @@ struct PartitionedWriteFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "524288";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1047,6 +1140,7 @@ struct PartitionedWriteMaxOpenFilesSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "100";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1056,6 +1150,7 @@ struct PasswordSetting {
 	static constexpr const char *Name = "password";
 	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1066,6 +1161,7 @@ struct PerfectHtThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
 	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "12";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -1077,6 +1173,7 @@ struct PinThreadsSetting {
 	static constexpr const char *Description =
 	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1088,6 +1185,7 @@ struct PivotFilterThresholdSetting {
 	static constexpr const char *Description =
 	    "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "20";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1097,6 +1195,7 @@ struct PivotLimitSetting {
 	static constexpr const char *Name = "pivot_limit";
 	static constexpr const char *Description = "The maximum number of pivot columns in a pivot statement";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "100000";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1106,6 +1205,7 @@ struct PreferRangeJoinsSetting {
 	static constexpr const char *Name = "prefer_range_joins";
 	static constexpr const char *Description = "Force use of range joins with mixed predicates";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1116,6 +1216,7 @@ struct PreserveIdentifierCaseSetting {
 	static constexpr const char *Description =
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1127,6 +1228,7 @@ struct PreserveInsertionOrderSetting {
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
 	    "that do not contain ORDER BY clauses.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -1137,6 +1239,7 @@ struct ProduceArrowStringViewSetting {
 	static constexpr const char *Description =
 	    "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -1147,6 +1250,7 @@ struct ProfileOutputSetting {
 	static constexpr const char *Description =
 	    "The file to which profile output should be saved, or empty to print to the terminal";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1157,6 +1261,7 @@ struct ProfilingCoverageSetting {
 	static constexpr const char *Name = "profiling_coverage";
 	static constexpr const char *Description = "The profiling coverage (SELECT or ALL)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1167,6 +1272,7 @@ struct ProfilingModeSetting {
 	static constexpr const char *Name = "profiling_mode";
 	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1178,6 +1284,7 @@ struct ProgressBarTimeSetting {
 	static constexpr const char *Description =
 	    "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar";
 	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1189,6 +1296,7 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr const char *Description =
 	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error.";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1199,6 +1307,7 @@ struct SchedulerProcessPartialSetting {
 	static constexpr const char *Description =
 	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1210,6 +1319,7 @@ struct SchemaSetting {
 	static constexpr const char *Description =
 	    "Sets the default search schema. Equivalent to setting search_path to a single value.";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1221,6 +1331,7 @@ struct SearchPathSetting {
 	static constexpr const char *Description =
 	    "Sets the default catalog search path as a comma-separated list of values";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1231,6 +1342,7 @@ struct SecretDirectorySetting {
 	static constexpr const char *Name = "secret_directory";
 	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1241,6 +1353,7 @@ struct StorageBlockPrefetchSetting {
 	static constexpr const char *Name = "storage_block_prefetch";
 	static constexpr const char *Description = "In which scenarios to use storage block prefetching";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "REMOTE_ONLY";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -1251,6 +1364,7 @@ struct StorageCompatibilityVersionSetting {
 	static constexpr const char *Name = "storage_compatibility_version";
 	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1262,6 +1376,7 @@ struct StreamingBufferSizeSetting {
 	static constexpr const char *Description =
 	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1272,6 +1387,7 @@ struct TempDirectorySetting {
 	static constexpr const char *Name = "temp_directory";
 	static constexpr const char *Description = "Set the directory to which to write temp files";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1282,6 +1398,7 @@ struct TempFileEncryptionSetting {
 	static constexpr const char *Name = "temp_file_encryption";
 	static constexpr const char *Description = "Encrypt all temporary files if database is encrypted";
 	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1292,6 +1409,7 @@ struct ThreadsSetting {
 	static constexpr const char *Name = "threads";
 	static constexpr const char *Description = "The number of total threads used by the system.";
 	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1302,6 +1420,7 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1324,6 +1443,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *Description = "The amount of row groups to buffer in bulk ingestion prior to flushing "
 	                                           "them together. Reducing this setting can reduce memory consumption.";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
@@ -1334,6 +1454,7 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *Description =
 	    "The (average) length at which to enable ZSTD compression, defaults to 4096";
 	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *AlternativeInputType = nullptr;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

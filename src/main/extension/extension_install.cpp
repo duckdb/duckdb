@@ -58,56 +58,95 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	return link;
 }
 
-duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
-	string home_directory = fs.GetHomeDirectory();
-	// exception if the home directory does not exist, don't create whatever we think is home
-	if (!fs.DirectoryExists(home_directory)) {
-		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-		                  "home_directory='/path/to/dir' option.",
-		                  home_directory);
+vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) {
+	vector<duckdb::string> default_folders;
+// These fallbacks are necessary if the user doesn't use the CMake build.
+#ifndef DUCKDB_EXTENSION_DIRECTORIES
+#ifdef _WIN32
+#define DUCKDB_EXTENSION_DIRECTORIES "~\\.duckdb\\extensions"
+#else
+#define DUCKDB_EXTENSION_DIRECTORIES "~/.duckdb/extensions"
+#endif
+#endif
+	string dirs_string(DUCKDB_EXTENSION_DIRECTORIES);
+
+	// Skip if empty
+	if (dirs_string.empty()) {
+		return default_folders;
 	}
-	string res = home_directory;
-	res = fs.JoinPath(res, ".duckdb");
-	res = fs.JoinPath(res, "extensions");
-	return res;
+
+	// Split the string by separator
+	auto directories = StringUtil::Split(dirs_string, ';');
+
+	for (auto &dir : directories) {
+		// Skip empty directories
+		if (dir.empty()) {
+			continue;
+		}
+
+		default_folders.push_back(dir);
+	}
+
+	return default_folders;
 }
 
-string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
+vector<string> ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	return GetExtensionDirectoryPath(db, fs);
 }
 
-string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
-	string extension_directory;
+vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
+	vector<string> extension_directories;
 	auto &config = db.config;
-	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
-		extension_directory = config.options.extension_directory;
-		// TODO this should probably live in the FileSystem
-		// convert random separators to platform-canonic
-	} else { // otherwise default to home
-		extension_directory = DefaultExtensionFolder(fs);
+
+	if (!config.options.extension_directories.empty()) {
+		// Add all configured extension directories
+		for (const auto &dir : config.options.extension_directories) {
+			extension_directories.push_back(dir);
+		}
+	} else {
+		// Add default extension directory if no custom directories configured
+		for (const auto &default_dir : ExtensionHelper::DefaultExtensionFolders(fs)) {
+			extension_directories.push_back(default_dir);
+		}
 	}
 
-	extension_directory = fs.ConvertSeparators(extension_directory);
-	// expand ~ in extension directory
-	extension_directory = fs.ExpandPath(extension_directory);
-
+	// Process all directories with common path operations
 	auto path_components = PathComponents();
-	for (auto &path_ele : path_components) {
-		extension_directory = fs.JoinPath(extension_directory, path_ele);
+	for (auto &extension_directory : extension_directories) {
+		// convert random separators to platform-canonic
+		extension_directory = fs.ConvertSeparators(extension_directory);
+		// expand ~ in extension directory
+		extension_directory = fs.ExpandPath(extension_directory);
+
+		// Add path components (version and platform)
+		for (auto &path_ele : path_components) {
+			extension_directory = fs.JoinPath(extension_directory, path_ele);
+		}
 	}
 
-	return extension_directory;
+	return extension_directories;
 }
 
 string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
-	string extension_directory = GetExtensionDirectoryPath(db, fs);
+	auto extension_directories = GetExtensionDirectoryPath(db, fs);
+	// TODO: This should never be the case given the implementation of GetExtensionDirectoryPath
+	// should we still keep this check?
+	D_ASSERT(!extension_directories.empty());
+
+	string extension_directory = extension_directories[0]; // Use first/primary directory
 	{
 		if (!fs.DirectoryExists(extension_directory)) {
+			string home_directory = fs.GetHomeDirectory();
+			if (extension_directory.rfind(home_directory, 0) == 0 && !fs.DirectoryExists(home_directory)) {
+				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+				                  "home_directory='/path/to/dir' option.",
+				                  home_directory);
+			}
 			fs.CreateDirectoriesRecursive(extension_directory);
 		}
 	}
