@@ -1232,6 +1232,17 @@ struct SearchPathSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct SecondaryExtensionDirectorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "secondary_extension_directory";
+	static constexpr const char *Description =
+	    "Set the alternate directory to store extensions in (should be set by package managers)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct SecretDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "secret_directory";
