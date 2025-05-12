@@ -301,8 +301,8 @@ struct RemapEntry {
 
 	static void PerformRemap(const string &remap_target, const Value &remap_val,
 	                         case_insensitive_map_t<RemapIndex> &source_map,
-	                         case_insensitive_map_t<RemapIndex> &target_map,
-	                         case_insensitive_map_t<RemapEntry> &result) {
+	                         case_insensitive_map_t<RemapIndex> &target_map, case_insensitive_map_t<RemapEntry> &result,
+	                         const LogicalType &parent_type) {
 		string remap_source;
 		Value struct_val;
 		if (remap_val.type().id() == LogicalTypeId::VARCHAR) {
@@ -333,22 +333,35 @@ struct RemapEntry {
 		if (target_entry == target_map.end()) {
 			throw BinderException("Target value %s not found", remap_target);
 		}
-		bool source_is_struct = entry->second.type.id() == LogicalTypeId::STRUCT;
-		bool target_is_struct = target_entry->second.type.id() == LogicalTypeId::STRUCT;
+
+		auto &source_type = entry->second.type;
+		auto &target_type = target_entry->second.type;
+
+		bool source_is_nested = source_type.IsNested();
+		bool target_is_nested = target_type.IsNested();
 		RemapEntry remap;
 		remap.index = entry->second.index;
 		remap.target_type = target_entry->second.type;
-		if (source_is_struct || target_is_struct || !struct_val.IsNull()) {
-			// this is a struct - we actually need all 3 of these to be true (or none of them to be true)
-			if (!source_is_struct || !target_is_struct || struct_val.IsNull()) {
-				throw BinderException("Structs require nested remaps");
+		if (source_is_nested || target_is_nested || !struct_val.IsNull()) {
+			if (source_type.id() != target_type.id()) {
+				throw BinderException("Can't change source type (%s) to target type (%s), type conversion not allowed",
+				                      source_type.ToString(), target_type.ToString());
 			}
-			remap.child_remaps = make_uniq<case_insensitive_map_t<RemapEntry>>();
-			auto &remap_types = StructType::GetChildTypes(struct_val.type());
-			auto &remap_values = StructValue::GetChildren(struct_val);
-			for (idx_t child_idx = 0; child_idx < remap_types.size(); child_idx++) {
-				PerformRemap(remap_types[child_idx].first, remap_values[child_idx], *entry->second.child_map,
-				             *target_entry->second.child_map, *remap.child_remaps);
+			if (!struct_val.IsNull()) {
+				// this is a struct - we actually need all 3 of these to be true (or none of them to be true)
+				if (!source_is_nested || !target_is_nested || struct_val.IsNull()) {
+					throw BinderException("Found a struct value (%s) as a remap, this is only expected for a nested "
+					                      "type, source type is '%s', target type is '%s'",
+					                      struct_val.ToString(), entry->second.type.ToString(),
+					                      target_entry->second.type.ToString());
+				}
+				remap.child_remaps = make_uniq<case_insensitive_map_t<RemapEntry>>();
+				auto &remap_types = StructType::GetChildTypes(struct_val.type());
+				auto &remap_values = StructValue::GetChildren(struct_val);
+				for (idx_t child_idx = 0; child_idx < remap_types.size(); child_idx++) {
+					PerformRemap(remap_types[child_idx].first, remap_values[child_idx], *entry->second.child_map,
+					             *target_entry->second.child_map, *remap.child_remaps, source_type);
+				}
 			}
 		}
 		result.emplace(remap_target, std::move(remap));
@@ -412,8 +425,8 @@ struct RemapEntry {
 			RemapColumnInfo info;
 			info.index = entry->second.index;
 			info.default_index = entry->second.default_index;
-			if (child_type.IsNested()) {
-				// recurse
+			if (child_type.IsNested() && entry->second.child_remaps) {
+				// type is nested and a mapping for it is given - recurse
 				info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
 			}
 			result.push_back(std::move(info));
@@ -460,8 +473,8 @@ struct RemapEntry {
 				auto remap_entry = remap_map.find(entry->second);
 				D_ASSERT(remap_entry != remap_map.end());
 				// this entry is remapped - fetch the target type
-				if (child_type.IsNested()) {
-					// nested - recurse
+				if (child_type.IsNested() && remap_entry->second.child_remaps) {
+					// type is nested and a mapping for it is given - recurse
 					new_source_children.emplace_back(child_name,
 					                                 RemapCast(child_type, *remap_entry->second.child_remaps));
 				} else {
@@ -535,6 +548,12 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 	}
 	auto &from_type = arguments[0]->return_type;
 	auto &to_type = arguments[1]->return_type;
+
+	if ((from_type.IsNested() || to_type.IsNested()) && from_type.id() != to_type.id()) {
+		throw BinderException("Can't change source type (%s) to target type (%s), type conversion not allowed",
+		                      from_type.ToString(), to_type.ToString());
+	}
+
 	if (!arguments[2]->IsFoldable()) {
 		throw BinderException("Remap keys for remap_struct needs to be a constant value");
 	}
@@ -551,7 +570,7 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 		for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
 			auto &remap_val = remap_values[remap_idx];
 			auto &remap_target = remap_types[remap_idx].first;
-			RemapEntry::PerformRemap(remap_target, remap_val, source_map, target_map, remap_map);
+			RemapEntry::PerformRemap(remap_target, remap_val, source_map, target_map, remap_map, from_type);
 		}
 	}
 	if (!arguments[3]->IsFoldable()) {
