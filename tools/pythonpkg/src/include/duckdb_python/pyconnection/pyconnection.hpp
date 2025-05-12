@@ -296,6 +296,8 @@ public:
 
 	void Interrupt();
 
+	double QueryProgress();
+
 	ModifiedMemoryFileSystem &GetObjectFileSystem();
 
 	// cursor() is stupid

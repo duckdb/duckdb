@@ -1,8 +1,10 @@
+#include "duckdb/common/helper.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
@@ -14,8 +16,12 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto column_ref = make_uniq<BoundColumnRefExpression>(stats.GetType(), stats_binding);
 		auto filter_expr = expr_filter.ToExpression(*column_ref);
-		UpdateFilterStatistics(*filter_expr);
-		return HandleFilter(filter_expr);
+		// handle the filter before updating the statistics
+		// otherwise the filter can be pruned by the updated statistics
+		auto copy_expr = filter_expr->Copy();
+		auto propagate_result = HandleFilter(filter_expr);
+		UpdateFilterStatistics(*copy_expr);
+		return propagate_result;
 	}
 	return filter.CheckStatistics(stats);
 }
@@ -92,6 +98,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			get.table_filters.filters.erase(table_filter_column);
+			break;
+		case FilterPropagateResult::FILTER_TRUE_OR_NULL:
+			// filter is true or null; we can replace this with a not null filter
+			get.table_filters.filters[table_filter_column] = make_uniq<IsNotNullFilter>();
 			break;
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
