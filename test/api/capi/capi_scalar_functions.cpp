@@ -463,7 +463,7 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 
 	result = tester.Query("SELECT get_connection_id()");
 	REQUIRE_NO_FAIL(*result);
-	auto first_connection_id = result->Fetch<int64_t>(0, 0);
+	auto first_connection_id = result->Fetch<uint64_t>(0, 0);
 	REQUIRE(first_connection_id != 0);
 
 	duckdb_client_context context;
@@ -476,7 +476,7 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 
 	result = tester.Query("SELECT get_connection_id()");
 	REQUIRE_NO_FAIL(*result);
-	auto second_connection_id = result->Fetch<int64_t>(0, 0);
+	auto second_connection_id = result->Fetch<uint64_t>(0, 0);
 	REQUIRE(second_connection_id != 0);
 
 	duckdb_connection_get_client_context(tester.connection, &context);
