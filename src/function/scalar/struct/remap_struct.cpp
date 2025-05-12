@@ -90,10 +90,13 @@ static void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, true);
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
 			return;
 		}
+		auto list_data = FlatVector::GetData<list_entry_t>(input);
+		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(result_size, format);
@@ -137,10 +140,13 @@ static void RemapList(Vector &input, Vector &default_vector, Vector &result, idx
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, true);
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
 			return;
 		}
+		auto list_data = FlatVector::GetData<list_entry_t>(input);
+		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(result_size, format);
@@ -180,8 +186,8 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, true);
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
 			return;
 		}
 	} else {
@@ -521,7 +527,7 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 			if (arg_idx == 3 && arg->return_type.id() == LogicalTypeId::SQLNULL) {
 				// defaults can be NULL
 			} else {
-				throw BinderException("Struct remap can only remap structs");
+				throw BinderException("Struct remap can only remap nested types");
 			}
 		} else if (arg->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->return_type)) {
 			throw BinderException("Struct remap can only remap named structs");
@@ -537,14 +543,16 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 
 	Value remap_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 	auto &remap_types = StructType::GetChildTypes(arguments[2]->return_type);
-	auto &remap_values = StructValue::GetChildren(remap_val);
 
 	// (recursively) generate the remap entries
 	case_insensitive_map_t<RemapEntry> remap_map;
-	for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
-		auto &remap_val = remap_values[remap_idx];
-		auto &remap_target = remap_types[remap_idx].first;
-		RemapEntry::PerformRemap(remap_target, remap_val, source_map, target_map, remap_map);
+	if (!remap_val.IsNull()) {
+		auto &remap_values = StructValue::GetChildren(remap_val);
+		for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
+			auto &remap_val = remap_values[remap_idx];
+			auto &remap_target = remap_types[remap_idx].first;
+			RemapEntry::PerformRemap(remap_target, remap_val, source_map, target_map, remap_map);
+		}
 	}
 	if (!arguments[3]->IsFoldable()) {
 		throw BinderException("Default values must be constants");
@@ -577,8 +585,8 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 
 ScalarFunction RemapStructFun::GetFunction() {
 	ScalarFunction remap("remap_struct",
-	                     {LogicalTypeId::STRUCT, LogicalTypeId::STRUCT, LogicalTypeId::STRUCT, LogicalTypeId::STRUCT},
-	                     LogicalTypeId::STRUCT, RemapStructFunction, RemapStructBind);
+	                     {LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY},
+	                     LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
 	remap.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return remap;
 }
