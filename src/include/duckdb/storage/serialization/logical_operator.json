@@ -548,6 +548,11 @@
         "id": 202,
         "name": "ctename",
         "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "materialize",
+        "type": "CTEMaterialize"
       }
     ]
   },

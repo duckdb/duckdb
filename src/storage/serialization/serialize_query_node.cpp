@@ -47,6 +47,7 @@ void CTENode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "child", child);
 	serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
+	serializer.WriteProperty<CTEMaterialize>(204, "materialized", materialized);
 }
 
 unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
@@ -55,6 +56,7 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "child", result->child);
 	deserializer.ReadPropertyWithDefault<vector<string>>(203, "aliases", result->aliases);
+	deserializer.ReadProperty<CTEMaterialize>(204, "materialized", result->materialized);
 	return std::move(result);
 }
 

@@ -80,11 +80,12 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 	vector<unique_ptr<CTENode>> materialized_ctes;
 	for (auto &cte : cte_map.map) {
 		auto &cte_entry = cte.second;
-		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+		if (cte_entry->materialized != CTEMaterialize::CTE_MATERIALIZE_NEVER) {
 			auto mat_cte = make_uniq<CTENode>();
 			mat_cte->ctename = cte.first;
 			mat_cte->query = cte_entry->query->node->Copy();
 			mat_cte->aliases = cte_entry->aliases;
+			mat_cte->materialized = cte_entry->materialized;
 			materialized_ctes.push_back(std::move(mat_cte));
 		}
 	}
