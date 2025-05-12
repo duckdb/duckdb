@@ -224,6 +224,27 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	}
 }
 
+FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
+	PropagateExpression(condition);
+
+	if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+
+	if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(true))) {
+		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
+	}
+
+	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
+	    ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	}
+
+	// cannot prune this filter: propagate statistics from the filter
+	UpdateFilterStatistics(*condition);
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate to the child
@@ -236,9 +257,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	// then propagate to each of the expressions
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {
 		auto &condition = filter.expressions[i];
-		PropagateExpression(condition);
-
-		if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+		auto prune_result = HandleFilter(condition);
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			filter.expressions.erase_at(i);
@@ -252,14 +272,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 				}
 				break;
 			}
-		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
-		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+		} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);
-		} else {
-			// cannot prune this filter: propagate statistics from the filter
-			UpdateFilterStatistics(*condition);
 		}
 	}
 	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)

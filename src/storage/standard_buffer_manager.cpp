@@ -366,6 +366,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 			// now we can actually load the current block
 			D_ASSERT(handle->Readers() == 0);
 			buf = handle->Load(std::move(reusable_buffer));
+			if (!buf.IsValid()) {
+				reservation.Resize(0);
+				return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
+			}
 			auto &memory_charge = handle->GetMemoryCharge(lock);
 			memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.

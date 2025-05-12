@@ -57,6 +57,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
 	bool write_empty_file = true;
+	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
@@ -137,6 +138,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			write_partition_columns = GetBooleanArg(context, option.second);
 		} else if (loption == "write_empty_file") {
 			write_empty_file = GetBooleanArg(context, option.second);
+		} else if (loption == "hive_file_pattern") {
+			hive_file_pattern = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
@@ -271,6 +274,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	copy->write_empty_file = write_empty_file;
 	copy->return_type = return_type;
 	copy->preserve_order = preserve_order;
+	copy->hive_file_pattern = hive_file_pattern;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;

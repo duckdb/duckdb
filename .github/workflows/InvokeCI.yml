@@ -70,7 +70,7 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
-
+    
   Wasm:
     uses: ./.github/workflows/Wasm.yml
     secrets: inherit
@@ -89,6 +89,7 @@ jobs:
 
   prepare-status:
     runs-on: ubuntu-latest
+    if: always()
     needs:
       - osx
       - linux-release
@@ -113,9 +114,9 @@ jobs:
                 "${{ needs.R.result }}" == "success" && \
                 "${{ needs.Wasm.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
-            echo "success='true'" >> $GITHUB_OUTPUT
+            echo "success=true" >> $GITHUB_OUTPUT
           else
-            echo "success='false'" >> $GITHUB_OUTPUT
+            echo "success=false" >> $GITHUB_OUTPUT
           fi
     
   notify-external-repos-main:
@@ -125,8 +126,8 @@ jobs:
     if: ${{ inputs.git_ref == '' && always() }} 
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ github.ref }}
+      target-branch: ${{ github.ref }}
+      duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
 
@@ -137,7 +138,7 @@ jobs:
     if: ${{ inputs.git_ref != '' && always() }}
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ inputs.git_ref }}
+      target-branch: ${{ inputs.git_ref }}
+      duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'

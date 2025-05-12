@@ -662,8 +662,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                FileOpener *opener) {
+bool LocalFileSystem::ListFilesExtended(const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback,
+                                        optional_ptr<FileOpener> opener) {
 	auto normalized_dir = NormalizeLocalPath(directory);
 	auto dir = opendir(normalized_dir);
 	if (!dir) {
@@ -676,7 +677,8 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 	struct dirent *ent;
 	// loop over all files in the directory
 	while ((ent = readdir(dir)) != nullptr) {
-		string name = string(ent->d_name);
+		OpenFileInfo info(ent->d_name);
+		auto &name = info.path;
 		// skip . .. and empty files
 		if (name.empty() || name == "." || name == "..") {
 			continue;
@@ -692,10 +694,20 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 			// not a file or directory: skip
 			continue;
 		}
-		// invoke callback
-		callback(name, status.st_mode & S_IFDIR);
-	}
+		// create extended info
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		auto &options = info.extended_info->options;
+		// file type
+		Value file_type(status.st_mode & S_IFDIR ? "directory" : "file");
+		options.emplace("type", std::move(file_type));
+		// file size
+		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
+		// last modified time
+		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(status.st_mtime)));
 
+		// invoke callback
+		callback(info);
+	}
 	return true;
 }
 
@@ -1044,20 +1056,11 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-
-	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
-	FILETIME last_write;
-	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
-	}
-
+time_t FiletimeToTimeT(FILETIME file_time) {
 	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
 	ULARGE_INTEGER ul;
-	ul.LowPart = last_write.dwLowDateTime;
-	ul.HighPart = last_write.dwHighDateTime;
+	ul.LowPart = file_time.dwLowDateTime;
+	ul.HighPart = file_time.dwHighDateTime;
 	int64_t fileTime64 = ul.QuadPart;
 
 	// fileTime64 contains a 64-bit value representing the number of
@@ -1069,6 +1072,18 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
 	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 	return result;
+}
+
+time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
+	}
+	return FiletimeToTimeT(last_write);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1140,8 +1155,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                FileOpener *opener) {
+bool LocalFileSystem::ListFilesExtended(const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback,
+                                        optional_ptr<FileOpener> opener) {
 	string search_dir = JoinPath(directory, "*");
 	auto unicode_path = NormalizePathAndConvertToUnicode(search_dir);
 
@@ -1151,11 +1167,27 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		return false;
 	}
 	do {
-		string cFileName = WindowsUtil::UnicodeToUTF8(ffd.cFileName);
-		if (cFileName == "." || cFileName == "..") {
+		OpenFileInfo info(WindowsUtil::UnicodeToUTF8(ffd.cFileName));
+		auto &name = info.path;
+		if (name == "." || name == "..") {
 			continue;
 		}
-		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+		// create extended info
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		auto &options = info.extended_info->options;
+		// file type
+		Value file_type(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
+		options.emplace("type", std::move(file_type));
+		// file size
+		int64_t file_size_bytes =
+		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
+		options.emplace("file_size", Value::BIGINT(file_size_bytes));
+		// last modified time
+		auto last_modified_time = FiletimeToTimeT(ffd.ftLastWriteTime);
+		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(last_modified_time)));
+
+		// callback
+		callback(info);
 	} while (FindNextFileW(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();
@@ -1248,37 +1280,38 @@ static bool IsSymbolicLink(const string &path) {
 static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
                                      bool match_directory, bool join_path) {
 
-	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
-		string concat;
+	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		if (join_path) {
-			concat = fs.JoinPath(path, fname);
-		} else {
-			concat = fname;
+			info.path = fs.JoinPath(path, info.path);
 		}
-		if (IsSymbolicLink(concat)) {
+		if (IsSymbolicLink(info.path)) {
 			return;
 		}
-		if (is_directory == match_directory) {
-			result.push_back(concat);
-		}
+		bool is_directory = FileSystem::IsDirectory(info);
+		bool return_file = is_directory == match_directory;
 		if (is_directory) {
-			RecursiveGlobDirectories(fs, concat, result, match_directory, true);
+			if (return_file) {
+				result.push_back(info);
+			}
+			RecursiveGlobDirectories(fs, info.path, result, match_directory, true);
+		} else if (return_file) {
+			result.push_back(std::move(info));
 		}
 	});
 }
 
 static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
                               vector<OpenFileInfo> &result, bool join_path) {
-	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+	fs.ListFiles(path, [&](OpenFileInfo &info) {
+		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
 			return;
 		}
-		if (Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
+		if (Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
 			if (join_path) {
-				result.push_back(fs.JoinPath(path, fname));
-			} else {
-				result.push_back(fname);
+				info.path = fs.JoinPath(path, info.path);
 			}
+			result.push_back(std::move(info));
 		}
 	});
 }

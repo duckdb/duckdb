@@ -5,6 +5,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/main/database.hpp"
 #include "zstd.h"
 
 namespace duckdb {
@@ -268,6 +269,9 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	if (db.config.options.use_direct_io) {
+		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+	}
 	handle = fs.OpenFile(path, open_flags);
 }
 

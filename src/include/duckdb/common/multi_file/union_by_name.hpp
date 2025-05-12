@@ -32,6 +32,10 @@ public:
 		readers[file_idx] = OP::GetUnionData(std::move(reader), file_idx);
 	}
 
+	string TaskType() const override {
+		return "UnionByReaderTask";
+	}
+
 private:
 	ClientContext &context;
 	const OpenFileInfo &file;

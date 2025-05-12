@@ -186,6 +186,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("query"), py::arg("parameters") = py::none());
 	m.def("close", &DuckDBPyConnection::Close, "Close the connection");
 	m.def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations");
+	m.def("query_progress", &DuckDBPyConnection::QueryProgress, "Query progress of pending operation");
 	m.def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute");
 	m.def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	      py::arg("size") = 1);
@@ -968,7 +969,8 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	                                                "hive_partitioning",
 	                                                "union_by_name",
 	                                                "hive_types",
-	                                                "hive_types_autocast"};
+	                                                "hive_types_autocast",
+	                                                "thousands"};
 
 	std::ostringstream error;
 	error << "The methods read_csv and read_csv_auto do not have the \"" << unkown_parameter << "\" argument." << '\n';
@@ -1041,6 +1043,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object hive_types = py::none();
 	py::object hive_types_autocast = py::none();
 	py::object comment = py::none();
+	py::object thousands_separator = py::none();
 
 	for (auto &arg : kwargs) {
 		const auto &arg_name = py::str(arg.first).cast<std::string>();
@@ -1054,6 +1057,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			delimiter = kwargs[arg_name.c_str()];
 		} else if (arg_name == "comment") {
 			comment = kwargs[arg_name.c_str()];
+		} else if (arg_name == "thousands") {
+			thousands_separator = kwargs[arg_name.c_str()];
 		} else if (arg_name == "dtype") {
 			dtype = kwargs[arg_name.c_str()];
 		} else if (arg_name == "na_values") {
@@ -1249,6 +1254,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			throw InvalidInputException("read_csv only accepts 'comment' as a string");
 		}
 		bind_parameters["comment"] = Value(py::str(comment));
+	}
+
+	if (!py::none().is(thousands_separator)) {
+		if (!py::isinstance<py::str>(thousands_separator)) {
+			throw InvalidInputException("read_csv only accepts 'thousands' as a string");
+		}
+		bind_parameters["thousands"] = Value(py::str(thousands_separator));
 	}
 
 	if (!py::none().is(escapechar)) {
@@ -1806,6 +1818,11 @@ void DuckDBPyConnection::Close() {
 void DuckDBPyConnection::Interrupt() {
 	auto &connection = con.GetConnection();
 	connection.Interrupt();
+}
+
+double DuckDBPyConnection::QueryProgress() {
+	auto &connection = con.GetConnection();
+	return connection.GetQueryProgress();
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install, const py::object &repository,

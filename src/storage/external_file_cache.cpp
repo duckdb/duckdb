@@ -70,26 +70,35 @@ void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &gua
 #endif
 }
 
-bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
-                                            const string &current_version_tag, time_t current_last_modified,
-                                            int64_t access_time) {
+bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
+                                const string &current_version_tag, time_t current_last_modified) {
 	if (!validate) {
 		return true; // Assume valid
 	}
-	if (!current_version_tag.empty()) {
-		return VersionTag(guard) == current_version_tag; // Validity checked by version tag (httpfs)
+	if (!current_version_tag.empty() || !cached_version_tag.empty()) {
+		return cached_version_tag == current_version_tag; // Validity checked by version tag (httpfs)
 	}
-	if (LastModified(guard) != current_last_modified) {
+	if (cached_last_modified != current_last_modified) {
 		return false; // The file has certainly been modified
 	}
 	// The last modified time matches. However, we cannot blindly trust this,
 	// because some file systems use a low resolution clock to set the last modified time.
 	// So, we will require that the last modified time is more than 10 seconds ago.
 	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 10;
+	const auto access_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 	if (access_time < current_last_modified) {
 		return false; // Last modified in the future?
 	}
 	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
+}
+
+bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
+                                            const string &current_version_tag, time_t current_last_modified) {
+	if (!validate) {
+		return true; // Assume valid
+	}
+	return ExternalFileCache::IsValid(validate, VersionTag(guard), LastModified(guard), current_version_tag,
+	                                  current_last_modified);
 }
 
 idx_t &ExternalFileCache::CachedFile::FileSize(const unique_ptr<StorageLockKey> &guard) {

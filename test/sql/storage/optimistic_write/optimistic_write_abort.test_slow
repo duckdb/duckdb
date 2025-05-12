@@ -26,9 +26,6 @@ SELECT SUM(a) FROM test
 ----
 999999000000
 
-# temp table
-require skip_reload
-
 statement ok
 CREATE TEMPORARY TABLE blocks AS SELECT total_blocks FROM pragma_database_size();
 

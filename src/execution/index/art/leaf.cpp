@@ -8,6 +8,7 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -18,82 +19,67 @@ void Leaf::New(Node &node, const row_t row_id) {
 	node.SetRowId(row_id);
 }
 
-void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
-               const idx_t count) {
-	D_ASSERT(count > 1);
-	D_ASSERT(!node.get().HasMetadata());
+void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, Node &left, Node &right, GateStatus status, idx_t depth) {
+	D_ASSERT(left.GetType() == NType::LEAF_INLINED);
+	D_ASSERT(right.GetType() == NType::LEAF_INLINED);
 
-	// We cannot recurse into the leaf during Construct(...) because row IDs are not sorted.
-	for (idx_t i = 0; i < count; i++) {
-		idx_t offset = start + i;
-		art.Insert(node, row_ids[offset], 0, row_ids[offset], GateStatus::GATE_SET, nullptr, IndexAppendMode::DEFAULT);
-	}
-	node.get().SetGateStatus(GateStatus::GATE_SET);
-}
-
-void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
-	D_ASSERT(r_node.GetType() == INLINED);
-
-	ArenaAllocator arena_allocator(Allocator::Get(art.db));
-	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId());
-	art.Insert(l_node, key, 0, key, l_node.GetGateStatus(), nullptr, IndexAppendMode::DEFAULT);
-	r_node.Clear();
-}
-
-void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const GateStatus status) {
-	D_ASSERT(node.GetType() == INLINED);
-
-	ArenaAllocator allocator(Allocator::Get(art.db));
-	auto key = ARTKey::CreateARTKey<row_t>(allocator, node.GetRowId());
-
-	GateStatus new_status;
-	if (status == GateStatus::GATE_NOT_SET || node.GetGateStatus() == GateStatus::GATE_SET) {
-		new_status = GateStatus::GATE_SET;
-	} else {
-		new_status = GateStatus::GATE_NOT_SET;
-	}
-
-	if (new_status == GateStatus::GATE_SET) {
+	status = status == GateStatus::GATE_NOT_SET ? GateStatus::GATE_SET : GateStatus::GATE_NOT_SET;
+	if (status == GateStatus::GATE_SET) {
+		// Case 1: We are outside a nested leaf,
+		// so we create a nested leaf.
 		depth = 0;
 	}
-	node.Clear();
+	// Otherwise, case 2: we are in a nested leaf with two 'compressed' prefixes.
+	// A 'compressed prefix' is an inlined leaf that could've been expanded to
+	// a prefix with an inlined leaf as its only child.
 
-	// Get the mismatching position.
-	D_ASSERT(row_id.len == key.len);
-	auto pos = row_id.GetMismatchPos(key, depth);
-	D_ASSERT(pos != DConstants::INVALID_INDEX);
-	D_ASSERT(pos >= depth);
-	auto byte = row_id.data[pos];
+	// Get the corresponding row IDs and their ART keys.
+	auto left_row_id = left.GetRowId();
+	auto right_row_id = right.GetRowId();
+	auto left_key = ARTKey::CreateARTKey<row_t>(arena, left_row_id);
+	auto right_key = ARTKey::CreateARTKey<row_t>(arena, right_row_id);
 
-	// Create the (optional) prefix and the node.
-	reference<Node> next(node);
-	auto count = pos - depth;
-	if (count != 0) {
-		Prefix::New(art, next, row_id, depth, count);
+	auto pos = left_key.GetMismatchPos(right_key, depth);
+
+	left.Clear();
+	reference<Node> node(left);
+	if (pos != depth) {
+		// The row IDs share a prefix.
+		Prefix::New(art, node, left_key, depth, pos - depth);
 	}
+
+	auto left_byte = left_key.data[pos];
+	auto right_byte = right_key.data[pos];
+
 	if (pos == Prefix::ROW_ID_COUNT) {
-		Node7Leaf::New(art, next);
-	} else {
-		Node4::New(art, next);
+		// The row IDs differ on the last byte.
+		Node7Leaf::New(art, node);
+		Node7Leaf::InsertByte(art, node, left_byte);
+		Node7Leaf::InsertByte(art, node, right_byte);
+		left.SetGateStatus(status);
+		return;
 	}
 
-	// Create the children.
-	Node row_id_node;
-	Leaf::New(row_id_node, row_id.GetRowId());
-	Node remainder;
-	if (pos != Prefix::ROW_ID_COUNT) {
-		Leaf::New(remainder, key.GetRowId());
-	}
+	// Create and insert the (compressed) children.
+	// We inline directly into the node, instead of creating prefixes
+	// with a single inlined leaf as their child.
+	Node4::New(art, node);
 
-	Node::InsertChild(art, next, key[pos], remainder);
-	Node::InsertChild(art, next, byte, row_id_node);
-	node.SetGateStatus(new_status);
+	Node left_child;
+	Leaf::New(left_child, left_row_id);
+	Node4::InsertChild(art, node, left_byte, left_child);
+
+	Node right_child;
+	Leaf::New(right_child, right_row_id);
+	Node4::InsertChild(art, node, right_byte, right_child);
+
+	left.SetGateStatus(status);
 }
 
 void Leaf::TransformToNested(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	ArenaAllocator allocator(Allocator::Get(art.db));
+	ArenaAllocator arena(Allocator::Get(art.db));
 	Node root = Node();
 
 	// Move all row IDs into the nested leaf.
@@ -101,9 +87,9 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 	while (leaf_ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
-			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i]);
-			auto conflict_type =
-			    art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::INSERT_DUPLICATES);
+			auto row_id = ARTKey::CreateARTKey<row_t>(arena, leaf.row_ids[i]);
+			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr,
+			                                         IndexAppendMode::INSERT_DUPLICATES);
 			if (conflict_type != ARTConflictType::NO_CONFLICT) {
 				throw InternalException("invalid conflict type in Leaf::TransformToNested");
 			}

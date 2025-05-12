@@ -46,6 +46,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "PipelineFinishTask";
+	}
+
 private:
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	//! Debugging state: number of times blocked

@@ -69,8 +69,13 @@ inline uint8_t StringCompress(const string_t &input) {
 
 template <class RESULT_TYPE>
 static void StringCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, RESULT_TYPE>(args.data[0], result, args.size(), StringCompress<RESULT_TYPE>,
-	                                              FunctionErrors::CANNOT_ERROR);
+	UnaryExecutor::Execute<string_t, RESULT_TYPE>(
+	    args.data[0], result, args.size(), StringCompress<RESULT_TYPE>,
+#if defined(D_ASSERT_IS_ENABLED)
+	    FunctionErrors::CAN_THROW_RUNTIME_ERROR); // Can only throw a runtime error when assertions are enabled
+#else
+	    FunctionErrors::CANNOT_ERROR);
+#endif
 }
 
 template <class RESULT_TYPE>
