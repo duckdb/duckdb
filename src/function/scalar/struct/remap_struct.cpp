@@ -393,7 +393,7 @@ struct RemapEntry {
 		}
 	}
 
-	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> target_children,
+	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> &target_children,
 	                                                        const case_insensitive_map_t<RemapEntry> &remap_map) {
 		vector<RemapColumnInfo> result;
 		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
@@ -442,7 +442,7 @@ struct RemapEntry {
 		}
 	}
 
-	static child_list_t<LogicalType> RemapCastChildren(const child_list_t<LogicalType> source_children,
+	static child_list_t<LogicalType> RemapCastChildren(const child_list_t<LogicalType> &source_children,
 	                                                   const case_insensitive_map_t<RemapEntry> &remap_map,
 	                                                   const unordered_map<idx_t, string> &source_name_map) {
 		child_list_t<LogicalType> new_source_children;
