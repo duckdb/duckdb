@@ -209,7 +209,7 @@
                 }
             ],
             "comment": {
-                "description": "Sets the user-provided bind data in the bind object of the scalar function. \n This object can be retrieved again during execution.\n\n",
+                "description": "Sets the user-provided bind data in the bind object of the scalar function. \nThis object can be retrieved again during execution.\n\n",
                 "param_comments": {
                     "info": "The bind info of the scalar function.",
                     "bind_data": "The bind data object.",
@@ -308,7 +308,7 @@
                 }
             ],
             "comment": {
-                "description": "Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`. \n\nNote that the bind data should be considered as read-only.\n\n",
+                "description": "Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`. \n\nNote that the bind data is read-only.\n\n",
                 "param_comments": {
                     "info": "The function info."
                 },

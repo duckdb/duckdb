@@ -547,12 +547,13 @@ typedef struct _duckdb_extension_info {
 // Function types
 //===--------------------------------------------------------------------===//
 
-//! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
+//! Additional function info.
+//! When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_function_info {
 	void *internal_ptr;
 } * duckdb_function_info;
 
-//! The bind info of the function.
+//! The bind info of a function.
 //! When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_bind_info {
 	void *internal_ptr;
@@ -572,7 +573,7 @@ typedef struct _duckdb_scalar_function_set {
 	void *internal_ptr;
 } * duckdb_scalar_function_set;
 
-//! The bind function of the table function.
+//! The bind function of the scalar function.
 typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
 
 //! The main function of the scalar function.

@@ -550,12 +550,13 @@ typedef struct _duckdb_extension_info {
 // Function types
 //===--------------------------------------------------------------------===//
 
-//! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
+//! Additional function info.
+//! When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_function_info {
 	void *internal_ptr;
 } * duckdb_function_info;
 
-//! The bind info of the function.
+//! The bind info of a function.
 //! When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_bind_info {
 	void *internal_ptr;
@@ -575,7 +576,7 @@ typedef struct _duckdb_scalar_function_set {
 	void *internal_ptr;
 } * duckdb_scalar_function_set;
 
-//! The bind function of the table function.
+//! The bind function of the scalar function.
 typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
 
 //! The main function of the scalar function.
@@ -819,10 +820,10 @@ DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connect
                                                        duckdb_client_context *out_context);
 
 /*!
-Returns the connection id of the client context's connection.
+Returns the connection id of the client context.
 
 * @param context The client context.
-* @return The connection id of the client context's connection.
+* @return The connection id of the client context.
 */
 DUCKDB_C_API idx_t duckdb_client_context_get_connection_id(duckdb_client_context context);
 
@@ -3281,7 +3282,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
 
 /*!
 Sets the user-provided bind data in the bind object of the scalar function.
- This object can be retrieved again during execution.
+This object can be retrieved again during execution.
 
 * @param info The bind info of the scalar function.
 * @param bind_data The bind data object.
@@ -3332,7 +3333,7 @@ DUCKDB_C_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info in
 /*!
 Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.
 
-Note that the bind data should be considered as read-only.
+Note that the bind data is read-only.
 
 * @param info The function info.
 * @return The bind data object.
@@ -3741,7 +3742,7 @@ DUCKDB_C_API duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info,
 
 /*!
 Sets the user-provided bind data in the bind object of the table function.
- This object can be retrieved again during execution.
+This object can be retrieved again during execution.
 
 * @param info The bind info of the table function.
 * @param bind_data The bind data object.
@@ -3849,7 +3850,7 @@ DUCKDB_C_API void *duckdb_function_get_extra_info(duckdb_function_info info);
 /*!
 Gets the table function's bind data set by `duckdb_bind_set_bind_data`.
 
-Note that the bind data should be considered as read-only.
+Note that the bind data is read-only.
 For tracking state, use the init data instead.
 
 * @param info The function info object.

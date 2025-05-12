@@ -237,11 +237,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the connection id of the client context's connection.\n\n",
+                "description": "Returns the connection id of the client context.\n\n",
                 "param_comments": {
                     "context": "The client context."
                 },
-                "return_value": "The connection id of the client context's connection."
+                "return_value": "The connection id of the client context."
             }
         },
         {

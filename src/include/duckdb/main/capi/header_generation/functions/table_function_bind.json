@@ -124,7 +124,7 @@
                 }
             ],
             "comment": {
-                "description": "Sets the user-provided bind data in the bind object of the table function. \n This object can be retrieved again during execution.\n\n",
+                "description": "Sets the user-provided bind data in the bind object of the table function. \nThis object can be retrieved again during execution.\n\n",
                 "param_comments": {
                     "info": "The bind info of the table function.",
                     "bind_data": "The bind data object.",

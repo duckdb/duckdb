@@ -405,3 +405,84 @@ TEST_CASE("Test Scalar Function Overloads C API", "[capi]") {
 		REQUIRE(result->Fetch<int64_t>(0, row) == static_cast<int64_t>(1000000 + row + row));
 	}
 }
+
+struct ConnectionIdStruct {
+	idx_t connection_id;
+};
+
+void GetConnectionIdBind(duckdb_bind_info info) {
+	duckdb_client_context context;
+	duckdb_scalar_function_get_client_context(info, &context);
+
+	auto connection_id = duckdb_client_context_get_connection_id(context);
+	duckdb_destroy_client_context(&context);
+
+	auto bind_data = reinterpret_cast<ConnectionIdStruct *>(malloc(sizeof(ConnectionIdStruct)));
+	bind_data->connection_id = connection_id;
+	duckdb_scalar_function_set_bind_data(info, bind_data, free);
+}
+
+void GetConnectionId(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+	auto bind_data_ptr = duckdb_scalar_function_get_bind_data(info);
+	auto bind_data = reinterpret_cast<ConnectionIdStruct *>(bind_data_ptr);
+	auto input_size = duckdb_data_chunk_get_size(input);
+
+	auto result_data = reinterpret_cast<uint64_t *>(duckdb_vector_get_data(output));
+	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
+		result_data[row_idx] = bind_data->connection_id;
+	}
+}
+
+static void CAPIRegisterGetConnectionId(duckdb_connection connection) {
+	duckdb_state status;
+
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, "get_connection_id");
+
+	// Set the return type to UBIGINT.
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
+	duckdb_scalar_function_set_return_type(function, type);
+	duckdb_destroy_logical_type(&type);
+
+	// Set up the bind and function callbacks.
+	duckdb_scalar_function_set_bind(function, GetConnectionIdBind);
+	duckdb_scalar_function_set_function(function, GetConnectionId);
+
+	// Register and cleanup.
+	status = duckdb_register_scalar_function(connection, function);
+	REQUIRE(status == DuckDBSuccess);
+	duckdb_destroy_scalar_function(&function);
+}
+
+TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterGetConnectionId(tester.connection);
+
+	result = tester.Query("SELECT get_connection_id()");
+	REQUIRE_NO_FAIL(*result);
+	auto first_connection_id = result->Fetch<int64_t>(0, 0);
+	REQUIRE(first_connection_id != 0);
+
+	duckdb_client_context context;
+	duckdb_connection_get_client_context(tester.connection, &context);
+	auto first_conn_id = duckdb_client_context_get_connection_id(context);
+	duckdb_destroy_client_context(&context);
+	REQUIRE(first_conn_id == first_connection_id);
+
+	tester.ChangeConnection();
+
+	result = tester.Query("SELECT get_connection_id()");
+	REQUIRE_NO_FAIL(*result);
+	auto second_connection_id = result->Fetch<int64_t>(0, 0);
+	REQUIRE(second_connection_id != 0);
+
+	duckdb_connection_get_client_context(tester.connection, &context);
+	auto second_conn_id = duckdb_client_context_get_connection_id(context);
+	duckdb_destroy_client_context(&context);
+	REQUIRE(second_conn_id == second_connection_id);
+
+	REQUIRE(first_connection_id != second_connection_id);
+}
