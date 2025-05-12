@@ -389,35 +389,11 @@ struct RemapEntry {
 		}
 	}
 
-	static vector<RemapColumnInfo> ConstructMap(const LogicalType &type,
-	                                            const case_insensitive_map_t<RemapEntry> &remap_map) {
-		D_ASSERT(type.IsNested());
-		switch (type.id()) {
-		case LogicalTypeId::STRUCT: {
-			auto &target_children = StructType::GetChildTypes(type);
-			vector<RemapColumnInfo> result;
-			for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
-				auto &target_name = target_children[target_idx].first;
-				auto &child_type = target_children[target_idx].second;
-				auto entry = remap_map.find(target_name);
-				if (entry == remap_map.end()) {
-					throw BinderException("Missing target value %s for remap", target_name);
-				}
-				RemapColumnInfo info;
-				info.index = entry->second.index;
-				info.default_index = entry->second.default_index;
-				if (child_type.id() == LogicalTypeId::STRUCT) {
-					// recurse
-					info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
-				}
-				result.push_back(std::move(info));
-			}
-			return result;
-		}
-		case LogicalTypeId::LIST: {
-			vector<RemapColumnInfo> result;
-			auto &child_type = ListType::GetChildType(type);
-			auto target_name = "list";
+	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> target_children, const case_insensitive_map_t<RemapEntry> &remap_map) {
+		vector<RemapColumnInfo> result;
+		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
+			auto &target_name = target_children[target_idx].first;
+			auto &child_type = target_children[target_idx].second;
 			auto entry = remap_map.find(target_name);
 			if (entry == remap_map.end()) {
 				throw BinderException("Missing target value %s for remap", target_name);
@@ -430,45 +406,31 @@ struct RemapEntry {
 				info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
 			}
 			result.push_back(std::move(info));
-			return result;
+		}
+		return result;
+	}
+
+	static vector<RemapColumnInfo> ConstructMap(const LogicalType &type,
+	                                            const case_insensitive_map_t<RemapEntry> &remap_map) {
+		D_ASSERT(type.IsNested());
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT: {
+			auto &target_children = StructType::GetChildTypes(type);
+			return ConstructMapFromChildren(target_children, remap_map);
+		}
+		case LogicalTypeId::LIST: {
+			auto &child_type = ListType::GetChildType(type);
+			child_list_t<LogicalType> target_children;
+			target_children.emplace_back("list", child_type);
+			return ConstructMapFromChildren(target_children, remap_map);
 		}
 		case LogicalTypeId::MAP: {
-			vector<RemapColumnInfo> result;
 			auto &key_type = MapType::KeyType(type);
 			auto &value_type = MapType::ValueType(type);
-			//! Construct map for key
-			{
-				auto target_name = "key";
-				auto entry = remap_map.find(target_name);
-				if (entry == remap_map.end()) {
-					throw BinderException("Missing target value %s for remap", target_name);
-				}
-				RemapColumnInfo info;
-				info.index = entry->second.index;
-				info.default_index = entry->second.default_index;
-				if (key_type.IsNested()) {
-					// recurse
-					info.child_remap_info = ConstructMap(key_type, *entry->second.child_remaps);
-				}
-				result.push_back(std::move(info));
-			}
-			//! Construct map for value
-			{
-				auto target_name = "value";
-				auto entry = remap_map.find(target_name);
-				if (entry == remap_map.end()) {
-					throw BinderException("Missing target value %s for remap", target_name);
-				}
-				RemapColumnInfo info;
-				info.index = entry->second.index;
-				info.default_index = entry->second.default_index;
-				if (value_type.IsNested()) {
-					// recurse
-					info.child_remap_info = ConstructMap(value_type, *entry->second.child_remaps);
-				}
-				result.push_back(std::move(info));
-			}
-			return result;
+			child_list_t<LogicalType> target_children;
+			target_children.emplace_back("key", key_type);
+			target_children.emplace_back("value", value_type);
+			return ConstructMapFromChildren(target_children, remap_map);
 		}
 		default:
 			throw BinderException("Can't ConstructMap for type '%s'", type.ToString());
