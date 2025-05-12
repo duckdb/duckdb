@@ -68,7 +68,13 @@ void JsonExtension::Load(DuckDB &db) {
 
 	// JSON copy function
 	auto copy_fun = JSONFunctions::GetJSONCopyFunction();
-	ExtensionUtil::RegisterFunction(db_instance, std::move(copy_fun));
+	ExtensionUtil::RegisterFunction(db_instance, copy_fun);
+	copy_fun.extension = "ndjson";
+	copy_fun.name = "ndjson";
+	ExtensionUtil::RegisterFunction(db_instance, copy_fun);
+	copy_fun.extension = "jsonl";
+	copy_fun.name = "jsonl";
+	ExtensionUtil::RegisterFunction(db_instance, copy_fun);
 
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
