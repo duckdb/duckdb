@@ -976,6 +976,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
+		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
 		if (CompressionTypeIsDeprecated(compression_type)) {
 			throw ParserException("Attempted to force a deprecated compression type (%s)",
 			                      CompressionTypeToString(compression_type));
@@ -1017,6 +1018,25 @@ bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &con
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
 	}
 	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Lambda Syntax Setting
+//===----------------------------------------------------------------------===//
+void LambdaSyntaxSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto setting_type = EnumUtil::FromString<LambdaSyntax>(input.ToString());
+	auto &config = ClientConfig::GetConfig(context);
+	config.lambda_syntax = setting_type;
+}
+
+void LambdaSyntaxSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.lambda_syntax = LambdaSyntax::DEFAULT;
+}
+
+Value LambdaSyntaxSetting::GetSetting(const ClientContext &context) {
+	const auto &config = ClientConfig::GetConfig(context);
+	return Value(EnumUtil::ToString(config.lambda_syntax));
 }
 
 //===----------------------------------------------------------------------===//

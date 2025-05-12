@@ -1,8 +1,6 @@
 # name: test/sql/attach/attach_encryption_block_header.test
 # group: [attach]
 
-require noforcestorage
-
 # workaround - alternative verify always forces the latest storage
 require no_alternative_verify
 

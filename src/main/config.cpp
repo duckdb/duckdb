@@ -132,6 +132,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(IndexScanMaxCountSetting),
     DUCKDB_GLOBAL(IndexScanPercentageSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
+    DUCKDB_LOCAL(LambdaSyntaxSetting),
     DUCKDB_LOCAL(LateMaterializationMaxRowsSetting),
     DUCKDB_GLOBAL(LockConfigurationSetting),
     DUCKDB_LOCAL(LogQueryPathSetting),

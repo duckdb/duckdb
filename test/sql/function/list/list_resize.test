@@ -170,7 +170,7 @@ select list_resize([1, 2, 3], len(list_resize([1, 2, 3], 2)));
 [1, 2]
 
 query I
-select list_resize(list_filter([1, 2, 3, 4, 5, 6], x -> x > 1), 4);
+select list_resize(list_filter([1, 2, 3, 4, 5, 6], lambda x: x > 1), 4);
 ----
 [2, 3, 4, 5]
 

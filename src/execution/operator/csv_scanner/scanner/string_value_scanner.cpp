@@ -749,7 +749,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
 		}
-		result.error_handler.Error(csv_error);
+		result.error_handler.Error(csv_error, result.try_row);
 	}
 	if (is_error_in_line && scan_id != StringValueScanner::LINE_FINDER_ID) {
 		if (result.sniffing) {
@@ -777,7 +777,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch, path);
-		error_handler.Error(csv_error);
+		error_handler.Error(csv_error, try_row);
 	}
 }
 
@@ -847,13 +847,13 @@ bool StringValueResult::AddRowInternal() {
 					    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
 					    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 					    last_position.GetGlobalPosition(requested_size, first_nl), path);
-					error_handler.Error(csv_error);
+					error_handler.Error(csv_error, try_row);
 				} else {
 					auto csv_error = CSVError::IncorrectColumnAmountError(
 					    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
 					    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 					    last_position.GetGlobalPosition(requested_size), path);
-					error_handler.Error(csv_error);
+					error_handler.Error(csv_error, try_row);
 				}
 			}
 			// If we are here we ignore_errors, so we delete this line
@@ -966,6 +966,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
 		lines_read += csv_file_scan->skipped_rows;
 	}
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
+	result.try_row = scanner_idx == LINE_FINDER_ID;
 }
 
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
@@ -1710,19 +1711,24 @@ bool StringValueScanner::IsRowValid(CSVIterator &current_iterator) const {
 		return false;
 	}
 	constexpr idx_t result_size = 1;
-	auto scan_finder = make_uniq<StringValueScanner>(StringValueScanner::LINE_FINDER_ID, buffer_manager,
-	                                                 state_machine_strict, make_shared_ptr<CSVErrorHandler>(),
-	                                                 csv_file_scan, false, current_iterator, result_size);
-	auto &tuples = scan_finder->ParseChunk();
-	current_iterator.pos = scan_finder->GetIteratorPosition();
-	bool has_error = false;
-	if (tuples.current_errors.HasError()) {
-		if (tuples.current_errors.Size() != 1 || !tuples.current_errors.HasErrorType(MAXIMUM_LINE_SIZE)) {
-			// We ignore maximum line size errors
-			has_error = true;
+	auto scan_finder = make_uniq<StringValueScanner>(LINE_FINDER_ID, buffer_manager, state_machine_strict,
+	                                                 make_shared_ptr<CSVErrorHandler>(), csv_file_scan, false,
+	                                                 current_iterator, result_size);
+	try {
+		auto &tuples = scan_finder->ParseChunk();
+		current_iterator.pos = scan_finder->GetIteratorPosition();
+		bool has_error = false;
+		if (tuples.current_errors.HasError()) {
+			if (tuples.current_errors.Size() != 1 || !tuples.current_errors.HasErrorType(MAXIMUM_LINE_SIZE)) {
+				// We ignore maximum line size errors
+				has_error = true;
+			}
 		}
+		return (tuples.number_of_rows == 1 || tuples.first_line_is_comment) && !has_error && tuples.borked_rows.empty();
+	} catch (const Exception &e) {
+		return false;
 	}
-	return (tuples.number_of_rows == 1 || tuples.first_line_is_comment) && !has_error && tuples.borked_rows.empty();
+	return true;
 }
 
 ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const {

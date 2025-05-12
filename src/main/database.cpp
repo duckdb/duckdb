@@ -29,6 +29,7 @@
 #include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/common/http_util.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -47,6 +48,8 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
+	http_util = make_uniq<HTTPUtil>();
+	storage_extensions["__open_file__"] = OpenFileStorageExtension::Create();
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
@@ -169,8 +172,8 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-                                                                      const AttachOptions &options) {
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+                                                                      AttachOptions &options) {
 	unique_ptr<AttachedDatabase> attached_database;
 	auto &catalog = Catalog::GetSystemCatalog(*this);
 
@@ -312,12 +315,18 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
+	if (config.options.database_type == "duckdb") {
+		config.options.database_type = string();
+	}
 	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		auto entry = config.storage_extensions.find(config.options.database_type);
+		if (entry == config.storage_extensions.end()) {
+			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		}
 	}
 
 	LoadExtensionSettings();
@@ -431,7 +440,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_uniq<VirtualFileSystem>();
+		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
 	if (database_path && !config.options.enable_external_access) {
 		config.AddAllowedPath(database_path);

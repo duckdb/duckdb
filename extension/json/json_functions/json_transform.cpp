@@ -974,12 +974,14 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
 		throw InvalidInputException(options.error_message);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
@@ -1008,8 +1010,8 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = true;
