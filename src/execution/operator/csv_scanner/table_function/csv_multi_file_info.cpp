@@ -134,8 +134,11 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	}
 	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
-			if (i < options.sql_type_list.size()) {
-				// This is type is user-set, we don't replace
+			if (!options.sql_types_per_column.empty()) {
+				if (options.sql_types_per_column.find(names[i]) != options.sql_types_per_column.end()) {
+					continue;
+				}
+			} else if (i < options.sql_type_list.size()) {
 				continue;
 			}
 			D_ASSERT(return_types[i].id() == LogicalTypeId::BOOLEAN);

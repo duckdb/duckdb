@@ -156,8 +156,12 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {
 		for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
-			if (i < sniffer_options.sql_type_list.size()) {
-				// This is type is user-set, we don't replace
+			if (!sniffer_options.sql_types_per_column.empty()) {
+				if (sniffer_options.sql_types_per_column.find(sniffer_result.names[i]) !=
+				    sniffer_options.sql_types_per_column.end()) {
+					continue;
+				}
+			} else if (i < sniffer_options.sql_type_list.size()) {
 				continue;
 			}
 			D_ASSERT(sniffer_result.return_types[i].id() == LogicalTypeId::BOOLEAN);

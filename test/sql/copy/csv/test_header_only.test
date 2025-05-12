@@ -43,7 +43,7 @@ SELECT columns from sniff_csv('data/csv/header_only.csv', types = {'abs_file_nam
 [{'name': abs_file_name, 'type': INTEGER}]
 
 statement ok
-CREATE TABLE T AS from read_csv('data/csv/header_only.csv', header=True, ignore_errors=True, types = ['INTEGER'])
+CREATE TABLE T AS from read_csv('data/csv/header_only.csv',types = ['INTEGER'])
 
 query IIIIII
 DESCRIBE T
@@ -51,9 +51,53 @@ DESCRIBE T
 abs_file_name	INTEGER	YES	NULL	NULL	NULL
 
 statement ok
-CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only.csv', header=True, ignore_errors=True, types = {'abs_file_name':'INTEGER'})
+CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
 
 query IIIIII
 DESCRIBE T
 ----
 abs_file_name	INTEGER	YES	NULL	NULL	NULL
+
+# Now with two columns
+query I
+SELECT columns from sniff_csv('data/csv/header_only_2.csv', types = ['INTEGER'])
+----
+[{'name': foo, 'type': INTEGER}, {'name': bar, 'type': VARCHAR}]
+
+query I
+SELECT columns from sniff_csv('data/csv/header_only_2.csv', types = {'foo':'INTEGER'})
+----
+[{'name': foo, 'type': INTEGER}, {'name': bar, 'type': VARCHAR}]
+
+# This is clearly wrong
+query I
+SELECT columns from sniff_csv('data/csv/header_only_2.csv', types = {'bar':'INTEGER'})
+----
+[{'name': foo, 'type': VARCHAR}, {'name': bar, 'type': INTEGER}]
+
+statement ok
+CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only_2.csv', types = ['INTEGER'])
+
+query IIIIII
+DESCRIBE T
+----
+foo	INTEGER	YES	NULL	NULL	NULL
+bar	VARCHAR	YES	NULL	NULL	NULL
+
+statement ok
+CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only_2.csv', types = {'foo':'INTEGER'})
+
+query IIIIII
+DESCRIBE T
+----
+foo	INTEGER	YES	NULL	NULL	NULL
+bar	VARCHAR	YES	NULL	NULL	NULL
+
+statement ok
+CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only_2.csv', types = {'bar':'INTEGER'})
+
+query IIIIII
+DESCRIBE T
+----
+foo	VARCHAR	YES	NULL	NULL	NULL
+bar	INTEGER	YES	NULL	NULL	NULL
