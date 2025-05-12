@@ -257,17 +257,17 @@ struct LogicalType {
 		return type_info_.get();
 	}
 	inline bool IsNested() const {
-		auto internal = InternalType();
-		if (internal == PhysicalType::STRUCT) {
-			return true;
+		switch (InternalType()) {
+			case PhysicalType::STRUCT:
+			case PhysicalType::LIST:
+			case PhysicalType::ARRAY:
+				return true;
+			default:
+				return false;
 		}
-		if (internal == PhysicalType::LIST) {
-			return true;
-		}
-		if (internal == PhysicalType::ARRAY) {
-			return true;
-		}
-		return false;
+	}
+	inline bool IsUnknown() const {
+		return id_ == LogicalTypeId::UNKNOWN;
 	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
