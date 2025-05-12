@@ -155,10 +155,14 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {
-		for (auto &type : sniffer_result.return_types) {
-			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+		for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
+			if (i < sniffer_options.sql_type_list.size()) {
+				// This is type is user-set, we don't replace
+				continue;
+			}
+			D_ASSERT(sniffer_result.return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
-			type = LogicalType::VARCHAR;
+			sniffer_result.return_types[i] = LogicalType::VARCHAR;
 		}
 	}
 	string str_opt;

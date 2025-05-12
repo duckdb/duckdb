@@ -30,3 +30,30 @@ SELECT REGEXP_MATCHES(abs_file_name, 'foo')
   FROM ( SELECT abs_file_name FROM read_csv(['data/csv/header_only.csv','data/csv/bool.csv','data/csv/header_only.csv'], header=True, ignore_errors=True))
 ----
 No function matches the given name and argument types 'regexp_matches(BOOLEAN, STRING_LITERAL)'. You might need to add explicit type casts.
+
+# Try to replace column type
+query I
+SELECT columns from sniff_csv('data/csv/header_only.csv', types = ['INTEGER'])
+----
+[{'name': abs_file_name, 'type': INTEGER}]
+
+query I
+SELECT columns from sniff_csv('data/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
+----
+[{'name': abs_file_name, 'type': INTEGER}]
+
+statement ok
+CREATE TABLE T AS from read_csv('data/csv/header_only.csv', header=True, ignore_errors=True, types = ['INTEGER'])
+
+query IIIIII
+DESCRIBE T
+----
+abs_file_name	INTEGER	YES	NULL	NULL	NULL
+
+statement ok
+CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only.csv', header=True, ignore_errors=True, types = {'abs_file_name':'INTEGER'})
+
+query IIIIII
+DESCRIBE T
+----
+abs_file_name	INTEGER	YES	NULL	NULL	NULL
