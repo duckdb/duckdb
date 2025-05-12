@@ -371,6 +371,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	auto &http_util = HTTPUtil::Get(db);
 	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
+	get_request.try_request = true;
+
 	auto response = http_util.Request(get_request);
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error

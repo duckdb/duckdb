@@ -252,19 +252,21 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 class HTTPLibClient : public HTTPClient {
 public:
 	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) {
+		auto sec = static_cast<time_t>(http_params.timeout);
+		auto usec = static_cast<time_t>(http_params.timeout_usec);
 		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
 		client->set_follow_location(true);
 		client->set_keep_alive(http_params.keep_alive);
-		client->set_write_timeout(http_params.timeout, http_params.timeout_usec);
-		client->set_read_timeout(http_params.timeout, http_params.timeout_usec);
-		client->set_connection_timeout(http_params.timeout, http_params.timeout_usec);
+		client->set_write_timeout(sec, usec);
+		client->set_read_timeout(sec, usec);
+		client->set_connection_timeout(sec, usec);
 		client->set_decompress(false);
 		if (http_params.logger) {
 			SetLogger(*http_params.logger);
 		}
 
 		if (!http_params.http_proxy.empty()) {
-			client->set_proxy(http_params.http_proxy, http_params.http_proxy_port);
+			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
 
 			if (!http_params.http_proxy_username.empty()) {
 				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
@@ -348,23 +350,6 @@ unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const
 	return make_uniq<HTTPLibClient>(http_params, proto_host_port);
 }
 
-string RequestTypeToString(RequestType type) {
-	switch (type) {
-	case RequestType::GET_REQUEST:
-		return "GET";
-	case RequestType::PUT_REQUEST:
-		return "PUT";
-	case RequestType::HEAD_REQUEST:
-		return "HEAD";
-	case RequestType::DELETE_REQUEST:
-		return "DELETE";
-	case RequestType::POST_REQUEST:
-		return "POST";
-	default:
-		throw InternalException("Unsupported request type");
-	}
-}
-
 unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
 	if (!client) {
 		client = InitializeClient(request.params, request.proto_host_port);
@@ -374,7 +359,7 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	// Refresh the client on retries
 	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
 
-	return HTTPUtil::RunRequestWithRetry(on_request, request.url, RequestTypeToString(request.type), request.params);
+	return RunRequestWithRetry(on_request, request);
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
@@ -418,25 +403,38 @@ void HTTPUtil::DecomposeURL(const string &url, string &path_out, string &proto_h
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
 duckdb::unique_ptr<HTTPResponse>
-HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &request, const string &url,
-                              string method, const HTTPParams &params, const std::function<void(void)> &retry_cb) {
+HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request,
+                              const BaseRequest &request, const std::function<void(void)> &retry_cb) {
+	auto &params = request.params;
 	idx_t tries = 0;
 	while (true) {
 		std::exception_ptr caught_e = nullptr;
 		unique_ptr<HTTPResponse> response;
+		string exception_error;
 
 		try {
-			response = request();
-			response->url = url;
+			response = on_request();
+			response->url = request.url;
 		} catch (IOException &e) {
+			exception_error = e.what();
 			caught_e = std::current_exception();
 		} catch (HTTPException &e) {
+			exception_error = e.what();
 			caught_e = std::current_exception();
 		}
 
 		// Note: request errors will always be retried
 		bool should_retry = !response || response->ShouldRetry();
 		if (!should_retry) {
+			switch (response->status) {
+			case HTTPStatusCode::OK_200:
+			case HTTPStatusCode::NotModified_304:
+				response->success = true;
+				break;
+			default:
+				response->success = false;
+				break;
+			}
 			return response;
 		}
 
@@ -452,14 +450,29 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 				retry_cb();
 			}
 		} else {
+			// failed and we cannot retry
+			if (request.try_request) {
+				// try request - return the failure
+				if (!response) {
+					response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+					string error = "Unknown error";
+					if (!exception_error.empty()) {
+						error = std::move(exception_error);
+					}
+					response->request_error = std::move(error);
+				}
+				response->success = false;
+				return response;
+			}
+			auto method = EnumUtil::ToString(request.type);
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (response && !response->HasRequestError()) {
 				throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
-				                    static_cast<int>(response->status), method, url);
+				                    static_cast<int>(response->status), method, request.url);
 			} else {
 				string error = response ? response->GetError() : "Unknown error";
-				throw IOException("%s error for HTTP %s to '%s'", error, method, url);
+				throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
 			}
 		}
 	}

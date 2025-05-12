@@ -198,7 +198,7 @@ struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
 	BaseRequest(RequestType type, const string &endpoint_p, const string &path_p, const HTTPHeaders &headers,
 	            HTTPParams &params)
-	    : type(type), url(path), proto_host_port(endpoint_p), path(path_p), headers(headers), params(params) {
+	    : type(type), url(path), path(path_p), proto_host_port(endpoint_p), headers(headers), params(params) {
 	}
 
 	RequestType type;
@@ -207,6 +207,8 @@ struct BaseRequest {
 	string proto_host_port;
 	const HTTPHeaders &headers;
 	HTTPParams &params;
+	//! Whether or not to return failed requests (instead of throwing)
+	bool try_request = false;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -222,16 +224,16 @@ struct BaseRequest {
 
 struct GetRequestInfo : public BaseRequest {
 	GetRequestInfo(const string &url, const HTTPHeaders &headers, HTTPParams &params,
-	               std::function<bool(const HTTPResponse &response)> response_handler,
-	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler)
-	    : BaseRequest(RequestType::GET_REQUEST, url, headers, params), content_handler(content_handler),
-	      response_handler(response_handler) {
+	               std::function<bool(const HTTPResponse &response)> response_handler_p,
+	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
+	    : BaseRequest(RequestType::GET_REQUEST, url, headers, params), content_handler(std::move(content_handler_p)),
+	      response_handler(std::move(response_handler_p)) {
 	}
 	GetRequestInfo(const string &endpoint, const string &path, const HTTPHeaders &headers, HTTPParams &params,
-	               std::function<bool(const HTTPResponse &response)> response_handler,
-	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler)
-	    : BaseRequest(RequestType::GET_REQUEST, endpoint, path, headers, params), content_handler(content_handler),
-	      response_handler(response_handler) {
+	               std::function<bool(const HTTPResponse &response)> response_handler_p,
+	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
+	    : BaseRequest(RequestType::GET_REQUEST, endpoint, path, headers, params),
+	      content_handler(std::move(content_handler_p)), response_handler(std::move(response_handler_p)) {
 	}
 
 	std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler;
@@ -308,7 +310,7 @@ public:
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>
-	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &request, const string &url, string method,
-	                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {});
+	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request,
+	                    const std::function<void(void)> &retry_cb = {});
 };
 } // namespace duckdb
