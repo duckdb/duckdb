@@ -26,7 +26,6 @@ query I
 select * FROM t1 WHERE  EXISTS (SELECT 1 FROM t0 WHERE ((t0.c0) != (t1.c1)));
 ----
 
-
 query I
 select * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t0 WHERE ((t0.c0)!=(t1.c1))); -- wrong, no row
 ----
@@ -50,5 +49,7 @@ select * from lineitem l1 where exists (
 1	2	43
 
 
-query I
+query II
 select c0, EXISTS (select * from t1 where c1 != c0) from t0;
+----
+1	false
