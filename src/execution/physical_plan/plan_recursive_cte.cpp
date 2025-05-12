@@ -104,7 +104,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	D_ASSERT(op.children.empty());
 
 	// Check if this LogicalCTERef is supposed to scan a materialized CTE.
-	if (op.materialized_cte == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+	if (op.materialized_cte != CTEMaterialize::CTE_MATERIALIZE_NEVER) {
 		// Lookup if there is a materialized CTE for the cte_index.
 		auto materialized_cte = materialized_ctes.find(op.cte_index);
 
