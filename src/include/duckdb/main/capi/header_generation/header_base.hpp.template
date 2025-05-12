@@ -465,6 +465,11 @@ typedef struct _duckdb_connection {
 	void *internal_ptr;
 } * duckdb_connection;
 
+//! A client context of a duckdb connection. Must be destroyed with `duckdb_destroy_context`.
+typedef struct _duckdb_client_context {
+	void *internal_ptr;
+} * duckdb_client_context;
+
 //! A prepared statement is a parameterized query that allows you to bind parameters to it.
 //! Must be destroyed with `duckdb_destroy_prepare`.
 typedef struct _duckdb_prepared_statement {
@@ -532,6 +537,7 @@ typedef struct _duckdb_profiling_info {
 //===--------------------------------------------------------------------===//
 // C API Extension info
 //===--------------------------------------------------------------------===//
+
 //! Holds state during the C API extension intialization process
 typedef struct _duckdb_extension_info {
 	void *internal_ptr;
@@ -540,14 +546,22 @@ typedef struct _duckdb_extension_info {
 //===--------------------------------------------------------------------===//
 // Function types
 //===--------------------------------------------------------------------===//
+
 //! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_function_info {
 	void *internal_ptr;
 } * duckdb_function_info;
 
+//! The bind info of the function.
+//! When setting this info, it is necessary to pass a destroy-callback function.
+typedef struct _duckdb_bind_info {
+	void *internal_ptr;
+} * duckdb_bind_info;
+
 //===--------------------------------------------------------------------===//
 // Scalar function types
 //===--------------------------------------------------------------------===//
+
 //! A scalar function. Must be destroyed with `duckdb_destroy_scalar_function`.
 typedef struct _duckdb_scalar_function {
 	void *internal_ptr;
@@ -557,6 +571,9 @@ typedef struct _duckdb_scalar_function {
 typedef struct _duckdb_scalar_function_set {
 	void *internal_ptr;
 } * duckdb_scalar_function_set;
+
+//! The bind function of the table function.
+typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
 
 //! The main function of the scalar function.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
@@ -603,11 +620,6 @@ typedef void (*duckdb_aggregate_finalize_t)(duckdb_function_info info, duckdb_ag
 typedef struct _duckdb_table_function {
 	void *internal_ptr;
 } * duckdb_table_function;
-
-//! The bind info of the function. When setting this info, it is necessary to pass a destroy-callback function.
-typedef struct _duckdb_bind_info {
-	void *internal_ptr;
-} * duckdb_bind_info;
 
 //! Additional function init info. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_init_info {
