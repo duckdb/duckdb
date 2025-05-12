@@ -1904,7 +1904,7 @@ index 229c79e..e389e56 100644
  	static void ParseFileList(string &aws_response, vector<OpenFileInfo> &result);
  	static vector<string> ParseCommonPrefix(string &aws_response);
 diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 7ec018c..f2e2485 100644
+index 7ec018c..8245318 100644
 --- a/extension/httpfs/s3fs.cpp
 +++ b/extension/httpfs/s3fs.cpp
 @@ -23,11 +23,11 @@
@@ -2266,7 +2266,7 @@ index 7ec018c..f2e2485 100644
 -	    listobjectv2_url.c_str(), *headers,
 -	    [&](const duckdb_httplib_openssl::Response &response) {
 -		    if (response.status >= 400) {
-+	GetRequestInfo get_request(listobjectv2_url, header_map, http_params,
++	GetRequestInfo get_request(parsed_url.host, listobjectv2_url, header_map, http_params,
 +	    [&](const HTTPResponse &response) {
 +		    if (static_cast<int>(response.status) >= 400) {
  			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);

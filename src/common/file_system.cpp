@@ -528,7 +528,7 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(Ope
 				info.extended_info->options["type"] = "directory";
 			}
 			callback(info);
-		});
+		}, opener.get());
 	}
 }
 
