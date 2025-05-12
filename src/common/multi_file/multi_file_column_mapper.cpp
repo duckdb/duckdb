@@ -224,23 +224,19 @@ bool IsTriviallyMappable(const MultiFileColumnDefinition &global_column,
 }
 
 static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
-                          const ColumnIndex &global_index, const vector<MultiFileColumnDefinition> &local_columns,
-                          const ColumnMapper &mapper, optional_idx top_level_index = optional_idx());
+                                 const ColumnIndex &global_index,
+                                 const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
+                                 optional_idx top_level_index = optional_idx());
 
-ColumnMapResult MapColumnList(
-	ClientContext &context,
-	const MultiFileColumnDefinition &global_column,
-	const ColumnIndex &global_index,
-	const MultiFileColumnDefinition &local_column,
-	const MultiFileLocalColumnId &local_id,
-	const ColumnMapper &mapper,
-	unique_ptr<MultiFileIndexMapping> mapping,
-	const bool is_root
-) {
+ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefinition &global_column,
+                              const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
+                              const MultiFileLocalColumnId &local_id, const ColumnMapper &mapper,
+                              unique_ptr<MultiFileIndexMapping> mapping, const bool is_root) {
 	const idx_t expected_list_children = 1;
 	if (global_column.children.size() != expected_list_children) {
 		throw InvalidInputException(
-			"Mismatch between field id children in global_column.children (%d) and list child in type", global_column.children.size());
+		    "Mismatch between field id children in global_column.children (%d) and list child in type",
+		    global_column.children.size());
 	}
 
 	auto nested_mapper = mapper.Create(local_column.children);
@@ -272,8 +268,7 @@ ColumnMapResult MapColumnList(
 
 	ColumnMapResult child_map;
 	if (is_selected) {
-		child_map =
-			MapColumn(context, global_child, global_child_index.get(), local_column.children, *nested_mapper);
+		child_map = MapColumn(context, global_child, global_child_index.get(), local_column.children, *nested_mapper);
 	} else {
 		// column is not relevant for the query - push a NULL value
 		child_map.default_value = make_uniq<BoundConstantExpression>(Value(global_child.type));
@@ -306,20 +301,14 @@ ColumnMapResult MapColumnList(
 	return result;
 }
 
-ColumnMapResult MapColumnStruct(
-	ClientContext &context,
-	const MultiFileColumnDefinition &global_column,
-	const ColumnIndex &global_index,
-	const MultiFileColumnDefinition &local_column,
-	const MultiFileLocalColumnId &local_id,
-	const ColumnMapper &mapper,
-	unique_ptr<MultiFileIndexMapping> mapping,
-	const bool is_root
-) {
+ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDefinition &global_column,
+                                const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
+                                const MultiFileLocalColumnId &local_id, const ColumnMapper &mapper,
+                                unique_ptr<MultiFileIndexMapping> mapping, const bool is_root) {
 	auto &struct_children = StructType::GetChildTypes(global_column.type);
 	if (struct_children.size() != global_column.children.size()) {
 		throw InvalidInputException(
-			"Mismatch between field id children in global_column.children and struct children in type");
+		    "Mismatch between field id children in global_column.children and struct children in type");
 	}
 
 	auto nested_mapper = mapper.Create(local_column.children);
@@ -404,8 +393,9 @@ ColumnMapResult MapColumnStruct(
 }
 
 static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
-                          const ColumnIndex &global_index, const vector<MultiFileColumnDefinition> &local_columns,
-                          const ColumnMapper &mapper, optional_idx top_level_index) {
+                                 const ColumnIndex &global_index,
+                                 const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
+                                 optional_idx top_level_index) {
 	bool is_root = top_level_index.IsValid();
 	ColumnMapResult result;
 	auto entry = mapper.Find(global_column);
@@ -440,15 +430,17 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	// nested type - check if the field identifiers match and if we need to remap
 	D_ASSERT(global_column.type.IsNested());
 	switch (global_column.type.InternalType()) {
-		case PhysicalType::STRUCT:
-			return MapColumnStruct(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping), is_root);
-		case PhysicalType::LIST:
-			return MapColumnList(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping), is_root);
-		case PhysicalType::ARRAY: {
-			throw NotImplementedException("Can't map an ARRAY with nested children!");
-		}
-		default:
-			throw InternalException("MapColumn for children of type %s not implemented", global_column.type.ToString());
+	case PhysicalType::STRUCT:
+		return MapColumnStruct(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
+		                       is_root);
+	case PhysicalType::LIST:
+		return MapColumnList(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
+		                     is_root);
+	case PhysicalType::ARRAY: {
+		throw NotImplementedException("Can't map an ARRAY with nested children!");
+	}
+	default:
+		throw InternalException("MapColumn for children of type %s not implemented", global_column.type.ToString());
 	}
 }
 
