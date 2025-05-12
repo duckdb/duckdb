@@ -271,8 +271,7 @@ struct PostRequestInfo : public BaseRequest {
 
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
-	duckdb::unique_ptr<char[]> buffer_out;
-	idx_t buffer_out_len = 0;
+	string buffer_out;
 };
 
 class HTTPClient {
