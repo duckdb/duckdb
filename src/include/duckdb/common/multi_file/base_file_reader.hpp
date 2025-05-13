@@ -74,6 +74,9 @@ public:
 	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 
+	virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
+	}
+
 	virtual string GetReaderType() const = 0;
 
 public:

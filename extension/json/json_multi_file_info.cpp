@@ -552,8 +552,7 @@ void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_s
 	}
 }
 
-void JSONMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state,
-                                   BaseFileReader &reader) {
+void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	gstate.file_is_assigned = false;
 }

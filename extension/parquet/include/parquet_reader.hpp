@@ -156,6 +156,7 @@ public:
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);

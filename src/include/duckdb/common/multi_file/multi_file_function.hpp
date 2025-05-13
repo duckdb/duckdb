@@ -376,7 +376,7 @@ public:
 					current_reader_data.file_state = MultiFileFileState::CLOSED;
 
 					//! Finish processing the file
-					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
+					current_reader_data.reader->FinishFile(context, *gstate.global_state);
 					current_reader_data.closed_reader = current_reader_data.reader;
 					current_reader_data.reader = nullptr;
 					continue;

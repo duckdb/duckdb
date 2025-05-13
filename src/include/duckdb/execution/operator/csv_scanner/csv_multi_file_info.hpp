@@ -47,7 +47,6 @@ struct CSVMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
 	                                               CSVReaderOptions &options, const MultiFileOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader);
 	static void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                          LocalTableFunctionState &local_state);
 	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);

@@ -209,6 +209,7 @@ public:
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 
 public:
 	//! Get a new buffer index (must hold the lock)

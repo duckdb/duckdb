@@ -547,8 +547,7 @@ bool ParquetReader::TryInitializeScan(ClientContext &context,
 	return true;
 }
 
-void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                      BaseFileReader &reader) {
+void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	gstate.row_group_index = 0;
 }

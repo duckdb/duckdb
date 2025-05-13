@@ -359,10 +359,9 @@ void CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_
 	lstate.csv_reader->Flush(chunk);
 }
 
-void CSVMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state,
-                                  BaseFileReader &reader) {
+void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
 	auto &gstate = global_state.Cast<CSVGlobalState>();
-	gstate.FinishLaunchingTasks(reader.Cast<CSVFileScan>());
+	gstate.FinishLaunchingTasks(*this);
 }
 
 void CSVMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
