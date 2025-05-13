@@ -538,7 +538,7 @@ MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context,
 	// note also that it requires fully expanding the MultiFileList
 	auto materialized_file_list = files.GetAllFiles();
 	auto union_readers = UnionByName::UnionCols(context, materialized_file_list, union_col_types, union_col_names,
-	                                            options, file_options, interface);
+	                                            options, file_options, *this, interface);
 
 	std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 	// perform the binding on the obtained set of names + types
@@ -560,7 +560,7 @@ MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vect
 		return BindUnionReader(context, return_types, names, files, result, options, file_options, interface);
 	} else {
 		shared_ptr<BaseFileReader> reader;
-		reader = interface.CreateReader(context, files.GetFirstFile(), options, file_options);
+		reader = CreateReader(context, files.GetFirstFile(), options, file_options, interface);
 		auto &columns = reader->GetColumns();
 		for (auto &column : columns) {
 			return_types.emplace_back(column.type);
@@ -584,6 +584,25 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
 	             global_state);
 	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
 	                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
+}
+
+shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+                                                         BaseUnionData &union_data,
+                                                         const MultiFileBindData &bind_data) {
+	return bind_data.interface->CreateReader(context, gstate, union_data, bind_data);
+}
+
+shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+                                                         const OpenFileInfo &file, idx_t file_idx,
+                                                         const MultiFileBindData &bind_data) {
+	return bind_data.interface->CreateReader(context, gstate, file, file_idx, bind_data);
+}
+
+shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, const OpenFileInfo &file,
+                                                         BaseFileReaderOptions &options,
+                                                         const MultiFileOptions &file_options,
+                                                         MultiFileReaderInterface &interface) {
+	return interface.CreateReader(context, file, options, file_options);
 }
 
 void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_list) {

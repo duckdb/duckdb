@@ -60,7 +60,7 @@ struct MultiFileReaderGlobalState {
 };
 
 struct MultiFileBindData : public TableFunctionData {
-	virtual ~MultiFileBindData() override;
+	~MultiFileBindData() override;
 
 	unique_ptr<TableFunctionData> bind_data;
 	shared_ptr<MultiFileList> file_list;

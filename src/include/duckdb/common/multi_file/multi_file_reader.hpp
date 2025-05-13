@@ -138,13 +138,24 @@ public:
 	                                   MultiFileList &files, MultiFileBindData &result, BaseFileReaderOptions &options,
 	                                   MultiFileOptions &file_options, MultiFileReaderInterface &interface);
 
-	virtual ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
-	                                              const vector<MultiFileColumnDefinition> &global_columns,
-	                                              const vector<ColumnIndex> &global_column_ids,
-	                                              optional_ptr<TableFilterSet> table_filters, ClientContext &context,
-	                                              optional_ptr<MultiFileReaderGlobalState> global_state);
+	DUCKDB_API virtual ReaderInitializeType
+	InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
+	                 const vector<MultiFileColumnDefinition> &global_columns,
+	                 const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
+	                 ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	static void PruneReaders(MultiFileBindData &data, MultiFileList &file_list);
+
+	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                                           BaseUnionData &union_data,
+	                                                           const MultiFileBindData &bind_data);
+	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                                           const OpenFileInfo &file, idx_t file_idx,
+	                                                           const MultiFileBindData &bind_data);
+	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
+	                                                           BaseFileReaderOptions &options,
+	                                                           const MultiFileOptions &file_options,
+	                                                           MultiFileReaderInterface &interfac);
 
 	//! Get partition info
 	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,

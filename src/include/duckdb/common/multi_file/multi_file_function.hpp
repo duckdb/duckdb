@@ -284,10 +284,10 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						current_reader_data.reader = bind_data.interface->CreateReader(
+						current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
 						    context, *global_state.global_state, union_data, bind_data);
 					} else {
-						current_reader_data.reader = bind_data.interface->CreateReader(
+						current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
 						    context, *global_state.global_state, current_reader_data.file_to_be_opened,
 						    current_file_index, bind_data);
 					}
