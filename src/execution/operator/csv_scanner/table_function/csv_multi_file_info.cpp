@@ -54,9 +54,10 @@ unique_ptr<TableFunctionData> CSVMultiFileInfo::InitializeBindData(MultiFileBind
 }
 
 //! Function to do schema discovery over one CSV file or a list/glob of CSV files
-void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
-                     const MultiFileOptions &file_options, vector<LogicalType> &return_types, vector<string> &names,
-                     MultiFileList &multi_file_list) {
+CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr<CSVBufferManager> &buffer_manager,
+                                              CSVReaderOptions &options, const MultiFileOptions &file_options,
+                                              vector<LogicalType> &return_types, vector<string> &names,
+                                              MultiFileList &multi_file_list) {
 	vector<CSVSchema> schemas;
 	const auto option_og = options;
 
@@ -70,17 +71,17 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	idx_t current_file = 0;
 	options.file_path = file_paths[current_file].path;
 
-	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, false);
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, false);
 	idx_t only_header_or_empty_files = 0;
 
 	{
-		CSVSniffer sniffer(options, file_options, result.buffer_manager, CSVStateMachineCache::Get(context));
+		CSVSniffer sniffer(options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() -
 		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
 
 		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0].path, rows_read,
-		                     result.buffer_manager->GetBuffer(0)->actual_size == 0);
+		                     buffer_manager->GetBuffer(0)->actual_size == 0);
 		total_number_of_rows += sniffer.LinesSniffed();
 		current_file++;
 		if (sniffer.EmptyOrOnlyHeader()) {
@@ -94,14 +95,15 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
 		option_copy.file_path = file_paths[current_file].path;
-		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
+		auto file_buffer_manager =
+		    make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
 		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
 		// reader
-		CSVSniffer sniffer(option_copy, file_options, buffer_manager, CSVStateMachineCache::Get(context));
+		CSVSniffer sniffer(option_copy, file_options, file_buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
 		                                            option_copy.dialect_options.header.GetValue());
-		if (buffer_manager->GetBuffer(0)->actual_size == 0) {
+		if (file_buffer_manager->GetBuffer(0)->actual_size == 0) {
 			schemas.emplace_back(true);
 		} else {
 			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, option_copy.file_path, rows_read);
@@ -149,7 +151,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 			return_types[i] = LogicalType::VARCHAR;
 		}
 	}
-	result.csv_schema = best_schema;
+	return best_schema;
 }
 
 void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
@@ -159,7 +161,9 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 	auto &options = csv_data.options;
 	if (!bind_data.file_options.union_by_name) {
 		if (options.auto_detect) {
-			SchemaDiscovery(context, csv_data, options, bind_data.file_options, return_types, names, multi_file_list);
+			csv_data.csv_schema =
+			    CSVSchemaDiscovery::SchemaDiscovery(context, csv_data.buffer_manager, options, bind_data.file_options,
+			                                        return_types, names, multi_file_list);
 		} else {
 			// If we are not running the sniffer, the columns must be set!
 			if (!options.columns_set) {
