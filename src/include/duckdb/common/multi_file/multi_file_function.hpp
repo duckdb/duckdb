@@ -47,6 +47,9 @@ struct MultiFileReaderInterface {
 	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                                const OpenFileInfo &file, idx_t file_idx,
 	                                                const MultiFileBindData &bind_data) = 0;
+	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
+	                                                BaseFileReaderOptions &options,
+	                                                const MultiFileOptions &file_options);
 	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                           LocalTableFunctionState &local_state);
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;

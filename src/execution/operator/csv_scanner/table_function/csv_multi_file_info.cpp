@@ -178,8 +178,10 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 		bind_data.multi_file_reader->BindOptions(bind_data.file_options, multi_file_list, return_types, names,
 		                                         bind_data.reader_bind);
 	} else {
-		bind_data.reader_bind = bind_data.multi_file_reader->BindUnionReader<CSVMultiFileInfo>(
-		    context, return_types, names, multi_file_list, bind_data, options, bind_data.file_options);
+		CSVFileReaderOptions csv_options(options);
+		bind_data.reader_bind =
+		    bind_data.multi_file_reader->BindUnionReader(context, return_types, names, multi_file_list, bind_data,
+		                                                 csv_options, bind_data.file_options, *bind_data.interface);
 		if (bind_data.union_readers.size() > 1) {
 			for (idx_t i = 0; i < bind_data.union_readers.size(); i++) {
 				auto &csv_union_data = bind_data.union_readers[i]->Cast<CSVUnionData>();
@@ -311,9 +313,10 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 }
 
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
-                                                          CSVReaderOptions &options,
+                                                          BaseFileReaderOptions &options_p,
                                                           const MultiFileOptions &file_options) {
-	return make_shared_ptr<CSVFileScan>(context, file, options, file_options);
+	auto &csv_options = options_p.Cast<CSVFileReaderOptions>();
+	return make_shared_ptr<CSVFileScan>(context, file, csv_options.options, file_options);
 }
 
 shared_ptr<BaseUnionData> CSVFileScan::GetUnionData(idx_t file_idx) {

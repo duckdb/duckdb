@@ -50,8 +50,9 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        const OpenFileInfo &file, idx_t file_idx,
 	                                        const MultiFileBindData &bind_data) override;
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
-	                                               ParquetOptions &options, const MultiFileOptions &file_options);
+	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
+	                                        BaseFileReaderOptions &options,
+	                                        const MultiFileOptions &file_options) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
 	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) override;
 	unique_ptr<MultiFileReaderInterface> Copy() override;

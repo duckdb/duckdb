@@ -13,14 +13,21 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
-	ParquetOptions parquet_options;
+	unique_ptr<ParquetFileReaderOptions> options;
+
+	ParquetOptions &GetParquetOptions() {
+		return options->options;
+	}
+	const ParquetOptions &GetParquetOptions() const {
+		return options->options;
+	}
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<ParquetReadBindData>();
 		result->initial_file_cardinality = initial_file_cardinality;
 		result->initial_file_row_groups = initial_file_row_groups;
 		result->explicit_cardinality = explicit_cardinality;
-		result->parquet_options = parquet_options;
+		result->options = make_uniq<ParquetFileReaderOptions>(options->options);
 		return std::move(result);
 	}
 };
@@ -52,7 +59,7 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
                        MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
-	auto &options = parquet_bind.parquet_options;
+	auto &options = parquet_bind.GetParquetOptions();
 	D_ASSERT(!options.schema.empty());
 
 	auto &file_options = bind_data.file_options;
@@ -127,12 +134,13 @@ ParquetMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReade
 void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
                                       MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
-	auto &options = parquet_bind.parquet_options;
+	auto &options = parquet_bind.GetParquetOptions();
 	if (!options.schema.empty()) {
 		BindSchema(context, return_types, names, bind_data);
 	} else {
-		bind_data.reader_bind = bind_data.multi_file_reader->BindReader<ParquetMultiFileInfo>(
-		    context, return_types, names, *bind_data.file_list, bind_data, options, bind_data.file_options);
+		bind_data.reader_bind =
+		    bind_data.multi_file_reader->BindReader(context, return_types, names, *bind_data.file_list, bind_data,
+		                                            *parquet_bind.options, bind_data.file_options, *this);
 	}
 }
 
@@ -211,7 +219,7 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	serializer.WriteProperty(100, "files", files);
 	serializer.WriteProperty(101, "types", bind_data.types);
 	serializer.WriteProperty(102, "names", bind_data.names);
-	ParquetOptionsSerialization serialization(parquet_data.parquet_options, bind_data.file_options);
+	ParquetOptionsSerialization serialization(parquet_data.GetParquetOptions(), bind_data.file_options);
 	serializer.WriteProperty(103, "parquet_options", serialization);
 	if (serializer.ShouldSerialize(3)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
@@ -415,11 +423,11 @@ unique_ptr<TableFunctionData> ParquetMultiFileInfo::InitializeBindData(MultiFile
                                                                        unique_ptr<BaseFileReaderOptions> options_p) {
 	auto result = make_uniq<ParquetReadBindData>();
 	// Set the explicit cardinality if requested
-	auto &options = options_p->Cast<ParquetFileReaderOptions>();
-	result->parquet_options = std::move(options.options);
-	if (result->parquet_options.explicit_cardinality) {
+	result->options = unique_ptr_cast<BaseFileReaderOptions, ParquetFileReaderOptions>(std::move(options_p));
+	auto &parquet_options = result->GetParquetOptions();
+	if (parquet_options.explicit_cardinality) {
 		auto file_count = multi_file_data.file_list->GetTotalFileCount();
-		result->explicit_cardinality = result->parquet_options.explicit_cardinality;
+		result->explicit_cardinality = parquet_options.explicit_cardinality;
 		result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
 	}
 	return std::move(result);
@@ -427,10 +435,11 @@ unique_ptr<TableFunctionData> ParquetMultiFileInfo::InitializeBindData(MultiFile
 
 void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, BindInfo &info) {
 	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+	auto &parquet_options = bind_data.GetParquetOptions();
 	info.type = ScanType::PARQUET;
-	info.InsertOption("binary_as_string", Value::BOOLEAN(bind_data.parquet_options.binary_as_string));
-	info.InsertOption("file_row_number", Value::BOOLEAN(bind_data.parquet_options.file_row_number));
-	info.InsertOption("debug_use_openssl", Value::BOOLEAN(bind_data.parquet_options.debug_use_openssl));
+	info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_options.binary_as_string));
+	info.InsertOption("file_row_number", Value::BOOLEAN(parquet_options.file_row_number));
+	info.InsertOption("debug_use_openssl", Value::BOOLEAN(parquet_options.debug_use_openssl));
 }
 
 optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
@@ -450,7 +459,7 @@ void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) 
 		auto &initial_reader = multi_file_data.initial_reader->Cast<ParquetReader>();
 		bind_data.initial_file_cardinality = initial_reader.NumRows();
 		bind_data.initial_file_row_groups = initial_reader.NumRowGroups();
-		bind_data.parquet_options = initial_reader.parquet_options;
+		bind_data.options->options = initial_reader.parquet_options;
 	}
 }
 
@@ -488,12 +497,14 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, file, bind_data.parquet_options);
+	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions());
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
-                                                              ParquetOptions &options, const MultiFileOptions &) {
-	return make_shared_ptr<ParquetReader>(context, file, options);
+                                                              BaseFileReaderOptions &options_p,
+                                                              const MultiFileOptions &) {
+	auto &options = options_p.Cast<ParquetFileReaderOptions>();
+	return make_shared_ptr<ParquetReader>(context, file, options.options);
 }
 
 shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {

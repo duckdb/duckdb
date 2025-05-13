@@ -15,6 +15,10 @@ namespace duckdb {
 
 class CSVFileReaderOptions : public BaseFileReaderOptions {
 public:
+	CSVFileReaderOptions() = default;
+	explicit CSVFileReaderOptions(CSVReaderOptions options_p) : options(std::move(options_p)) {
+	}
+
 	CSVReaderOptions options;
 };
 
@@ -46,8 +50,9 @@ struct CSVMultiFileInfo : public MultiFileReaderInterface {
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        const OpenFileInfo &file, idx_t file_idx,
 	                                        const MultiFileBindData &bind_data) override;
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
-	                                               CSVReaderOptions &options, const MultiFileOptions &file_options);
+	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
+	                                        BaseFileReaderOptions &options,
+	                                        const MultiFileOptions &file_options) override;
 	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                   LocalTableFunctionState &local_state) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
