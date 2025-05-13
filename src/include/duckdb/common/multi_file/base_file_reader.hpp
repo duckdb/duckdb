@@ -21,7 +21,7 @@ namespace duckdb {
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
-class BaseFileReader {
+class BaseFileReader : public enable_shared_from_this<BaseFileReader> {
 public:
 	explicit BaseFileReader(OpenFileInfo file_p) : file(std::move(file_p)) {
 	}
@@ -68,6 +68,8 @@ public:
 	//! Prepare reader for scanning
 	virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
 	}
+	virtual bool TryInitializeScan(ClientContext &context,
+				      GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) = 0;
 	//! Scan a chunk from the read state
 	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) = 0;

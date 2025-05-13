@@ -355,7 +355,7 @@ public:
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
+				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
 				                          *scan_data.local_state)) {
 					if (!current_reader_data.reader) {
 						throw InternalException("MultiFileReader was moved");

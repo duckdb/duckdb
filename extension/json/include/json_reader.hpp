@@ -205,9 +205,10 @@ public:
 		return "JSON";
 	}
 
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
-	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
 
 public:
 	//! Get a new buffer index (must hold the lock)

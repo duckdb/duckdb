@@ -532,18 +532,17 @@ unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(E
 	return make_uniq<ParquetReadLocalState>();
 }
 
-bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader_p,
+bool ParquetReader::TryInitializeScan(ClientContext &context,
                                              GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	auto &reader = reader_p->Cast<ParquetReader>();
-	if (gstate.row_group_index >= reader.NumRowGroups()) {
+	if (gstate.row_group_index >= NumRowGroups()) {
 		// scanned all row groups in this file
 		return false;
 	}
 	// The current reader has rowgroups left to be scanned
 	vector<idx_t> group_indexes {gstate.row_group_index};
-	reader.InitializeScan(context, lstate.scan_state, group_indexes);
+	InitializeScan(context, lstate.scan_state, group_indexes);
 	gstate.row_group_index++;
 	return true;
 }

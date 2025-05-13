@@ -336,11 +336,11 @@ void CSVFileScan::PrepareReader(ClientContext &context, GlobalTableFunctionState
 	SetStart();
 }
 
-bool CSVMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
+bool CSVFileScan::TryInitializeScan(ClientContext &context,
                                          GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
-	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(reader);
+	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(shared_from_this());
 	gstate.FinishScan(std::move(lstate.csv_reader));
 	lstate.csv_reader = gstate.Next(csv_reader_ptr);
 	if (!lstate.csv_reader) {

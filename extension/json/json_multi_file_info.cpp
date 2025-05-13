@@ -456,14 +456,13 @@ void JSONReader::PrepareReader(ClientContext &context, GlobalTableFunctionState 
 	}
 }
 
-bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
+bool JSONReader::TryInitializeScan(ClientContext &context,
                                           GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
-	auto &json_reader = reader->Cast<JSONReader>();
 
 	lstate.GetScanState().ResetForNextBuffer();
-	return lstate.TryInitializeScan(gstate, json_reader);
+	return lstate.TryInitializeScan(gstate, *this);
 }
 
 void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,

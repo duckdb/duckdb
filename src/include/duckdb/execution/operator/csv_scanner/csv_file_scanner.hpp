@@ -55,9 +55,10 @@ public:
 		return true;
 	}
 
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
-	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
 
 public:
 	idx_t GetFileIndex() const {

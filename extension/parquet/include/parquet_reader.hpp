@@ -153,6 +153,7 @@ public:
 		return "Parquet";
 	}
 
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 
