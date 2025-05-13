@@ -13,7 +13,6 @@
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/multi_file/union_by_name.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_states.hpp"
 

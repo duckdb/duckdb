@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/common/multi_file/union_by_name.hpp"
 #include <algorithm>
 
 namespace duckdb {

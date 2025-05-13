@@ -17,6 +17,7 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 
 namespace duckdb {
+struct MultiFileReader;
 struct MultiFileReaderInterface;
 
 class UnionByName {
