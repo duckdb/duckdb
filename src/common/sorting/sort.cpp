@@ -283,8 +283,7 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType Sort::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                OperatorSinkFinalizeInput &input) const {
+SinkFinalizeType Sort::Finalize(Pipeline &, Event &, ClientContext &context, OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
 	if (gstate.sorted_runs.empty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
@@ -295,15 +294,11 @@ SinkFinalizeType Sort::Finalize(Pipeline &pipeline, Event &event, ClientContext 
 		gstate.total_count += sorted_run->Count();
 		maximum_run_count = MaxValue(maximum_run_count, sorted_run->Count());
 	}
-	gstate.partition_size = MinValue<idx_t>(gstate.total_count, 122800); // Same as our row group size
-
-	// TODO: Keep a "Value" min/max per sorted run:
-	//  1. Allows runs to be concatenated without merging
-	//  2. Can identify sets of runs that overlap within the set, but the sets might not overlap with another set
-	//    * For example, this could reduce one 100-ary merge into five 20-ary merges
-	//    * This is probably going to be a really complicated algorithm (lots of trade-offs)
-	//  3. Need C++ iterator over fixed-size blocks, use FastMod to reduce cost of modulo tuples per block
-	//  This needs to set gstate.any_concatenated
+	if (context.config.verify_parallelism) {
+		gstate.partition_size = ClampValue<idx_t>(maximum_run_count / 2, 1, DEFAULT_ROW_GROUP_SIZE);
+	} else {
+		gstate.partition_size = MinValue<idx_t>(gstate.total_count, DEFAULT_ROW_GROUP_SIZE);
+	}
 
 	return SinkFinalizeType::READY;
 }
