@@ -5,12 +5,19 @@
 statement ok
 PRAGMA enable_verification
 
-# query I
-# SELECT typeof(bar) FROM 'data/csv/17451/2.csv' limit 1
-# ----
-# VARCHAR
-
 query I
 SELECT typeof(bar) FROM 'data/csv/17451/*.csv' limit 1
 ----
 DATE
+
+statement ok
+CREATE TABLE T AS SELECT 'bar,baz', UNION ALL SELECT ',baz' from range (0,100000)
+
+statement ok
+COPY T TO '__TEST_DIR__/t.csv' (QUOTE '', HEADER 0)
+
+# If we can't be absolutely sure by reading the whole file, we need to push it as a varchar still
+query I
+SELECT typeof(bar) FROM read_csv(['data/csv/17451/1.csv', '__TEST_DIR__/t.csv']) limit 1
+----
+VARCHAR
