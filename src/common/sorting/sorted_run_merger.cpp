@@ -50,13 +50,11 @@ public:
 		return run_boundaries;
 	}
 
-	bool GetBeginComputed(const unique_lock<mutex> &guard) const {
-		VerifyLock(guard);
+	bool GetBeginComputed() const {
 		return begin_computed;
 	}
 
-	void SetBeginComputed(const unique_lock<mutex> &guard) {
-		VerifyLock(guard);
+	void SetBeginComputed() {
 		begin_computed = true;
 	}
 
@@ -73,7 +71,7 @@ public:
 private:
 	mutex lock;
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
-	bool begin_computed;
+	atomic<bool> begin_computed;
 };
 
 enum class SortedRunMergerTask : uint8_t {
@@ -363,15 +361,17 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	// Another thread depends on this, set them first
 	if (p_idx.GetIndex() != gstate.num_partitions - 1) {
 		auto &next_partition = *gstate.partitions[p_idx.GetIndex() + 1];
-		auto next_partition_guard = next_partition.Lock();
-		if (!next_partition.GetBeginComputed(next_partition_guard)) {
-			auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(next_partition_guard);
-			for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
-				const auto &computed_boundary = run_boundaries[run_idx];
-				D_ASSERT(computed_boundary.begin == computed_boundary.end);
-				next_partition_run_boundaries[run_idx].begin = computed_boundary.begin;
+		if (!next_partition.GetBeginComputed()) {
+			auto next_partition_guard = next_partition.Lock();
+			if (!next_partition.GetBeginComputed()) {
+				auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(next_partition_guard);
+				for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
+					const auto &computed_boundary = run_boundaries[run_idx];
+					D_ASSERT(computed_boundary.begin == computed_boundary.end);
+					next_partition_run_boundaries[run_idx].begin = computed_boundary.begin;
+				}
+				next_partition.SetBeginComputed();
 			}
-			next_partition.SetBeginComputed(next_partition_guard);
 		}
 	}
 
@@ -508,13 +508,12 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	D_ASSERT(partition_idx.IsValid());
 	D_ASSERT(task == SortedRunMergerTask::ACQUIRE_BOUNDARIES);
 	auto &current_partition = *gstate.partitions[partition_idx.GetIndex()];
-	auto guard = current_partition.Lock();
-	if (current_partition.GetBeginComputed(guard)) {
+	if (current_partition.GetBeginComputed()) {
 		// Begin has been computed, boundaries are ready to use. Copy to local
+		auto guard = current_partition.Lock();
 		run_boundaries = current_partition.GetRunBoundaries(guard);
 		return;
 	}
-	guard.unlock();
 
 	// Begin has not yet been computed by another thread, let this thread do it
 	task = SortedRunMergerTask::COMPUTE_BOUNDARIES;
@@ -522,8 +521,8 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
 
 	// Copy to local
-	guard.lock();
-	D_ASSERT(current_partition.GetBeginComputed(guard));
+	auto guard = current_partition.Lock();
+	D_ASSERT(current_partition.GetBeginComputed());
 	run_boundaries = current_partition.GetRunBoundaries(guard);
 }
 
