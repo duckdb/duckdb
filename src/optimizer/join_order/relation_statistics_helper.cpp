@@ -86,7 +86,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		auto column_id = column_ids[i].GetPrimaryIndex();
 		auto distinct_count = GetDistinctCount(get, context, column_id);
 		if (distinct_count > 0) {
-			distinct_count = MaxValue<idx_t>(1, distinct_count);
 			auto column_distinct_count = DistinctCount({distinct_count, true});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			return_stats.column_names.push_back(name + "." + get.names.at(column_id));
