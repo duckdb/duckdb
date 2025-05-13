@@ -486,3 +486,74 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 
 	REQUIRE(first_connection_id != second_connection_id);
 }
+
+void ListSum(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
+	auto input_vector = duckdb_data_chunk_get_vector(input, 0);
+	auto input_size = duckdb_data_chunk_get_size(input);
+	auto input_validity = duckdb_vector_get_validity(input_vector);
+
+	auto list_entry = reinterpret_cast<duckdb_list_entry *>(duckdb_vector_get_data(input_vector));
+	auto list_child = duckdb_list_vector_get_child(input_vector);
+	auto child_validity = duckdb_vector_get_validity(list_child);
+	auto child_data = reinterpret_cast<uint64_t *>(duckdb_vector_get_data(list_child));
+
+	auto result_data = reinterpret_cast<uint64_t *>(duckdb_vector_get_data(output));
+	duckdb_vector_ensure_validity_writable(output);
+	auto result_validity = duckdb_vector_get_validity(output);
+
+	for (idx_t row = 0; row < input_size; row++) {
+		if (!duckdb_validity_row_is_valid(input_validity, row)) {
+			duckdb_validity_set_row_invalid(result_validity, row);
+			continue;
+		}
+		auto entry = list_entry[row];
+		auto offset = entry.offset;
+		auto length = entry.length;
+		uint64_t sum = 0;
+		for (idx_t idx = offset; idx < offset + length; idx++) {
+			if (duckdb_validity_row_is_valid(child_validity, idx)) {
+				sum += child_data[idx];
+			}
+		}
+		result_data[row] = sum;
+	}
+}
+
+static void CAPIRegisterListSum(duckdb_connection connection, const char *name) {
+	duckdb_state status;
+
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, name);
+
+	auto ubigint_type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
+	auto list_type = duckdb_create_list_type(ubigint_type);
+	duckdb_scalar_function_add_parameter(function, list_type);
+	duckdb_scalar_function_set_return_type(function, ubigint_type);
+	duckdb_destroy_logical_type(&list_type);
+	duckdb_destroy_logical_type(&ubigint_type);
+
+	duckdb_scalar_function_set_function(function, ListSum);
+	status = duckdb_register_scalar_function(connection, function);
+	REQUIRE(status == DuckDBSuccess);
+	duckdb_destroy_scalar_function(&function);
+}
+
+TEST_CASE("Test Scalar Functions - LIST", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterListSum(tester.connection, "my_list_sum");
+
+	result = tester.Query("SELECT my_list_sum([1::uint64])");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 1);
+
+	result = tester.Query("SELECT my_list_sum(NULL)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+
+	result = tester.Query("SELECT my_list_sum([])");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+}
