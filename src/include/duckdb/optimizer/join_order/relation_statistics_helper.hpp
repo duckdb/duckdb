@@ -69,6 +69,7 @@ public:
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
+	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, idx_t column_id);
 };
 
 } // namespace duckdb
