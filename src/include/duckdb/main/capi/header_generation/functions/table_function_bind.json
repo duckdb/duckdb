@@ -124,11 +124,11 @@
                 }
             ],
             "comment": {
-                "description": "Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.\n\n",
+                "description": "Sets the user-provided bind data in the bind object of the table function. \nThis object can be retrieved again during execution.\n\n",
                 "param_comments": {
-                    "info": "The info object",
+                    "info": "The bind info of the table function.",
                     "bind_data": "The bind data object.",
-                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                    "destroy": "The callback to destroy the bind data (if any)."
                 }
             }
         },
@@ -171,7 +171,7 @@
                 }
             ],
             "comment": {
-                "description": "Report that an error has occurred while calling bind.\n\n",
+                "description": "Report that an error has occurred while calling bind on a table function.\n\n",
                 "param_comments": {
                     "info": "The info object",
                     "error": "The error message"

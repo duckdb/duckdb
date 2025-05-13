@@ -542,6 +542,23 @@ typedef struct {
 	                                               idx_t row);
 #endif
 
+// New functions around the client context
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
+	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
+	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
+#endif
+
+// New functions around scalar function binding
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
+	void (*duckdb_scalar_function_bind_set_error)(duckdb_bind_info info, const char *error);
+	void (*duckdb_scalar_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+	void (*duckdb_scalar_function_set_bind_data)(duckdb_bind_info info, void *bind_data,
+	                                             duckdb_delete_callback_t destroy);
+	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
+#endif
+
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -987,6 +1004,18 @@ typedef struct {
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_open_connect_functions
+#define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
+#define duckdb_client_context_get_connection_id duckdb_ext_api.duckdb_client_context_get_connection_id
+#define duckdb_destroy_client_context           duckdb_ext_api.duckdb_destroy_client_context
+
+// Version unstable_new_scalar_function_functions
+#define duckdb_scalar_function_set_bind           duckdb_ext_api.duckdb_scalar_function_set_bind
+#define duckdb_scalar_function_set_bind_data      duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_bind_set_error     duckdb_ext_api.duckdb_scalar_function_bind_set_error
+#define duckdb_scalar_function_get_bind_data      duckdb_ext_api.duckdb_scalar_function_get_bind_data
+#define duckdb_scalar_function_get_client_context duckdb_ext_api.duckdb_scalar_function_get_client_context
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string

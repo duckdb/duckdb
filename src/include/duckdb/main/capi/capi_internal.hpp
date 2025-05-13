@@ -37,6 +37,11 @@ struct DatabaseWrapper {
 	shared_ptr<DuckDB> database;
 };
 
+struct CClientContextWrapper {
+	explicit CClientContextWrapper(ClientContext &context) : context(context) {};
+	ClientContext &context;
+};
+
 struct PreparedStatementWrapper {
 	//! Map of name -> values
 	case_insensitive_map_t<BoundParameterData> values;
