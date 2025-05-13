@@ -57,6 +57,11 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
 		auto loaded_encodings = config.GetLoadedEncodedFunctions();
 		std::ostringstream error;
 		error << "The CSV Reader does not support the encoding: \"" << encoding_name_to_find << "\"\n";
+		if (!context.db->ExtensionIsLoaded("encodings")) {
+			error << "It is possible that the encoding exists in the encodings extension. You can try \"INSTALL "
+			         "encodings; LOAD encodings\""
+			      << "\n";
+		}
 		error << "The currently supported encodings are: " << '\n';
 		for (auto &encoding_function : loaded_encodings) {
 			error << "*  " << encoding_function.get().GetName() << '\n';
