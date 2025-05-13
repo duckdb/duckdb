@@ -521,14 +521,17 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(Ope
 	if (SupportsListFilesExtended()) {
 		return ListFilesExtended(directory, callback, opener);
 	} else {
-		return ListFiles(directory, [&](const string &path, bool is_dir) {
-			OpenFileInfo info(path);
-			if (is_dir) {
-				info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-				info.extended_info->options["type"] = "directory";
-			}
-			callback(info);
-		});
+		return ListFiles(
+		    directory,
+		    [&](const string &path, bool is_dir) {
+			    OpenFileInfo info(path);
+			    if (is_dir) {
+				    info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+				    info.extended_info->options["type"] = "directory";
+			    }
+			    callback(info);
+		    },
+		    opener.get());
 	}
 }
 

@@ -3,6 +3,8 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/logging/http_logger.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/main/client_data.hpp"
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
@@ -207,95 +209,157 @@ const string &HTTPResponse::GetRequestError() const {
 	return request_error;
 }
 
+const string &HTTPResponse::GetError() const {
+	return request_error.empty() ? reason : request_error;
+}
+
 HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
 	return *db.config.http_util;
 }
 
-unique_ptr<HTTPResponse> HTTPUtil::Request(DatabaseInstance &db, const string &url, const HTTPHeaders &headers,
-                                           optional_ptr<HTTPLogger> http_logger) {
-	string no_http = StringUtil::Replace(url, "http://", "");
-
-	idx_t next = no_http.find('/', 0);
-	if (next == string::npos) {
-		throw IOException("No slash in URL template");
+bool HTTPResponse::ShouldRetry() const {
+	if (HasRequestError()) {
+		// always retry on request errors
+		return true;
 	}
-
-	// Push the substring [last, next) on to splits
-	auto hostname_without_http = no_http.substr(0, next);
-	auto url_local_part = no_http.substr(next);
-
-	auto url_base = "http://" + hostname_without_http;
-
-	duckdb_httplib::Headers httplib_headers;
-	for (auto &header : headers) {
-		httplib_headers.insert({header.first, header.second});
+	switch (status) {
+	case HTTPStatusCode::RequestTimeout_408:
+	case HTTPStatusCode::ImATeapot_418:
+	case HTTPStatusCode::TooManyRequests_429:
+	case HTTPStatusCode::InternalServerError_500:
+	case HTTPStatusCode::ServiceUnavailable_503:
+	case HTTPStatusCode::GatewayTimeout_504:
+		return true;
+	default:
+		return false;
 	}
+}
 
-	// FIXME: the retry logic should be unified with the retry logic in the httpfs client
-	static constexpr idx_t MAX_RETRY_COUNT = 3;
-	static constexpr uint64_t RETRY_WAIT_MS = 100;
-	static constexpr double RETRY_BACKOFF = 4;
-	idx_t retry_count = 0;
-	duckdb_httplib::Result res;
-	while (true) {
-		duckdb_httplib::Client cli(url_base.c_str());
-		if (!db.config.options.http_proxy.empty()) {
-			idx_t port;
-			string host;
-			HTTPUtil::ParseHTTPProxyHost(db.config.options.http_proxy, host, port);
-			cli.set_proxy(host, NumericCast<int>(port));
+unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
+	unique_ptr<HTTPClient> client;
+	return SendRequest(request, client);
+}
+
+unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+	return SendRequest(request, client);
+}
+
+BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params)
+    : type(type), url(url), headers(headers), params(params) {
+	HTTPUtil::DecomposeURL(url, path, proto_host_port);
+}
+
+class HTTPLibClient : public HTTPClient {
+public:
+	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) {
+		auto sec = static_cast<time_t>(http_params.timeout);
+		auto usec = static_cast<time_t>(http_params.timeout_usec);
+		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
+		client->set_follow_location(true);
+		client->set_keep_alive(http_params.keep_alive);
+		client->set_write_timeout(sec, usec);
+		client->set_read_timeout(sec, usec);
+		client->set_connection_timeout(sec, usec);
+		client->set_decompress(false);
+		if (http_params.logger) {
+			SetLogger(*http_params.logger);
 		}
 
-		if (!db.config.options.http_proxy_username.empty() || !db.config.options.http_proxy_password.empty()) {
-			cli.set_proxy_basic_auth(db.config.options.http_proxy_username, db.config.options.http_proxy_password);
-		}
+		if (!http_params.http_proxy.empty()) {
+			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
 
-		if (http_logger) {
-			cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
-		}
-
-		res = cli.Get(url_local_part.c_str(), httplib_headers);
-		if (res && res->status == 304) {
-			return make_uniq<HTTPResponse>(HTTPStatusCode::NotModified_304);
-		}
-		if (res && res->status == 200) {
-			// success!
-			return TransformResponse(res);
-		}
-		// failure - check if we should retry
-		bool should_retry = false;
-		if (res.error() == duckdb_httplib::Error::Success) {
-			switch (res->status) {
-			case 408: // Request Timeout
-			case 418: // Server is pretending to be a teapot
-			case 429: // Rate limiter hit
-			case 500: // Server has error
-			case 503: // Server has error
-			case 504: // Server has error
-				should_retry = true;
-				break;
-			default:
-				break;
+			if (!http_params.http_proxy_username.empty()) {
+				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
 			}
-		} else {
-			// always retry on duckdb_httplib::Error::Error
-			should_retry = true;
 		}
-		retry_count++;
-		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
-			// if we should not retry or exceeded the number of retries - bubble up the error
-			auto result = TransformResponse(res);
-			result->success = false;
+	}
+
+	void SetLogger(HTTPLogger &logger) {
+		client->set_logger(logger.GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
+	}
+	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
+		auto headers = TransformHeaders(info.headers, info.params);
+		if (!info.response_handler && !info.content_handler) {
+			return TransformResult(client->Get(info.path, headers));
+		} else {
+			return TransformResult(client->Get(
+			    info.path, headers,
+			    [&](const duckdb_httplib::Response &response) {
+				    auto http_response = TransformResponse(response);
+				    return info.response_handler(*http_response);
+			    },
+			    [&](const char *data, size_t data_length) {
+				    return info.content_handler(const_data_ptr_cast(data), data_length);
+			    }));
+		}
+	}
+	unique_ptr<HTTPResponse> Put(PutRequestInfo &info) override {
+		throw NotImplementedException("PUT request not implemented");
+	}
+
+	unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) override {
+		throw NotImplementedException("HEAD request not implemented");
+	}
+
+	unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) override {
+		throw NotImplementedException("DELETE request not implemented");
+	}
+
+	unique_ptr<HTTPResponse> Post(PostRequestInfo &info) override {
+		throw NotImplementedException("POST request not implemented");
+	}
+
+	unique_ptr<duckdb_httplib::Client> client;
+
+private:
+	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
+		duckdb_httplib::Headers headers;
+		for (auto &entry : header_map) {
+			headers.insert(entry);
+		}
+		for (auto &entry : params.extra_headers) {
+			headers.insert(entry);
+		}
+		return headers;
+	}
+
+	unique_ptr<HTTPResponse> TransformResponse(const duckdb_httplib::Response &response) {
+		auto status_code = HTTPUtil::ToStatusCode(response.status);
+		auto result = make_uniq<HTTPResponse>(status_code);
+		result->body = response.body;
+		result->reason = response.reason;
+		for (auto &entry : response.headers) {
+			result->headers.Insert(entry.first, entry.second);
+		}
+		return result;
+	}
+
+	unique_ptr<HTTPResponse> TransformResult(const duckdb_httplib::Result &res) {
+		if (res.error() == duckdb_httplib::Error::Success) {
+			auto &response = res.value();
+			return TransformResponse(response);
+		} else {
+			auto result = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+			result->request_error = to_string(res.error());
 			return result;
 		}
-#ifndef DUCKDB_NO_THREADS
-		// retry
-		// sleep first
-		uint64_t sleep_amount = static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) *
-		                                              pow(RETRY_BACKOFF, static_cast<double>(retry_count) - 1));
-		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
-#endif
 	}
+};
+
+unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const string &proto_host_port) {
+	return make_uniq<HTTPLibClient>(http_params, proto_host_port);
+}
+
+unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+	if (!client) {
+		client = InitializeClient(request.params, request.proto_host_port);
+	}
+
+	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() { return client->Request(request); });
+	// Refresh the client on retries
+	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
+
+	return RunRequestWithRetry(on_request, request);
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
@@ -316,6 +380,139 @@ void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx
 		port_out = port;
 	} else {
 		throw InvalidInputException("Failed to parse http_proxy '%s' into a host and port", proxy_value);
+	}
+}
+
+void HTTPUtil::DecomposeURL(const string &url, string &path_out, string &proto_host_port_out) {
+	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
+		throw IOException("URL needs to start with http:// or https://");
+	}
+	auto slash_pos = url.find('/', 8);
+	if (slash_pos == string::npos) {
+		throw IOException("URL needs to contain a '/' after the host");
+	}
+	proto_host_port_out = url.substr(0, slash_pos);
+
+	path_out = url.substr(slash_pos);
+
+	if (path_out.empty()) {
+		throw IOException("URL needs to contain a path");
+	}
+}
+
+// Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
+// retry callback is called
+duckdb::unique_ptr<HTTPResponse>
+HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request,
+                              const BaseRequest &request, const std::function<void(void)> &retry_cb) {
+	auto &params = request.params;
+	idx_t tries = 0;
+	while (true) {
+		std::exception_ptr caught_e = nullptr;
+		unique_ptr<HTTPResponse> response;
+		string exception_error;
+
+		try {
+			response = on_request();
+			response->url = request.url;
+		} catch (IOException &e) {
+			exception_error = e.what();
+			caught_e = std::current_exception();
+		} catch (HTTPException &e) {
+			exception_error = e.what();
+			caught_e = std::current_exception();
+		}
+
+		// Note: request errors will always be retried
+		bool should_retry = !response || response->ShouldRetry();
+		if (!should_retry) {
+			switch (response->status) {
+			case HTTPStatusCode::OK_200:
+			case HTTPStatusCode::NotModified_304:
+				response->success = true;
+				break;
+			default:
+				response->success = false;
+				break;
+			}
+			return response;
+		}
+
+		tries += 1;
+		if (tries <= params.retries) {
+			if (tries > 1) {
+#ifndef DUCKDB_NO_THREADS
+				uint64_t sleep_amount = (uint64_t)((double)params.retry_wait_ms *
+				                                   pow(params.retry_backoff, static_cast<double>(tries - 2)));
+				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
+#endif
+			}
+			if (retry_cb) {
+				retry_cb();
+			}
+		} else {
+			// failed and we cannot retry
+			if (request.try_request) {
+				// try request - return the failure
+				if (!response) {
+					response = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
+					string error = "Unknown error";
+					if (!exception_error.empty()) {
+						error = std::move(exception_error);
+					}
+					response->request_error = std::move(error);
+				}
+				response->success = false;
+				return response;
+			}
+			auto method = EnumUtil::ToString(request.type);
+			if (caught_e) {
+				std::rethrow_exception(caught_e);
+			} else if (response && !response->HasRequestError()) {
+				throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
+				                    static_cast<int>(response->status), method, request.url);
+			} else {
+				string error = response ? response->GetError() : "Unknown error";
+				throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
+			}
+		}
+	}
+}
+
+void HTTPParams::Initialize(DatabaseInstance &db) {
+	if (!db.config.options.http_proxy.empty()) {
+		idx_t port;
+		string host;
+		HTTPUtil::ParseHTTPProxyHost(db.config.options.http_proxy, host, port);
+		http_proxy = host;
+		http_proxy_port = port;
+	}
+	http_proxy_username = db.config.options.http_proxy_username;
+	http_proxy_password = db.config.options.http_proxy_password;
+}
+
+void HTTPParams::Initialize(ClientContext &context) {
+	Initialize(*context.db);
+	auto &client_config = ClientConfig::GetConfig(context);
+	if (client_config.enable_http_logging) {
+		logger = context.client_data->http_logger.get();
+	}
+}
+
+unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
+	switch (request.type) {
+	case RequestType::GET_REQUEST:
+		return Get(request.Cast<GetRequestInfo>());
+	case RequestType::PUT_REQUEST:
+		return Put(request.Cast<PutRequestInfo>());
+	case RequestType::HEAD_REQUEST:
+		return Head(request.Cast<HeadRequestInfo>());
+	case RequestType::DELETE_REQUEST:
+		return Delete(request.Cast<DeleteRequestInfo>());
+	case RequestType::POST_REQUEST:
+		return Post(request.Cast<PostRequestInfo>());
+	default:
+		throw InternalException("Unsupported request type");
 	}
 }
 

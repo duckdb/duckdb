@@ -365,8 +365,15 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	if (options.use_etags && install_info && !install_info->etag.empty()) {
 		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
+	HTTPParams params;
+	params.Initialize(db);
+	params.logger = http_logger;
+
 	auto &http_util = HTTPUtil::Get(db);
-	auto response = http_util.Request(db, url, headers, http_logger);
+	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
+	get_request.try_request = true;
+
+	auto response = http_util.Request(get_request);
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error
 		string message;

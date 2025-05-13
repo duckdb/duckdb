@@ -48,7 +48,7 @@ DBConfig::DBConfig() {
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
-	http_util = make_uniq<HTTPUtil>();
+	http_util = make_shared_ptr<HTTPUtil>();
 	storage_extensions["__open_file__"] = OpenFileStorageExtension::Create();
 }
 
