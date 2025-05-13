@@ -60,6 +60,7 @@ public:
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
+	double GetProgressInFile(ClientContext &context) override;
 
 public:
 	idx_t GetFileIndex() const {

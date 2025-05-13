@@ -387,24 +387,22 @@ unique_ptr<BaseStatistics> CSVMultiFileInfo::GetStatistics(ClientContext &contex
 	throw InternalException("Unimplemented CSVMultiFileInfo method");
 }
 
-double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
-	auto &csv_scan = reader.Cast<CSVFileScan>();
-
-	auto buffer_manager = csv_scan.buffer_manager;
-	if (!buffer_manager) {
+double CSVFileScan::GetProgressInFile(ClientContext &context) {
+	auto manager = buffer_manager;
+	if (!manager) {
 		// We are done with this file, so it's 100%
 		return 100.0;
 	}
-	double bytes_read;
-	if (buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
-	    buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
+	double total_bytes_read;
+	if (manager->file_handle->compression_type == FileCompressionType::GZIP ||
+	    manager->file_handle->compression_type == FileCompressionType::ZSTD) {
 		// compressed file: we care about the progress made in the *underlying* file handle
 		// the bytes read from the uncompressed file are skewed
-		bytes_read = buffer_manager->file_handle->GetProgress();
+		total_bytes_read = manager->file_handle->GetProgress();
 	} else {
-		bytes_read = static_cast<double>(csv_scan.bytes_read);
+		total_bytes_read = static_cast<double>(bytes_read);
 	}
-	double file_progress = bytes_read / static_cast<double>(csv_scan.file_size);
+	double file_progress = total_bytes_read / static_cast<double>(file_size);
 	return file_progress * 100.0;
 }
 

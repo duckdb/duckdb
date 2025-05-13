@@ -420,9 +420,8 @@ unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(Exec
 	return std::move(result);
 }
 
-double JSONMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
-	auto &json_reader = reader.Cast<JSONReader>();
-	return json_reader.GetProgress();
+double JSONReader::GetProgressInFile(ClientContext &context) {
+	return GetProgress();
 }
 
 shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,

@@ -468,10 +468,9 @@ unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &co
 	return reader.ReadStatistics(name);
 }
 
-double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
-	auto &parquet_reader = reader.Cast<ParquetReader>();
-	auto read_rows = parquet_reader.rows_read.load();
-	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(parquet_reader.NumRows()));
+double ParquetReader::GetProgressInFile(ClientContext &context) {
+	auto read_rows = rows_read.load();
+	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(NumRows()));
 }
 
 void ParquetMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {

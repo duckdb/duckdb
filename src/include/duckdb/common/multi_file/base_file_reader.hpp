@@ -76,6 +76,7 @@ public:
 
 	virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	}
+	virtual double GetProgressInFile(ClientContext &context) = 0;
 
 	virtual string GetReaderType() const = 0;
 

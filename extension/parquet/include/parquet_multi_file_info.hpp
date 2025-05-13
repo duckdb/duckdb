@@ -58,7 +58,6 @@ struct ParquetMultiFileInfo {
 	                          LocalTableFunctionState &local_state);
 	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
-	static double GetProgressInFile(ClientContext &context, const BaseFileReader &reader);
 	static void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 };
 

@@ -598,7 +598,7 @@ public:
 			double progress_in_file;
 			if (reader_data.file_state == MultiFileFileState::OPEN) {
 				// file is currently open - get the progress within the file
-				progress_in_file = OP::GetProgressInFile(context, *reader_data.reader);
+				progress_in_file = reader_data.reader->GetProgressInFile(context);
 			} else if (reader_data.file_state == MultiFileFileState::CLOSED) {
 				// file has been closed - check if the reader is still in use
 				auto reader = reader_data.closed_reader.lock();
@@ -607,7 +607,7 @@ public:
 					progress_in_file = 100.0;
 				} else {
 					// file is still being read
-					progress_in_file = OP::GetProgressInFile(context, *reader);
+					progress_in_file = reader->GetProgressInFile(context);
 				}
 			} else {
 				// file has not been opened yet - progress in this file is zero
