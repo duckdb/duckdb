@@ -1,0 +1,6 @@
+
+-- Test for read_json_auto function
+CREATE TABLE test_json AS 
+SELECT * FROM read_json_auto('test/data/json/sample.json');
+
+SELECT COUNT(*) FROM test_json;
