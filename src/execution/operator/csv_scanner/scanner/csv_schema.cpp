@@ -113,6 +113,14 @@ vector<LogicalType> CSVSchema::GetTypes() const {
 	return types;
 }
 
+void CSVSchema::ReplaceNullWithVarchar() {
+	for (auto& column: columns) {
+		if (column.type.id() == LogicalTypeId::SQLNULL) {
+			column.type = LogicalType::VARCHAR;
+		}
+	}
+}
+
 bool CSVSchema::Empty() const {
 	return columns.empty();
 }

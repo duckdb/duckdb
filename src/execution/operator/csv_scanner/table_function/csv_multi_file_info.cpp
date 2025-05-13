@@ -128,6 +128,9 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		}
 	}
 
+	// At this point, replace an sqlnull with varchar for the type
+	best_schema.ReplaceNullWithVarchar();
+
 	if (names.empty()) {
 		names = best_schema.GetNames();
 		return_types = best_schema.GetTypes();

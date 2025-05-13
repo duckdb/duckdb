@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_glob_type.test
+# description: Test globbing files with different types
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# query I
+# SELECT typeof(bar) FROM 'data/csv/17451/2.csv' limit 1
+# ----
+# VARCHAR
+
+query I
+SELECT typeof(bar) FROM 'data/csv/17451/*.csv' limit 1
+----
+DATE
