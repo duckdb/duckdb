@@ -140,13 +140,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				// or a materialized CTE present.
 				auto index = GenerateTableIndex();
 				auto materialized = cte.materialized;
-				//				if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
-				//#ifdef DUCKDB_ALTERNATIVE_VERIFY
-				//					materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-				//#else
-				//					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-				//#endif
-				//				}
 
 				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
 					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
