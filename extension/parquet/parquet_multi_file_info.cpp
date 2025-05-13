@@ -462,10 +462,8 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileB
 	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
 }
 
-unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &context, BaseFileReader &reader_p,
-                                                               const string &name) {
-	auto &reader = reader_p.Cast<ParquetReader>();
-	return reader.ReadStatistics(name);
+unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {
+	return ReadStatistics(name);
 }
 
 double ParquetReader::GetProgressInFile(ClientContext &context) {
@@ -531,8 +529,8 @@ unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(E
 	return make_uniq<ParquetReadLocalState>();
 }
 
-bool ParquetReader::TryInitializeScan(ClientContext &context,
-                                             GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                      LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
 	if (gstate.row_group_index >= NumRowGroups()) {
@@ -556,7 +554,7 @@ void ParquetMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunc
 }
 
 void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-								LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+                         LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	Scan(context, local_state.scan_state, chunk);
 }

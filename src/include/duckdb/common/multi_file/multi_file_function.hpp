@@ -356,7 +356,7 @@ public:
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
-				                          *scan_data.local_state)) {
+				                                                  *scan_data.local_state)) {
 					if (!current_reader_data.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
@@ -575,7 +575,7 @@ public:
 		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
-		return OP::GetStatistics(context, *bind_data.initial_reader, bind_data.names[column_index]);
+		return bind_data.initial_reader->GetStatistics(context, bind_data.names[column_index]);
 	}
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,

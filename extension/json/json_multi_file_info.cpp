@@ -455,8 +455,8 @@ void JSONReader::PrepareReader(ClientContext &context, GlobalTableFunctionState 
 	}
 }
 
-bool JSONReader::TryInitializeScan(ClientContext &context,
-                                          GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+bool JSONReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                   LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
 
@@ -535,7 +535,7 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 }
 
 void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                             LocalTableFunctionState &local_state, DataChunk &output) {
+                      LocalTableFunctionState &local_state, DataChunk &output) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();

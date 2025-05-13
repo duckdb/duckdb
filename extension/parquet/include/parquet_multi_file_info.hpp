@@ -52,12 +52,9 @@ struct ParquetMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
 	                                               ParquetOptions &options, const MultiFileOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
-	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                          LocalTableFunctionState &local_state);
 	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
-	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
 	static void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 };
 

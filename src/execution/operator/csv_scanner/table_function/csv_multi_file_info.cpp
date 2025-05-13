@@ -336,8 +336,8 @@ void CSVFileScan::PrepareReader(ClientContext &context, GlobalTableFunctionState
 	SetStart();
 }
 
-bool CSVFileScan::TryInitializeScan(ClientContext &context,
-                                         GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                    LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(shared_from_this());
@@ -351,7 +351,7 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context,
 }
 
 void CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                            LocalTableFunctionState &local_state, DataChunk &chunk) {
+                       LocalTableFunctionState &local_state, DataChunk &chunk) {
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.csv_reader->FinishedIterator()) {
 		return;
@@ -380,11 +380,6 @@ unique_ptr<NodeStatistics> CSVMultiFileInfo::GetCardinality(const MultiFileBindD
 		per_file_cardinality = csv_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
 	}
 	return make_uniq<NodeStatistics>(file_count * per_file_cardinality);
-}
-
-unique_ptr<BaseStatistics> CSVMultiFileInfo::GetStatistics(ClientContext &context, BaseFileReader &reader,
-                                                           const string &name) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
 }
 
 double CSVFileScan::GetProgressInFile(ClientContext &context) {
