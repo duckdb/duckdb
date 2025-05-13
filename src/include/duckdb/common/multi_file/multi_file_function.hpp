@@ -543,7 +543,7 @@ public:
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
-			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
+			data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,

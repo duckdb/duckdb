@@ -46,6 +46,18 @@ public:
 	void SetNamesAndTypes(const vector<string> &names, const vector<LogicalType> &types);
 
 public:
+	string GetReaderType() const override {
+		return "CSV";
+	}
+
+	bool UseCastMap() const override {
+		//! Whether or not to push casts into the cast map
+		return true;
+	}
+
+	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+public:
 	idx_t GetFileIndex() const {
 		return file_list_idx.GetIndex();
 	}
@@ -56,15 +68,6 @@ public:
 
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
-
-	string GetReaderType() const override {
-		return "CSV";
-	}
-
-	bool UseCastMap() const override {
-		//! Whether or not to push casts into the cast map
-		return true;
-	}
 
 public:
 	//! Buffer Manager for the CSV File

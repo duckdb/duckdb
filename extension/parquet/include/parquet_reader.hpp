@@ -149,6 +149,14 @@ public:
 	atomic<idx_t> rows_read;
 
 public:
+	string GetReaderType() const override {
+		return "Parquet";
+	}
+
+	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+
+public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 
@@ -171,10 +179,6 @@ public:
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
-
-	string GetReaderType() const override {
-		return "Parquet";
-	}
 
 	void AddVirtualColumn(column_t virtual_column_id) override;
 

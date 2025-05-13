@@ -351,7 +351,7 @@ bool CSVMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<Base
 	return true;
 }
 
-void CSVMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
+void CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                             LocalTableFunctionState &local_state, DataChunk &chunk) {
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.csv_reader->FinishedIterator()) {

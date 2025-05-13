@@ -50,8 +50,6 @@ struct CSVMultiFileInfo {
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
 	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
-	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
-	                 LocalTableFunctionState &local_state, DataChunk &chunk);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader);
 	static void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                          LocalTableFunctionState &local_state);

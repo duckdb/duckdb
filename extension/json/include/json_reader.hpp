@@ -201,6 +201,13 @@ public:
 	JSONFileHandle &GetFileHandle() const;
 
 public:
+	string GetReaderType() const override {
+		return "JSON";
+	}
+
+	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+public:
 	//! Get a new buffer index (must hold the lock)
 	idx_t GetBufferIndex();
 	//! Set line count for a buffer that is done (grabs the lock)
@@ -226,10 +233,6 @@ public:
 	double GetProgress() const;
 
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
-
-	string GetReaderType() const override {
-		return "JSON";
-	}
 
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);

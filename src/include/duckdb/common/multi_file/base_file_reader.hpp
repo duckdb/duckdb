@@ -55,7 +55,6 @@ public:
 	const string &GetFileName() {
 		return file.path;
 	}
-	virtual string GetReaderType() const = 0;
 	virtual bool UseCastMap() const {
 		//! Whether or not to push casts into the cast map
 		return false;
@@ -64,6 +63,12 @@ public:
 	virtual void AddVirtualColumn(column_t virtual_column_id) {
 		throw InternalException("Reader %s does not support AddVirtualColumn", GetReaderType());
 	}
+
+public:
+	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+			 LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
+
+	virtual string GetReaderType() const = 0;
 
 public:
 	template <class TARGET>

@@ -561,11 +561,10 @@ void ParquetMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunc
                                          LocalTableFunctionState &local_state) {
 }
 
-void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p, GlobalTableFunctionState &gstate_p,
-                                LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+								LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
-	auto &reader = reader_p.Cast<ParquetReader>();
-	reader.Scan(context, local_state.scan_state, chunk);
+	Scan(context, local_state.scan_state, chunk);
 }
 
 } // namespace duckdb
