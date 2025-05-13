@@ -386,7 +386,7 @@ index 80b28d6..4566617 100644
  	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
  	if (secret_manager && transaction) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 13ac1d2..fe60d0b 100644
+index 13ac1d2..7edcaba 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -19,27 +19,22 @@
@@ -1022,7 +1022,7 @@ index 13ac1d2..fe60d0b 100644
  			if (!flags.CreateFileIfNotExists() && !flags.OverwriteExistingFile()) {
  				throw IOException("Unable to open URL \"" + path +
  				                  "\" for writing: file does not exist and CREATE flag is not set");
-@@ -776,92 +567,113 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -776,92 +567,105 @@ void HTTPFileHandle::LoadFileInfo() {
  			return;
  		} else {
  			// HEAD request fail, use Range request for another try (read only one byte)
@@ -1033,14 +1033,14 @@ index 13ac1d2..fe60d0b 100644
 -					throw IOException("Unable to connect to URL \"%s\": %d (%s).", path, res->code, res->error);
 +				if (range_res->status != HTTPStatusCode::PartialContent_206 && range_res->status != HTTPStatusCode::Accepted_202 && range_res->status != HTTPStatusCode::OK_200) {
 +					throw IOException("Unable to connect to URL \"%s\": %d (%s).", path, static_cast<int>(res->status), res->GetError());
++				}
++				string content_range;
++				if (range_res->headers.HasHeader("Content-Range")) {
++					content_range = range_res->headers.GetHeaderValue("Content-Range");
  				}
 -				auto range_find = range_res->headers["Content-Range"].find("/");
 -				if (!(range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1)) {
 -					range_length = range_res->headers["Content-Range"].substr(range_find + 1);
-+				string content_range;
-+				if (range_res->headers.HasHeader("Content-Range")) {
-+					content_range = range_res->headers.GetHeaderValue("Content-Range");
-+				}
 +				auto range_find = content_range.find("/");
 +				if (!(range_find == std::string::npos || content_range.size() < range_find + 1)) {
 +					range_length = content_range.substr(range_find + 1);
@@ -1060,22 +1060,14 @@ index 13ac1d2..fe60d0b 100644
 -	if (!res->headers["Last-Modified"].empty()) {
 -		HTTPFileSystem::TryParseLastModifiedTime(res->headers["Last-Modified"], last_modified);
 +	string content_length;
-+	string content_range;
 +	if (res->headers.HasHeader("Content-Length")) {
 +		content_length = res->headers.GetHeaderValue("Content-Length");
  	}
 -	if (!res->headers["Etag"].empty()) {
 -		etag = res->headers["Etag"];
-+	if (res->headers.HasHeader("Content-Range")) {
-+		content_range = res->headers.GetHeaderValue("Content-Range");
-+	}
 +	length = 0;
 +	try {
-+        if (!content_range.empty()) {
-+            length = std::stoull(content_range);
-+        } else if (!content_length.empty()) {
-+            length = std::stoull(content_length);
-+        }
++        length = std::stoull(content_length);
 +    } catch (std::invalid_argument &e) {
 +        throw IOException("Invalid Content-Length header received: %s", content_length);
 +    } catch (std::out_of_range &e) {
@@ -1194,7 +1186,7 @@ index 13ac1d2..fe60d0b 100644
  	// Try to fetch a cached client
  	auto cached_client = client_cache.GetClient();
  	if (cached_client) {
-@@ -869,35 +681,19 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::GetClient(optional_pt
+@@ -869,35 +673,19 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::GetClient(optional_pt
  	}
  
  	// Create a new client

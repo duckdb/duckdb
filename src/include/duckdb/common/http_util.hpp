@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -134,7 +134,7 @@ public:
 enum class RequestType : uint8_t { GET_REQUEST, PUT_REQUEST, HEAD_REQUEST, DELETE_REQUEST, POST_REQUEST };
 
 struct HTTPHeaders {
-	using header_map_t = std::unordered_map<string, string>;
+	using header_map_t = case_insensitive_map_t<string>;
 
 public:
 	HTTPHeaders() = default;
