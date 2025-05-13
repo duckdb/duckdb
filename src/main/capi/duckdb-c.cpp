@@ -1,5 +1,6 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 
+using duckdb::CClientContextWrapper;
 using duckdb::Connection;
 using duckdb::DatabaseWrapper;
 using duckdb::DBConfig;
@@ -138,6 +139,28 @@ void duckdb_disconnect(duckdb_connection *connection) {
 		Connection *conn = reinterpret_cast<Connection *>(*connection);
 		delete conn;
 		*connection = nullptr;
+	}
+}
+
+void duckdb_connection_get_client_context(duckdb_connection connection, duckdb_client_context *out_context) {
+	if (!connection || !out_context) {
+		return;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	auto wrapper = new CClientContextWrapper(*conn->context);
+	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
+}
+
+idx_t duckdb_client_context_get_connection_id(duckdb_client_context context) {
+	auto wrapper = reinterpret_cast<CClientContextWrapper *>(context);
+	return wrapper->context.GetConnectionId();
+}
+
+void duckdb_destroy_client_context(duckdb_client_context *context) {
+	if (context && *context) {
+		auto wrapper = reinterpret_cast<CClientContextWrapper *>(*context);
+		delete wrapper;
+		*context = nullptr;
 	}
 }
 

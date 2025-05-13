@@ -1032,19 +1032,20 @@ const StringUtil::EnumStringLiteral *GetDataFileTypeValues() {
 		{ static_cast<uint32_t>(DataFileType::FILE_DOES_NOT_EXIST), "FILE_DOES_NOT_EXIST" },
 		{ static_cast<uint32_t>(DataFileType::DUCKDB_FILE), "DUCKDB_FILE" },
 		{ static_cast<uint32_t>(DataFileType::SQLITE_FILE), "SQLITE_FILE" },
-		{ static_cast<uint32_t>(DataFileType::PARQUET_FILE), "PARQUET_FILE" }
+		{ static_cast<uint32_t>(DataFileType::PARQUET_FILE), "PARQUET_FILE" },
+		{ static_cast<uint32_t>(DataFileType::UNKNOWN_FILE), "UNKNOWN_FILE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value) {
-	return StringUtil::EnumToString(GetDataFileTypeValues(), 4, "DataFileType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDataFileTypeValues(), 5, "DataFileType", static_cast<uint32_t>(value));
 }
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value) {
-	return static_cast<DataFileType>(StringUtil::StringToEnum(GetDataFileTypeValues(), 4, "DataFileType", value));
+	return static_cast<DataFileType>(StringUtil::StringToEnum(GetDataFileTypeValues(), 5, "DataFileType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDateCastResultValues() {
