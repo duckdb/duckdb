@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-unique_ptr<MultiFileReaderInterface> CSVMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface>
+CSVMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
 	return make_uniq<CSVMultiFileInfo>();
 }
 
@@ -229,9 +230,6 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 	csv_data.Finalize();
 }
 
-void CSVMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
-}
-
 optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
                                           FileExpandResult expand_result) {
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
@@ -400,9 +398,6 @@ double CSVFileScan::GetProgressInFile(ClientContext &context) {
 	}
 	double file_progress = total_bytes_read / static_cast<double>(file_size);
 	return file_progress * 100.0;
-}
-
-void CSVMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 }
 
 } // namespace duckdb

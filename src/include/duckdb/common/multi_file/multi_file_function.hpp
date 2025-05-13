@@ -18,10 +18,40 @@
 namespace duckdb {
 
 struct MultiFileReaderInterface {
-	virtual ~MultiFileReaderInterface() = default;
+	virtual ~MultiFileReaderInterface();
 
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
-								   optional_ptr<TableFunctionInfo> info) = 0;
+	                                                            optional_ptr<TableFunctionInfo> info) = 0;
+	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+	                             BaseFileReaderOptions &options, vector<string> &expected_names,
+	                             vector<LogicalType> &expected_types) = 0;
+	virtual bool ParseOption(ClientContext &context, const string &key, const Value &val,
+	                         MultiFileOptions &file_options, BaseFileReaderOptions &options) = 0;
+	virtual void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
+	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
+	virtual unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
+	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
+	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	                        MultiFileBindData &bind_data) = 0;
+	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
+	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
+	virtual optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
+	                                FileExpandResult expand_result);
+	virtual unique_ptr<GlobalTableFunctionState>
+	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
+	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &,
+	                                                                 GlobalTableFunctionState &) = 0;
+	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                                BaseUnionData &union_data,
+	                                                const MultiFileBindData &bind_data_p) = 0;
+	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                                const OpenFileInfo &file, idx_t file_idx,
+	                                                const MultiFileBindData &bind_data) = 0;
+	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+	                           LocalTableFunctionState &local_state);
+	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
+	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
+	virtual unique_ptr<MultiFileReaderInterface> Copy();
 };
 
 template <class OP>
@@ -47,17 +77,22 @@ public:
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
 	                                                      vector<LogicalType> &return_types, vector<string> &names,
 	                                                      MultiFileOptions file_options_p,
-	                                                      unique_ptr<BaseFileReaderOptions> options_p) {
+	                                                      unique_ptr<BaseFileReaderOptions> options_p,
+	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
+		auto &interface = *interface_p;
+
 		auto result = make_uniq<MultiFileBindData>();
 		result->multi_file_reader = std::move(multi_file_reader_p);
 		result->file_list = std::move(multi_file_list_p);
 		// auto-detect hive partitioning
 		result->file_options = std::move(file_options_p);
-		result->bind_data = OP::InitializeBindData(*result, std::move(options_p));
+		result->bind_data = interface.InitializeBindData(*result, std::move(options_p));
+		result->interface = std::move(interface_p);
+
 		// now bind the readers
 		// there are two ways of binding the readers
 		// (1) MultiFileReader::Bind -> custom bind, used only for certain lakehouse extensions
-		// (2) OP::BindReader
+		// (2) Interface::BindReader
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
@@ -66,9 +101,9 @@ public:
 			bound_on_first_file = false;
 		} else {
 			result->file_options.AutoDetectHivePartitioning(*result->file_list, context);
-			OP::BindReader(context, result->types, result->names, *result);
+			interface.BindReader(context, result->types, result->names, *result);
 		}
-		OP::FinalizeBindData(*result);
+		interface.FinalizeBindData(*result);
 
 		if (return_types.empty()) {
 			// no expected types - just copy the types
@@ -134,13 +169,13 @@ public:
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}
-			if (OP::ParseOption(context, kv.first, kv.second, file_options, *options)) {
+			if (interface->ParseOption(context, kv.first, kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);
 		}
 		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), return_types, names,
-		                             std::move(file_options), std::move(options));
+		                             std::move(file_options), std::move(options), std::move(interface));
 	}
 
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
@@ -157,15 +192,15 @@ public:
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (OP::ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
+			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
 			}
 			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
 		}
-		OP::FinalizeCopyBind(context, *options, expected_names, expected_types);
+		interface->FinalizeCopyBind(context, *options, expected_names, expected_types);
 
 		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
-		                             expected_names, std::move(file_options), std::move(options));
+		                             expected_names, std::move(file_options), std::move(options), std::move(interface));
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
@@ -246,12 +281,12 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						current_reader_data.reader =
-						    OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
+						current_reader_data.reader = bind_data.interface->CreateReader(
+						    context, *global_state.global_state, union_data, bind_data);
 					} else {
-						current_reader_data.reader =
-						    OP::CreateReader(context, *global_state.global_state, current_reader_data.file_to_be_opened,
-						                     current_file_index, bind_data);
+						current_reader_data.reader = bind_data.interface->CreateReader(
+						    context, *global_state.global_state, current_reader_data.file_to_be_opened,
+						    current_file_index, bind_data);
 					}
 					auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
 					                                    global_state.filters, context, current_file_index,
@@ -360,7 +395,7 @@ public:
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
-				OP::FinishReading(context, *gstate.global_state, *scan_data.local_state);
+				bind_data.interface->FinishReading(context, *gstate.global_state, *scan_data.local_state);
 				return false;
 			}
 
@@ -418,7 +453,7 @@ public:
 		auto result = make_uniq<MultiFileLocalState>(context.client);
 		result->is_parallel = true;
 		result->batch_index = 0;
-		result->local_state = OP::InitializeLocalState(context, *gstate.global_state);
+		result->local_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 
 		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 			return nullptr;
@@ -464,7 +499,7 @@ public:
 		result->file_index = 0;
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
-		result->global_state = OP::InitializeGlobalState(context, bind_data, *result);
+		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
 		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
@@ -492,7 +527,7 @@ public:
 		}
 
 		auto expand_result = bind_data.file_list->GetExpandResult();
-		auto max_threads = OP::MaxThreads(bind_data, *result, expand_result);
+		auto max_threads = bind_data.interface->MaxThreads(bind_data, *result, expand_result);
 		if (max_threads.IsValid()) {
 			result->max_threads = MinValue<idx_t>(result->max_threads, max_threads.GetIndex());
 		}
@@ -641,7 +676,7 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
-		return OP::GetCardinality(data, data.file_list->GetTotalFileCount());
+		return data.interface->GetCardinality(data, data.file_list->GetTotalFileCount());
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
@@ -669,7 +704,7 @@ public:
 
 		// LCOV_EXCL_START
 		bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
-		OP::GetBindInfo(*bind_data.bind_data, bind_info);
+		bind_data.interface->GetBindInfo(*bind_data.bind_data, bind_info);
 		bind_data.file_options.AddBatchInfo(bind_info);
 		// LCOV_EXCL_STOP
 		return bind_info;
@@ -686,7 +721,7 @@ public:
 		virtual_column_map_t result;
 		MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
 
-		OP::GetVirtualColumns(context, bind_data, result);
+		bind_data.interface->GetVirtualColumns(context, bind_data, result);
 
 		bind_data.virtual_columns = result;
 		return result;

@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -46,6 +47,9 @@ unique_ptr<MultiFileReader> MultiFileReader::Copy() const {
 	return CreateDefault(function_name);
 }
 
+MultiFileBindData::~MultiFileBindData() {
+}
+
 unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	auto result = make_uniq<MultiFileBindData>();
 	if (bind_data) {
@@ -53,6 +57,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	}
 	result->file_list = make_uniq<SimpleMultiFileList>(file_list->GetAllFiles());
 	result->multi_file_reader = multi_file_reader->Copy();
+	result->interface = interface->Copy();
 	result->columns = columns;
 	result->reader_bind = reader_bind;
 	result->file_options = file_options;

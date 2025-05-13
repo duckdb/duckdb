@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-unique_ptr<MultiFileReaderInterface> JSONMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface>
+JSONMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
 	return make_uniq<JSONMultiFileInfo>();
 }
 
@@ -356,9 +357,6 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	}
 }
 
-void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
-}
-
 void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
                                          const vector<string> &expected_names,
                                          const vector<LogicalType> &expected_types) {
@@ -444,11 +442,6 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, file.path);
 	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 	return std::move(reader);
-}
-shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
-                                                           JSONReaderOptions &options,
-                                                           const MultiFileOptions &file_options) {
-	throw InternalException("Create reader from file not implemented");
 }
 
 void JSONReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate_p) {
@@ -566,9 +559,6 @@ void JSONMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctio
 	lstate.GetScanState().ResetForNextBuffer();
 }
 
-void JSONMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
-}
-
 unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	idx_t per_file_cardinality = 42;
@@ -577,10 +567,6 @@ unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBind
 		per_file_cardinality = json_data.estimated_cardinality_per_file.GetIndex();
 	}
 	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
-}
-
-void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
-                                          virtual_column_map_t &result) {
 }
 
 optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,

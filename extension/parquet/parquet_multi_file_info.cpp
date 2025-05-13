@@ -119,7 +119,8 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	D_ASSERT(names.size() == return_types.size());
 }
 
-unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface>
+ParquetMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
 	return make_uniq<ParquetMultiFileInfo>();
 }
 
@@ -235,9 +236,10 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
 	                                                   FileGlobOptions::DISALLOW_EMPTY);
 	auto parquet_options = make_uniq<ParquetFileReaderOptions>(std::move(serialization.parquet_options));
+	auto interface = make_uniq<ParquetMultiFileInfo>();
 	auto bind_data = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindInternal(
 	    context, std::move(multi_file_reader), std::move(file_list), types, names,
-	    std::move(serialization.file_options), std::move(parquet_options));
+	    std::move(serialization.file_options), std::move(parquet_options), std::move(interface));
 	bind_data->Cast<MultiFileBindData>().table_columns = std::move(table_columns);
 	return bind_data;
 }
@@ -356,11 +358,6 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		return true;
 	}
 	return false;
-}
-
-void ParquetMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
-                                            const vector<string> &expected_names,
-                                            const vector<LogicalType> &expected_types) {
 }
 
 bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &original_key, const Value &val,
@@ -546,14 +543,14 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 	gstate.row_group_index = 0;
 }
 
-void ParquetMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
-                                         LocalTableFunctionState &local_state) {
-}
-
 void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                          LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	Scan(context, local_state.scan_state, chunk);
+}
+
+unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {
+	return make_uniq<ParquetMultiFileInfo>();
 }
 
 } // namespace duckdb
