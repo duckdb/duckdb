@@ -339,7 +339,7 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	D_ASSERT(task == SortedRunMergerTask::COMPUTE_BOUNDARIES);
 
 	// Copy over the run boundaries from the assigned partition (under lock)
-	auto &current_partition = *gstate.partitions[partition_idx.GetIndex()];
+	auto &current_partition = *gstate.partitions[p_idx.GetIndex()];
 	auto current_partition_guard = current_partition.Lock();
 	run_boundaries = current_partition.GetRunBoundaries(current_partition_guard);
 	current_partition_guard.unlock();
@@ -364,13 +364,15 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	if (p_idx.GetIndex() != gstate.num_partitions - 1) {
 		auto &next_partition = *gstate.partitions[p_idx.GetIndex() + 1];
 		auto next_partition_guard = next_partition.Lock();
-		auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(next_partition_guard);
-		for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
-			const auto &computed_boundary = run_boundaries[run_idx];
-			D_ASSERT(computed_boundary.begin == computed_boundary.end);
-			next_partition_run_boundaries[run_idx].begin = computed_boundary.begin;
+		if (!next_partition.GetBeginComputed(next_partition_guard)) {
+			auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(next_partition_guard);
+			for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
+				const auto &computed_boundary = run_boundaries[run_idx];
+				D_ASSERT(computed_boundary.begin == computed_boundary.end);
+				next_partition_run_boundaries[run_idx].begin = computed_boundary.begin;
+			}
+			next_partition.SetBeginComputed(next_partition_guard);
 		}
-		next_partition.SetBeginComputed(next_partition_guard);
 	}
 
 	// Set the computed end partition boundaries of the current partition
@@ -514,7 +516,7 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	}
 	guard.unlock();
 
-	// Begin has not yet been computed by another thread, just let this thread do it
+	// Begin has not yet been computed by another thread, let this thread do it
 	task = SortedRunMergerTask::COMPUTE_BOUNDARIES;
 	ComputePartitionBoundaries(gstate, partition_idx.GetIndex() - 1);
 	task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
