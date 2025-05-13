@@ -23,9 +23,11 @@ public:
 	ParquetOptions options;
 };
 
-struct ParquetMultiFileInfo {
-	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
-	                                                           optional_ptr<TableFunctionInfo> info);
+struct ParquetMultiFileInfo : public MultiFileReaderInterface {
+	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
+
+	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
+	                                                           optional_ptr<TableFunctionInfo> info) override;
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            BaseFileReaderOptions &options, vector<string> &expected_names,
 	                            vector<LogicalType> &expected_types);

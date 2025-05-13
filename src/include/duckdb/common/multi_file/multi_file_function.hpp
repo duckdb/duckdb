@@ -17,6 +17,13 @@
 
 namespace duckdb {
 
+struct MultiFileReaderInterface {
+	virtual ~MultiFileReaderInterface() = default;
+
+	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
+								   optional_ptr<TableFunctionInfo> info) = 0;
+};
+
 template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
@@ -116,9 +123,12 @@ public:
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+
+		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+
 		MultiFileOptions file_options;
 
-		auto options = OP::InitializeOptions(context, input.info);
+		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
@@ -136,7 +146,13 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
-		auto options = OP::InitializeOptions(context, nullptr);
+		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
+		vector<string> paths = {info.file_path};
+		auto file_list = multi_file_reader->CreateFileList(context, paths);
+
+		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+
+		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
 
 		for (auto &option : info.options) {
@@ -147,11 +163,6 @@ public:
 			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
 		}
 		OP::FinalizeCopyBind(context, *options, expected_names, expected_types);
-
-		// TODO: Allow overriding the MultiFileReader for COPY FROM?
-		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
-		vector<string> paths = {info.file_path};
-		auto file_list = multi_file_reader->CreateFileList(context, paths);
 
 		return MultiFileBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
 		                             expected_names, std::move(file_options), std::move(options));

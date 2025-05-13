@@ -119,6 +119,10 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	D_ASSERT(names.size() == return_types.size());
 }
 
+unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+	return make_uniq<ParquetMultiFileInfo>();
+}
+
 void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
                                       MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();

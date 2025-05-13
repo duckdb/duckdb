@@ -8,6 +8,10 @@
 
 namespace duckdb {
 
+unique_ptr<MultiFileReaderInterface> CSVMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+	return make_uniq<CSVMultiFileInfo>();
+}
+
 unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientContext &context,
                                                                       optional_ptr<TableFunctionInfo> info) {
 	return make_uniq<CSVFileReaderOptions>();

@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+unique_ptr<MultiFileReaderInterface> JSONMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+	return make_uniq<JSONMultiFileInfo>();
+}
+
 unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context,
                                                                        optional_ptr<TableFunctionInfo> info) {
 	auto reader_options = make_uniq<JSONFileReaderOptions>();
