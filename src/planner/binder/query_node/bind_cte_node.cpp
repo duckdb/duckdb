@@ -24,6 +24,7 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	D_ASSERT(statement.query);
 
 	result->ctename = statement.ctename;
+	result->materialized = statement.materialized;
 	result->setop_index = GenerateTableIndex();
 
 	result->query_binder = Binder::CreateBinder(context, this);
