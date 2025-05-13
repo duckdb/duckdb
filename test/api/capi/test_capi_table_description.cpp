@@ -78,3 +78,29 @@ TEST_CASE("Test the table description in the C API", "[capi]") {
 	}
 	duckdb_table_description_destroy(&table_description);
 }
+
+TEST_CASE("Test getting the table names of a query in the C API", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE SCHEMA schema1");
+	tester.Query("CREATE SCHEMA \"schema.2\"");
+	tester.Query("CREATE TABLE schema1.\"table.1\"(i INT)");
+	tester.Query("CREATE TABLE \"schema.2\".\"table.2\"(i INT)");
+
+	string query = "SELECT * FROM schema1.\"table.1\", \"schema.2\".\"table.2\"";
+	auto table_names_value = duckdb_get_table_names(tester.connection, query.c_str(), true);
+
+	duckdb::vector<string> expected_names = {"schema1.\"table.1\"", "\"schema.2\".\"table.2\""};
+	auto size = duckdb_get_list_size(table_names_value);
+	REQUIRE(size == 2);
+	for (idx_t i = 0; i < size; i++) {
+		auto name_value = duckdb_get_list_child(table_names_value, i);
+		auto name = duckdb_get_varchar(name_value);
+		REQUIRE(StringUtil::Equals(name, expected_names[i].c_str()));
+		duckdb_free(name);
+		duckdb_destroy_value(&name_value);
+	}
+
+	duckdb_destroy_value(&table_names_value);
+}

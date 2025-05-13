@@ -173,3 +173,29 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 const char *duckdb_library_version() {
 	return DuckDB::LibraryVersion();
 }
+
+duckdb_value duckdb_get_table_names(duckdb_connection connection, const char *query, bool qualified) {
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	auto table_names = conn->GetTableNames(query, qualified);
+
+	auto count = table_names.size();
+	auto ptr = malloc(count * sizeof(duckdb_value));
+	auto list_values = reinterpret_cast<duckdb_value *>(ptr);
+
+	idx_t name_ix = 0;
+	for (const auto &name : table_names) {
+		list_values[name_ix] = duckdb_create_varchar(name.c_str());
+		name_ix++;
+	}
+
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto list_value = duckdb_create_list_value(varchar_type, list_values, count);
+
+	for (idx_t i = 0; i < count; i++) {
+		duckdb_destroy_value(&list_values[i]);
+	}
+	duckdb_free(ptr);
+	duckdb_destroy_logical_type(&varchar_type);
+
+	return list_value;
+}

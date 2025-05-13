@@ -1243,7 +1243,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	RunFunctionInTransaction([&]() { InternalTryBindRelation(relation, result_columns); });
 }
 
-unordered_set<string> ClientContext::GetTableNames(const string &query) {
+unordered_set<string> ClientContext::GetTableNames(const string &query, const bool qualified) {
 	auto lock = LockContext();
 
 	auto statements = ParseStatementsInternal(*lock, query);
@@ -1255,7 +1255,8 @@ unordered_set<string> ClientContext::GetTableNames(const string &query) {
 	RunFunctionInTransactionInternal(*lock, [&]() {
 		// bind the expressions
 		auto binder = Binder::CreateBinder(*this);
-		binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
+		auto mode = qualified ? BindingMode::EXTRACT_QUALIFIED_NAMES : BindingMode::EXTRACT_NAMES;
+		binder->SetBindingMode(mode);
 		binder->Bind(*statements[0]);
 		result = binder->GetTableNames();
 	});
