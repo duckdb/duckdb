@@ -181,7 +181,7 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 		CSVFileReaderOptions csv_options(options);
 		bind_data.reader_bind =
 		    bind_data.multi_file_reader->BindUnionReader(context, return_types, names, multi_file_list, bind_data,
-		                                                 csv_options, bind_data.file_options, *bind_data.interface);
+		                                                 csv_options, bind_data.file_options);
 		if (bind_data.union_readers.size() > 1) {
 			for (idx_t i = 0; i < bind_data.union_readers.size(); i++) {
 				auto &csv_union_data = bind_data.union_readers[i]->Cast<CSVUnionData>();

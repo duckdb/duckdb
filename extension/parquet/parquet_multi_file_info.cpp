@@ -140,7 +140,7 @@ void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType
 	} else {
 		bind_data.reader_bind =
 		    bind_data.multi_file_reader->BindReader(context, return_types, names, *bind_data.file_list, bind_data,
-		                                            *parquet_bind.options, bind_data.file_options, *this);
+		                                            *parquet_bind.options, bind_data.file_options);
 	}
 }
 

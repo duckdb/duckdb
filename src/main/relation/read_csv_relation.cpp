@@ -54,7 +54,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		result->interface = make_uniq<CSVMultiFileInfo>();
 
 		multi_file_reader->BindUnionReader(*context, types, names, multi_file_list, *result, csv_file_options,
-		                                   file_options, *result->interface);
+		                                   file_options);
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {

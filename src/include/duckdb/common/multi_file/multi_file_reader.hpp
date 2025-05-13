@@ -131,12 +131,11 @@ public:
 
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<string> &names, MultiFileList &files, MultiFileBindData &result,
-	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options,
-	                                        MultiFileReaderInterface &interface);
+	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
 	                                   MultiFileList &files, MultiFileBindData &result, BaseFileReaderOptions &options,
-	                                   MultiFileOptions &file_options, MultiFileReaderInterface &interface);
+	                                   MultiFileOptions &file_options);
 
 	DUCKDB_API virtual ReaderInitializeType
 	InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,

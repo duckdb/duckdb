@@ -17,4 +17,8 @@ void BaseFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionSt
 void BaseFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
 }
 
+double BaseFileReader::GetProgressInFile(ClientContext &context) {
+	return 0;
+}
+
 } // namespace duckdb

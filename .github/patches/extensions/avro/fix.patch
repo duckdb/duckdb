@@ -1,0 +1,260 @@
+diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
+index b8b358c..3f63e95 100644
+--- a/src/avro_multi_file_info.cpp
++++ b/src/avro_multi_file_info.cpp
+@@ -21,11 +21,6 @@ bool AvroMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
+ 	return false;
+ }
+ 
+-void AvroMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
+-                                         const vector<string> &expected_names,
+-                                         const vector<LogicalType> &expected_types) {
+-}
+-
+ struct AvroMultiFileData final : public TableFunctionData {
+ public:
+ 	AvroMultiFileData() = default;
+@@ -42,16 +37,10 @@ void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
+ 	if (bind_data.file_options.union_by_name) {
+ 		throw NotImplementedException("'union_by_name' not implemented for Avro reader yet");
+ 	}
+-	bind_data.reader_bind = bind_data.multi_file_reader->BindReader<AvroMultiFileInfo>( context, return_types, names, *bind_data.file_list, bind_data, options, bind_data.file_options);
++	bind_data.reader_bind = bind_data.multi_file_reader->BindReader( context, return_types, names, *bind_data.file_list, bind_data, options, bind_data.file_options);
+ 	D_ASSERT(names.size() == return_types.size());
+ }
+ 
+-void AvroMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
+-}
+-
+-void AvroMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
+-}
+-
+ optional_idx AvroMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
+                                            const MultiFileGlobalState &global_state, FileExpandResult expand_result) {
+ 	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
+@@ -106,47 +95,29 @@ shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &contex
+ }
+ 
+ shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
+-                                                           AvroFileReaderOptions &options,
++                                                           BaseFileReaderOptions &options,
+                                                            const MultiFileOptions &file_options) {
+ 	return make_shared_ptr<AvroReader>(context, file.path);
+ }
+ 
+-shared_ptr<BaseUnionData> AvroMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
+-	throw NotImplementedException("'union_by_name' is not implemented");
+-}
+-
+-void AvroMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
+-}
+-
+-bool AvroMultiFileInfo::TryInitializeScan(ClientContext &context, const shared_ptr<BaseFileReader> &reader_p,
++bool AvroReader::TryInitializeScan(ClientContext &context,
+                                           GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+ 	auto &gstate = gstate_p.Cast<AvroFileGlobalState>();
+ 	auto &lstate = lstate_p.Cast<AvroFileLocalState>();
+-	auto &reader = reader_p->Cast<AvroReader>();
+-	if (gstate.files.count(reader.file_list_idx.GetIndex())) {
++	if (gstate.files.count(file_list_idx.GetIndex())) {
+ 		// Return false because we don't currently support more than one thread
+ 		// scanning a file.
+ 		return false;
+ 	}
+-	gstate.files.insert(reader.file_list_idx.GetIndex());
+-	lstate.file_scan = shared_ptr_cast<BaseFileReader, AvroReader>(reader_p);
++	gstate.files.insert(file_list_idx.GetIndex());
++	throw InternalException("FIXME: CAST");
++//	lstate.file_scan = shared_ptr_cast<BaseFileReader, AvroReader>(shared_from_this());
+ 	return true;
+ }
+ 
+-void AvroMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p, GlobalTableFunctionState &global_state,
++void AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                              LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+-	auto &reader = reader_p.Cast<AvroReader>();
+-	reader.Read(chunk);
+-}
+-
+-void AvroMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state,
+-                                   BaseFileReader &reader) {
+-	//! FIXME: this is where the state of the current file being read would be reset
+-	//! once we support parallelizing over a single file.
+-}
+-
+-void AvroMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+-                                      LocalTableFunctionState &local_state) {
++	Read(chunk);
+ }
+ 
+ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
+@@ -154,17 +125,4 @@ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBind
+ 	return make_uniq<NodeStatistics>();
+ }
+ 
+-unique_ptr<BaseStatistics> AvroMultiFileInfo::GetStatistics(ClientContext &context, BaseFileReader &reader,
+-                                                            const string &name) {
+-	return nullptr;
+-}
+-
+-double AvroMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
+-	//! TODO: interrogate the avro reader to figure out the progress of the memory reader
+-	return 0;
+-}
+-
+-void AvroMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
+-}
+-
+ } // namespace duckdb
+diff --git a/src/include/avro_multi_file_info.hpp b/src/include/avro_multi_file_info.hpp
+index 4ae1d21..2abf87e 100644
+--- a/src/include/avro_multi_file_info.hpp
++++ b/src/include/avro_multi_file_info.hpp
+@@ -15,74 +15,48 @@ namespace duckdb {
+ //! We might have avro specific options one day
+ class AvroFileReaderOptions : public BaseFileReaderOptions {};
+ 
+-struct AvroMultiFileInfo {
+-	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
+-	                                                           optional_ptr<TableFunctionInfo> info);
++struct AvroMultiFileInfo : MultiFileReaderInterface {
++	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
++																	MultiFileList &file_list);
+ 
+-	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
++	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
++	                                                           optional_ptr<TableFunctionInfo> info) override;
++	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+ 	                            BaseFileReaderOptions &options, vector<string> &expected_names,
+-	                            vector<LogicalType> &expected_types);
++	                            vector<LogicalType> &expected_types) override;
+ 
+-	static bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
+-	                        BaseFileReaderOptions &options);
++	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
++	                        BaseFileReaderOptions &options) override;
+ 
+-	static void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
+-	                             const vector<string> &expected_names, const vector<LogicalType> &expected_types);
+-
+-	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
+-	                                                        unique_ptr<BaseFileReaderOptions> options);
++	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
++	                                                        unique_ptr<BaseFileReaderOptions> options) override;
+ 
+ 	//! This is where the actual binding must happen, so in this function we either:
+ 	//! 1. union_by_name = False. We set the schema/name depending on the first file
+ 	//! 2. union_by_name = True.
+-	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+-	                       MultiFileBindData &bind_data);
+-
+-	static void FinalizeBindData(MultiFileBindData &multi_file_data);
+-
+-	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
++	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
++	                       MultiFileBindData &bind_data) override;
+ 
+-	static optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
+-	                               FileExpandResult expand_result);
++	optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
++	                               FileExpandResult expand_result) override;
+ 
+-	static unique_ptr<GlobalTableFunctionState>
+-	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
++	unique_ptr<GlobalTableFunctionState>
++	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) override;
+ 
+-	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context,
+-	                                                                GlobalTableFunctionState &function_state);
++	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context,
++	                                                                GlobalTableFunctionState &function_state) override;
+ 
+-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+-	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
++	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
++	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
+ 
+-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
++	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+ 	                                               const OpenFileInfo &file, idx_t file_idx,
+-	                                               const MultiFileBindData &bind_data);
+-
+-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
+-	                                               AvroFileReaderOptions &options, const MultiFileOptions &file_options);
+-
+-	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
+-
+-	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
+-
+-	static bool TryInitializeScan(ClientContext &context, const shared_ptr<BaseFileReader> &reader,
+-	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
+-
+-	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
+-	                 LocalTableFunctionState &local_state, DataChunk &chunk);
+-
+-	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader);
+-
+-	static void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+-	                          LocalTableFunctionState &local_state);
+-
+-	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
+-
+-	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
++	                                               const MultiFileBindData &bind_data) override;
+ 
+-	static double GetProgressInFile(ClientContext &context, const BaseFileReader &reader);
++	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
++	                                        BaseFileReaderOptions &options, const MultiFileOptions &file_options) override;
+ 
+-	static void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
++	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/include/avro_reader.hpp b/src/include/avro_reader.hpp
+index 5d731c4..dd347f6 100644
+--- a/src/include/avro_reader.hpp
++++ b/src/include/avro_reader.hpp
+@@ -6,29 +6,7 @@
+ 
+ namespace duckdb {
+ 
+-struct AvroReader;
+-
+-// this is just a dummy to make the multi file reader compile
+-struct AvroUnionData {
+-public:
+-	AvroUnionData() {
+-		throw InternalException("union_by_name not supported");
+-	}
+-
+-public:
+-	const string &GetFileName() {
+-		return file_name;
+-	}
+-
+-public:
+-	string file_name;
+-	vector<string> names;
+-	vector<LogicalType> types;
+-	// AvroOptions options;
+-	unique_ptr<AvroReader> reader;
+-};
+-
+-struct AvroReader : public BaseFileReader {
++class AvroReader : public BaseFileReader {
+ public:
+ 	AvroReader(ClientContext &context, const string filename_p);
+ 
+@@ -43,6 +21,11 @@ public:
+ 		return "Avro";
+ 	}
+ 
++	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
++								   LocalTableFunctionState &lstate) override;
++	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
++					  LocalTableFunctionState &local_state, DataChunk &chunk) override;
++
+ public:
+ 	avro_file_reader_t reader;
+ 	avro_value_t value;

@@ -527,8 +527,7 @@ unique_ptr<Expression> MultiFileReader::GetVirtualColumnExpression(ClientContext
 MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
                                                          vector<string> &names, MultiFileList &files,
                                                          MultiFileBindData &result, BaseFileReaderOptions &options,
-                                                         MultiFileOptions &file_options,
-                                                         MultiFileReaderInterface &interface) {
+                                                         MultiFileOptions &file_options) {
 	D_ASSERT(file_options.union_by_name);
 	vector<string> union_col_names;
 	vector<LogicalType> union_col_types;
@@ -538,7 +537,7 @@ MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context,
 	// note also that it requires fully expanding the MultiFileList
 	auto materialized_file_list = files.GetAllFiles();
 	auto union_readers = UnionByName::UnionCols(context, materialized_file_list, union_col_types, union_col_names,
-	                                            options, file_options, *this, interface);
+	                                            options, file_options, *this, *result.interface);
 
 	std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 	// perform the binding on the obtained set of names + types
@@ -554,13 +553,12 @@ MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context,
 MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vector<LogicalType> &return_types,
                                                     vector<string> &names, MultiFileList &files,
                                                     MultiFileBindData &result, BaseFileReaderOptions &options,
-                                                    MultiFileOptions &file_options,
-                                                    MultiFileReaderInterface &interface) {
+                                                    MultiFileOptions &file_options) {
 	if (file_options.union_by_name) {
-		return BindUnionReader(context, return_types, names, files, result, options, file_options, interface);
+		return BindUnionReader(context, return_types, names, files, result, options, file_options);
 	} else {
 		shared_ptr<BaseFileReader> reader;
-		reader = CreateReader(context, files.GetFirstFile(), options, file_options, interface);
+		reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
 		auto &columns = reader->GetColumns();
 		for (auto &column : columns) {
 			return_types.emplace_back(column.type);

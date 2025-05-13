@@ -19,6 +19,8 @@
 
 namespace duckdb {
 class BaseUnionData;
+struct GlobalTableFunctionState;
+struct LocalTableFunctionState;
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
@@ -66,11 +68,11 @@ public:
 	}
 
 public:
-	virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
+	DUCKDB_API virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
-	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
+	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
 	//! Prepare reader for scanning
-	virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
+	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
 
 	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                               LocalTableFunctionState &lstate) = 0;
@@ -78,9 +80,9 @@ public:
 	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                  LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 	//! Finish scanning a given file
-	virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
+	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file
-	virtual double GetProgressInFile(ClientContext &context) = 0;
+	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
 
 	virtual string GetReaderType() const = 0;
 
