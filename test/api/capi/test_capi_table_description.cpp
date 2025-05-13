@@ -103,4 +103,5 @@ TEST_CASE("Test getting the table names of a query in the C API", "[capi]") {
 	}
 
 	duckdb_destroy_value(&table_names_value);
+	tester.Cleanup();
 }
