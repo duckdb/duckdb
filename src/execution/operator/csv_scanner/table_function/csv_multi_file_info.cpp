@@ -89,7 +89,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
-	constexpr idx_t max_files_to_sniff = 10;
+	idx_t max_files_to_sniff = options.files_to_sniff == -1 ? NumericLimits<idx_t>::Maximum() : options.files_to_sniff;
 	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
@@ -120,7 +120,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 			// A schema is bettah than no schema
 			best_schema = schema;
 		} else if (best_schema.GetRowsRead() == 0) {
-			// If the best-schema has no data-rows, that's easy, we just take the new schema
+			// If the best-schema has no data-rows, that's easy; we just take the new schema
 			best_schema = schema;
 		} else if (schema.GetRowsRead() != 0) {
 			// We might have conflicting-schemas, we must merge them
@@ -128,7 +128,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		}
 	}
 
-	// At this point, replace an sqlnull with varchar for the type
+	// At this point, replace a sqlnull with varchar for the type
 	best_schema.ReplaceNullWithVarchar();
 
 	if (names.empty()) {

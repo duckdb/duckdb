@@ -21,3 +21,23 @@ query I
 SELECT typeof(bar) FROM read_csv(['data/csv/17451/1.csv', '__TEST_DIR__/t.csv']) limit 1
 ----
 VARCHAR
+
+statement error
+SELECT typeof(bar) FROM read_csv(['data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/2.csv','data/csv/17451/extra/3.csv'], files_to_sniff = 0) limit 1
+----
+Unsupported parameter for files_to_sniff: value must be -1 for all files or higher than one.
+
+query I
+SELECT typeof(bar) FROM read_csv(['data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/2.csv','data/csv/17451/extra/3.csv'], files_to_sniff = 5) limit 1
+----
+DATE
+
+statement error
+FROM read_csv(['data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/2.csv','data/csv/17451/extra/3.csv'], files_to_sniff = 5)
+----
+Consider setting files_to_sniff to a higher value (e.g., files_to_sniff = -1)
+
+query I
+SELECT typeof(bar) FROM read_csv(['data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/1.csv','data/csv/17451/2.csv','data/csv/17451/extra/3.csv'], files_to_sniff = -1) limit 1
+----
+VARCHAR

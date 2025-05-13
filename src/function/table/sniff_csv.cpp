@@ -170,7 +170,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 			sniffer_result.return_types[i] = LogicalType::VARCHAR;
 		}
 	}
-	for (auto&type: sniffer_result.return_types) {
+	for (auto &type : sniffer_result.return_types) {
 		if (type.id() == LogicalTypeId::SQLNULL) {
 			type = LogicalType::VARCHAR;
 		}
