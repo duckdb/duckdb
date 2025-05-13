@@ -522,9 +522,6 @@ shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFile
 	return std::move(result);
 }
 
-void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
-}
-
 unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
                                                                                  MultiFileGlobalState &) {
 	return make_uniq<ParquetReadGlobalState>();

@@ -65,6 +65,10 @@ public:
 	}
 
 public:
+	//! Prepare reader for scanning
+	virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
+	}
+	//! Scan a chunk from the read state
 	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 

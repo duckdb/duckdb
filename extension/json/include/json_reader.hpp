@@ -207,6 +207,8 @@ public:
 
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+
 public:
 	//! Get a new buffer index (must hold the lock)
 	idx_t GetBufferIndex();

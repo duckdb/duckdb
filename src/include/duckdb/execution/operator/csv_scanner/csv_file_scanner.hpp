@@ -57,6 +57,8 @@ public:
 
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 			 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+
 public:
 	idx_t GetFileIndex() const {
 		return file_list_idx.GetIndex();

@@ -249,7 +249,7 @@ public:
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
 					} else {
-						OP::FinalizeReader(context, *current_reader_data.reader, *global_state.global_state);
+						current_reader_data.reader->PrepareReader(context, *global_state.global_state);
 					}
 				} catch (...) {
 					parallel_lock.lock();

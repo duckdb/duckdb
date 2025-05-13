@@ -448,13 +448,11 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 	throw InternalException("Create reader from file not implemented");
 }
 
-void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader_p,
-                                       GlobalTableFunctionState &gstate_p) {
-	auto &reader = reader_p.Cast<JSONReader>();
+void JSONReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	if (gstate.enable_parallel_scans) {
 		// if we are doing parallel scans we need to open the file here
-		reader.Initialize(gstate.allocator, gstate.buffer_capacity);
+		Initialize(gstate.allocator, gstate.buffer_capacity);
 	}
 }
 
