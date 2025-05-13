@@ -11,60 +11,10 @@ index 9a8d39b..c1298e1 100644
    extension/httpfs/crypto.cpp
    extension/httpfs/create_secret_functions.cpp
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index af56f11..bd01f40 100644
+index af56f11..ac748c6 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
-@@ -4,8 +4,47 @@
- #include "duckdb/common/common.hpp"
- #include <stdio.h>
- 
--#define CPPHTTPLIB_OPENSSL_SUPPORT
--#include "httplib.hpp"
-+// FIXME: this is copied from httplib.hpp
-+#ifdef _WIN32
-+#include <wincrypt.h>
-+
-+// these are defined in wincrypt.h and it breaks compilation if BoringSSL is
-+// used
-+#undef X509_NAME
-+#undef X509_CERT_PAIR
-+#undef X509_EXTENSIONS
-+#undef PKCS7_SIGNER_INFO
-+
-+#ifdef _MSC_VER
-+#pragma comment(lib, "crypt32.lib")
-+#endif
-+#elif defined(CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN) && defined(__APPLE__)
-+#include <TargetConditionals.h>
-+#if TARGET_OS_OSX
-+#include <CoreFoundation/CoreFoundation.h>
-+#include <Security/Security.h>
-+#endif // TARGET_OS_OSX
-+#endif // _WIN32
-+
-+#include <openssl/err.h>
-+#include <openssl/evp.h>
-+#include <openssl/ssl.h>
-+#include <openssl/x509v3.h>
-+#include <openssl/rand.h>
-+
-+#if defined(_WIN32) && defined(OPENSSL_USE_APPLINK)
-+#include <openssl/applink.c>
-+#endif
-+
-+#include <iostream>
-+#include <sstream>
-+
-+// Disabled OpenSSL version check for CI
-+//#if OPENSSL_VERSION_NUMBER < 0x1010100fL
-+//#error Sorry, OpenSSL versions prior to 1.1.1 are not supported
-+#if OPENSSL_VERSION_NUMBER < 0x30000000L
-+#define SSL_get1_peer_certificate SSL_get_peer_certificate
-+#endif
- 
- namespace duckdb {
- 
-@@ -31,68 +70,82 @@ void hex256(hash_bytes &in, hash_str &out) {
+@@ -31,68 +31,82 @@ void hex256(hash_bytes &in, hash_str &out) {
  	}
  }
  
@@ -175,7 +125,7 @@ index af56f11..bd01f40 100644
  		                           const_data_ptr_cast(in), (int)in_len)) {
  
  			throw InternalException("DecryptUpdate failed");
-@@ -107,41 +160,79 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
+@@ -107,41 +121,79 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
  	return out_len;
  }
  
@@ -288,7 +238,7 @@ index af56f11..bd01f40 100644
  }
  
  } // namespace duckdb
-@@ -149,7 +240,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
+@@ -149,7 +201,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
  extern "C" {
  
  // Call the member function through the factory object
@@ -436,7 +386,7 @@ index 80b28d6..4566617 100644
  	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
  	if (secret_manager && transaction) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 13ac1d2..7fa1034 100644
+index 13ac1d2..fe60d0b 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -19,27 +19,22 @@
@@ -1072,7 +1022,7 @@ index 13ac1d2..7fa1034 100644
  			if (!flags.CreateFileIfNotExists() && !flags.OverwriteExistingFile()) {
  				throw IOException("Unable to open URL \"" + path +
  				                  "\" for writing: file does not exist and CREATE flag is not set");
-@@ -776,92 +567,93 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -776,92 +567,113 @@ void HTTPFileHandle::LoadFileInfo() {
  			return;
  		} else {
  			// HEAD request fail, use Range request for another try (read only one byte)
@@ -1109,13 +1059,33 @@ index 13ac1d2..7fa1034 100644
  	}
 -	if (!res->headers["Last-Modified"].empty()) {
 -		HTTPFileSystem::TryParseLastModifiedTime(res->headers["Last-Modified"], last_modified);
-+	if (res->headers.HasHeader("Last-Modified")) {
-+		HTTPFileSystem::TryParseLastModifiedTime(res->headers.GetHeaderValue("Last-Modified"), last_modified);
++	string content_length;
++	string content_range;
++	if (res->headers.HasHeader("Content-Length")) {
++		content_length = res->headers.GetHeaderValue("Content-Length");
  	}
 -	if (!res->headers["Etag"].empty()) {
 -		etag = res->headers["Etag"];
-+	if (res->headers.HasHeader("Etag")) {
-+		etag = res->headers.GetHeaderValue("Etag");
++	if (res->headers.HasHeader("Content-Range")) {
++		content_range = res->headers.GetHeaderValue("Content-Range");
++	}
++	length = 0;
++	try {
++        if (!content_range.empty()) {
++            length = std::stoull(content_range);
++        } else if (!content_length.empty()) {
++            length = std::stoull(content_length);
++        }
++    } catch (std::invalid_argument &e) {
++        throw IOException("Invalid Content-Length header received: %s", content_length);
++    } catch (std::out_of_range &e) {
++        throw IOException("Invalid Content-Length header received: %s", content_length);
++    }
++	if (res->headers.HasHeader("Last-Modified")) {
++		HTTPFileSystem::TryParseLastModifiedTime(res->headers.GetHeaderValue("Last-Modified"), last_modified);
++	}
++	if (res->headers.HasHeader("ETag")) {
++		etag = res->headers.GetHeaderValue("ETag");
  	}
  	initialized = true;
  }
@@ -1224,7 +1194,7 @@ index 13ac1d2..7fa1034 100644
  	// Try to fetch a cached client
  	auto cached_client = client_cache.GetClient();
  	if (cached_client) {
-@@ -869,35 +661,19 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::GetClient(optional_pt
+@@ -869,35 +681,19 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::GetClient(optional_pt
  	}
  
  	// Create a new client
