@@ -314,18 +314,15 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	return make_shared_ptr<CSVFileScan>(context, file, options, file_options);
 }
 
-shared_ptr<BaseUnionData> CSVMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
-	auto &scan = scan_p->Cast<CSVFileScan>();
-	auto data = make_shared_ptr<CSVUnionData>(scan_p->file);
+shared_ptr<BaseUnionData> CSVFileScan::GetUnionData(idx_t file_idx) {
+	auto data = make_shared_ptr<CSVUnionData>(file);
+	data->names = GetNames();
+	data->types = GetTypes();
 	if (file_idx == 0) {
-		data->options = scan.options;
-		data->names = scan.GetNames();
-		data->types = scan.GetTypes();
-		data->reader = std::move(scan_p);
+		data->options = options;
+		data->reader = shared_from_this();
 	} else {
-		data->options = std::move(scan.options);
-		data->names = scan.GetNames();
-		data->types = scan.GetTypes();
+		data->options = std::move(options);
 	}
 	data->options.auto_detect = false;
 	return data;

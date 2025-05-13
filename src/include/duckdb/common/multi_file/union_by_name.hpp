@@ -29,7 +29,7 @@ public:
 
 	void ExecuteTask() override {
 		auto reader = OP::CreateReader(context, file, options, file_options);
-		readers[file_idx] = OP::GetUnionData(std::move(reader), file_idx);
+		readers[file_idx] = reader->GetUnionData(file_idx);
 	}
 
 	string TaskType() const override {

@@ -18,6 +18,7 @@
 #include "duckdb/common/open_file_info.hpp"
 
 namespace duckdb {
+class BaseUnionData;
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
@@ -65,6 +66,7 @@ public:
 	}
 
 public:
+	virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) {
 		return nullptr;

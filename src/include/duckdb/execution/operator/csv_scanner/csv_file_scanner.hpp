@@ -55,6 +55,7 @@ public:
 		return true;
 	}
 
+	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;

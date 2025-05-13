@@ -495,27 +495,20 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 	return make_shared_ptr<ParquetReader>(context, file, options);
 }
 
-shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
-	auto &scan = scan_p->Cast<ParquetReader>();
-	auto result = make_uniq<ParquetUnionData>(scan.file);
-	if (file_idx == 0) {
-		for (auto &column : scan.columns) {
-			result->names.push_back(column.name);
-			result->types.push_back(column.type);
-		}
-		result->options = scan.parquet_options;
-		result->metadata = scan.metadata;
-		result->reader = std::move(scan_p);
-	} else {
-		for (auto &column : scan.columns) {
-			result->names.push_back(column.name);
-			result->types.push_back(column.type);
-		}
-		scan.columns.clear();
-		result->options = std::move(scan.parquet_options);
-		result->metadata = std::move(scan.metadata);
+shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
+	auto result = make_uniq<ParquetUnionData>(file);
+	for (auto &column : columns) {
+		result->names.push_back(column.name);
+		result->types.push_back(column.type);
 	}
-
+	if (file_idx == 0) {
+		result->options = parquet_options;
+		result->metadata = metadata;
+		result->reader = shared_from_this();
+	} else {
+		result->options = std::move(parquet_options);
+		result->metadata = std::move(metadata);
+	}
 	return std::move(result);
 }
 
