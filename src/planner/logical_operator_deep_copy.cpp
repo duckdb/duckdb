@@ -6,19 +6,20 @@
 
 namespace duckdb {
 
-	LogicalOperatorDeepCopy::LogicalOperatorDeepCopy(Binder &binder, optional_ptr<bound_parameter_map_t> parameter_data) : binder(binder), parameter_data(parameter_data) {
-	}
+LogicalOperatorDeepCopy::LogicalOperatorDeepCopy(Binder &binder, optional_ptr<bound_parameter_map_t> parameter_data)
+    : binder(binder), parameter_data(parameter_data) {
+}
 
-	unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(unique_ptr<duckdb::LogicalOperator> &op) {
-		auto copy = op->Copy(binder.context);
-		VisitOperator(*copy);
-		TableBindingReplacer replacer(table_idx_replacements, parameter_data);
-		replacer.VisitOperator(*copy);
-		return copy;
-	}
+unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(unique_ptr<duckdb::LogicalOperator> &op) {
+	auto copy = op->Copy(binder.context);
+	VisitOperator(*copy);
+	TableBindingReplacer replacer(table_idx_replacements, parameter_data);
+	replacer.VisitOperator(*copy);
+	return copy;
+}
 
-	// The following templates of TableIndexAccessor with ReplaceTableIndex and ReplaceTableIndexMulti
-	// reduces the amount of code significantly.
+// The following templates of TableIndexAccessor with ReplaceTableIndex and ReplaceTableIndexMulti
+// reduces the amount of code significantly.
 template <typename T>
 struct TableIndexAccessor {
 	static idx_t &Get(T &plan) {
@@ -29,11 +30,7 @@ struct TableIndexAccessor {
 template <>
 struct TableIndexAccessor<LogicalAggregate> {
 	static vector<reference<idx_t>> Get(LogicalAggregate &plan) {
-		return {
-			std::ref(plan.group_index),
-			std::ref(plan.aggregate_index),
-			std::ref(plan.groupings_index)
-		};
+		return {std::ref(plan.group_index), std::ref(plan.aggregate_index), std::ref(plan.groupings_index)};
 	}
 };
 
@@ -87,175 +84,177 @@ void LogicalOperatorDeepCopy::ReplaceTableIndexMulti(LogicalOperator &op) {
 	}
 }
 
-	void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
-		VisitOperatorChildren(op);
-		switch (op.type) {
-			case LogicalOperatorType::LOGICAL_PROJECTION:
-				ReplaceTableIndex<LogicalProjection>(op);
-				break;
+void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
+	VisitOperatorChildren(op);
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		ReplaceTableIndex<LogicalProjection>(op);
+		break;
 
-			case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-				ReplaceTableIndexMulti<LogicalAggregate>(op);
-				break;
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		ReplaceTableIndexMulti<LogicalAggregate>(op);
+		break;
 
-			case LogicalOperatorType::LOGICAL_WINDOW:
-				ReplaceTableIndex<LogicalWindow>(op);
-				break;
-			case LogicalOperatorType::LOGICAL_UNNEST: {
-				ReplaceTableIndex<LogicalUnnest>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_PIVOT: {
-				ReplaceTableIndex<LogicalPivot>(op);
-				break;
-			}
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		ReplaceTableIndex<LogicalWindow>(op);
+		break;
+	case LogicalOperatorType::LOGICAL_UNNEST: {
+		ReplaceTableIndex<LogicalUnnest>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_PIVOT: {
+		ReplaceTableIndex<LogicalPivot>(op);
+		break;
+	}
 
-			// -----------------------------
-			// Data sources
-			// -----------------------------
-			case LogicalOperatorType::LOGICAL_GET: {
-				ReplaceTableIndex<LogicalGet>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_CHUNK_GET: {
-				ReplaceTableIndex<LogicalColumnDataGet>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_DELIM_GET: {
-				ReplaceTableIndex<LogicalDelimGet>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-				ReplaceTableIndex<LogicalExpressionGet>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
-				ReplaceTableIndex<LogicalDummyScan>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_CTE_REF: {
-				ReplaceTableIndex<LogicalCTERef>(op);
-				break;
-			}
-			// -----------------------------
-			// Joins
-			// -----------------------------
-			case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-			case LogicalOperatorType::LOGICAL_ANY_JOIN:
-			case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-			case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
-			case LogicalOperatorType::LOGICAL_JOIN: {
-				auto &join = op.Cast<LogicalJoin>();
-				// Only replace the mark index for JOINs that have a valid mark index in the first place
-				if (join.join_type == JoinType::MARK) {
-					ReplaceTableIndex<LogicalJoin>(op);
-				}
-				break;
-			}
-			// -----------------------------
-			// SetOps
-			// -----------------------------
-			case LogicalOperatorType::LOGICAL_UNION:
-			case LogicalOperatorType::LOGICAL_EXCEPT:
-			case LogicalOperatorType::LOGICAL_INTERSECT: {
-				ReplaceTableIndex<LogicalSetOperation>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-			case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-				ReplaceTableIndex<LogicalCTE>(op);
-				break;
-			}
-
-			case LogicalOperatorType::LOGICAL_INSERT: {
-				ReplaceTableIndex<LogicalInsert>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_DELETE: {
-				ReplaceTableIndex<LogicalDelete>(op);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_UPDATE: {
-				ReplaceTableIndex<LogicalUpdate>(op);
-				break;
-			}
-
-			default:
-				break;
+	// -----------------------------
+	// Data sources
+	// -----------------------------
+	case LogicalOperatorType::LOGICAL_GET: {
+		ReplaceTableIndex<LogicalGet>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		ReplaceTableIndex<LogicalColumnDataGet>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_GET: {
+		ReplaceTableIndex<LogicalDelimGet>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+		ReplaceTableIndex<LogicalExpressionGet>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
+		ReplaceTableIndex<LogicalDummyScan>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		ReplaceTableIndex<LogicalCTERef>(op);
+		break;
+	}
+	// -----------------------------
+	// Joins
+	// -----------------------------
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+	case LogicalOperatorType::LOGICAL_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		// Only replace the mark index for JOINs that have a valid mark index in the first place
+		if (join.join_type == JoinType::MARK) {
+			ReplaceTableIndex<LogicalJoin>(op);
 		}
+		break;
+	}
+	// -----------------------------
+	// SetOps
+	// -----------------------------
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		ReplaceTableIndex<LogicalSetOperation>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		ReplaceTableIndex<LogicalCTE>(op);
+		break;
 	}
 
-	TableBindingReplacer::TableBindingReplacer(std::map<idx_t, idx_t> &table_idx_replacements, optional_ptr<bound_parameter_map_t> parameter_data) : table_idx_replacements(table_idx_replacements), parameter_data(parameter_data) {
+	case LogicalOperatorType::LOGICAL_INSERT: {
+		ReplaceTableIndex<LogicalInsert>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_DELETE: {
+		ReplaceTableIndex<LogicalDelete>(op);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_UPDATE: {
+		ReplaceTableIndex<LogicalUpdate>(op);
+		break;
 	}
 
-	void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
-		switch (op.type) {
-			case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
-				// The visitor does not catch the correlated_column vector of DEPENDENT_JOINs,
-				// therefore we need to special case it.
-				auto &join = op.Cast<LogicalDependentJoin>();
-				for (auto &col : join.correlated_columns) {
-					auto entry = table_idx_replacements.find(col.binding.table_index);
-					if (entry != table_idx_replacements.end()) {
-						col.binding.table_index = entry->second;
-					}
-				}
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-			case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-				// The visitor does not catch the correlated_column vector,
-				// therefore we need to special case it.
-				auto &cte = op.Cast<LogicalCTE>();
-				for (auto &col : cte.correlated_columns) {
-					auto entry = table_idx_replacements.find(col.binding.table_index);
-					if (entry != table_idx_replacements.end()) {
-						col.binding.table_index = entry->second;
-					}
-				}
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_CTE_REF: {
-				// Similarly, the visitor is unable to replace the cte reference's cte_index,
-				// which may have changed. We have to check that and adapt accordingly.
-				auto &cteref = op.Cast<LogicalCTERef>();
-				auto entry = table_idx_replacements.find(cteref.cte_index);
-				if (entry != table_idx_replacements.end()) {
-					cteref.cte_index = entry->second;
-				}
-				break;
-			}
-			default:
-				break;
-		}
-
-		VisitOperatorChildren(op);
-		VisitOperatorExpressions(op);
+	default:
+		break;
 	}
-
-	void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
-		auto &expr = *expression;
-		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-			auto entry = table_idx_replacements.find(bound_column_ref.binding.table_index);
-			if (entry != table_idx_replacements.end()) {
-				bound_column_ref.binding.table_index = entry->second;
-			}
-		} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
-			// we have to replace the parameter data if it is a bound parameter
-			// because while the parameter data is copied, it does not contain the
-			// correct pointer to the parameter data
-			auto &bound_parameter = expr->Cast<BoundParameterExpression>();
-			if (parameter_data) {
-				auto entry = parameter_data->find(bound_parameter.identifier);
-				if (entry != parameter_data->end()) {
-					bound_parameter.parameter_data = entry->second;
-				}
-			}
-		}
-
-		VisitExpressionChildren(**expression);
-	}
-
 }
+
+TableBindingReplacer::TableBindingReplacer(std::map<idx_t, idx_t> &table_idx_replacements,
+                                           optional_ptr<bound_parameter_map_t> parameter_data)
+    : table_idx_replacements(table_idx_replacements), parameter_data(parameter_data) {
+}
+
+void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
+		// The visitor does not catch the correlated_column vector of DEPENDENT_JOINs,
+		// therefore we need to special case it.
+		auto &join = op.Cast<LogicalDependentJoin>();
+		for (auto &col : join.correlated_columns) {
+			auto entry = table_idx_replacements.find(col.binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				col.binding.table_index = entry->second;
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		// The visitor does not catch the correlated_column vector,
+		// therefore we need to special case it.
+		auto &cte = op.Cast<LogicalCTE>();
+		for (auto &col : cte.correlated_columns) {
+			auto entry = table_idx_replacements.find(col.binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				col.binding.table_index = entry->second;
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		// Similarly, the visitor is unable to replace the cte reference's cte_index,
+		// which may have changed. We have to check that and adapt accordingly.
+		auto &cteref = op.Cast<LogicalCTERef>();
+		auto entry = table_idx_replacements.find(cteref.cte_index);
+		if (entry != table_idx_replacements.end()) {
+			cteref.cte_index = entry->second;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+	VisitOperatorChildren(op);
+	VisitOperatorExpressions(op);
+}
+
+void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
+	auto &expr = *expression;
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
+		auto entry = table_idx_replacements.find(bound_column_ref.binding.table_index);
+		if (entry != table_idx_replacements.end()) {
+			bound_column_ref.binding.table_index = entry->second;
+		}
+	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
+		// we have to replace the parameter data if it is a bound parameter
+		// because while the parameter data is copied, it does not contain the
+		// correct pointer to the parameter data
+		auto &bound_parameter = expr->Cast<BoundParameterExpression>();
+		if (parameter_data) {
+			auto entry = parameter_data->find(bound_parameter.identifier);
+			if (entry != parameter_data->end()) {
+				bound_parameter.parameter_data = entry->second;
+			}
+		}
+	}
+
+	VisitExpressionChildren(**expression);
+}
+
+} // namespace duckdb

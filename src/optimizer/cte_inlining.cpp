@@ -68,7 +68,8 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	}
 }
 
-bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperator &materialized_cte, bool requires_copy) {
+bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperator &materialized_cte,
+                         bool requires_copy) {
 	if (op->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op->Cast<LogicalCTERef>();
 		auto &cte = materialized_cte.Cast<LogicalCTE>();
@@ -85,11 +86,11 @@ bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperato
 					return false;
 				}
 			}
-			vector <unique_ptr<Expression>> proj_expressions;
+			vector<unique_ptr<Expression>> proj_expressions;
 			definition->ResolveOperatorTypes();
 			auto types = definition->types;
 			idx_t col_idx = 0;
-			for (auto &col: definition->GetColumnBindings()) {
+			for (auto &col : definition->GetColumnBindings()) {
 				proj_expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], col));
 				col_idx++;
 			}
