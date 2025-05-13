@@ -1,8 +1,20 @@
 diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
-index b8b358c..3f63e95 100644
+index b8b358c..9e105f4 100644
 --- a/src/avro_multi_file_info.cpp
 +++ b/src/avro_multi_file_info.cpp
-@@ -21,11 +21,6 @@ bool AvroMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
+@@ -3,6 +3,11 @@
+ 
+ namespace duckdb {
+ 
++unique_ptr<MultiFileReaderInterface> AvroMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader,
++																MultiFileList &file_list) {
++	return make_uniq<AvroMultiFileInfo>();
++}
++
+ unique_ptr<BaseFileReaderOptions> AvroMultiFileInfo::InitializeOptions(ClientContext &context,
+                                                                        optional_ptr<TableFunctionInfo> info) {
+ 	return make_uniq<AvroFileReaderOptions>();
+@@ -21,11 +26,6 @@ bool AvroMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
  	return false;
  }
  
@@ -14,7 +26,7 @@ index b8b358c..3f63e95 100644
  struct AvroMultiFileData final : public TableFunctionData {
  public:
  	AvroMultiFileData() = default;
-@@ -42,16 +37,10 @@ void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
+@@ -42,16 +42,10 @@ void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
  	if (bind_data.file_options.union_by_name) {
  		throw NotImplementedException("'union_by_name' not implemented for Avro reader yet");
  	}
@@ -32,7 +44,7 @@ index b8b358c..3f63e95 100644
  optional_idx AvroMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
                                             const MultiFileGlobalState &global_state, FileExpandResult expand_result) {
  	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
-@@ -106,47 +95,29 @@ shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &contex
+@@ -106,47 +100,29 @@ shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &contex
  }
  
  shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
@@ -88,7 +100,7 @@ index b8b358c..3f63e95 100644
  }
  
  unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
-@@ -154,17 +125,4 @@ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBind
+@@ -154,17 +130,4 @@ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBind
  	return make_uniq<NodeStatistics>();
  }
  
