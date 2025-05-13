@@ -68,20 +68,17 @@ public:
 public:
 	virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
-	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) {
-		return nullptr;
-	}
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
 	//! Prepare reader for scanning
-	virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
-	}
+	virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
+
 	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                               LocalTableFunctionState &lstate) = 0;
 	//! Scan a chunk from the read state
 	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                  LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 	//! Finish scanning a given file
-	virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
-	}
+	virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file
 	virtual double GetProgressInFile(ClientContext &context) = 0;
 
