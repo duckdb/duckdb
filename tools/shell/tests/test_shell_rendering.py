@@ -40,3 +40,12 @@ def test_markdown(shell):
 
     result = test.run()
     result.check_stdout("| a  |  str  |")
+
+def test_mode_insert_table(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode box mytable")
+    )
+
+    result = test.run()
+    result.check_stderr("TABLE argument can only be used with .mode insert")

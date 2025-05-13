@@ -1,5 +1,3 @@
-include_directories(../../../third_party/httplib/)
-
 # To link extensions into DuckDB and auto-load them on startup, we generated an
 # include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
 # parameter.
@@ -92,11 +90,6 @@ set(generated_loader_obj_files
 
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
-
-if(${EXIT_TIME_DESTRUCTORS_WARNING})
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
-endif()
 
 add_library(
   duckdb_main_extension OBJECT

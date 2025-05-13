@@ -46,7 +46,7 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
 	auto &profiling_info = node.GetProfilingInfo();
 
-	duckdb::unordered_map<duckdb::string, duckdb::string> metrics_map;
+	duckdb::InsertionOrderPreservingMap<duckdb::string> metrics_map;
 	for (const auto &metric : profiling_info.metrics) {
 		auto key = EnumUtil::ToString(metric.first);
 		if (!profiling_info.Enabled(profiling_info.settings, metric.first)) {

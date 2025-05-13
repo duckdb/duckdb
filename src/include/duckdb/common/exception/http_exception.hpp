@@ -25,7 +25,8 @@ public:
 
 	template <class RESPONSE, typename ResponseShape<decltype(RESPONSE::status)>::status = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
-	    : HTTPException(response.status, response.body, response.headers, response.reason, msg, params...) {
+	    : HTTPException(static_cast<int>(response.status), response.body, response.headers, response.reason, msg,
+	                    params...) {
 	}
 
 	template <typename>
@@ -35,7 +36,8 @@ public:
 
 	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
-	    : HTTPException(response.code, response.body, response.headers, response.error, msg, params...) {
+	    : HTTPException(static_cast<int>(response.code), response.body, response.headers, response.error, msg,
+	                    params...) {
 	}
 
 	template <class HEADERS, typename... ARGS>

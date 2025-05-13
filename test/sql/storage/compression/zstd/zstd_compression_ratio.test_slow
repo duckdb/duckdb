@@ -18,8 +18,7 @@ set logging_level='info';
 statement ok
 PRAGMA force_compression='zstd'
 
-statement ok
-select setseed(0.42);
+set seed 0.42
 
 statement ok
 set variable dataset_size = 100_000;
@@ -48,8 +47,7 @@ FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 23080
 statement ok
 PRAGMA force_compression='uncompressed'
 
-statement ok
-select setseed(0.42);
+set seed 0.42
 
 statement ok
 CREATE TABLE test_uncompressed as (

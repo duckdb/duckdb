@@ -207,6 +207,60 @@
             }
         },
         {
+            "name": "duckdb_connection_get_client_context",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "duckdb_client_context *",
+                    "name": "out_context"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the client context of the connection.\n\n",
+                "param_comments": {
+                    "connection": "The connection.",
+                    "out_context": "The client context of the connection. Must be destroyed with `duckdb_destroy_client_context`."
+                }
+            }
+        },
+        {
+            "name": "duckdb_client_context_get_connection_id",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_client_context",
+                    "name": "context"
+                }
+            ],
+            "comment": {
+                "description": "Returns the connection id of the client context.\n\n",
+                "param_comments": {
+                    "context": "The client context."
+                },
+                "return_value": "The connection id of the client context."
+            }
+        },
+        {
+            "name": "duckdb_destroy_client_context",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_client_context *",
+                    "name": "context"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the client context and deallocates its memory.\n\n",
+                "param_comments": {
+                    "context": "The client context to destroy."
+                }
+            }
+        },
+        {
             "name": "duckdb_library_version",
             "return_type": "const char *",
             "params": [],

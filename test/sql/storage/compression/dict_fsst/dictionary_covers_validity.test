@@ -61,7 +61,7 @@ select segment_type, compression from pragma_storage_info('tbl') where segment_t
 VALIDITY	Constant
 VALIDITY	Constant
 VALIDITY	Roaring
-VARCHAR	Uncompressed
+VARCHAR	ZSTD
 
 query I
 SELECT col FROM tbl ORDER BY col.a DESC LIMIT 3;

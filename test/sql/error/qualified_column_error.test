@@ -2,8 +2,6 @@
 # description: Test errors on qualified columns
 # group: [error]
 
-require skip_reload
-
 statement ok
 create schema "dbt_temp"
 

@@ -2,13 +2,10 @@
 # description: Test IEJoin projection mapping
 # group: [iejoin]
 
-require skip_reload
-
 statement ok
 PRAGMA threads=1
 
-statement ok
-SELECT SETSEED(0.8765309);
+set seed 0.8765309
 
 statement ok
 CREATE TABLE df (id INTEGER, id2 INTEGER, id3 INTEGER, value_double DOUBLE, value as (value_double::DECIMAL(4,3)), one_min_value as ((1.0 - value_double)::DECIMAL(4,3)))

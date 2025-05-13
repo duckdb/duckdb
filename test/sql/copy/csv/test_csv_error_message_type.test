@@ -70,11 +70,11 @@ CREATE TABLE venue_2 (
 
 
 # Check our  possible solutions:
-#* Override the type for this column manually by setting the type explicitly, e.g. types={'venueseats': 'VARCHAR'}
+#* Override the type for this column manually by setting the type explicitly, e.g., types={'venueseats': 'VARCHAR'}
 statement ok
 INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1, types={'venueseats': 'VARCHAR'});
 
-#* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. sample_size=-1
+#* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g., sample_size=-1
 statement ok
 INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = -1);
 

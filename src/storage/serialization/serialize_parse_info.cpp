@@ -338,6 +338,7 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(206, "file_path", file_path);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<vector<Value>>>(207, "options", options);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "select_statement", select_statement);
+	serializer.WritePropertyWithDefault<bool>(209, "is_format_auto_detected", is_format_auto_detected);
 }
 
 unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
@@ -351,6 +352,7 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(206, "file_path", result->file_path);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<vector<Value>>>(207, "options", result->options);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "select_statement", result->select_statement);
+	deserializer.ReadPropertyWithDefault<bool>(209, "is_format_auto_detected", result->is_format_auto_detected);
 	return std::move(result);
 }
 

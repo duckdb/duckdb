@@ -133,10 +133,17 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		return_types = best_schema.GetTypes();
 	}
 	if (only_header_or_empty_files == current_file && !options.columns_set) {
-		for (auto &type : return_types) {
-			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+		for (idx_t i = 0; i < return_types.size(); i++) {
+			if (!options.sql_types_per_column.empty()) {
+				if (options.sql_types_per_column.find(names[i]) != options.sql_types_per_column.end()) {
+					continue;
+				}
+			} else if (i < options.sql_type_list.size()) {
+				continue;
+			}
+			D_ASSERT(return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
-			type = LogicalType::VARCHAR;
+			return_types[i] = LogicalType::VARCHAR;
 		}
 	}
 	result.csv_schema = best_schema;

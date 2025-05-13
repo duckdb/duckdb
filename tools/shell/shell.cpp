@@ -3139,7 +3139,7 @@ MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg >= 2) {
+	if (nArg > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	int rc = 0;
@@ -3246,6 +3246,10 @@ MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg)
 bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 	idx_t n2 = StringLength(mode_str);
 	char c2 = mode_str[0];
+	if (tbl_name && !(c2 == 'i' && strncmp(mode_str, "insert", n2) == 0)) {
+		raw_printf(stderr, "TABLE argument can only be used with .mode insert");
+		return false;
+	}
 	if (c2 == 'l' && n2 > 2 && strncmp(mode_str, "lines", n2) == 0) {
 		mode = RenderMode::LINE;
 		rowSeparator = SEP_Row;

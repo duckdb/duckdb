@@ -2,8 +2,6 @@
 # description: Test string compression with big strings, which are currently unsupported by the compression algorithms
 # group: [string]
 
-require skip_reload
-
 statement ok
 pragma verify_fetch_row
 

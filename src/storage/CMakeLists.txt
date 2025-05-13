@@ -26,6 +26,7 @@ add_library_unity(
   temporary_file_manager.cpp
   table_index_list.cpp
   write_ahead_log.cpp
+  open_file_storage_extension.cpp
   optimistic_data_writer.cpp
   partial_block_manager.cpp
   single_file_block_manager.cpp
