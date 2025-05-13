@@ -142,21 +142,18 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, Funct
                                                        const vector<LogicalType> &arguments, ErrorData &error) {
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
-		// no candidates
+		// No candidates, return an invalid index.
 		return optional_idx();
 	}
 	if (candidate_functions.size() > 1) {
-		// multiple candidates, check if there are any unknown arguments
-		bool has_parameters = false;
+		// Multiple candidates, check if there are any unknown arguments.
 		for (auto &arg_type : arguments) {
-			if (arg_type.id() == LogicalTypeId::UNKNOWN) {
-				//! there are! we could not resolve parameters in this case
+			if (arg_type.IsUnknown()) {
+				// We cannot resolve the parameters to a function.
 				throw ParameterNotResolvedException();
 			}
 		}
-		if (!has_parameters) {
-			return MultipleCandidateException(name, functions, candidate_functions, arguments, error);
-		}
+		return MultipleCandidateException(name, functions, candidate_functions, arguments, error);
 	}
 	return candidate_functions[0];
 }
