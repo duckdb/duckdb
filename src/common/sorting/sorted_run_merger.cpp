@@ -339,8 +339,25 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	// Copy over the run boundaries from the assigned partition (under lock)
 	auto &current_partition = *gstate.partitions[p_idx.GetIndex()];
 	auto current_partition_guard = current_partition.Lock();
+	const auto begin_computed = current_partition.GetBeginComputed();
 	run_boundaries = current_partition.GetRunBoundaries(current_partition_guard);
 	current_partition_guard.unlock();
+
+	if (!begin_computed) {
+		// We can use information from previous partitions to speed up computing this partition
+		for (idx_t prev = p_idx.GetIndex(); prev > 1; prev--) {
+			auto &prev_partition = *gstate.partitions[prev - 1];
+			if (!prev_partition.GetBeginComputed()) {
+				continue;
+			}
+			auto prev_partition_guard = prev_partition.Lock();
+			const auto &prev_partition_run_boundaries = prev_partition.GetRunBoundaries(prev_partition_guard);
+			for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
+				run_boundaries[run_idx].begin = prev_partition_run_boundaries[run_idx].begin;
+			}
+			break;
+		}
+	}
 
 	// Compute the end partition boundaries (lock-free)
 	switch (iterator_state_type) {
