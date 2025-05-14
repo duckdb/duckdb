@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 22a0387e09389ee9148f58b3f8a71e7896b48093
+    GIT_TAG 6bee4d97b79df24ec24516464143fead9ed13ea7
     INCLUDE_DIR extension/httpfs/include
     APPLY_PATCHES
     )
@@ -30,6 +30,7 @@ if (NOT MINGW)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
             GIT_TAG 712514078247b4b71f51d0c9eb862bec3928742c
+            APPLY_PATCHES
     )
 endif()
 

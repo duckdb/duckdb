@@ -13,6 +13,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::COPY_INFO;
 
 public:
-	CopyInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA) {
+	CopyInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA), is_format_auto_detected(true) {
 	}
 
 	//! The catalog name to copy to/from
@@ -38,15 +39,18 @@ public:
 	bool is_from;
 	//! The file format of the external file
 	string format;
+	//! If the format is manually set (i.e., via the format parameter) or was discovered by inspecting the file path
+	bool is_format_auto_detected;
 	//! The file path to copy to/from
 	string file_path;
 	//! Set of (key, value) options
 	case_insensitive_map_t<vector<Value>> options;
-	// The SQL statement used instead of a table when copying data out to a file
+	//! The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
 
 public:
-	static string CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options);
+	static string CopyOptionsToString(const string &format, bool is_format_auto_detected,
+	                                  const case_insensitive_map_t<vector<Value>> &options);
 
 public:
 	unique_ptr<CopyInfo> Copy() const;

@@ -468,6 +468,11 @@ typedef struct _duckdb_connection {
 	void *internal_ptr;
 } * duckdb_connection;
 
+//! A client context of a duckdb connection. Must be destroyed with `duckdb_destroy_context`.
+typedef struct _duckdb_client_context {
+	void *internal_ptr;
+} * duckdb_client_context;
+
 //! A prepared statement is a parameterized query that allows you to bind parameters to it.
 //! Must be destroyed with `duckdb_destroy_prepare`.
 typedef struct _duckdb_prepared_statement {
@@ -535,6 +540,7 @@ typedef struct _duckdb_profiling_info {
 //===--------------------------------------------------------------------===//
 // C API Extension info
 //===--------------------------------------------------------------------===//
+
 //! Holds state during the C API extension intialization process
 typedef struct _duckdb_extension_info {
 	void *internal_ptr;
@@ -543,14 +549,23 @@ typedef struct _duckdb_extension_info {
 //===--------------------------------------------------------------------===//
 // Function types
 //===--------------------------------------------------------------------===//
-//! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
+
+//! Additional function info.
+//! When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_function_info {
 	void *internal_ptr;
 } * duckdb_function_info;
 
+//! The bind info of a function.
+//! When setting this info, it is necessary to pass a destroy-callback function.
+typedef struct _duckdb_bind_info {
+	void *internal_ptr;
+} * duckdb_bind_info;
+
 //===--------------------------------------------------------------------===//
 // Scalar function types
 //===--------------------------------------------------------------------===//
+
 //! A scalar function. Must be destroyed with `duckdb_destroy_scalar_function`.
 typedef struct _duckdb_scalar_function {
 	void *internal_ptr;
@@ -560,6 +575,9 @@ typedef struct _duckdb_scalar_function {
 typedef struct _duckdb_scalar_function_set {
 	void *internal_ptr;
 } * duckdb_scalar_function_set;
+
+//! The bind function of the scalar function.
+typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
 
 //! The main function of the scalar function.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
@@ -606,11 +624,6 @@ typedef void (*duckdb_aggregate_finalize_t)(duckdb_function_info info, duckdb_ag
 typedef struct _duckdb_table_function {
 	void *internal_ptr;
 } * duckdb_table_function;
-
-//! The bind info of the function. When setting this info, it is necessary to pass a destroy-callback function.
-typedef struct _duckdb_bind_info {
-	void *internal_ptr;
-} * duckdb_bind_info;
 
 //! Additional function init info. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_init_info {
@@ -796,6 +809,30 @@ Closes the specified connection and de-allocates all memory allocated for that c
 * @param connection The connection to close.
 */
 DUCKDB_C_API void duckdb_disconnect(duckdb_connection *connection);
+
+/*!
+Retrieves the client context of the connection.
+
+* @param connection The connection.
+* @param out_context The client context of the connection. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connection,
+                                                       duckdb_client_context *out_context);
+
+/*!
+Returns the connection id of the client context.
+
+* @param context The client context.
+* @return The connection id of the client context.
+*/
+DUCKDB_C_API idx_t duckdb_client_context_get_connection_id(duckdb_client_context context);
+
+/*!
+Destroys the client context and deallocates its memory.
+
+* @param context The client context to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
 
 /*!
 Returns the version of the linked DuckDB, with a version postfix for dev versions
@@ -3160,7 +3197,7 @@ DUCKDB_C_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 /*!
 Creates a new empty scalar function.
 
-The return value should be destroyed with `duckdb_destroy_scalar_function`.
+The return value must be destroyed with `duckdb_destroy_scalar_function`.
 
 * @return The scalar function object.
 */
@@ -3235,6 +3272,34 @@ DUCKDB_C_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function s
                                                         duckdb_delete_callback_t destroy);
 
 /*!
+Sets the (optional) bind function of the scalar function.
+
+* @param scalar_function The scalar function
+* @param bind The bind function
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_function,
+                                                  duckdb_scalar_function_bind_t bind);
+
+/*!
+Sets the user-provided bind data in the bind object of the scalar function.
+This object can be retrieved again during execution.
+
+* @param info The bind info of the scalar function.
+* @param bind_data The bind data object.
+* @param destroy The callback to destroy the bind data (if any).
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data,
+                                                       duckdb_delete_callback_t destroy);
+
+/*!
+Report that an error has occurred while calling bind on a scalar function.
+
+* @param info The bind info object
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_scalar_function_bind_set_error(duckdb_bind_info info, const char *error);
+
+/*!
 Sets the main function of the scalar function.
 
 * @param scalar_function The scalar function
@@ -3266,6 +3331,24 @@ Retrieves the extra info of the function as set in `duckdb_scalar_function_set_e
 DUCKDB_C_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info info);
 
 /*!
+Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.
+
+Note that the bind data is read-only.
+
+* @param info The function info.
+* @return The bind data object.
+*/
+DUCKDB_C_API void *duckdb_scalar_function_get_bind_data(duckdb_function_info info);
+
+/*!
+Retrieves the client context of the bind info of a scalar function.
+
+* @param info The bind info object of the scalar function.
+* @param out_context The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_scalar_function_get_client_context(duckdb_bind_info info, duckdb_client_context *out_context);
+
+/*!
 Report that an error has occurred while executing the scalar function.
 
 * @param info The info object.
@@ -3276,7 +3359,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_error(duckdb_function_info info, co
 /*!
 Creates a new empty scalar function set.
 
-The return value should be destroyed with `duckdb_destroy_scalar_function_set`.
+The return value must be destroyed with `duckdb_destroy_scalar_function_set`.
 
 * @return The scalar function set object.
 */
@@ -3658,11 +3741,12 @@ The result must be destroyed with `duckdb_destroy_value`.
 DUCKDB_C_API duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *name);
 
 /*!
-Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
+Sets the user-provided bind data in the bind object of the table function.
+This object can be retrieved again during execution.
 
-* @param info The info object
+* @param info The bind info of the table function.
 * @param bind_data The bind data object.
-* @param destroy The callback that will be called to destroy the bind data (if any)
+* @param destroy The callback to destroy the bind data (if any).
 */
 DUCKDB_C_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy);
 
@@ -3675,7 +3759,7 @@ Sets the cardinality estimate for the table function, used for optimization.
 DUCKDB_C_API void duckdb_bind_set_cardinality(duckdb_bind_info info, idx_t cardinality, bool is_exact);
 
 /*!
-Report that an error has occurred while calling bind.
+Report that an error has occurred while calling bind on a table function.
 
 * @param info The info object
 * @param error The error message
@@ -3764,13 +3848,13 @@ Retrieves the extra info of the function as set in `duckdb_table_function_set_ex
 DUCKDB_C_API void *duckdb_function_get_extra_info(duckdb_function_info info);
 
 /*!
-Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+Gets the table function's bind data set by `duckdb_bind_set_bind_data`.
 
-Note that the bind data should be considered as read-only.
+Note that the bind data is read-only.
 For tracking state, use the init data instead.
 
-* @param info The info object
-* @return The bind data object
+* @param info The function info object.
+* @return The bind data object.
 */
 DUCKDB_C_API void *duckdb_function_get_bind_data(duckdb_function_info info);
 

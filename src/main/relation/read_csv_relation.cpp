@@ -37,7 +37,8 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
-	CSVReaderOptions csv_options;
+	CSVFileReaderOptions csv_file_options;
+	auto &csv_options = csv_file_options.options;
 	csv_options.file_path = file_name.path;
 	vector<string> empty;
 	csv_options.FromNamedParameters(options, *context, file_options);
@@ -50,9 +51,10 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		vector<string> names;
 		auto result = make_uniq<MultiFileBindData>();
 		auto csv_data = make_uniq<ReadCSVData>();
+		result->interface = make_uniq<CSVMultiFileInfo>();
 
-		multi_file_reader->BindUnionReader<CSVMultiFileInfo>(*context, types, names, multi_file_list, *result,
-		                                                     csv_options, file_options);
+		multi_file_reader->BindUnionReader(*context, types, names, multi_file_list, *result, csv_file_options,
+		                                   file_options);
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {
