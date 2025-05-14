@@ -52,6 +52,33 @@ void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	}
 }
 
+void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx_t row_block_end) {
+	if (row_block_begin == row_block_end) {
+		return;
+	}
+	for (idx_t block_idx = row_block_begin; block_idx < row_block_end; block_idx++) {
+		auto &block = row_blocks[block_idx];
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+			block.handle.reset();
+		}
+	}
+}
+
+void TupleDataAllocator::DestroyHeapBlocks(const idx_t heap_block_begin, const idx_t heap_block_end) {
+	D_ASSERT(!layout.AllConstant());
+	if (heap_block_begin == heap_block_end) {
+		return;
+	}
+	for (idx_t block_idx = heap_block_begin; block_idx < heap_block_end; block_idx++) {
+		auto &block = heap_blocks[block_idx];
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+			block.handle.reset();
+		}
+	}
+}
+
 TupleDataAllocator::~TupleDataAllocator() {
 	SetDestroyBufferUponUnpin();
 }

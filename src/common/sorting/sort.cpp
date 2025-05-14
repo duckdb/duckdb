@@ -117,14 +117,15 @@ public:
 class SortGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
-	    : temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), active_threads(0),
+	    : num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
 	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
-	      partition_size(1) {
+	      partition_size(0) {
 	}
 
 public:
 	void UpdateLocalState(SortLocalSinkState &lstate) const {
-		lstate.maximum_run_size = temporary_memory_state->GetReservation() / active_threads;
+		lstate.maximum_run_size = temporary_memory_state->GetReservation() / num_threads;
 		lstate.external = external;
 	}
 
@@ -141,8 +142,8 @@ public:
 		}
 
 		// Double until it fits
-		const auto required = active_threads * lstate.sorted_run->SizeInBytes();
-		auto request = temporary_memory_state->GetReservation() * 2;
+		const auto required = num_threads * lstate.sorted_run->SizeInBytes();
+		auto request = temporary_memory_state->GetRemainingSize() * 2;
 		while (request < required) {
 			request *= 2;
 		}
@@ -165,6 +166,8 @@ public:
 	}
 
 public:
+	//! Total number of threads
+	const idx_t num_threads;
 	//! Temporary memory state for managing this sort's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 	//! Runs that have been sorted locally before being appended to this global state
@@ -172,8 +175,6 @@ public:
 	//! Sorted tuple count (for progress)
 	atomic<idx_t> sorted_tuples;
 
-	//! How many threads are active
-	atomic<idx_t> active_threads;
 	//! Whether this is an external sort
 	bool external;
 	//! Whether any thread has called Combine yet
@@ -222,7 +223,6 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	auto &lstate = input.local_state.Cast<SortLocalSinkState>();
 
 	if (!lstate.sorted_run) {
-		++gstate.active_threads;
 		lstate.InitializeSortedRun(*this, context.client);
 		gstate.UpdateLocalState(lstate);
 	}

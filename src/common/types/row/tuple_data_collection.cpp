@@ -106,6 +106,23 @@ vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
 	return result;
 }
 
+void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t chunk_idx_end) {
+	D_ASSERT(segments.size() == 1); // Assume 1 segment for now (multi-segment destroys can be implemented if needed)
+	auto &segment = segments[0];
+	auto &chunk_begin = segment.chunks[chunk_idx_begin];
+	auto &chunk_end = segment.chunks[chunk_idx_end];
+
+	const auto row_block_begin = chunk_begin.row_block_ids.Start();
+	const auto row_block_end = chunk_end.row_block_ids.Start();
+	segment.allocator->DestroyRowBlocks(row_block_begin, row_block_end);
+
+	if (!layout.AllConstant()) {
+		const auto heap_block_begin = chunk_begin.heap_block_ids.Start();
+		const auto heap_block_end = chunk_end.heap_block_ids.Start();
+		segment.allocator->DestroyHeapBlocks(heap_block_begin, heap_block_end);
+	}
+}
+
 // LCOV_EXCL_START
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef D_ASSERT_IS_ENABLED

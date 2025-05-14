@@ -158,7 +158,8 @@ private:
 class SortedRunMergerGlobalState : public GlobalSourceState {
 public:
 	explicit SortedRunMergerGlobalState(ClientContext &context_p, const SortedRunMerger &merger_p)
-	    : context(context_p), merger(merger_p), num_runs(merger.sorted_runs.size()),
+	    : context(context_p), num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	      merger(merger_p), num_runs(merger.sorted_runs.size()),
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0),
@@ -201,25 +202,34 @@ public:
 		// Check how many partitions we can destroy
 		idx_t end_partition_idx;
 		for (end_partition_idx = destroy_partition_idx; end_partition_idx < num_partitions; end_partition_idx++) {
-			if (!partitions[end_partition_idx]->scanned) {
+			const auto &partition = *partitions[end_partition_idx];
+			if (!partition.scanned) {
 				break;
 			}
 		}
 
+		// Destroying must lag "num_threads" partitions behind to avoid destroying actively used data
+		if (end_partition_idx < num_threads) {
+			return;
+		}
+		end_partition_idx -= num_threads;
+		if (end_partition_idx <= destroy_partition_idx) {
+			return;
+		}
+
 		// Compute average number of tuples per partition to destroy
 		const auto total_tuples_to_destroy = (end_partition_idx - destroy_partition_idx) * merger.partition_size;
-		const auto tuples_to_destroy_per_partition = (total_tuples_to_destroy + num_partitions - 1) / num_partitions;
+		const auto tuples_to_destroy_per_partition = total_tuples_to_destroy / num_partitions;
 
-		// Compute tuples per block
-		const auto block_size = BufferManager::GetBufferManager(context).GetBlockSize();
-		const auto row_width = merger.key_layout->GetRowWidth();
-		const auto rows_per_block = (block_size + row_width - 1) / row_width;
+		// Compute max tuples per block
+		const auto &run = *merger.sorted_runs[0];
+		const auto tuples_per_block =
+		    run.payload_data ? run.payload_data->TuplesPerBlock() : run.key_data->TuplesPerBlock();
 
 		// Compute number of blocks we can destroy per partition
-		static constexpr idx_t BLOCKS_TO_DESTROY_PER_PARTITION_THRESHOLD = 2;
-		const auto blocks_to_destroy_per_partition = tuples_to_destroy_per_partition / rows_per_block;
-		if (blocks_to_destroy_per_partition < BLOCKS_TO_DESTROY_PER_PARTITION_THRESHOLD) {
-			return; // Not worth it yet
+		const auto blocks_to_destroy_per_partition = tuples_to_destroy_per_partition / tuples_per_block;
+		if (blocks_to_destroy_per_partition == 0) {
+			return;
 		}
 
 		for (idx_t run_idx = 0; run_idx < num_runs; run_idx++) {
@@ -245,6 +255,7 @@ public:
 
 public:
 	ClientContext &context;
+	const idx_t num_threads;
 
 	const SortedRunMerger &merger;
 	const idx_t num_runs;
@@ -319,11 +330,11 @@ void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, 
 	case SortedRunMergerTask::SCAN_PARTITION:
 		ScanPartition(gstate, chunk);
 		if (chunk.size() == 0) {
+			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
 			gstate.total_scanned += merged_partition_count;
 			partition_idx = optional_idx::Invalid();
 			task = SortedRunMergerTask::FINISHED;
-			gstate.DestroyScannedData();
 		}
 		break;
 	default:

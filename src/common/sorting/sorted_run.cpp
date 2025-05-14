@@ -230,9 +230,9 @@ static void TemplatedReorder(unique_ptr<TupleDataCollection> &key_data, unique_p
 	}
 	D_ASSERT(index == total_count);
 
+	key_data->Unpin();
 	if (!SORT_KEY::CONSTANT_SIZE) {
 		new_key_data->FinalizePinState(new_key_data_append_state.pin_state);
-		new_key_data->Unpin();
 		key_data = std::move(new_key_data);
 	}
 
@@ -287,11 +287,17 @@ void SortedRun::Finalize(bool external) {
 	finalized = true;
 }
 
-void SortedRun::DestroyData(const idx_t begin_tuple_idx, const idx_t end_tuple_idx) {
-	// key_data->DestroyData(begin_tuple_idx, end_tuple_idx);
-	// if (payload_data) {
-	// 	payload_data->DestroyData(begin_tuple_idx, end_tuple_idx);
-	// }
+void SortedRun::DestroyData(const idx_t tuple_idx_begin, const idx_t tuple_idx_end) {
+	// We always have full chunks for sorting, so we can just use the vector size
+	const auto chunk_idx_start = tuple_idx_begin / STANDARD_VECTOR_SIZE;
+	const auto chunk_idx_end = tuple_idx_end / STANDARD_VECTOR_SIZE;
+	if (chunk_idx_start == chunk_idx_end) {
+		return;
+	}
+	key_data->DestroyChunks(chunk_idx_start, chunk_idx_end);
+	if (payload_data) {
+		payload_data->DestroyChunks(chunk_idx_start, chunk_idx_end);
+	}
 }
 
 idx_t SortedRun::Count() const {

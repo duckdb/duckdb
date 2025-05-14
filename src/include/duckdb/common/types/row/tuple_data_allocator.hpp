@@ -91,6 +91,9 @@ public:
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
 	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
 	void SetDestroyBufferUponUnpin();
+	//! Destroy the blocks between the given indices
+	void DestroyRowBlocks(idx_t row_block_begin, idx_t row_block_end);
+	void DestroyHeapBlocks(idx_t heap_block_begin, idx_t heap_block_end);
 
 private:
 	//! Builds out a single part (grabs the lock)
