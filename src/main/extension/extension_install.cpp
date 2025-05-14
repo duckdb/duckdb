@@ -365,12 +365,12 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	if (options.use_etags && install_info && !install_info->etag.empty()) {
 		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
-	HTTPParams params;
-	params.Initialize(db);
-	params.logger = http_logger;
 
 	auto &http_util = HTTPUtil::Get(db);
-	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
+	auto params = http_util.InitializeParameters(db, url);
+	params->logger = http_logger;
+
+	GetRequestInfo get_request(url, headers, *params, nullptr, nullptr);
 	get_request.try_request = true;
 
 	auto response = http_util.Request(get_request);
