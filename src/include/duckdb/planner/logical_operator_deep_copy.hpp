@@ -14,6 +14,7 @@
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 
 namespace duckdb {
 
