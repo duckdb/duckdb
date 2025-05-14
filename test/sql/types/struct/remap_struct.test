@@ -194,4 +194,4 @@ SELECT remap_struct(
  {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
  {'v2': NULL, 'v3': NULL::VARCHAR});
 ----
-Target value is a struct - default value should also be a struct
+Binder Error: Default key v2 does not match target type STRUCT(x INTEGER, y INTEGER) - add a cast
