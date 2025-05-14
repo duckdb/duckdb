@@ -26,6 +26,7 @@ def geomean(xs):
             return entry
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
+
 import argparse
 
 # Set up the argument parser
@@ -42,7 +43,12 @@ parser.add_argument("--disable-timeout", action="store_true", help="Disable time
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
 parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
-parser.add_argument("--regression-threshold-seconds", type=float, default=0.05, help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.")
+parser.add_argument(
+    "--regression-threshold-seconds",
+    type=float,
+    default=0.05,
+    help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.",
+)
 
 # Parse the arguments
 args = parser.parse_args()
