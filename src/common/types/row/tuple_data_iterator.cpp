@@ -35,7 +35,8 @@ TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p
 }
 
 void TupleDataChunkIterator::InitializeCurrentChunk() {
-	collection.FetchChunk(state, current_segment_idx, current_chunk_idx, init_heap);
+	auto &segment = collection.segments[current_segment_idx];
+	segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, current_chunk_idx, init_heap);
 }
 
 bool TupleDataChunkIterator::Done() const {
