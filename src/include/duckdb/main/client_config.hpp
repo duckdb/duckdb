@@ -22,7 +22,6 @@ namespace duckdb {
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
-class HTTPLogger;
 
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;

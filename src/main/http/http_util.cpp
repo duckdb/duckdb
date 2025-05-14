@@ -2,7 +2,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/logging/httplib_logger.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/main/client_data.hpp"
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -261,9 +260,6 @@ public:
 		client->set_read_timeout(sec, usec);
 		client->set_connection_timeout(sec, usec);
 		client->set_decompress(false);
-		if (http_params.logger) {
-			SetLogger(*http_params.logger);
-		}
 
 		if (!http_params.http_proxy.empty()) {
 			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
@@ -272,10 +268,6 @@ public:
 				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
 			}
 		}
-	}
-
-	void SetLogger(HTTPLogger &logger) {
-		client->set_logger(logger.GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
 	}
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		auto headers = TransformHeaders(info.headers, info.params);
@@ -355,11 +347,38 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		client = InitializeClient(request.params, request.proto_host_port);
 	}
 
-	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() { return client->Request(request); });
+	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
+		auto response = client->Request(request);
+		LogRequest(request, response ? response.get() : nullptr);
+		return response;
+	});
+
 	// Refresh the client on retries
 	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
 
 	return RunRequestWithRetry(on_request, request);
+}
+
+void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
+	if (!request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
+		return;
+	}
+
+	stringstream out;
+
+	out << "HTTP Request:\n";
+	out << "\t" << EnumUtil::ToString(request.type) << " " << request.path << "\n";
+	for (auto &entry : request.headers) {
+		out << "\t" << entry.first << ": " << entry.second << "\n";
+	}
+	if (response) {
+		out << "\nHTTP Response:\n";
+		out << "\t" << EnumUtil::ToString(response->status) << " " << response->reason << "\n";
+		for (auto &entry : response->headers) {
+			out << "\t" << entry.first << ": " << entry.second << "\n";
+		}
+		out << "\n";
+	}
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
@@ -489,14 +508,12 @@ void HTTPParams::Initialize(DatabaseInstance &db) {
 	}
 	http_proxy_username = db.config.options.http_proxy_username;
 	http_proxy_password = db.config.options.http_proxy_password;
+	logger = db.GetLogManager().GlobalLoggerReference();
 }
 
 void HTTPParams::Initialize(ClientContext &context) {
 	Initialize(*context.db);
-	auto &client_config = ClientConfig::GetConfig(context);
-	if (client_config.enable_http_logging) {
-		logger = context.client_data->http_logger.get();
-	}
+	logger = context.logger;
 }
 
 unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {

@@ -5,7 +5,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/logging/httplib_logger.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -364,8 +363,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
 	HTTPParams params;
-	params.Initialize(db);
-	params.logger = http_logger;
+	if (context) {
+		params.Initialize(*context);
+	} else {
+		params.Initialize(db);
+	}
 
 	auto &http_util = HTTPUtil::Get(db);
 	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);

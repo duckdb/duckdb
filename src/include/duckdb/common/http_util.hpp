@@ -14,7 +14,7 @@
 
 namespace duckdb {
 class DatabaseInstance;
-class HTTPLogger;
+class Logger;
 
 enum class HTTPStatusCode : uint16_t {
 	INVALID = 0,
@@ -92,6 +92,8 @@ enum class HTTPStatusCode : uint16_t {
 	NetworkAuthenticationRequired_511 = 511,
 };
 
+struct HTTPLogWriter {};
+
 struct HTTPParams {
 	virtual ~HTTPParams() = default;
 
@@ -113,7 +115,8 @@ struct HTTPParams {
 	string http_proxy_username;
 	string http_proxy_password;
 	unordered_map<string, string> extra_headers;
-	optional_ptr<HTTPLogger> logger;
+
+	shared_ptr<Logger> logger;
 
 public:
 	void Initialize(DatabaseInstance &db);
@@ -300,6 +303,7 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
+	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);
