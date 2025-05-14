@@ -251,7 +251,11 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 
 	bool has_locals = false;
 	bool has_globals = false;
-	while (!py::none().is(current_frame)) {
+	do {
+		if (py::none().is(current_frame)) {
+			break;
+		}
+
 		py::object local_dict_p;
 		try {
 			local_dict_p = current_frame.attr("f_locals");
@@ -287,7 +291,7 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 		} catch (py::error_already_set &e) {
 			return nullptr;
 		}
-	}
+	} while (scan_all_frames && (has_locals || has_globals));
 	return nullptr;
 }
 
