@@ -34,92 +34,92 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-#  linux-debug:
-#     name: Linux Debug (${{ matrix.tag }})
-#     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#     runs-on: ubuntu-22.04
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         include:
-#           - tag: 1
-#             start_offset: ""
-#             end_offset: "--end-offset 2000"
-#           - tag: 2
-#             start_offset: "--start-offset 2000"
-#             end_offset: ""
-#     env:
-#       CC: gcc-10
-#       CXX: g++-10
-#       TREAT_WARNINGS_AS_ERRORS: 1
-#       GEN: ninja
-#       CRASH_ON_ASSERT: 1
+ linux-debug:
+    name: Linux Debug (${{ matrix.tag }})
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: 1
+            start_offset: ""
+            end_offset: "--end-offset 2000"
+          - tag: 2
+            start_offset: "--start-offset 2000"
+            end_offset: ""
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
+      GEN: ninja
+      CRASH_ON_ASSERT: 1
 
-#     steps:
-#     - uses: actions/checkout@v4
+    steps:
+    - uses: actions/checkout@v4
 
-#     - id: describe_step
-#       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
+    - id: describe_step
+      run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-#     - name: Install
-#       shell: bash
-#       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#     - name: Setup Ccache
-#       uses: hendrikmuhs/ccache-action@main
-#       with:
-#         key: ${{ github.job }}
-#         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#     - name: Build
-#       shell: bash
-#       run:  make debug
+    - name: Build
+      shell: bash
+      run:  make debug
 
-#     - name: Output version info
-#       shell: bash
-#       run: ./build/debug/duckdb -c "PRAGMA version;"
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
 
-#     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-#       shell: bash
-#       run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: bash
+      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
 
-#     - name: Test DUCKDB_INSTALL_LIB variable
-#       run: echo $DUCKDB_INSTALL_LIB
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo $DUCKDB_INSTALL_LIB
 
-#     - name: Test
-#       shell: bash
-#       run: |
-#         python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
+    - name: Test
+      shell: bash
+      run: |
+        python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
 
-#  linux-release:
-#     name: Linux Release (full suite)
-#     runs-on: ubuntu-24.04
-#     env:
-#       GEN: ninja
-#       BUILD_JEMALLOC: 1
-#       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
-#       DISABLE_SANITIZER: 1
+ linux-release:
+    name: Linux Release (full suite)
+    runs-on: ubuntu-24.04
+    env:
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
 
-#     steps:
-#     - uses: actions/checkout@v3
+    steps:
+    - uses: actions/checkout@v3
 
-#     - name: Install
-#       shell: bash
-#       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#     - name: Setup Ccache
-#       uses: hendrikmuhs/ccache-action@main
-#       with:
-#         key: ${{ github.job }}
-#         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#     - name: Build
-#       shell: bash
-#       run: make release
+    - name: Build
+      shell: bash
+      run: make release
 
-#     - name: Test
-#       shell: bash
-#       run: make allunit
+    - name: Test
+      shell: bash
+      run: make allunit
 
  force-storage:
     name: Force Storage
@@ -158,277 +158,286 @@ jobs:
       shell: bash
       run: build/reldebug/test/unittest --force-storage
 
-#  force-restart:
-#     name: Force Restart
-#     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#     runs-on: ubuntu-22.04
-#     needs: force-storage
-#     env:
-#       CC: gcc-10
-#       CXX: g++-10
-#       GEN: ninja
-#       BUILD_JEMALLOC: 1
-#       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
+ force-restart:
+    name: Force Restart
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-22.04
+    needs: force-storage
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
 
-#     steps:
-#     - uses: actions/checkout@v4
+    steps:
+    - uses: actions/checkout@v4
 
-#     - name: Install
-#       shell: bash
-#       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#     - name: Setup Ccache
-#       uses: hendrikmuhs/ccache-action@main
-#       with:
-#         key: ${{ github.job }}
-#         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#     - name: Build
-#       shell: bash
-#       run: make reldebug
+    - name: Build
+      shell: bash
+      run: make reldebug
 
-#     - name: Output version info
-#       shell: bash
-#       run: ./build/reldebug/duckdb -c "PRAGMA version;"
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
 
-#     - name: Test
-#       shell: bash
-#       run: build/reldebug/test/unittest --force-reload --force-storage
+    - name: Test
+      shell: bash
+      run: build/reldebug/test/unittest --force-reload --force-storage
 
-#  no-string-inline:
-#     name: No String Inline / Destroy Unpinned Blocks
-#     runs-on: ubuntu-24.04
-#     needs: force-storage
-#     env:
-#       GEN: ninja
-#       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-#       DISABLE_STRING_INLINE: 1
-#       DESTROY_UNPINNED_BLOCKS: 1
-#       ALTERNATIVE_VERIFY: 1
-#       DISABLE_POINTER_SALT: 1
-#       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+ no-string-inline:
+    name: No String Inline / Destroy Unpinned Blocks
+    runs-on: ubuntu-24.04
+    needs: force-storage
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
+      DISABLE_POINTER_SALT: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
-#     steps:
-#       - uses: actions/checkout@v3
-#         with:
-#           fetch-depth: 0
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-#       - name: Install
-#         shell: bash
-#         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#       - name: Setup Ccache
-#         uses: hendrikmuhs/ccache-action@main
-#         with:
-#           key: ${{ github.job }}
-#           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#       - name: Build
-#         shell: bash
-#         run: make relassert
+      - name: Build
+        shell: bash
+        run: make relassert
 
-#       - name: Test
-#         shell: bash
-#         run: build/relassert/test/unittest
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
 
-#  prefetch-all-parquet-files:
-#    name: Prefetch All Parquet Files
-#    runs-on: ubuntu-24.04
-#    needs: force-storage
-#    env:
-#      GEN: ninja
-#      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-#      PREFETCH_ALL_PARQUET_FILES: 1
-#      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+ prefetch-all-parquet-files:
+   name: Prefetch All Parquet Files
+   runs-on: ubuntu-24.04
+   needs: force-storage
+   env:
+     GEN: ninja
+     CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+     PREFETCH_ALL_PARQUET_FILES: 1
+     LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
-#    steps:
-#      - uses: actions/checkout@v3
-#        with:
-#          fetch-depth: 0
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
 
-#      - name: Install
-#        shell: bash
-#        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#      - name: Setup Ccache
-#        uses: hendrikmuhs/ccache-action@main
-#        with:
-#          key: ${{ github.job }}
-#          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#      - name: Build
-#        shell: bash
-#        run: make relassert
+     - name: Build
+       shell: bash
+       run: make relassert
 
-#      - name: Test
-#        shell: bash
-#        run: build/relassert/test/unittest
+     - name: Test
+       shell: bash
+       run: build/relassert/test/unittest
 
-#  vector-sizes:
-#     name: Vector Sizes
-#     runs-on: ubuntu-22.04
-#     needs: force-storage
-#     env:
-#       CC: gcc-10
-#       CXX: g++-10
-#       GEN: ninja
+ vector-sizes:
+    name: Vector Sizes
+    runs-on: ubuntu-22.04
+    needs: force-storage
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
 
-#     steps:
-#       - uses: actions/checkout@v3
-#         with:
-#           fetch-depth: 0
+    steps:
+      - name: Clean up the disc space
+        shell: bash
+        run: |
+          echo "Disk usage before clean up:"
+          df -h
+          rm -rf /opt/hostedtoolcache/CodeQL Java* Pypy Ruby go node
+          echo "Disk usage after clean up:"
+          df -h
 
-#       - name: Install
-#         shell: bash
-#         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-#       - name: Setup Ccache
-#         uses: hendrikmuhs/ccache-action@main
-#         with:
-#           key: ${{ github.job }}
-#           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#       - name: Build
-#         shell: bash
-#         run: STANDARD_VECTOR_SIZE=2 make relassert
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#       - name: Test
-#         shell: bash
-#         run: |
-#           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
+      - name: Build
+        shell: bash
+        run: STANDARD_VECTOR_SIZE=2 make reldebug
 
-#  valgrind:
-#     name: Valgrind
-#     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#     runs-on: ubuntu-24.04
-#     needs: force-storage
-#     env:
-#       CC: clang
-#       CXX: clang++
-#       DISABLE_SANITIZER: 1
-#       BUILD_JEMALLOC: 1
-#       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
-#       GEN: ninja
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
 
-#     steps:
-#     - uses: actions/checkout@v4
+ valgrind:
+    name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    needs: force-storage
+    env:
+      CC: clang
+      CXX: clang++
+      DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: 'icu;json;parquet;tpch'
+      GEN: ninja
 
-#     - name: Install
-#       shell: bash
-#       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
+    steps:
+    - uses: actions/checkout@v4
 
-#     - name: Setup Ccache
-#       uses: hendrikmuhs/ccache-action@main
-#       with:
-#         key: ${{ github.job }}
-#         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
 
-#     - name: Build
-#       shell: bash
-#       run: make relassert
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#     - name: Output version info
-#       shell: bash
-#       run: ./build/relassert/duckdb -c "PRAGMA version;"
+    - name: Build
+      shell: bash
+      run: make relassert
 
-#     - name: Test
-#       shell: bash
-#       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
+    - name: Output version info
+      shell: bash
+      run: ./build/relassert/duckdb -c "PRAGMA version;"
 
-#  vector-verification:
-#     name: Vector Verification Tests
-#     needs: force-storage
-#     runs-on: ubuntu-22.04
-#     env:
-#       CC: gcc-10
-#       CXX: g++-10
-#       GEN: ninja
-#       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+    - name: Test
+      shell: bash
+      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
-#     steps:
-#       - uses: actions/checkout@v3
-#         with:
-#           fetch-depth: 0
+ vector-verification:
+    name: Vector Verification Tests
+    needs: force-storage
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
 
-#       - name: Install
-#         shell: bash
-#         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-#       - name: Setup Ccache
-#         uses: hendrikmuhs/ccache-action@main
-#         with:
-#           key: ${{ github.job }}
-#           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#       - name: Build
-#         shell: bash
-#         env:
-#           DISABLE_CPP_UNITTESTS: 1
-#         run: make reldebug
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#       - name: Test dictionary_expression
-#         shell: bash
-#         env:
-#           DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_expression
-#         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+      - name: Build
+        shell: bash
+        env:
+          DISABLE_CPP_UNITTESTS: 1
+        run: make reldebug
 
-#       - name: Test dictionary_operator
-#         shell: bash
-#         env:
-#           DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_operator
-#         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+      - name: Test dictionary_expression
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_expression
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
-#       - name: Test constant_operator
-#         shell: bash
-#         env:
-#           DUCKDB_DEBUG_VERIFY_VECTOR: constant_operator
-#         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+      - name: Test dictionary_operator
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
-#       - name: Test sequence_operator
-#         shell: bash
-#         env:
-#           DUCKDB_DEBUG_VERIFY_VECTOR: sequence_operator
-#         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+      - name: Test constant_operator
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: constant_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
-#       - name: Test nested_shuffle
-#         shell: bash
-#         env:
-#           DUCKDB_DEBUG_VERIFY_VECTOR: nested_shuffle
-#         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+      - name: Test sequence_operator
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: sequence_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
-#  latest-storage:
-#     name: Latest Storage
-#     needs: force-storage
-#     runs-on: ubuntu-22.04
-#     env:
-#       CC: gcc-10
-#       CXX: g++-10
-#       GEN: ninja
-#       CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+      - name: Test nested_shuffle
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: nested_shuffle
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
-#     steps:
-#       - uses: actions/checkout@v3
-#         with:
-#           fetch-depth: 0
+ latest-storage:
+    name: Latest Storage
+    needs: force-storage
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
 
-#       - name: Install
-#         shell: bash
-#         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-#       - name: Setup Ccache
-#         uses: hendrikmuhs/ccache-action@main
-#         with:
-#           key: ${{ github.job }}
-#           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-#       - name: Build
-#         shell: bash
-#         run: DEBUG_STACKTRACE=1 BLOCK_VERIFICATION=1 LATEST_STORAGE=1 make reldebug
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-#       - name: Test
-#         shell: bash
-#         run: |
-#           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
+      - name: Build
+        shell: bash
+        run: DEBUG_STACKTRACE=1 BLOCK_VERIFICATION=1 LATEST_STORAGE=1 make reldebug
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
 
  threadsan:
     name: Thread Sanitizer
@@ -471,3 +480,67 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
+
+
+ linux-httpfs:
+    name: Linux HTTPFS
+    needs: force-storage
+    runs-on: ubuntu-22.04
+    env:
+      CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
+      S3_TEST_SERVER_AVAILABLE: 1
+      AWS_DEFAULT_REGION: eu-west-1
+      AWS_ACCESS_KEY_ID: minio_duckdb_user
+      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
+      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
+      DUCKDB_S3_USE_SSL: false
+      HTTP_PROXY_PUBLIC: localhost:3128
+      TEST_PERSISTENT_SECRETS_AVAILABLE: true
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Fix permissions of test secrets
+      shell: bash
+      run: chmod -R 700 data/secrets
+
+    # TODO: fix the authenticated proxy here
+    - name: Install and run http proxy squid
+      shell: bash
+      run: |
+        sudo apt-get install squid
+        ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Start test server & run tests
+      shell: bash
+      run: |
+        sudo ./scripts/install_s3_test_server.sh
+        ./scripts/generate_presigned_url.sh
+        source ./scripts/run_s3_test_server.sh
+        source ./scripts/set_s3_test_server_variables.sh
+        sleep 60
+
+        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'

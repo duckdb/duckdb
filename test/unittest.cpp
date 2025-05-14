@@ -15,6 +15,7 @@ static bool test_memory_leaks = false;
 static bool summarize_failures = false;
 // this counter is for the order number of the failed test case in Failures Summary
 static size_t failures_summary_counter = 0;
+mutex counter_mutex;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -33,18 +34,12 @@ bool SummarizeFailures() {
 }
 
 size_t GetSummaryCounter() {
-	return ++failures_summary_counter;
+	{
+		lock_guard<mutex> lock(counter_mutex);
+		++failures_summary_counter;
+	}
+	return failures_summary_counter;
 }
-
-// inline FailureSummary &GetFailureSummary() {
-//     static FailureSummary instance;
-//     return instance;
-// }
-
-// std::ostringstream &GetSummary() {
-// 	static std::ostringstream summary;
-// 	return summary;
-// }
 
 } // namespace duckdb
 
@@ -109,9 +104,7 @@ int main(int argc, char *argv[]) {
 	RegisterSqllogictests();
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	// std::string failures_summary = GetFailureSummary().ToString();
-	std::string failures_summary;
-	failures_summary = GetFailureSummary().ToString();
+	std::string failures_summary = SQLLogicTestLogger::GetFailureSummary();
 	if (!failures_summary.empty() && summarize_failures) {
 		std::cerr << "\n====================================================" << std::endl;
 		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;

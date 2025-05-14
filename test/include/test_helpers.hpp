@@ -25,6 +25,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "../sqlite/sqllogic_test_logger.hpp"
 #include <sstream>
 #include <iostream>
 namespace duckdb {
@@ -62,27 +63,6 @@ void WriteBinary(string path, const uint8_t *data, uint64_t length);
 
 bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
-
-class FailureSummary {
-public:
-	void SafeAppend(const std::string &line);
-	std::string ToString() const;
-
-private:
-	std::string summary;
-	mutable std::mutex summary_lock;
-};
-
-// struct FailureSummary {
-// 	void SafeAppend(const std::function<void(std::ostringstream &)> &callback);
-// 	std::string ToString() const;
-
-// private:
-// 	std::ostringstream summary;
-// 	mutable std::mutex lock;
-// };
-
-FailureSummary &GetFailureSummary();
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())

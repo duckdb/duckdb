@@ -8,7 +8,26 @@ import os
 import shutil
 import re
 
-error_container = []
+
+class ErrorContainer:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._errors = []
+
+    def append(self, item):
+        with self._lock:
+            self._errors.append(item)
+
+    def get_errors(self):
+        with self._lock:
+            return list(self._errors)
+
+    def __len__(self):
+        with self._lock:
+            return len(self._errors)
+
+
+error_container = ErrorContainer()
 
 
 def valid_timeout(value):
@@ -155,10 +174,12 @@ def launch_test(test, list_of_tests=False):
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
         # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
+        env = os.environ.copy()
         if list_of_tests or no_exit or tests_per_invocation:
-            env = {'SUMMARIZE_FAILURES': '0', 'NO_DUPLICATING_HEADERS': '1'}
+            env['SUMMARIZE_FAILURES'] = '0'
+            env['NO_DUPLICATING_HEADERS'] = '1'
         else:
-            env = {'SUMMARIZE_FAILURES': '0'}
+            env['SUMMARIZE_FAILURES'] = '0'
         res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
@@ -268,7 +289,7 @@ if len(error_container):
 ====================================================\n
 '''
     )
-    for i, error in enumerate(error_container, start=1):
+    for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"{i}:", error["test"])
         print(error["stderr"])
 exit(1)

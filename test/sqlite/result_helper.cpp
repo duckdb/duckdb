@@ -22,10 +22,6 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	auto sort_style = query.sort_style;
 	auto query_has_label = query.query_has_label;
 	auto &query_label = query.query_label;
-<<<<<<< HEAD
-	// // auto &oss = GetSummary();
-=======
->>>>>>> 21e64551dd (restored from commits used to return strings from logger functions)
 
 	SQLLogicTestLogger logger(context, query);
 	if (result.HasError()) {
@@ -98,9 +94,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		if (!csv_error.empty()) {
 			string log_message;
 			log_message += logger.PrintErrorHeader(csv_error);
-			GetFailureSummary().SafeAppend(log_message);
-			std::cerr << log_message;
-			// GetSummary() << log_message;
+			logger.LogBoth(log_message);
 			return false;
 		}
 	} else {
@@ -517,15 +511,13 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		log_message += logger.PrintSQL();
 		log_message += logger.PrintLineSep();
 		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		            << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-		            << termcolor::reset;
+		    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
+		    << termcolor::reset;
 		oss << lvalue_str << " <> " << rvalue_str << std::endl;
 		log_message += oss.str();
 		log_message += logger.PrintLineSep();
 		log_message += logger.PrintResultError(result_values, values, expected_column_count, row_wise);
-		GetFailureSummary().SafeAppend(log_message);
-		std::cerr << log_message;
-		// GetSummary() << log_message;
+		logger.LogBoth(log_message);
 		return false;
 	}
 	return true;
@@ -545,12 +537,10 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 		log_message += logger.PrintErrorHeader("Test error!");
 		log_message += logger.PrintLineSep();
 		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
-		            << std::endl;
+		    << std::endl;
 		log_message += oss.str();
 		log_message += logger.PrintLineSep();
-		GetFailureSummary().SafeAppend(log_message);
-		std::cerr << log_message;
-		// GetSummary() << log_message;
+		logger.LogBoth(log_message);
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);
