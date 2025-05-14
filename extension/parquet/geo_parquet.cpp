@@ -413,7 +413,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);
 
 		// Create an expression reader that applies the conversion function to the child reader
-		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
+		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr), schema);
 	}
 
 	// Otherwise, unrecognized encoding
