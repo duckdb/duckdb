@@ -89,6 +89,10 @@ HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
 	return *db.config.http_util;
 }
 
+string HTTPUtil::GetName() const {
+	return "Built-In";
+}
+
 bool HTTPResponse::ShouldRetry() const {
 	if (HasRequestError()) {
 		// always retry on request errors

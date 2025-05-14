@@ -237,10 +237,10 @@ index 24123b2..079083d 100644
  
  void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
 diff --git a/extension/httpfs/httpfs_client.cpp b/extension/httpfs/httpfs_client.cpp
-index 6fb33d9..4a36d67 100644
+index 6fb33d9..bf87668 100644
 --- a/extension/httpfs/httpfs_client.cpp
 +++ b/extension/httpfs/httpfs_client.cpp
-@@ -167,137 +167,4 @@ unordered_map<string, string> HTTPFSUtil::ParseGetParameters(const string &text)
+@@ -167,137 +167,8 @@ unordered_map<string, string> HTTPFSUtil::ParseGetParameters(const string &text)
  	return result;
  }
  
@@ -375,8 +375,10 @@ index 6fb33d9..4a36d67 100644
 -	case HTTPStatusCode::InternalServerError_500:
 -		return "Internal Server Error";
 -	}
--}
--
++string HTTPFSUtil::GetName() const {
++	return "HTTPFS";
+ }
+ 
  } // namespace duckdb
 diff --git a/extension/httpfs/include/hffs.hpp b/extension/httpfs/include/hffs.hpp
 index a5901e5..7fe1af1 100644
@@ -417,7 +419,7 @@ index 37773fe..a6b8570 100644
  	// File handle info
  	FileOpenFlags flags;
 diff --git a/extension/httpfs/include/httpfs_client.hpp b/extension/httpfs/include/httpfs_client.hpp
-index dff9d18..084bfc2 100644
+index dff9d18..16545e5 100644
 --- a/extension/httpfs/include/httpfs_client.hpp
 +++ b/extension/httpfs/include/httpfs_client.hpp
 @@ -7,6 +7,8 @@ struct FileOpenerInfo;
@@ -429,7 +431,7 @@ index dff9d18..084bfc2 100644
  	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
  	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
  	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
-@@ -16,18 +18,16 @@ struct HTTPFSParams : public HTTPParams {
+@@ -16,18 +18,18 @@ struct HTTPFSParams : public HTTPParams {
  	idx_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
  	string ca_cert_file;
  	string bearer_token;
@@ -447,6 +449,8 @@ index dff9d18..084bfc2 100644
  	static unordered_map<string, string> ParseGetParameters(const string &text);
 -	static string GetStatusMessage(HTTPStatusCode status);
 +	static shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener);
++
++	string GetName() const override;
  };
  
  } // namespace duckdb
