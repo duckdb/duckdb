@@ -89,19 +89,20 @@ TEST_CASE("Test getting the table names of a query in the C API", "[capi]") {
 	tester.Query("CREATE TABLE \"schema.2\".\"table.2\"(i INT)");
 
 	string query = "SELECT * FROM schema1.\"table.1\", \"schema.2\".\"table.2\"";
-	auto table_names_value = duckdb_get_table_names(tester.connection, query.c_str(), true);
+	auto table_name_values = duckdb_get_table_names(tester.connection, query.c_str(), true);
 
-	duckdb::vector<string> expected_names = {"schema1.\"table.1\"", "\"schema.2\".\"table.2\""};
-	auto size = duckdb_get_list_size(table_names_value);
+	auto size = duckdb_get_list_size(table_name_values);
 	REQUIRE(size == 2);
+
+	duckdb::unordered_set<string> expected_names = {"schema1.\"table.1\"", "\"schema.2\".\"table.2\""};
 	for (idx_t i = 0; i < size; i++) {
-		auto name_value = duckdb_get_list_child(table_names_value, i);
+		auto name_value = duckdb_get_list_child(table_name_values, i);
 		auto name = duckdb_get_varchar(name_value);
-		REQUIRE(StringUtil::Equals(name, expected_names[i].c_str()));
+		REQUIRE(expected_names.count(name) == 1);
 		duckdb_free(name);
 		duckdb_destroy_value(&name_value);
 	}
 
-	duckdb_destroy_value(&table_names_value);
+	duckdb_destroy_value(&table_name_values);
 	tester.Cleanup();
 }
