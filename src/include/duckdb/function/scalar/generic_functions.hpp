@@ -55,4 +55,14 @@ struct CreateSortKeyFun {
 	static ScalarFunction GetFunction();
 };
 
+struct DecodeSortKeyFun {
+	static constexpr const char *Name = "decode_sort_key";
+	static constexpr const char *Parameters = "parameters...";
+	static constexpr const char *Description = "Decodes a sort key created with create_sort_key into a STRUCT based on a set of sort qualifiers";
+	static constexpr const char *Example = "decode_sort_key(sort_key, 'A INTEGER', 'DESC')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

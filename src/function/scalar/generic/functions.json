@@ -27,5 +27,12 @@
         "description": "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers",
         "example": "create_sort_key('A', 'DESC')",
         "type": "scalar_function"
+    },
+    {
+        "name": "decode_sort_key",
+        "parameters": "parameters...",
+        "description": "Decodes a sort key created with create_sort_key into a STRUCT based on a set of sort qualifiers",
+        "example": "decode_sort_key(sort_key, 'A INTEGER', 'DESC')",
+        "type": "scalar_function"
     }
 ]

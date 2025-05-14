@@ -6,18 +6,19 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
-struct CreateSortKeyBindData : public FunctionData {
+struct SortKeyBindData : public FunctionData {
 	vector<OrderModifiers> modifiers;
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<CreateSortKeyBindData>();
+		auto &other = other_p.Cast<SortKeyBindData>();
 		return modifiers == other.modifiers;
 	}
 	unique_ptr<FunctionData> Copy() const override {
-		auto result = make_uniq<CreateSortKeyBindData>();
+		auto result = make_uniq<SortKeyBindData>();
 		result->modifiers = modifiers;
 		return std::move(result);
 	}
@@ -29,7 +30,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		throw BinderException(
 		    "Arguments to create_sort_key must be [key1, sort_specifier1, key2, sort_specifier2, ...]");
 	}
-	auto result = make_uniq<CreateSortKeyBindData>();
+	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		if (!arguments[i]->IsFoldable()) {
 			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i]->ToString());
@@ -755,7 +756,7 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &resu
 }
 
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<CreateSortKeyBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
 
 	// prepare the sort key data
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
@@ -772,6 +773,73 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 //===--------------------------------------------------------------------===//
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
+unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	if ((arguments.size() - 1) % 2 != 0) {
+		throw BinderException(
+		    "Arguments to decode_sort_key must be [sort_key, col1, sort_specifier1, col2, sort_specifier2, ...]");
+	}
+	bool all_constant = true;
+	idx_t constant_size = 0;
+	child_list_t<LogicalType> children;
+	auto result = make_uniq<SortKeyBindData>();
+	for (idx_t i = 1; i < arguments.size(); i += 2) {
+		// Parse column definition
+		const auto &col_arg = *arguments[i];
+		if (!col_arg.IsFoldable()) {
+			throw BinderException("col must be a constant value - but got %s", col_arg.ToString());
+		}
+		Value col = ExpressionExecutor::EvaluateScalar(context, col_arg);
+		const auto col_list = Parser::ParseColumnList(col.ToString());
+		if (col_list.LogicalColumnCount() != 1) {
+			throw BinderException("decode_sort_key col must contain exactly one column");
+		}
+		const auto &col_name = col_list.GetColumnNames()[0];
+		const auto &col_type = col_list.GetColumnTypes()[0];
+
+		// Keep track of this to validate the arguments
+		const auto physical_type = col_type.InternalType();
+		if (!TypeIsConstantSize(physical_type)) {
+			all_constant = false;
+		} else {
+			// we always add one byte for the validity
+			constant_size += GetTypeIdSize(physical_type) + 1;
+		}
+
+		// Add name/type to create a struct
+		children.emplace_back(col_name, col_type);
+
+		// Parse sort specifier
+		const auto &specifier_arg = *arguments[i + 1];
+		if (!specifier_arg.IsFoldable()) {
+			throw BinderException("sort_specifier must be a constant value - but got %s", specifier_arg.ToString());
+		}
+		Value sort_specifier = ExpressionExecutor::EvaluateScalar(context, specifier_arg);
+		if (sort_specifier.IsNull()) {
+			throw BinderException("sort_specifier cannot be NULL");
+		}
+		const auto sort_specifier_str = sort_specifier.ToString();
+		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
+	}
+
+	const auto &sort_key_arg = *arguments[0];
+	if (sort_key_arg.return_type == LogicalType::BIGINT) {
+		if (!all_constant || constant_size > sizeof(int64_t)) {
+			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
+		}
+	} else if (sort_key_arg.return_type == LogicalType::BLOB) {
+		if (all_constant && constant_size <= sizeof(int64_t)) {
+			throw BinderException("sort_key has type BLOB but arguments require BIGINT");
+		}
+	} else {
+		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
+		                      sort_key_arg.return_type.ToString());
+	}
+	bound_function.return_type = LogicalType::STRUCT(std::move(children));
+
+	return std::move(result);
+}
+
 struct DecodeSortKeyVectorData {
 	DecodeSortKeyVectorData(const LogicalType &type, OrderModifiers modifiers)
 	    : flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
@@ -817,8 +885,15 @@ struct DecodeSortKeyVectorData {
 };
 
 struct DecodeSortKeyData {
-	explicit DecodeSortKeyData(string_t &sort_key)
+	DecodeSortKeyData() : data(nullptr), size(DConstants::INVALID_INDEX), position(DConstants::INVALID_INDEX) {
+	}
+
+	explicit DecodeSortKeyData(const string_t &sort_key)
 	    : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0) {
+	}
+
+	explicit DecodeSortKeyData(const int64_t &sort_key)
+	    : data(const_data_ptr_cast(&sort_key)), size(sizeof(int64_t)), position(0) {
 	}
 
 	const_data_ptr_t data;
@@ -1026,11 +1101,84 @@ void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, i
 	}
 }
 
+static void DecodeSortKeyInternal(const DecodeSortKeyData decode_data[], const DecodeSortKeyVectorData &sort_key_data,
+                                  Vector &result, const idx_t count) {
+}
+
+static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
+
+	const auto count = args.size();
+	auto &sort_key_vec = args.data[0];
+	UnifiedVectorFormat sort_key_vec_format;
+	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
+
+	if (!sort_key_vec_format.validity.AllValid()) {
+		throw InvalidInputException("Inputs to decode_sort_key cannot be NULL!");
+	}
+
+	// Construct utility for all sort keys that we will decode
+	DecodeSortKeyData decode_data[STANDARD_VECTOR_SIZE];
+	int64_t bswapped_ints[STANDARD_VECTOR_SIZE];
+	if (result.GetType() == LogicalType::BLOB) {
+		const auto sort_keys = UnifiedVectorFormat::GetData<string_t>(sort_key_vec_format);
+		if (sort_key_vec_format.sel->IsSet()) {
+			for (idx_t i = 0; i < count; i++) {
+				const auto idx = sort_key_vec_format.sel->get_index(i);
+				decode_data[i] = DecodeSortKeyData(sort_keys[idx]);
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				decode_data[i] = DecodeSortKeyData(sort_keys[i]);
+			}
+		}
+	} else {
+		D_ASSERT(result.GetType() == LogicalType::BIGINT);
+		const auto sort_keys = UnifiedVectorFormat::GetData<int64_t>(sort_key_vec_format);
+		if (sort_key_vec_format.sel->IsSet()) {
+			for (idx_t i = 0; i < count; i++) {
+				const auto idx = sort_key_vec_format.sel->get_index(i);
+				bswapped_ints[i] = BSwap(sort_keys[idx]);
+				decode_data[i] = DecodeSortKeyData(bswapped_ints[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				bswapped_ints[i] = BSwap(sort_keys[i]);
+				decode_data[i] = DecodeSortKeyData(bswapped_ints[i]);
+			}
+		}
+	}
+
+	// Loop through the columns
+	const auto &result_type = result.GetType();
+	const auto &child_vectors = StructVector::GetEntries(result);
+	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
+		auto &child_vector = *child_vectors[c];
+		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
+		DecodeSortKeyInternal(decode_data, sort_key_data, child_vector, count);
+	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Get Functions
+//===--------------------------------------------------------------------===//
 ScalarFunction CreateSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
 	                                 CreateSortKeyBind);
 	sort_key_function.varargs = LogicalType::ANY;
 	sort_key_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return sort_key_function;
+}
+
+ScalarFunction DecodeSortKeyFun::GetFunction() {
+	ScalarFunction sort_key_function("decode_sort_key", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                 LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction,
+	                                 DecodeSortKeyBind);
+	sort_key_function.varargs = LogicalType::VARCHAR;
 	return sort_key_function;
 }
 
