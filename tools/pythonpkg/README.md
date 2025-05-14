@@ -8,12 +8,6 @@ You can install the latest release of DuckDB directly from [PyPi](https://pypi.o
 pip install duckdb
 ```
 
-Or if you prefer [Conda](https://anaconda.org/conda-forge/python-duckdb):
-
-```bash
-conda install -c conda-forge python-duckdb
-```
-
 ## Documentation
 
 [DuckDB.org](https://duckdb.org) is a great resource for documentation:
