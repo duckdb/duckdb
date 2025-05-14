@@ -268,4 +268,4 @@ string HTTPUtil::GetStatusMessage(HTTPStatusCode status) {
 	}
 }
 
-}
+} // namespace duckdb

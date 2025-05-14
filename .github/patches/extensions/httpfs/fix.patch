@@ -1,0 +1,437 @@
+diff --git a/extension/httpfs/hffs.cpp b/extension/httpfs/hffs.cpp
+index a7c70d8..ba89a39 100644
+--- a/extension/httpfs/hffs.cpp
++++ b/extension/httpfs/hffs.cpp
+@@ -205,7 +205,9 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
+ 
+ 	FileOpenerInfo info;
+ 	info.file_path = path;
+-	auto http_params = HTTPFSParams::ReadFrom(opener, info);
++	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util->InitializeParameters(opener, info);
++	auto &http_params = params->Cast<HTTPFSParams>();
+ 	SetParams(http_params, path, opener);
+ 	auto http_state = HTTPState::TryGetState(opener).get();
+ 
+@@ -278,10 +280,11 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const OpenFileInf
+ 	FileOpenerInfo info;
+ 	info.file_path = file.path;
+ 
+-	auto params = HTTPFSParams::ReadFrom(opener, info);
+-	SetParams(params, file.path, opener);
++	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util->InitializeParameters(opener, info);
++	SetParams(params->Cast<HTTPFSParams>(), file.path, opener);
+ 
+-	return duckdb::make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, params);
++	return duckdb::make_uniq<HFFileHandle>(*this, std::move(parsed_url), file, flags, std::move(params));
+ }
+ 
+ void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener) {
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index 24123b2..aabecc5 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -21,7 +21,7 @@
+ 
+ namespace duckdb {
+ 
+-shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener) {
++shared_ptr<HTTPUtil> HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
+ 	if (opener) {
+ 		auto db = opener->TryGetDatabase();
+ 		if (db) {
+@@ -32,9 +32,9 @@ shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener) {
+ 	return make_shared_ptr<HTTPFSUtil>();
+ }
+ 
+-HTTPFSParams HTTPFSParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
+-	HTTPFSParams result;
+-	result.http_util = GetHTTPUtil(opener);
++unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
++	auto result = make_uniq<HTTPFSParams>();
++	result->Initialize(opener);
+ 
+ 	// No point in continueing without an opener
+ 	if (!opener) {
+@@ -44,41 +44,31 @@ HTTPFSParams HTTPFSParams::ReadFrom(optional_ptr<FileOpener> opener, optional_pt
+ 	Value value;
+ 
+ 	// Setting lookups
+-	FileOpener::TryGetCurrentSetting(opener, "http_timeout", result.timeout, info);
+-	FileOpener::TryGetCurrentSetting(opener, "force_download", result.force_download, info);
+-	FileOpener::TryGetCurrentSetting(opener, "http_retries", result.retries, info);
+-	FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", result.retry_wait_ms, info);
+-	FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", result.retry_backoff, info);
+-	FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", result.keep_alive, info);
+-	FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", result.enable_server_cert_verification,
++	FileOpener::TryGetCurrentSetting(opener, "http_timeout", result->timeout, info);
++	FileOpener::TryGetCurrentSetting(opener, "force_download", result->force_download, info);
++	FileOpener::TryGetCurrentSetting(opener, "http_retries", result->retries, info);
++	FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", result->retry_wait_ms, info);
++	FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", result->retry_backoff, info);
++	FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", result->keep_alive, info);
++	FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", result->enable_server_cert_verification,
+ 	                                 info);
+-	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
+-	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
++	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result->ca_cert_file, info);
++	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result->hf_max_per_page, info);
+ 
+ 	// HTTP Secret lookups
+ 	KeyValueSecretReader settings_reader(*opener, info, "http");
+ 
+-	auto client_context = FileOpener::TryGetClientContext(opener);
+-	if (client_context) {
+-		result.Initialize(*client_context);
+-	} else {
+-		auto db = FileOpener::TryGetDatabase(opener);
+-		if (db) {
+-			result.Initialize(*db);
+-		}
+-	}
+-
+ 	string proxy_setting;
+ 	if (settings_reader.TryGetSecretKey<string>("http_proxy", proxy_setting) && !proxy_setting.empty()) {
+ 		idx_t port;
+ 		string host;
+ 		HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
+-		result.http_proxy = host;
+-		result.http_proxy_port = port;
++		result->http_proxy = host;
++		result->http_proxy_port = port;
+ 	}
+-	settings_reader.TryGetSecretKey<string>("http_proxy_username", result.http_proxy_username);
+-	settings_reader.TryGetSecretKey<string>("http_proxy_password", result.http_proxy_password);
+-	settings_reader.TryGetSecretKey<string>("bearer_token", result.bearer_token);
++	settings_reader.TryGetSecretKey<string>("http_proxy_username", result->http_proxy_username);
++	settings_reader.TryGetSecretKey<string>("http_proxy_password", result->http_proxy_password);
++	settings_reader.TryGetSecretKey<string>("bearer_token", result->bearer_token);
+ 
+ 	Value extra_headers;
+ 	if (settings_reader.TryGetSecretKey("extra_http_headers", extra_headers)) {
+@@ -86,7 +76,7 @@ HTTPFSParams HTTPFSParams::ReadFrom(optional_ptr<FileOpener> opener, optional_pt
+ 		for (const auto &child : children) {
+ 			auto kv = StructValue::GetChildren(child);
+ 			D_ASSERT(kv.size() == 2);
+-			result.extra_headers[kv[0].GetValue<string>()] = kv[1].GetValue<string>();
++			result->extra_headers[kv[0].GetValue<string>()] = kv[1].GetValue<string>();
+ 		}
+ 	}
+ 
+@@ -286,8 +276,8 @@ void TimestampToTimeT(timestamp_t timestamp, time_t &result) {
+ }
+ 
+ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
+-                               HTTPFSParams http_params_p)
+-    : FileHandle(fs, file.path, flags), http_params(std::move(http_params_p)), flags(flags), length(0),
++                               unique_ptr<HTTPParams> params_p)
++    : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params_p->Cast<HTTPFSParams>()), flags(flags), length(0),
+       buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0), buffer_end(0) {
+ 	// check if the handle has extended properties that can be set directly in the handle
+ 	// if we have these properties we don't need to do a head request to obtain them later
+@@ -318,7 +308,9 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
+ 
+ 	FileOpenerInfo info;
+ 	info.file_path = file.path;
+-	auto params = HTTPFSParams::ReadFrom(opener, info);
++
++	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util->InitializeParameters(opener, info);
+ 
+ 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+ 	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+@@ -327,10 +319,11 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const OpenFileInfo &file
+ 
+ 		if (secret_match.HasMatch()) {
+ 			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
+-			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
++			auto &httpfs_params = params->Cast<HTTPFSParams>();
++			httpfs_params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+ 		}
+ 	}
+-	return duckdb::make_uniq<HTTPFileHandle>(*this, file, flags, params);
++	return duckdb::make_uniq<HTTPFileHandle>(*this, file, flags, std::move(params));
+ }
+ 
+ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+diff --git a/extension/httpfs/httpfs_client.cpp b/extension/httpfs/httpfs_client.cpp
+index 6fb33d9..4a36d67 100644
+--- a/extension/httpfs/httpfs_client.cpp
++++ b/extension/httpfs/httpfs_client.cpp
+@@ -167,137 +167,4 @@ unordered_map<string, string> HTTPFSUtil::ParseGetParameters(const string &text)
+ 	return result;
+ }
+ 
+-string HTTPFSUtil::GetStatusMessage(HTTPStatusCode status) {
+-	switch (status) {
+-	case HTTPStatusCode::Continue_100:
+-		return "Continue";
+-	case HTTPStatusCode::SwitchingProtocol_101:
+-		return "Switching Protocol";
+-	case HTTPStatusCode::Processing_102:
+-		return "Processing";
+-	case HTTPStatusCode::EarlyHints_103:
+-		return "Early Hints";
+-	case HTTPStatusCode::OK_200:
+-		return "OK";
+-	case HTTPStatusCode::Created_201:
+-		return "Created";
+-	case HTTPStatusCode::Accepted_202:
+-		return "Accepted";
+-	case HTTPStatusCode::NonAuthoritativeInformation_203:
+-		return "Non-Authoritative Information";
+-	case HTTPStatusCode::NoContent_204:
+-		return "No Content";
+-	case HTTPStatusCode::ResetContent_205:
+-		return "Reset Content";
+-	case HTTPStatusCode::PartialContent_206:
+-		return "Partial Content";
+-	case HTTPStatusCode::MultiStatus_207:
+-		return "Multi-Status";
+-	case HTTPStatusCode::AlreadyReported_208:
+-		return "Already Reported";
+-	case HTTPStatusCode::IMUsed_226:
+-		return "IM Used";
+-	case HTTPStatusCode::MultipleChoices_300:
+-		return "Multiple Choices";
+-	case HTTPStatusCode::MovedPermanently_301:
+-		return "Moved Permanently";
+-	case HTTPStatusCode::Found_302:
+-		return "Found";
+-	case HTTPStatusCode::SeeOther_303:
+-		return "See Other";
+-	case HTTPStatusCode::NotModified_304:
+-		return "Not Modified";
+-	case HTTPStatusCode::UseProxy_305:
+-		return "Use Proxy";
+-	case HTTPStatusCode::unused_306:
+-		return "unused";
+-	case HTTPStatusCode::TemporaryRedirect_307:
+-		return "Temporary Redirect";
+-	case HTTPStatusCode::PermanentRedirect_308:
+-		return "Permanent Redirect";
+-	case HTTPStatusCode::BadRequest_400:
+-		return "Bad Request";
+-	case HTTPStatusCode::Unauthorized_401:
+-		return "Unauthorized";
+-	case HTTPStatusCode::PaymentRequired_402:
+-		return "Payment Required";
+-	case HTTPStatusCode::Forbidden_403:
+-		return "Forbidden";
+-	case HTTPStatusCode::NotFound_404:
+-		return "Not Found";
+-	case HTTPStatusCode::MethodNotAllowed_405:
+-		return "Method Not Allowed";
+-	case HTTPStatusCode::NotAcceptable_406:
+-		return "Not Acceptable";
+-	case HTTPStatusCode::ProxyAuthenticationRequired_407:
+-		return "Proxy Authentication Required";
+-	case HTTPStatusCode::RequestTimeout_408:
+-		return "Request Timeout";
+-	case HTTPStatusCode::Conflict_409:
+-		return "Conflict";
+-	case HTTPStatusCode::Gone_410:
+-		return "Gone";
+-	case HTTPStatusCode::LengthRequired_411:
+-		return "Length Required";
+-	case HTTPStatusCode::PreconditionFailed_412:
+-		return "Precondition Failed";
+-	case HTTPStatusCode::PayloadTooLarge_413:
+-		return "Payload Too Large";
+-	case HTTPStatusCode::UriTooLong_414:
+-		return "URI Too Long";
+-	case HTTPStatusCode::UnsupportedMediaType_415:
+-		return "Unsupported Media Type";
+-	case HTTPStatusCode::RangeNotSatisfiable_416:
+-		return "Range Not Satisfiable";
+-	case HTTPStatusCode::ExpectationFailed_417:
+-		return "Expectation Failed";
+-	case HTTPStatusCode::ImATeapot_418:
+-		return "I'm a teapot";
+-	case HTTPStatusCode::MisdirectedRequest_421:
+-		return "Misdirected Request";
+-	case HTTPStatusCode::UnprocessableContent_422:
+-		return "Unprocessable Content";
+-	case HTTPStatusCode::Locked_423:
+-		return "Locked";
+-	case HTTPStatusCode::FailedDependency_424:
+-		return "Failed Dependency";
+-	case HTTPStatusCode::TooEarly_425:
+-		return "Too Early";
+-	case HTTPStatusCode::UpgradeRequired_426:
+-		return "Upgrade Required";
+-	case HTTPStatusCode::PreconditionRequired_428:
+-		return "Precondition Required";
+-	case HTTPStatusCode::TooManyRequests_429:
+-		return "Too Many Requests";
+-	case HTTPStatusCode::RequestHeaderFieldsTooLarge_431:
+-		return "Request Header Fields Too Large";
+-	case HTTPStatusCode::UnavailableForLegalReasons_451:
+-		return "Unavailable For Legal Reasons";
+-	case HTTPStatusCode::NotImplemented_501:
+-		return "Not Implemented";
+-	case HTTPStatusCode::BadGateway_502:
+-		return "Bad Gateway";
+-	case HTTPStatusCode::ServiceUnavailable_503:
+-		return "Service Unavailable";
+-	case HTTPStatusCode::GatewayTimeout_504:
+-		return "Gateway Timeout";
+-	case HTTPStatusCode::HttpVersionNotSupported_505:
+-		return "HTTP Version Not Supported";
+-	case HTTPStatusCode::VariantAlsoNegotiates_506:
+-		return "Variant Also Negotiates";
+-	case HTTPStatusCode::InsufficientStorage_507:
+-		return "Insufficient Storage";
+-	case HTTPStatusCode::LoopDetected_508:
+-		return "Loop Detected";
+-	case HTTPStatusCode::NotExtended_510:
+-		return "Not Extended";
+-	case HTTPStatusCode::NetworkAuthenticationRequired_511:
+-		return "Network Authentication Required";
+-
+-	default:
+-	case HTTPStatusCode::InternalServerError_500:
+-		return "Internal Server Error";
+-	}
+-}
+-
+ } // namespace duckdb
+diff --git a/extension/httpfs/include/hffs.hpp b/extension/httpfs/include/hffs.hpp
+index a5901e5..7fe1af1 100644
+--- a/extension/httpfs/include/hffs.hpp
++++ b/extension/httpfs/include/hffs.hpp
+@@ -57,8 +57,8 @@ class HFFileHandle : public HTTPFileHandle {
+ 
+ public:
+ 	HFFileHandle(FileSystem &fs, ParsedHFUrl hf_url, const OpenFileInfo &file, FileOpenFlags flags,
+-	             const HTTPFSParams &http_params)
+-	    : HTTPFileHandle(fs, file, flags, http_params), parsed_url(std::move(hf_url)) {
++	             unique_ptr<HTTPParams> http_params)
++	    : HTTPFileHandle(fs, file, flags, std::move(http_params)), parsed_url(std::move(hf_url)) {
+ 	}
+ 	~HFFileHandle() override;
+ 
+diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
+index 37773fe..a6b8570 100644
+--- a/extension/httpfs/include/httpfs.hpp
++++ b/extension/httpfs/include/httpfs.hpp
+@@ -32,7 +32,7 @@ class HTTPFileSystem;
+ 
+ class HTTPFileHandle : public FileHandle {
+ public:
+-	HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags, HTTPFSParams params);
++	HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags, unique_ptr<HTTPParams> params);
+ 	~HTTPFileHandle() override;
+ 	// This two-phase construction allows subclasses more flexible setup.
+ 	virtual void Initialize(optional_ptr<FileOpener> opener);
+@@ -40,7 +40,8 @@ public:
+ 	// We keep an http client stored for connection reuse with keep-alive headers
+ 	HTTPClientCache client_cache;
+ 
+-	HTTPFSParams http_params;
++	unique_ptr<HTTPParams> params;
++	HTTPFSParams &http_params;
+ 
+ 	// File handle info
+ 	FileOpenFlags flags;
+diff --git a/extension/httpfs/include/httpfs_client.hpp b/extension/httpfs/include/httpfs_client.hpp
+index dff9d18..4ab03af 100644
+--- a/extension/httpfs/include/httpfs_client.hpp
++++ b/extension/httpfs/include/httpfs_client.hpp
+@@ -16,18 +16,16 @@ struct HTTPFSParams : public HTTPParams {
+ 	idx_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
+ 	string ca_cert_file;
+ 	string bearer_token;
+-	shared_ptr<HTTPUtil> http_util;
+ 	shared_ptr<HTTPState> state;
+-
+-	static HTTPFSParams ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
+ };
+ 
+ class HTTPFSUtil : public HTTPUtil {
+ public:
++	unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) override;
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
+ 
+ 	static unordered_map<string, string> ParseGetParameters(const string &text);
+-	static string GetStatusMessage(HTTPStatusCode status);
++	static shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener);
+ };
+ 
+ } // namespace duckdb
+diff --git a/extension/httpfs/include/s3fs.hpp b/extension/httpfs/include/s3fs.hpp
+index b15e0d2..8363429 100644
+--- a/extension/httpfs/include/s3fs.hpp
++++ b/extension/httpfs/include/s3fs.hpp
+@@ -108,7 +108,7 @@ class S3FileHandle : public HTTPFileHandle {
+ 	friend class S3FileSystem;
+ 
+ public:
+-	S3FileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags, HTTPFSParams http_params_p,
++	S3FileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags, unique_ptr<HTTPParams> http_params_p,
+ 	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
+ 	    : HTTPFileHandle(fs, file, flags, std::move(http_params_p)), auth_params(auth_params_p),
+ 	      config_params(config_params_p), uploads_in_progress(0), parts_uploaded(0), upload_finalized(false),
+@@ -238,7 +238,7 @@ protected:
+ 
+ // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+ struct AWSListObjectV2 {
+-	static string Request(string &path, HTTPFSParams &http_params, S3AuthParams &s3_auth_params,
++	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+ 	                      string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter = false);
+ 	static void ParseFileList(string &aws_response, vector<OpenFileInfo> &result);
+ 	static vector<string> ParseCommonPrefix(string &aws_response);
+diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
+index 700193d..9ba57ca 100644
+--- a/extension/httpfs/s3fs.cpp
++++ b/extension/httpfs/s3fs.cpp
+@@ -706,7 +706,10 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
+ 	auto parsed_s3_url = S3UrlParse(file.path, auth_params);
+ 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
+ 
+-	return duckdb::make_uniq<S3FileHandle>(*this, file, flags, HTTPFSParams::ReadFrom(opener, info), auth_params,
++	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto params = http_util->InitializeParameters(opener, info);
++
++	return duckdb::make_uniq<S3FileHandle>(*this, file, flags, std::move(params), auth_params,
+ 	                                       S3ConfigParams::ReadFrom(opener));
+ }
+ 
+@@ -887,7 +890,8 @@ vector<OpenFileInfo> S3FileSystem::Glob(const string &glob_pattern, FileOpener *
+ 	}
+ 
+ 	string shared_path = parsed_glob_url.substr(0, first_wildcard_pos);
+-	auto http_params = HTTPFSParams::ReadFrom(opener, info);
++	auto http_util = HTTPFSUtil::GetHTTPUtil(opener);
++	auto http_params = http_util->InitializeParameters(opener, info);
+ 
+ 	ReadQueryParams(parsed_s3_url.query_param, s3_auth_params);
+ 
+@@ -898,7 +902,7 @@ vector<OpenFileInfo> S3FileSystem::Glob(const string &glob_pattern, FileOpener *
+ 	// Main paging loop
+ 	do {
+ 		// main listobject call, may
+-		string response_str = AWSListObjectV2::Request(shared_path, http_params, s3_auth_params,
++		string response_str = AWSListObjectV2::Request(shared_path, *http_params, s3_auth_params,
+ 		                                               main_continuation_token, HTTPState::TryGetState(opener).get());
+ 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
+ 		AWSListObjectV2::ParseFileList(response_str, s3_keys);
+@@ -914,7 +918,7 @@ vector<OpenFileInfo> S3FileSystem::Glob(const string &glob_pattern, FileOpener *
+ 			string common_prefix_continuation_token;
+ 			do {
+ 				auto prefix_res =
+-				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
++				    AWSListObjectV2::Request(prefix_path, *http_params, s3_auth_params, common_prefix_continuation_token,
+ 				                             HTTPState::TryGetState(opener).get());
+ 				AWSListObjectV2::ParseFileList(prefix_res, s3_keys);
+ 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
+@@ -986,7 +990,7 @@ HTTPException S3FileSystem::GetHTTPError(FileHandle &handle, const HTTPResponse
+ 	}
+ 	return HTTPFileSystem::GetHTTPError(handle, response, url);
+ }
+-string AWSListObjectV2::Request(string &path, HTTPFSParams &http_params, S3AuthParams &s3_auth_params,
++string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+                                 string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter) {
+ 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
+ 

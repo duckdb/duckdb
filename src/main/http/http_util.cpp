@@ -19,7 +19,8 @@
 
 namespace duckdb {
 
-HTTPParams::~HTTPParams() {}
+HTTPParams::~HTTPParams() {
+}
 
 HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
 	headers.insert({"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())});
@@ -383,9 +384,11 @@ unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(ClientContext &context) {
 	return InitializeParameters(&opener, nullptr);
 }
 
-unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
+unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(optional_ptr<FileOpener> opener,
+                                                      optional_ptr<FileOpenerInfo> info) {
 	auto result = make_uniq<HTTPParams>();
 	result->Initialize(opener);
+	result->http_util = shared_from_this();
 	return result;
 }
 

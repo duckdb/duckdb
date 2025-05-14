@@ -215,7 +215,7 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 };
 
-class HTTPUtil {
+class HTTPUtil : enable_shared_from_this<HTTPUtil> {
 public:
 	virtual ~HTTPUtil() = default;
 
@@ -224,7 +224,8 @@ public:
 
 	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db);
 	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context);
-	virtual unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
+	virtual unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
+	                                                    optional_ptr<FileOpenerInfo> info);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
 
