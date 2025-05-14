@@ -662,6 +662,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_union_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_voronoidiagram", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_within", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_withinproperly", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_x", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_xmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_xmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
