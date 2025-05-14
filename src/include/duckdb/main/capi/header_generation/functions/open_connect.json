@@ -290,9 +290,9 @@
                 "param_comments": {
                     "connection": "The connection for which to get the table names.",
                     "query": "The query for which to get the table names.",
-                    "qualified": "Returns qualified table names (catalog.schema.table), if set to true, else only the table names."
+                    "qualified": "Returns qualified, escaped table names (catalog.schema.table), if set to true, else only the (not escaped) table names."
                 },
-                "return_value": "A duckdb_value of type VARCHAR[] containing the (qualified) table names of the query.\nMust be destroyed with duckdb_destroy_value."
+                "return_value": "A duckdb_value of type VARCHAR[] containing the (qualified) table names of the query. Must be destroyed with duckdb_destroy_value."
             }
         }
     ]

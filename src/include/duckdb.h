@@ -846,8 +846,10 @@ Get the list of (qualified) table names of the query.
 
 * @param connection The connection for which to get the table names.
 * @param query The query for which to get the table names.
-* @param qualified Returns qualified table names (catalog.schema.table), if set to true, else only the table names.
-* @return A duckdb_value of type VARCHAR[] containing the (qualified) table names of the query.
+* @param qualified Returns qualified, escaped table names (catalog.schema.table), if set to true, else only the (not
+escaped) table names.
+* @return A duckdb_value of type VARCHAR[] containing the (qualified) table names of the query. Must be destroyed with
+duckdb_destroy_value.
 */
 DUCKDB_C_API duckdb_value duckdb_get_table_names(duckdb_connection connection, const char *query, bool qualified);
 
