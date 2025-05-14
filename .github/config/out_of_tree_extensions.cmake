@@ -30,6 +30,7 @@ if (NOT MINGW)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
             GIT_TAG 712514078247b4b71f51d0c9eb862bec3928742c
+            APPLY_PATCHES
     )
 endif()
 
