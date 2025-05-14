@@ -1,9 +1,9 @@
 # ────────────────────────────────────────────
-#  IMPORTANT: Cmake is NOT used to build this library.
-#             This is here only for Intellisense and clang-tidy.
+# IMPORTANT: Cmake is NOT used to build this library. This is here only for
+# Intellisense and clang-tidy.
 #
-#  See README.md for more information on how to use this file
-#  and how to build the library.
+# See README.md for more information on how to use this file and how to build
+# the library.
 # ────────────────────────────────────────────
 
 cmake_minimum_required(VERSION 3.15...3.29)
@@ -11,18 +11,18 @@ cmake_minimum_required(VERSION 3.15...3.29)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ────────────────────────────────────────────
-#  Policy hygiene
+# Policy hygiene
 # ────────────────────────────────────────────
-if(POLICY CMP0148)  # Disallow FindPythonLibs
+if(POLICY CMP0148) # Disallow FindPythonLibs
   cmake_policy(SET CMP0148 NEW)
 endif()
 
-if(POLICY CMP0003)  # No implicit link directories
+if(POLICY CMP0003) # No implicit link directories
   cmake_policy(SET CMP0003 NEW)
 endif()
 
 # ────────────────────────────────────────────
-#  Dependencies
+# Dependencies
 # ────────────────────────────────────────────
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 find_package(pybind11 CONFIG REQUIRED)
@@ -32,46 +32,46 @@ message(STATUS "CPython include dirs: ${Python3_INCLUDE_DIRS}")
 message(STATUS "CPython libraries: ${Python3_LIBRARIES}")
 
 # ────────────────────────────────────────────
-#  INTERFACE library that **only** carries usage requirements
+# INTERFACE library that **only** carries usage requirements
 # ────────────────────────────────────────────
 add_library(pytooling INTERFACE)
 
 # 1. Include paths that clang‑tidy / IntelliSense must see
-target_include_directories(pytooling INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/include>
-)
+target_include_directories(
+  pytooling INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>
+                      $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/include>)
 
-# 2. All the imported dependency targets: they bring their own
-#    include dirs + compile definitions automatically.
-target_link_libraries(pytooling INTERFACE
-        Python3::Python        # defined by FindPython3
-        pybind11::pybind11     # defined by pybind11Config.cmake
+# 1. All the imported dependency targets: they bring their own include dirs +
+#   compile definitions automatically.
+target_link_libraries(
+  pytooling INTERFACE Python3::Python # defined by FindPython3
+                      pybind11::pybind11 # defined by pybind11Config.cmake
 )
 
 # ────────────────────────────────────────────
-#  Descend into the real DuckDB‑Python sources
+# Descend into the real DuckDB‑Python sources
 # ────────────────────────────────────────────
 add_subdirectory(src EXCLUDE_FROM_ALL)
 
 # ────────────────────────────────────────────
-#  Fake aggregation library for analysis tools
+# Fake aggregation library for analysis tools
 # ────────────────────────────────────────────
 add_library(duckdb_python_analysis STATIC duckdb_python.cpp)
-target_link_libraries(duckdb_python_analysis PRIVATE
-        pytooling        # <- brings Python + pybind11 + local includes
-        python_src
-        python_arrow
-        python_common
-        python_functional
-        python_jupyter
-        python_native
-        python_numpy
-        python_pandas
-        python_pybind11
-        python_connection
-        python_expression
-        python_relation
-        python_type
-        duckdb_static    # <- DuckDB static library from the main project
+target_link_libraries(
+  duckdb_python_analysis
+  PRIVATE pytooling # <- brings Python + pybind11 + local includes
+          python_src
+          python_arrow
+          python_common
+          python_functional
+          python_jupyter
+          python_native
+          python_numpy
+          python_pandas
+          python_pybind11
+          python_connection
+          python_expression
+          python_relation
+          python_type
+          duckdb_static # <- DuckDB static library from the main project
 )
