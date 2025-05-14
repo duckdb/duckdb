@@ -47,7 +47,7 @@ index a7c70d8..d91e2cf 100644
  
  void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 24123b2..e8520f5 100644
+index 24123b2..b111562 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -21,7 +21,7 @@
@@ -59,7 +59,7 @@ index 24123b2..e8520f5 100644
  	if (opener) {
  		auto db = opener->TryGetDatabase();
  		if (db) {
-@@ -32,9 +32,9 @@ shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener) {
+@@ -32,53 +32,43 @@ shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener) {
  	return make_shared_ptr<HTTPFSUtil>();
  }
  
@@ -72,7 +72,10 @@ index 24123b2..e8520f5 100644
  
  	// No point in continueing without an opener
  	if (!opener) {
-@@ -44,41 +44,31 @@ HTTPFSParams HTTPFSParams::ReadFrom(optional_ptr<FileOpener> opener, optional_pt
+-		return result;
++		return std::move(result);
+ 	}
+ 
  	Value value;
  
  	// Setting lookups
@@ -128,7 +131,7 @@ index 24123b2..e8520f5 100644
  
  	Value extra_headers;
  	if (settings_reader.TryGetSecretKey("extra_http_headers", extra_headers)) {
-@@ -86,7 +76,7 @@ HTTPFSParams HTTPFSParams::ReadFrom(optional_ptr<FileOpener> opener, optional_pt
+@@ -86,11 +76,11 @@ HTTPFSParams HTTPFSParams::ReadFrom(optional_ptr<FileOpener> opener, optional_pt
  		for (const auto &child : children) {
  			auto kv = StructValue::GetChildren(child);
  			D_ASSERT(kv.size() == 2);
@@ -137,6 +140,11 @@ index 24123b2..e8520f5 100644
  		}
  	}
  
+-	return result;
++	return std::move(result);
+ }
+ 
+ unique_ptr<HTTPClient> HTTPClientCache::GetClient() {
 @@ -113,7 +103,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PostRequest(FileHandle &handle, string
                                                       string &buffer_out, char *buffer_in, idx_t buffer_in_len,
                                                       string params) {
