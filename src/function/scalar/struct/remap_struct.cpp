@@ -112,7 +112,9 @@ static void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_
 		}
 		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
-		memcpy(result_list_data, list_data, sizeof(list_entry_t) * result_size);
+		for (idx_t i = 0; i < result_size; i++) {
+			result_list_data[i] = list_data[format.sel->get_index(i)];
+		}
 	}
 	// set up the correct vector references
 	D_ASSERT(remap_info.size() == 2);
