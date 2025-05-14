@@ -210,7 +210,7 @@ public:
 	connection_t GetConnectionId() const;
 
 	//! Fetch the set of tables names of the query.
-	//! Returns the qualified, escaped table names, if qualified is set to true,
+	//! Returns the fully qualified, escaped table names, if qualified is set to true,
 	//! else returns the not qualified, not escaped table names.
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query, const bool qualified = false);
 
