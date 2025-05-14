@@ -15,7 +15,7 @@ namespace duckdb {
 
 class LogicalOperator;
 class Optimizer;
-class BoundParameterData;
+struct BoundParameterData;
 
 class CTEInlining {
 public:
