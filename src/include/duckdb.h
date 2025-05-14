@@ -841,6 +841,18 @@ Usually used for developing C extensions that must return this for a compatibili
 */
 DUCKDB_C_API const char *duckdb_library_version();
 
+/*!
+Get the list of (fully qualified) table names of the query.
+
+* @param connection The connection for which to get the table names.
+* @param query The query for which to get the table names.
+* @param qualified Returns fully qualified table names (catalog.schema.table), if set to true, else only the (not
+escaped) table names.
+* @return A duckdb_value of type VARCHAR[] containing the (fully qualified) table names of the query. Must be destroyed
+with duckdb_destroy_value.
+*/
+DUCKDB_C_API duckdb_value duckdb_get_table_names(duckdb_connection connection, const char *query, bool qualified);
+
 //===--------------------------------------------------------------------===//
 // Configuration
 //===--------------------------------------------------------------------===//
