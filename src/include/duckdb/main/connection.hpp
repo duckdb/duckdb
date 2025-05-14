@@ -178,8 +178,10 @@ public:
 	DUCKDB_API bool IsAutoCommit();
 	DUCKDB_API bool HasActiveTransaction();
 
-	//! Fetch a list of table names that are required for a given query
-	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
+	//! Fetch the set of tables names of the query.
+	//! Returns the fully qualified, escaped table names, if qualified is set to true,
+	//! else returns the not qualified, not escaped table names.
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query, const bool qualified = false);
 
 	// NOLINTBEGIN
 	template <typename TR, typename... ARGS>

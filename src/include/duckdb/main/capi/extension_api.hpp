@@ -476,6 +476,7 @@ typedef struct {
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
 	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
+	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	// New functions around scalar function binding
 
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
@@ -920,6 +921,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
+	result.duckdb_get_table_names = duckdb_get_table_names;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;
 	result.duckdb_scalar_function_get_client_context = duckdb_scalar_function_get_client_context;
