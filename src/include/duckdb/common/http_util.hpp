@@ -222,8 +222,8 @@ public:
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
 
-	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db);
-	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context);
+	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &path);
+	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &path);
 	virtual unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
 	                                                    optional_ptr<FileOpenerInfo> info);
 

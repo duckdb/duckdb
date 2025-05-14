@@ -374,14 +374,18 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	}
 }
 
-unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(DatabaseInstance &db) {
+unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(DatabaseInstance &db, const string &url) {
 	DatabaseFileOpener opener(db);
-	return InitializeParameters(&opener, nullptr);
+	FileOpenerInfo info;
+	info.file_path = url;
+	return InitializeParameters(&opener, &info);
 }
 
-unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(ClientContext &context) {
+unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(ClientContext &context, const string &url) {
 	ClientContextFileOpener opener(context);
-	return InitializeParameters(&opener, nullptr);
+	FileOpenerInfo info;
+	info.file_path = url;
+	return InitializeParameters(&opener, &info);
 }
 
 unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(optional_ptr<FileOpener> opener,
