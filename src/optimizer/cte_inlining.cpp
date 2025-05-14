@@ -14,10 +14,6 @@
 
 namespace duckdb {
 
-CTEInlining::MaterializedCTEInfo::MaterializedCTEInfo(LogicalOperator &materialized_cte_p)
-    : materialized_cte(materialized_cte_p), all_cte_refs_are_filtered(true) {
-}
-
 CTEInlining::CTEInlining(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
