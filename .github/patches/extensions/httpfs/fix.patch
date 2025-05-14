@@ -47,7 +47,7 @@ index a7c70d8..d91e2cf 100644
  
  void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 24123b2..079083d 100644
+index 24123b2..e8520f5 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -21,7 +21,7 @@
@@ -198,7 +198,7 @@ index 24123b2..079083d 100644
 -                               HTTPFSParams http_params_p)
 -    : FileHandle(fs, file.path, flags), http_params(std::move(http_params_p)), flags(flags), length(0),
 +                               unique_ptr<HTTPParams> params_p)
-+    : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params_p->Cast<HTTPFSParams>()), flags(flags), length(0),
++    : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params->Cast<HTTPFSParams>()), flags(flags), length(0),
        buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0), buffer_end(0) {
  	// check if the handle has extended properties that can be set directly in the handle
  	// if we have these properties we don't need to do a head request to obtain them later
