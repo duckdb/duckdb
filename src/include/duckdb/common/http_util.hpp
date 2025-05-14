@@ -21,6 +21,8 @@ class FileOpener;
 struct FileOpenerInfo;
 
 struct HTTPParams {
+	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
+	}
 	virtual ~HTTPParams();
 
 	static constexpr uint64_t DEFAULT_TIMEOUT_SECONDS = 30; // 30 sec
@@ -41,7 +43,7 @@ struct HTTPParams {
 	string http_proxy_username;
 	string http_proxy_password;
 	unordered_map<string, string> extra_headers;
-	shared_ptr<HTTPUtil> http_util;
+	HTTPUtil &http_util;
 	optional_ptr<HTTPLogger> logger;
 
 public:
@@ -215,7 +217,7 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 };
 
-class HTTPUtil : enable_shared_from_this<HTTPUtil> {
+class HTTPUtil {
 public:
 	virtual ~HTTPUtil() = default;
 

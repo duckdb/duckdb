@@ -1,7 +1,25 @@
 diff --git a/extension/httpfs/hffs.cpp b/extension/httpfs/hffs.cpp
-index a7c70d8..ba89a39 100644
+index a7c70d8..d91e2cf 100644
 --- a/extension/httpfs/hffs.cpp
 +++ b/extension/httpfs/hffs.cpp
+@@ -45,7 +45,7 @@ static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
+ HFFileHandle::~HFFileHandle() {};
+ 
+ unique_ptr<HTTPClient> HFFileHandle::CreateClient() {
+-	return http_params.http_util->InitializeClient(http_params, parsed_url.endpoint);
++	return http_params.http_util.InitializeClient(http_params, parsed_url.endpoint);
+ }
+ 
+ string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPFSParams &http_params, string &next_page_url,
+@@ -69,7 +69,7 @@ string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPFSParams &http
+ 		    response << string(const_char_ptr_cast(data), data_length);
+ 		    return true;
+ 	    });
+-	auto res = http_params.http_util->Request(get_request);
++	auto res = http_params.http_util.Request(get_request);
+ 	if (res->status != HTTPStatusCode::OK_200) {
+ 		throw IOException(res->GetError() + " error for HTTP GET to '" + next_page_url + "'");
+ 	}
 @@ -205,7 +205,9 @@ vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener
  
  	FileOpenerInfo info;
@@ -29,7 +47,7 @@ index a7c70d8..ba89a39 100644
  
  void HuggingFaceFileSystem::SetParams(HTTPFSParams &params, const string &path, optional_ptr<FileOpener> opener) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 24123b2..aabecc5 100644
+index 24123b2..079083d 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -21,7 +21,7 @@
@@ -49,7 +67,7 @@ index 24123b2..aabecc5 100644
 -	HTTPFSParams result;
 -	result.http_util = GetHTTPUtil(opener);
 +unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
-+	auto result = make_uniq<HTTPFSParams>();
++	auto result = make_uniq<HTTPFSParams>(*this);
 +	result->Initialize(opener);
  
  	// No point in continueing without an opener
@@ -119,6 +137,60 @@ index 24123b2..aabecc5 100644
  		}
  	}
  
+@@ -113,7 +103,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PostRequest(FileHandle &handle, string
+                                                      string &buffer_out, char *buffer_in, idx_t buffer_in_len,
+                                                      string params) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+-	auto &http_util = *hfh.http_params.http_util;
++	auto &http_util = hfh.http_params.http_util;
+ 	PostRequestInfo post_request(url, header_map, hfh.http_params, const_data_ptr_cast(buffer_in), buffer_in_len);
+ 	auto result = http_util.Request(post_request);
+ 	buffer_out = std::move(post_request.buffer_out);
+@@ -123,7 +113,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PostRequest(FileHandle &handle, string
+ unique_ptr<HTTPResponse> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HTTPHeaders header_map,
+                                                     char *buffer_in, idx_t buffer_in_len, string params) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+-	auto &http_util = *hfh.http_params.http_util;
++	auto &http_util = hfh.http_params.http_util;
+ 	string content_type = "application/octet-stream";
+ 	PutRequestInfo put_request(url, header_map, hfh.http_params, (const_data_ptr_t)buffer_in, buffer_in_len,
+ 	                           content_type);
+@@ -132,7 +122,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PutRequest(FileHandle &handle, string u
+ 
+ unique_ptr<HTTPResponse> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HTTPHeaders header_map) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+-	auto &http_util = *hfh.http_params.http_util;
++	auto &http_util = hfh.http_params.http_util;
+ 	auto http_client = hfh.GetClient();
+ 
+ 	HeadRequestInfo head_request(url, header_map, hfh.http_params);
+@@ -144,7 +134,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::HeadRequest(FileHandle &handle, string
+ 
+ unique_ptr<HTTPResponse> HTTPFileSystem::DeleteRequest(FileHandle &handle, string url, HTTPHeaders header_map) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+-	auto &http_util = *hfh.http_params.http_util;
++	auto &http_util = hfh.http_params.http_util;
+ 	auto http_client = hfh.GetClient();
+ 	DeleteRequestInfo delete_request(url, header_map, hfh.http_params);
+ 	auto response = http_util.Request(delete_request, http_client);
+@@ -166,7 +156,7 @@ HTTPException HTTPFileSystem::GetHTTPError(FileHandle &, const HTTPResponse &res
+ 
+ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HTTPHeaders header_map) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+-	auto &http_util = *hfh.http_params.http_util;
++	auto &http_util = hfh.http_params.http_util;
+ 
+ 	D_ASSERT(hfh.cached_file_handle);
+ 
+@@ -215,7 +205,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
+ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HTTPHeaders header_map,
+                                                          idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+-	auto &http_util = *hfh.http_params.http_util;
++	auto &http_util = hfh.http_params.http_util;
+ 
+ 	// send the Range header to read only subset of file
+ 	string range_expr = "bytes=" + to_string(file_offset) + "-" + to_string(file_offset + buffer_out_len - 1);
 @@ -286,8 +276,8 @@ void TimestampToTimeT(timestamp_t timestamp, time_t &result) {
  }
  
@@ -155,6 +227,15 @@ index 24123b2..aabecc5 100644
  }
  
  unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+@@ -711,7 +704,7 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
+ 	// Create a new client
+ 	string path_out, proto_host_port;
+ 	HTTPUtil::DecomposeURL(path, path_out, proto_host_port);
+-	return http_params.http_util->InitializeClient(http_params, proto_host_port);
++	return http_params.http_util.InitializeClient(http_params, proto_host_port);
+ }
+ 
+ void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
 diff --git a/extension/httpfs/httpfs_client.cpp b/extension/httpfs/httpfs_client.cpp
 index 6fb33d9..4a36d67 100644
 --- a/extension/httpfs/httpfs_client.cpp
@@ -336,10 +417,19 @@ index 37773fe..a6b8570 100644
  	// File handle info
  	FileOpenFlags flags;
 diff --git a/extension/httpfs/include/httpfs_client.hpp b/extension/httpfs/include/httpfs_client.hpp
-index dff9d18..4ab03af 100644
+index dff9d18..084bfc2 100644
 --- a/extension/httpfs/include/httpfs_client.hpp
 +++ b/extension/httpfs/include/httpfs_client.hpp
-@@ -16,18 +16,16 @@ struct HTTPFSParams : public HTTPParams {
+@@ -7,6 +7,8 @@ struct FileOpenerInfo;
+ class HTTPState;
+ 
+ struct HTTPFSParams : public HTTPParams {
++	HTTPFSParams(HTTPUtil &http_util) : HTTPParams(http_util) {}
++
+ 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
+ 	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
+ 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
+@@ -16,18 +18,16 @@ struct HTTPFSParams : public HTTPParams {
  	idx_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
  	string ca_cert_file;
  	string bearer_token;
@@ -383,9 +473,18 @@ index b15e0d2..8363429 100644
  	static void ParseFileList(string &aws_response, vector<OpenFileInfo> &result);
  	static vector<string> ParseCommonPrefix(string &aws_response);
 diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 700193d..9ba57ca 100644
+index 700193d..ce0710f 100644
 --- a/extension/httpfs/s3fs.cpp
 +++ b/extension/httpfs/s3fs.cpp
+@@ -275,7 +275,7 @@ unique_ptr<HTTPClient> S3FileHandle::CreateClient() {
+ 	auto parsed_url = S3FileSystem::S3UrlParse(path, this->auth_params);
+ 
+ 	string proto_host_port = parsed_url.http_proto + parsed_url.host;
+-	return http_params.http_util->InitializeClient(http_params, proto_host_port);
++	return http_params.http_util.InitializeClient(http_params, proto_host_port);
+ }
+ 
+ // Opens the multipart upload and returns the ID
 @@ -706,7 +706,10 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
  	auto parsed_s3_url = S3UrlParse(file.path, auth_params);
  	ReadQueryParams(parsed_s3_url.query_param, auth_params);
@@ -435,3 +534,21 @@ index 700193d..9ba57ca 100644
                                  string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter) {
  	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
  
+@@ -1011,7 +1015,7 @@ string AWSListObjectV2::Request(string &path, HTTPFSParams &http_params, S3AuthP
+ 	    create_s3_header(req_path, req_params, parsed_url.host, "s3", "GET", s3_auth_params, "", "", "", "");
+ 
+ 	// Get requests use fresh connection
+-	auto client = http_params.http_util->InitializeClient(http_params, parsed_url.http_proto + parsed_url.host);
++	auto client = http_params.http_util.InitializeClient(http_params, parsed_url.http_proto + parsed_url.host);
+ 	std::stringstream response;
+ 	GetRequestInfo get_request(
+ 	    parsed_url.host, listobjectv2_url, header_map, http_params,
+@@ -1028,7 +1032,7 @@ string AWSListObjectV2::Request(string &path, HTTPFSParams &http_params, S3AuthP
+ 		    response << string(const_char_ptr_cast(data), data_length);
+ 		    return true;
+ 	    });
+-	auto result = http_params.http_util->Request(get_request);
++	auto result = http_params.http_util.Request(get_request);
+ 	if (result->HasRequestError()) {
+ 		throw IOException("%s error for HTTP GET to '%s'", result->GetRequestError(), listobjectv2_url);
+ 	}

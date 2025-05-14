@@ -390,9 +390,8 @@ unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(ClientContext &context, co
 
 unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(optional_ptr<FileOpener> opener,
                                                       optional_ptr<FileOpenerInfo> info) {
-	auto result = make_uniq<HTTPParams>();
+	auto result = make_uniq<HTTPParams>(*this);
 	result->Initialize(opener);
-	result->http_util = shared_from_this();
 	return result;
 }
 
