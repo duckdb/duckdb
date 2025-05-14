@@ -1,5 +1,5 @@
 diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
-index b8b358c..9e105f4 100644
+index b8b358c..756202e 100644
 --- a/src/avro_multi_file_info.cpp
 +++ b/src/avro_multi_file_info.cpp
 @@ -3,6 +3,11 @@
@@ -44,7 +44,7 @@ index b8b358c..9e105f4 100644
  optional_idx AvroMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
                                             const MultiFileGlobalState &global_state, FileExpandResult expand_result) {
  	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
-@@ -106,47 +100,29 @@ shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &contex
+@@ -106,47 +100,28 @@ shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &contex
  }
  
  shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
@@ -76,8 +76,7 @@ index b8b358c..9e105f4 100644
 -	gstate.files.insert(reader.file_list_idx.GetIndex());
 -	lstate.file_scan = shared_ptr_cast<BaseFileReader, AvroReader>(reader_p);
 +	gstate.files.insert(file_list_idx.GetIndex());
-+	throw InternalException("FIXME: CAST");
-+//	lstate.file_scan = shared_ptr_cast<BaseFileReader, AvroReader>(shared_from_this());
++	lstate.file_scan = shared_ptr_cast<BaseFileReader, AvroReader>(shared_from_this());
  	return true;
  }
  
@@ -100,7 +99,7 @@ index b8b358c..9e105f4 100644
  }
  
  unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
-@@ -154,17 +130,4 @@ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBind
+@@ -154,17 +129,4 @@ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBind
  	return make_uniq<NodeStatistics>();
  }
  
