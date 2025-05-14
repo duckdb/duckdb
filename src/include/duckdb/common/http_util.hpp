@@ -246,6 +246,6 @@ public:
 public:
 	static duckdb::unique_ptr<HTTPResponse>
 	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request,
-	                    const std::function<void(void)> &retry_cb = {});
+	                    const std::function<void(void)> &retry_cb);
 };
 } // namespace duckdb
