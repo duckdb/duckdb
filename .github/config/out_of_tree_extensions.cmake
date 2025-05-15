@@ -39,7 +39,6 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             ### TODO: re-enable LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
             GIT_TAG 4f318ebd088e464266c511abe2f70bbdeee2fcd8
-            APPLY_PATCHES
             )
 endif()
 
@@ -49,7 +48,6 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
             GIT_TAG 86a5acb33afe50ea57086ed997472551320c9820
-            APPLY_PATCHES
             )
 endif()
 
@@ -73,7 +71,6 @@ duckdb_extension_load(excel
     GIT_URL https://github.com/duckdb/duckdb-excel
     GIT_TAG 7e97933214d0c7de2315668ec68589ae85651afb
     INCLUDE_DIR src/excel/include
-    APPLY_PATCHES
     )
 
 ################# ICEBERG
@@ -99,7 +96,6 @@ duckdb_extension_load(inet
     GIT_TAG eb2455703ca0665e69b9fd20fd1d8816c547cb49
     INCLUDE_DIR src/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
