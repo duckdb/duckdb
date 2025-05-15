@@ -199,7 +199,31 @@ static void StructFunction(DataChunk &args, Vector &result) {
 			chunk.data[col].Reference(*struct_vector_members[member_idx]);
 		}
 
-		PopulateChild(chunk, *result_child_members[member_idx]);
+		switch (result_child_members[member_idx]->GetType().InternalType()) {
+			case PhysicalType::LIST:
+				ListFunction(chunk, *result_child_members[member_idx]);
+				break;
+			case PhysicalType::STRUCT:
+				StructFunction(chunk, *result_child_members[member_idx]);
+				break;
+			default: {
+				PopulateChild(chunk, *result_child_members[member_idx]);
+				break;
+			}
+		}
+}
+
+	// Set the top level result validity
+	const auto unified_format = args.ToUnifiedFormat();
+	auto &result_validity = FlatVector::Validity(result_child);
+	for (idx_t row = 0; row < args.size(); row++) {
+		for (idx_t col = 0; col < column_count; col++) {
+			const auto input_idx = unified_format[col].sel->get_index(row);
+			const auto result_idx = row * column_count + col;
+			if (!unified_format[col].validity.RowIsValid(input_idx)) {
+				result_validity.SetInvalid(result_idx);
+			}
+		}
 	}
 
 	// Set the top level result validity
