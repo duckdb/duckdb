@@ -2,11 +2,10 @@
 # description: Test joins on uint64 columns with NULL values
 # group: [inner]
 
-statement ok
-PRAGMA enable_verification
+set seed 0.42
 
 statement ok
-SELECT setseed(0.42);
+PRAGMA enable_verification
 
 statement ok
 PRAGMA disable_optimizer;
