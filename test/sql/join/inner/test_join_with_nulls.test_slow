@@ -1,4 +1,4 @@
-# name: test/sql/join/inner/test_joins_with_nulls.test
+# name: test/sql/join/inner/test_join_with_nulls.test_slow
 # description: Test joins on uint64 columns with NULL values
 # group: [inner]
 
