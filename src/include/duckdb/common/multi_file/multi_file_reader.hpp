@@ -153,7 +153,7 @@ public:
 	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
 	                                                           BaseFileReaderOptions &options,
 	                                                           const MultiFileOptions &file_options,
-	                                                           MultiFileReaderInterface &interfac);
+	                                                           MultiFileReaderInterface &interface);
 
 	//! Get partition info
 	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,
