@@ -250,14 +250,10 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, info);
 
 	// First remove the local extension we are about to replace
-	if (fs.FileExists(local_extension_path)) {
-		fs.RemoveFile(local_extension_path);
-	}
+	fs.TryRemoveFile(local_extension_path);
 
 	// Then remove the old metadata file
-	if (fs.FileExists(metadata_file_path)) {
-		fs.RemoveFile(metadata_file_path);
-	}
+	fs.TryRemoveFile(metadata_file_path);
 
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 	fs.MoveFile(temp_path, local_extension_path);
@@ -495,9 +491,7 @@ ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, 
 		return nullptr;
 	}
 
-	if (fs.FileExists(temp_path)) {
-		fs.RemoveFile(temp_path);
-	}
+	fs.TryRemoveFile(temp_path);
 
 	if (ExtensionHelper::IsFullPath(extension) && options.repository) {
 		throw InvalidInputException("Cannot pass both a repository and a full path url");
