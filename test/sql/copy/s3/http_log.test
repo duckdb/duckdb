@@ -26,18 +26,18 @@ statement ok
 COPY (SELECT 'value-1' as value) TO 's3://test-bucket/http_log/test.parquet';
 
 statement ok
-set enable_logging=1;
+pragma enable_logging('HTTP')
 
 statement ok
 set logging_level='debug'
 
 query I
-FROM 's3://test-bucket/http-secret-test/test.parquet'
+FROM 's3://test-bucket/http_log/test.parquet'
 ----
 value-1
 
-query I
-SELECT message FROM duckdb_logs() WHERE log_type='duckdb.Httplib'
----
-<REGEX>:.*HEAD /test.parquet.*
-
+query II
+SELECT request.type, parse_filename(request.url) FROM duckdb_logs_parsed('HTTP');
+----
+HEAD	test.parquet
+GET	test.parquet
