@@ -320,6 +320,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			auto ht_offset = ht_offsets[row_index];
 			IncrementAndWrap(ht_offset, ht.bitmask);
 
+			// Get original hash from unified vector format to extract the salt if hashes_dense was populated that way
 			hash_t hash;
 			if (uses_unified) {
 				const auto uvf_index = hashes_unified_v.sel->get_index(row_index);
