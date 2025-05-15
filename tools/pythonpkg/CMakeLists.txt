@@ -6,7 +6,7 @@
 # the library.
 # ────────────────────────────────────────────
 
-cmake_minimum_required(VERSION 3.15...3.29)
+cmake_minimum_required(VERSION 3.18...3.29)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -25,11 +25,17 @@ endif()
 # Dependencies
 # ────────────────────────────────────────────
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
-find_package(pybind11 CONFIG REQUIRED)
-
 message(STATUS "CPython executable: ${Python3_EXECUTABLE}")
 message(STATUS "CPython include dirs: ${Python3_INCLUDE_DIRS}")
 message(STATUS "CPython libraries: ${Python3_LIBRARIES}")
+
+find_package(pybind11 CONFIG QUIET)
+# Header-only shim: good enough for clang-tidy / IntelliSense
+if(NOT TARGET pybind11::pybind11)
+  add_library(pybind11::pybind11 INTERFACE IMPORTED)
+  target_include_directories(pybind11::pybind11 INTERFACE
+          $<BUILD_INTERFACE:${Python3_SITEARCH}/pybind11/include>)
+endif()
 
 # ────────────────────────────────────────────
 # INTERFACE library that **only** carries usage requirements
@@ -41,7 +47,7 @@ target_include_directories(
   pytooling INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>
                       $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/include>)
 
-# 1. All the imported dependency targets: they bring their own include dirs +
+# 2. All the imported dependency targets: they bring their own include dirs +
 #   compile definitions automatically.
 target_link_libraries(
   pytooling INTERFACE Python3::Python # defined by FindPython3
@@ -59,8 +65,8 @@ add_subdirectory(src EXCLUDE_FROM_ALL)
 add_library(duckdb_python_analysis STATIC duckdb_python.cpp)
 target_link_libraries(
   duckdb_python_analysis
-  PRIVATE pytooling # <- brings Python + pybind11 + local includes
-          python_src
+  PRIVATE pytooling  # brings Python + pybind11 + local includes
+          python_src # keep in sync with sub-directory object libs
           python_arrow
           python_common
           python_functional
