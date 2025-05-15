@@ -141,50 +141,76 @@ time_old = geomean(old_runner.complete_timings)
 time_new = geomean(new_runner.complete_timings)
 
 exit_code = 0
+allowed_regressions: List[BenchmarkResult] = []
+regressions_to_report: List[BenchmarkResult] = []
 regression_list.extend(error_list)
 summary = []
+
 if len(regression_list) > 0:
-    exit_code = 1
-    print(
-        '''====================================================
-==============  REGRESSIONS DETECTED   =============
-====================================================
-'''
-    )
-    # calculate max individual regression percentage
-    max_individual_regression_percentage = 0.0
+    print("HERE")
+    # filter regression_list to allowed and regressions to report
     for regression in regression_list:
         if isinstance(regression.old_result, (int, float)) or isinstance(regression.new_result, (int, float)):
             individual_regression_diff_perc = ((regression.new_result - regression.old_result) / regression.old_result) * 100
-            max_individual_regression_percentage = max(max_individual_regression_percentage, individual_regression_diff_perc)
+            if isinstance(time_old, float) and isinstance(time_new, float):
+                if time_new <= time_old and individual_regression_diff_perc <= 10.0:
+                    # allow individual regressions less than 10% when overall geomean had improved or hadn't change
+                    allowed_regressions.append(regression)
+                else:
+                    regressions_to_report.append(regression)
     
-    # don't report individual regressions less than 10% when overall geomean had improved or hadn't change
-    ignore_small_regressions = False
-    if isinstance(time_old, float) and isinstance(time_new, float):
-        if time_new <= time_old and max_individual_regression_percentage <= 10.0:
-            ignore_small_regressions = True
-    if ignore_small_regressions:
-        exit_code = 0
-    
-    if ignore_small_regressions:
-        print("")
-        print(f"{regression.benchmark}")
-        print(f"Old timing: {regression.old_result}")
-        print(f"New timing: {regression.new_result}")
-        # add to the FAILURES SUMMARY
-        if regression.old_failure or regression.new_failure:
-            new_data = {
-                "benchmark": regression.benchmark,
-                "old_failure": regression.old_failure,
-                "new_failure": regression.new_failure,
-            }
-            summary.append(new_data)
-        print("")
-    # add regression
-    if time_new > time_old * 1.01:
-    print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
-    print(f"New timing geometric mean: {time_new}")
-    print("")
+    exit_code = 1 if len(regressions_to_report) > 0 else 0
+
+    if len(allowed_regressions) > 0:
+        print(
+    '''====================================================
+==============  ALLOWED REGRESSIONS   ==============
+====================================================
+'''
+        )
+
+        for regression in allowed_regressions:
+            print("")
+            print(f"{regression.benchmark}")
+            print(f"Old timing: {regression.old_result}")
+            print(f"New timing: {regression.new_result}")
+            # add to the FAILURES SUMMARY
+            if regression.old_failure or regression.new_failure:
+                new_data = {
+                    "benchmark": regression.benchmark,
+                    "old_failure": regression.old_failure,
+                    "new_failure": regression.new_failure,
+                }
+                summary.append(new_data)
+            print("")
+
+    if len(regressions_to_report) > 0:
+        print(
+    '''====================================================
+==============  REGRESSIONS DETECTED   =============
+====================================================
+'''
+        )
+        for regression in regressions_to_report:
+            print("")
+            print(f"{regression.benchmark}")
+            print(f"Old timing: {regression.old_result}")
+            print(f"New timing: {regression.new_result}")
+            # add to the FAILURES SUMMARY
+            if regression.old_failure or regression.new_failure:
+                new_data = {
+                    "benchmark": regression.benchmark,
+                    "old_failure": regression.old_failure,
+                    "new_failure": regression.new_failure,
+                }
+                summary.append(new_data)
+            print("")
+
+        # add regression
+        if time_new > time_old * 1.01:
+            print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
+            print(f"New timing geometric mean: {time_new}")
+            print("")
     
     print(
         '''====================================================
