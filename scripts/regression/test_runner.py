@@ -151,19 +151,21 @@ if len(regression_list) > 0:
     # filter regression_list to allowed and regressions to report
     for regression in regression_list:
         if isinstance(regression.old_result, (int, float)) or isinstance(regression.new_result, (int, float)):
-            individual_regression_diff_perc = ((regression.new_result - regression.old_result) / regression.old_result) * 100
+            individual_regression_diff_perc = (
+                (regression.new_result - regression.old_result) / regression.old_result
+            ) * 100
             if isinstance(time_old, float) and isinstance(time_new, float):
                 if time_new <= time_old and individual_regression_diff_perc <= 10.0:
                     # allow individual regressions less than 10% when overall geomean had improved or hadn't change
                     allowed_regressions.append(regression)
                 else:
                     regressions_to_report.append(regression)
-    
+
     exit_code = 1 if len(regressions_to_report) > 0 else 0
 
     if len(allowed_regressions) > 0:
         print(
-    '''====================================================
+            '''====================================================
 ==============  ALLOWED REGRESSIONS   ==============
 ====================================================
 '''
@@ -186,7 +188,7 @@ if len(regression_list) > 0:
 
     if len(regressions_to_report) > 0:
         print(
-    '''====================================================
+            '''====================================================
 ==============  REGRESSIONS DETECTED   =============
 ====================================================
 '''
@@ -208,10 +210,12 @@ if len(regression_list) > 0:
 
         # add regression
         if time_new > time_old * 1.01:
-            print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
+            print(
+                f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster"
+            )
             print(f"New timing geometric mean: {time_new}")
             print("")
-    
+
     print(
         '''====================================================
 ==============     OTHER TIMINGS       =============
