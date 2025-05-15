@@ -107,6 +107,12 @@ public:
 		GetFileSystem().RemoveFile(filename, GetOpener());
 	}
 
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
+		return GetFileSystem().TryRemoveFile(filename, GetOpener());
+	}
+
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
 	}
