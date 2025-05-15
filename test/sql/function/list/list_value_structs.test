@@ -81,7 +81,22 @@ statement ok
 CREATE TABLE mixed_structs (s struct(a int[], b varchar, c int, d varchar[], e struct(a int, b varchar)));
 
 statement ok
-INSERT INTO mixed_structs VALUES (ROW([1, 2, 3], 'a', 1, ['a', 'b'], ROW(1, 'a'))), (ROW([4, 5], NULL, 2, ['c', 'd'], ROW(2, NULL))), (NULL), ( ROW(NULL, 'e', 3, ['e', 'f'], ROW(3, 'c'))), (ROW([7, 8], 'g', 4, ['g', 'h'], ROW(4, 'd'))), (ROW(NULL, NULL, 5, ['i', 'j'], ROW(5, 'e')));
+INSERT INTO mixed_structs VALUES (ROW([1, 2, 3], 'a', 1, ['a', 'b'], ROW(1, 'a')))
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW([4, 5], NULL, 2, ['c', 'd'], ROW(2, NULL)))
+
+statement ok
+INSERT INTO mixed_structs VALUES (NULL)
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW(NULL, 'e', 3, ['e', 'f'], ROW(3, 'c')))
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW([7, 8], 'g', 4, ['g', 'h'], ROW(4, 'd')))
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW(NULL, NULL, 5, ['i', 'j'], ROW(5, 'e')))
 
 query I
 SELECT list_value(s, s, s, s) AS res FROM mixed_structs;
