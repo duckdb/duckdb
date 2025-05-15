@@ -19,9 +19,8 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG d6c3eb0d7b73c8dd0701b6626924fbeba47e7416
+    GIT_TAG 4cf8a592cda330a9acc4c39756434f0e08ed1512
     INCLUDE_DIR extension/httpfs/include
-    APPLY_PATCHES
     )
 
 ################# AVRO
