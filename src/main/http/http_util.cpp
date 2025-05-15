@@ -235,7 +235,7 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	// Refresh the client on retries
 	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
 
-	return RunRequestWithRetry(on_request, request);
+	return RunRequestWithRetry(on_request, request, on_retry);
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
