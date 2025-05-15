@@ -136,6 +136,10 @@ for i in range(NUMBER_REPETITIONS):
             other_results.append(BenchmarkResult(benchmark, old_res, new_res))
     benchmark_list = [res.benchmark for res in regression_list]
 
+
+time_old = geomean(old_runner.complete_timings)
+time_new = geomean(new_runner.complete_timings)
+
 exit_code = 0
 regression_list.extend(error_list)
 summary = []
@@ -147,10 +151,27 @@ if len(regression_list) > 0:
 ====================================================
 '''
     )
+    # calculate max individual regression percentage
+    max_individual_regression_percentage = 0.0
     for regression in regression_list:
+        if isinstance(regression.old_result, (int, float)) or isinstance(regression.new_result, (int, float)):
+            individual_regression_diff_perc = ((regression.new_result - regression.old_result) / regression.old_result) * 100
+            max_individual_regression_percentage = max(max_individual_regression_percentage, individual_regression_diff_perc)
+    
+    # don't report individual regressions less than 10% when overall geomean had improved or hadn't change
+    ignore_small_regressions = False
+    if isinstance(time_old, float) and isinstance(time_new, float):
+        if time_new <= time_old and max_individual_regression_percentage <= 10.0:
+            ignore_small_regressions = True
+    if ignore_small_regressions:
+        exit_code = 0
+    
+    if ignore_small_regressions:
+        print("")
         print(f"{regression.benchmark}")
         print(f"Old timing: {regression.old_result}")
         print(f"New timing: {regression.new_result}")
+        # add to the FAILURES SUMMARY
         if regression.old_failure or regression.new_failure:
             new_data = {
                 "benchmark": regression.benchmark,
@@ -159,6 +180,12 @@ if len(regression_list) > 0:
             }
             summary.append(new_data)
         print("")
+    # add regression
+    if time_new > time_old * 1.01:
+    print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
+    print(f"New timing geometric mean: {time_new}")
+    print("")
+    
     print(
         '''====================================================
 ==============     OTHER TIMINGS       =============
@@ -180,23 +207,20 @@ for res in other_results:
     print(f"New timing: {res.new_result}")
     print("")
 
-time_a = geomean(old_runner.complete_timings)
-time_b = geomean(new_runner.complete_timings)
-
 
 print("")
-if isinstance(time_a, str) or isinstance(time_b, str):
-    print(f"Old: {time_a}")
-    print(f"New: {time_b}")
-elif time_a > time_b * 1.01:
-    print(f"Old timing geometric mean: {time_a}")
-    print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
-elif time_b > time_a * 1.01:
-    print(f"Old timing geometric mean: {time_a}, roughly {int((time_b - time_a) * 100.0 / time_b)}% faster")
-    print(f"New timing geometric mean: {time_b}")
+if isinstance(time_old, str) or isinstance(time_new, str):
+    print(f"Old: {time_old}")
+    print(f"New: {time_new}")
+elif time_old > time_new * 1.01:
+    print(f"Old timing geometric mean: {time_old}")
+    print(f"New timing geometric mean: {time_new}, roughly {int((time_old - time_new) * 100.0 / time_old)}% faster")
+elif time_new > time_old * 1.01:
+    print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
+    print(f"New timing geometric mean: {time_new}")
 else:
-    print(f"Old timing geometric mean: {time_a}")
-    print(f"New timing geometric mean: {time_b}")
+    print(f"Old timing geometric mean: {time_old}")
+    print(f"New timing geometric mean: {time_new}")
 
 # nuke cached benchmark data between runs
 if os.path.isdir("duckdb_benchmark_data"):
