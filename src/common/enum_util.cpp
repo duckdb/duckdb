@@ -2801,6 +2801,24 @@ OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value) {
 	return static_cast<OnEntryNotFound>(StringUtil::StringToEnum(GetOnEntryNotFoundValues(), 2, "OnEntryNotFound", value));
 }
 
+const StringUtil::EnumStringLiteral *GetOperatorFinalResultTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OperatorFinalResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(OperatorFinalResultType::BLOCKED), "BLOCKED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType value) {
+	return StringUtil::EnumToString(GetOperatorFinalResultTypeValues(), 2, "OperatorFinalResultType", static_cast<uint32_t>(value));
+}
+
+template<>
+OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char *value) {
+	return static_cast<OperatorFinalResultType>(StringUtil::StringToEnum(GetOperatorFinalResultTypeValues(), 2, "OperatorFinalResultType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetOperatorFinalizeResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(OperatorFinalizeResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
