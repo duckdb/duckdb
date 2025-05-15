@@ -1,3 +1,16 @@
+diff --git a/extension/httpfs/create_secret_functions.cpp b/extension/httpfs/create_secret_functions.cpp
+index d59c8af..7929cdb 100644
+--- a/extension/httpfs/create_secret_functions.cpp
++++ b/extension/httpfs/create_secret_functions.cpp
+@@ -158,7 +158,7 @@ bool CreateS3SecretFunctions::TryRefreshS3Secret(ClientContext &context, const S
+ 	try {
+ 		auto res = secret_manager.CreateSecret(context, refresh_input);
+ 		auto &new_secret = dynamic_cast<const KeyValueSecret &>(*res->secret);
+-		DUCKDB_LOG_INFO(context, "httpfs.SecretRefresh", "Successfully refreshed secret: %s, new key_id: %s",
++		DUCKDB_LOG_INFO(context, "Successfully refreshed secret: %s, new key_id: %s",
+ 		                secret_to_refresh.secret->GetName(), new_secret.TryGetValue("key_id").ToString());
+ 		return true;
+ 	} catch (std::exception &ex) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
 index b111562..519cfb4 100644
 --- a/extension/httpfs/httpfs.cpp
@@ -153,3 +166,45 @@ index ce0710f..1370b14 100644
  }
  
  static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
+diff --git a/test/sql/secret/secret_refresh.test b/test/sql/secret/secret_refresh.test
+index e1cc7ed..85c8738 100644
+--- a/test/sql/secret/secret_refresh.test
++++ b/test/sql/secret/secret_refresh.test
+@@ -61,7 +61,7 @@ statement ok
+ FROM "s3://test-bucket/test-file.parquet"
+ 
+ query I
+-SELECT message[0:46] FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT message[0:46] FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+ Successfully refreshed secret: s1, new key_id:
+ 
+@@ -84,7 +84,7 @@ FROM "s3://test-bucket/test-file.parquet"
+ HTTP 403
+ 
+ query I
+-SELECT message[0:46] FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT message[0:46] FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+ Successfully refreshed secret: s1, new key_id:
+ 
+@@ -125,5 +125,5 @@ HTTP 403
+ 
+ # -> log empty
+ query II
+-SELECT log_level, message FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT log_level, message FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+diff --git a/test/sql/secret/secret_refresh_attach.test b/test/sql/secret/secret_refresh_attach.test
+index a62ed15..c20881d 100644
+--- a/test/sql/secret/secret_refresh_attach.test
++++ b/test/sql/secret/secret_refresh_attach.test
+@@ -45,6 +45,6 @@ ATTACH 's3://test-bucket/presigned/attach.db' AS db (READONLY 1);
+ 
+ # Secret refresh has been triggered
+ query II
+-SELECT log_level, message FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT log_level, message FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+ INFO	Successfully refreshed secret: uhuh_this_mah_sh, new key_id: all the girls
+\ No newline at end of file
