@@ -119,10 +119,9 @@ if (NOT MINGW)
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
-    GIT_TAG 4be6065edc313a53ff2196ff79c11a0d5e249720
+    GIT_TAG 99554f154f7a83e138bbc52eb8c3eca6417a1f23
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 endif()
 
@@ -151,9 +150,8 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-vss
-        GIT_TAG ba199a7215b75e83821ece13f6b921ccfcebd6ac
+        GIT_TAG ccfa7c9c1f1f540fa7f433a93d32bed772aa44f4
         TEST_DIR test/sql
-        APPLY_PATCHES
     )
 
 ################# MYSQL
