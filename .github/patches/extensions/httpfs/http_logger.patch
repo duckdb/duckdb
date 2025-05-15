@@ -1,0 +1,210 @@
+diff --git a/extension/httpfs/create_secret_functions.cpp b/extension/httpfs/create_secret_functions.cpp
+index d59c8af..7929cdb 100644
+--- a/extension/httpfs/create_secret_functions.cpp
++++ b/extension/httpfs/create_secret_functions.cpp
+@@ -158,7 +158,7 @@ bool CreateS3SecretFunctions::TryRefreshS3Secret(ClientContext &context, const S
+ 	try {
+ 		auto res = secret_manager.CreateSecret(context, refresh_input);
+ 		auto &new_secret = dynamic_cast<const KeyValueSecret &>(*res->secret);
+-		DUCKDB_LOG_INFO(context, "httpfs.SecretRefresh", "Successfully refreshed secret: %s, new key_id: %s",
++		DUCKDB_LOG_INFO(context, "Successfully refreshed secret: %s, new key_id: %s",
+ 		                secret_to_refresh.secret->GetName(), new_secret.TryGetValue("key_id").ToString());
+ 		return true;
+ 	} catch (std::exception &ex) {
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index b111562..519cfb4 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -8,7 +8,7 @@
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/hash.hpp"
+ #include "duckdb/function/scalar/strftime_format.hpp"
+-#include "duckdb/logging/http_logger.hpp"
++#include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+@@ -342,6 +342,9 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
+ 
+ 	auto handle = CreateHandle(file, flags, opener);
+ 	handle->Initialize(opener);
++
++	DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
++
+ 	return std::move(handle);
+ }
+ 
+@@ -356,6 +359,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 			throw InternalException("Cached file not initialized properly");
+ 		}
+ 		memcpy(buffer, hfh.cached_file_handle->GetData() + location, nr_bytes);
++		DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
++		hfh.file_offset = location + nr_bytes;
+ 		return;
+ 	}
+ 
+@@ -366,17 +371,19 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 	bool skip_buffer = hfh.flags.DirectIO() || hfh.flags.RequireParallelAccess();
+ 	if (skip_buffer && to_read > 0) {
+ 		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
+-
++		DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
+ 		// Update handle status within critical section for parallel access.
+ 		if (hfh.flags.RequireParallelAccess()) {
+ 			std::lock_guard<std::mutex> lck(hfh.mu);
+ 			hfh.buffer_available = 0;
+ 			hfh.buffer_idx = 0;
++			hfh.file_offset = location + nr_bytes;
+ 			return;
+ 		}
+ 
+ 		hfh.buffer_available = 0;
+ 		hfh.buffer_idx = 0;
++		hfh.file_offset = location + nr_bytes;
+ 		return;
+ 	}
+ 
+@@ -423,6 +430,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 			}
+ 		}
+ 	}
++	hfh.file_offset = location + nr_bytes;
++	DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
+ }
+ 
+ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+@@ -430,7 +439,6 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
+ 	idx_t max_read = hfh.length - hfh.file_offset;
+ 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
+ 	Read(handle, buffer, nr_bytes, hfh.file_offset);
+-	hfh.file_offset += nr_bytes;
+ 	return nr_bytes;
+ }
+ 
+@@ -642,6 +650,10 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 		http_params.state = make_shared_ptr<HTTPState>();
+ 	}
+ 
++	if (opener) {
++		TryAddLogger(*opener);
++	}
++
+ 	auto current_cache = TryGetMetadataCache(opener, hfs);
+ 
+ 	bool should_write_cache = false;
+@@ -711,5 +723,7 @@ void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
+ 	client_cache.StoreClient(std::move(client));
+ }
+ 
+-HTTPFileHandle::~HTTPFileHandle() = default;
++HTTPFileHandle::~HTTPFileHandle() {
++	DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
++};
+ } // namespace duckdb
+diff --git a/extension/httpfs/httpfs_client.cpp b/extension/httpfs/httpfs_client.cpp
+index bf87668..7a779ef 100644
+--- a/extension/httpfs/httpfs_client.cpp
++++ b/extension/httpfs/httpfs_client.cpp
+@@ -1,6 +1,5 @@
+ #include "httpfs_client.hpp"
+ #include "http_state.hpp"
+-#include "duckdb/logging/http_logger.hpp"
+ 
+ #define CPPHTTPLIB_OPENSSL_SUPPORT
+ #include "httplib.hpp"
+@@ -21,9 +20,6 @@ public:
+ 		client->set_read_timeout(http_params.timeout, http_params.timeout_usec);
+ 		client->set_connection_timeout(http_params.timeout, http_params.timeout_usec);
+ 		client->set_decompress(false);
+-		if (http_params.logger) {
+-			SetLogger(*http_params.logger);
+-		}
+ 		if (!http_params.bearer_token.empty()) {
+ 			client->set_bearer_token_auth(http_params.bearer_token.c_str());
+ 		}
+@@ -38,9 +34,6 @@ public:
+ 		state = http_params.state;
+ 	}
+ 
+-	void SetLogger(HTTPLogger &logger) {
+-		client->set_logger(logger.GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+-	}
+ 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
+ 		if (state) {
+ 			state->get_count++;
+diff --git a/extension/httpfs/include/httpfs_client.hpp b/extension/httpfs/include/httpfs_client.hpp
+index 16545e5..c4d1f04 100644
+--- a/extension/httpfs/include/httpfs_client.hpp
++++ b/extension/httpfs/include/httpfs_client.hpp
+@@ -1,7 +1,6 @@
+ #include "duckdb/common/http_util.hpp"
+ 
+ namespace duckdb {
+-class HTTPLogger;
+ class FileOpener;
+ struct FileOpenerInfo;
+ class HTTPState;
+diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
+index ce0710f..1370b14 100644
+--- a/extension/httpfs/s3fs.cpp
++++ b/extension/httpfs/s3fs.cpp
+@@ -4,6 +4,8 @@
+ #include "duckdb.hpp"
+ #ifndef DUCKDB_AMALGAMATION
+ #include "duckdb/common/exception/http_exception.hpp"
++#include "duckdb/logging/log_type.hpp"
++#include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/timestamp.hpp"
+@@ -838,6 +840,8 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
+ 		s3fh.file_offset += bytes_to_write;
+ 		bytes_written += bytes_to_write;
+ 	}
++
++	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, bytes_written, s3fh.file_offset - bytes_written);
+ }
+ 
+ static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
+diff --git a/test/sql/secret/secret_refresh.test b/test/sql/secret/secret_refresh.test
+index e1cc7ed..85c8738 100644
+--- a/test/sql/secret/secret_refresh.test
++++ b/test/sql/secret/secret_refresh.test
+@@ -61,7 +61,7 @@ statement ok
+ FROM "s3://test-bucket/test-file.parquet"
+ 
+ query I
+-SELECT message[0:46] FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT message[0:46] FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+ Successfully refreshed secret: s1, new key_id:
+ 
+@@ -84,7 +84,7 @@ FROM "s3://test-bucket/test-file.parquet"
+ HTTP 403
+ 
+ query I
+-SELECT message[0:46] FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT message[0:46] FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+ Successfully refreshed secret: s1, new key_id:
+ 
+@@ -125,5 +125,5 @@ HTTP 403
+ 
+ # -> log empty
+ query II
+-SELECT log_level, message FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT log_level, message FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+diff --git a/test/sql/secret/secret_refresh_attach.test b/test/sql/secret/secret_refresh_attach.test
+index a62ed15..c20881d 100644
+--- a/test/sql/secret/secret_refresh_attach.test
++++ b/test/sql/secret/secret_refresh_attach.test
+@@ -45,6 +45,6 @@ ATTACH 's3://test-bucket/presigned/attach.db' AS db (READONLY 1);
+ 
+ # Secret refresh has been triggered
+ query II
+-SELECT log_level, message FROM duckdb_logs WHERE type='httpfs.SecretRefresh'
++SELECT log_level, message FROM duckdb_logs WHERE message like '%Successfully refreshed secret%'
+ ----
+ INFO	Successfully refreshed secret: uhuh_this_mah_sh, new key_id: all the girls
+\ No newline at end of file

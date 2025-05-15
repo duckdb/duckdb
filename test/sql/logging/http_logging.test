@@ -1,0 +1,47 @@
+# name: test/sql/logging/http_logging.test
+# group: [logging]
+
+require parquet
+
+require noforcestorage
+
+require httpfs
+
+statement ok
+PRAGMA enable_logging('HTTP');
+
+statement ok
+FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+
+query IIII
+SELECT 
+	request.type,
+	request.url,
+	response.status,
+	response.reason,
+FROM duckdb_logs_parsed('HTTP')
+----
+HEAD	https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv	OK_200	OK
+GET	https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv	PartialContent_206	Partial Content
+
+query II
+SELECT request.headers['Range'], response.headers['Content-Range']
+FROM duckdb_logs_parsed('HTTP')
+WHERE request.type='GET'
+----
+bytes=0-1275	bytes 0-1275/1276
+
+statement ok
+pragma truncate_duckdb_logs
+
+# This old option still exists, however it now logs to the duckdb log instead of printing straight to stdout
+statement ok
+set enable_http_logging=false;
+
+statement ok
+FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+
+query I
+select count(*) FROM duckdb_logs_parsed('HTTP');
+----
+0

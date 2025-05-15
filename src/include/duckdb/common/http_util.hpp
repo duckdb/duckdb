@@ -15,10 +15,12 @@
 
 namespace duckdb {
 class DatabaseInstance;
-class HTTPLogger;
+class Logger;
 class HTTPUtil;
 class FileOpener;
 struct FileOpenerInfo;
+
+struct HTTPLogWriter {};
 
 struct HTTPParams {
 	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
@@ -44,7 +46,7 @@ struct HTTPParams {
 	string http_proxy_password;
 	unordered_map<string, string> extra_headers;
 	HTTPUtil &http_util;
-	optional_ptr<HTTPLogger> logger;
+	shared_ptr<Logger> logger;
 
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
@@ -237,6 +239,7 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
+	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);

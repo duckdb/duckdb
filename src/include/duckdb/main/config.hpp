@@ -38,6 +38,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
 

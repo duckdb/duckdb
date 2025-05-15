@@ -43,6 +43,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/logging/log_type.hpp"
 
 namespace duckdb {
 
@@ -218,7 +219,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
 	context.query_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
-	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
+	DUCKDB_LOG(*this, QueryLogType, query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,

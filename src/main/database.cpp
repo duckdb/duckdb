@@ -524,7 +524,7 @@ void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallIn
 	for (auto &callback : callbacks) {
 		callback->OnExtensionLoaded(*this, name);
 	}
-	DUCKDB_LOG_INFO(*this, "duckdb.Extensions.ExtensionLoaded", name);
+	DUCKDB_LOG_INFO(*this, name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {

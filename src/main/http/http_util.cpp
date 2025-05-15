@@ -2,7 +2,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/database_file_opener.hpp"
@@ -137,9 +136,6 @@ public:
 		client->set_read_timeout(sec, usec);
 		client->set_connection_timeout(sec, usec);
 		client->set_decompress(false);
-		if (http_params.logger) {
-			SetLogger(*http_params.logger);
-		}
 
 		if (!http_params.http_proxy.empty()) {
 			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
@@ -148,10 +144,6 @@ public:
 				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
 			}
 		}
-	}
-
-	void SetLogger(HTTPLogger &logger) {
-		client->set_logger(logger.GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
 	}
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		auto headers = TransformHeaders(info.headers, info.params);
@@ -231,11 +223,24 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		client = InitializeClient(request.params, request.proto_host_port);
 	}
 
-	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() { return client->Request(request); });
+	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
+		auto response = client->Request(request);
+		LogRequest(request, response ? response.get() : nullptr);
+		return response;
+	});
+
 	// Refresh the client on retries
 	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
 
 	return RunRequestWithRetry(on_request, request, on_retry);
+}
+
+void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
+	if (!request.params.logger || !request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
+		return;
+	}
+	auto log_string = HTTPLogType::ConstructLogMessage(request, response);
+	request.params.logger->WriteLog(HTTPLogType::NAME, HTTPLogType::LEVEL, log_string);
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
@@ -369,11 +374,12 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 		http_proxy_username = config.options.http_proxy_username;
 		http_proxy_password = config.options.http_proxy_password;
 	}
+
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
 		auto &client_config = ClientConfig::GetConfig(*client_context);
 		if (client_config.enable_http_logging) {
-			logger = client_context->client_data->http_logger.get();
+			logger = client_context->logger;
 		}
 	}
 }
