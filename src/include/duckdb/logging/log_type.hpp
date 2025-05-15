@@ -12,6 +12,8 @@
 
 namespace duckdb {
 struct FileHandle;
+struct BaseRequest;
+struct HTTPResponse;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -73,9 +75,12 @@ public:
 	static constexpr const char *NAME = "HTTP";
 	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
 
-	//! Construct the log type
-	HTTPLogType() : LogType(NAME, LEVEL) {
-	}
+	//! Construct the log types
+	HTTPLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	// FIXME: HTTPLogType should be structured probably
 	static string ConstructLogMessage(const string &str) {

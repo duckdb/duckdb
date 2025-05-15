@@ -236,25 +236,11 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 }
 
 void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
-	if (!request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
+	if (!request.params.logger || !request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
 		return;
 	}
-
-	stringstream out;
-
-	out << "HTTP Request:\n";
-	out << "\t" << EnumUtil::ToString(request.type) << " " << request.path << "\n";
-	for (auto &entry : request.headers) {
-		out << "\t" << entry.first << ": " << entry.second << "\n";
-	}
-	if (response) {
-		out << "\nHTTP Response:\n";
-		out << "\t" << EnumUtil::ToString(response->status) << " " << response->reason << "\n";
-		for (auto &entry : response->headers) {
-			out << "\t" << entry.first << ": " << entry.second << "\n";
-		}
-		out << "\n";
-	}
+	auto log_string = HTTPLogType::ConstructLogMessage(request, response);
+	request.params.logger->WriteLog(HTTPLogType::NAME, HTTPLogType::LEVEL, log_string);
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
@@ -388,11 +374,12 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 		http_proxy_username = config.options.http_proxy_username;
 		http_proxy_password = config.options.http_proxy_password;
 	}
+
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
 		auto &client_config = ClientConfig::GetConfig(*client_context);
 		if (client_config.enable_http_logging) {
-			logger = client_context.logger;
+			logger = client_context->logger;
 		}
 	}
 }

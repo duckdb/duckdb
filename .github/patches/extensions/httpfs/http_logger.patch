@@ -1,5 +1,5 @@
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 4c91065..1db86a2 100644
+index b111562..519cfb4 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -8,7 +8,7 @@
@@ -11,7 +11,7 @@ index 4c91065..1db86a2 100644
  #include "duckdb/main/client_context.hpp"
  #include "duckdb/main/database.hpp"
  #include "duckdb/main/secret/secret_manager.hpp"
-@@ -336,6 +336,9 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
+@@ -342,6 +342,9 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
  
  	auto handle = CreateHandle(file, flags, opener);
  	handle->Initialize(opener);
@@ -21,7 +21,7 @@ index 4c91065..1db86a2 100644
  	return std::move(handle);
  }
  
-@@ -350,6 +353,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+@@ -356,6 +359,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
  			throw InternalException("Cached file not initialized properly");
  		}
  		memcpy(buffer, hfh.cached_file_handle->GetData() + location, nr_bytes);
@@ -30,7 +30,7 @@ index 4c91065..1db86a2 100644
  		return;
  	}
  
-@@ -360,17 +365,19 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+@@ -366,17 +371,19 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
  	bool skip_buffer = hfh.flags.DirectIO() || hfh.flags.RequireParallelAccess();
  	if (skip_buffer && to_read > 0) {
  		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
@@ -51,7 +51,7 @@ index 4c91065..1db86a2 100644
  		return;
  	}
  
-@@ -418,6 +425,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+@@ -423,6 +430,8 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
  			}
  		}
  	}
@@ -60,7 +60,7 @@ index 4c91065..1db86a2 100644
  }
  
  int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-@@ -425,7 +434,6 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
+@@ -430,7 +439,6 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
  	idx_t max_read = hfh.length - hfh.file_offset;
  	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
  	Read(handle, buffer, nr_bytes, hfh.file_offset);
@@ -68,7 +68,7 @@ index 4c91065..1db86a2 100644
  	return nr_bytes;
  }
  
-@@ -635,6 +643,10 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -642,6 +650,10 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
  		http_params.state = make_shared_ptr<HTTPState>();
  	}
  
@@ -78,8 +78,8 @@ index 4c91065..1db86a2 100644
 +
  	auto current_cache = TryGetMetadataCache(opener, hfs);
  
-     bool should_write_cache = false;
-@@ -704,5 +716,7 @@ void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
+ 	bool should_write_cache = false;
+@@ -711,5 +723,7 @@ void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
  	client_cache.StoreClient(std::move(client));
  }
  
@@ -89,7 +89,7 @@ index 4c91065..1db86a2 100644
 +};
  } // namespace duckdb
 diff --git a/extension/httpfs/httpfs_client.cpp b/extension/httpfs/httpfs_client.cpp
-index 26e485b..f77a462 100644
+index bf87668..7a779ef 100644
 --- a/extension/httpfs/httpfs_client.cpp
 +++ b/extension/httpfs/httpfs_client.cpp
 @@ -1,6 +1,5 @@
@@ -109,19 +109,18 @@ index 26e485b..f77a462 100644
  		if (!http_params.bearer_token.empty()) {
  			client->set_bearer_token_auth(http_params.bearer_token.c_str());
  		}
-@@ -38,10 +34,6 @@ public:
+@@ -38,9 +34,6 @@ public:
  		state = http_params.state;
  	}
  
 -	void SetLogger(HTTPLogger &logger) {
--		client->set_logger(
--			logger.GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+-		client->set_logger(logger.GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
 -	}
  	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
  		if (state) {
  			state->get_count++;
 diff --git a/extension/httpfs/include/httpfs_client.hpp b/extension/httpfs/include/httpfs_client.hpp
-index 4b0c33e..d1ed11e 100644
+index 16545e5..c4d1f04 100644
 --- a/extension/httpfs/include/httpfs_client.hpp
 +++ b/extension/httpfs/include/httpfs_client.hpp
 @@ -1,7 +1,6 @@
@@ -133,7 +132,7 @@ index 4b0c33e..d1ed11e 100644
  struct FileOpenerInfo;
  class HTTPState;
 diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 8245318..a5bc226 100644
+index ce0710f..1370b14 100644
 --- a/extension/httpfs/s3fs.cpp
 +++ b/extension/httpfs/s3fs.cpp
 @@ -4,6 +4,8 @@
@@ -145,7 +144,7 @@ index 8245318..a5bc226 100644
  #include "duckdb/common/helper.hpp"
  #include "duckdb/common/thread.hpp"
  #include "duckdb/common/types/timestamp.hpp"
-@@ -835,6 +837,8 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
+@@ -838,6 +840,8 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
  		s3fh.file_offset += bytes_to_write;
  		bytes_written += bytes_to_write;
  	}
