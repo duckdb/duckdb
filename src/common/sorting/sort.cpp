@@ -11,20 +11,19 @@
 
 namespace duckdb {
 
-Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
+Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, const vector<LogicalType> &input_types,
            vector<idx_t> projection_map)
     : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()) {
+	for (const auto &order : orders_p) {
+		orders.push_back(order.Copy());
+	}
+
 	// Convert orders to a single "create_sort_key" expression
-	// Copied from ordered_aggregate_optimizer.cpp, should be unified
 	FunctionBinder binder(context);
 	vector<unique_ptr<Expression>> sort_children;
 	for (auto &order : orders) {
 		sort_children.emplace_back(order.expression->Copy());
-		string modifier;
-		modifier += (order.type == OrderType::ASCENDING) ? "ASC" : "DESC";
-		modifier += " NULLS";
-		modifier += (order.null_order == OrderByNullType::NULLS_FIRST) ? " FIRST" : " LAST";
-		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(modifier)));
+		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
 	}
 
 	ErrorData error;
@@ -321,8 +320,8 @@ ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gsta
 class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
-	    : sink(sink_p), merger(sort.key_layout, std::move(sink.sorted_runs), sort.output_projection_columns,
-	                           sink.partition_size, sink.external),
+	    : sink(sink_p), merger(context, sort.orders, sort.key_layout, std::move(sink.sorted_runs),
+	                           sort.output_projection_columns, sink.partition_size, sink.external),
 	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
 	}
 

@@ -886,8 +886,13 @@ struct DecodeSortKeyVectorData {
 };
 
 struct DecodeSortKeyData {
+#ifdef DEBUG
 	DecodeSortKeyData() : data(nullptr), size(DConstants::INVALID_INDEX), position(DConstants::INVALID_INDEX) {
 	}
+#else
+	DecodeSortKeyData() {
+	}
+#endif
 
 	explicit DecodeSortKeyData(const string_t &sort_key)
 	    : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0) {

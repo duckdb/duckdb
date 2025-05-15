@@ -31,6 +31,9 @@ public:
 	     vector<idx_t> projection_map);
 
 private:
+	//! Orders
+	vector<BoundOrderByNode> orders;
+
 	//! Key orders, expressions, and layout
 	unique_ptr<Expression> key_expression;
 	shared_ptr<TupleDataLayout> key_layout;

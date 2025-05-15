@@ -116,8 +116,6 @@ private:
 	vector<LogicalType> types;
 	//! The aggregate functions
 	Aggregates aggregates;
-	//! The specified ORDER BY
-	vector<BoundOrderByNode> orders;
 	//! The sort key type associated with orders
 	SortKeyType sort_key_type;
 	//! Structs are a recursive TupleDataLayout

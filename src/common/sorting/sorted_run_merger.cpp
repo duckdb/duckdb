@@ -4,6 +4,9 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include "pdqsort.h"
 #include "vergesort.h"
@@ -150,6 +153,11 @@ private:
 	idx_t merged_partition_count;
 	idx_t merged_partition_index;
 	TupleDataScanState payload_state;
+
+	//! For decoding sort keys
+	ExpressionExecutor key_executor;
+	DataChunk key;
+	DataChunk decoded_key;
 };
 
 //===--------------------------------------------------------------------===//
@@ -278,7 +286,8 @@ public:
 SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState &gstate)
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
-      merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX) {
+      merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
+      key_executor(gstate.context, *gstate.merger.key_expression) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -294,6 +303,12 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 			                              EnumUtil::ToString(iterator_state_type));
 		}
 	}
+	const auto sort_key_logical_type =
+	    sort_key_type == SortKeyType::NO_PAYLOAD_FIXED_8 || sort_key_type == SortKeyType::PAYLOAD_FIXED_16
+	        ? LogicalType::BIGINT
+	        : LogicalType::BLOB;
+	key.Initialize(gstate.context, {sort_key_logical_type});
+	decoded_key.Initialize(gstate.context, {gstate.merger.key_expression->return_type});
 }
 
 bool SortedRunMergerLocalState::TaskFinished() const {
@@ -665,6 +680,21 @@ void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate
 	}
 }
 
+template <class SORT_KEY>
+void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
+                      data_ptr_t *const payload_ptrs) {
+	using PHYSICAL_TYPE = typename SORT_KEY::PHYSICAL_TYPE;
+	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
+	for (idx_t i = 0; i < count; i++) {
+		auto &merged_partition_key = merged_partition_keys[i];
+		merged_partition_key.Deconstruct(key_data[i]);
+		if (SORT_KEY::HAS_PAYLOAD) {
+			payload_ptrs[i] = merged_partition_key.GetPayload();
+		}
+	}
+	key.SetCardinality(count);
+}
+
 template <SortKeyType SORT_KEY_TYPE>
 void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
@@ -673,42 +703,54 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 	const auto &output_projection_columns = gstate.merger.output_projection_columns;
 	idx_t opc_idx = 0;
 
+	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
+	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_state.chunk_state.row_locations);
+	bool gathered_payload = false;
+
 	// Decode from key
-	for (; opc_idx < output_projection_columns.size(); opc_idx++) {
-		const auto &opc = output_projection_columns[opc_idx];
-		if (opc.is_payload) {
-			break;
+	if (!output_projection_columns[0].is_payload) {
+		key.Reset();
+		GetKeyAndPayload(merged_partition_keys, count, key, payload_ptrs);
+
+		decoded_key.Reset();
+		key_executor.Execute(key, decoded_key);
+
+		const auto &decoded_key_entries = StructVector::GetEntries(decoded_key.data[0]);
+		for (; opc_idx < output_projection_columns.size(); opc_idx++) {
+			const auto &opc = output_projection_columns[opc_idx];
+			if (opc.is_payload) {
+				break;
+			}
+			chunk.data[opc.output_col_idx].Reference(*decoded_key_entries[opc.layout_col_idx]);
 		}
-		throw NotImplementedException("Sort");
+		gathered_payload = true;
 	}
 
 	// If there are no payload columns, we're done here
-	if (opc_idx == output_projection_columns.size()) {
-		return;
-	}
+	if (opc_idx != output_projection_columns.size()) {
+		if (!gathered_payload) {
+			// Gather row pointers from keys
+			for (idx_t i = 0; i < count; i++) {
+				payload_ptrs[i] = merged_partition_keys[i].GetPayload();
+			}
+		}
 
-	// Gather row pointers from keys
-	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
-	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_state.chunk_state.row_locations);
-	for (idx_t i = 0; i < count; i++) {
-		payload_ptrs[i] = merged_partition_keys[i].GetPayload();
-	}
+		// Init scan state
+		auto &payload_data = *gstate.merger.sorted_runs.back()->payload_data;
+		if (payload_state.pin_state.properties == TupleDataPinProperties::INVALID) {
+			payload_data.InitializeScan(payload_state, TupleDataPinProperties::ALREADY_PINNED);
+		}
+		TupleDataCollection::ResetCachedCastVectors(payload_state.chunk_state, payload_state.chunk_state.column_ids);
 
-	// Init scan state
-	auto &payload_data = *gstate.merger.sorted_runs.back()->payload_data;
-	if (payload_state.pin_state.properties == TupleDataPinProperties::INVALID) {
-		payload_data.InitializeScan(payload_state, TupleDataPinProperties::ALREADY_PINNED);
-	}
-	TupleDataCollection::ResetCachedCastVectors(payload_state.chunk_state, payload_state.chunk_state.column_ids);
-
-	// Now gather from payload
-	for (; opc_idx < output_projection_columns.size(); opc_idx++) {
-		const auto &opc = output_projection_columns[opc_idx];
-		D_ASSERT(opc.is_payload);
-		payload_data.Gather(payload_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), count,
-		                    opc.layout_col_idx, chunk.data[opc.output_col_idx],
-		                    *FlatVector::IncrementalSelectionVector(),
-		                    payload_state.chunk_state.cached_cast_vectors[opc.layout_col_idx]);
+		// Now gather from payload
+		for (; opc_idx < output_projection_columns.size(); opc_idx++) {
+			const auto &opc = output_projection_columns[opc_idx];
+			D_ASSERT(opc.is_payload);
+			payload_data.Gather(payload_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
+			                    count, opc.layout_col_idx, chunk.data[opc.output_col_idx],
+			                    *FlatVector::IncrementalSelectionVector(),
+			                    payload_state.chunk_state.cached_cast_vectors[opc.layout_col_idx]);
+		}
 	}
 
 	merged_partition_index += count;
@@ -718,13 +760,39 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
-SortedRunMerger::SortedRunMerger(shared_ptr<TupleDataLayout> key_layout_p,
+SortedRunMerger::SortedRunMerger(ClientContext &context, const vector<BoundOrderByNode> &orders,
+                                 shared_ptr<TupleDataLayout> key_layout_p,
                                  vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  const vector<SortProjectionColumn> &output_projection_columns_p,
                                  idx_t partition_size_p, bool external_p)
     : key_layout(std::move(key_layout_p)), sorted_runs(std::move(sorted_runs_p)),
       output_projection_columns(output_projection_columns_p), total_count(SortedRunsTotalCount(sorted_runs)),
       partition_size(partition_size_p), external(external_p) {
+
+	// Convert orders to a single "decode_sort_key" expression
+	FunctionBinder binder(context);
+	vector<unique_ptr<Expression>> sort_children;
+	storage_t first_col_idx = 0;
+	switch (key_layout->GetSortKeyType()) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+	case SortKeyType::PAYLOAD_FIXED_16:
+		sort_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, first_col_idx));
+		break;
+	default:
+		sort_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, first_col_idx));
+	}
+	for (idx_t col_idx = 0; col_idx < orders.size(); col_idx++) {
+		const auto &order = orders[col_idx];
+		const auto col_def = StringUtil::Format("c%llu %s", col_idx, order.expression->return_type.ToString());
+		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(col_def)));
+		sort_children.emplace_back(make_uniq<BoundConstantExpression>(order.GetOrderModifier()));
+	}
+
+	ErrorData error;
+	key_expression = binder.BindScalarFunction(DEFAULT_SCHEMA, "decode_sort_key", std::move(sort_children), error);
+	if (!key_expression) {
+		throw InternalException("Unable to bind decode_sort_key in SortedRunMerger::SortedRunMerger");
+	}
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,

@@ -14,10 +14,6 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	TupleDataLayout result;
 	result.types = this->types;
 	result.aggregates = this->aggregates;
-	result.orders.clear();
-	for (const auto &order : orders) {
-		result.orders.push_back(order.Copy());
-	}
 	result.sort_key_type = this->sort_key_type;
 	if (this->struct_layouts) {
 		result.struct_layouts = make_uniq<unordered_map<idx_t, TupleDataLayout>>();
