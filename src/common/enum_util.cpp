@@ -30,6 +30,7 @@
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
+#include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
@@ -579,19 +580,20 @@ const StringUtil::EnumStringLiteral *GetBindingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(BindingMode::STANDARD_BINDING), "STANDARD_BINDING" },
 		{ static_cast<uint32_t>(BindingMode::EXTRACT_NAMES), "EXTRACT_NAMES" },
-		{ static_cast<uint32_t>(BindingMode::EXTRACT_REPLACEMENT_SCANS), "EXTRACT_REPLACEMENT_SCANS" }
+		{ static_cast<uint32_t>(BindingMode::EXTRACT_REPLACEMENT_SCANS), "EXTRACT_REPLACEMENT_SCANS" },
+		{ static_cast<uint32_t>(BindingMode::EXTRACT_QUALIFIED_NAMES), "EXTRACT_QUALIFIED_NAMES" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<BindingMode>(BindingMode value) {
-	return StringUtil::EnumToString(GetBindingModeValues(), 3, "BindingMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetBindingModeValues(), 4, "BindingMode", static_cast<uint32_t>(value));
 }
 
 template<>
 BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
-	return static_cast<BindingMode>(StringUtil::StringToEnum(GetBindingModeValues(), 3, "BindingMode", value));
+	return static_cast<BindingMode>(StringUtil::StringToEnum(GetBindingModeValues(), 4, "BindingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBitpackingModeValues() {

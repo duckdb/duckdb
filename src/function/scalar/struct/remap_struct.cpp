@@ -112,7 +112,9 @@ static void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_
 		}
 		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
-		memcpy(result_list_data, list_data, sizeof(list_entry_t) * result_size);
+		for (idx_t i = 0; i < result_size; i++) {
+			result_list_data[i] = list_data[format.sel->get_index(i)];
+		}
 	}
 	// set up the correct vector references
 	D_ASSERT(remap_info.size() == 2);
@@ -162,7 +164,9 @@ static void RemapList(Vector &input, Vector &default_vector, Vector &result, idx
 		}
 		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
-		memcpy(result_list_data, list_data, sizeof(list_entry_t) * result_size);
+		for (idx_t i = 0; i < result_size; i++) {
+			result_list_data[i] = list_data[format.sel->get_index(i)];
+		}
 	}
 
 	//! Build up the input for remapping the child of the list
@@ -378,10 +382,11 @@ struct RemapEntry {
 
 		RemapEntry remap;
 		remap.default_index = default_idx;
-		if (target_type.id() == LogicalTypeId::STRUCT) {
+		if (default_type.id() == LogicalTypeId::STRUCT) {
 			// nested remap - recurse
-			if (default_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("Target value is a struct - default value should also be a struct");
+			if (!target_type.IsNested()) {
+				throw BinderException("Default value is a struct - target value should be a nested type, is '%s'",
+				                      target_type.ToString());
 			}
 			// add to the map at this level only if it does not yet exist
 			auto result_entry = result.find(default_target);
@@ -531,23 +536,28 @@ struct RemapEntry {
 
 static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
-	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
+	D_ASSERT(arguments.size() == 4);
+	for (idx_t arg_idx = 0; arg_idx < 3; arg_idx++) {
 		auto &arg = arguments[arg_idx];
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 		if (!arg->return_type.IsNested()) {
-			if (arg_idx == 3 && arg->return_type.id() == LogicalTypeId::SQLNULL) {
-				// defaults can be NULL
-			} else {
-				throw BinderException("Struct remap can only remap nested types");
-			}
+			throw BinderException("Struct remap can only remap nested types, not '%s'", arg->return_type.ToString());
 		} else if (arg->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->return_type)) {
 			throw BinderException("Struct remap can only remap named structs");
 		}
 	}
 	auto &from_type = arguments[0]->return_type;
 	auto &to_type = arguments[1]->return_type;
+
+	auto &defaults = arguments[3];
+	if (defaults->return_type.id() != LogicalTypeId::SQLNULL && defaults->return_type.id() != LogicalTypeId::STRUCT) {
+		throw BinderException("The defaults provided to 'remap_struct' should be of type STRUCT if they're not NULL");
+	}
+	if (defaults->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->return_type)) {
+		throw BinderException("The defaults have to be either NULL or a named STRUCT, not an unnamed struct");
+	}
 
 	if ((from_type.IsNested() || to_type.IsNested()) && from_type.id() != to_type.id()) {
 		throw BinderException("Can't change source type (%s) to target type (%s), type conversion not allowed",

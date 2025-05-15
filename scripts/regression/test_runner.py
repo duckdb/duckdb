@@ -27,13 +27,6 @@ def geomean(xs):
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
 
-# how many times we will run the experiment, to be sure of the regression
-NUMBER_REPETITIONS = 5
-# the threshold at which we consider something a regression (percentage)
-REGRESSION_THRESHOLD_PERCENTAGE = 0.1
-# minimal seconds diff for something to be a regression (for very fast benchmarks)
-REGRESSION_THRESHOLD_SECONDS = 0.05
-
 import argparse
 
 # Set up the argument parser
@@ -50,6 +43,12 @@ parser.add_argument("--disable-timeout", action="store_true", help="Disable time
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
 parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
+parser.add_argument(
+    "--regression-threshold-seconds",
+    type=float,
+    default=0.05,
+    help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.",
+)
 
 # Parse the arguments
 args = parser.parse_args()
@@ -65,6 +64,15 @@ disable_timeout = args.disable_timeout
 max_timeout = args.max_timeout
 root_dir = args.root_dir
 no_summary = args.no_summary
+regression_threshold_seconds = args.regression_threshold_seconds
+
+
+# how many times we will run the experiment, to be sure of the regression
+NUMBER_REPETITIONS = 5
+# the threshold at which we consider something a regression (percentage)
+REGRESSION_THRESHOLD_PERCENTAGE = 0.1
+# minimal seconds diff for something to be a regression (for very fast benchmarks)
+REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
 
 if not os.path.isfile(old_runner_path):
     print(f"Failed to find old runner {old_runner_path}")

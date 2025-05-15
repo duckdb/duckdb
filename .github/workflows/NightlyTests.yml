@@ -105,7 +105,7 @@ jobs:
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs;spatial"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
