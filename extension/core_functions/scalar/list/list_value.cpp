@@ -14,34 +14,30 @@ namespace duckdb {
 struct AssignInfo {
 	explicit AssignInfo(DataChunk &args, const optional_ptr<vector<idx_t>> col_offsets = nullptr) :
 		col_offsets(col_offsets) {
-		unified_format = args.ToUnifiedFormat();
 	}
 
-	unsafe_unique_array<UnifiedVectorFormat> unified_format;
 	const optional_ptr<vector<idx_t>> col_offsets;
 };
 
 struct PrimitiveAssign {
 	template<class T>
-	static T Assign(Vector &result, AssignInfo &info, idx_t input_idx, idx_t col) {
-		return *UnifiedVectorFormat::GetData<T>(info.unified_format[col]);
+	static T Assign(const T &input, Vector &result, AssignInfo &info, const idx_t col) {
+		return input;
 	}
 };
 
 struct StringAssign {
 	template <class T>
-	static T Assign(Vector &result, AssignInfo &info, idx_t input_idx, idx_t col) {
-		auto input_data = *UnifiedVectorFormat::GetData<T>(info.unified_format[col]);
-		return StringVector::AddStringOrBlob(result, input_data);
+	static T Assign(const T &input, Vector &result, AssignInfo &info, const idx_t col) {
+		return StringVector::AddStringOrBlob(result, input);
 	}
 };
 
 struct ListEntryAssign {
 	template <class T>
-	static T Assign(Vector &result, AssignInfo &info, idx_t input_idx, idx_t col) {
-		const auto input_data = UnifiedVectorFormat::GetData<list_entry_t>(info.unified_format[col]);
-		const auto length = input_data[input_idx].length;
-		const auto offset = (*info.col_offsets)[col] + input_data[input_idx].offset;
+	static T Assign(const T &input, Vector &result, AssignInfo &info, const idx_t col) {
+		const auto length = input.length;
+		const auto offset = (*info.col_offsets)[col] + input.offset;
 		return list_entry_t(offset, length);
 	}
 };
@@ -56,20 +52,23 @@ static void TemplatedPopulateChild(DataChunk &args, Vector &result, const option
 	auto result_data = FlatVector::GetData<T>(result);
 	auto result_validity = &FlatVector::Validity(result);
 
+	auto unified_format = args.ToUnifiedFormat();
 	for (idx_t row = 0; row < row_count; row++) {
 		for (idx_t col = 0; col < column_count; col++) {
-			auto input_idx = info.unified_format[col].sel->get_index(row);
+			auto input_idx = unified_format[col].sel->get_index(row);
 			auto result_idx = row * column_count + col;
-			if (!info.unified_format[col].validity.RowIsValid(input_idx)) {
+			if (!unified_format[col].validity.RowIsValid(input_idx)) {
 				result_validity->SetInvalid(result_idx);
 				continue;
 			}
-			auto val = OP::template Assign<T>(result, info, input_idx, col);
+			const auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[col]);
+			auto val = OP::template Assign<T>(input_data[input_idx], result, info, col);
 			result_data[result_idx] = val;
 		}
 	}
 }
 
+template<class OP = PrimitiveAssign>
 static void PopulateChild(DataChunk &args, Vector &result, const optional_ptr<vector<idx_t>> col_offsets = nullptr) {
 	switch (result.GetType().InternalType()) {
 		case PhysicalType::BOOL:
@@ -153,13 +152,13 @@ static void ListFunction(DataChunk &args, Vector &result) {
 	vector<LogicalType> types;
 	for (idx_t col = 0; col < column_count; col++) {
 		auto list = args.data[col];
-		auto &child_vector = ListVector::GetEntry(list);
-		types.push_back(child_vector.GetType());
+		types.push_back(list.GetType());
 
 		const auto length = ListVector::GetListSize(list);
 		if (length == 0) {
 			continue;
 		}
+		auto &child_vector = ListVector::GetEntry(list);
 		VectorOperations::Copy(child_vector, result_nested_child, length, 0, col_offsets[col]);
 	}
 
@@ -169,10 +168,10 @@ static void ListFunction(DataChunk &args, Vector &result) {
 
 	for (idx_t col = 0; col < column_count; col++) {
 		auto list = args.data[col];
-		auto &child_vector = ListVector::GetEntry(list);
-		chunk.data[col].Reference(child_vector);
+		chunk.data[col].Reference(list);
 	}
 	PopulateChild(chunk, result_child, col_offsets);
+	ListVector::SetListSize(result_child, offset_sum);
 }
 
 static void StructFunction(DataChunk &args, Vector &result) {
@@ -201,6 +200,19 @@ static void StructFunction(DataChunk &args, Vector &result) {
 		}
 
 		PopulateChild(chunk, *result_child_members[member_idx]);
+	}
+
+	// Set the top level result validity
+	const auto unified_format = args.ToUnifiedFormat();
+	auto &result_validity = FlatVector::Validity(result_child);
+	for (idx_t row = 0; row < args.size(); row++) {
+		for (idx_t col = 0; col < column_count; col++) {
+			const auto input_idx = unified_format[col].sel->get_index(row);
+			const auto result_idx = row * column_count + col;
+			if (!unified_format[col].validity.RowIsValid(input_idx)) {
+				result_validity.SetInvalid(result_idx);
+			}
+		}
 	}
 }
 
