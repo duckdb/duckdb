@@ -275,8 +275,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_
 	if (mbedtls_cipher_set_iv(context.get(), iv, iv_len) != 0) {
 		runtime_error("Failed to set IV for encryption");
 	}
-
-	size_t result;
+	
 	if (aad_len > 0) {
 		auto ret = mbedtls_cipher_update_ad(context.get(), aad, aad_len);
 		if (ret != 0) {
