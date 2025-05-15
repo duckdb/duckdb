@@ -415,7 +415,6 @@ option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
-option(ENABLE_PYTHON_ANALYSIS "Generate compile_commands for the Python binding (IntelliSense clang‑tidy only, no build)" OFF)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
@@ -1294,9 +1293,13 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load client specific config
+# Load Python client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
+  # If we're in a debug build and the main lib is being built, then we add package config
+  if(BUILD_MAIN_DUCKDB_LIBRARY AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
+  endif()
 endif()
 
 # Load base extension config
@@ -1313,9 +1316,6 @@ endforeach()
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
-  if(ENABLE_PYTHON_ANALYSIS)
-    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
-  endif()
   add_subdirectory(tools)
 endif()
 
