@@ -44,9 +44,9 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	csv_options.FromNamedParameters(options, *context, file_options);
 
 	// Run the auto-detect, populating the options with the detected settings
+	SimpleMultiFileList multi_file_list(files);
 
 	if (file_options.union_by_name) {
-		SimpleMultiFileList multi_file_list(files);
 		vector<LogicalType> types;
 		vector<string> names;
 		auto result = make_uniq<MultiFileBindData>();
@@ -73,14 +73,13 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		}
 	} else {
 		if (csv_options.auto_detect) {
+			vector<LogicalType> return_types;
+			vector<string> names;
 			shared_ptr<CSVBufferManager> buffer_manager;
-			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0].path, 0);
-			CSVSniffer sniffer(csv_options, file_options, buffer_manager, CSVStateMachineCache::Get(*context));
-			auto sniffer_result = sniffer.SniffCSV();
-			auto &types = sniffer_result.return_types;
-			auto &names = sniffer_result.names;
-			for (idx_t i = 0; i < types.size(); i++) {
-				columns.emplace_back(names[i], types[i]);
+			CSVSchemaDiscovery::SchemaDiscovery(*context, buffer_manager, csv_options, file_options, return_types,
+			                                    names, multi_file_list);
+			for (idx_t i = 0; i < return_types.size(); i++) {
+				columns.emplace_back(names[i], return_types[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
