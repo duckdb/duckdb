@@ -53,6 +53,10 @@ bool TableFunction::Equal(const TableFunction &rhs) const {
 		return false;
 	}
 
+	if (ordinality_data != rhs.ordinality_data) {
+		return false;
+	}
+
 	return true; // they are equal
 }
 
