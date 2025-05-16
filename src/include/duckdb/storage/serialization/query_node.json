@@ -176,6 +176,11 @@
         "id": 203,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 204,
+        "name": "materialized",
+        "type": "CTEMaterialize"
       }
     ]
   }

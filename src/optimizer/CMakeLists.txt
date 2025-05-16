@@ -17,6 +17,7 @@ add_library_unity(
   compressed_materialization.cpp
   cse_optimizer.cpp
   cte_filter_pusher.cpp
+  cte_inlining.cpp
   deliminator.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp

@@ -200,8 +200,9 @@ NULL
 
 require no_alternative_verify
 
+# NULL type propagation for UNION ALL does not work as this test intends for materialized CTEs
 query I
-WITH cte AS (SELECT NULL)
+WITH cte AS NOT MATERIALIZED (SELECT NULL)
 SELECT * FROM cte UNION ALL SELECT CAST(1 AS BOOLEAN)
 ----
 NULL
