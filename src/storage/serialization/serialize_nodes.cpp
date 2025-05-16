@@ -35,6 +35,7 @@
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -299,6 +300,22 @@ void ExportedTableInfo::Serialize(Serializer &serializer) const {
 ExportedTableInfo ExportedTableInfo::Deserialize(Deserializer &deserializer) {
 	auto table_data = deserializer.ReadProperty<ExportedTableData>(1, "table_data");
 	ExportedTableInfo result(deserializer.Get<ClientContext &>(), table_data);
+	return result;
+}
+
+void ExtraOperatorInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "file_filters", file_filters);
+	serializer.WriteProperty<optional_idx>(101, "total_files", total_files);
+	serializer.WriteProperty<optional_idx>(102, "filtered_files", filtered_files);
+	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", sample_options);
+}
+
+ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
+	ExtraOperatorInfo result;
+	deserializer.ReadPropertyWithDefault<string>(100, "file_filters", result.file_filters);
+	deserializer.ReadProperty<optional_idx>(101, "total_files", result.total_files);
+	deserializer.ReadProperty<optional_idx>(102, "filtered_files", result.filtered_files);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", result.sample_options);
 	return result;
 }
 
