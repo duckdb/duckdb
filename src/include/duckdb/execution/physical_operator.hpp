@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/arena_linked_list.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -52,7 +53,7 @@ public:
 	//! The physical operator type
 	PhysicalOperatorType type;
 	//! The set of children of the operator
-	vector<reference<PhysicalOperator>> children;
+	ArenaLinkedList<reference<PhysicalOperator>> children;
 	//! The types returned by this physical operator
 	vector<LogicalType> types;
 	//! The estimated cardinality of this physical operator

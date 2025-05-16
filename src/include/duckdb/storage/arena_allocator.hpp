@@ -77,6 +77,12 @@ public:
 		return arena_allocator;
 	}
 
+	template<class T, class ...ARGS>
+	T& Make(ARGS &&... args) {
+		auto ptr = AllocateAligned(sizeof(T), alignof(T));
+		return *new (ptr) T(std::forward<ARGS>(args)...);
+	}
+
 private:
 	void AllocateNewBlock(idx_t min_size);
 
