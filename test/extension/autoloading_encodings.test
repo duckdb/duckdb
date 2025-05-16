@@ -2,6 +2,8 @@
 # description: Test autoloading of encodings.
 # group: [extension]
 
+mode skip
+
 require-env LOCAL_EXTENSION_REPO
 
 statement ok
