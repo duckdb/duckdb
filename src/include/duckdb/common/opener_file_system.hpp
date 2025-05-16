@@ -44,6 +44,9 @@ public:
 	time_t GetLastModifiedTime(FileHandle &handle) override {
 		return GetFileSystem().GetLastModifiedTime(handle);
 	}
+	string GetVersionTag(FileHandle &handle) override {
+		return GetFileSystem().GetVersionTag(handle);
+	}
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
 	}
@@ -71,13 +74,6 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().RemoveDirectory(directory, GetOpener());
-	}
-
-	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-	               FileOpener *opener = nullptr) override {
-		VerifyNoOpener(opener);
-		VerifyCanAccessDirectory(directory);
-		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
@@ -109,6 +105,12 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
 		GetFileSystem().RemoveFile(filename, GetOpener());
+	}
+
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
+		return GetFileSystem().TryRemoveFile(filename, GetOpener());
 	}
 
 	string PathSeparator(const string &path) override {
@@ -154,6 +156,17 @@ protected:
 	}
 
 	bool SupportsOpenFileExtended() const override {
+		return true;
+	}
+
+	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+	                       optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
+		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
+	}
+
+	bool SupportsListFilesExtended() const override {
 		return true;
 	}
 

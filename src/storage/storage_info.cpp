@@ -206,4 +206,21 @@ void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
 	}
 }
 
+void Storage::VerifyBlockHeaderSize(const idx_t block_header_size) {
+	if ((block_header_size & 7) != 0) {
+		// Alignment to 8 bytes is necessary for computing the checksum
+		throw InvalidInputException("the block size must a multiple of 8, got %llu", block_header_size);
+	}
+	if (block_header_size < DEFAULT_BLOCK_HEADER_SIZE) {
+		throw InvalidInputException(
+		    "the block header size must be greater or equal than the default block header of %llu, got %llu",
+		    DEFAULT_BLOCK_HEADER_SIZE, block_header_size);
+	}
+	if (block_header_size > MAX_BLOCK_HEADER_SIZE) {
+		throw InvalidInputException(
+		    "the block header size must be lesser or equal than the maximum block size of %llu, got %llu",
+		    MAX_BLOCK_ALLOC_SIZE, block_header_size);
+	}
+}
+
 } // namespace duckdb

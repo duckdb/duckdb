@@ -141,6 +141,7 @@ typedef unsigned char u8;
 #define SHELL_USE_LOCAL_GETLINE 1
 #endif
 
+#include "duckdb.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
@@ -3139,7 +3140,7 @@ MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg >= 2) {
+	if (nArg > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	int rc = 0;
@@ -3246,6 +3247,10 @@ MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg)
 bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 	idx_t n2 = StringLength(mode_str);
 	char c2 = mode_str[0];
+	if (tbl_name && !(c2 == 'i' && strncmp(mode_str, "insert", n2) == 0)) {
+		raw_printf(stderr, "TABLE argument can only be used with .mode insert");
+		return false;
+	}
 	if (c2 == 'l' && n2 > 2 && strncmp(mode_str, "lines", n2) == 0) {
 		mode = RenderMode::LINE;
 		rowSeparator = SEP_Row;
@@ -3629,7 +3634,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
-	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
+	for (iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
 		const char *z = azArg[iName];
 		if (optionMatch(z, "new")) {
 			newFlag = true;
@@ -3997,7 +4002,8 @@ MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
-	utf8_printf(state.out, "DuckDB %s %s\n" /*extra-version-info*/, sqlite3_libversion(), sqlite3_sourceid());
+	utf8_printf(state.out, "DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
+	            duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 #define CTIMEOPT_VAL_(opt) #opt
 #define CTIMEOPT_VAL(opt)  CTIMEOPT_VAL_(opt)
 #if defined(__clang__) && defined(__clang_major__)
@@ -4902,6 +4908,16 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
+		} else if (strcmp(z, "-storage_version") == 0) {
+			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
+			if (storage_version != "latest") {
+				utf8_printf(
+				    stderr,
+				    "%s: Error: unknown argument (%s) for '-storage_version', only 'latest' is supported currently\n",
+				    program_name, storage_version.c_str());
+			} else {
+				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
+			}
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		}
@@ -5065,6 +5081,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				free(azCmd);
 				return rc;
 			}
+		} else if (strcmp(z, "-storage_version") == 0) {
+			// already processed on start-up
 		} else {
 			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");
@@ -5109,9 +5127,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			char *zHome;
 			char *zHistory;
 			int nHistory;
-			printf("%s %.19s\n" /*extra-version-info*/
+			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
 			       "Enter \".help\" for usage hints.\n",
-			       sqlite3_libversion(), sqlite3_sourceid());
+			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
 				ShellHighlight highlighter(data);

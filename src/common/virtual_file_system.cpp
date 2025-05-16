@@ -5,7 +5,10 @@
 
 namespace duckdb {
 
-VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
+}
+
+VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_fs(std::move(inner)) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
@@ -68,6 +71,9 @@ int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 time_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
+string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
+	return handle.file_system.GetVersionTag(handle);
+}
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
@@ -92,8 +98,9 @@ void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<Fi
 	FindFileSystem(directory).RemoveDirectory(directory, opener);
 }
 
-bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                  FileOpener *opener) {
+bool VirtualFileSystem::ListFilesExtended(const string &directory,
+                                          const std::function<void(OpenFileInfo &info)> &callback,
+                                          optional_ptr<FileOpener> opener) {
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 
@@ -111,6 +118,10 @@ bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> 
 
 void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	FindFileSystem(filename).RemoveFile(filename, opener);
+}
+
+bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(filename).TryRemoveFile(filename, opener);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

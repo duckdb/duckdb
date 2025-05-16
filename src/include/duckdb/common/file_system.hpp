@@ -32,6 +32,8 @@ class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
+class FileHandleLogger;
+class Logger;
 
 enum class FileType {
 	//! Regular file
@@ -82,6 +84,8 @@ public:
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 
+	DUCKDB_API void TryAddLogger(FileOpener &opener);
+
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
 
@@ -108,6 +112,8 @@ public:
 	FileSystem &file_system;
 	string path;
 	FileOpenFlags flags;
+
+	shared_ptr<Logger> logger;
 };
 
 class FileSystem {
@@ -156,6 +162,8 @@ public:
 	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Helper function that uses DirectoryExists and CreateDirectory to ensure all directories in path are created
+	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 
@@ -163,6 +171,8 @@ public:
 	DUCKDB_API virtual bool ListFiles(const string &directory,
 	                                  const std::function<void(const string &, bool)> &callback,
 	                                  FileOpener *opener = nullptr);
+	DUCKDB_API bool ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+	                          optional_ptr<FileOpener> opener = nullptr);
 
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
@@ -174,6 +184,8 @@ public:
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
+	//! Remvoe a file from disk if it exists - if it does not exist, return false
+	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory
@@ -263,10 +275,17 @@ public:
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 
+	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
+
 protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
 	                                                           optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsOpenFileExtended() const;
+
+	DUCKDB_API virtual bool ListFilesExtended(const string &directory,
+	                                          const std::function<void(OpenFileInfo &info)> &callback,
+	                                          optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool SupportsListFilesExtended() const;
 
 public:
 	template <class TARGET>

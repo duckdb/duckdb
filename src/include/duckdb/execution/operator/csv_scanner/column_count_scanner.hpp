@@ -41,7 +41,6 @@ public:
 	idx_t current_column_count = 0;
 	bool error = false;
 	idx_t result_position = 0;
-	bool cur_line_starts_as_comment = false;
 
 	idx_t cur_buffer_idx = 0;
 	idx_t current_buffer_size = 0;

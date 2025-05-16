@@ -41,8 +41,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			properties.RegisterDBRead(*catalog, context);
 		}
 		EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->name);
-		auto entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup,
-		                               OnEntryNotFound::RETURN_NULL);
+		auto entry =
+		    Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup, stmt.info->if_not_found);
 		if (!entry) {
 			break;
 		}

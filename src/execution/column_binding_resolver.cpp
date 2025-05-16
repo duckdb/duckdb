@@ -1,7 +1,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -26,6 +25,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		VisitOperator(*comp_join.children[0]);
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
+		}
+		// resolve any single-side predicates
+		// for now, only ASOF supports this, and we are guaranteed that all right side predicates
+		// have been pushed into a filter.
+		if (comp_join.predicate) {
+			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			VisitExpression(&comp_join.predicate);
 		}
 		// visit the duplicate eliminated columns on the LHS, if any
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {

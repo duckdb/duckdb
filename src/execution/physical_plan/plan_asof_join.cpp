@@ -42,6 +42,11 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	const auto &probe_types = op.children[0]->types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
 
+	// TODO: We can't handle predicates right now because we would have to remap column references.
+	if (op.predicate) {
+		return nullptr;
+	}
+
 	//	Fill in the projection maps to simplify the code below
 	//	Since NLJ doesn't support projection, but ASOF does,
 	//	we have to track this carefully...

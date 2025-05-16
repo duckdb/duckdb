@@ -2,10 +2,7 @@
 # description: Issue #16122 - Attach binding to incorrect table
 # group: [attach]
 
-require noforcestorage
-
 load __TEST_DIR__/issue16122.db
-
 
 statement ok
 create table mytable (C1 VARCHAR(10));

@@ -36,6 +36,9 @@ public:
 	// Projection mappings
 	vector<column_t> right_projection_map;
 
+	// Predicate (join conditions that don't reference both sides)
+	unique_ptr<Expression> predicate;
+
 public:
 	// Operator Interface
 	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;

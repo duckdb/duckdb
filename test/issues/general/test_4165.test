@@ -2,8 +2,7 @@
 # description: Issue 4165: SIGSEGV on Debian Buster amd64
 # group: [general]
 
-statement ok
-SELECT setseed(0.42);
+set seed 0.42
 
 statement ok
 CREATE TABLE df_a AS

@@ -1,0 +1,61 @@
+# name: test/sql/copy/parquet/copy_preserve_order.test_slow
+# description: Test order preservation with the PRESERVE_ORDER flag
+# group: [parquet]
+
+require parquet
+
+load __TEST_DIR__/insert_order_preserving.db
+
+# test the PRESERVE_ORDER option
+statement ok
+SET preserve_insertion_order=false
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+----
+10000000
+
+query I
+COPY integers TO '__TEST_DIR__/force_order_preserve.parquet' (PRESERVE_ORDER);
+----
+10000000
+
+statement ok
+CREATE VIEW integers2 AS FROM '__TEST_DIR__/force_order_preserve.parquet'
+
+query I
+SELECT SUM(i) FROM integers
+----
+49999995000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+49999995000000
+
+# verify the file was written in the correct order - for this we set the preserve_insertion_order back to true
+statement ok
+SET preserve_insertion_order=true
+
+query I
+SELECT * FROM '__TEST_DIR__/force_order_preserve.parquet' LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM '__TEST_DIR__/force_order_preserve.parquet' LIMIT 5 OFFSET 777778
+----
+777778
+777779
+777780
+777781
+777782
+
+statement error
+COPY integers TO '__TEST_DIR__/force_order_preserve_2.parquet' (PRESERVE_ORDER, PARTITION_BY (i), WRITE_PARTITION_COLUMNS);
+----
+PRESERVE_ORDER is not supported with these parameters

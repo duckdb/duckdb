@@ -26,12 +26,32 @@
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
 
 namespace duckdb {
+
+ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
+                                                       optional_ptr<CastParameters> parameters) {
+	optional_idx query_location;
+	if (parameters) {
+		query_location = parameters->query_location;
+		if (parameters->cast_source && parameters->cast_target) {
+			auto &source_expr = *parameters->cast_source;
+			auto &target_expr = *parameters->cast_target;
+			return ConversionException(query_location,
+			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
+		}
+	}
+	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
+}
+
+string TryCast::UnimplementedCastMessage(const LogicalType &source, const LogicalType &target) {
+	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source, target);
+}
 
 //===--------------------------------------------------------------------===//
 // Cast bool -> Numeric
@@ -1462,7 +1482,7 @@ string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
-	return UUID::FromString(input.GetString(), result);
+	return UUID::FromString(input.GetString(), result, parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1753,6 +1773,9 @@ struct HugeIntegerCastOperation {
 
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
+			if (e < -38) {
+				return false;
+			}
 			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent);
 		} else {
@@ -1800,11 +1823,12 @@ struct HugeIntegerCastOperation {
 		}
 
 		// Get the first (left-most) digit of the decimals
-		while (state.decimal_total_digits > 39) {
-			state.decimal /= T::Operation::POWERS_OF_TEN[39];
-			state.decimal_total_digits -= 39;
+		constexpr auto MAX_DIGITS = T::Operation::CACHED_POWERS_OF_TEN - 1;
+		while (state.decimal_total_digits > MAX_DIGITS) {
+			state.decimal /= T::Operation::POWERS_OF_TEN[MAX_DIGITS];
+			state.decimal_total_digits -= MAX_DIGITS;
 		}
-		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= 39);
+		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= MAX_DIGITS);
 		state.decimal /= T::Operation::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
 		if (state.decimal >= 5) {
@@ -2311,12 +2335,13 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
 	double roundedValue = round(value);
 	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
-	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
+	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width] || !Value::IsFinite(roundedValue)) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", input, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = Cast::Operation<SRC, DST>(static_cast<SRC>(value));
+	// For some reason PG does not use statistical rounding here (even though it _does_ for integers...)
+	result = Cast::Operation<SRC, DST>(static_cast<SRC>(roundedValue));
 	return true;
 }
 

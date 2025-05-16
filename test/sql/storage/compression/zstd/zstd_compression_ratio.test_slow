@@ -18,8 +18,7 @@ set logging_level='info';
 statement ok
 PRAGMA force_compression='zstd'
 
-statement ok
-select setseed(0.42);
+set seed 0.42
 
 statement ok
 set variable dataset_size = 100_000;
@@ -28,7 +27,7 @@ set variable dataset_size = 100_000;
 statement ok
 create table test_compressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select
@@ -41,20 +40,19 @@ checkpoint
 
 # We analyzed the ZSTD compressed data to be 230.8 Mb
 query I
-SELECT message FROM duckdb_logs where message.starts_with('FinalAnalyze') and message.contains('test_compressed') and message.contains('VARCHAR') order by timestamp;
+SELECT message FROM duckdb_logs where message.starts_with('ColumnDataCheckpointer FinalAnalyze') and message.contains('test_compressed') and message.contains('VARCHAR') order by timestamp;
 ----
-FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 230801376
+ColumnDataCheckpointer FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 230801376
 
 statement ok
 PRAGMA force_compression='uncompressed'
 
-statement ok
-select setseed(0.42);
+set seed 0.42
 
 statement ok
 CREATE TABLE test_uncompressed as (
 	with cte as (
-		select list_reduce([uuid()::varchar for x in range(128)], (x, y) -> concat(x, y)) str
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
 		from range(getvariable('dataset_size'))
 	)
 	select
@@ -67,9 +65,9 @@ checkpoint
 
 # The Uncompressed data to would have been 462.4 Mb
 query I
-SELECT message FROM duckdb_logs where message.starts_with('FinalAnalyze') and message.contains('test_uncompressed') and message.contains('VARCHAR') order by timestamp;
+SELECT message FROM duckdb_logs where message.starts_with('ColumnDataCheckpointer FinalAnalyze') and message.contains('test_uncompressed') and message.contains('VARCHAR') order by timestamp;
 ----
-FinalAnalyze(COMPRESSION_UNCOMPRESSED) result for main.test_uncompressed.0(VARCHAR): 462400000
+ColumnDataCheckpointer FinalAnalyze(COMPRESSION_UNCOMPRESSED) result for main.test_uncompressed.0(VARCHAR): 462400000
 
 query I
 SELECT compression FROM pragma_storage_info('test_compressed') WHERE segment_type != 'VALIDITY' AND compression != 'ZSTD';

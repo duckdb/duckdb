@@ -182,6 +182,11 @@ def test_exit(shell, alias):
     test = ShellTest(shell).statement(f".{alias}")
     result = test.run()
 
+def test_exit_rc(shell):
+    test = ShellTest(shell).statement(f".exit 17")
+    result = test.run()
+    assert result.status_code == 17
+
 def test_print(shell):
     test = ShellTest(shell).statement(".print asdf")
     result = test.run()
@@ -636,6 +641,15 @@ def test_mode_insert(shell):
     result.check_not_exist('3.139999')
     result.check_not_exist('2.710000')
 
+def test_mode_insert_table(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode insert my_table")
+        .statement("SELECT 42;")
+    )
+    result = test.run()
+    result.check_stdout('my_table')
+
 def test_mode_line(shell):
     test = (
         ShellTest(shell)
@@ -1046,5 +1060,12 @@ def test_prepared_statement(shell):
     result = test.run()
     result.check_stderr("Prepared statement parameters cannot be used directly")
 
+def test_shell_csv_file(shell):
+    test = (
+        ShellTest(shell, ['data/csv/dates.csv'])
+        .statement('SELECT * FROM dates')
+    )
+    result = test.run()
+    result.check_stdout("2008-08-10")
 
 # fmt: on

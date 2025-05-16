@@ -40,6 +40,11 @@ public:
 
 	atomic<idx_t> catalog_version;
 
+	//! Transactions undergo Cleanup, after (1) removing them directly in RemoveTransaction,
+	//! or (2) after they exist old_transactions.
+	//! Some (after rollback) enter old_transactions, but do not require Cleanup.
+	bool awaiting_cleanup;
+
 public:
 	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);
 	static DuckTransaction &Get(ClientContext &context, Catalog &catalog);

@@ -12,6 +12,7 @@ import re
 import tempfile
 import uuid
 import concurrent.futures
+import argparse
 from python_helpers import open_utf8
 
 try:
@@ -120,42 +121,30 @@ silent = False
 force = False
 
 
-def print_usage():
-    print("Usage: python scripts/format.py [revision|--all] [--check|--fix] [--force]")
-    print(
-        "   [revision]     is an optional revision number, all files that changed since that revision will be formatted (default=HEAD)"
-    )
-    print("                  if [revision] is set to --all, all files will be formatted")
-    print("   --check only prints differences, --fix also fixes the files (--check is default)")
+parser = argparse.ArgumentParser(prog='python scripts/format.py', description='Format source directory files')
+parser.add_argument(
+    'revision', nargs='?', default='HEAD', help='Revision number or --all to format all files (default: HEAD)'
+)
+parser.add_argument('--check', action='store_true', help='Only print differences (default)')
+parser.add_argument('--fix', action='store_true', help='Fix the files')
+parser.add_argument('-a', '--all', action='store_true', help='Format all files')
+parser.add_argument('-d', '--directories', nargs='*', default=[], help='Format specified directories')
+parser.add_argument('-y', '--noconfirm', action='store_true', help='Skip confirmation prompt')
+parser.add_argument('-q', '--silent', action='store_true', help='Suppress output')
+parser.add_argument('-f', '--force', action='store_true', help='Force formatting')
+args = parser.parse_args()
+
+revision = args.revision
+if args.check and args.fix:
+    parser.print_usage()
     exit(1)
-
-
-if len(sys.argv) == 1:
-    revision = "HEAD"
-elif len(sys.argv) >= 2:
-    revision = sys.argv[1]
-else:
-    print_usage()
-
-if len(sys.argv) > 2:
-    for arg in sys.argv[2:]:
-        if arg == '--check':
-            check_only = True
-        elif arg == '--fix':
-            check_only = False
-        elif arg == '--noconfirm':
-            confirm = False
-        elif arg == '--confirm':
-            confirm = True
-        elif arg == '--silent':
-            silent = True
-        elif arg == '--force':
-            force = True
-        else:
-            print_usage()
-
-if revision == '--all':
-    format_all = True
+check_only = not args.fix
+confirm = not args.noconfirm
+silent = args.silent
+force = args.force
+format_all = args.all
+if args.directories:
+    formatted_directories = args.directories
 
 
 def file_is_ignored(full_path):
