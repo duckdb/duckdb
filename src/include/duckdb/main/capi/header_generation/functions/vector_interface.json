@@ -332,6 +332,32 @@
             "comment": {
                 "description": "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer \n\n"
             }
+        },
+        {
+            "name": "duckdb_data_chunk_to_string",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Returns the debug string from the data chunk.\nThe string returned must be freed.\n"
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_verify",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Verifies the data chunk is a valid chunk.\n"
+            }
         }
     ]
 }

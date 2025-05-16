@@ -503,6 +503,8 @@ typedef struct {
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
+	const char *(*duckdb_data_chunk_to_string)(duckdb_data_chunk chunk);
+	void (*duckdb_data_chunk_verify)(duckdb_data_chunk chunk);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -938,6 +940,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_create_selection_vector = duckdb_create_selection_vector;
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
+	result.duckdb_data_chunk_to_string = duckdb_data_chunk_to_string;
+	result.duckdb_data_chunk_verify = duckdb_data_chunk_verify;
 	return result;
 }
 
