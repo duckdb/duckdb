@@ -37,13 +37,21 @@ bool BoundOrderByNode::Equals(const BoundOrderByNode &other) const {
 }
 
 string BoundOrderByNode::GetOrderModifier() const {
-	string str;
+	string modifier;
+	modifier += (type == OrderType::ASCENDING) ? "ASC" : "DESC";
+	modifier += " NULLS";
+	modifier += (null_order == OrderByNullType::NULLS_FIRST) ? " FIRST" : " LAST";
+	return modifier;
+}
+
+string BoundOrderByNode::ToString() const {
+	auto str = expression->ToString();
 	switch (type) {
 	case OrderType::ASCENDING:
-		str += "ASC";
+		str += " ASC";
 		break;
 	case OrderType::DESCENDING:
-		str += "DESC";
+		str += " DESC";
 		break;
 	default:
 		break;
@@ -60,10 +68,6 @@ string BoundOrderByNode::GetOrderModifier() const {
 		break;
 	}
 	return str;
-}
-
-string BoundOrderByNode::ToString() const {
-	return expression->ToString() + " " + GetOrderModifier();
 }
 
 unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {
