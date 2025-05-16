@@ -21,15 +21,6 @@ class ExtraOperatorInfo {
 public:
 	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
-	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
-	    : file_filters(extra_info.file_filters), sample_options(std::move(extra_info.sample_options)) {
-		if (extra_info.total_files.IsValid()) {
-			total_files = extra_info.total_files.GetIndex();
-		}
-		if (extra_info.filtered_files.IsValid()) {
-			filtered_files = extra_info.filtered_files.GetIndex();
-		}
-	}
 	ExtraOperatorInfo(ExtraOperatorInfo &&extra_info)
 	    : file_filters(extra_info.file_filters), sample_options(std::move(extra_info.sample_options)) {
 		if (extra_info.total_files.IsValid()) {
@@ -39,7 +30,7 @@ public:
 			filtered_files = extra_info.filtered_files.GetIndex();
 		}
 	}
-	ExtraOperatorInfo& operator=(ExtraOperatorInfo &&extra_info) {
+	ExtraOperatorInfo &operator=(ExtraOperatorInfo &&extra_info) {
 		if (this != &extra_info) {
 			file_filters = extra_info.file_filters;
 			if (extra_info.total_files.IsValid()) {
