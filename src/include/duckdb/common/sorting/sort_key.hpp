@@ -70,10 +70,9 @@ public:
 			FastMemcpy(&sort_key.part0, str.GetPointer(), str.GetSize());
 		}
 
-		// IMPORTANT NOTE: for fixed-size keys, we don't actually store the data in byte-comparable order.
-		// We swap so that our comparison can do aligned uint64_t comparisons, yielding better comparison performance.
+		// IMPORTANT NOTE: We don't actually store the data in byte-comparable order!
+		// This allows us to do int64_t comparisons, yielding better performance.
 		// This means we have to ByteSwap once more when decoding the keys later.
-		// For variable-size keys, we just store it in byte-comparable order, as the performance there matters less.
 		ByteSwap();
 	}
 
@@ -114,7 +113,7 @@ public:
 			           ? (lhs[1] == rhs[1] ? (lhs[2] == rhs[2] ? lhs[3] < rhs[3] : lhs[2] < rhs[2]) : lhs[1] < rhs[1])
 			           : lhs[0] < rhs[0];
 		default:
-			throw NotImplementedException("FixedSortKey::LessThan for %llu", SORT_KEY::PARTS);
+			throw NotImplementedException("FixedSortKey::LessThan for %llu parts", SORT_KEY::PARTS);
 		}
 	}
 
@@ -132,6 +131,13 @@ private:
 public:
 	static constexpr bool CONSTANT_SIZE = false;
 
+	void ByteSwap() {
+		auto &sort_key = static_cast<SORT_KEY &>(*this);
+		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
+			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+		}
+	}
+
 	void Construct(const string_t &val, data_ptr_t &heap_ptr) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
@@ -144,6 +150,9 @@ public:
 			memcpy(sort_key.data.u.ptr, val.GetData(), val.GetSize());
 			heap_ptr += val.GetSize();
 		}
+
+		// Same as FixedSortKey, we do not store the data in byte-comparable order
+		ByteSwap();
 	}
 
 	void Construct(const int64_t &, data_ptr_t &) {
@@ -155,6 +164,7 @@ public:
 		if (sort_key.size > SORT_KEY::INLINE_LENGTH) {
 			val = string_t(const_char_ptr_cast(sort_key.data.u.ptr), UnsafeNumericCast<uint32_t>(sort_key.size));
 		} else {
+			ByteSwap();
 			val = string_t(const_char_ptr_cast(&sort_key.part0), UnsafeNumericCast<uint32_t>(sort_key.size));
 		}
 	}
@@ -178,8 +188,23 @@ public:
 		return sort_key.size;
 	}
 
+	static int32_t TernaryCompare(const uint64_t &lhs, const uint64_t &rhs) {
+		return (lhs > rhs) - (lhs < rhs);
+	}
+
+	static int32_t LessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
+		switch (SORT_KEY::PARTS) {
+		case 1:
+			return TernaryCompare(lhs[0], rhs[0]);
+		case 2:
+			return 2 * TernaryCompare(lhs[0], rhs[0]) + TernaryCompare(lhs[1], rhs[1]);
+		default:
+			throw NotImplementedException("VariableSortKey::LessThan for %llu parts", SORT_KEY::PARTS);
+		}
+	}
+
 	friend bool operator<(const SORT_KEY &lhs, const SORT_KEY &rhs) {
-		auto comp_res = memcmp(&lhs.part0, &rhs.part0, SORT_KEY::INLINE_LENGTH);
+		auto comp_res = LessThan(&lhs.part0, &rhs.part0);
 		// If inlined is not equal, we can return already
 		if (comp_res != 0) {
 			return comp_res < 0;

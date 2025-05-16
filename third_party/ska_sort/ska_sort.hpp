@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "pdqsort.h"
+#include "vergesort.h"
 
 namespace duckdb_ska_sort {
 
@@ -1073,7 +1074,10 @@ template<typename It, typename ExtractKey>
 inline void StdSortFallback(It begin, It end, ExtractKey & extract_key)
 {
     static const auto comp = [&](const typename std::remove_reference<decltype(*begin)>::type & l, const typename std::remove_reference<decltype(*begin)>::type & r){ return extract_key(l) < extract_key(r); };
-    duckdb_pdqsort::pdqsort_branchless(begin, end, comp);
+	static const auto fallback = [&](const It &fb_begin, const It &fb_end) {
+		duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end, comp);
+	};
+	duckdb_vergesort::vergesort(begin, end, comp, fallback);
 }
 
 template<size_t StdSortThreshold, typename It, typename ExtractKey>

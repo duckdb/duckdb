@@ -14,10 +14,9 @@
 namespace duckdb {
 
 class TupleDataLayout;
+struct BoundOrderByNode;
 struct ProgressData;
 class SortedRun;
-class SortedRunMergerLocalState;
-class SortedRunMergerGlobalState;
 enum class SortKeyType : uint8_t;
 
 class SortedRunMerger {

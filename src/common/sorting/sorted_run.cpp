@@ -115,6 +115,24 @@ static void TemplatedSortWide(const TupleDataCollection &key_data) {
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback2);
 }
 
+template <SortKeyType SORT_KEY_TYPE>
+static void TemplatedSortVariable(const TupleDataCollection &key_data) {
+	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::IN_MEMORY>;
+	using BLOCK_ITERATOR = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>;
+
+	const BLOCK_ITERATOR_STATE state(key_data);
+	auto begin = BLOCK_ITERATOR(state, 0);
+	auto end = BLOCK_ITERATOR(state, key_data.Count());
+
+	// Variable key, use pdq
+	static const auto fallback = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+		duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end);
+	};
+	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
+}
+
 static void Sort(const TupleDataCollection &key_data) {
 	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
@@ -127,7 +145,7 @@ static void Sort(const TupleDataCollection &key_data) {
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedSortWide<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
+		return TemplatedSortVariable<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedSortThin<SortKeyType::PAYLOAD_FIXED_16>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_24:
@@ -135,7 +153,7 @@ static void Sort(const TupleDataCollection &key_data) {
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedSortWide<SortKeyType::PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedSortWide<SortKeyType::PAYLOAD_VARIABLE_32>(key_data);
+		return TemplatedSortVariable<SortKeyType::PAYLOAD_VARIABLE_32>(key_data);
 	default:
 		throw NotImplementedException("TemplatedSort for %s", EnumUtil::ToString(sort_key_type));
 	}
