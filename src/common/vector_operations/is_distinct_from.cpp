@@ -687,8 +687,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	}
 
 	// Create dictionary views of the children so we can vectorise the positional comparisons.
-	SelectionVector lcursor(count);
-	SelectionVector rcursor(count);
+	SelectionVector lcursor(0, count);
+	SelectionVector rcursor(0, count);
 
 	Vector lentry_flattened(ListVector::GetEntry(left));
 	Vector rentry_flattened(ListVector::GetEntry(right));
