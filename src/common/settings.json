@@ -778,6 +778,12 @@
         "custom_implementation": true
     },
     {
+        "name": "secondary_extension_directory",
+        "description": "Set the alternate directory to store extensions in (should be set by package managers)",
+        "type": "VARCHAR",
+        "scope": "global"
+    },
+    {
         "name": "secret_directory",
         "description": "Set the directory to which persistent secrets are stored",
         "type": "VARCHAR",

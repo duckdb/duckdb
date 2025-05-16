@@ -1151,6 +1151,22 @@ Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Secondary Extension Directory
+//===----------------------------------------------------------------------===//
+void SecondaryExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.secondary_extension_directory = input.GetValue<string>();
+}
+
+void SecondaryExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.secondary_extension_directory = DBConfig().options.secondary_extension_directory;
+}
+
+Value SecondaryExtensionDirectorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.secondary_extension_directory);
+}
+
+//===----------------------------------------------------------------------===//
 // Zstd Min String Length
 //===----------------------------------------------------------------------===//
 void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

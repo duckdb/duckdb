@@ -79,6 +79,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
+	    {"secondary_extension_directory", {"test2"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
