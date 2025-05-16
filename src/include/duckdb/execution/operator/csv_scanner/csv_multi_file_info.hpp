@@ -24,13 +24,12 @@ public:
 	CSVReaderOptions options;
 };
 
-	struct CSVSchemaDiscovery {
+struct CSVSchemaDiscovery {
 	static CSVSchema SchemaDiscovery(ClientContext &context, shared_ptr<CSVBufferManager> &buffer_manager,
 	                                 CSVReaderOptions &options, const MultiFileOptions &file_options,
 	                                 vector<LogicalType> &return_types, vector<string> &names,
 	                                 MultiFileList &multi_file_list);
 };
-
 
 struct CSVMultiFileInfo : public MultiFileReaderInterface {
 	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
