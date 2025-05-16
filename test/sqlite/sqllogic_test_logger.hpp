@@ -56,11 +56,12 @@ public:
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
 
 	static void SafeAppend(const string &log_message);
-	static void LogBoth(const string &log_message);
+	void LogBoth(const string &log_message);
 	static string GetFailureSummary();
 
 private:
-	lock_guard<mutex> log_lock;
+	mutex &log_lock;
+	// lock_guard<mutex> log_lock;
 	string file_name;
 	int query_line;
 	string sql_query;

@@ -14,7 +14,8 @@ void SQLLogicTestLogger::SafeAppend(const string &log_message) {
 	failures_summary.push_back(log_message);
 }
 
-void SQLLogicTestLogger::LogBoth(const string &log_message) {
+void SQLLogicTestLogger::LogBoth(const string &log_message) { 
+	lock_guard<mutex> lock(log_lock);
 	std::cerr << log_message;
 	SafeAppend(log_message);
 }
