@@ -45,7 +45,7 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	if (!writer) {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-		                                           FileFlags::FILE_FLAGS_APPEND);
+		                                           FileFlags::FILE_FLAGS_APPEND | FileLockType::WRITE_LOCK);
 		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
 			writer->Truncate(wal_size);
 		}
