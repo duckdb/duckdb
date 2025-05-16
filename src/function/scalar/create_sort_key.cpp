@@ -152,17 +152,16 @@ struct SortKeyConstantOperator {
 		return sizeof(T);
 	}
 
-	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
-		auto result_data = FlatVector::GetData<TYPE>(result);
+	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
 		if (flip_bytes) {
 			// descending order - so flip bytes
 			data_t flipped_bytes[sizeof(T)];
 			for (idx_t b = 0; b < sizeof(T); b++) {
 				flipped_bytes[b] = ~input[b];
 			}
-			result_data[result_idx] = Radix::DecodeData<T>(flipped_bytes);
+			result_value = Radix::DecodeData<T>(flipped_bytes);
 		} else {
-			result_data[result_idx] = Radix::DecodeData<T>(input);
+			result_value = Radix::DecodeData<T>(input);
 		}
 		return sizeof(T);
 	}
@@ -185,7 +184,7 @@ struct SortKeyVarcharOperator {
 		return input_size + 1;
 	}
 
-	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
+	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		// iterate until we encounter the string delimiter to figure out the string length
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
@@ -197,8 +196,8 @@ struct SortKeyVarcharOperator {
 		}
 		idx_t str_len = pos;
 		// now allocate the string data and fill it with the decoded data
-		result_data[result_idx] = StringVector::EmptyString(result, str_len);
-		auto str_data = data_ptr_cast(result_data[result_idx].GetDataWriteable());
+		result_value = StringVector::EmptyString(result, str_len);
+		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
 		for (pos = 0; pos < str_len; pos++) {
 			if (flip_bytes) {
 				str_data[pos] = (~input[pos]) - 1;
@@ -206,7 +205,7 @@ struct SortKeyVarcharOperator {
 				str_data[pos] = input[pos] - 1;
 			}
 		}
-		result_data[result_idx].Finalize();
+		result_value.Finalize();
 		return pos + 1;
 	}
 };
@@ -244,8 +243,7 @@ struct SortKeyBlobOperator {
 		return result_offset;
 	}
 
-	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
-		auto result_data = FlatVector::GetData<TYPE>(result);
+	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
 		// scan until we find the delimiter, keeping in mind escapes
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
 		data_t escape_character = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
@@ -263,8 +261,8 @@ struct SortKeyBlobOperator {
 			}
 		}
 		// now allocate the blob data and fill it with the decoded data
-		result_data[result_idx] = StringVector::EmptyString(result, blob_len);
-		auto str_data = data_ptr_cast(result_data[result_idx].GetDataWriteable());
+		result_value = StringVector::EmptyString(result, blob_len);
+		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
 		for (idx_t input_pos = 0, result_pos = 0; input_pos < pos; input_pos++) {
 			if (input[input_pos] == escape_character) {
 				// if we encounter an escape character - copy the NEXT byte
@@ -276,7 +274,7 @@ struct SortKeyBlobOperator {
 				str_data[result_pos++] = input[input_pos];
 			}
 		}
-		result_data[result_idx].Finalize();
+		result_value.Finalize();
 		return pos + 1;
 	}
 };
@@ -315,7 +313,7 @@ struct SortKeyChunk {
 	idx_t result_index;
 	bool has_result_index;
 
-	inline idx_t GetResultIndex(idx_t r) {
+	inline idx_t GetResultIndex(idx_t r) const {
 		return has_result_index ? result_index : r;
 	}
 };
@@ -486,16 +484,17 @@ struct SortKeyConstructInfo {
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info);
 
-template <class OP>
-void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
+template <class OP, bool ALL_VALID, bool HAS_RESULT_INDEX_OR_SEL>
+void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, const SortKeyChunk chunk,
+                                       const SortKeyConstructInfo &info) {
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
 	auto &offsets = info.offsets;
 	for (idx_t r = chunk.start; r < chunk.end; r++) {
-		auto result_index = chunk.GetResultIndex(r);
-		auto idx = vector_data.format.sel->get_index(r);
+		const auto result_index = HAS_RESULT_INDEX_OR_SEL ? chunk.GetResultIndex(r) : r;
+		const auto idx = HAS_RESULT_INDEX_OR_SEL ? vector_data.format.sel->get_index(r) : r;
 		auto &offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		if (!vector_data.format.validity.RowIsValid(idx)) {
+		if (!ALL_VALID && !vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
 			continue;
@@ -510,6 +509,23 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chun
 			}
 		}
 		offset += encode_len;
+	}
+}
+
+template <class OP>
+void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
+	if (vector_data.format.validity.AllValid()) {
+		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
+			TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
+		} else {
+			TemplatedConstructSortKeyInternal<OP, true, true>(vector_data, chunk, info);
+		}
+	} else {
+		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
+			TemplatedConstructSortKeyInternal<OP, false, false>(vector_data, chunk, info);
+		} else {
+			TemplatedConstructSortKeyInternal<OP, false, true>(vector_data, chunk, info);
+		}
 	}
 }
 
@@ -914,6 +930,7 @@ template <class OP>
 void TemplatedDecodeSortKey(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorData &vector_data, Vector &result,
                             const idx_t result_offset, const idx_t count) {
 	auto &result_validity = FlatVector::Validity(result);
+	const auto result_data = FlatVector::GetData<typename OP::TYPE>(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
@@ -924,8 +941,8 @@ void TemplatedDecodeSortKey(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVe
 			result_validity.SetInvalid(result_idx);
 			continue;
 		}
-		idx_t increment =
-		    OP::Decode(decode_data.data + decode_data.position, result, result_idx, vector_data.flip_bytes);
+		idx_t increment = OP::Decode(decode_data.data + decode_data.position, result, result_data[result_idx],
+		                             vector_data.flip_bytes);
 		decode_data.position += increment;
 	}
 }
