@@ -1296,10 +1296,6 @@ endif()
 # Load Python client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
-  # If we're in a debug build and the main lib is being built, then we add package config
-  if(BUILD_MAIN_DUCKDB_LIBRARY AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
-  endif()
 endif()
 
 # Load base extension config
@@ -1457,6 +1453,8 @@ if(BUILD_PYTHON)
 
   if(PYTHON_EDITABLE_BUILD)
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .[dev])
+    # Enable intellisense / clang-tidy support for IDEs
+    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
   else()
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
   endif()
