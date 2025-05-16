@@ -32,7 +32,12 @@ enum class ParseInfoType : uint8_t {
 	COMMENT_ON_INFO,
 	COMMENT_ON_COLUMN_INFO,
 	COPY_DATABASE_INFO,
-	UPDATE_EXTENSIONS_INFO
+	UPDATE_EXTENSIONS_INFO,
+	SEQUENCE_VALUE_INFO,
+	TABLE_DATA_INFO,
+	VERSION_INFO,
+	FLUSH_INFO,
+	CHECKPOINT_INFO,
 };
 
 struct ParseInfo {
@@ -42,6 +47,7 @@ struct ParseInfo {
 	}
 
 	ParseInfoType info_type;
+	idx_t size = 0;
 
 public:
 	template <class TARGET>
