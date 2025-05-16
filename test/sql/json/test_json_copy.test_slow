@@ -72,7 +72,6 @@ query I nosort q0
 select * from roundtrip
 ----
 
-
 # test issue #6305
 statement ok
 copy (
