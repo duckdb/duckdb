@@ -169,6 +169,7 @@ duckdb_extension_load(fts
 )
 
 ################# ENCODINGS
+if (NOT ${WASM_ENABLED})
 duckdb_extension_load(encodings
         LOAD_TESTS
         DONT_LINK
@@ -176,3 +177,4 @@ duckdb_extension_load(encodings
         GIT_TAG dc3c206e237b517abcdd95ebe40d02dcd0f71084
         TEST_DIR test/sql
 )
+endif()
