@@ -9,6 +9,8 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
 
@@ -17,6 +19,50 @@ ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(ver
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_CREATE_BF: {
+		VisitOperatorChildren(op);
+		auto &create_bf = op.Cast<LogicalCreateBF>();
+		for (auto &bf_plan : create_bf.filter_plans) {
+			bf_plan->bound_cols_build.clear();
+			for (auto &col : bf_plan->build) {
+				auto &col_bind = col->Cast<BoundColumnRefExpression>().binding;
+				for (idx_t i = 0; i < bindings.size(); i++) {
+					if (col_bind == bindings[i]) {
+						bf_plan->bound_cols_build.push_back(i);
+						break;
+					}
+				}
+			}
+			if (bf_plan->bound_cols_build.size() != bf_plan->build.size()) {
+				throw InternalException("Failed to bind column reference.\n");
+			}
+		}
+		bindings = op.GetColumnBindings();
+		VisitOperatorExpressions(op);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_USE_BF: {
+		VisitOperatorChildren(op);
+		auto &use_bf = op.Cast<LogicalUseBF>();
+		auto &bf_plan = use_bf.filter_plan;
+		bf_plan->bound_cols_apply.clear();
+		for (auto &col : bf_plan->apply) {
+			auto &col_bind = col->Cast<BoundColumnRefExpression>().binding;
+			for (idx_t i = 0; i < bindings.size(); i++) {
+				if (col_bind == bindings[i]) {
+					bf_plan->bound_cols_apply.push_back(i);
+					break;
+				}
+			}
+		}
+		if (bf_plan->bound_cols_apply.size() != bf_plan->apply.size()) {
+			throw InternalException("Failed to bind column reference.\n");
+		}
+
+		bindings = op.GetColumnBindings();
+		VisitOperatorExpressions(op);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// special case: comparison join

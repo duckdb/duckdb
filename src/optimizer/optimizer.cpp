@@ -35,6 +35,7 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/optimizer/predicate_transfer/predicate_transfer_optimizer.hpp"
 
 namespace duckdb {
 
@@ -149,11 +150,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = regex_opt.Rewrite(std::move(plan));
 	});
 
-	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter ic_rewriter(context, *this);
-		plan = ic_rewriter.Rewrite(std::move(plan));
-	});
-
 	// removes any redundant DelimGets/DelimJoins
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
 		Deliminator deliminator;
@@ -166,12 +162,27 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
-	// then we perform the join ordering optimization
-	// this also rewrites cross products + filters into joins and performs filter pushdowns
-	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
-		JoinOrderOptimizer optimizer(context);
-		plan = optimizer.Optimize(std::move(plan));
+	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
+		InClauseRewriter ic_rewriter(context, *this);
+		plan = ic_rewriter.Rewrite(std::move(plan));
 	});
+
+	// Perform predicate transfer and join order optimization
+	{
+		// 1. Extract information for predicate transfer, because some information may be lost in the next step.
+		PredicateTransferOptimizer PT(context);
+		plan = PT.PreOptimize(std::move(plan));
+
+		// 2. Then we perform the join ordering optimization, this also rewrites cross products + filters into joins and
+		// performs filter pushdowns
+		RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
+			JoinOrderOptimizer optimizer(context);
+			plan = optimizer.Optimize(std::move(plan));
+		});
+
+		// 3. Insert BloomFilter-related operators
+		plan = PT.Optimize(std::move(plan));
+	}
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
