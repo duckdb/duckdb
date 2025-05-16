@@ -28,7 +28,7 @@ class Sort {
 
 public:
 	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
-	     vector<idx_t> projection_map);
+	     vector<idx_t> projection_map, bool force_external = false);
 
 private:
 	//! Orders
@@ -45,6 +45,9 @@ private:
 	//! Mapping from key/payload layouts to output columns
 	vector<idx_t> input_projection_map;
 	vector<SortProjectionColumn> output_projection_columns;
+
+	//! Whether to force an external sort
+	bool force_external;
 
 public:
 	//===--------------------------------------------------------------------===//

@@ -12,8 +12,9 @@
 namespace duckdb {
 
 Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, const vector<LogicalType> &input_types,
-           vector<idx_t> projection_map)
-    : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()) {
+           vector<idx_t> projection_map, bool force_external_p)
+    : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()),
+      force_external(force_external_p) {
 	for (const auto &order : orders_p) {
 		orders.push_back(order.Copy());
 	}
@@ -270,6 +271,9 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 
 	// Set any_combined under lock
 	auto guard = gstate.Lock();
+	if (force_external) {
+		gstate.external = true;
+	}
 	gstate.any_combined = true;
 	guard.unlock();
 
@@ -293,8 +297,8 @@ SinkFinalizeType Sort::Finalize(Pipeline &, Event &, ClientContext &context, Ope
 		gstate.total_count += sorted_run->Count();
 		maximum_run_count = MaxValue(maximum_run_count, sorted_run->Count());
 	}
-	if (context.config.verify_parallelism) {
-		gstate.partition_size = ClampValue<idx_t>(maximum_run_count / 2, 1, DEFAULT_ROW_GROUP_SIZE);
+	if (gstate.num_threads == 1 || context.config.verify_parallelism) {
+		gstate.partition_size = STANDARD_VECTOR_SIZE;
 	} else {
 		gstate.partition_size = MinValue<idx_t>(gstate.total_count, DEFAULT_ROW_GROUP_SIZE);
 	}

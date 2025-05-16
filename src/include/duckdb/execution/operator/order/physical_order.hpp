@@ -23,10 +23,11 @@ public:
 
 public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
-	              idx_t estimated_cardinality);
+	              idx_t estimated_cardinality, bool force_external = false);
 
 	vector<BoundOrderByNode> orders;
 	vector<idx_t> projections;
+	bool force_external;
 
 public:
 	//===--------------------------------------------------------------------===//

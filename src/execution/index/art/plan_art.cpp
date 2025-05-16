@@ -76,8 +76,10 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	}
 	projections.emplace_back(new_column_types.size() - 1);
 
+	// We force an external sort by adding "true" here to reduce memory pressure,
+	// as both sorting and building the art require memory
 	auto &order = planner.Make<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
-	                                          op.estimated_cardinality);
+	                                          op.estimated_cardinality, true);
 	order.children.push_back(prev_op);
 	create_idx.children.push_back(order);
 	return create_idx;
