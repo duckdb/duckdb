@@ -219,15 +219,16 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 				                      table_function.name);
 			}
 		}
-		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-
 		if (table_function.ordinality_data.ordinality_request == Ordinality_request_t::REQUESTED &&
-		    table_function.in_out_function) {
+			table_function.in_out_function) {
 			return_types.emplace_back(LogicalType::BIGINT);
 			return_names.emplace_back("ordinality");
 			D_ASSERT(return_names.size() == return_types.size());
 			table_function.ordinality_data.column_id = return_types.size() - 1;
-		}
+			}
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+
+
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
