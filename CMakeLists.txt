@@ -427,6 +427,7 @@ option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(PYTHON_DEV "Build Intellisense and clang-tidy support and install dev dependencies" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -1306,7 +1307,7 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load client specific config
+# Load Python client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
@@ -1464,7 +1465,11 @@ if(BUILD_PYTHON)
       DUCKDB_LIBS="${duckdb_libs}"
     )
 
-  if(PYTHON_EDITABLE_BUILD)
+  if(PYTHON_DEV)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .[dev])
+    # Enable intellisense / clang-tidy support for IDEs
+    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
+  elseif(PYTHON_EDITABLE_BUILD)
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
   else()
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
