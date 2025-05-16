@@ -20,6 +20,8 @@ static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableF
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
 	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("codename");
+	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;
 }
 
@@ -36,6 +38,8 @@ static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &da
 	output.SetCardinality(1);
 	output.SetValue(0, 0, DuckDB::LibraryVersion());
 	output.SetValue(1, 0, DuckDB::SourceID());
+	output.SetValue(2, 0, DuckDB::ReleaseCodename());
+
 	data.finished = true;
 }
 
@@ -56,6 +60,23 @@ const char *DuckDB::SourceID() {
 
 const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
+}
+
+const char *DuckDB::ReleaseCodename() {
+	// dev releases have no name
+	if (StringUtil::Contains(DUCKDB_VERSION, "-dev")) {
+		return "Development Version";
+	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.2.")) {
+		return "Histrionicus";
+	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.3.")) {
+		return "Ossivalis";
+	}
+	// add new version names here
+
+	// we should not get here, but let's not fail because of it because tags on forks can be whatever
+	return "Unknown Version";
 }
 
 string DuckDB::Platform() {

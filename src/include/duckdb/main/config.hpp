@@ -38,6 +38,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
 
@@ -351,7 +352,7 @@ public:
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! HTTP Request utility functions
-	unique_ptr<HTTPUtil> http_util;
+	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 
