@@ -90,7 +90,9 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
-	idx_t max_files_to_sniff = options.files_to_sniff == -1 ? NumericLimits<idx_t>::Maximum() : options.files_to_sniff;
+	idx_t max_files_to_sniff = static_cast<idx_t>(options.files_to_sniff == -1)
+	                               ? NumericLimits<idx_t>::Maximum()
+	                               : static_cast<idx_t>(options.files_to_sniff);
 	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
