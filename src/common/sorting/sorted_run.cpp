@@ -169,7 +169,7 @@ static void ReorderKeyData(TupleDataCollection &new_key_data, TupleDataAppendSta
 	for (idx_t i = 0; i < count; i++) {
 		const auto &sort_key = *row_locations[i];
 		heap_locations[i] = sort_key.GetData();
-		heap_sizes[i] = sort_key.GetSize();
+		heap_sizes[i] = sort_key.GetHeapSize();
 	}
 
 	new_key_data_append_state.chunk_state.heap_sizes.Reference(input.heap_sizes);

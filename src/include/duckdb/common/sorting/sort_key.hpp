@@ -100,6 +100,10 @@ public:
 		throw InternalException("GetSize() called on a FixedSortKey");
 	}
 
+	idx_t GetHeapSize() const {
+		throw InternalException("GetHeapSize() called on a FixedSortKey");
+	}
+
 	static bool LessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
 		switch (SORT_KEY::PARTS) {
 		case 1:
@@ -140,19 +144,23 @@ public:
 
 	void Construct(const string_t &val, data_ptr_t &heap_ptr) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
+		// Initialize to 0's (including size by doing + 1)
+		for (idx_t i = 0; i < SORT_KEY::PARTS + 1; i++) {
 			(&sort_key.part0)[i] = 0;
 		}
-		memcpy(&sort_key.part0, val.GetData(), val.GetSize());
-		sort_key.size = val.GetSize();
-		sort_key.data.u.ptr = heap_ptr;
-		if (sort_key.size > SORT_KEY::INLINE_LENGTH) {
-			memcpy(sort_key.data.u.ptr, val.GetData(), val.GetSize());
-			heap_ptr += val.GetSize();
-		}
 
+		// Deal with inlined part first
+		memcpy(&sort_key.part0, val.GetData(), MinValue(val.GetSize(), SORT_KEY::INLINE_LENGTH));
 		// Same as FixedSortKey, we do not store the data in byte-comparable order
 		ByteSwap();
+
+		// Deal with non-inlined part (if necessary)
+		if (val.GetSize() > SORT_KEY::INLINE_LENGTH) {
+			sort_key.size = val.GetSize();
+			sort_key.data.u.ptr = heap_ptr;
+			memcpy(sort_key.data.u.ptr, val.GetData(), sort_key.size);
+			heap_ptr += sort_key.size;
+		}
 	}
 
 	void Construct(const int64_t &, data_ptr_t &) {
@@ -165,7 +173,7 @@ public:
 			val = string_t(const_char_ptr_cast(sort_key.data.u.ptr), UnsafeNumericCast<uint32_t>(sort_key.size));
 		} else {
 			ByteSwap();
-			val = string_t(const_char_ptr_cast(&sort_key.part0), UnsafeNumericCast<uint32_t>(sort_key.size));
+			val = string_t(const_char_ptr_cast(&sort_key.part0), UnsafeNumericCast<uint32_t>(SORT_KEY::INLINE_LENGTH));
 		}
 	}
 
@@ -184,6 +192,11 @@ public:
 	}
 
 	idx_t GetSize() const {
+		auto &sort_key = static_cast<const SORT_KEY &>(*this);
+		return MaxValue(sort_key.size, SORT_KEY::INLINE_LENGTH);
+	}
+
+	idx_t GetHeapSize() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
 		return sort_key.size;
 	}
