@@ -1,0 +1,89 @@
+# name: test/sql/alter/list/add_column_in_struct.test
+# group: [list]
+
+query I
+WITH cte as (
+	select a::STRUCT(i INTEGER, j INTEGER)[] a from
+	VALUES
+		([ROW(1, 1)]),
+		([ROW(2, 2)])
+	t(a)
+)
+SELECT remap_struct(
+	a,
+	NULL::STRUCT(i INTEGER, j INTEGER, k INTEGER)[],
+	{
+		'list': (
+			'list', {
+				'i': 'i',
+				'j': 'j'
+			}
+		)
+	},
+	{
+		'list': {
+			'k': NULL::INTEGER
+		}
+	}
+) from cte;
+----
+[{'i': 1, 'j': 1, 'k': NULL}]
+[{'i': 2, 'j': 2, 'k': NULL}]
+
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		i INTEGER,
+		j INTEGER
+	)[]
+)
+
+statement ok
+INSERT INTO test VALUES
+	([ROW(1, 1)]),
+	([ROW(2, 2)])
+
+# add a column to a struct
+statement ok
+ALTER TABLE test ADD COLUMN s.element.k INTEGER
+
+query I
+select * from test;
+----
+[{'i': 1, 'j': 1, 'k': NULL}]
+[{'i': 2, 'j': 2, 'k': NULL}]
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		a STRUCT(
+			i INTEGER,
+			j INTEGER
+		)[]
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(ROW([ROW(1, 1)])),
+	(ROW([ROW(2, 2)]))
+
+# add a column to a struct
+statement ok
+ALTER TABLE test ADD COLUMN s.a.element.k INTEGER
+
+query I
+select * from test;
+----
+{'a': [{'i': 1, 'j': 1, 'k': NULL}]}
+{'a': [{'i': 2, 'j': 2, 'k': NULL}]}
+
+# attempt to add a field to a list
+statement error
+ALTER TABLE test ADD COLUMN s.a.not_element INTEGER
+----
+Binder Error: Column a is not a struct - ALTER TABLE can only add fields to structs

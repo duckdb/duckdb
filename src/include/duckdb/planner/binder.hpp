@@ -66,7 +66,12 @@ struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
-enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES, EXTRACT_REPLACEMENT_SCANS };
+enum class BindingMode : uint8_t {
+	STANDARD_BINDING,
+	EXTRACT_NAMES,
+	EXTRACT_REPLACEMENT_SCANS,
+	EXTRACT_QUALIFIED_NAMES
+};
 enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 
 struct CorrelatedColumnInfo {
@@ -254,7 +259,7 @@ private:
 	optional_ptr<SQLStatement> root_statement;
 	//! Binding mode
 	BindingMode mode = BindingMode::STANDARD_BINDING;
-	//! Table names extracted for BindingMode::EXTRACT_NAMES
+	//! Table names extracted for BindingMode::EXTRACT_NAMES or BindingMode::EXTRACT_QUALIFIED_NAMES.
 	unordered_set<string> table_names;
 	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
 	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;

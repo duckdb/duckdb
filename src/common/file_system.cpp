@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/logging/log_type.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
@@ -16,6 +17,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -521,14 +523,17 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(Ope
 	if (SupportsListFilesExtended()) {
 		return ListFilesExtended(directory, callback, opener);
 	} else {
-		return ListFiles(directory, [&](const string &path, bool is_dir) {
-			OpenFileInfo info(path);
-			if (is_dir) {
-				info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-				info.extended_info->options["type"] = "directory";
-			}
-			callback(info);
-		});
+		return ListFiles(
+		    directory,
+		    [&](const string &path, bool is_dir) {
+			    OpenFileInfo info(path);
+			    if (is_dir) {
+				    info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+				    info.extended_info->options["type"] = "directory";
+			    }
+			    callback(info);
+		    },
+		    opener.get());
 	}
 }
 
@@ -546,6 +551,14 @@ bool FileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener)
 
 void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
+}
+
+bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	if (FileExists(filename, opener)) {
+		RemoveFile(filename, opener);
+		return true;
+	}
+	return false;
 }
 
 void FileSystem::FileSync(FileHandle &handle) {
@@ -750,6 +763,18 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+void FileHandle::TryAddLogger(FileOpener &opener) {
+	auto context = opener.TryGetClientContext();
+	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = context->logger;
+		return;
+	}
+	auto database = opener.TryGetDatabase();
+	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = database->GetLogManager().GlobalLoggerReference();
+	}
 }
 
 idx_t FileHandle::GetProgress() {

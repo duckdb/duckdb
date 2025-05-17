@@ -75,8 +75,8 @@ public:
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
-	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-	                                                    const AttachOptions &options);
+	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+	                                                    AttachOptions &options);
 
 	void AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info);
 
@@ -145,6 +145,7 @@ public:
 	DUCKDB_API idx_t NumberOfThreads();
 	DUCKDB_API static const char *SourceID();
 	DUCKDB_API static const char *LibraryVersion();
+	DUCKDB_API static const char *ReleaseCodename();
 	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);

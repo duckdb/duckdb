@@ -168,13 +168,9 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// file does not exist and we are in read-write mode
 		// create a new file
 
-		// check if a WAL file already exists
 		auto wal_path = GetWALPath();
-		if (fs.FileExists(wal_path)) {
-			// WAL file exists but database file does not
-			// remove the WAL
-			fs.RemoveFile(wal_path);
-		}
+		// try to remove the WAL file if it exists
+		fs.TryRemoveFile(wal_path);
 
 		// Set the block allocation size for the new database file.
 		if (storage_options.block_alloc_size.IsValid()) {
