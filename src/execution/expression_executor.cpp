@@ -25,7 +25,6 @@ ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression 
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &exprs)
     : ExpressionExecutor(context) {
-	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
 	}
