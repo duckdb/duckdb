@@ -62,13 +62,43 @@ LOAD 'loadable_extension_demo';
 statement ok
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
-# can load now
 statement ok
-LOAD 'loadable_extension_demo';
+SET extension_directory='__TEST_DIR__/extension_directory/with/lot/of/nesting'
+
+# can't install after setting directory, too many level deep
+statement error
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+----
+IO Error: CreateDirectoriesRecursive could not find base existing folder
+
+statement ok
+SET extension_directory='__TEST_DIR__/extension_directory/with/lot/of'
+
+# can't install after setting directory, too many level deep
+statement error
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+----
+IO Error: CreateDirectoriesRecursive could not find base existing folder
+
+statement ok
+SET extension_directory='__TEST_DIR__/extension_directory/with/lot'
+
+# can't install after setting directory, too many level deep
+statement error
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+----
+IO Error: CreateDirectoriesRecursive could not find base existing folder
+
+statement ok
+SET extension_directory='__TEST_DIR__/extension_directory/with'
+
+# can now install after setting directory, extension_directory exist alredy, only with is created
+statement ok
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 # ensure file is there
 query I
-select count(*) from glob('__TEST_DIR__/extension_directory/**/loadable_extension_demo.duckdb_extension')
+select count(*) from glob('__TEST_DIR__/extension_directory/with/**/loadable_extension_demo.duckdb_extension')
 ----
 1
 

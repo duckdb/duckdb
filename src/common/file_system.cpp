@@ -473,7 +473,7 @@ void FileSystem::CreateDirectoriesRecursive(const string &path, idx_t max_to_be_
 
 		if (current_to_be_created + 1 > max_to_be_created) {
 			throw IOException("CreateDirectoriesRecursive could not find base existing folder at \"%s\" (with path "
-			                  "\"%s\" and allowed %d created directories)",
+			                  "\"%s\" and allowed %d created directories). Consider creating the missing directory explcitly.",
 			                  current_prefix, path, max_to_be_created);
 		}
 
