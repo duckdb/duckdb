@@ -94,6 +94,10 @@ statement error
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 ----
 
+# we can't install because we will not create a non-existing home directory, but we should succeed at querying extensions
+statement ok
+FROM duckdb_extensions()
+
 # but this one should exist
 statement ok
 SET home_directory='__TEST_DIR__'
