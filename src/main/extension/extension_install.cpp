@@ -64,7 +64,8 @@ duckdb::pair<duckdb::string, idx_t> ExtensionHelper::DefaultExtensionFolder(File
 	res = fs.JoinPath(res, ".duckdb");
 	res = fs.JoinPath(res, "extensions");
 
-	// Use a budget of 2, that is maximum 2 created directories, so that home_directory is never actually created if not existing
+	// Use a budget of 2, that is maximum 2 created directories, so that home_directory is never actually created if not
+	// existing
 	return {res, 2};
 }
 
