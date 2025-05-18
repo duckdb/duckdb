@@ -452,7 +452,8 @@ void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+void FileSystem::CreateDirectoriesRecursive(const string &path, idx_t max_to_be_created,
+                                            optional_ptr<FileOpener> opener) {
 	// To avoid hitting directories we have no permission for when using allowed_directories + enable_external_access,
 	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
 	// dir that is not in the allowed_directories list
@@ -464,9 +465,19 @@ void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<Fil
 
 	StringUtil::RTrim(current_prefix, sep);
 
+	idx_t current_to_be_created = 0;
+
 	// Strip directories from the path until we hit a directory that exists
 	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
 		auto found = current_prefix.find_last_of(sep);
+
+		if (current_to_be_created + 1 > max_to_be_created) {
+			throw IOException("CreateDirectoriesRecursive could not find base existing folder at \"%s\" (with path "
+			                  "\"%s\" and allowed %d created directories)",
+			                  current_prefix, path, max_to_be_created);
+		}
+
+		current_to_be_created++;
 
 		// Push back the root dir
 		if (found == string::npos || found == 0) {

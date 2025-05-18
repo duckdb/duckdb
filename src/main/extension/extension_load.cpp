@@ -352,7 +352,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 
 		string local_path = !db.config.options.extension_directory.empty()
 		                        ? db.config.options.extension_directory
-		                        : ExtensionHelper::DefaultExtensionFolder(fs);
+		                        : ExtensionHelper::DefaultExtensionFolder(fs).first;
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);

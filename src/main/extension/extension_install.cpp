@@ -58,35 +58,35 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	return link;
 }
 
-duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
+duckdb::pair<duckdb::string, idx_t> ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	string home_directory = fs.GetHomeDirectory();
-	// exception if the home directory does not exist, don't create whatever we think is home
-	if (!fs.DirectoryExists(home_directory)) {
-		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-		                  "home_directory='/path/to/dir' option.",
-		                  home_directory);
-	}
 	string res = home_directory;
 	res = fs.JoinPath(res, ".duckdb");
 	res = fs.JoinPath(res, "extensions");
-	return res;
+
+	// Use a budget of 2, that is maximum 2 created directories, so that home_directory is never actually created if not existing
+	return {res, 2};
 }
 
-string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
+string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context, idx_t &how_deep) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
-	return GetExtensionDirectoryPath(db, fs);
+	return GetExtensionDirectoryPath(db, fs, how_deep);
 }
 
-string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
+string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs, idx_t &how_deep) {
 	string extension_directory;
 	auto &config = db.config;
-	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
+	if (!config.options.extension_directory.empty()) {
+		// create the extension directory if not present
+		how_deep = 1;
 		extension_directory = config.options.extension_directory;
 		// TODO this should probably live in the FileSystem
 		// convert random separators to platform-canonic
 	} else { // otherwise default to home
-		extension_directory = DefaultExtensionFolder(fs);
+		auto res = DefaultExtensionFolder(fs);
+		extension_directory = res.first;
+		how_deep = res.second;
 	}
 
 	extension_directory = fs.ConvertSeparators(extension_directory);
@@ -95,6 +95,7 @@ string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSyst
 
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
+		how_deep++;
 		extension_directory = fs.JoinPath(extension_directory, path_ele);
 	}
 
@@ -105,10 +106,11 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 #ifdef WASM_LOADABLE_EXTENSIONS
 	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
-	string extension_directory = GetExtensionDirectoryPath(db, fs);
+	idx_t max_to_be_created = 0;
+	string extension_directory = GetExtensionDirectoryPath(db, fs, max_to_be_created);
 	{
 		if (!fs.DirectoryExists(extension_directory)) {
-			fs.CreateDirectoriesRecursive(extension_directory);
+			fs.CreateDirectoriesRecursive(extension_directory, max_to_be_created);
 		}
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
