@@ -1073,7 +1073,8 @@ struct ListElementSubKey : SubKey<typename std::decay<decltype(std::declval<T>()
 template<typename It, typename ExtractKey>
 inline void StdSortFallback(It begin, It end, ExtractKey & extract_key)
 {
-    static const auto comp = [&](const typename std::remove_reference<decltype(*begin)>::type & l, const typename std::remove_reference<decltype(*begin)>::type & r){ return extract_key(l) < extract_key(r); };
+	// LNK note that we use the full comparison (not just extracted key) here
+    static const auto comp = [&](const typename std::remove_reference<decltype(*begin)>::type & l, const typename std::remove_reference<decltype(*begin)>::type & r){ return l < r; };
 	static const auto fallback = [&](const It &fb_begin, const It &fb_end) {
 		duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end, comp);
 	};
@@ -1423,9 +1424,18 @@ struct SortStarter
         if (StdSortIfLessThanThreshold<StdSortThreshold>(begin, end, num_elements, extract_key))
             return;
 
-        void (*next_sort)(It, It, size_t, ExtractKey &, void *) = static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, typename CurrentSubKey::next>::sort);
-        if (next_sort == static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, SubKey<void>>::sort))
-            next_sort = nullptr;
+        // void (*next_sort)(It, It, size_t, ExtractKey &, void *) = static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, typename CurrentSubKey::next>::sort);
+        // if (next_sort == static_cast<void (*)(It, It, size_t, ExtractKey &, void *)>(&SortStarter<StdSortThreshold, AmericanFlagSortThreshold, SubKey<void>>::sort))
+        //     next_sort = nullptr;
+
+    	// LNK: different templating for DuckDB
+    	void (*next_sort)(It, It, size_t, ExtractKey &, void *) = nullptr;
+    	if (ExtractKey::REQUIRES_NEXT_SORT) {
+    		next_sort = [](It b, It e, size_t, ExtractKey& ek, void*) {
+    			StdSortFallback(b, e, ek);
+    		};
+    	}
+
         InplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey>::sort(begin, end, num_elements, extract_key, next_sort, next_sort_data);
     }
 };

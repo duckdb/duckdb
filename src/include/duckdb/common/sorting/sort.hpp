@@ -28,14 +28,15 @@ class Sort {
 
 public:
 	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
-	     vector<idx_t> projection_map, bool force_external = false);
+	     vector<idx_t> projection_map, bool is_index_sort = false);
 
 private:
 	//! Orders
 	vector<BoundOrderByNode> orders;
 
 	//! Key orders, expressions, and layout
-	unique_ptr<Expression> key_expression;
+	unique_ptr<Expression> create_sort_key;
+	unique_ptr<Expression> decode_sort_key;
 	shared_ptr<TupleDataLayout> key_layout;
 
 	//! Projection map and payload layout (columns that also appear as key eliminated)
@@ -47,7 +48,7 @@ private:
 	vector<SortProjectionColumn> output_projection_columns;
 
 	//! Whether to force an external sort
-	bool force_external;
+	bool is_index_sort;
 
 public:
 	//===--------------------------------------------------------------------===//

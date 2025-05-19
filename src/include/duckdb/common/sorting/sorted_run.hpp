@@ -20,7 +20,7 @@ class TupleDataLayout;
 class SortedRun {
 public:
 	SortedRun(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> key_layout,
-	          shared_ptr<TupleDataLayout> payload_layout);
+	          shared_ptr<TupleDataLayout> payload_layout, bool is_index_sort);
 
 	~SortedRun();
 
@@ -42,6 +42,9 @@ public:
 	unique_ptr<TupleDataCollection> payload_data;
 	TupleDataAppendState key_append_state;
 	TupleDataAppendState payload_append_state;
+
+	//! Whether this is an (approximate) index sort
+	const bool is_index_sort;
 
 	//! Whether this run has been finalized
 	bool finalized;

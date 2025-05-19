@@ -4,14 +4,9 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/function/create_sort_key.hpp"
 
 #include "pdqsort.h"
 #include "vergesort.h"
-#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -289,7 +284,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      key_executor(gstate.context, *gstate.merger.key_expression) {
+      key_executor(gstate.context, gstate.merger.decode_sort_key) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -310,7 +305,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 	        ? LogicalType::BIGINT
 	        : LogicalType::BLOB;
 	key.Initialize(gstate.context, {sort_key_logical_type});
-	decoded_key.Initialize(gstate.context, {gstate.merger.key_expression->return_type});
+	decoded_key.Initialize(gstate.context, {gstate.merger.decode_sort_key.return_type});
 }
 
 bool SortedRunMergerLocalState::TaskFinished() const {
@@ -644,8 +639,8 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 		}
 	}
 
-	if (active_runs == 1) {
-		return; // Only one active run, no need to sort
+	if (active_runs == 1 || gstate.merger.is_index_sort) {
+		return; // Only one active run, no need to sort (or index sort, which is approximate sorting)
 	}
 
 	// Seems counter-intuitive to re-sort instead of merging, but modern sorting algorithms detect and merge
@@ -762,58 +757,13 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
-SortedRunMerger::SortedRunMerger(ClientContext &context, const vector<BoundOrderByNode> &orders,
-                                 shared_ptr<TupleDataLayout> key_layout_p,
+SortedRunMerger::SortedRunMerger(const Expression &decode_sort_key_p, shared_ptr<TupleDataLayout> key_layout_p,
                                  vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  const vector<SortProjectionColumn> &output_projection_columns_p,
-                                 idx_t partition_size_p, bool external_p)
-    : key_layout(std::move(key_layout_p)), sorted_runs(std::move(sorted_runs_p)),
+                                 idx_t partition_size_p, bool external_p, bool is_index_sort_p)
+    : decode_sort_key(decode_sort_key_p), key_layout(std::move(key_layout_p)), sorted_runs(std::move(sorted_runs_p)),
       output_projection_columns(output_projection_columns_p), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p) {
-
-	// Convert orders to a single "decode_sort_key" expression
-	vector<unique_ptr<Expression>> sort_children;
-	storage_t first_col_idx = 0;
-	switch (key_layout->GetSortKeyType()) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-	case SortKeyType::PAYLOAD_FIXED_16:
-		sort_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, first_col_idx));
-		break;
-	default:
-		sort_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, first_col_idx));
-	}
-
-	child_list_t<LogicalType> child_list;
-	for (idx_t col_idx = 0; col_idx < orders.size(); col_idx++) {
-		const auto &order = orders[col_idx];
-		// Avoid having unnamed structs fields (otherwise we get a parser exception while binding)
-		const auto col_name = StringUtil::Format("c%llu", col_idx);
-		auto col_type = order.expression->return_type;
-		child_list.emplace_back(col_name, col_type);
-		col_type = TypeVisitor::VisitReplace(col_type, [](const LogicalType &type) {
-			if (type.id() != LogicalTypeId::STRUCT) {
-				return type;
-			}
-			child_list_t<LogicalType> internal_child_list;
-			for (const auto &child : StructType::GetChildTypes(type)) {
-				internal_child_list.emplace_back(StringUtil::Format("c%llu", internal_child_list.size()), child.second);
-			}
-			return LogicalType::STRUCT(std::move(internal_child_list));
-		});
-
-		// For each column we have two arguments: 1. col name + type, 2. sort specifier
-		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(col_name + " " + col_type.ToString())));
-		sort_children.emplace_back(make_uniq<BoundConstantExpression>(order.GetOrderModifier()));
-	}
-
-	FunctionBinder binder(context);
-	key_expression = binder.BindScalarFunction(DecodeSortKeyFun::GetFunction(), std::move(sort_children));
-	if (!key_expression) {
-		throw InternalException("Unable to bind decode_sort_key in SortedRunMerger::SortedRunMerger");
-	}
-
-	// A bit hacky, but this way we make sure that the output does contain the unnamed structs again
-	key_expression->return_type = LogicalType::STRUCT(std::move(child_list));
+      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,

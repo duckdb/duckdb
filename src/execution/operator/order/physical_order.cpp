@@ -5,9 +5,9 @@
 namespace duckdb {
 
 PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
-                             idx_t estimated_cardinality, bool force_external_p)
+                             idx_t estimated_cardinality, bool is_index_sort_p)
     : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality),
-      orders(std::move(orders)), projections(std::move(projections)), force_external(force_external_p) {
+      orders(std::move(orders)), projections(std::move(projections)), is_index_sort(is_index_sort_p) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -16,7 +16,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 class OrderGlobalSinkState : public GlobalSinkState {
 public:
 	OrderGlobalSinkState(const PhysicalOrder &op, ClientContext &context)
-	    : sort(context, op.orders, op.children[0].get().types, op.projections, op.force_external),
+	    : sort(context, op.orders, op.children[0].get().types, op.projections, op.is_index_sort),
 	      state(sort.GetGlobalSinkState(context)) {
 	}
 

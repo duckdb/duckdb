@@ -1,9 +1,11 @@
 #include "duckdb/common/sorting/sort.hpp"
 
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -12,26 +14,66 @@
 namespace duckdb {
 
 Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, const vector<LogicalType> &input_types,
-           vector<idx_t> projection_map, bool force_external_p)
+           vector<idx_t> projection_map, bool is_index_sort_p)
     : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()),
-      force_external(force_external_p) {
+      is_index_sort(is_index_sort_p) {
 	for (const auto &order : orders_p) {
 		orders.push_back(order.Copy());
 	}
 
-	// Convert orders to a single "create_sort_key" expression
+	// Convert orders to a single "create_sort_key" expression (and corresponding "decode_sort_key")
 	FunctionBinder binder(context);
-	vector<unique_ptr<Expression>> sort_children;
-	for (auto &order : orders) {
-		sort_children.emplace_back(order.expression->Copy());
-		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
+	vector<unique_ptr<Expression>> create_children;
+	vector<unique_ptr<Expression>> decode_children;
+	switch (key_layout->GetSortKeyType()) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+	case SortKeyType::PAYLOAD_FIXED_16:
+		decode_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, static_cast<storage_t>(0)));
+		break;
+	default:
+		decode_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, static_cast<storage_t>(0)));
+	}
+	child_list_t<LogicalType> decode_child_list;
+	for (idx_t col_idx = 0; col_idx < orders.size(); col_idx++) {
+		const auto &order = orders[col_idx];
+
+		// Create: for each column we have two arguments: 1. the column, 2. sort specifier
+		create_children.emplace_back(order.expression->Copy());
+		create_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
+
+		// Avoid having unnamed structs fields (otherwise we get a parser exception while binding)
+		const auto col_name = StringUtil::Format("c%llu", col_idx);
+		auto col_type = order.expression->return_type;
+		decode_child_list.emplace_back(col_name, col_type);
+		col_type = TypeVisitor::VisitReplace(col_type, [](const LogicalType &type) {
+			if (type.id() != LogicalTypeId::STRUCT) {
+				return type;
+			}
+			child_list_t<LogicalType> internal_child_list;
+			for (const auto &child : StructType::GetChildTypes(type)) {
+				internal_child_list.emplace_back(StringUtil::Format("c%llu", internal_child_list.size()), child.second);
+			}
+			return LogicalType::STRUCT(std::move(internal_child_list));
+		});
+
+		// Decode: for each column we have two arguments: 1. col name + type, 2. sort specifier
+		decode_children.emplace_back(make_uniq<BoundConstantExpression>(Value(col_name + " " + col_type.ToString())));
+		decode_children.emplace_back(make_uniq<BoundConstantExpression>(order.GetOrderModifier()));
 	}
 
 	ErrorData error;
-	key_expression = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(sort_children), error);
-	if (!key_expression) {
+	create_sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(create_children), error);
+	if (!create_sort_key) {
 		throw InternalException("Unable to bind create_sort_key in Sort::Sort");
 	}
+
+	decode_sort_key = binder.BindScalarFunction(DecodeSortKeyFun::GetFunction(), std::move(decode_children));
+	if (!decode_sort_key) {
+		throw InternalException("Unable to bind decode_sort_key in Sort::Sort");
+	}
+
+	// A bit hacky, but this way we make sure that the output does contain the unnamed structs again
+	decode_sort_key->return_type = LogicalType::STRUCT(std::move(decode_child_list));
 
 	// For convenience, we fill the projection map if it is empty
 	if (projection_map.empty()) {
@@ -80,7 +122,7 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, con
 	          });
 
 	// Finally, initialize the key layout (now that we know whether we have a payload)
-	key_layout->Initialize(orders, key_expression->return_type, !payload_types.empty());
+	key_layout->Initialize(orders, create_sort_key->return_type, !payload_types.empty());
 }
 
 //===--------------------------------------------------------------------===//
@@ -89,8 +131,8 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, con
 class SortLocalSinkState : public LocalSinkState {
 public:
 	SortLocalSinkState(const Sort &sort, ClientContext &context)
-	    : maximum_run_size(0), external(false), key_executor(context, *sort.key_expression) {
-		key.Initialize(context, {sort.key_expression->return_type});
+	    : maximum_run_size(0), external(false), key_executor(context, *sort.create_sort_key) {
+		key.Initialize(context, {sort.create_sort_key->return_type});
 		payload.Initialize(context, sort.payload_layout->GetTypes());
 	}
 
@@ -98,7 +140,7 @@ public:
 	void InitializeSortedRun(const Sort &sort, ClientContext &context) {
 		D_ASSERT(!sorted_run);
 		auto &buffer_manager = BufferManager::GetBufferManager(context);
-		sorted_run = make_uniq<SortedRun>(buffer_manager, sort.key_layout, sort.payload_layout);
+		sorted_run = make_uniq<SortedRun>(buffer_manager, sort.key_layout, sort.payload_layout, sort.is_index_sort);
 	}
 
 public:
@@ -129,7 +171,8 @@ public:
 		lstate.external = external;
 	}
 
-	void TryIncreaseReservation(ClientContext &context, SortLocalSinkState &lstate, const unique_lock<mutex> &guard) {
+	void TryIncreaseReservation(ClientContext &context, SortLocalSinkState &lstate, bool is_index_sort,
+	                            const unique_lock<mutex> &guard) {
 		VerifyLock(guard);
 		D_ASSERT(!external);
 
@@ -142,7 +185,10 @@ public:
 		}
 
 		// Double until it fits
-		const auto required = num_threads * lstate.sorted_run->SizeInBytes();
+		auto required = num_threads * lstate.sorted_run->SizeInBytes();
+		if (is_index_sort) {
+			required *= 4; // Index creation is pretty intense, so we are very conservative here
+		}
 		auto request = temporary_memory_state->GetRemainingSize() * 2;
 		while (request < required) {
 			request *= 2;
@@ -248,7 +294,7 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	}
 
 	// Still no, this thread must try to increase the limit
-	gstate.TryIncreaseReservation(context.client, lstate, guard);
+	gstate.TryIncreaseReservation(context.client, lstate, is_index_sort, guard);
 	gstate.UpdateLocalState(lstate);
 	guard.unlock(); // Can unlock now, local state is definitely up-to-date
 
@@ -271,9 +317,6 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 
 	// Set any_combined under lock
 	auto guard = gstate.Lock();
-	if (force_external) {
-		gstate.external = true;
-	}
 	gstate.any_combined = true;
 	guard.unlock();
 
@@ -324,8 +367,8 @@ ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gsta
 class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
-	    : sink(sink_p), merger(context, sort.orders, sort.key_layout, std::move(sink.sorted_runs),
-	                           sort.output_projection_columns, sink.partition_size, sink.external),
+	    : sink(sink_p), merger(*sort.decode_sort_key, sort.key_layout, std::move(sink.sorted_runs),
+	                           sort.output_projection_columns, sink.partition_size, sink.external, sort.is_index_sort),
 	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
 	}
 

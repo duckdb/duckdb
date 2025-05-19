@@ -24,9 +24,10 @@ class SortedRunMerger {
 	friend class SortedRunMergerGlobalState;
 
 public:
-	SortedRunMerger(ClientContext &context, const vector<BoundOrderByNode> &orders,
-	                shared_ptr<TupleDataLayout> key_layout, vector<unique_ptr<SortedRun>> &&sorted_runs,
-	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external);
+	SortedRunMerger(const Expression &decode_sort_key, shared_ptr<TupleDataLayout> key_layout,
+	                vector<unique_ptr<SortedRun>> &&sorted_runs,
+	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external,
+	                bool is_index_sort);
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -40,14 +41,15 @@ public:
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
 public:
+	const Expression &decode_sort_key;
 	shared_ptr<TupleDataLayout> key_layout;
 	vector<unique_ptr<SortedRun>> sorted_runs;
-	unique_ptr<Expression> key_expression;
 	const vector<SortProjectionColumn> &output_projection_columns;
 	const idx_t total_count;
 
 	const idx_t partition_size;
 	const bool external;
+	const bool is_index_sort;
 };
 
 } // namespace duckdb
