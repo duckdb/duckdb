@@ -157,8 +157,8 @@ if len(regression_list) > 0:
     # regression_list already consists of the benchmarks regressed of more that 10%
     regression_percentage = int((time_new - time_old) * 100.0 / time_new)
     if isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int) and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE:
-            # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
-            regressions_header = 'ALLOWED REGRESSIONS'
+        # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
+        regressions_header = 'ALLOWED REGRESSIONS'
     else:
         regressions_header = 'REGRESSIONS DETECTED'
         exit_code = 1
@@ -188,9 +188,7 @@ if len(regression_list) > 0:
 
         # add regression
         if time_new > time_old * 1.01:
-            print(
-                f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster"
-            )
+            print(f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster")
             print(f"New timing geometric mean: {time_new}")
             print("")
 
