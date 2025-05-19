@@ -73,7 +73,7 @@
         "name": "format_bytes",
         "parameters": "integer",
         "description": "Converts `integer` to a human-readable representation using units based on powers of 2 (KiB, MiB, GiB, etc.).",
-        "example": "format_bytes(1000 * 16)",
+        "example": "format_bytes(16_000)",
         "categories": ["string", "numeric"],
         "type": "scalar_function",
         "aliases": ["formatReadableSize"]
@@ -81,8 +81,8 @@
     {
         "name": "formatReadableDecimalSize",
         "parameters": "integer",
-        "description": "Converts `integer` to a human-readable representation (e.g. 16000 -> 16.0 KB).",
-        "example": "formatReadableDecimalSize(1000 * 16)",
+        "description": "Converts `integer` to a human-readable representation using units based on powers of 10 (KB, MB, GB, etc.).",
+        "example": "formatReadableDecimalSize(16_000)",
         "categories": ["string", "numeric"],
         "type": "scalar_function"
     },

@@ -101,7 +101,7 @@ struct FormatBytesFun {
 	static constexpr const char *Name = "format_bytes";
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Converts `integer` to a human-readable representation using units based on powers of 2 (KiB, MiB, GiB, etc.).";
-	static constexpr const char *Example = "format_bytes(1000 * 16)";
+	static constexpr const char *Example = "format_bytes(16_000)";
 	static constexpr const char *Categories = "string,numeric";
 
 	static ScalarFunction GetFunction();
@@ -116,8 +116,8 @@ struct FormatreadablesizeFun {
 struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
 	static constexpr const char *Parameters = "integer";
-	static constexpr const char *Description = "Converts `integer` to a human-readable representation (e.g. 16000 -> 16.0 KB).";
-	static constexpr const char *Example = "formatReadableDecimalSize(1000 * 16)";
+	static constexpr const char *Description = "Converts `integer` to a human-readable representation using units based on powers of 10 (KB, MB, GB, etc.).";
+	static constexpr const char *Example = "formatReadableDecimalSize(16_000)";
 	static constexpr const char *Categories = "string,numeric";
 
 	static ScalarFunction GetFunction();
