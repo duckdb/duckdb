@@ -16,10 +16,44 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func) {
+BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
+                                                 const LambdaSyntaxType syntax_type) {
+	if (syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD) {
+		// lambda x: x + 1 syntax.
+		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	}
 
-	auto lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	auto &config = ClientConfig::GetConfig(context);
+	auto setting = config.lambda_syntax;
+	bool invalid_syntax =
+	    setting == LambdaSyntax::DISABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
+	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
+	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
+	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior. \n"
+	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
+
+	BindResult lambda_bind_result;
+	ErrorData error;
+	try {
+		lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	} catch (const std::exception &ex) {
+		error = ErrorData(ex);
+	}
+
+	if (error.HasError() && error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED && invalid_syntax) {
+		ErrorData deprecation_error(ExceptionType::BINDER, msg);
+		deprecation_error.Throw();
+	} else if (error.HasError()) {
+		error.Throw();
+	}
+
 	if (!lambda_bind_result.HasError()) {
+		if (!invalid_syntax) {
+			return lambda_bind_result;
+		}
+		return BindResult(msg);
+	}
+	if (StringUtil::Contains(lambda_bind_result.error.RawMessage(), "Deprecated lambda arrow (->) detected.")) {
 		return lambda_bind_result;
 	}
 
@@ -56,18 +90,25 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
 			// the schema is set - check if we can turn this the schema into a column ref
-			ErrorData error;
-			unique_ptr<ColumnRefExpression> colref;
-			if (function.catalog.empty()) {
-				colref = make_uniq<ColumnRefExpression>(function.schema);
-			} else {
-				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
-			}
-			auto new_colref = QualifyColumnName(*colref, error);
-			bool is_col = !error.HasError();
-			bool is_col_alias = QualifyColumnAlias(*colref);
-
-			if (is_col || is_col_alias) {
+			// does this function exist in the system catalog?
+			func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			if (func) {
+				// the function exists in the system catalog - turn this into a dot call
+				ErrorData error;
+				unique_ptr<ColumnRefExpression> colref;
+				if (function.catalog.empty()) {
+					colref = make_uniq<ColumnRefExpression>(function.schema);
+				} else {
+					colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
+				}
+				auto new_colref = QualifyColumnName(*colref, error);
+				if (error.HasError()) {
+					// could not find the column - try to qualify the alias
+					if (!QualifyColumnAlias(*colref)) {
+						// no alias found either - throw
+						error.Throw();
+					}
+				}
 				// we can! transform this into a function call on the column
 				// i.e. "x.lower()" becomes "lower(x)"
 				function.children.insert(function.children.begin(), std::move(colref));
@@ -76,7 +117,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 		// rebind the function
-		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		if (!func) {
+			func =
+			    GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		}
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -88,8 +132,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		if (function.IsLambdaFunction()) {
-			return TryBindLambdaOrJson(function, depth, *func);
+		auto child = function.IsLambdaFunction();
+		if (child) {
+			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
+			return TryBindLambdaOrJson(function, depth, *func, syntax_type);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
@@ -114,7 +160,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 

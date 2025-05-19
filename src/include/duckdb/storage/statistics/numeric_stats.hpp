@@ -70,7 +70,7 @@ struct NumericStats {
 
 	//! Check whether or not a given comparison with a constant could possibly be satisfied by rows given the statistics
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-	                                                     array_ptr<Value> constants);
+	                                                     array_ptr<const Value> constants);
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 

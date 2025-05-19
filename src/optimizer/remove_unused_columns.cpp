@@ -56,9 +56,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
-		if (!everything_referenced) {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		// if there is more than one grouping set, the group by most likely has a rollup or cube
+		// If there is an equality join underneath the aggregate, this can change the groups to avoid unused columns
+		// This causes the duplicate eliminator to ignore functionality provided by grouping sets
+		bool new_root = false;
+		if (aggr.grouping_sets.size() > 1) {
+			;
+			new_root = true;
+		}
+		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			auto &aggr = op.Cast<LogicalAggregate>();
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
@@ -70,7 +78,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 
 		// then recurse into the children of the aggregate
-		RemoveUnusedColumns remove(binder, context);
+		RemoveUnusedColumns remove(binder, context, new_root);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;
@@ -87,10 +95,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for inner joins with equality predicates in the form of (X=Y)
 			// we can replace any references to the RHS (Y) to references to the LHS (X)
 			// this reduces the amount of columns we need to extract from the join hash table
+			// (except in the case of floating point numbers which have +0 and -0, equal but different).
 			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 					if (cond.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    !(cond.left->Cast<BoundColumnRefExpression>().return_type.IsFloating() &&
+					      cond.right->Cast<BoundColumnRefExpression>().return_type.IsFloating())) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
@@ -300,18 +311,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		everything_referenced = true;
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-		everything_referenced = true;
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_CTE_REF: {
-		everything_referenced = true;
-		break;
-	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 	case LogicalOperatorType::LOGICAL_PIVOT: {
 		everything_referenced = true;
 		break;

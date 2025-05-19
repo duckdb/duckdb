@@ -218,6 +218,8 @@ public:
 
 	//! Decompose a timestamp into its components
 	DUCKDB_API static TimestampComponents GetComponents(timestamp_t timestamp);
+	DUCKDB_API static time_t ToTimeT(timestamp_t);
+	DUCKDB_API static timestamp_t FromTimeT(time_t);
 
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
 

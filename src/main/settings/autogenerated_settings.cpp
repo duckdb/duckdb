@@ -427,6 +427,23 @@ void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
+// Disable Timestamptz Casts
+//===----------------------------------------------------------------------===//
+void DisableTimestamptzCastsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.disable_timestamptz_casts = input.GetValue<bool>();
+}
+
+void DisableTimestamptzCastsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).disable_timestamptz_casts = ClientConfig().disable_timestamptz_casts;
+}
+
+Value DisableTimestamptzCastsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.disable_timestamptz_casts);
+}
+
+//===----------------------------------------------------------------------===//
 // Dynamic Or Filter Threshold
 //===----------------------------------------------------------------------===//
 void DynamicOrFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1115,6 +1132,22 @@ void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context
 Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.scalar_subquery_error_on_multiple_rows);
+}
+
+//===----------------------------------------------------------------------===//
+// Scheduler Process Partial
+//===----------------------------------------------------------------------===//
+void SchedulerProcessPartialSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.scheduler_process_partial = input.GetValue<bool>();
+}
+
+void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.scheduler_process_partial = DBConfig().options.scheduler_process_partial;
+}
+
+Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.scheduler_process_partial);
 }
 
 //===----------------------------------------------------------------------===//

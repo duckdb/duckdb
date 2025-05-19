@@ -97,18 +97,20 @@ public:
 		created_directories.insert(dir_path);
 	}
 
-	string GetOrCreateDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                            string path, FileSystem &fs) {
+	string GetOrCreateDirectory(const vector<idx_t> &cols, bool hive_file_pattern, const vector<string> &names,
+	                            const vector<Value> &values, string path, FileSystem &fs) {
 		CreateDir(path, fs);
-		for (idx_t i = 0; i < cols.size(); i++) {
-			const auto &partition_col_name = names[cols[i]];
-			const auto &partition_value = values[i];
-			string p_dir;
-			p_dir += HivePartitioning::Escape(partition_col_name);
-			p_dir += "=";
-			p_dir += HivePartitioning::Escape(partition_value.ToString());
-			path = fs.JoinPath(path, p_dir);
-			CreateDir(path, fs);
+		if (hive_file_pattern) {
+			for (idx_t i = 0; i < cols.size(); i++) {
+				const auto &partition_col_name = names[cols[i]];
+				const auto &partition_value = values[i];
+				string p_dir;
+				p_dir += HivePartitioning::Escape(partition_col_name);
+				p_dir += "=";
+				p_dir += HivePartitioning::Escape(partition_value.ToString());
+				path = fs.JoinPath(path, p_dir);
+				CreateDir(path, fs);
+			}
 		}
 		return path;
 	}
@@ -167,14 +169,19 @@ public:
 			}
 		}
 		idx_t offset = 0;
-		auto prev_offset = previous_partitions.find(values);
-		if (prev_offset != previous_partitions.end()) {
-			offset = prev_offset->second;
+		if (op.hive_file_pattern) {
+			auto prev_offset = previous_partitions.find(values);
+			if (prev_offset != previous_partitions.end()) {
+				offset = prev_offset->second;
+			}
+		} else {
+			offset = global_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
-		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string hive_path =
+		    GetOrCreateDirectory(op.partition_columns, op.hive_file_pattern, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset));
 		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 			// when appending, we first check if the file exists
@@ -226,6 +233,7 @@ private:
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
 	vector_of_value_map_t<idx_t> previous_partitions;
+	idx_t global_offset = 0;
 };
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
@@ -241,6 +249,7 @@ public:
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
+	idx_t total_rows_copied = 0;
 
 	//! Buffers the tuples in partitions before writing
 	unique_ptr<HivePartitionedColumnData> part_buffer;
@@ -449,9 +458,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = GetNonTmpFile(context, tmp_file_path);
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
+	fs.TryRemoveFile(file_path);
 	fs.MoveFile(tmp_file_path, file_path);
 }
 
@@ -520,7 +527,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		// if we are only writing the file when there are rows to write we need to initialize here
 		g.Initialize(context.client, *this);
 	}
-	g.rows_copied += chunk.size();
+	l.total_rows_copied += chunk.size();
 
 	if (partition_output) {
 		l.AppendToPartition(context, *this, g, chunk);
@@ -557,6 +564,11 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
+	if (l.total_rows_copied == 0) {
+		// no rows copied
+		return SinkCombineResultType::FINISHED;
+	}
+	g.rows_copied += l.total_rows_copied;
 
 	if (partition_output) {
 		// flush all remaining partitions
@@ -580,9 +592,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                              OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
+SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, GlobalSinkState &global_state) const {
+	auto &gstate = global_state.Cast<CopyToFunctionGlobalState>();
 	if (partition_output) {
 		// finalize any outstanding partitions
 		gstate.FinalizePartitions(context, *this);
@@ -610,6 +621,11 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		}
 	}
 	return SinkFinalizeType::READY;
+}
+
+SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                              OperatorSinkFinalizeInput &input) const {
+	return FinalizeInternal(context, input.global_state);
 }
 
 //===--------------------------------------------------------------------===//

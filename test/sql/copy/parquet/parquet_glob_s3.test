@@ -23,6 +23,12 @@ require-env DUCKDB_S3_USE_SSL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+# this test was written before we implemented the external file cache
+# when it is enabled, the request counts are different
+# we disable it so this test still makes sense
+statement ok
+set enable_external_file_cache=false;
+
 # Copy files to S3 before beginning tests
 statement ok
 COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t1.parquet';
@@ -147,25 +153,34 @@ SET s3_url_compatibility_mode=false;
 
 endloop
 
+# S3 glob gives us information necessary to skip HEAD requests
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket/parquet_glob_s3/g*/*.parquet';
+----
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 3.*PUT\: 0.*\#POST\: 0.*
+
+statement ok
+SET VARIABLE file_list = (SELECT LIST(file) FROM GLOB('s3://test-bucket/parquet_glob_s3/g*/*.parquet'))
+
 # sanity check for request count
 # we expect 1 HEAD request per file for the open call, then 1 GET for the list call
 # then for each file 1 for the metadata offset and 1 for the metadata
 query II
-EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket/parquet_glob_s3/g*/*.parquet';
+EXPLAIN ANALYZE SELECT COUNT(*) FROM read_parquet(getvariable('file_list'));
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 3.*GET\: 7.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 3.*GET\: 3.*PUT\: 0.*\#POST\: 0.*
 
 statement ok
 SET enable_http_metadata_cache=true;
 
 # metadata cache was just enabled, its still cold
 query II
-EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket/parquet_glob_s3/g*/*.parquet';
+EXPLAIN ANALYZE SELECT COUNT(*) FROM read_parquet(getvariable('file_list'));
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 3.*GET\: 7.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 3.*GET\: 3.*PUT\: 0.*\#POST\: 0.*
 
 # now head request count should be 0
 query II
-EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket/parquet_glob_s3/g*/*.parquet';
+EXPLAIN ANALYZE SELECT COUNT(*) FROM read_parquet(getvariable('file_list'));
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 7.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 3.*PUT\: 0.*\#POST\: 0.*

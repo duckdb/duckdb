@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/likely.hpp"
@@ -566,6 +567,34 @@ struct RoundDecimalOperator {
 	}
 };
 
+struct RoundIntegerOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA input, TB precision) {
+		if (precision < 0) {
+			//	Do all the arithmetic at higher precision
+			using POWERS_OF_TEN_CLASS = typename DecimalCastTraits<TA>::POWERS_OF_TEN_CLASS;
+			if (precision <= -POWERS_OF_TEN_CLASS::CACHED_POWERS_OF_TEN) {
+				return 0;
+			}
+			const auto power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-precision];
+			auto addition = power_of_ten / 2;
+			if (input < 0) {
+				addition = -addition;
+			}
+			addition += input;
+			addition /= power_of_ten;
+			if (addition) {
+				return UnsafeNumericCast<TR>(addition * power_of_ten);
+			} else {
+				return 0;
+			}
+		} else {
+			//	Rounding integers to higher precision is a NOP
+			return input;
+		}
+	}
+};
+
 struct RoundPrecisionFunctionData : public FunctionData {
 	explicit RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
 	}
@@ -698,10 +727,6 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		scalar_function_t round_func = nullptr;
 		bind_scalar_function_t bind_func = nullptr;
 		bind_scalar_function_t bind_prec_func = nullptr;
-		if (type.IsIntegral()) {
-			// no round for integral numbers
-			continue;
-		}
 		switch (type.id()) {
 		case LogicalTypeId::FLOAT:
 			round_func = ScalarFunction::UnaryFunction<float, float, RoundOperator>;
@@ -715,7 +740,31 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
 			bind_prec_func = BindDecimalRoundPrecision;
 			break;
+		case LogicalTypeId::TINYINT:
+			round_func = ScalarFunction::NopFunction;
+			round_prec_func = ScalarFunction::BinaryFunction<int8_t, int32_t, int8_t, RoundIntegerOperator>;
+			break;
+		case LogicalTypeId::SMALLINT:
+			round_func = ScalarFunction::NopFunction;
+			round_prec_func = ScalarFunction::BinaryFunction<int16_t, int32_t, int16_t, RoundIntegerOperator>;
+			break;
+		case LogicalTypeId::INTEGER:
+			round_func = ScalarFunction::NopFunction;
+			round_prec_func = ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, RoundIntegerOperator>;
+			break;
+		case LogicalTypeId::BIGINT:
+			round_func = ScalarFunction::NopFunction;
+			round_prec_func = ScalarFunction::BinaryFunction<int64_t, int32_t, int64_t, RoundIntegerOperator>;
+			break;
+		case LogicalTypeId::HUGEINT:
+			round_func = ScalarFunction::NopFunction;
+			round_prec_func = ScalarFunction::BinaryFunction<hugeint_t, int32_t, hugeint_t, RoundIntegerOperator>;
+			break;
 		default:
+			if (type.IsIntegral()) {
+				// no round for integral numbers
+				continue;
+			}
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
 		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));

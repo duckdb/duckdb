@@ -2,8 +2,6 @@
 # description: Test attach storage various versions
 # group: [storage]
 
-require skip_reload
-
 # These files were created with vector-size 2048
 require vector_size 2048
 

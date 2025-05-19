@@ -2,8 +2,6 @@
 # description: Test deletions
 # group: [delete]
 
-require skip_reload
-
 statement ok con1
 CREATE TABLE a(i INTEGER);
 

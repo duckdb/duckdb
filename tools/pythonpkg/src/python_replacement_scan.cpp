@@ -241,12 +241,27 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 	auto scan_all_frames = result.GetValue<bool>();
 
 	py::gil_scoped_acquire acquire;
-	py::object current_frame = py::module::import("inspect").attr("currentframe")();
+	py::object current_frame;
+	try {
+		current_frame = py::module::import("inspect").attr("currentframe")();
+	} catch (py::error_already_set &e) {
+		//! Likely no call stack exists, just safely return
+		return nullptr;
+	}
 
 	bool has_locals = false;
 	bool has_globals = false;
 	do {
-		py::object local_dict_p = current_frame.attr("f_locals");
+		if (py::none().is(current_frame)) {
+			break;
+		}
+
+		py::object local_dict_p;
+		try {
+			local_dict_p = current_frame.attr("f_locals");
+		} catch (py::error_already_set &e) {
+			return nullptr;
+		}
 		has_locals = !py::none().is(local_dict_p);
 		if (has_locals) {
 			// search local dictionary
@@ -256,7 +271,12 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 				return result;
 			}
 		}
-		py::object global_dict_p = current_frame.attr("f_globals");
+		py::object global_dict_p;
+		try {
+			global_dict_p = current_frame.attr("f_globals");
+		} catch (py::error_already_set &e) {
+			return nullptr;
+		}
 		has_globals = !py::none().is(global_dict_p);
 		if (has_globals) {
 			auto global_dict = py::cast<py::dict>(global_dict_p);
@@ -266,9 +286,10 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 				return result;
 			}
 		}
-		current_frame = current_frame.attr("f_back");
-		if (py::none().is(current_frame)) {
-			break;
+		try {
+			current_frame = current_frame.attr("f_back");
+		} catch (py::error_already_set &e) {
+			return nullptr;
 		}
 	} while (scan_all_frames && (has_locals || has_globals));
 	return nullptr;

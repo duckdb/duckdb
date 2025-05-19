@@ -31,6 +31,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBDependenciesFun::RegisterFunction(*this);
 	DuckDBExtensionsFun::RegisterFunction(*this);
 	DuckDBMemoryFun::RegisterFunction(*this);
+	DuckDBExternalFileCacheFun::RegisterFunction(*this);
 	DuckDBOptimizersFun::RegisterFunction(*this);
 	DuckDBSecretsFun::RegisterFunction(*this);
 	DuckDBWhichSecretFun::RegisterFunction(*this);

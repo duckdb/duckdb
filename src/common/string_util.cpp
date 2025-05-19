@@ -562,18 +562,20 @@ unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore
 	yyjson_val *key, *value;
 	while ((key = yyjson_obj_iter_next(&iter))) {
 		value = yyjson_obj_iter_get_val(key);
+		const auto key_val = yyjson_get_str(key);
+		const auto key_len = yyjson_get_len(key);
 		auto type = yyjson_get_type(value);
 		if (type == YYJSON_TYPE_STR) {
 			// Since this is a string, we can directly add the value
-			const auto key_val = yyjson_get_str(key);
-			const auto key_len = yyjson_get_len(key);
 			const auto value_val = yyjson_get_str(value);
 			const auto value_len = yyjson_get_len(value);
 			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(string(value_val, value_len)));
+		} else if (type == YYJSON_TYPE_BOOL) {
+			// boolean values
+			bool bool_val = yyjson_get_bool(value);
+			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(bool_val ? "true" : "false"));
 		} else if (type == YYJSON_TYPE_OBJ) {
 			// We recurse, this is a complex json
-			const auto key_val = yyjson_get_str(key);
-			const auto key_len = yyjson_get_len(key);
 			// Convert the object value to a JSON string and recurse
 			size_t json_str_len;
 			char *json_str = yyjson_val_write(value, 0, &json_str_len);

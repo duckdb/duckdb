@@ -12,7 +12,7 @@ statement ok
 INSERT INTO integers VALUES (1, 2, 3)
 
 query II
-SELECT COLUMNS(x -> x LIKE 'col%') FROM integers
+SELECT COLUMNS(lambda x: x LIKE 'col%') FROM integers
 ----
 1	2
 

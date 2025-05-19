@@ -805,7 +805,7 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	return result;
 }
 
-Value Value::MAP(const unordered_map<string, string> &kv_pairs) {
+Value Value::MAP(const InsertionOrderPreservingMap<string> &kv_pairs) {
 	Value result;
 	result.type_ = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	result.is_null = false;

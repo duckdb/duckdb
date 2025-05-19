@@ -47,11 +47,13 @@ public:
 	DUCKDB_API static string ToBlob(string_t str, CastParameters &parameters);
 
 	// base 64 conversion functions
+	DUCKDB_API static string ToBase64(string_t blob);
 	//! Returns the string size of a blob -> base64 conversion
 	DUCKDB_API static idx_t ToBase64Size(string_t blob);
 	//! Converts a blob to a base64 string, output should have space for at least ToBase64Size(blob) bytes
 	DUCKDB_API static void ToBase64(string_t blob, char *output);
 
+	DUCKDB_API static string FromBase64(string_t blob);
 	//! Returns the string size of a base64 string -> blob conversion
 	DUCKDB_API static idx_t FromBase64Size(string_t str);
 	//! Converts a base64 string to a blob, output should have space for at least FromBase64Size(blob) bytes

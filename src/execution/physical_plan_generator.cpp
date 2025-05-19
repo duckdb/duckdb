@@ -50,7 +50,7 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 
 unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op) {
 	if (!physical_plan) {
-		physical_plan = make_uniq<PhysicalPlan>();
+		physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(context));
 	}
 	op.estimated_cardinality = op.EstimateCardinality(context);
 	physical_plan->SetRoot(CreatePlan(op));

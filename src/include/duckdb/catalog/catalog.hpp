@@ -373,6 +373,9 @@ public:
 	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
+	//! Called when the catalog is detached
+	DUCKDB_API virtual void OnDetach(ClientContext &context);
+
 protected:
 	//! Reference to the database
 	AttachedDatabase &db;

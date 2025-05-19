@@ -115,7 +115,7 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['core_functions', 'parquet', 'icu', 'tpch', 'json']
+extensions = ['core_functions', 'parquet', 'icu', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
@@ -453,7 +453,7 @@ setup(
     # NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
-    long_description="See here for an introduction: https://duckdb.org/docs/api/python/overview",
+    long_description="See here for an introduction: https://duckdb.org/docs/stable/clients/python/overview",
     ext_modules=[libduckdb],
     use_scm_version={
         "version_scheme": version_scheme,

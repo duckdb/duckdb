@@ -14,8 +14,7 @@ statement ok
 SET merge_join_threshold=0
 
 # Use small 1K table to test Q2 because it melts down the other operators at larger scales
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 CREATE TABLE events AS (

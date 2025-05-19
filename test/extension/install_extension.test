@@ -42,4 +42,4 @@ IO Error: Failed to install local extension "will_never_exist", no access to the
 statement error
 INSTALL will_never_exist FROM core;
 ----
-For more info, visit https://duckdb.org/docs/extensions/troubleshooting
+For more info, visit https://duckdb.org/docs/stable/extensions/troubleshooting

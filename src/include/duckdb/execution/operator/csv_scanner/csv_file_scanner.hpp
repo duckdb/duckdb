@@ -21,7 +21,7 @@ struct ReadCSVData;
 class CSVFileScan;
 
 struct CSVUnionData : public BaseUnionData {
-	explicit CSVUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	explicit CSVUnionData(OpenFileInfo file_p) : BaseUnionData(std::move(file_p)) {
 	}
 	~CSVUnionData() override;
 
@@ -33,17 +33,36 @@ class CSVFileScan : public BaseFileReader {
 public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
-	CSVFileScan(ClientContext &context, const string &file_path, CSVReaderOptions options,
+	CSVFileScan(ClientContext &context, const OpenFileInfo &file, CSVReaderOptions options,
 	            const MultiFileOptions &file_options, const vector<string> &names, const vector<LogicalType> &types,
 	            CSVSchema &file_schema, bool per_file_single_threaded,
 	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
-	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options,
+	CSVFileScan(ClientContext &context, const OpenFileInfo &file, const CSVReaderOptions &options,
 	            const MultiFileOptions &file_options);
 
 public:
 	void SetStart();
 	void SetNamesAndTypes(const vector<string> &names, const vector<LogicalType> &types);
+
+public:
+	string GetReaderType() const override {
+		return "CSV";
+	}
+
+	bool UseCastMap() const override {
+		//! Whether or not to push casts into the cast map
+		return true;
+	}
+
+	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
+	          DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
+	double GetProgressInFile(ClientContext &context) override;
 
 public:
 	idx_t GetFileIndex() const {
@@ -56,15 +75,6 @@ public:
 
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
-
-	string GetReaderType() const override {
-		return "CSV";
-	}
-
-	bool UseCastMap() const override {
-		//! Whether or not to push casts into the cast map
-		return true;
-	}
 
 public:
 	//! Buffer Manager for the CSV File
@@ -92,6 +102,7 @@ public:
 	CSVIterator start_iterator;
 
 	CSVValidator validator;
+	idx_t skipped_rows = 0;
 
 	//! The started tasks and finished tasks allow us to track if all reads of the CSV file have completed
 	//! Note that the "started_tasks" starts at one - this is so we can track when the scheduling of all tasks for this

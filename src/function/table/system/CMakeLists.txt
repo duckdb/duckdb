@@ -6,6 +6,7 @@ add_library_unity(
   duckdb_databases.cpp
   duckdb_dependencies.cpp
   duckdb_extensions.cpp
+  duckdb_external_file_cache.cpp
   duckdb_functions.cpp
   duckdb_keywords.cpp
   duckdb_log.cpp

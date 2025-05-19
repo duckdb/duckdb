@@ -1,0 +1,28 @@
+# name: test/sql/json/issues/issue16968.test
+# description: Test issue 16968 - A not descriptive error message when value of BLOB is passed to JSON function
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+select from_hex('aa')::json;
+----
+"\\xAA"
+
+query I
+select json(from_hex('aa'));
+----
+"\\xAA"
+
+query I
+select '1101'::BIT::JSON
+----
+"1101"
+
+query I
+select json('1101'::BIT)
+----
+"1101"

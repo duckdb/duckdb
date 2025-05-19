@@ -20,13 +20,13 @@ class AttachedDatabase;
 class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
+class CachingFileSystem;
 class FileOpener;
 class FileSystem;
 class HTTPState;
 class QueryProfiler;
 class PreparedStatementData;
 class SchemaCatalogEntry;
-class HTTPLogger;
 class RandomEngine;
 
 struct ClientData {
@@ -36,15 +36,13 @@ struct ClientData {
 	//! Query profiler
 	shared_ptr<QueryProfiler> profiler;
 
-	//! HTTP logger
-	shared_ptr<HTTPLogger> http_logger;
-
 	//! The set of temporary objects that belong to this client
 	shared_ptr<AttachedDatabase> temporary_objects;
 	//! The set of bound prepared statements that belong to this client
 	case_insensitive_map_t<shared_ptr<PreparedStatementData>> prepared_statements;
 
-	//! The writer used to log queries (if logging is enabled) TODO unify with new logger infra
+	//! The writer used to log queries (if logging is enabled) **Deprecated** queries are written to the generic log
+	//! now.
 	unique_ptr<BufferedFileWriter> log_query_writer;
 
 	//! The random generator used by random(). Its seed value can be set by setseed().
