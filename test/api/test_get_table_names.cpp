@@ -267,3 +267,107 @@ TEST_CASE("Test GetTableNames", "[api]") {
 		REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=0)"));
 	}
 }
+
+TEST_CASE("Test GetTableNames with qualified parameter", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unordered_set<string> table_names;
+
+	// Test basic table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE basic_table(i INTEGER)"));
+	
+	// Default behavior (qualified=false)
+	table_names = con.GetTableNames("SELECT * FROM basic_table");
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("basic_table"));
+	REQUIRE(!table_names.count("main.basic_table"));
+	
+	// Explicitly set qualified=false
+	table_names = con.GetTableNames("SELECT * FROM basic_table", false);
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("basic_table"));
+	REQUIRE(!table_names.count("main.basic_table"));
+	
+	// Test with qualified=true
+	table_names = con.GetTableNames("SELECT * FROM basic_table", true);
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("basic_table")); // Still returns unqualified for main schema
+
+	// Test with schema
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test_schema"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_schema.schema_table(i INTEGER)"));
+	
+	// Default behavior with schema (qualified=false)
+	table_names = con.GetTableNames("SELECT * FROM test_schema.schema_table");
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("schema_table"));
+	REQUIRE(!table_names.count("test_schema.schema_table"));
+	
+	// With qualified=true to get schema qualified names
+	table_names = con.GetTableNames("SELECT * FROM test_schema.schema_table", true);
+	REQUIRE(table_names.size() == 1);
+	REQUIRE(table_names.count("test_schema.schema_table"));
+	REQUIRE(!table_names.count("schema_table"));
+	
+	// Test with multiple tables in different schemas
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA other_schema"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE other_schema.other_table(i INTEGER)"));
+	
+	// Query with multiple schemas
+	string query = "SELECT * FROM test_schema.schema_table, other_schema.other_table, basic_table";
+	
+	// Default behavior (qualified=false)
+	table_names = con.GetTableNames(query);
+	REQUIRE(table_names.size() == 3);
+	REQUIRE(table_names.count("schema_table"));
+	REQUIRE(table_names.count("other_table"));
+	REQUIRE(table_names.count("basic_table"));
+	
+	// With qualified=true
+	table_names = con.GetTableNames(query, true);
+	REQUIRE(table_names.size() == 3);
+	REQUIRE(table_names.count("test_schema.schema_table"));
+	REQUIRE(table_names.count("other_schema.other_table"));
+	REQUIRE(table_names.count("basic_table")); // Still simple name for main schema
+	
+	// Test with attached database
+	auto test_dir = TestDirectoryPath();
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_dir + "/catalog_test.db' AS test_catalog"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test_catalog.catalog_schema"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_catalog.catalog_schema.catalog_table(i INTEGER)"));
+	
+	// Query with catalog.schema.table
+	query = "SELECT * FROM test_catalog.catalog_schema.catalog_table, test_schema.schema_table";
+	
+	// Default behavior (qualified=false)
+	table_names = con.GetTableNames(query);
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("catalog_table"));
+	REQUIRE(table_names.count("schema_table"));
+	
+	// With qualified=true
+	table_names = con.GetTableNames(query, true);
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("test_catalog.catalog_schema.catalog_table"));
+	REQUIRE(table_names.count("test_schema.schema_table"));
+	
+	// Test with quoted identifiers
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA \"Schema.With.Dots\""));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE \"Schema.With.Dots\".\"Table.With.Dots\"(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE \"Table With Spaces\"(i INTEGER)"));
+	
+	// Query with quoted identifiers
+	query = "SELECT * FROM \"Schema.With.Dots\".\"Table.With.Dots\", \"Table With Spaces\"";
+	
+	// Default behavior (qualified=false)
+	table_names = con.GetTableNames(query);
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("Table.With.Dots"));
+	REQUIRE(table_names.count("Table With Spaces"));
+	
+	// With qualified=true
+	table_names = con.GetTableNames(query, true);
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("\"Schema.With.Dots\".\"Table.With.Dots\""));
+	REQUIRE(table_names.count("\"Table With Spaces\""));
+}
