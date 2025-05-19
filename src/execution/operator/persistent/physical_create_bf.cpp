@@ -199,37 +199,22 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 		if (this_pipeline->num_source_chunks > 32) {
 			gstate.is_selectivity_checked = true;
 
-			bool has_logical_filter = true;
-			switch (this_pipeline->GetSource()->type) {
-			case PhysicalOperatorType::TABLE_SCAN: {
-				auto &source = this_pipeline->GetSource()->Cast<PhysicalTableScan>();
-				has_logical_filter = source.table_filters && !source.table_filters->filters.empty();
-				break;
-			}
-			default:
-				break;
-			}
-
-			// Check the selectivity
+			// 1. Check the selectivity: a high selectivity means that the base table is not filtered. It is not
+			// beneficial to build a BF on a full table.
 			double input_rows = static_cast<double>(gstate.num_input_rows);
-			double source_rows = has_logical_filter
-			                         ? static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE)
-			                         : static_cast<double>(this_pipeline->num_source_rows);
+			double source_rows = static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE);
 			double selectivity = input_rows / source_rows;
-
-			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
-			// a full table.
 			if (selectivity > 0.35) {
 				is_successful = false;
 				return true;
 			}
 
-			// Estimate the lower bound of required memory, which is used to materialize this table. If it is very
+			// 2. Estimate the lower bound of required memory, which is used to materialize this table. If it is very
 			// large, give up creating BF.
 			ProgressData progress;
 			this_pipeline->GetProgress(progress);
-			double percent = progress.done / progress.total;
-			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / percent;
+			double progress_percent = progress.done / progress.total;
+			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / progress_percent;
 			idx_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
 			idx_t estimated_required_memory = static_cast<idx_t>(estimated_num_rows) * per_tuple_size;
 			if (estimated_required_memory >= lstate.temporary_memory_state->GetReservation()) {

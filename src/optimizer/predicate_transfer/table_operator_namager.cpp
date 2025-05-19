@@ -112,7 +112,23 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
 
-	// 1. collect joins
+	// 1.1 collect base tables
+	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
+		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
+			LogicalOperator *child = op->children[0].get();
+			if (child->type == LogicalOperatorType::LOGICAL_GET) {
+				AddTableOperator(op);
+				return;
+			}
+
+			D_ASSERT(!op->expressions.empty());
+			ExtractOperatorsInternal(*child, joins);
+			return;
+		}
+		op = op->children[0].get();
+	}
+
+	// 2. collect joins
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
@@ -139,7 +155,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		}
 	}
 
-	// 2. collect base tables
+	// 1.2 collect base tables
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
@@ -180,7 +196,6 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 			rename_col_bindings.insert({old_refs[i], new_refs[i]});
 		}
 
-		// AddTableOperator(op);
 		ExtractOperatorsInternal(*op->children[0], joins);
 		ExtractOperatorsInternal(*op->children[1], joins);
 		return;
