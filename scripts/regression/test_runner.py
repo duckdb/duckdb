@@ -49,6 +49,12 @@ parser.add_argument(
     default=0.05,
     help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.",
 )
+parser.add_argument(
+    "--max-allowed-regression-percentage",
+    type=int,
+    default=1,
+    help="MAX_ALLOWED_REGRESS_PERCENTAGE value for large benchmarks.",
+)
 
 # Parse the arguments
 args = parser.parse_args()
@@ -65,14 +71,17 @@ max_timeout = args.max_timeout
 root_dir = args.root_dir
 no_summary = args.no_summary
 regression_threshold_seconds = args.regression_threshold_seconds
+max_allowed_regression_percentage = args.max_allowed_regression_percentage
 
 
 # how many times we will run the experiment, to be sure of the regression
 NUMBER_REPETITIONS = 5
-# the threshold at which we consider something a regression (percentage)
+# the threshold at which we consider individual benchmark a regression (percentage)
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
+# max regression percentage for overal test suite to be a regression
+MAX_ALLOWED_REGRESS_PERCENTAGE = max_allowed_regression_percentage
 
 if not os.path.isfile(old_runner_path):
     print(f"Failed to find old runner {old_runner_path}")
@@ -141,59 +150,28 @@ time_old = geomean(old_runner.complete_timings)
 time_new = geomean(new_runner.complete_timings)
 
 exit_code = 0
-allowed_regressions: List[BenchmarkResult] = []
-regressions_to_report: List[BenchmarkResult] = []
 regression_list.extend(error_list)
 summary = []
 
 if len(regression_list) > 0:
-    print("HERE")
-    # filter regression_list to allowed and regressions to report
-    for regression in regression_list:
-        if isinstance(regression.old_result, (int, float)) or isinstance(regression.new_result, (int, float)):
-            individual_regression_diff_perc = (
-                (regression.new_result - regression.old_result) / regression.old_result
-            ) * 100
-            if isinstance(time_old, float) and isinstance(time_new, float):
-                if time_new <= time_old and individual_regression_diff_perc <= 10.0:
-                    # allow individual regressions less than 10% when overall geomean had improved or hadn't change
-                    allowed_regressions.append(regression)
-                else:
-                    regressions_to_report.append(regression)
+    # regression_list already consists of the benchmarks regressed of more that 10%
+    regression_percentage = int((time_new - time_old) * 100.0 / time_new)
+    if isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int) and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE:
+            # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
+            regressions_header = 'ALLOWED REGRESSIONS'
+    else:
+        regressions_header = 'REGRESSIONS DETECTED'
+        exit_code = 1
 
-    exit_code = 1 if len(regressions_to_report) > 0 else 0
-
-    if len(allowed_regressions) > 0:
+    if len(regression_list) > 0:
         print(
-            '''====================================================
-==============  ALLOWED REGRESSIONS   ==============
+            f'''====================================================
+==============  {regressions_header}   ==============
 ====================================================
 '''
         )
 
-        for regression in allowed_regressions:
-            print("")
-            print(f"{regression.benchmark}")
-            print(f"Old timing: {regression.old_result}")
-            print(f"New timing: {regression.new_result}")
-            # add to the FAILURES SUMMARY
-            if regression.old_failure or regression.new_failure:
-                new_data = {
-                    "benchmark": regression.benchmark,
-                    "old_failure": regression.old_failure,
-                    "new_failure": regression.new_failure,
-                }
-                summary.append(new_data)
-            print("")
-
-    if len(regressions_to_report) > 0:
-        print(
-            '''====================================================
-==============  REGRESSIONS DETECTED   =============
-====================================================
-'''
-        )
-        for regression in regressions_to_report:
+        for regression in regression_list:
             print("")
             print(f"{regression.benchmark}")
             print(f"Old timing: {regression.old_result}")
@@ -211,7 +189,7 @@ if len(regression_list) > 0:
         # add regression
         if time_new > time_old * 1.01:
             print(
-                f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster"
+                f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster"
             )
             print(f"New timing geometric mean: {time_new}")
             print("")
