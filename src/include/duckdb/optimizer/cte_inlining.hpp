@@ -10,6 +10,10 @@
 
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
@@ -31,6 +35,16 @@ private:
 	Optimizer &optimizer;
 
 	optional_ptr<bound_parameter_map_t> parameter_data;
+};
+
+class PreventInlining : public LogicalOperatorVisitor {
+public:
+	PreventInlining() : prevent_inlining(false) {};
+
+	void VisitOperator(LogicalOperator &op) override;
+	bool prevent_inlining;
+
+	void VisitExpression(unique_ptr<Expression> *expression) override;
 };
 
 } // namespace duckdb
