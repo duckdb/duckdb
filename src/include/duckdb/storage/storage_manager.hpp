@@ -111,7 +111,10 @@ public:
 		storage_version = version;
 	}
 	idx_t GetStorageVersion() const {
-		return storage_version.GetIndex();
+		if (!storage_version.IsValid()) {
+			return storage_version.GetIndex();
+		}
+		return DConstants::INVALID_INDEX;
 	}
 
 protected:
