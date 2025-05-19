@@ -265,7 +265,7 @@ void LogicalCTERef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(201, "cte_index", cte_index);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "chunk_types", chunk_types);
 	serializer.WritePropertyWithDefault<vector<string>>(203, "bound_columns", bound_columns);
-	serializer.WriteProperty<CTEMaterialize>(204, "materialized_cte", materialized_cte);
+	serializer.WritePropertyWithDefault<CTEMaterialize>(204, "materialized_cte", materialized_cte, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	serializer.WritePropertyWithDefault<bool>(205, "is_recurring", is_recurring);
 }
 
@@ -274,7 +274,7 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserialize
 	auto cte_index = deserializer.ReadPropertyWithDefault<idx_t>(201, "cte_index");
 	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "chunk_types");
 	auto bound_columns = deserializer.ReadPropertyWithDefault<vector<string>>(203, "bound_columns");
-	auto materialized_cte = deserializer.ReadProperty<CTEMaterialize>(204, "materialized_cte");
+	auto materialized_cte = deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(204, "materialized_cte", CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	auto result = duckdb::unique_ptr<LogicalCTERef>(new LogicalCTERef(table_index, cte_index, std::move(chunk_types), std::move(bound_columns), materialized_cte));
 	deserializer.ReadPropertyWithDefault<bool>(205, "is_recurring", result->is_recurring);
 	return std::move(result);
@@ -571,7 +571,7 @@ void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
 	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
-	serializer.WriteProperty<CTEMaterialize>(203, "materialize", materialize);
+	serializer.WritePropertyWithDefault<CTEMaterialize>(203, "materialize", materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
 
 unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &deserializer) {
@@ -579,7 +579,7 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
-	deserializer.ReadProperty<CTEMaterialize>(203, "materialize", result->materialize);
+	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return std::move(result);
 }
 
