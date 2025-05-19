@@ -44,8 +44,27 @@ static bool ContainsLimit(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_LIMIT || op.type == LogicalOperatorType::LOGICAL_TOP_N) {
 		return true;
 	}
+	if (op.children.size() != 1) {
+		return false;
+	}
 	for (auto &child : op.children) {
 		if (ContainsLimit(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool EndsInAggregateOrDistinct(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+	    op.type == LogicalOperatorType::LOGICAL_DISTINCT) {
+		return true;
+	}
+	if (op.children.size() != 1) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (EndsInAggregateOrDistinct(*child)) {
 			return true;
 		}
 	}
@@ -92,6 +111,12 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 
 			if (prevent_inlining.prevent_inlining) {
 				// we cannot inline this CTE, we have to keep it materialized
+				return;
+			}
+
+			// Prevent inlining if the CTE ends in an aggregate or distinct operator
+			// This mimics the behavior of the CTE materialization in the binder
+			if (EndsInAggregateOrDistinct(*op->children[0])) {
 				return;
 			}
 
