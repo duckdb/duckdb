@@ -35,7 +35,8 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	}
 }
 
-static void VerifyColumnCompressionTypes(optional_ptr<StorageManager> storage_manager, BoundCreateTableInfo &info) {
+static void VerifyCompressionType(optional_ptr<StorageManager> storage_manager, DBConfig &config,
+                                  BoundCreateTableInfo &info) {
 	auto &base = info.base->Cast<CreateTableInfo>();
 	for (auto &col : base.columns.Logical()) {
 		auto compression_type = col.CompressionType();
@@ -43,6 +44,14 @@ static void VerifyColumnCompressionTypes(optional_ptr<StorageManager> storage_ma
 			throw BinderException("Can't compress using user-provided compression type '%s', that type is deprecated "
 			                      "and only has decompress support",
 			                      CompressionTypeToString(compression_type));
+		}
+		const auto &logical_type = col.GetType();
+		auto physical_type = logical_type.InternalType();
+		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
+		if (!compression_method) {
+			throw BinderException(
+			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
+			    logical_type.ToString(), EnumUtil::ToString(physical_type), CompressionTypeToString(compression_type));
 		}
 	}
 }
@@ -622,7 +631,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			dependencies.AddDependency(entry);
 		});
 
-		VerifyColumnCompressionTypes(storage_manager, *result);
+		auto &config = DBConfig::Get(catalog.GetAttached());
+		VerifyCompressionType(storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
