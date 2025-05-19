@@ -31,9 +31,6 @@ public:
 	     vector<idx_t> projection_map, bool is_index_sort = false);
 
 private:
-	//! Orders
-	vector<BoundOrderByNode> orders;
-
 	//! Key orders, expressions, and layout
 	unique_ptr<Expression> create_sort_key;
 	unique_ptr<Expression> decode_sort_key;

@@ -13,26 +13,14 @@
 
 namespace duckdb {
 
-Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, const vector<LogicalType> &input_types,
+Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
            vector<idx_t> projection_map, bool is_index_sort_p)
     : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()),
       is_index_sort(is_index_sort_p) {
-	for (const auto &order : orders_p) {
-		orders.push_back(order.Copy());
-	}
-
 	// Convert orders to a single "create_sort_key" expression (and corresponding "decode_sort_key")
 	FunctionBinder binder(context);
 	vector<unique_ptr<Expression>> create_children;
 	vector<unique_ptr<Expression>> decode_children;
-	switch (key_layout->GetSortKeyType()) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-	case SortKeyType::PAYLOAD_FIXED_16:
-		decode_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, static_cast<storage_t>(0)));
-		break;
-	default:
-		decode_children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, static_cast<storage_t>(0)));
-	}
 	child_list_t<LogicalType> decode_child_list;
 	for (idx_t col_idx = 0; col_idx < orders.size(); col_idx++) {
 		const auto &order = orders[col_idx];
@@ -65,6 +53,17 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders_p, con
 	create_sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(create_children), error);
 	if (!create_sort_key) {
 		throw InternalException("Unable to bind create_sort_key in Sort::Sort");
+	}
+
+	switch (create_sort_key->return_type.id()) {
+	case LogicalTypeId::BIGINT:
+		decode_children.insert(decode_children.begin(),
+		                       make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, static_cast<storage_t>(0)));
+		break;
+	default:
+		D_ASSERT(create_sort_key->return_type.id() == LogicalTypeId::BLOB);
+		decode_children.insert(decode_children.begin(),
+		                       make_uniq<BoundReferenceExpression>(LogicalType::BLOB, static_cast<storage_t>(0)));
 	}
 
 	decode_sort_key = binder.BindScalarFunction(DecodeSortKeyFun::GetFunction(), std::move(decode_children));
