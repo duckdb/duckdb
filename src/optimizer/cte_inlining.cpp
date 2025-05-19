@@ -37,6 +37,18 @@ static idx_t CountCTEReferences(const LogicalOperator &op, idx_t cte_index) {
 	return number_of_references;
 }
 
+static bool ContainsLimit(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_LIMIT || op.type == LogicalOperatorType::LOGICAL_TOP_N) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsLimit(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
 		// we are in a prepare statement, if we have to copy an operator during inlining,
@@ -52,14 +64,47 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 
 	if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		auto &cte = op->Cast<LogicalMaterializedCTE>();
+		auto ref_count = CountCTEReferences(*op, cte.table_index);
+		if (ref_count == 0) {
+			// this CTE is not referenced, we can remove it
+			op = std::move(op->children[1]);
+			return;
+		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			// This CTE is always materialized, we cannot inline it
 			return;
 		}
-		if (CountCTEReferences(*op->children[1], cte.table_index) == 1) {
+		if (ref_count == 1) {
 			// this CTE is only referenced once, we can inline it directly without copying
-			Inline(op->children[1], *op, false);
-			op = std::move(op->children[1]);
+			bool success = Inline(op->children[1], *op, false);
+			if (success) {
+				op = std::move(op->children[1]);
+			}
+			return;
+		}
+		if (ref_count > 1) {
+			// check if we can inline this CTE
+			PreventInlining prevent_inlining;
+			prevent_inlining.VisitOperator(*op->children[0]);
+
+			if (prevent_inlining.prevent_inlining) {
+				// we cannot inline this CTE, we have to keep it materialized
+				return;
+			}
+
+			// CTEs require full materialization before the CTE scans begin,
+			// LIMIT and TOP_N operators cannot abort the materialization,
+			// even if only a part of the CTE result is needed.
+			// Therefore, we check if the CTE Scans are below the LIMIT or TOP_N operator
+			// and if so, we try to inline the CTE definition.
+			if (ContainsLimit(*op->children[1])) {
+				// this CTE is referenced multiple times and has a limit, we want to inline it
+				bool success = Inline(op->children[1], *op, true);
+				if (success) {
+					op = std::move(op->children[1]);
+				}
+				return;
+			}
 		}
 	}
 }
@@ -71,11 +116,12 @@ bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperato
 		auto &cte = materialized_cte.Cast<LogicalCTE>();
 		if (cteref.cte_index == cte.table_index) {
 			unique_ptr<LogicalOperator> &definition = cte.children[0];
+			unique_ptr<LogicalOperator> copy;
 			if (requires_copy) {
 				// there are multiple references to the CTE, we need to copy it
 				LogicalOperatorDeepCopy deep_copy(optimizer.binder, parameter_data);
 				try {
-					definition = deep_copy.DeepCopy(cte.children[0]);
+					copy = deep_copy.DeepCopy(definition);
 				} catch (NotImplementedException &ex) {
 					// if we have to copy the lhs of a CTE, but we cannot copy the operator, we have to
 					// stop inlining and keep the materialized CTE instead
@@ -84,15 +130,22 @@ bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperato
 			}
 			vector<unique_ptr<Expression>> proj_expressions;
 			definition->ResolveOperatorTypes();
-			auto types = definition->types;
+			vector<LogicalType> types = definition->types;
+			vector<ColumnBinding> bindings =
+			    requires_copy ? copy->GetColumnBindings() : definition->GetColumnBindings();
+
 			idx_t col_idx = 0;
-			for (auto &col : definition->GetColumnBindings()) {
+			for (auto &col : bindings) {
 				proj_expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], col));
 				col_idx++;
 			}
 			auto proj = make_uniq<LogicalProjection>(cteref.table_index, std::move(proj_expressions));
 
-			proj->children.push_back(std::move(definition));
+			if (requires_copy) {
+				proj->children.push_back(std::move(copy));
+			} else {
+				proj->children.push_back(std::move(definition));
+			}
 			op = std::move(proj);
 			return true;
 		}
@@ -104,6 +157,24 @@ bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperato
 		}
 		return success;
 	}
+}
+
+void PreventInlining::VisitOperator(LogicalOperator &op) {
+	VisitOperatorExpressions(op);
+	// We can stop checking early if we already know that inlining is not possible
+	if (!prevent_inlining) {
+		VisitOperatorChildren(op);
+	}
+}
+
+void PreventInlining::VisitExpression(unique_ptr<Expression> *expression) {
+	auto &expr = *expression;
+	if (expr->IsVolatile()) {
+		// this expression is volatile, we cannot inline it
+		prevent_inlining = true;
+		return;
+	}
+	VisitExpressionChildren(**expression);
 }
 
 } // namespace duckdb
