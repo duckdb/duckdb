@@ -329,9 +329,6 @@ void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto
 	if (detection_result.scheme_type == URISchemeType::NONE) {
 		//! Assume it's HTTP
 		url = "http://" + url;
-	} else if (detection_result.scheme_type == URISchemeType::OTHER) {
-		throw IOException("Can't read from URI's with scheme: '%s', only http and httpfs are expected",
-		                  detection_result.lower_scheme);
 	}
 
 	auto slash_pos = url.find('/', 8);
