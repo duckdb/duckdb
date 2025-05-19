@@ -1,0 +1,9 @@
+# name: test/sql/storage/compression/chimp/using_chimp.test
+# group: [chimp]
+
+load __TEST_DIR__/using_chimp_test readwrite v1.0.0
+
+statement error
+CREATE OR REPLACE TABLE t(x VARCHAR USING COMPRESSION chimp);
+----
+Invalid Input Error: Can't compress using user-provided compression type 'Chimp', that type is deprecated and only has decompress support

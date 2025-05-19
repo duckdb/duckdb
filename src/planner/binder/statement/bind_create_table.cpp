@@ -21,6 +21,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,18 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 			continue;
 		}
 		info.column_dependency_manager.AddGeneratedColumn(col, base.columns);
+	}
+}
+
+static void VerifyColumnCompressionTypes(StorageManager &storage_manager, BoundCreateTableInfo &info) {
+	auto &base = info.base->Cast<CreateTableInfo>();
+	for (auto &col : base.columns.Logical()) {
+		auto compression_type = col.CompressionType();
+		if (CompressionTypeIsDeprecated(compression_type, &storage_manager)) {
+			throw BinderException("Can't compress using user-provided compression type '%s', that type is deprecated "
+			                      "and only has decompress support",
+			                      CompressionTypeToString(compression_type));
+		}
 	}
 }
 
@@ -551,6 +564,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
+	auto &catalog = schema.ParentCatalog();
+	auto &storage_manager = StorageManager::Get(catalog);
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
@@ -603,6 +618,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 			dependencies.AddDependency(entry);
 		});
+		VerifyColumnCompressionTypes(storage_manager, *result);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
