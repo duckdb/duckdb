@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -11,6 +12,8 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
+
+#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -169,10 +172,18 @@ void PreventInlining::VisitOperator(LogicalOperator &op) {
 
 void PreventInlining::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = *expression;
-	if (expr->IsVolatile()) {
-		// this expression is volatile, we cannot inline it
-		prevent_inlining = true;
-		return;
+
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &bound_function = expr->Cast<BoundFunctionExpression>();
+		// if we encounter the ErrorFun function, we still want to inline
+		if (bound_function.function == ErrorFun::GetFunction()) {
+			return;
+		}
+
+		if(expr->IsVolatile()) {
+			prevent_inlining = true;
+			return;
+		}
 	}
 	VisitExpressionChildren(**expression);
 }
