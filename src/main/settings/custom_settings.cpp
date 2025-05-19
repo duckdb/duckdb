@@ -196,6 +196,9 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
+	if (!config.file_system) {
+		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
+	}
 	config.options.allowed_directories.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
@@ -226,6 +229,10 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
+	if (!config.file_system) {
+		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
+	}
+
 	config.options.allowed_paths.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
