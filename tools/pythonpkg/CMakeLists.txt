@@ -33,8 +33,9 @@ find_package(pybind11 CONFIG QUIET)
 # Header-only shim: good enough for clang-tidy / IntelliSense
 if(NOT TARGET pybind11::pybind11)
   add_library(pybind11::pybind11 INTERFACE IMPORTED)
-  target_include_directories(pybind11::pybind11 INTERFACE
-          $<BUILD_INTERFACE:${Python3_SITEARCH}/pybind11/include>)
+  target_include_directories(
+    pybind11::pybind11
+    INTERFACE $<BUILD_INTERFACE:${Python3_SITEARCH}/pybind11/include>)
 endif()
 
 # ────────────────────────────────────────────
@@ -47,7 +48,7 @@ target_include_directories(
   pytooling INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>
                       $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/include>)
 
-# 2. All the imported dependency targets: they bring their own include dirs +
+# 1. All the imported dependency targets: they bring their own include dirs +
 #   compile definitions automatically.
 target_link_libraries(
   pytooling INTERFACE Python3::Python # defined by FindPython3
@@ -65,7 +66,7 @@ add_subdirectory(src EXCLUDE_FROM_ALL)
 add_library(duckdb_python_analysis STATIC duckdb_python.cpp)
 target_link_libraries(
   duckdb_python_analysis
-  PRIVATE pytooling  # brings Python + pybind11 + local includes
+  PRIVATE pytooling # brings Python + pybind11 + local includes
           python_src # keep in sync with sub-directory object libs
           python_arrow
           python_common
