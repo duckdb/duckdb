@@ -421,12 +421,6 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return Timestamp::FromEpochMs(epoch_ms);
 }
 
-timestamp_ns_t Timestamp::GetCurrentTimestampNs() {
-	auto now = system_clock::now();
-	auto epoch_ns = duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-	return timestamp_ns_t(epoch_ns);
-}
-
 timestamp_t Timestamp::FromEpochSecondsPossiblyInfinite(int64_t sec) {
 	int64_t result;
 	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result)) {

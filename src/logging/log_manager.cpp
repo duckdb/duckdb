@@ -92,8 +92,8 @@ RegisteredLoggingContext LogManager::RegisterLoggingContextInternal(LoggingConte
 	return result;
 }
 
-void LogManager::WriteLogEntry(timestamp_ns_t timestamp, const char *log_type, LogLevel log_level,
-                               const char *log_message, const RegisteredLoggingContext &context) {
+void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message,
+                               const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 	log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
 }
