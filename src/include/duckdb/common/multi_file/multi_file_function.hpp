@@ -235,8 +235,7 @@ public:
 	static ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
 	                                             const vector<ColumnIndex> &global_column_ids,
 	                                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
-	                                             optional_idx file_idx,
-	                                             optional_ptr<MultiFileReaderGlobalState> reader_state) {
+	                                             optional_idx file_idx, MultiFileGlobalState &global_state) {
 		auto &reader = *reader_data.reader;
 		// Mark the file in the file list we are scanning here
 		reader.file_list_idx = file_idx;
@@ -246,7 +245,7 @@ public:
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
 		return bind_data.multi_file_reader->InitializeReader(reader_data, bind_data, global_columns, global_column_ids,
-		                                                     table_filters, context, reader_state);
+		                                                     table_filters, context, global_state);
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
@@ -291,9 +290,9 @@ public:
 						    context, *global_state.global_state, current_reader_data.file_to_be_opened,
 						    current_file_index, bind_data);
 					}
-					auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
-					                                    global_state.filters, context, current_file_index,
-					                                    global_state.multi_file_reader_state);
+					auto init_result =
+					    InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
+					                     global_state.filters, context, current_file_index, global_state);
 					if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
@@ -520,7 +519,7 @@ public:
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
 				auto init_result = InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters,
-				                                    context, file_idx, result->multi_file_reader_state);
+				                                    context, file_idx, *result);
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;

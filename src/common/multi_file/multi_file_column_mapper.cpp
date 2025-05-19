@@ -17,12 +17,12 @@ MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileRe
                                              MultiFileReaderData &reader_data,
                                              const vector<MultiFileColumnDefinition> &global_columns,
                                              const vector<ColumnIndex> &global_column_ids,
-                                             optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
+                                             optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
                                              const MultiFileReaderBindData &bind_data,
                                              const virtual_column_map_t &virtual_columns)
-    : context(context), multi_file_reader(multi_file_reader), reader_data(reader_data), global_columns(global_columns),
-      global_column_ids(global_column_ids), global_filters(filters), initial_file(initial_file), bind_data(bind_data),
-      virtual_columns(virtual_columns) {
+    : context(context), multi_file_reader(multi_file_reader), multi_file_list(multi_file_list),
+      reader_data(reader_data), global_columns(global_columns), global_column_ids(global_column_ids),
+      global_filters(filters), bind_data(bind_data), virtual_columns(virtual_columns) {
 }
 
 struct MultiFileIndexMapping {
@@ -189,7 +189,8 @@ void MultiFileColumnMapper::ThrowColumnNotFoundError(const string &global_column
 	                            "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
 	                            "%s\nIf you are trying to "
 	                            "read files with different schemas, try setting union_by_name=True",
-	                            file_name, global_column_name, initial_file.path, file_name, candidate_names);
+	                            file_name, global_column_name, multi_file_list.GetFirstFile().path, file_name,
+	                            candidate_names);
 }
 
 //! Check if a column is trivially mappable (i.e. the column is effectively identical to the global column)
