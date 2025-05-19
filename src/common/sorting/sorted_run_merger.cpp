@@ -65,13 +65,13 @@ private:
 #endif
 	}
 
-public:
-	atomic<bool> scanned;
-
 private:
 	mutex lock;
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 	atomic<bool> begin_computed;
+
+public:
+	atomic<bool> scanned;
 };
 
 enum class SortedRunMergerTask : uint8_t {

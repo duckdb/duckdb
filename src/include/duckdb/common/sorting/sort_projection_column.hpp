@@ -18,4 +18,4 @@ struct SortProjectionColumn {
 	idx_t output_col_idx;
 };
 
-}; // namespace duckdb
+} // namespace duckdb
