@@ -130,7 +130,7 @@ public:
 		auto sec = static_cast<time_t>(http_params.timeout);
 		auto usec = static_cast<time_t>(http_params.timeout_usec);
 		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
-		client->set_follow_location(true);
+		client->set_follow_location(http_params.follow_location);
 		client->set_keep_alive(http_params.keep_alive);
 		client->set_write_timeout(sec, usec);
 		client->set_read_timeout(sec, usec);
