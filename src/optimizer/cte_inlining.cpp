@@ -180,7 +180,7 @@ void PreventInlining::VisitExpression(unique_ptr<Expression> *expression) {
 			return;
 		}
 
-		if(expr->IsVolatile()) {
+		if (expr->IsVolatile()) {
 			prevent_inlining = true;
 			return;
 		}
