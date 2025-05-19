@@ -46,7 +46,7 @@ public:
 	DUCKDB_API virtual ~LogStorage() = default;
 
 	//! WRITING
-	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+	DUCKDB_API virtual void WriteLogEntry(timestamp_ns_t timestamp, LogLevel level, const string &log_type,
 	                                      const string &log_message, const RegisteredLoggingContext &context) = 0;
 	DUCKDB_API virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
 	DUCKDB_API virtual void Flush() = 0;
@@ -71,7 +71,7 @@ public:
 	~StdOutLogStorage() override;
 
 	//! LogStorage API: WRITING
-	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
+	void WriteLogEntry(timestamp_ns_t timestamp, LogLevel level, const string &log_type, const string &log_message,
 	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
@@ -93,7 +93,7 @@ public:
 	~InMemoryLogStorage() override;
 
 	//! LogStorage API: WRITING
-	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
+	void WriteLogEntry(timestamp_ns_t timestamp, LogLevel level, const string &log_type, const string &log_message,
 	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;

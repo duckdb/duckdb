@@ -35,10 +35,10 @@ StdOutLogStorage::StdOutLogStorage() {
 StdOutLogStorage::~StdOutLogStorage() {
 }
 
-void StdOutLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+void StdOutLogStorage::WriteLogEntry(timestamp_ns_t timestamp, LogLevel level, const string &log_type,
                                      const string &log_message, const RegisteredLoggingContext &context) {
 	std::cout << StringUtil::Format(
-	    "[LOG] %s, %s, %s, %s, %s, %s, %s, %s\n", Value::TIMESTAMP(timestamp).ToString(), log_type,
+	    "[LOG] %s, %s, %s, %s, %s, %s, %s, %s\n", Value::TIMESTAMPNS(timestamp).ToString(), log_type,
 	    EnumUtil::ToString(level), log_message, EnumUtil::ToString(context.context.scope),
 	    context.context.connection_id.IsValid() ? to_string(context.context.connection_id.GetIndex()) : "NULL",
 	    context.context.transaction_id.IsValid() ? to_string(context.context.transaction_id.GetIndex()) : "NULL",
@@ -66,11 +66,11 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
     : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
 	// LogEntry Schema
 	vector<LogicalType> log_entry_schema = {
-	    LogicalType::UBIGINT,   // context_id
-	    LogicalType::TIMESTAMP, // timestamp
-	    LogicalType::VARCHAR,   // log_type TODO: const vector where possible?
-	    LogicalType::VARCHAR,   // level TODO: enumify
-	    LogicalType::VARCHAR,   // message
+	    LogicalType::UBIGINT,      // context_id
+	    LogicalType::TIMESTAMP_NS, // timestamp
+	    LogicalType::VARCHAR,      // log_type TODO: const vector where possible?
+	    LogicalType::VARCHAR,      // level TODO: enumify
+	    LogicalType::VARCHAR,      // message
 	};
 
 	// LogContext Schema
@@ -103,7 +103,7 @@ void InMemoryLogStorage::ResetBuffers() {
 InMemoryLogStorage::~InMemoryLogStorage() {
 }
 
-void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+void InMemoryLogStorage::WriteLogEntry(timestamp_ns_t timestamp, LogLevel level, const string &log_type,
                                        const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
@@ -113,7 +113,7 @@ void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, co
 
 	auto size = entry_buffer->size();
 	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
-	auto timestamp_data = FlatVector::GetData<timestamp_t>(entry_buffer->data[1]);
+	auto timestamp_data = FlatVector::GetData<timestamp_ns_t>(entry_buffer->data[1]);
 	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
 	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
 	auto message_data = FlatVector::GetData<string_t>(entry_buffer->data[4]);
