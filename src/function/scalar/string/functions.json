@@ -446,7 +446,7 @@
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
                 "description": "Returns the MD5 hash of the `string` as a `VARCHAR`.",
-                "example": "md5('123')",
+                "example": "md5('abc')",
                 "categories": ["string"]
             },
             {
