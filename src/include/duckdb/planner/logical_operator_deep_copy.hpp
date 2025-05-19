@@ -31,7 +31,7 @@ public:
 	unique_ptr<LogicalOperator> DeepCopy(unique_ptr<LogicalOperator> &op);
 
 private:
-	void VisitOperator(LogicalOperator &op);
+	void VisitOperator(LogicalOperator &op) override;
 
 private:
 	// Single-field version
