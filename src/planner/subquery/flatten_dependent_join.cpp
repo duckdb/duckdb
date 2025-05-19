@@ -640,9 +640,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {
-			if (right_has_correlation) {
-				throw NotImplementedException("MARK join with correlation in RHS not supported");
-			}
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
