@@ -753,17 +753,14 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	// we are running a result query
 	// store the current result in a table called "__answer"
 	auto &collection = state.result->Collection();
-	auto &names = state.result->names;
 	auto &types = state.result->types;
 	// first create the (empty) table
 	string create_tbl = "CREATE OR REPLACE TEMP TABLE __answer(";
-	for (idx_t i = 0; i < names.size(); i++) {
+	for (idx_t i = 0; i < types.size(); i++) {
 		if (i > 0) {
 			create_tbl += ", ";
 		}
-		create_tbl += KeywordHelper::WriteOptionallyQuoted(names[i]);
-		create_tbl += " ";
-		create_tbl += types[i].ToString();
+		create_tbl += "c" + to_string(i) + " " + types[i].ToString();
 	}
 	create_tbl += ")";
 	auto new_result = state.con.Query(create_tbl);
