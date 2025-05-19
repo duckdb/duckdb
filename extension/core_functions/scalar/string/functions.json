@@ -380,11 +380,9 @@
     {
         "name": "to_base",
         "parameters": "number,radix,min_length",
-        "description": "Converts a `number` to a string in the given base `radix`. If optional argument `min_length` is provided, the result will be padded with leading zeros upto the minimum length.",
-        "examples": [
-            "to_base(42, 16)",
-            "to_base(42, 16, 5)"
-        ],
+        "description": "Converts `number` to a string in the given base `radix`, optionally padding with leading zeros to `min_length`.",
+        "example": "to_base(42, 16, 5)",
+        "categories": ["string", "numeric"],
         "type": "scalar_function_set"
     },
     {

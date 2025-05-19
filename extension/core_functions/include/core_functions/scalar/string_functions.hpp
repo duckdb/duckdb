@@ -454,9 +454,9 @@ struct OrdFun {
 struct ToBaseFun {
 	static constexpr const char *Name = "to_base";
 	static constexpr const char *Parameters = "number,radix,min_length";
-	static constexpr const char *Description = "Converts a `number` to a string in the given base `radix`. If optional argument `min_length` is provided, the result will be padded with leading zeros upto the minimum length.";
-	static constexpr const char *Example = "to_base(42, 16)\002to_base(42, 16, 5)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Description = "Converts `number` to a string in the given base `radix`, optionally padding with leading zeros to `min_length`.";
+	static constexpr const char *Example = "to_base(42, 16, 5)";
+	static constexpr const char *Categories = "string,numeric";
 
 	static ScalarFunctionSet GetFunctions();
 };
