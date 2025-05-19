@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 
@@ -36,19 +37,38 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-CSVEncoder::CSVEncoder(const DBConfig &config, const string &encoding_name_to_find, idx_t buffer_size) {
+CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_find, idx_t buffer_size)
+    : pass_on_byte(0) {
+	auto &config = DBConfig::GetConfig(context);
 	encoding_name = StringUtil::Lower(encoding_name_to_find);
 	auto function = config.GetEncodeFunction(encoding_name_to_find);
 	if (!function) {
+		if (!context.db->ExtensionIsLoaded("encodings")) {
+			// Maybe we can try to auto-load from our encodings extension, if this somehow fails, we just error.
+			auto extension_loaded = ExtensionHelper::TryAutoLoadExtension(context, "encodings");
+			if (extension_loaded) {
+				// If it successfully loaded, we can try to get our function again
+				function = config.GetEncodeFunction(encoding_name_to_find);
+			}
+		}
+	}
+	if (!function) {
+		// If at this point we still do not have a function we throw an error.
 		auto loaded_encodings = config.GetLoadedEncodedFunctions();
 		std::ostringstream error;
 		error << "The CSV Reader does not support the encoding: \"" << encoding_name_to_find << "\"\n";
+		if (!context.db->ExtensionIsLoaded("encodings")) {
+			error << "It is possible that the encoding exists in the encodings extension. You can try \"INSTALL "
+			         "encodings; LOAD encodings\""
+			      << "\n";
+		}
 		error << "The currently supported encodings are: " << '\n';
 		for (auto &encoding_function : loaded_encodings) {
 			error << "*  " << encoding_function.get().GetName() << '\n';
 		}
 		throw InvalidInputException(error.str());
 	}
+
 	// We ensure that the encoded buffer size is an even number to make the two byte lookup on utf-16 work
 	idx_t encoded_buffer_size = buffer_size % 2 != 0 ? buffer_size - 1 : buffer_size;
 	if (encoded_buffer_size == 0) {

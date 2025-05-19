@@ -19,9 +19,8 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 22a0387e09389ee9148f58b3f8a71e7896b48093
+    GIT_TAG eb1b04907c419d576f5fa4b34303810e8802e2f8
     INCLUDE_DIR extension/httpfs/include
-    APPLY_PATCHES
     )
 
 ################# AVRO
@@ -29,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG 712514078247b4b71f51d0c9eb862bec3928742c
+            GIT_TAG ff766174cc6cc9c4ed93fc4b75871bcdffcc6e65
     )
 endif()
 
@@ -38,8 +37,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             ### TODO: re-enable LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG e92e45b30ba17594b1101db22699a2244adfaeb1
-            APPLY_PATCHES
+            GIT_TAG 4f318ebd088e464266c511abe2f70bbdeee2fcd8
             )
 endif()
 
@@ -48,8 +46,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
-            GIT_TAG 1593cb56745a51eb7d8415c1fd7d11a15f20f413
-            APPLY_PATCHES
+            GIT_TAG 86a5acb33afe50ea57086ed997472551320c9820
             )
 endif()
 
@@ -71,9 +68,8 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
-    GIT_TAG b724b308b2b3a3c5644272cc84ec140fbcc7617d
+    GIT_TAG 7e97933214d0c7de2315668ec68589ae85651afb
     INCLUDE_DIR src/excel/include
-    APPLY_PATCHES
     )
 
 ################# ICEBERG
@@ -88,7 +84,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG dd8617d636b6aa8bd83fa219cd238fc9823df4e3
+            GIT_TAG 24dd874bee165661f6c3c79ee2a823f02941ed94
             )
 endif()
 
@@ -96,10 +92,9 @@ endif()
 duckdb_extension_load(inet
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-inet
-    GIT_TAG a8b361ab5d43f6390d7cb48c9a9f0638e9581cf9
+    GIT_TAG eb2455703ca0665e69b9fd20fd1d8816c547cb49
     INCLUDE_DIR src/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
@@ -109,8 +104,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 98482ce5c144287f01e738275892cdb84ea9b5ce
-            APPLY_PATCHES
+            GIT_TAG 9b24967e06a4af0a3cd43f8372114202a400f5f5
             )
 endif()
 
@@ -120,10 +114,9 @@ if (NOT MINGW)
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
-    GIT_TAG 4be6065edc313a53ff2196ff79c11a0d5e249720
+    GIT_TAG 494d94912cc7ebcd8c43c9b6fc173a3e4142740f
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 endif()
 
@@ -138,14 +131,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
-        GIT_TAG 66a5fa2448398379dc21c18308e3b95d42d84015
-        APPLY_PATCHES
+        GIT_TAG ed38d770e0bbf1d5a6660ec1887cc5abef65be15
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlsmith
-        GIT_TAG e1eb0ae02a258f176d6e06b84c0d6c7a09c6b4da
+        GIT_TAG 06e8da8a95710c996fcd62f385962ccd36a363f6
         )
 
 ################# VSS
@@ -153,9 +145,8 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-vss
-        GIT_TAG ba199a7215b75e83821ece13f6b921ccfcebd6ac
+        GIT_TAG ccfa7c9c1f1f540fa7f433a93d32bed772aa44f4
         TEST_DIR test/sql
-        APPLY_PATCHES
     )
 
 ################# MYSQL
@@ -164,8 +155,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG 93469fc39a317acf916627e0ddc724a076bf7302
-            APPLY_PATCHES
+            GIT_TAG b79ef7e2dde1f9253f9ad584883b029eba8d29a4
             )
 endif()
 
@@ -177,3 +167,14 @@ duckdb_extension_load(fts
         GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
         TEST_DIR test/sql
 )
+
+################# ENCODINGS
+if (NOT ${WASM_ENABLED})
+duckdb_extension_load(encodings
+        LOAD_TESTS
+        DONT_LINK
+        GIT_URL https://github.com/duckdb/duckdb-encodings
+        GIT_TAG dc3c206e237b517abcdd95ebe40d02dcd0f71084
+        TEST_DIR test/sql
+)
+endif()

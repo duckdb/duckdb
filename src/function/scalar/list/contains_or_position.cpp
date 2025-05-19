@@ -43,17 +43,20 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
-	const auto list_is_param = list.id() == LogicalTypeId::UNKNOWN;
-	const auto value_is_param = value.id() == LogicalTypeId::UNKNOWN;
+	if (list.IsUnknown() && value.IsUnknown()) {
+		bound_function.arguments[0] = list;
+		bound_function.arguments[1] = value;
+		return nullptr;
+	}
 
-	if (list_is_param) {
-		if (!value_is_param) {
-			// only list is a parameter, cast it to a list of value type
-			bound_function.arguments[0] = LogicalType::LIST(value);
-			bound_function.arguments[1] = value;
-		}
-	} else if (value_is_param) {
-		// only value is a parameter: we expect the child type of list
+	if (list.IsUnknown()) {
+		// Only the list type is unknown.
+		// We can infer its type from the type of the value.
+		bound_function.arguments[0] = LogicalType::LIST(value);
+		bound_function.arguments[1] = value;
+	} else if (value.IsUnknown()) {
+		// Only the value type is unknown.
+		// We can infer its type from the child type of the list.
 		bound_function.arguments[0] = list;
 		bound_function.arguments[1] = ListType::GetChildType(list);
 	} else {

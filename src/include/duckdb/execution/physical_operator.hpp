@@ -98,12 +98,18 @@ public:
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
 	                                                GlobalOperatorState &gstate, OperatorState &state) const;
+	virtual OperatorFinalResultType OperatorFinalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                                                 OperatorFinalizeInput &input) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
 	}
 
 	virtual bool RequiresFinalExecute() const {
+		return false;
+	}
+
+	virtual bool RequiresOperatorFinalize() const {
 		return false;
 	}
 

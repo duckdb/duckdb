@@ -81,7 +81,7 @@ public:
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
-	unique_ptr<Logger> logger;
+	shared_ptr<Logger> logger;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
@@ -209,8 +209,10 @@ public:
 
 	connection_t GetConnectionId() const;
 
-	//! Fetch a list of table names that are required for a given query
-	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
+	//! Fetch the set of tables names of the query.
+	//! Returns the fully qualified, escaped table names, if qualified is set to true,
+	//! else returns the not qualified, not escaped table names.
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query, const bool qualified = false);
 
 	DUCKDB_API ClientProperties GetClientProperties();
 

@@ -234,17 +234,21 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	auto table_or_view =
 	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
-	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
-			// if we are in EXTRACT_NAMES, we create a dummy table ref
-			AddTableName(ref.table_name);
+			// if we are in EXTRACT_NAMES or EXTRACT_QUALIFIED_NAMES, we create a dummy table ref
+			if (GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+				AddTableName(ref.ToString());
+			} else {
+				AddTableName(ref.table_name);
+			}
 
 			// add a bind context entry
 			auto table_index = GenerateTableIndex();
-			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
+			auto ref_alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			vector<LogicalType> types {LogicalType::INTEGER};
 			vector<string> names {"__dummy_col" + to_string(table_index)};
-			bind_context.AddGenericBinding(table_index, alias, names, types);
+			bind_context.AddGenericBinding(table_index, ref_alias, names, types);
 			return make_uniq_base<BoundTableRef, BoundEmptyTableRef>(table_index);
 		}
 	}

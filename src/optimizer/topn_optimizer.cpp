@@ -64,6 +64,10 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		// we can only pushdown on ORDER BY [col] currently
 		return;
 	}
+	if (op.dynamic_filter) {
+		// dynamic filter is already set
+		return;
+	}
 	auto &colref = op.orders[0].expression->Cast<BoundColumnRefExpression>();
 	vector<JoinFilterPushdownColumn> columns;
 	JoinFilterPushdownColumn column;
@@ -145,7 +149,6 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		if (topn->children[0]->has_estimated_cardinality && topn->children[0]->estimated_cardinality < limit_val) {
 			cardinality = topn->children[0]->estimated_cardinality;
 		}
-		PushdownDynamicFilters(*topn);
 		topn->SetEstimatedCardinality(cardinality);
 		op = std::move(topn);
 
@@ -156,6 +159,9 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 			op = std::move(node);
 			projections.pop_back();
 		}
+	}
+	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
+		PushdownDynamicFilters(op->Cast<LogicalTopN>());
 	}
 
 	for (auto &child : op->children) {

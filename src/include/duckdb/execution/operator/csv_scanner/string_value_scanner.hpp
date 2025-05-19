@@ -217,6 +217,9 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
+	//! If we are trying a row or not when figuring out the next row to start from.
+	bool try_row = false;
+
 	unsafe_unique_array<ParseTypeInfo> parse_types;
 	vector<string> names;
 
@@ -376,7 +379,7 @@ private:
 	idx_t start_pos;
 	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
-	//! Strict state machine, is basically a state machine with rfc 4180 set to true, used to figure out new line.
+	//! Strict state machine is basically a state machine with rfc 4180 set to true, used to figure out a new line.
 	shared_ptr<CSVStateMachine> state_machine_strict;
 };
 

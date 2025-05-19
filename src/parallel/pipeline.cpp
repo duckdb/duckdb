@@ -298,6 +298,10 @@ vector<const_reference<PhysicalOperator>> Pipeline::GetOperators() const {
 	return result;
 }
 
+const vector<reference<PhysicalOperator>> &Pipeline::GetIntermediateOperators() const {
+	return operators;
+}
+
 void Pipeline::ClearSource() {
 	source_state.reset();
 	batch_indexes.clear();

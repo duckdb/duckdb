@@ -207,11 +207,92 @@
             }
         },
         {
+            "name": "duckdb_connection_get_client_context",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "duckdb_client_context *",
+                    "name": "out_context"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the client context of the connection.\n\n",
+                "param_comments": {
+                    "connection": "The connection.",
+                    "out_context": "The client context of the connection. Must be destroyed with `duckdb_destroy_client_context`."
+                }
+            }
+        },
+        {
+            "name": "duckdb_client_context_get_connection_id",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_client_context",
+                    "name": "context"
+                }
+            ],
+            "comment": {
+                "description": "Returns the connection id of the client context.\n\n",
+                "param_comments": {
+                    "context": "The client context."
+                },
+                "return_value": "The connection id of the client context."
+            }
+        },
+        {
+            "name": "duckdb_destroy_client_context",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_client_context *",
+                    "name": "context"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the client context and deallocates its memory.\n\n",
+                "param_comments": {
+                    "context": "The client context to destroy."
+                }
+            }
+        },
+        {
             "name": "duckdb_library_version",
             "return_type": "const char *",
             "params": [],
             "comment": {
                 "description": "Returns the version of the linked DuckDB, with a version postfix for dev versions\n\nUsually used for developing C extensions that must return this for a compatibility check.\n"
+            }
+        },
+        {
+            "name": "duckdb_get_table_names",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "bool",
+                    "name": "qualified"
+                }
+            ],
+            "comment": {
+                "description": "Get the list of (fully qualified) table names of the query.\n\n",
+                "param_comments": {
+                    "connection": "The connection for which to get the table names.",
+                    "query": "The query for which to get the table names.",
+                    "qualified": "Returns fully qualified table names (catalog.schema.table), if set to true, else only the (not escaped) table names."
+                },
+                "return_value": "A duckdb_value of type VARCHAR[] containing the (fully qualified) table names of the query. Must be destroyed with duckdb_destroy_value."
             }
         }
     ]

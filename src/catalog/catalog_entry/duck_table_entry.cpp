@@ -388,15 +388,55 @@ unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, s
 	return std::move(res);
 }
 
+static child_list_t<LogicalType> GetChildList(const LogicalType &type) {
+	child_list_t<LogicalType> child_types;
+	switch (type.id()) {
+	case LogicalTypeId::LIST: {
+		child_types.emplace_back("list", ListType::GetChildType(type));
+		break;
+	}
+	case LogicalTypeId::MAP: {
+		child_types.emplace_back("key", MapType::KeyType(type));
+		child_types.emplace_back("value", MapType::ValueType(type));
+		break;
+	}
+	case LogicalTypeId::STRUCT: {
+		child_types = StructType::GetChildTypes(type);
+		break;
+	}
+	default:
+		throw BinderException("Can't ConstructMapping for type '%s'", type.ToString());
+	}
+	return child_types;
+}
+
+static LogicalType ConstructNewType(const LogicalType &original_type, child_list_t<LogicalType> new_child_types) {
+	switch (original_type.id()) {
+	case LogicalTypeId::STRUCT: {
+		return LogicalType::STRUCT(std::move(new_child_types));
+	}
+	case LogicalTypeId::LIST: {
+		D_ASSERT(new_child_types.size() == 1);
+		return LogicalType::LIST(new_child_types[0].second);
+	}
+	case LogicalTypeId::MAP: {
+		D_ASSERT(new_child_types.size() == 2);
+		return LogicalType::MAP(new_child_types[0].second, new_child_types[1].second);
+	}
+	default:
+		throw BinderException("Type '%s' not supported for ADD COLUMN", original_type.ToString());
+	}
+}
+
 Value ConstructMapping(const string &name, const LogicalType &type) {
-	if (type.id() != LogicalTypeId::STRUCT) {
+	if (!type.IsNested()) {
 		return Value(name);
 	}
 	child_list_t<Value> child_mapping;
-	auto &child_types = StructType::GetChildTypes(type);
+	auto child_types = GetChildList(type);
 	for (auto &entry : child_types) {
 		auto mapping_value = ConstructMapping(entry.first, entry.second);
-		if (entry.second.id() == LogicalTypeId::STRUCT) {
+		if (entry.second.IsNested()) {
 			child_list_t<Value> child_values;
 			child_values.emplace_back(string(), Value(entry.first));
 			child_values.emplace_back(string(), std::move(mapping_value));
@@ -409,20 +449,28 @@ Value ConstructMapping(const string &name, const LogicalType &type) {
 
 StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string> &column_path,
                                    const ColumnDefinition &new_field, idx_t depth = 0) {
-	if (type.id() != LogicalTypeId::STRUCT) {
-		throw BinderException("Column %s is not a struct - ALTER TABLE can only add fields to structs",
+	if (!type.IsNested()) {
+		throw BinderException("Column '%s' is not a nested type, ADD COLUMN can only be used on nested types",
 		                      column_path[depth]);
 	}
+
 	StructMappingInfo result;
-	auto child_list = StructType::GetChildTypes(type);
-	if (column_path.size() == depth + 1) {
+	auto child_list = GetChildList(type);
+	auto &current_component = column_path[depth];
+	bool last_entry = depth + 1 == column_path.size();
+
+	if (last_entry) {
+		if (type.id() != LogicalTypeId::STRUCT) {
+			throw BinderException("Column %s is not a struct - ALTER TABLE can only add fields to structs",
+			                      current_component);
+		}
 		// root path - we are adding at this level
 		// check if a field with this name already exists
 		for (auto &entry : child_list) {
 			if (StringUtil::CIEquals(entry.first, new_field.Name())) {
 				// already exists!
 				result.error = ErrorData(CatalogException("Duplicate field \"%s\" - field already exists in struct %s",
-				                                          new_field.Name(), column_path.back()));
+				                                          new_field.Name(), current_component));
 				return result;
 			}
 		}
@@ -439,26 +487,32 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 		result.default_value = PackExpression(std::move(default_value), new_field.Name());
 		return result;
 	}
+
 	// not the root path - we need to recurse
 	auto &next_component = column_path[depth + 1];
 	bool found = false;
 	for (auto &entry : child_list) {
-		if (StringUtil::CIEquals(entry.first, next_component)) {
+		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(next_component, "element")) ||
+		    StringUtil::CIEquals(entry.first, next_component)) {
 			// found the entry - recurse
 			auto child_res = AddFieldToStruct(entry.second, column_path, new_field, depth + 1);
 			if (child_res.error.HasError()) {
 				return child_res;
 			}
 			entry.second = std::move(child_res.new_type);
-			result.default_value = PackExpression(std::move(child_res.default_value), entry.first);
+			if (type.id() == LogicalTypeId::LIST) {
+				result.default_value = PackExpression(std::move(child_res.default_value), "list");
+			} else {
+				result.default_value = PackExpression(std::move(child_res.default_value), entry.first);
+			}
 			found = true;
 			break;
 		}
 	}
-	result.new_type = LogicalType::STRUCT(std::move(child_list));
 	if (!found) {
 		throw BinderException("Sub-field %s does not exist in column %s", next_component, column_path[depth]);
 	}
+	result.new_type = ConstructNewType(type, std::move(child_list));
 	return result;
 }
 
@@ -478,6 +532,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFie
 	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
 	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
 	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name(), col.Type())));
+	D_ASSERT(res.default_value);
 	children.push_back(std::move(res.default_value));
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
@@ -634,8 +689,8 @@ struct DroppedFieldMapping {
 };
 
 DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<string> &column_path, idx_t depth) {
-	if (type.id() != LogicalTypeId::STRUCT) {
-		throw CatalogException("Cannot drop field from column \"%s\" - not a struct", column_path[0]);
+	if (!type.IsNested()) {
+		throw CatalogException("Cannot drop field from column \"%s\" - not a nested type", column_path[0]);
 	}
 	auto &dropped_entry = column_path[depth];
 	bool last_entry = depth + 1 == column_path.size();
@@ -643,14 +698,20 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 	DroppedFieldMapping result;
 	child_list_t<Value> child_mapping;
 	child_list_t<LogicalType> new_type_children;
-	auto &child_types = StructType::GetChildTypes(type);
+	auto child_types = GetChildList(type);
+
 	for (auto &entry : child_types) {
 		Value mapping_value;
 		LogicalType type_value;
-		if (StringUtil::CIEquals(entry.first, dropped_entry)) {
+		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(dropped_entry, "element")) ||
+		    StringUtil::CIEquals(entry.first, dropped_entry)) {
 			// this is the entry we are dropping
 			found = true;
 			if (last_entry) {
+				if (type.id() != LogicalTypeId::STRUCT) {
+					throw CatalogException("Cannot drop field '%s' from column '%s' - it's not a struct",
+					                       column_path.back(), column_path.front());
+				}
 				// we are dropping this entry in its entirety - just skip
 				if (child_types.size() == 1) {
 					throw CatalogException("Cannot drop field %s from column %s - it is the last field of the struct",
@@ -672,7 +733,8 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 			mapping_value = ConstructMapping(entry.first, entry.second);
 			type_value = entry.second;
 		}
-		if (entry.second.id() == LogicalTypeId::STRUCT) {
+
+		if (entry.second.IsNested()) {
 			child_list_t<Value> child_values;
 			child_values.emplace_back(string(), Value(entry.first));
 			child_values.emplace_back(string(), std::move(mapping_value));
@@ -681,11 +743,12 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 		child_mapping.emplace_back(entry.first, std::move(mapping_value));
 		new_type_children.emplace_back(entry.first, type_value);
 	}
+
 	if (!found) {
 		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
-		result.new_type = LogicalType::STRUCT(std::move(new_type_children));
+		result.new_type = ConstructNewType(type, std::move(new_type_children));
 	}
 	return result;
 }
@@ -723,8 +786,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 
 DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<string> &column_path,
                                           const string &new_name, idx_t depth) {
-	if (type.id() != LogicalTypeId::STRUCT) {
-		throw CatalogException("Cannot rename field from column \"%s\" - not a struct", column_path[0]);
+	if (!type.IsNested()) {
+		throw CatalogException("Cannot rename field from column \"%s\" - not a nested type", column_path[0]);
 	}
 	auto &rename_entry = column_path[depth];
 	bool last_entry = depth + 1 == column_path.size();
@@ -732,15 +795,21 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 	DroppedFieldMapping result;
 	child_list_t<Value> child_mapping;
 	child_list_t<LogicalType> new_type_children;
-	auto &child_types = StructType::GetChildTypes(type);
+	auto child_types = GetChildList(type);
 	for (auto &entry : child_types) {
 		auto field_name = entry.first;
 		Value mapping_value;
 		LogicalType type_value;
-		if (StringUtil::CIEquals(field_name, rename_entry)) {
-			// this is the entry we are dropping
+		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(rename_entry, "element")) ||
+		    StringUtil::CIEquals(field_name, rename_entry)) {
+			// this is the entry we are renaming
 			found = true;
 			if (last_entry) {
+				if (type.id() != LogicalTypeId::STRUCT) {
+					throw CatalogException(
+					    "Cannot rename field '%s' from column '%s' - can only rename fields inside a struct",
+					    column_path.back(), column_path.front());
+				}
 				// we are renaming this entry
 				for (auto &sub_entry : child_types) {
 					if (StringUtil::CIEquals(new_name, sub_entry.first)) {
@@ -753,7 +822,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 				mapping_value = ConstructMapping(entry.first, entry.second);
 				type_value = entry.second;
 			} else {
-				// we are dropping a field in this entry - recurse
+				// we are renaming a field in this entry - recurse
 				auto child_result = RenameFieldFromStruct(entry.second, column_path, new_name, depth + 1);
 				if (child_result.error.HasError()) {
 					// bubble up error
@@ -767,7 +836,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			mapping_value = ConstructMapping(entry.first, entry.second);
 			type_value = entry.second;
 		}
-		if (entry.second.id() == LogicalTypeId::STRUCT) {
+		if (entry.second.IsNested()) {
 			child_list_t<Value> child_values;
 			child_values.emplace_back(string(), Value(entry.first));
 			child_values.emplace_back(string(), std::move(mapping_value));
@@ -780,7 +849,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
-		result.new_type = LogicalType::STRUCT(std::move(new_type_children));
+		result.new_type = ConstructNewType(type, std::move(new_type_children));
 	}
 	return result;
 }

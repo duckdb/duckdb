@@ -269,6 +269,9 @@ struct LogicalType {
 		}
 		return false;
 	}
+	inline bool IsUnknown() const {
+		return id_ == LogicalTypeId::UNKNOWN;
+	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
 		return type_info_;
