@@ -128,6 +128,9 @@ public:
 
 	void Verify(Catalog &catalog);
 
+	//! Override the default generator - this should not be used after the catalog set has been used
+	void SetDefaultGenerator(unique_ptr<DefaultGenerator> defaults);
+
 private:
 	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
 	                      bool allow_drop_internal = false);

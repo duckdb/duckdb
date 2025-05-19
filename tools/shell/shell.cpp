@@ -141,6 +141,7 @@ typedef unsigned char u8;
 #define SHELL_USE_LOCAL_GETLINE 1
 #endif
 
+#include "duckdb.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
@@ -4001,7 +4002,8 @@ MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
-	utf8_printf(state.out, "DuckDB %s %s\n" /*extra-version-info*/, sqlite3_libversion(), sqlite3_sourceid());
+	utf8_printf(state.out, "DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
+	            duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 #define CTIMEOPT_VAL_(opt) #opt
 #define CTIMEOPT_VAL(opt)  CTIMEOPT_VAL_(opt)
 #if defined(__clang__) && defined(__clang_major__)
@@ -5125,9 +5127,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			char *zHome;
 			char *zHistory;
 			int nHistory;
-			printf("%s %.19s\n" /*extra-version-info*/
+			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
 			       "Enter \".help\" for usage hints.\n",
-			       sqlite3_libversion(), sqlite3_sourceid());
+			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
 				ShellHighlight highlighter(data);

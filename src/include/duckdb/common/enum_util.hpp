@@ -256,6 +256,8 @@ enum class OnCreateConflict : uint8_t;
 
 enum class OnEntryNotFound : uint8_t;
 
+enum class OperatorFinalResultType : uint8_t;
+
 enum class OperatorFinalizeResultType : uint8_t;
 
 enum class OperatorResultType : uint8_t;
@@ -305,6 +307,8 @@ enum class QueryResultType : uint8_t;
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
+
+enum class RequestType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
@@ -748,6 +752,9 @@ template<>
 const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value);
 
 template<>
+const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType value);
+
+template<>
 const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
 
 template<>
@@ -821,6 +828,9 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
+
+template<>
+const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
@@ -1316,6 +1326,9 @@ template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value);
 
 template<>
+OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char *value);
+
+template<>
 OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(const char *value);
 
 template<>
@@ -1389,6 +1402,9 @@ RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);

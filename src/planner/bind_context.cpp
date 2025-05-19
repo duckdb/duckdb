@@ -584,7 +584,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 	}
 
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		//! We only care about extracting the names of the referenced columns
 		//! remove the exclude + replace lists
 		expr.exclude_list.clear();

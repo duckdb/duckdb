@@ -171,6 +171,11 @@ struct OperatorSinkFinalizeInput {
 	InterruptState &interrupt_state;
 };
 
+struct OperatorFinalizeInput {
+	GlobalOperatorState &global_state;
+	InterruptState &interrupt_state;
+};
+
 struct OperatorSinkNextBatchInput {
 	GlobalSinkState &global_state;
 	LocalSinkState &local_state;
