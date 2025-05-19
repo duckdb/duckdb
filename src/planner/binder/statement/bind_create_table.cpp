@@ -47,6 +47,9 @@ static void VerifyCompressionType(optional_ptr<StorageManager> storage_manager, 
 		}
 		const auto &logical_type = col.GetType();
 		auto physical_type = logical_type.InternalType();
+		if (compression_type == CompressionType::COMPRESSION_AUTO) {
+			continue;
+		}
 		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
 		if (!compression_method) {
 			throw BinderException(
