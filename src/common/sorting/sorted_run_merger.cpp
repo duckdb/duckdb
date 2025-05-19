@@ -5,8 +5,8 @@
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
-#include "pdqsort.h"
 #include "vergesort.h"
+#include "pdqsort.h"
 
 namespace duckdb {
 

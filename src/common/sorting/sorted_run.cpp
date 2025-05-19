@@ -4,9 +4,8 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 
-#include "pdqsort.h"
-#include "ska_sort.hpp"
 #include "vergesort.h"
+#include "ska_sort.hpp"
 
 namespace duckdb {
 
@@ -16,7 +15,7 @@ SortedRun::SortedRun(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> 
       payload_data(payload_layout->ColumnCount() != 0
                        ? make_uniq<TupleDataCollection>(buffer_manager, std::move(payload_layout))
                        : nullptr),
-      finalized(false), is_index_sort(is_index_sort_p) {
+      is_index_sort(is_index_sort_p), finalized(false) {
 	key_data->InitializeAppend(key_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	if (payload_data) {
 		payload_data->InitializeAppend(payload_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);

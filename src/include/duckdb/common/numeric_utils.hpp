@@ -189,7 +189,7 @@ public:
 	}
 
 	TYPE Div(const TYPE &val) const {
-		return UnsafeNumericCast<TYPE>((static_cast<NEXT_TYPE>(val) * multiplier) >> (sizeof(TYPE) * 8));
+		return static_cast<TYPE>((static_cast<NEXT_TYPE>(val) * multiplier) >> (sizeof(TYPE) * 8)); // NOLINT
 	}
 
 	TYPE Mod(const TYPE &val, const TYPE &quotient) const {
