@@ -195,9 +195,9 @@
     {
         "name": "ltrim",
         "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.",
+        "description": "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`.",
         "examples": [
-            "ltrim('␣␣␣␣test␣␣')",
+            "ltrim('    test  ')",
             "ltrim('>>>>test<<', '><')"
         ],
         "categories": ["string"],
@@ -323,9 +323,9 @@
     {
         "name": "rtrim",
         "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.",
+        "description": "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`.",
         "examples": [
-            "rtrim('␣␣␣␣test␣␣')",
+            "rtrim('    test  ')",
             "rtrim('>>>>test<<', '><')"
         ],
         "categories": ["string"],
@@ -342,9 +342,9 @@
     {
         "name": "trim",
         "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`. In the example, the `␣` symbol denotes a space character.",
+        "description": "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`.",
         "examples": [
-            "trim('␣␣␣␣test␣␣')",
+            "trim('    test  ')",
             "trim('>>>>test<<', '><')"
         ],
         "categories": ["string"],
