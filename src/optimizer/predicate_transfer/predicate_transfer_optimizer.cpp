@@ -175,6 +175,14 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 	auto &node = graph_manager.transfer_graph[cur_node_id];
 	auto &edges = reverse ? node->backward_stage_edges.out : node->forward_stage_edges.out;
 
+	// we cannot create BFs for set operators, because the current dynamic pipeline does not support it.
+	auto &base_table = graph_manager.table_operator_manager.table_operators[cur_node_id];
+	if (base_table->type == LogicalOperatorType::LOGICAL_UNION ||
+	    base_table->type == LogicalOperatorType::LOGICAL_EXCEPT ||
+	    base_table->type == LogicalOperatorType::LOGICAL_INTERSECT) {
+		return;
+	}
+
 	for (auto &edge : edges) {
 		auto bf_plan = make_shared_ptr<FilterPlan>();
 
