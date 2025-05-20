@@ -30,19 +30,44 @@ public:
 		return *this;
 	}
 public:
-	void push_back(ArenaAllocator &arena, const T& value) {
+	bool empty() const {
+		return head == nullptr;
+	}
+
+	idx_t size() const {
+		return _size;
+	}
+
+	// TODO: do we want to expose [], or make it more explicit that this can be O(n)?
+
+	T& operator[](const idx_t index) {
+		idx_t i = 0;
+		for (auto &elem : *this) {
+			if (i == index) {
+				return elem;
+			}
+			i++;
+		}
+		throw InternalException("index out of bounds in ArenaLinkedList");
+	}
+
+	T operator[](const idx_t index) const {
+		idx_t i = 0;
+		for (const auto &elem : *this) {
+			if (i == index) {
+				return elem;
+			}
+			i++;
+		}
+		throw InternalException("index out of bounds in ArenaLinkedList");
+	}
+
+	void Append(ArenaAllocator &arena, const T& value) {
 		auto node = arena.Make<Node>(value);
 		auto ptr = head ? &tail->next : &head;
 		*ptr = node;
 		tail = node;
-	}
-
-	template<class ...ARGS>
-	void emplace_back(ArenaAllocator &arena, ARGS&&... args) {
-		auto node = arena.Make<Node>(std::forward<ARGS>(args)...);
-		auto ptr = head ? &tail->next : &head;
-		*ptr = node;
-		tail = node;
+		_size++;
 	}
 
 	struct Iterator;
@@ -62,6 +87,7 @@ private:
 
 	Node* head = nullptr;
 	Node* tail = nullptr;
+	idx_t _size = 0;
 };
 
 

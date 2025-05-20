@@ -50,6 +50,9 @@ public:
 	void SetRoot(PhysicalOperator &op) {
 		root = op;
 	}
+	ArenaAllocator &GetArena() {
+		return arena;
+	}
 
 private:
 	//! The arena allocator storing the physical operator memory.
@@ -93,6 +96,10 @@ public:
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
+	}
+
+	ArenaAllocator &GetArena() {
+		return physical_plan->GetArena();
 	}
 
 public:

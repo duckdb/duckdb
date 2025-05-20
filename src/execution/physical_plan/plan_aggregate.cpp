@@ -255,12 +255,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		if (can_use_simple_aggregation) {
 			auto &group_by =
 			    Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions), op.estimated_cardinality);
-			group_by.children.push_back(plan);
+			group_by.children.Append(GetArena(), plan);
 			return group_by;
 		}
 		auto &group_by =
 		    Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), op.estimated_cardinality);
-		group_by.children.push_back(plan);
+		group_by.children.Append(GetArena(), plan);
 		return group_by;
 	}
 
@@ -272,7 +272,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		auto &group_by =
 		    Make<PhysicalPartitionedAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 		                                       std::move(partition_columns), op.estimated_cardinality);
-		group_by.children.push_back(plan);
+		group_by.children.Append(GetArena(), plan);
 		return group_by;
 	}
 
@@ -280,14 +280,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		auto &group_by = Make<PhysicalPerfectHashAggregate>(context, op.types, std::move(op.expressions),
 		                                                    std::move(op.groups), std::move(op.group_stats),
 		                                                    std::move(required_bits), op.estimated_cardinality);
-		group_by.children.push_back(plan);
+		group_by.children.Append(GetArena(), plan);
 		return group_by;
 	}
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
 	                                             op.estimated_cardinality);
-	group_by.children.push_back(plan);
+	group_by.children.Append(GetArena(), plan);
 	return group_by;
 }
 
@@ -313,11 +313,11 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	}
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		for (auto &child : bound_aggr.children) {
-			auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
-			types.push_back(child->return_type);
-			expressions.push_back(std::move(child));
-			child = std::move(ref);
+		for (auto &child_expr : bound_aggr.children) {
+			auto ref = make_uniq<BoundReferenceExpression>(child_expr->return_type, expressions.size());
+			types.push_back(child_expr->return_type);
+			expressions.push_back(std::move(child_expr));
+			child_expr = std::move(ref);
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;
@@ -331,7 +331,7 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 		return child;
 	}
 	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(expressions), child.estimated_cardinality);
-	proj.children.push_back(child);
+	proj.children.Append(GetArena(), child);
 	return proj;
 }
 

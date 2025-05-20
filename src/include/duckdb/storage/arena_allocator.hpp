@@ -78,9 +78,9 @@ public:
 	}
 
 	template<class T, class ...ARGS>
-	T& Make(ARGS &&... args) {
-		auto ptr = AllocateAligned(sizeof(T), alignof(T));
-		return *new (ptr) T(std::forward<ARGS>(args)...);
+	T* Make(ARGS &&... args) {
+		auto ptr = AllocateAligned(sizeof(T));
+		return new (ptr) T(std::forward<ARGS>(args)...);
 	}
 
 private:
