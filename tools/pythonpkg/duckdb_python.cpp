@@ -771,8 +771,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    }
 		    return conn->GetTableNames(query, qualified);
 	    },
-	    "Extract the required table names from a query", py::arg("query"), py::kw_only(),
-	    py::arg("qualified") = false, py::arg("connection") = py::none());
+	    "Extract the required table names from a query", py::arg("query"), py::kw_only(), py::arg("qualified") = false,
+	    py::arg("connection") = py::none());
 	m.def(
 	    "install_extension",
 	    [](const string &extension, bool force_install = false, const py::object &repository = py::none(),
