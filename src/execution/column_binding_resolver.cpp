@@ -138,7 +138,11 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		// Just to be very sure, we clear before and after resolving extension operator column bindings
+		// This skips checks, but makes sure we don't break any extension operators with type verification
+		types.clear();
 		ext_op.ResolveColumnBindings(*this, bindings);
+		types.clear();
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
