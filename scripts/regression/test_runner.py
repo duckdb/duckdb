@@ -47,13 +47,13 @@ parser.add_argument(
     "--regression-threshold-seconds",
     type=float,
     default=0.05,
-    help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.",
+    help="The threshold at which we consider individual benchmark a regression (percentage)",
 )
 parser.add_argument(
     "--max-allowed-regression-percentage",
     type=int,
     default=1,
-    help="MAX_ALLOWED_REGRESS_PERCENTAGE value for large benchmarks.",
+    help="Max regression percentage for overal test suite to be a regression",
 )
 
 # Parse the arguments
