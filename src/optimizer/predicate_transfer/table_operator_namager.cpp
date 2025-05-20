@@ -56,6 +56,7 @@ ColumnBinding TableOperatorManager::GetRenaming(ColumnBinding binding) {
 
 idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -66,17 +67,7 @@ idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 		return op->GetTableIndex()[0];
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-			return op->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
-		}
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			// For In-Clause optimization
-			return op->children[0]->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
-		}
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-			return op->children[0]->Cast<LogicalAggregate>().GetTableIndex()[0];
-		}
-		return op->Cast<LogicalGet>().GetTableIndex()[0];
+		return GetScalarTableIndex(op->children[0].get());
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		return op->GetTableIndex()[1];
@@ -153,8 +144,8 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
 		if (agg.groups.empty() && agg.grouping_sets.size() <= 1) {
-			ExtractOperatorsInternal(*op->children[0], joins);
 			AddTableOperator(op);
+			ExtractOperatorsInternal(*op->children[0], joins);
 		} else {
 			auto old_refs = agg.GetColumnBindings();
 			for (size_t i = 0; i < agg.groups.size(); i++) {
@@ -186,7 +177,11 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		ExtractOperatorsInternal(*op->children[1], joins);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_WINDOW: {
+		AddTableOperator(op);
+		ExtractOperatorsInternal(*op->children[0], joins);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:
