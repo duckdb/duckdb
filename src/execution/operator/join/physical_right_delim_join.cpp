@@ -10,8 +10,9 @@
 
 namespace duckdb {
 
-PhysicalRightDelimJoin::PhysicalRightDelimJoin(PhysicalPlanGenerator &planner, vector<LogicalType> types,
-                                               PhysicalOperator &original_join, PhysicalOperator &distinct,
+PhysicalRightDelimJoin::PhysicalRightDelimJoin(ArenaAllocator &arena, PhysicalPlanGenerator &planner,
+                                               vector<LogicalType> types, PhysicalOperator &original_join,
+                                               PhysicalOperator &distinct,
                                                const vector<const_reference<PhysicalOperator>> &delim_scans,
                                                idx_t estimated_cardinality, optional_idx delim_idx)
     : PhysicalDelimJoin(PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), original_join, distinct, delim_scans,
@@ -19,6 +20,7 @@ PhysicalRightDelimJoin::PhysicalRightDelimJoin(PhysicalPlanGenerator &planner, v
 	D_ASSERT(join.children.size() == 2);
 	// now for the original join
 	// we take its right child, this is the side that we will duplicate eliminate
+	children.Init(arena);
 	children.push_back(join.children[1]);
 
 	// we replace it with a PhysicalDummyScan, which contains no data, just the types, it won't be scanned anyway

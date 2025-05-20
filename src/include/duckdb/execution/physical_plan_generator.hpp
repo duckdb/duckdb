@@ -37,10 +37,14 @@ public:
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
-		auto mem = arena.AllocateAligned(sizeof(T));
-		auto ptr = new (mem) T(std::forward<ARGS>(args)...);
+		auto ptr = arena.Make<T>(std::forward<ARGS>(args)...);
+		ptr->children.Init(arena);
 		ops.push_back(*ptr);
 		return *ptr;
+	}
+
+	ArenaAllocator &GetArena() {
+		return arena;
 	}
 
 	PhysicalOperator &Root() {
@@ -49,9 +53,6 @@ public:
 	}
 	void SetRoot(PhysicalOperator &op) {
 		root = op;
-	}
-	ArenaAllocator &GetArena() {
-		return arena;
 	}
 
 private:

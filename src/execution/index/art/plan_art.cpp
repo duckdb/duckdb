@@ -24,7 +24,7 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	select_list.push_back(make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
 
 	auto &proj = planner.Make<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
-	proj.children.Append(planner.GetArena(), input.table_scan);
+	proj.children.push_back(input.table_scan);
 
 	// Optional NOT NULL filter.
 	reference<PhysicalOperator> prev_op(proj);
@@ -45,7 +45,7 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 		prev_op = planner.Make<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list),
 		                                       op.estimated_cardinality);
 		prev_op.get().types.emplace_back(LogicalType::ROW_TYPE);
-		prev_op.get().children.Append(planner.GetArena(), proj);
+		prev_op.get().children.push_back(proj);
 	}
 
 	// Determine whether to push an ORDER BY operator.
@@ -62,7 +62,7 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	                                                        sort, std::move(op.alter_table_info));
 
 	if (!sort) {
-		create_idx.children.Append(planner.GetArena(), prev_op);
+		create_idx.children.push_back(prev_op);
 		return create_idx;
 	}
 
@@ -78,8 +78,8 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 
 	auto &order = planner.Make<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
 	                                          op.estimated_cardinality);
-	order.children.Append(planner.GetArena(), prev_op);
-	create_idx.children.Append(planner.GetArena(), order);
+	order.children.push_back(prev_op);
+	create_idx.children.push_back(order);
 	return create_idx;
 }
 

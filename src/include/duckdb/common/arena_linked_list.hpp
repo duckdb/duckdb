@@ -6,12 +6,14 @@
 
 namespace duckdb {
 
-template<class T>
+template <class T>
 class ArenaLinkedList {
 public:
 	static_assert(std::is_trivially_destructible<T>::value, "T must be trivially destructible");
 
+public:
 	ArenaLinkedList() = default;
+
 	ArenaLinkedList(const ArenaLinkedList &) = delete;
 	ArenaLinkedList &operator=(const ArenaLinkedList &) = delete;
 
@@ -19,7 +21,6 @@ public:
 		other.head = nullptr;
 		other.tail = nullptr;
 	}
-
 	ArenaLinkedList &operator=(ArenaLinkedList &&other) noexcept {
 		if (this != &other) {
 			head = other.head;
@@ -29,7 +30,15 @@ public:
 		}
 		return *this;
 	}
+
 public:
+	void Init(ArenaAllocator &arena_p) {
+		if (arena) {
+			return;
+		}
+		arena = arena_p;
+	}
+
 	bool empty() const {
 		return head == nullptr;
 	}
@@ -38,9 +47,7 @@ public:
 		return _size;
 	}
 
-	// TODO: do we want to expose [], or make it more explicit that this can be O(n)?
-
-	T& operator[](const idx_t index) {
+	T &operator[](const idx_t index) {
 		idx_t i = 0;
 		for (auto &elem : *this) {
 			if (i == index) {
@@ -62,8 +69,17 @@ public:
 		throw InternalException("index out of bounds in ArenaLinkedList");
 	}
 
-	void Append(ArenaAllocator &arena, const T& value) {
-		auto node = arena.Make<Node>(value);
+	void push_back(const T &value) {
+		auto node = arena->Make<Node>(value);
+		auto ptr = head ? &tail->next : &head;
+		*ptr = node;
+		tail = node;
+		_size++;
+	}
+
+	template <class... ARGS>
+	void emplace_back(ARGS &&... args) {
+		auto node = arena->Make<Node>(std::forward<ARGS>(args)...);
 		auto ptr = head ? &tail->next : &head;
 		*ptr = node;
 		tail = node;
@@ -80,73 +96,76 @@ public:
 
 private:
 	struct Node {
-		explicit Node(const T& value_p) : next(nullptr), value(value_p) {}
+		explicit Node(const T &value_p) : next(nullptr), value(value_p) {
+		}
 		Node *next;
 		T value;
 	};
 
-	Node* head = nullptr;
-	Node* tail = nullptr;
+	optional_ptr<ArenaAllocator> arena;
+	Node *head = nullptr;
+	Node *tail = nullptr;
 	idx_t _size = 0;
 };
 
-
-template<class T>
+template <class T>
 struct ArenaLinkedList<T>::Iterator {
-	Node* node;
+	Node *node;
 
-	explicit Iterator(Node* node_p) : node(node_p) {}
+	explicit Iterator(Node *node_p) : node(node_p) {
+	}
 
-	T& operator*() {
+	T &operator*() {
 		return node->value;
 	}
 
-	Iterator& operator++() {
+	Iterator &operator++() {
 		node = node->next;
 		return *this;
 	}
 
-	bool operator!=(const Iterator& other) const {
+	bool operator!=(const Iterator &other) const {
 		return node != other.node;
 	}
 };
 
-template<class T>
+template <class T>
 struct ArenaLinkedList<T>::ConstIterator {
-	const Node* node;
+	const Node *node;
 
-	explicit ConstIterator(const Node* node_p) : node(node_p) {}
+	explicit ConstIterator(const Node *node_p) : node(node_p) {
+	}
 
-	const T& operator*() const {
+	const T &operator*() const {
 		return node->value;
 	}
 
-	ConstIterator& operator++() {
+	ConstIterator &operator++() {
 		node = node->next;
 		return *this;
 	}
 
-	bool operator!=(const ConstIterator& other) const {
+	bool operator!=(const ConstIterator &other) const {
 		return node != other.node;
 	}
 };
 
-template<class T>
+template <class T>
 typename ArenaLinkedList<T>::Iterator ArenaLinkedList<T>::begin() {
 	return Iterator(head);
 }
 
-template<class T>
+template <class T>
 typename ArenaLinkedList<T>::Iterator ArenaLinkedList<T>::end() {
 	return Iterator(nullptr);
 }
 
-template<class T>
+template <class T>
 typename ArenaLinkedList<T>::ConstIterator ArenaLinkedList<T>::begin() const {
 	return ConstIterator(head);
 }
 
-template<class T>
+template <class T>
 typename ArenaLinkedList<T>::ConstIterator ArenaLinkedList<T>::end() const {
 	return ConstIterator(nullptr);
 }

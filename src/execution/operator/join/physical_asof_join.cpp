@@ -12,7 +12,8 @@
 
 namespace duckdb {
 
-PhysicalAsOfJoin::PhysicalAsOfJoin(ArenaAllocator &arena, LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right)
+PhysicalAsOfJoin::PhysicalAsOfJoin(ArenaAllocator &arena, LogicalComparisonJoin &op, PhysicalOperator &left,
+                                   PhysicalOperator &right)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID), predicate(std::move(op.predicate)) {
@@ -54,8 +55,9 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(ArenaAllocator &arena, LogicalComparisonJoin 
 	D_ASSERT(!lhs_orders.empty());
 	D_ASSERT(!rhs_orders.empty());
 
-	children.Append(arena, left);
-	children.Append(arena, right);
+	children.Init(arena);
+	children.push_back(left);
+	children.push_back(right);
 
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;

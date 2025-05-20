@@ -60,7 +60,7 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	if (config.options.debug_verify_vector != DebugVectorVerification::NONE) {
 		if (config.options.debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION) {
 			physical_plan->SetRoot(
-			    Make<PhysicalVerifyVector>(GetArena(), physical_plan->Root(), config.options.debug_verify_vector));
+			    Make<PhysicalVerifyVector>(physical_plan->Root(), config.options.debug_verify_vector));
 		}
 	}
 	return std::move(physical_plan);

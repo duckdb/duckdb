@@ -255,12 +255,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		if (can_use_simple_aggregation) {
 			auto &group_by =
 			    Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions), op.estimated_cardinality);
-			group_by.children.Append(GetArena(), plan);
+			group_by.children.push_back(plan);
 			return group_by;
 		}
 		auto &group_by =
 		    Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), op.estimated_cardinality);
-		group_by.children.Append(GetArena(), plan);
+		group_by.children.push_back(plan);
 		return group_by;
 	}
 
@@ -272,7 +272,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		auto &group_by =
 		    Make<PhysicalPartitionedAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 		                                       std::move(partition_columns), op.estimated_cardinality);
-		group_by.children.Append(GetArena(), plan);
+		group_by.children.push_back(plan);
 		return group_by;
 	}
 
@@ -280,14 +280,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		auto &group_by = Make<PhysicalPerfectHashAggregate>(context, op.types, std::move(op.expressions),
 		                                                    std::move(op.groups), std::move(op.group_stats),
 		                                                    std::move(required_bits), op.estimated_cardinality);
-		group_by.children.Append(GetArena(), plan);
+		group_by.children.push_back(plan);
 		return group_by;
 	}
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
 	                                             op.estimated_cardinality);
-	group_by.children.Append(GetArena(), plan);
+	group_by.children.push_back(plan);
 	return group_by;
 }
 
@@ -331,7 +331,7 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 		return child;
 	}
 	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(expressions), child.estimated_cardinality);
-	proj.children.Append(GetArena(), child);
+	proj.children.push_back(child);
 	return proj;
 }
 

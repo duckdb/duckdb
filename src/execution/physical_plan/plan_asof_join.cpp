@@ -206,8 +206,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
 	window.children.emplace_back(probe);
 
-	auto &join = Make<PhysicalNestedLoopJoin>(join_op, build, window, std::move(join_op.conditions), join_op.join_type,
-	                                          probe_cardinality);
+	auto &join = Make<PhysicalNestedLoopJoin>(GetArena(), join_op, build, window, std::move(join_op.conditions),
+	                                          join_op.join_type, probe_cardinality);
 
 	// Plan a projection of the compare column
 	auto &comp_proj = Make<PhysicalProjection>(std::move(comp_types), std::move(comp_list), probe_cardinality);
@@ -277,7 +277,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 				return *result;
 			}
 		}
-		return Make<PhysicalAsOfJoin>(op, left, right);
+		return Make<PhysicalAsOfJoin>(GetArena(), op, left, right);
 	}
 
 	//	Strip extra column from rhs projections
@@ -351,7 +351,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	}
 
 	op.conditions.emplace_back(std::move(asof_upper));
-	return Make<PhysicalIEJoin>(op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
+	return Make<PhysicalIEJoin>(GetArena(), op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
 }
 
 } // namespace duckdb

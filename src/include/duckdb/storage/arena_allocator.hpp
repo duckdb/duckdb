@@ -77,10 +77,10 @@ public:
 		return arena_allocator;
 	}
 
-	template<class T, class ...ARGS>
-	T* Make(ARGS &&... args) {
-		auto ptr = AllocateAligned(sizeof(T));
-		return new (ptr) T(std::forward<ARGS>(args)...);
+	template <class T, class... ARGS>
+	T *Make(ARGS &&... args) {
+		auto mem = AllocateAligned(sizeof(T));
+		return new (mem) T(std::forward<ARGS>(args)...);
 	}
 
 private:

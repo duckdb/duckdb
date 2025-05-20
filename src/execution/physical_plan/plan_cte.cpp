@@ -23,7 +23,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	// Initialize an empty vector to collect the scan operators.
 	auto &right = CreatePlan(*op.children[1]);
 
-	auto &cte = Make<PhysicalCTE>(op.ctename, op.table_index, right.types, left, right, op.estimated_cardinality);
+	auto &cte =
+	    Make<PhysicalCTE>(GetArena(), op.ctename, op.table_index, right.types, left, right, op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalCTE>();
 	cast_cte.working_table = working_table;
 	cast_cte.cte_scans = materialized_ctes[op.table_index];
