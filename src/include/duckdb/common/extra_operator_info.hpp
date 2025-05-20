@@ -44,6 +44,11 @@ public:
 		return *this;
 	}
 
+	bool operator==(const ExtraOperatorInfo &other) const {
+		return file_filters == other.file_filters && total_files == other.total_files &&
+		       filtered_files == other.filtered_files && sample_options == other.sample_options;
+	}
+
 	//! Filters that have been pushed down into the main file list
 	string file_filters;
 	//! Total size of file list
