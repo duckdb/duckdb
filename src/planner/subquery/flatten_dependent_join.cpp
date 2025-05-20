@@ -110,6 +110,21 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		// first we check which logical operators have correlated expressions in the first place
 		flatten.DetectCorrelatedExpressions(*delim_join->children[1], op.is_lateral_join, lateral_depth);
 
+		if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &cte = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
+			// check if the left side of the CTE has correlated expressions
+			auto entry = flatten.has_correlated_expressions.find(*cte.children[0]);
+			if (entry != flatten.has_correlated_expressions.end()) {
+				if (!entry->second) {
+					// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
+					auto cte = std::move(delim_join->children[1]);
+					delim_join->children[1] = std::move(cte->children[1]);
+					cte->children[1] = Decorrelate(std::move(delim_join), parent_propagate_null_values, lateral_depth);
+					return std::move(cte);
+				}
+			}
+		}
+
 		// now we push the dependent join down
 		delim_join->children[1] =
 		    flatten.PushDownDependentJoin(std::move(delim_join->children[1]), propagate_null_values, lateral_depth);
@@ -956,7 +971,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
 
 			if (!left_has_correlation && right_has_correlation) {
-				auto &setop = plan->Cast<LogicalCTE>();
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
