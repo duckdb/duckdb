@@ -40,15 +40,9 @@ TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
 }
 
 void TupleDataAllocator::SetDestroyBufferUponUnpin() {
-	for (auto &block : row_blocks) {
-		if (block.handle) {
-			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
-		}
-	}
-	for (auto &block : heap_blocks) {
-		if (block.handle) {
-			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
-		}
+	DestroyRowBlocks(0, row_blocks.size());
+	if (!layout.AllConstant()) {
+		DestroyHeapBlocks(0, heap_blocks.size());
 	}
 }
 
@@ -60,7 +54,6 @@ void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx
 		auto &block = row_blocks[block_idx];
 		if (block.handle) {
 			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
-			block.handle.reset();
 		}
 	}
 }
@@ -74,7 +67,6 @@ void TupleDataAllocator::DestroyHeapBlocks(const idx_t heap_block_begin, const i
 		auto &block = heap_blocks[block_idx];
 		if (block.handle) {
 			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
-			block.handle.reset();
 		}
 	}
 }
