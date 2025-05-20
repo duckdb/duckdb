@@ -120,7 +120,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 					auto cte = std::move(delim_join->children[1]);
 					delim_join->children[1] = std::move(cte->children[1]);
 					cte->children[1] = Decorrelate(std::move(delim_join), parent_propagate_null_values, lateral_depth);
-					return std::move(cte);
+					return cte;
 				}
 			}
 		}
