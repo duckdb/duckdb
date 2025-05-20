@@ -234,8 +234,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	// If we detect correlation in a materialized or recursive CTE, the entire right side of the operator
 	// needs to be marked as correlated. Otherwise, function PushDownDependentJoinInternal does not do the
 	// right thing.
-	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
-	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		auto &setop = op.Cast<LogicalCTE>();
 		binder.recursive_ctes[setop.table_index] = &setop;
 		if (has_correlation) {
@@ -243,6 +242,20 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 			MarkSubtreeCorrelated(*op.children[1].get());
 		}
 	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		auto &setop = op.Cast<LogicalCTE>();
+		binder.recursive_ctes[setop.table_index] = &setop;
+		// only mark the entire subtree as correlated if the materializing side is correlated
+		auto entry = has_correlated_expressions.find(*op.children[0]);
+		if (entry != has_correlated_expressions.end()) {
+			if (has_correlation && entry->second) {
+				setop.correlated_columns = correlated_columns;
+				MarkSubtreeCorrelated(*op.children[1].get());
+			}
+		}
+	}
+
 	return has_correlation;
 }
 
@@ -937,6 +950,21 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();
 #endif
+		if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			// check the correlated expressions in the children of the join
+			bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
+			bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
+
+			if (!left_has_correlation && right_has_correlation) {
+				auto &setop = plan->Cast<LogicalCTE>();
+				// only right has correlation: push into right
+				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
+				                                                  parent_propagate_null_values, lateral_depth);
+				plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
+				return plan;
+			}
+		}
+
 		idx_t table_index = 0;
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
