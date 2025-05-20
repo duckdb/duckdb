@@ -399,7 +399,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op->Cast<LogicalCTERef>();
-		if (cte_ref.materialized_cte != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+		if (cte_ref.materialized_cte == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
 			return false;
 		}
 		auto cte_stats = optimizer.GetMaterializedCTEStats(cte_ref.cte_index);
