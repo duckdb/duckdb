@@ -156,7 +156,8 @@ summary = []
 if len(regression_list) > 0:
     # regression_list already consists of the benchmarks regressed of more that 10%
     regression_percentage = int((time_new - time_old) * 100.0 / time_new)
-    if isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int) and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE:
+    is_regression = time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE/100)
+    if isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int) and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE and is_regression:
         # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
         regressions_header = 'ALLOWED REGRESSIONS'
     else:
@@ -186,8 +187,7 @@ if len(regression_list) > 0:
                 summary.append(new_data)
             print("")
 
-        # add regression
-        if time_new > time_old * 1.01:
+        if is_regression:
             print(f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster")
             print(f"New timing geometric mean: {time_new}")
             print("")
@@ -218,10 +218,10 @@ print("")
 if isinstance(time_old, str) or isinstance(time_new, str):
     print(f"Old: {time_old}")
     print(f"New: {time_new}")
-elif time_old > time_new * 1.01:
+elif time_old > time_new * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE/100):
     print(f"Old timing geometric mean: {time_old}")
     print(f"New timing geometric mean: {time_new}, roughly {int((time_old - time_new) * 100.0 / time_old)}% faster")
-elif time_new > time_old * 1.01:
+elif time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE/100):
     print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
     print(f"New timing geometric mean: {time_new}")
 else:
