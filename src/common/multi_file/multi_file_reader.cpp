@@ -56,7 +56,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	if (bind_data) {
 		result->bind_data = unique_ptr_cast<FunctionData, TableFunctionData>(bind_data->Copy());
 	}
-	result->file_list = make_uniq<SimpleMultiFileList>(file_list->GetAllFiles());
+	result->file_list = file_list->Copy();
 	result->multi_file_reader = multi_file_reader->Copy();
 	result->interface = interface->Copy();
 	result->columns = columns;
