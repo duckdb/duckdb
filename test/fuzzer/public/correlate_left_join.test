@@ -1,0 +1,23 @@
+# name: test/fuzzer/public/correlate_left_join.test
+# description: correlate subquery followed by a right join
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t1(c0 BOOLEAN);
+
+statement ok
+CREATE TABLE t2(c0 DOUBLE);
+
+statement ok
+INSERT INTO t1(c0) VALUES (true);
+
+statement ok
+INSERT INTO t2(c0) VALUES (0.2);
+
+# The build_side_probe_side optimizer will turn the right join into left join
+query IIIII
+SELECT * FROM t2, (SELECT 0) RIGHT JOIN ( SELECT 0 AS col_0, t2.c0 AS col_2) as subQuery1 ON ((subQuery1.col_0)>(subQuery1.col_2)) RIGHT JOIN t1 ON true;
+0.2	NULL	0	0.2	true

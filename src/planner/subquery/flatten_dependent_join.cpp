@@ -657,6 +657,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		auto left_binding = this->base_binding;
+		auto left_delim_offset = delim_offset;
+
 		plan->children[1] =
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
 		auto right_binding = this->base_binding;
@@ -665,6 +667,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// because the RIGHT binding might contain NULL values
 		if (join.join_type == JoinType::LEFT) {
 			this->base_binding = left_binding;
+			delim_offset = left_delim_offset;
 		} else if (join.join_type == JoinType::RIGHT) {
 			this->base_binding = right_binding;
 			delim_offset += plan->children[0]->GetColumnBindings().size();
