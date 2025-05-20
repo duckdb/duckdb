@@ -77,9 +77,8 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	}
 	projections.emplace_back(new_column_types.size() - 1);
 
-	// TODO: we should pass "true" here to use an approximate sort
 	auto &order = planner.Make<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
-	                                          op.estimated_cardinality, false);
+	                                          op.estimated_cardinality, true);
 	order.children.push_back(prev_op);
 	create_idx.children.push_back(order);
 	return create_idx;

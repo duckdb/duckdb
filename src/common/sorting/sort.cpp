@@ -139,7 +139,9 @@ public:
 	void InitializeSortedRun(const Sort &sort, ClientContext &context) {
 		D_ASSERT(!sorted_run);
 		auto &buffer_manager = BufferManager::GetBufferManager(context);
-		sorted_run = make_uniq<SortedRun>(buffer_manager, sort.key_layout, sort.payload_layout, sort.is_index_sort);
+		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
+		//  so that we can do an approximate sort, but that causes issues in the ART
+		sorted_run = make_uniq<SortedRun>(buffer_manager, sort.key_layout, sort.payload_layout, false);
 	}
 
 public:
@@ -367,8 +369,10 @@ class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
 	    : sink(sink_p), merger(*sort.decode_sort_key, sort.key_layout, std::move(sink.sorted_runs),
-	                           sort.output_projection_columns, sink.partition_size, sink.external, sort.is_index_sort),
+	                           sort.output_projection_columns, sink.partition_size, sink.external, false),
 	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
+		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
+		//  so that we can do an approximate sort, but that causes issues in the ART
 	}
 
 public:
