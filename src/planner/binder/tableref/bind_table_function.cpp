@@ -239,6 +239,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 			                      table_function.name);
 		}
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (table_function.ordinality_data.ordinality_request == Ordinality_request_t::REQUESTED &&
 			table_function.in_out_function) {
 			return_types.emplace_back(LogicalType::BIGINT);
@@ -246,8 +247,6 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			D_ASSERT(return_names.size() == return_types.size());
 			table_function.ordinality_data.column_id = return_types.size() - 1;
 			}
-		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-
 
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
