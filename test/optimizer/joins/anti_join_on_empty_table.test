@@ -1,0 +1,22 @@
+
+
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t2(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (5);
+
+
+query I
+SELECT * FROM t0 ANTI JOIN t2 ON ((t2.c0)>=(t0.c0));
+----
+5
+
+# query I
+# SELECT * FROM t0 WHERE NOT EXISTS (select 1 FROM t2 WHERE ((t2.c0)>=(t0.c0)));
+# ----
+# 5

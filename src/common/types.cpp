@@ -648,6 +648,36 @@ bool LogicalType::IsIntegral() const {
 	}
 }
 
+bool LogicalType::IsSigned() const {
+	D_ASSERT(IsIntegral());
+	switch (id_) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool LogicalType::IsUnsigned() const {
+	D_ASSERT(IsIntegral());
+	switch (id_) {
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
 bool LogicalType::IsFloating() const {
 	switch (id_) {
 	case LogicalTypeId::FLOAT:
