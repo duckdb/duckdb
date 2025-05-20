@@ -294,7 +294,7 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 			// Another thread has read a range that fully contains the requested range in the meantime
 			auto other_pin = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
 			if (other_pin.IsValid()) {
-				return std::move(other_pin);
+				return other_pin;
 			}
 			it = ranges.erase(it);
 			continue;
