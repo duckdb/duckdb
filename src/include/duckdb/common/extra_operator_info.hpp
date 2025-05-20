@@ -22,7 +22,7 @@ public:
 	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &&extra_info) noexcept
-	    : file_filters(extra_info.file_filters), sample_options(std::move(extra_info.sample_options)) {
+	    : file_filters(std::move(extra_info.file_filters)), sample_options(std::move(extra_info.sample_options)) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}
