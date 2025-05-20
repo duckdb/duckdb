@@ -110,7 +110,11 @@ public:
 	void SetStorageVersion(idx_t version) {
 		storage_version = version;
 	}
+	bool HasStorageVersion() const {
+		return storage_version.IsValid();
+	}
 	idx_t GetStorageVersion() const {
+		D_ASSERT(HasStorageVersion());
 		return storage_version.GetIndex();
 	}
 
