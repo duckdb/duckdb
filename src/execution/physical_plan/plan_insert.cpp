@@ -20,6 +20,7 @@ OrderPreservationType PhysicalPlanGenerator::OrderPreservationRecursive(Physical
 	for (auto &child : op.children) {
 		// Do not take the materialization phase of physical CTEs into account
 		if (op.type == PhysicalOperatorType::CTE && child_idx == 0) {
+			child_idx++;
 			continue;
 		}
 		auto child_preservation = OrderPreservationRecursive(child);
