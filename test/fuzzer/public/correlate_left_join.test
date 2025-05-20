@@ -20,4 +20,5 @@ INSERT INTO t2(c0) VALUES (0.2);
 # The build_side_probe_side optimizer will turn the right join into left join
 query IIIII
 SELECT * FROM t2, (SELECT 0) RIGHT JOIN ( SELECT 0 AS col_0, t2.c0 AS col_2) as subQuery1 ON ((subQuery1.col_0)>(subQuery1.col_2)) RIGHT JOIN t1 ON true;
+----
 0.2	NULL	0	0.2	true
