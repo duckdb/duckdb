@@ -64,6 +64,7 @@ jobs:
         version:
           - '1.6'
           - '1.7'
+          - '1.10'
           - '1'
         os:
           - ubuntu-latest
