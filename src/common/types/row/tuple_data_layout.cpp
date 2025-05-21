@@ -173,7 +173,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 
 	// Set row width and sort key type accordingly
 	idx_t temp_row_width = type.id() == LogicalTypeId::BIGINT ? 8 : sort_width;
-	if (has_payload) {
+	if (sort_width != DConstants::INVALID_INDEX && has_payload) {
 		temp_row_width += 8;
 	}
 	if (temp_row_width <= 8) {
