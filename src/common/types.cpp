@@ -649,7 +649,6 @@ bool LogicalType::IsIntegral() const {
 }
 
 bool LogicalType::IsSigned() const {
-	D_ASSERT(IsIntegral());
 	switch (id_) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
@@ -664,7 +663,6 @@ bool LogicalType::IsSigned() const {
 }
 
 bool LogicalType::IsUnsigned() const {
-	D_ASSERT(IsIntegral());
 	switch (id_) {
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
