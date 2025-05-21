@@ -6,6 +6,11 @@ namespace duckdb {
 MultiFileReaderInterface::~MultiFileReaderInterface() {
 }
 
+MultiFileOptions MultiFileReaderInterface::InitializeMultiFileOptions(ClientContext &context,
+                                                                      optional_ptr<TableFunctionInfo> info) {
+	return {};
+}
+
 void MultiFileReaderInterface::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
                                                 const vector<string> &expected_names,
                                                 const vector<LogicalType> &expected_types) {

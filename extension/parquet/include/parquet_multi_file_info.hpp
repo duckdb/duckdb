@@ -27,6 +27,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
 	                                                                MultiFileList &file_list);
 
+	MultiFileOptions InitializeMultiFileOptions(ClientContext &context, optional_ptr<TableFunctionInfo> info) override;
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,

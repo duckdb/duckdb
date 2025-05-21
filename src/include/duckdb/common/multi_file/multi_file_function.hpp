@@ -20,6 +20,7 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	virtual MultiFileOptions InitializeMultiFileOptions(ClientContext &context, optional_ptr<TableFunctionInfo> info);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -164,9 +165,11 @@ public:
 
 		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
 
-		MultiFileOptions file_options;
+		auto file_options = interface->InitializeMultiFileOptions(context, input.info);
+		multi_file_reader->SetDefaultOptions(context, file_options, *file_list);
 
 		auto options = interface->InitializeOptions(context, input.info);
+
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
@@ -191,7 +194,7 @@ public:
 		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
 
 		auto options = interface->InitializeOptions(context, nullptr);
-		MultiFileOptions file_options;
+		auto file_options = interface->InitializeMultiFileOptions(context, nullptr);
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);

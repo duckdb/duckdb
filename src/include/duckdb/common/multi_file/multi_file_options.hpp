@@ -22,7 +22,7 @@ enum class MultiFileColumnMappingMode : uint8_t { BY_NAME, BY_FIELD_ID };
 struct MultiFileOptions {
 	bool filename = false;
 	bool hive_partitioning = false;
-	bool auto_detect_hive_partitioning = true;
+	bool auto_detect_hive_partitioning = false;
 	bool union_by_name = false;
 	bool hive_types_autocast = true;
 	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
