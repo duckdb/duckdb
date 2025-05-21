@@ -47,6 +47,15 @@
     tbl = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a") |> rowtable
     @test isequal(tbl, [(a=missing,), (a=42,)])
     close(con)
+
+    # special handling of the readonly option
+    file = tempname()
+    con = DBInterface.connect(DuckDB.DB, file)
+    DBInterface.execute(con, "CREATE TABLE t1(a INTEGER)")
+    close(con)
+    con = DBInterface.connect(DuckDB.DB, file; readonly=true)
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "CREATE TABLE t2(a INTEGER)")
+    close(con)
 end
 
 @testset "Test Set TimeZone" begin

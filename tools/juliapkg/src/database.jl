@@ -87,8 +87,13 @@ mutable struct DB <: DBInterface.Connection
         _add_table_scan(db)
         return db
     end
-    function DB(f::AbstractString; config=[], kwargs...)
-        return DB(f, Config(config))
+
+    function DB(f::AbstractString; config=[], readonly=false)
+        config = Config(config)
+        if readonly
+            config["access_mode"] = "READ_ONLY"
+        end
+        return DB(f, config)
     end
 end
 
