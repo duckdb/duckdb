@@ -391,6 +391,7 @@ import os
 # Whether to use main branch versioning logic, defaults to True
 main_branch_versioning = True if os.getenv('MAIN_BRANCH_VERSIONING') == "1" else False
 
+
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     from setuptools_scm.git import parse as git_parse
     from setuptools_scm.version import meta

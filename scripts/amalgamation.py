@@ -279,6 +279,7 @@ def git_commit_hash():
 ######
 main_branch_versioning = True if os.getenv('MAIN_BRANCH_VERSIONING') == "1" else False
 
+
 def git_dev_version():
     try:
         long_version = package_build.get_git_describe()

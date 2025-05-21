@@ -145,6 +145,7 @@ def get_relative_path(source_dir, target_file):
 ######
 main_branch_versioning = True if os.getenv('MAIN_BRANCH_VERSIONING') == "1" else False
 
+
 def get_git_describe():
     override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
     versioning_tag_match = 'v*.*.*'
