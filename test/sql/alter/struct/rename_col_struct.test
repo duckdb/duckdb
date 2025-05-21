@@ -1,0 +1,60 @@
+# name: test/sql/alter/struct/rename_col_struct.test
+# description: Test ALTER TABLE RENAME COLUMN: rename column of a struct
+# group: [struct]
+
+statement ok
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER))
+
+statement ok
+INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
+
+# add a column to a struct
+statement ok
+ALTER TABLE test RENAME s.i TO v1
+
+query I
+SELECT * FROM test
+----
+{'v1': 1, 'j': 1}
+{'v1': 2, 'j': 2}
+
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE test RENAME s.j TO v2
+
+query I
+SELECT * FROM test
+----
+{'v1': 1, 'v2': 1}
+{'v1': 2, 'v2': 2}
+
+statement ok
+ROLLBACK
+
+query I
+SELECT * FROM test
+----
+{'v1': 1, 'j': 1}
+{'v1': 2, 'j': 2}
+
+statement error
+ALTER TABLE test RENAME s.j TO v1
+----
+already exists
+
+statement error
+ALTER TABLE test RENAME s.j.x TO v2
+----
+Catalog Error: Cannot rename field from column "s" - not a nested type
+
+statement error
+ALTER TABLE test RENAME s.i TO v2
+----
+does not exist
+
+statement error
+ALTER TABLE test RENAME x.i TO v2
+----
+does not exist

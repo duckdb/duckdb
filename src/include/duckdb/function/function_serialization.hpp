@@ -23,6 +23,11 @@ public:
 		serializer.WriteProperty(500, "name", function.name);
 		serializer.WriteProperty(501, "arguments", function.arguments);
 		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
+		// These are optional fields that are written out of numeric order, older
+		// databases won't contain the fields, so the defaults will be used, but if
+		// the fields are present, they will be used.
+		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.catalog_name, "");
+		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.schema_name, "");
 		bool has_serialize = function.serialize;
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
@@ -33,10 +38,14 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &name,
-	                                vector<LogicalType> arguments, vector<LogicalType> original_arguments) {
+	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
+	                                const string &schema_name, const string &name, vector<LogicalType> arguments,
+	                                vector<LogicalType> original_arguments) {
 		EntryLookupInfo lookup_info(catalog_type, name);
-		auto &func_catalog = Catalog::GetEntry(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, lookup_info);
+		auto &func_catalog =
+		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
+		                      schema_name.empty() ? DEFAULT_SCHEMA : schema_name, name);
+
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 		}
@@ -54,8 +63,16 @@ public:
 		auto name = deserializer.ReadProperty<string>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
 		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, name, std::move(arguments),
-		                                                         std::move(original_arguments));
+		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		if (catalog_name.empty()) {
+			catalog_name = SYSTEM_CATALOG;
+		}
+		if (schema_name.empty()) {
+			schema_name = DEFAULT_SCHEMA;
+		}
+		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
+		                                                         std::move(arguments), std::move(original_arguments));
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		return make_pair(std::move(function), has_serialize);
 	}

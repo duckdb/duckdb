@@ -34,6 +34,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 
@@ -362,13 +363,13 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 }
 
 void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(100, "filename_idx", filename_idx);
+	serializer.WriteProperty<optional_idx>(100, "filename_idx", filename_idx);
 	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
 }
 
 MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
 	MultiFileReaderBindData result;
-	deserializer.ReadPropertyWithDefault<idx_t>(100, "filename_idx", result.filename_idx);
+	deserializer.ReadProperty<optional_idx>(100, "filename_idx", result.filename_idx);
 	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
 	return result;
 }
@@ -644,6 +645,18 @@ void StrpTimeFormat::Serialize(Serializer &serializer) const {
 StrpTimeFormat StrpTimeFormat::Deserialize(Deserializer &deserializer) {
 	auto format_specifier = deserializer.ReadPropertyWithDefault<string>(100, "format_specifier");
 	StrpTimeFormat result(format_specifier);
+	return result;
+}
+
+void TableColumn::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WriteProperty<LogicalType>(101, "type", type);
+}
+
+TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
+	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
+	TableColumn result(std::move(name), std::move(type));
 	return result;
 }
 

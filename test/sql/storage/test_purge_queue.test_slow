@@ -4,8 +4,6 @@
 
 require noforcestorage
 
-require skip_reload
-
 require 64bit
 
 # attach files

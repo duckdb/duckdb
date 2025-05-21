@@ -84,9 +84,9 @@ private:
 	                                         const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx MultipleCandidateException(const string &name, FunctionSet<T> &functions,
-	                                        vector<idx_t> &candidate_functions, const vector<LogicalType> &arguments,
-	                                        ErrorData &error);
+	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
+	                                        FunctionSet<T> &functions, vector<idx_t> &candidate_functions,
+	                                        const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
 	optional_idx BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,

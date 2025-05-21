@@ -192,6 +192,18 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
 ----
 5
 
+# we can still select virtual columns as well
+query III
+SELECT file_row_number, filename[-16:], i4
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+0	integers.parquet	2
+
 # projection still, even with different generated columns
 query III
 SELECT file_row_number, filename[-16:], i4

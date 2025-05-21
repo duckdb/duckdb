@@ -33,7 +33,12 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
 		if (!table.ColumnExists(colname)) {
-			throw BinderException("Referenced update column %s not found in table!", colname);
+			vector<string> column_names;
+			for (auto &col : table.GetColumns().Physical()) {
+				column_names.push_back(col.Name());
+			}
+			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname, "Did you mean");
+			throw BinderException("Referenced update column %s not found in table!\n%s", colname, candidates);
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
@@ -63,6 +68,32 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
 	proj->AddChild(std::move(root));
 	return unique_ptr_cast<LogicalProjection, LogicalOperator>(std::move(proj));
+}
+
+void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions) {
+	auto row_id_columns = table.GetRowIdColumns();
+	auto virtual_columns = table.GetVirtualColumns();
+	auto &column_ids = get.GetColumnIds();
+	for (auto &row_id_column : row_id_columns) {
+		auto row_id_entry = virtual_columns.find(row_id_column);
+		if (row_id_entry == virtual_columns.end()) {
+			throw InternalException(
+			    "BindRowIdColumns could not find the row id column in the virtual columns list of the table");
+		}
+		// check if this column has alraedy been projected
+		idx_t column_idx;
+		for (column_idx = 0; column_idx < column_ids.size(); ++column_idx) {
+			if (column_ids[column_idx].GetPrimaryIndex() == row_id_column) {
+				// it has! avoid projecting it again
+				break;
+			}
+		}
+		expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx)));
+		if (column_idx == column_ids.size()) {
+			get.AddColumnId(row_id_column);
+		}
+	}
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
@@ -132,16 +163,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// bind any extra columns necessary for CHECK constraints or indexes
 	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
-	// finally add the row id column to the projection list
-	auto virtual_columns = table.GetVirtualColumns();
-	auto row_id_entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
-	if (row_id_entry == virtual_columns.end()) {
-		throw InternalException("BindDelete could not find the row id column in the virtual columns list of the table");
-	}
-	auto &column_ids = get->GetColumnIds();
-	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
-	    row_id_entry->second.type, ColumnBinding(get->table_index, column_ids.size())));
-	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+	// finally bind the row id column and add them to the projection list
+	BindRowIdColumns(table, *get, proj->expressions);
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(std::move(proj));

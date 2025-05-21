@@ -748,7 +748,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 struct CollectionCheckpointState {
 	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer,
 	                          vector<SegmentNode<RowGroup>> &segments, TableStatistics &global_stats)
-	    : collection(collection), writer(writer), executor(writer.GetScheduler()), segments(segments),
+	    : collection(collection), writer(writer), executor(writer.CreateTaskExecutor()), segments(segments),
 	      global_stats(global_stats) {
 		writers.resize(segments.size());
 		write_data.resize(segments.size());
@@ -756,7 +756,7 @@ struct CollectionCheckpointState {
 
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
-	TaskExecutor executor;
+	unique_ptr<TaskExecutor> executor;
 	vector<SegmentNode<RowGroup>> &segments;
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
@@ -767,7 +767,7 @@ struct CollectionCheckpointState {
 class BaseCheckpointTask : public BaseExecutorTask {
 public:
 	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state)
-	    : BaseExecutorTask(checkpoint_state.executor), checkpoint_state(checkpoint_state) {
+	    : BaseExecutorTask(*checkpoint_state.executor), checkpoint_state(checkpoint_state) {
 	}
 
 protected:
@@ -785,6 +785,10 @@ public:
 		auto &row_group = *entry.node;
 		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(*entry.node);
 		checkpoint_state.write_data[index] = row_group.WriteToDisk(*checkpoint_state.writers[index]);
+	}
+
+	string TaskType() const override {
+		return "CheckpointTask";
 	}
 
 private:
@@ -908,6 +912,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "VacuumTask";
+	}
+
 private:
 	VacuumState &vacuum_state;
 	idx_t segment_idx;
@@ -1000,7 +1008,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// schedule the vacuum task
 	auto vacuum_task = make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count,
 	                                         merge_rows, state.row_start);
-	checkpoint_state.executor.ScheduleTask(std::move(vacuum_task));
+	checkpoint_state.executor->ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
@@ -1045,17 +1053,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
 			auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-			checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
+			checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
 			vacuum_state.row_start += entry.node->count;
 		}
 	} catch (const std::exception &e) {
 		ErrorData error(e);
-		checkpoint_state.executor.PushError(std::move(error));
-		checkpoint_state.executor.WorkOnTasks(); // ensure all tasks have completed first before rethrowing
+		checkpoint_state.executor->PushError(std::move(error));
+		checkpoint_state.executor->WorkOnTasks(); // ensure all tasks have completed first before rethrowing
 		throw;
 	}
 	// all tasks have been successfully scheduled - execute tasks until we are done
-	checkpoint_state.executor.WorkOnTasks();
+	checkpoint_state.executor->WorkOnTasks();
 
 	// no errors - finalize the row groups
 	idx_t new_total_rows = 0;

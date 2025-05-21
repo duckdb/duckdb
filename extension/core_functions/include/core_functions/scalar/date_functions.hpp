@@ -465,7 +465,7 @@ struct TimeTZSortKeyFun {
 	static constexpr const char *Name = "timetz_byte_comparable";
 	static constexpr const char *Parameters = "time_tz";
 	static constexpr const char *Description = "Converts a TIME WITH TIME ZONE to an integer sort key";
-	static constexpr const char *Example = "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)";
+	static constexpr const char *Example = "timetz_byte_comparable('18:18:16.21-07:00'::TIMETZ)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -478,7 +478,7 @@ struct ToCenturiesFun {
 	static constexpr const char *Example = "to_centuries(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToDaysFun {
@@ -488,7 +488,7 @@ struct ToDaysFun {
 	static constexpr const char *Example = "to_days(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToDecadesFun {
@@ -498,7 +498,7 @@ struct ToDecadesFun {
 	static constexpr const char *Example = "to_decades(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToHoursFun {
@@ -528,7 +528,7 @@ struct ToMillenniaFun {
 	static constexpr const char *Example = "to_millennia(1)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToMillisecondsFun {
@@ -558,7 +558,7 @@ struct ToMonthsFun {
 	static constexpr const char *Example = "to_months(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToQuartersFun {
@@ -568,7 +568,7 @@ struct ToQuartersFun {
 	static constexpr const char *Example = "to_quarters(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToSecondsFun {
@@ -598,7 +598,7 @@ struct ToWeeksFun {
 	static constexpr const char *Example = "to_weeks(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ToYearsFun {
@@ -608,7 +608,7 @@ struct ToYearsFun {
 	static constexpr const char *Example = "to_years(5)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct WeekFun {

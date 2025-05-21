@@ -70,7 +70,13 @@ struct DictionaryCompressionStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	auto &storage_manager = col_data.GetStorageManager();
+	if (storage_manager.GetStorageVersion() >= 5) {
+		// dict_fsst introduced - disable dictionary
+		return nullptr;
+	}
+
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
 
@@ -129,8 +135,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 
 	auto start = segment.GetRelativeIndex(state.row_index);
-	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE ||
-	    start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
+	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE) {
 		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);

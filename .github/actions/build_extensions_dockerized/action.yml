@@ -58,20 +58,20 @@ runs:
           echo "OPENSSL_ROOT_DIR=/duckdb_build_dir/build/release/vcpkg_installed/${{ inputs.vcpkg_target_triplet }}" >> docker_env.txt
           echo "OPENSSL_DIR=/duckdb_build_dir/build/release/vcpkg_installed/${{ inputs.vcpkg_target_triplet }}" >> docker_env.txt
           echo "OPENSSL_USE_STATIC_LIBS=true" >> docker_env.txt
+          # TODO this should also turn into a check
           echo "DUCKDB_PLATFORM=${{ inputs.duckdb_arch }}" >> docker_env.txt
-          echo "CMAKE_POLICY_VERSION_MINIMUM=3.5" >> docker_env.txt
           echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}" >> docker_env.txt
           echo "LINUX_CI_IN_DOCKER=1" >> docker_env.txt
+          # TODO: no more cross compilation for extension builds
           echo "TOOLCHAIN_FLAGS=${{ inputs.duckdb_arch == 'linux_arm64' && '-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DCMAKE_Fortran_COMPILER=aarch64-linux-gnu-gfortran' || '' }}" >> docker_env.txt
           echo "CC=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-gcc' || '' }}" >> docker_env.txt
           echo "CXX=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}" >> docker_env.txt 
 
       - name: Generate timestamp for Ccache entry
-        shell: cmake -P {0}
+        shell: bash
         id: ccache_timestamp
         run: |
-          string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-          message("::set-output name=timestamp::${current_date}")
+          date --utc +'timestamp=%Y-%m-%d-%H;%M;%S' >> "$GITHUB_OUTPUT"
 
       - name: Create Ccache directory
         shell: bash

@@ -84,7 +84,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
-                                   const AttachOptions &options)
+                                   AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
 	if (options.access_mode == AccessMode::READ_ONLY) {
@@ -94,6 +94,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	}
 	for (auto &entry : options.options) {
 		if (StringUtil::CIEquals(entry.first, "block_size")) {
+			continue;
+		}
+		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
 			continue;
 		}
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
@@ -113,19 +116,17 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
-                                   ClientContext &context, string name_p, const AttachInfo &info,
-                                   const AttachOptions &options)
+                                   ClientContext &context, string name_p, AttachInfo &info, AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
       storage_extension(&storage_extension_p) {
+	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
+	catalog = storage_extension->attach(storage_info, context, *this, name, info, options.access_mode);
 
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
-
-	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
-	catalog = storage_extension->attach(storage_info, context, *this, name, *info.Copy(), options.access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
@@ -217,6 +218,13 @@ void AttachedDatabase::SetInitialDatabase() {
 
 void AttachedDatabase::SetReadOnlyDatabase() {
 	type = AttachedDatabaseType::READ_ONLY_DATABASE;
+}
+
+void AttachedDatabase::OnDetach(ClientContext &context) {
+	if (!catalog) {
+		return;
+	}
+	catalog->OnDetach(context);
 }
 
 void AttachedDatabase::Close() {

@@ -1,0 +1,52 @@
+# name: test/sql/alter/struct/drop_col_struct.test
+# description: Test ALTER TABLE DROP COLUMN: drop column from a struct
+# group: [struct]
+
+statement ok
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER))
+
+statement ok
+INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
+
+# drop a column from a struct
+statement ok
+ALTER TABLE test DROP COLUMN s.i
+
+query I
+SELECT * FROM test
+----
+{'j': 1}
+{'j': 2}
+
+# we cannot drop the last column
+statement error
+ALTER TABLE test DROP COLUMN s.j
+----
+last field
+
+# does not exists
+statement error
+ALTER TABLE test DROP COLUMN s.v
+----
+does not exist
+
+statement ok
+ALTER TABLE test DROP COLUMN IF EXISTS s.v
+
+# not a struct
+statement error
+ALTER TABLE test DROP COLUMN s.j.a
+----
+Catalog Error: Cannot drop field from column "s" - not a nested type
+
+# field does not exist
+statement error
+ALTER TABLE test DROP COLUMN z.j
+----
+does not exist
+
+# nested column does not exist
+statement error
+ALTER TABLE test DROP COLUMN s.v1.a
+----
+does not exist

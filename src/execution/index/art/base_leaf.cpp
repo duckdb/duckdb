@@ -62,12 +62,6 @@ void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 		return;
 	}
 
-	// Still space. Insert the child.
-	uint8_t child_pos = 0;
-	while (child_pos < n7.count && n7.key[child_pos] < byte) {
-		child_pos++;
-	}
-
 	InsertByteInternal(n7, byte);
 }
 

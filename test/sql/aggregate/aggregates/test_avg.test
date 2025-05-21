@@ -2,8 +2,6 @@
 # description: Test AVG operator
 # group: [aggregates]
 
-require skip_reload
-
 # scalar average
 query RR
 SELECT AVG(3), AVG(NULL)

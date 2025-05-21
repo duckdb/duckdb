@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/windows.hpp"
 #include <ctime>
 
 namespace duckdb {
@@ -545,6 +546,42 @@ TimestampComponents Timestamp::GetComponents(timestamp_t timestamp) {
 	Date::Convert(date, result.year, result.month, result.day);
 	Time::Convert(time, result.hour, result.minute, result.second, result.microsecond);
 	return result;
+}
+
+time_t Timestamp::ToTimeT(timestamp_t timestamp) {
+	auto components = Timestamp::GetComponents(timestamp);
+	struct tm tm {};
+	tm.tm_year = components.year - 1900;
+	tm.tm_mon = components.month - 1;
+	tm.tm_mday = components.day;
+	tm.tm_hour = components.hour;
+	tm.tm_min = components.minute;
+	tm.tm_sec = components.second;
+	tm.tm_isdst = 0;
+	return mktime(&tm);
+}
+
+timestamp_t Timestamp::FromTimeT(time_t time) {
+#ifdef DUCKDB_WINDOWS
+	auto tm = localtime(&time);
+#else
+	struct tm tm_storage {};
+	auto tm = localtime_r(&time, &tm_storage);
+#endif
+	if (!tm) {
+		throw InternalException("FromTimeT failed: null pointer returned");
+	}
+
+	int32_t year = tm->tm_year + 1900;
+	int32_t month = tm->tm_mon + 1;
+	int32_t day = tm->tm_mday;
+	int32_t hour = tm->tm_hour;
+	int32_t min = tm->tm_min;
+	int32_t sec = tm->tm_sec;
+
+	auto dt = Date::FromDate(year, month, day);
+	auto t = Time::FromTime(hour, min, sec, 0);
+	return FromDatetime(dt, t);
 }
 
 } // namespace duckdb

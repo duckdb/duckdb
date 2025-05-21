@@ -122,6 +122,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(BoolOrFun),
 	DUCKDB_SCALAR_FUNCTION(CanCastImplicitlyFun),
 	DUCKDB_SCALAR_FUNCTION(CardinalityFun),
+	DUCKDB_SCALAR_FUNCTION(CastToTypeFun),
 	DUCKDB_SCALAR_FUNCTION(CbrtFun),
 	DUCKDB_SCALAR_FUNCTION_SET(CeilFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(CeilingFun),
@@ -354,21 +355,21 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ToBaseFun),
 	DUCKDB_SCALAR_FUNCTION(ToBase64Fun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ToBinaryFun),
-	DUCKDB_SCALAR_FUNCTION(ToCenturiesFun),
-	DUCKDB_SCALAR_FUNCTION(ToDaysFun),
-	DUCKDB_SCALAR_FUNCTION(ToDecadesFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToCenturiesFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToDaysFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToDecadesFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ToHexFun),
 	DUCKDB_SCALAR_FUNCTION(ToHoursFun),
 	DUCKDB_SCALAR_FUNCTION(ToMicrosecondsFun),
-	DUCKDB_SCALAR_FUNCTION(ToMillenniaFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToMillenniaFun),
 	DUCKDB_SCALAR_FUNCTION(ToMillisecondsFun),
 	DUCKDB_SCALAR_FUNCTION(ToMinutesFun),
-	DUCKDB_SCALAR_FUNCTION(ToMonthsFun),
-	DUCKDB_SCALAR_FUNCTION(ToQuartersFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToMonthsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToQuartersFun),
 	DUCKDB_SCALAR_FUNCTION(ToSecondsFun),
 	DUCKDB_SCALAR_FUNCTION(ToTimestampFun),
-	DUCKDB_SCALAR_FUNCTION(ToWeeksFun),
-	DUCKDB_SCALAR_FUNCTION(ToYearsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToWeeksFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToYearsFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(TransactionTimestampFun),
 	DUCKDB_SCALAR_FUNCTION(TranslateFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TrimFun),
@@ -405,7 +406,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	FINAL_FUNCTION
 };
 
-const StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
+const StaticFunctionDefinition *CoreFunctionList::GetFunctionList() {
 	return core_functions;
 }
 

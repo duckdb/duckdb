@@ -50,9 +50,11 @@ statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
 ----
 
-# but we can delete rows!
-statement ok con2
+# nor delete
+statement error con2
 DELETE FROM test WHERE i=1
+----
+altered
 
 query III con1
 SELECT * FROM test
@@ -63,6 +65,7 @@ SELECT * FROM test
 query II con2
 SELECT * FROM test
 ----
+1	1
 2	2
 
 # cannot update an altered table
@@ -85,6 +88,7 @@ COMMIT
 query III con1
 SELECT * FROM test
 ----
+1	100	NULL
 2	100	NULL
 
 statement ok con1

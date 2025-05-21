@@ -134,14 +134,14 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	auto paths = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
-	if (paths.size() > 1) {
+	auto files = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
+	if (files.size() > 1) {
 		throw NotImplementedException("sniff_csv does not operate on more than one file yet");
 	}
 
 	// We must run the sniffer.
 	auto sniffer_options = data.options;
-	sniffer_options.file_path = paths[0];
+	sniffer_options.file_path = files[0].path;
 
 	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
 	if (sniffer_options.name_list.empty()) {
@@ -155,10 +155,18 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {
-		for (auto &type : sniffer_result.return_types) {
-			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+		for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
+			if (!sniffer_options.sql_types_per_column.empty()) {
+				if (sniffer_options.sql_types_per_column.find(sniffer_result.names[i]) !=
+				    sniffer_options.sql_types_per_column.end()) {
+					continue;
+				}
+			} else if (i < sniffer_options.sql_type_list.size()) {
+				continue;
+			}
+			D_ASSERT(sniffer_result.return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
-			type = LogicalType::VARCHAR;
+			sniffer_result.return_types[i] = LogicalType::VARCHAR;
 		}
 	}
 	string str_opt;
@@ -238,7 +246,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	std::ostringstream csv_read;
 
 	// Base, Path and auto_detect=false
-	csv_read << "FROM read_csv('" << paths[0] << "'" << separator << "auto_detect=false" << separator;
+	csv_read << "FROM read_csv('" << files[0].path << "'" << separator << "auto_detect=false" << separator;
 	// 10.1. Delimiter
 	if (!sniffer_options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		csv_read << "delim="

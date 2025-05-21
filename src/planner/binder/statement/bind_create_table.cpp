@@ -102,7 +102,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 	return bound_constraints;
 }
 
-unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, Constraint &constraint, const string &table,
+unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint &constraint, const string &table,
                                                 const ColumnList &columns) {
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	auto &bound_check = bound_constraint->Cast<BoundCheckConstraint>();
@@ -112,15 +112,14 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, Constraint &cons
 	auto &check = constraint.Cast<CheckConstraint>();
 
 	// Create a copy of the unbound expression because binding can invalidate it.
-	auto unbound_expression = check.expression->Copy();
+	auto check_copy = check.expression->Copy();
 
 	// Bind the constraint and reset the original expression.
-	bound_check.expression = check_binder.Bind(check.expression);
-	check.expression = std::move(unbound_expression);
+	bound_check.expression = check_binder.Bind(check_copy);
 	return std::move(bound_constraint);
 }
 
-unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(Constraint &constraint, const string &table,
+unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &constraint, const string &table,
                                                          const ColumnList &columns) {
 	auto &unique = constraint.Cast<UniqueConstraint>();
 
@@ -132,7 +131,6 @@ unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(Constraint &constraint,
 	// If set, then the UNIQUE constraint is defined on a single column.
 	if (unique.HasIndex()) {
 		auto &col = columns.GetColumn(unique.GetIndex());
-		unique.SetColumnName(col.Name());
 		indexes.push_back(col.Physical());
 		index_set.insert(col.Physical());
 		return make_uniq<BoundUniqueConstraint>(std::move(indexes), std::move(index_set), unique.IsPrimaryKey());
@@ -159,7 +157,7 @@ unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(Constraint &constraint,
 	return make_uniq<BoundUniqueConstraint>(std::move(indexes), std::move(index_set), unique.IsPrimaryKey());
 }
 
-unique_ptr<BoundConstraint> BindForeignKey(Constraint &constraint) {
+unique_ptr<BoundConstraint> BindForeignKey(const Constraint &constraint) {
 	auto &fk = constraint.Cast<ForeignKeyConstraint>();
 	D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 	         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
@@ -184,7 +182,7 @@ unique_ptr<BoundConstraint> BindForeignKey(Constraint &constraint) {
 	return make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set));
 }
 
-unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const string &table,
+unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint, const string &table,
                                                    const ColumnList &columns) {
 	switch (constraint.type) {
 	case ConstraintType::CHECK: {

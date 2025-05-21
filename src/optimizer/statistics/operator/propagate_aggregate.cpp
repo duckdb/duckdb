@@ -13,12 +13,16 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// not possible with groups
 		return;
 	}
-	if (aggr.children[0]->type != LogicalOperatorType::LOGICAL_GET) {
+	// skip any projections
+	reference<LogicalOperator> child_ref = *aggr.children[0];
+	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		child_ref = *child_ref.get().children[0];
+	}
+	if (child_ref.get().type != LogicalOperatorType::LOGICAL_GET) {
 		// child must be a LOGICAL_GET
-		// FIXME: we could do this with projections as well
 		return;
 	}
-	auto &get = aggr.children[0]->Cast<LogicalGet>();
+	auto &get = child_ref.get().Cast<LogicalGet>();
 	if (!get.function.get_partition_stats) {
 		// GET does not support getting the partition stats
 		return;
@@ -46,6 +50,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	// we can do the rewrite! get the stats
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
 	auto partition_stats = get.function.get_partition_stats(context, input);
+	if (partition_stats.empty()) {
+		// no partition stats found
+		return;
+	}
 	idx_t count = 0;
 	for (auto &stats : partition_stats) {
 		if (stats.count_type == CountType::COUNT_APPROXIMATE) {

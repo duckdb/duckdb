@@ -96,6 +96,11 @@ OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &cont
                                                           GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
+
+OperatorFinalResultType PhysicalOperator::OperatorFinalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                           OperatorFinalizeInput &input) const {
+	throw InternalException("Calling FinalExecute on a node that is not an operator!");
+}
 // LCOV_EXCL_STOP
 
 //===--------------------------------------------------------------------===//

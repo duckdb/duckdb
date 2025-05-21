@@ -1,0 +1,29 @@
+# name: test/sql/function/list/lambdas/arrow/test_lambda_arrow_storage_deprecated.test
+# description: Test creating a macro with the lambda arrow and loading that from storage.
+# group: [arrow]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
+
+statement ok
+ATTACH '__TEST_DIR__/deprecated_syntax.db';
+
+statement ok
+CREATE OR REPLACE FUNCTION deprecated_syntax.transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);
+
+statement ok
+DETACH deprecated_syntax;
+
+statement ok
+ATTACH '__TEST_DIR__/deprecated_syntax.db';

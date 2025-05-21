@@ -14,15 +14,14 @@
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
+struct MultiFileReaderInterface;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The (global) column id of the filename column (if any)
-	column_t filename_idx = DConstants::INVALID_INDEX;
+	optional_idx filename_idx;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
-	//! The (global) column id of the file_row_number column (if any)
-	column_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! (optional) The schema set by the multi file reader
 	vector<MultiFileColumnDefinition> schema;
 	//! The method used to map local -> global columns
@@ -61,9 +60,12 @@ struct MultiFileReaderGlobalState {
 };
 
 struct MultiFileBindData : public TableFunctionData {
+	~MultiFileBindData() override;
+
 	unique_ptr<TableFunctionData> bind_data;
 	shared_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
+	unique_ptr<MultiFileReaderInterface> interface;
 	vector<MultiFileColumnDefinition> columns;
 	MultiFileReaderBindData reader_bind;
 	MultiFileOptions file_options;
@@ -82,12 +84,14 @@ struct MultiFileBindData : public TableFunctionData {
 	void Initialize(ClientContext &, BaseUnionData &union_data) {
 		Initialize(std::move(union_data.reader));
 	}
+
+	unique_ptr<FunctionData> Copy() const override;
 };
 
 //! Per-file data for the multi file reader
 struct MultiFileReaderData {
 	// Create data for an unopened file
-	explicit MultiFileReaderData(const string &file_to_be_opened)
+	explicit MultiFileReaderData(const OpenFileInfo &file_to_be_opened)
 	    : reader(nullptr), file_state(MultiFileFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
 	      file_to_be_opened(file_to_be_opened) {
 	}
@@ -122,7 +126,7 @@ struct MultiFileReaderData {
 	vector<unique_ptr<Expression>> expressions;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
-	string file_to_be_opened;
+	OpenFileInfo file_to_be_opened;
 };
 
 struct MultiFileGlobalState : public GlobalTableFunctionState {

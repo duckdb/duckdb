@@ -5,8 +5,9 @@
 
 namespace duckdb {
 
-PhysicalVerifyVector::PhysicalVerifyVector(PhysicalOperator &child)
-    : PhysicalOperator(PhysicalOperatorType::VERIFY_VECTOR, child.GetTypes(), child.estimated_cardinality) {
+PhysicalVerifyVector::PhysicalVerifyVector(PhysicalOperator &child, DebugVectorVerification verification)
+    : PhysicalOperator(PhysicalOperatorType::VERIFY_VECTOR, child.GetTypes(), child.estimated_cardinality),
+      verification(verification) {
 	children.push_back(child);
 }
 
@@ -216,19 +217,18 @@ unique_ptr<OperatorState> PhysicalVerifyVector::GetOperatorState(ExecutionContex
 
 OperatorResultType PhysicalVerifyVector::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                  GlobalOperatorState &gstate, OperatorState &state) const {
-#ifdef DUCKDB_VERIFY_CONSTANT_OPERATOR
-	return VerifyEmitConstantVectors(input, chunk, state);
-#endif
-#ifdef DUCKDB_VERIFY_DICTIONARY_OPERATOR
-	return VerifyEmitDictionaryVectors(input, chunk, state);
-#endif
-#ifdef DUCKDB_VERIFY_SEQUENCE_OPERATOR
-	return VerifyEmitSequenceVector(input, chunk, state);
-#endif
-#ifdef DUCKDB_VERIFY_NESTED_SHUFFLE
-	return VerifyEmitNestedShuffleVector(input, chunk, state);
-#endif
-	throw InternalException("PhysicalVerifyVector created but no verification code present");
+	switch (verification) {
+	case DebugVectorVerification::DICTIONARY_OPERATOR:
+		return VerifyEmitDictionaryVectors(input, chunk, state);
+	case DebugVectorVerification::CONSTANT_OPERATOR:
+		return VerifyEmitConstantVectors(input, chunk, state);
+	case DebugVectorVerification::SEQUENCE_OPERATOR:
+		return VerifyEmitSequenceVector(input, chunk, state);
+	case DebugVectorVerification::NESTED_SHUFFLE:
+		return VerifyEmitNestedShuffleVector(input, chunk, state);
+	default:
+		throw InternalException("PhysicalVerifyVector created but no verification code present");
+	}
 }
 
 } // namespace duckdb

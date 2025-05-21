@@ -1,0 +1,24 @@
+# name: benchmark/micro/window/window_rownumber_orderbys.benchmark
+# description: ROW_NUMBER duplicate ORDER BY optimisation
+# group: [window]
+
+load
+CREATE OR REPLACE TABLE example AS 
+	SELECT 
+		i % 47 AS customer_id,
+		'2024-01-01'::DATE + (i % 367)::INTEGER AS date
+	FROM range(10_000_000) tbl(i);
+
+# The TIMESTAMP cast is needed because this is a RANGE query
+# and DATE + INTERVAL => TIMESTAMP
+run
+SELECT
+    customer_id,
+    date,
+    row_number(ORDER BY date::TIMESTAMP ASC) OVER win AS row_by_partition
+FROM example
+WINDOW win AS (
+    PARTITION BY customer_id
+    ORDER BY date ASC
+    RANGE BETWEEN CURRENT ROW
+      AND INTERVAL 1 WEEK FOLLOWING);

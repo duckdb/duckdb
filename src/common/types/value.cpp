@@ -805,7 +805,7 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	return result;
 }
 
-Value Value::MAP(const unordered_map<string, string> &kv_pairs) {
+Value Value::MAP(const InsertionOrderPreservingMap<string> &kv_pairs) {
 	Value result;
 	result.type_ = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	result.is_null = false;
@@ -1347,19 +1347,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(value));
 	case LogicalTypeId::ENUM:
-		switch (type.InternalType()) {
-		case PhysicalType::UINT8:
-			D_ASSERT(value >= NumericLimits<uint8_t>::Minimum() && value <= NumericLimits<uint8_t>::Maximum());
-			return Value::UTINYINT((uint8_t)value);
-		case PhysicalType::UINT16:
-			D_ASSERT(value >= NumericLimits<uint16_t>::Minimum() && value <= NumericLimits<uint16_t>::Maximum());
-			return Value::USMALLINT((uint16_t)value);
-		case PhysicalType::UINT32:
-			D_ASSERT(value >= NumericLimits<uint32_t>::Minimum() && value <= NumericLimits<uint32_t>::Maximum());
-			return Value::UINTEGER((uint32_t)value);
-		default:
-			throw InternalException("Enum doesn't accept this physical type");
-		}
+		return Value::ENUM(NumericCast<uint64_t>(value), type);
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
@@ -1647,6 +1635,15 @@ string Value::ToSQLString() const {
 			}
 		}
 		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::UNION: {
+		string ret = "union_value(";
+		auto union_tag = UnionValue::GetTag(*this);
+		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
+		ret += tag_name + " := ";
+		ret += UnionValue::GetValue(*this).ToSQLString();
+		ret += ")";
 		return ret;
 	}
 	default:
