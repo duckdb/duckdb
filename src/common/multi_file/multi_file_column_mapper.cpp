@@ -10,7 +10,6 @@
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "core_functions/scalar/list_functions.hpp"
 
 namespace duckdb {
 
