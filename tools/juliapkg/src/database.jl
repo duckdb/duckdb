@@ -87,8 +87,8 @@ mutable struct DB <: DBInterface.Connection
         _add_table_scan(db)
         return db
     end
-    function DB(f::AbstractString)
-        return DB(f, Config())
+    function DB(f::AbstractString; config=[], kwargs...)
+        return DB(f, Config(config))
     end
 end
 
@@ -101,9 +101,9 @@ end
 const VECTOR_SIZE = duckdb_vector_size()
 const ROW_GROUP_SIZE = VECTOR_SIZE * 100
 
-DB() = DB(":memory:")
-DBInterface.connect(::Type{DB}) = DB()
-DBInterface.connect(::Type{DB}, f::AbstractString) = DB(f)
+DB(; kwargs...) = DB(":memory:"; kwargs...)
+DBInterface.connect(::Type{DB}; kwargs...) = DB(; kwargs...)
+DBInterface.connect(::Type{DB}, f::AbstractString; kwargs...) = DB(f; kwargs...)
 DBInterface.connect(::Type{DB}, f::AbstractString, config::Config) = DB(f, config)
 DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)

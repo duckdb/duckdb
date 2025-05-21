@@ -5,10 +5,8 @@
     con = DBInterface.connect(DuckDB.DB, ":memory:")
 
     results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
-    df = DataFrame(results)
-    @test names(df) == ["a"]
-    @test size(df, 1) == 2
-    @test isequal(df.a, [42, missing])
+    tbl = rowtable(results)
+    @test isequal(tbl, [(a=42,), (a=missing,)])
 
     DBInterface.close!(con)
 
@@ -27,10 +25,8 @@
 
         # NULL should come last now
         results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
-        df = DataFrame(results)
-        @test names(df) == ["a"]
-        @test size(df, 1) == 2
-        @test isequal(df.a, [missing, 42])
+        tbl = rowtable(results)
+        @test isequal(tbl, [(a=missing,), (a=42,)])
 
         DBInterface.close!(con)
 
@@ -40,6 +36,17 @@
         DBInterface.close!(config)
         DBInterface.close!(config)
     end
+
+    # config options can be specified directly in the call
+    con = DBInterface.connect(DuckDB.DB, ":memory:"; config=["default_null_order" => "nulls_first"])
+    tbl = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a") |> rowtable
+    @test isequal(tbl, [(a=missing,), (a=42,)])
+    close(con)
+
+    con = DBInterface.connect(DuckDB.DB, ":memory:"; config=(;default_null_order="nulls_first"))
+    tbl = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a") |> rowtable
+    @test isequal(tbl, [(a=missing,), (a=42,)])
+    close(con)
 end
 
 @testset "Test Set TimeZone" begin
