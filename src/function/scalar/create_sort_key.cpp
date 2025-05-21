@@ -814,7 +814,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunctio
 		}
 		const auto &col_def = col_list.GetColumn(PhysicalIndex(0));
 		const auto &col_name = col_def.GetName();
-		const auto &col_type = col_def.GetType();
+		const auto &col_type = TransformStringToLogicalType(col_def.GetType().ToString(), context);
 
 		// Keep track of this to validate the arguments
 		const auto physical_type = col_type.InternalType();
