@@ -43,7 +43,7 @@
     @test isequal(tbl, [(a = missing,), (a = 42,)])
     close(con)
 
-    con = DBInterface.connect(DuckDB.DB, ":memory:"; config = (;default_null_order = "nulls_first"))
+    con = DBInterface.connect(DuckDB.DB, ":memory:"; config = (; default_null_order = "nulls_first"))
     tbl = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a") |> rowtable
     @test isequal(tbl, [(a = missing,), (a = 42,)])
     close(con)
