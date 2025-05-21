@@ -17,13 +17,14 @@ public:
 	static constexpr double SELECTIVITY_THRESHOLD = 0.9;
 
 public:
-	explicit UseBFState() : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE) {
+	explicit UseBFState(bool valid_bf)
+	    : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE), use_bf(valid_bf) {
 	}
 
 	SelectionVector sel_vector;
 	vector<uint32_t> lookup_results;
 
-	bool use_bf = true;
+	bool use_bf;
 	bool is_checked = false;
 	int64_t num_chunk = 0;
 	uint64_t num_received = 0;
@@ -51,7 +52,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &context) const {
-	return make_uniq<UseBFState>();
+	return make_uniq<UseBFState>(bf_to_use->IsValid());
 }
 
 InsertionOrderPreservingMap<string> PhysicalUseBF::ParamsToString() const {
@@ -74,24 +75,22 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	auto &state = state_p.Cast<UseBFState>();
 
 	// This operator has no BloomFilter to use
-	if (!bf_to_use || !bf_to_use->IsValid() || !state.use_bf) {
+	if (!state.use_bf) {
 		chunk.Reference(input);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	// 1. Lookup the BloomFilter
-	auto count = input.size();
-	auto &results = state.lookup_results;
-	bf_to_use->Lookup(input, results);
+	bf_to_use->Lookup(input, state.lookup_results);
 
 	// 2. Fill results
 	idx_t result_count = 0;
 	auto &sel = state.sel_vector;
-	for (size_t i = 0; i < count; i++) {
+	for (size_t i = 0; i < input.size(); i++) {
 		sel.set_index(result_count, i);
-		result_count += results[i];
+		result_count += state.lookup_results[i];
 	}
-	if (result_count == count) {
+	if (result_count == input.size()) {
 		// nothing was filtered: skip adding any selection vectors
 		chunk.Reference(input);
 	} else {
