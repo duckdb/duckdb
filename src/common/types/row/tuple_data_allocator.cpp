@@ -515,15 +515,21 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 				const auto &row_location = row_locations[idx] + base_col_offset;
 				D_ASSERT(heap_sizes[idx] != 0);
 
+				// We always serialize a NullValue<string_t>, which isn't inlined if this build flag is enabled
+				// So we need to grab the pointer from here even if the string is NULL
+#ifndef DUCKDB_DEBUG_NO_INLINE
 				ValidityBytes row_mask(row_location, layout.ColumnCount());
 				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+#endif
 					const auto string_location = row_location + col_offset;
 					if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
 						const auto string_ptr_location = string_location + string_t::HEADER_SIZE;
 						heap_locations[idx] = Load<data_ptr_t>(string_ptr_location);
 						continue;
 					}
+#ifndef DUCKDB_DEBUG_NO_INLINE
 				}
+#endif
 				not_found.set_index(next_not_found_count++, idx);
 			}
 			not_found_count = next_not_found_count;
