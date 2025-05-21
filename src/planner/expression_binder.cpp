@@ -88,8 +88,10 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		// binding a function expression requires an extra parameter for macros
 		return BindExpression(function, depth, expr);
 	}
-	case ExpressionClass::LAMBDA:
-		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, LogicalTypeId::INVALID, nullptr);
+	case ExpressionClass::LAMBDA: {
+		const vector<LogicalType> function_child_types;
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr);
+	}
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
