@@ -430,9 +430,21 @@ def version_scheme(version):
             return version
         return 'v' + version
 
+    print("Version is", version)
+
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override:
+        formatted_version = version.format_with("{tag}")
+        print("formatted_version = ", formatted_version)
+        print("Early return due to OVERRIDE_GIT_DESCRIBE")
+        return formatted_version
+
     # If we're exactly on a tag (dev_iteration = 0, dirty=False)
     if version.exact:
-        return version.format_with("{tag}")
+        formatted_version = version.format_with("{tag}")
+        print("formatted_version = ", formatted_version)
+        print("Early return due to version.exact")
+        return formatted_version
 
     major, minor, patch = [int(x) for x in str(version.tag).split('.')]
     # Increment minor version if main_branch_versioning is enabled (default),
