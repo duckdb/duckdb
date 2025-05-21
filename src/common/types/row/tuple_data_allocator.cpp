@@ -6,8 +6,7 @@
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
-#include <duckdb/common/sorting/sort_key.hpp>
+#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
 
