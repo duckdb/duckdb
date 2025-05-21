@@ -489,6 +489,34 @@ SELECT list_reduce([1, 2, 3], lambda x, y: x * y, 2.5);
 ----
 15.0
 
+statement ok
+CREATE TABLE cast_test (l int[], initial float);
+
+statement ok
+INSERT INTO cast_test VALUES ([1, 2, 3], 100.0), ([0], 3.1), ([3, 2, 1], 10.5);
+
+query I 
+SELECT list_reduce(l, lambda x, y: x > 3, initial) FROM cast_test;
+----
+0.0
+1.0
+0.0
+
+query I
+SELECT list_reduce(l, lambda x, y: x + y, initial) FROM cast_test;
+----
+106.0
+3.1
+16.5
+
+query I
+SELECT list_reduce(l, lambda x, y: x * y, initial) FROM cast_test;
+----
+600.0
+0.0
+63.0
+
+
 # Test errors with incompatible types
 statement error
 SELECT list_reduce([1, 2, 3], lambda x, y: x + y, [1, 2]);
