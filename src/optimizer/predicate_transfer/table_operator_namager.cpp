@@ -178,8 +178,9 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
+		// TODO: how can we handle the window?
 		AddTableOperator(op);
-		ExtractOperatorsInternal(*op->children[0], joins);
+		// ExtractOperatorsInternal(*op->children[0], joins);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:

@@ -20,11 +20,17 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
                                    vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality,
                                    bool is_probing_side)
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
-      is_probing_side(is_probing_side), is_successful(true), filter_plans(filter_plans),
+      is_probing_side(is_probing_side), is_successful(true), filter_plans(filter_plans), unique_bloom_filters(),
       min_max_applied_cols(std::move(dynamic_filter_cols)), min_max_to_create(std::move(dynamic_filter_sets)) {
-	// TODO: we may unify the creation of BFs if they are built on the same columns.
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
-		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
+		auto &plan = filter_plans[i];
+		auto &cols_build = plan->bound_cols_build;
+
+		if (unique_bloom_filters.find(cols_build) == unique_bloom_filters.end()) {
+			unique_bloom_filters[cols_build] = make_shared_ptr<BloomFilter>();
+		}
+		auto &bf = unique_bloom_filters[cols_build];
+		bf_to_create.emplace_back(make_uniq<BloomFilterUsage>(bf, plan->bound_cols_apply, plan->bound_cols_build));
 	}
 }
 
@@ -308,8 +314,10 @@ public:
 		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 			chunk.SetValue(i, 0, Value());
 		}
-		for (auto &bf : sink.op.bf_to_create) {
-			bf->Insert(chunk);
+		for (auto &pair : sink.op.unique_bloom_filters) {
+			auto &cols_build = pair.first;
+			auto &bf = pair.second;
+			bf->Insert(chunk, cols_build);
 		}
 	}
 
@@ -318,8 +326,10 @@ public:
 		sink.data_collection->InitializeScanChunk(chunk);
 		for (idx_t i = chunk_idx_from; i < chunk_idx_to; i++) {
 			sink.data_collection->FetchChunk(i, chunk);
-			for (auto &bf : sink.op.bf_to_create) {
-				bf->Insert(chunk);
+			for (auto &pair : sink.op.unique_bloom_filters) {
+				auto &cols_build = pair.first;
+				auto &bf = pair.second;
+				bf->Insert(chunk, cols_build);
 			}
 		}
 		event->FinishTask();
@@ -365,7 +375,8 @@ public:
 	}
 
 	void FinishEvent() override {
-		for (auto &bf : sink.op.bf_to_create) {
+		for (auto &pair : sink.op.unique_bloom_filters) {
+			auto &bf = pair.second;
 			bf->finalized_ = true;
 		}
 	}
@@ -398,10 +409,9 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// Initialize the bloom filter
 	uint32_t num_rows = static_cast<uint32_t>(sink.data_collection->Count());
-	for (size_t i = 0; i < filter_plans.size(); i++) {
-		auto &plan = filter_plans[i];
-		auto &filter = bf_to_create[i];
-		filter->Initialize(context, num_rows, plan->bound_cols_apply, plan->bound_cols_build);
+	for (auto &pair : unique_bloom_filters) {
+		auto &bf = pair.second;
+		bf->Initialize(context, num_rows);
 	}
 
 	sink.ScheduleFinalize(pipeline, event);

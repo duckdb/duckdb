@@ -5,7 +5,7 @@
 
 namespace duckdb {
 PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, const shared_ptr<FilterPlan> &filter_plan,
-                             shared_ptr<BloomFilter> bf, PhysicalCreateBF *related_create_bfs,
+                             unique_ptr<BloomFilterUsage> bf, PhysicalCreateBF *related_create_bfs,
                              idx_t estimated_cardinality)
     : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality),
       filter_plan(filter_plan), related_creator(related_create_bfs), bf_to_use(std::move(bf)) {
@@ -74,7 +74,7 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	auto &state = state_p.Cast<UseBFState>();
 
 	// This operator has no BloomFilter to use
-	if (!bf_to_use || !bf_to_use->finalized_ || !state.use_bf) {
+	if (!bf_to_use || !bf_to_use->IsValid() || !state.use_bf) {
 		chunk.Reference(input);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
