@@ -361,7 +361,7 @@ struct UnpivotListFun {
 
 struct ListHasAnyFun {
 	static constexpr const char *Name = "list_has_any";
-	static constexpr const char *Parameters = "l1, l2";
+	static constexpr const char *Parameters = "list1,list2";
 	static constexpr const char *Description = "Returns true if the lists have any element in common. NULLs are ignored.";
 	static constexpr const char *Example = "list_has_any([1, 2, 3], [2, 3, 4])";
 	static constexpr const char *Categories = "list";
@@ -383,7 +383,7 @@ struct ListHasAnyFunAlias {
 
 struct ListHasAllFun {
 	static constexpr const char *Name = "list_has_all";
-	static constexpr const char *Parameters = "l1, l2";
+	static constexpr const char *Parameters = "list1,list2";
 	static constexpr const char *Description = "Returns true if all elements of l2 are in l1. NULLs are ignored.";
 	static constexpr const char *Example = "list_has_all([1, 2, 3], [2, 3])";
 	static constexpr const char *Categories = "list";

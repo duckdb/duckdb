@@ -197,7 +197,7 @@
     },
     {
         "name": "list_has_any",
-        "parameters": "l1, l2",
+        "parameters": "list1,list2",
         "description": "Returns true if the lists have any element in common. NULLs are ignored.",
         "example": "list_has_any([1, 2, 3], [2, 3, 4])",
         "categories": ["list"],
@@ -206,7 +206,7 @@
     },
     {
         "name": "list_has_all",
-        "parameters": "l1, l2",
+        "parameters": "list1,list2",
         "description": "Returns true if all elements of l2 are in l1. NULLs are ignored.",
         "example": "list_has_all([1, 2, 3], [2, 3])",
         "categories": ["list"],

@@ -27,7 +27,7 @@ struct ArrayValueFun {
 
 struct ArrayCrossProductFun {
 	static constexpr const char *Name = "array_cross_product";
-	static constexpr const char *Parameters = "array, array";
+	static constexpr const char *Parameters = "array,array";
 	static constexpr const char *Description = "Compute the cross product of two arrays of size 3. The array elements can not be NULL.";
 	static constexpr const char *Example = "array_cross_product([1, 2, 3], [1, 2, 3])";
 	static constexpr const char *Categories = "";
