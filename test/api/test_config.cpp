@@ -38,6 +38,29 @@ TEST_CASE("Test DB config configuration", "[api]") {
 	}
 }
 
+TEST_CASE("Test allowed options", "[api]") {
+	case_insensitive_map_t<Value> config_dict;
+	string option;
+
+	SECTION("allowed_directories") {
+		config_dict.emplace("allowed_directories", Value::LIST({Value("test")}));
+		option = "allowed_directories";
+	}
+	SECTION("allowed_paths") {
+		config_dict.emplace("allowed_paths", Value::LIST({Value("test")}));
+		option = "allowed_paths";
+	}
+
+	try {
+		DBConfig config(config_dict, false);
+	} catch (std::exception &ex) {
+		ErrorData error_data(ex);
+		REQUIRE(error_data.Type() == ExceptionType::INVALID_INPUT);
+		REQUIRE(error_data.RawMessage() ==
+		        StringUtil::Format("Cannot change/set %s before the database is started", option));
+	}
+}
+
 TEST_CASE("Test user_agent", "[api]") {
 	{
 		// Default duckdb_api is cpp
