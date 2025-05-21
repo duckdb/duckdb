@@ -23,7 +23,7 @@
 #define VERGESORT_DETAIL_INSERTION_SORT_H_
 
 #include <iterator>
-#include "prevnext.h"
+#include "detail/prevnext.h"
 
 namespace duckdb_vergesort
 {

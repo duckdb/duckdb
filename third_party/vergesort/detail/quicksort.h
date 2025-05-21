@@ -28,9 +28,9 @@
 
 #include <algorithm>
 #include <iterator>
-#include "insertion_sort.h"
-#include "iter_sort3.h"
-#include "prevnext.h"
+#include "detail/insertion_sort.h"
+#include "detail/iter_sort3.h"
+#include "detail/prevnext.h"
 
 namespace duckdb_vergesort
 {
