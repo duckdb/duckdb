@@ -244,28 +244,35 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 //===--------------------------------------------------------------------===//
 // LambdaFunctions
 //===--------------------------------------------------------------------===//
+LogicalType LambdaFunctions::DetermineListChildType(const vector<LogicalType> &function_child_types) {
+	// the first child is always the list
+	constexpr idx_t list_idx = 0;
 
-LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	switch (parameter_idx) {
-	case 0:
-		return list_child_type;
-	case 1:
-		return LogicalType::BIGINT;
-	default:
-		throw BinderException("This lambda function only supports up to two lambda parameters!");
+	LogicalType list_child_type = function_child_types[list_idx];
+	if (list_child_type.id() != LogicalTypeId::SQLNULL &&
+	    list_child_type.id() != LogicalTypeId::UNKNOWN) {
+		if (list_child_type.id() == LogicalTypeId::ARRAY) {
+			list_child_type = ArrayType::GetChildType(list_child_type);
+		} else {
+			list_child_type = ListType::GetChildType(list_child_type);
+		}
 	}
+
+	return list_child_type;
 }
 
-LogicalType LambdaFunctions::BindTernaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+
+LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, ClientContext &context,
+                                              const vector<LogicalType> &function_child_types) {
+	auto list_child_type = DetermineListChildType(function_child_types);
+
 	switch (parameter_idx) {
 	case 0:
 		return list_child_type;
 	case 1:
 		return list_child_type;
-	case 2:
-		return LogicalType::BIGINT;
 	default:
-		throw BinderException("This lambda function only supports up to three lambda parameters!");
+		throw BinderException("This lambda function only supports up to two lambda parameters!");
 	}
 }
 
