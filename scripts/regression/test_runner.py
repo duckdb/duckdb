@@ -53,7 +53,7 @@ parser.add_argument(
     "--max-allowed-regression-percentage",
     type=int,
     default=1,
-    help="Max regression percentage for overal test suite to be a regression",
+    help="Max regression percentage for overall test suite to be a regression",
 )
 
 # Parse the arguments
@@ -80,7 +80,7 @@ NUMBER_REPETITIONS = 5
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
-# max regression percentage for overal test suite to be a regression
+# max regression percentage for overall test suite to be a regression
 MAX_ALLOWED_REGRESS_PERCENTAGE = max_allowed_regression_percentage
 
 if not os.path.isfile(old_runner_path):
@@ -154,10 +154,14 @@ regression_list.extend(error_list)
 summary = []
 
 if len(regression_list) > 0:
-    # regression_list already consists of the benchmarks regressed of more that 10%
+    # regression_list already consists of the benchmarks regressed of more than 10%
     regression_percentage = int((time_new - time_old) * 100.0 / time_new)
-    is_regression = time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE/100)
-    if isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int) and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE and is_regression:
+    is_regression = time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100)
+    if (
+        isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int)
+        and is_regression
+        and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE
+    ):
         # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
         regressions_header = 'ALLOWED REGRESSIONS'
     else:
@@ -218,10 +222,10 @@ print("")
 if isinstance(time_old, str) or isinstance(time_new, str):
     print(f"Old: {time_old}")
     print(f"New: {time_new}")
-elif time_old > time_new * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE/100):
+elif time_old > time_new * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100):
     print(f"Old timing geometric mean: {time_old}")
     print(f"New timing geometric mean: {time_new}, roughly {int((time_old - time_new) * 100.0 / time_old)}% faster")
-elif time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE/100):
+elif time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100):
     print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
     print(f"New timing geometric mean: {time_new}")
 else:
