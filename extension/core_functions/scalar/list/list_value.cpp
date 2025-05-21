@@ -11,40 +11,22 @@
 
 namespace duckdb {
 
-struct AssignInfo {
-	explicit AssignInfo(DataChunk &args, const optional_ptr<vector<idx_t>> col_offsets = nullptr) :
-		col_offsets(col_offsets) {
-	}
-
-	const optional_ptr<vector<idx_t>> col_offsets;
-};
-
 struct PrimitiveAssign {
-	template<class T>
-	static T Assign(const T &input, Vector &result, AssignInfo &info, const idx_t col) {
+	template <class T>
+	static T Assign(const T &input, Vector &result) {
 		return input;
 	}
 };
 
 struct StringAssign {
 	template <class T>
-	static T Assign(const T &input, Vector &result, AssignInfo &info, const idx_t col) {
+	static T Assign(const T &input, Vector &result) {
 		return StringVector::AddStringOrBlob(result, input);
 	}
 };
 
-struct ListEntryAssign {
-	template <class T>
-	static T Assign(const T &input, Vector &result, AssignInfo &info, const idx_t col) {
-		const auto length = input.length;
-		const auto offset = (*info.col_offsets)[col] + input.offset;
-		return list_entry_t(offset, length);
-	}
-};
-
-template<class T, class OP = PrimitiveAssign>
-static void TemplatedPopulateChild(DataChunk &args, Vector &result, const optional_ptr<vector<idx_t>> col_offsets = nullptr) {
-	auto info = AssignInfo(args, col_offsets);
+template <class T, class OP = PrimitiveAssign>
+static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	auto column_count = args.ColumnCount();
 	auto row_count = args.size();
 
@@ -62,78 +44,64 @@ static void TemplatedPopulateChild(DataChunk &args, Vector &result, const option
 				continue;
 			}
 			const auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[col]);
-			auto val = OP::template Assign<T>(input_data[input_idx], result, info, col);
+			auto val = OP::template Assign<T>(input_data[input_idx], result);
 			result_data[result_idx] = val;
 		}
 	}
 }
 
-template<class OP = PrimitiveAssign>
-static void PopulateChild(DataChunk &args, Vector &result, const optional_ptr<vector<idx_t>> col_offsets = nullptr) {
+static void ListFunction(DataChunk &args, Vector &result);
+static void ArrayFunction(DataChunk &args, Vector &result);
+static void StructFunction(DataChunk &args, Vector &result);
+
+template <class OP = PrimitiveAssign>
+static void PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
-		case PhysicalType::BOOL:
-		case PhysicalType::INT8:
-			return TemplatedPopulateChild<int8_t>(args, result);
-		case PhysicalType::INT16:
-			return TemplatedPopulateChild<int16_t>(args, result);
-		case PhysicalType::INT32:
-			TemplatedPopulateChild<int32_t>(args, result);
-			// TODO: nit: return
-			break;
-		case PhysicalType::INT64:
-			TemplatedPopulateChild<int64_t>(args, result);
-			break;
-		case PhysicalType::UINT8:
-			TemplatedPopulateChild<uint8_t>(args, result);
-			break;
-		case PhysicalType::UINT16:
-			TemplatedPopulateChild<uint16_t>(args, result);
-			break;
-		case PhysicalType::UINT32:
-			TemplatedPopulateChild<uint32_t>(args, result);
-			break;
-		case PhysicalType::UINT64:
-			TemplatedPopulateChild<uint64_t>(args, result);
-			break;
-		case PhysicalType::INT128:
-			TemplatedPopulateChild<hugeint_t>(args, result);
-			break;
-		case PhysicalType::UINT128:
-			TemplatedPopulateChild<uhugeint_t>(args, result);
-			break;
-		case PhysicalType::FLOAT:
-			TemplatedPopulateChild<float>(args, result);
-			break;
-		case PhysicalType::DOUBLE:
-			TemplatedPopulateChild<double>(args, result);
-			break;
-		case PhysicalType::INTERVAL:
-			TemplatedPopulateChild<interval_t>(args, result);
-			break;
-		case PhysicalType::VARCHAR:
-			TemplatedPopulateChild<string_t, StringAssign>(args, result);
-			break;
-		case PhysicalType::LIST:
-			TemplatedPopulateChild<list_entry_t, ListEntryAssign>(args, result, col_offsets);
-			break;
-		default: {
-			// TODO: Throw internal error.
-			break;
-		}
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedPopulateChild<int8_t>(args, result);
+	case PhysicalType::INT16:
+		return TemplatedPopulateChild<int16_t>(args, result);
+	case PhysicalType::INT32:
+		return TemplatedPopulateChild<int32_t>(args, result);
+	case PhysicalType::INT64:
+		return TemplatedPopulateChild<int64_t>(args, result);
+	case PhysicalType::UINT8:
+		return TemplatedPopulateChild<uint8_t>(args, result);
+	case PhysicalType::UINT16:
+		return TemplatedPopulateChild<uint16_t>(args, result);
+	case PhysicalType::UINT32:
+		return TemplatedPopulateChild<uint32_t>(args, result);
+	case PhysicalType::UINT64:
+		return TemplatedPopulateChild<uint64_t>(args, result);
+	case PhysicalType::INT128:
+		return TemplatedPopulateChild<hugeint_t>(args, result);
+	case PhysicalType::UINT128:
+		return TemplatedPopulateChild<uhugeint_t>(args, result);
+	case PhysicalType::FLOAT:
+		return TemplatedPopulateChild<float>(args, result);
+	case PhysicalType::DOUBLE:
+		return TemplatedPopulateChild<double>(args, result);
+	case PhysicalType::INTERVAL:
+		return TemplatedPopulateChild<interval_t>(args, result);
+	case PhysicalType::VARCHAR:
+		return TemplatedPopulateChild<string_t, StringAssign>(args, result);
+	case PhysicalType::LIST:
+		return ListFunction(args, result);
+	case PhysicalType::ARRAY:
+		return ArrayFunction(args, result);
+	case PhysicalType::STRUCT:
+		return StructFunction(args, result);
+	default: {
+		throw InternalException("TODO");
+	}
 	}
 	// UNKNOWN and INVALID should throw
 	// Check ARRAY ? Check BIT ?
 }
 
-static void PrimitiveFunction(DataChunk &args, Vector &result) {
-	ListVector::Reserve(result, args.size() * args.ColumnCount());
-	auto &result_child = ListVector::GetEntry(result);
-	PopulateChild(args, result_child);
-}
-
 static void ListFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
-	ListVector::Reserve(result, args.size() * column_count);
 
 	vector<idx_t> col_offsets;
 	idx_t offset_sum = 0;
@@ -144,47 +112,83 @@ static void ListFunction(DataChunk &args, Vector &result) {
 		offset_sum += length;
 	}
 
-	auto &result_child = ListVector::GetEntry(result);
-	ListVector::Reserve(result_child, offset_sum);
+	ListVector::Reserve(result, offset_sum);
 
-	// The result vector is [[[a], [b]], ...], result_nested_child is [a, b, ...].
-	auto &result_nested_child = ListVector::GetEntry(result_child);
-	vector<LogicalType> types;
+	// The result vector is [[a], [b], ...], result_child is [a, b, ...].
+	auto &result_child = ListVector::GetEntry(result);
+
+	auto unified_format = args.ToUnifiedFormat();
+	vector<const list_entry_t *> col_data;
 	for (idx_t col = 0; col < column_count; col++) {
 		auto list = args.data[col];
-		types.push_back(list.GetType());
+		col_data.push_back(UnifiedVectorFormat::GetData<list_entry_t>(unified_format[col]));
 
 		const auto length = ListVector::GetListSize(list);
 		if (length == 0) {
 			continue;
 		}
 		auto &child_vector = ListVector::GetEntry(list);
-		VectorOperations::Copy(child_vector, result_nested_child, length, 0, col_offsets[col]);
+		VectorOperations::Copy(child_vector, result_child, length, 0, col_offsets[col]);
 	}
 
-	DataChunk chunk;
-	chunk.InitializeEmpty(types);
-	chunk.SetCardinality(args.size());
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_validity = &FlatVector::Validity(result);
 
+	for (idx_t row = 0; row < args.size(); row++) {
+		for (idx_t col = 0; col < column_count; col++) {
+			auto input_idx = unified_format[col].sel->get_index(row);
+			auto result_idx = row * column_count + col;
+			if (!unified_format[col].validity.RowIsValid(input_idx)) {
+				result_validity->SetInvalid(result_idx);
+				continue;
+			}
+			auto input = col_data[col][input_idx];
+			const auto length = input.length;
+			const auto offset = col_offsets[col] + input.offset;
+			result_data[result_idx] = list_entry_t(offset, length);
+		}
+	}
+	ListVector::SetListSize(result, offset_sum);
+}
+
+static void ArrayFunction(DataChunk &args, Vector &result) {
+	const idx_t column_count = args.ColumnCount();
+	;
+	const auto array_total_size = ArrayType::GetSize(args.data[0].GetType()) * args.size();
+
+	// The result vector is [[a], [b], ...], result_child is [a, b, ...].
+	auto &result_child = ArrayVector::GetEntry(result);
+
+	auto unified_format = args.ToUnifiedFormat();
 	for (idx_t col = 0; col < column_count; col++) {
-		auto list = args.data[col];
-		chunk.data[col].Reference(list);
+		auto &array = args.data[col];
+		auto &child_vector = ArrayVector::GetEntry(array);
+		VectorOperations::Copy(child_vector, result_child, array_total_size, 0, col * array_total_size);
 	}
-	PopulateChild(chunk, result_child, col_offsets);
-	ListVector::SetListSize(result_child, offset_sum);
+
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto result_validity = &FlatVector::Validity(result);
+
+	for (idx_t row = 0; row < args.size(); row++) {
+		for (idx_t col = 0; col < column_count; col++) {
+			auto input_idx = unified_format[col].sel->get_index(row);
+			auto result_idx = row * column_count + col;
+			if (!unified_format[col].validity.RowIsValid(input_idx)) {
+				result_validity->SetInvalid(result_idx);
+			}
+		}
+	}
 }
 
 static void StructFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
-	ListVector::Reserve(result, column_count * args.size());
+	auto &result_members = StructVector::GetEntries(result);
 
-	auto &result_child = ListVector::GetEntry(result);
-	auto &result_child_members = StructVector::GetEntries(result_child);
-
-	for (idx_t member_idx = 0; member_idx < result_child_members.size(); member_idx++) {
+	for (idx_t member_idx = 0; member_idx < result_members.size(); member_idx++) {
 		// Same type for each column's member.
 		vector<LogicalType> types;
-		const auto member_type = result_child_members[member_idx]->GetType();
+		const auto member_type = result_members[member_idx]->GetType();
 		for (idx_t col = 0; col < column_count; col++) {
 			types.push_back(member_type);
 		}
@@ -199,23 +203,12 @@ static void StructFunction(DataChunk &args, Vector &result) {
 			chunk.data[col].Reference(*struct_vector_members[member_idx]);
 		}
 
-		switch (result_child_members[member_idx]->GetType().InternalType()) {
-			case PhysicalType::LIST:
-				ListFunction(chunk, *result_child_members[member_idx]);
-				break;
-			case PhysicalType::STRUCT:
-				StructFunction(chunk, *result_child_members[member_idx]);
-				break;
-			default: {
-				PopulateChild(chunk, *result_child_members[member_idx]);
-				break;
-			}
-		}
-}
+		PopulateChild(chunk, *result_members[member_idx]);
+	}
 
 	// Set the top level result validity
 	const auto unified_format = args.ToUnifiedFormat();
-	auto &result_validity = FlatVector::Validity(result_child);
+	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);
@@ -258,19 +251,9 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	auto &result_type = ListVector::GetEntry(result).GetType();
-	switch (result_type.InternalType()) {
-		case PhysicalType::LIST:
-			ListFunction(args, result);
-			break;
-		case PhysicalType::STRUCT:
-			StructFunction(args, result);
-			break;
-		default: {
-			PrimitiveFunction(args, result);
-			break;
-		}
-	}
+	ListVector::Reserve(result, args.size() * args.ColumnCount());
+	auto &result_child = ListVector::GetEntry(result);
+	PopulateChild(args, result_child);
 
 	const idx_t column_count = args.ColumnCount();
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
