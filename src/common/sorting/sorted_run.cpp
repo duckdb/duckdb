@@ -93,10 +93,10 @@ static void TemplatedSort(const TupleDataCollection &key_data, const bool is_ind
 
 	const auto requires_next_sort =
 	    is_index_sort ? false : !SORT_KEY::CONSTANT_SIZE || SORT_KEY::INLINE_LENGTH != sizeof(uint64_t);
-	const auto ska_sort_width = MaxValue<idx_t>(layout.GetSortWidth(), sizeof(uint64_t));
+	const auto ska_sort_width = MinValue<idx_t>(layout.GetSortWidth(), sizeof(uint64_t));
 	auto ska_extract_key = SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width);
 
-	static const auto fallback = [&ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+	const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);

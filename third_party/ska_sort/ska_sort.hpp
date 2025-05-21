@@ -1175,7 +1175,7 @@ struct UnsignedInplaceSorter
             }
         }
         recurse:
-        if (Offset + 1 != NumBytes || next_sort)
+        if (Offset + 1 != extract_key.ska_sort_width || next_sort)
         {
             size_t start_offset = 0;
             It partition_begin = begin;
@@ -1236,7 +1236,7 @@ struct UnsignedInplaceSorter
                 return begin_offset != end_offset;
             });
         }
-        if (Offset + 1 != NumBytes || next_sort)
+        if (Offset + 1 != extract_key.ska_sort_width || next_sort)
         {
             for (uint8_t * it = remaining_partitions + num_partitions; it != remaining_partitions; --it)
             {
