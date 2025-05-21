@@ -87,6 +87,10 @@ public:
 	inline idx_t GetAggrWidth() const {
 		return aggr_width;
 	}
+	//! Returns the total width required for the aggregates, including padding
+	inline idx_t GetSortWidth() const {
+		return sort_width;
+	}
 	//! Returns the column offsets into each row
 	inline const vector<idx_t> &GetOffsets() const {
 		return offsets;
@@ -126,6 +130,8 @@ private:
 	idx_t data_width;
 	//! The width of the aggregate state portion
 	idx_t aggr_width;
+	//! The width of the sort key
+	idx_t sort_width;
 	//! The width of the entire row
 	idx_t row_width;
 	//! The offsets to the columns and aggregate data in each row

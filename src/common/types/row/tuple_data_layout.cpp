@@ -153,31 +153,29 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	types.push_back(type);
 
 	// Compute row width
-	idx_t temp_row_width = has_payload ? 8 : 0;
-	if (type.id() == LogicalTypeId::BIGINT) {
-		temp_row_width += 8;
-	} else {
-		for (auto &order : orders) {
-			const auto &logical_type = order.expression->return_type;
-			const auto physical_type = logical_type.InternalType();
-			if (TypeIsConstantSize(physical_type)) {
-				// NULL byte + fixed-width type
-				temp_row_width += 1 + GetTypeIdSize(physical_type);
-			} else if (logical_type == LogicalType::VARCHAR && order.stats &&
-			           StringStats::HasMaxStringLength(*order.stats)) {
-				// NULL byte + maximum string length + string delimiter
-				temp_row_width += 1 + StringStats::MaxStringLength(*order.stats) + 1;
-			} else {
-				// We don't know how long the key will be
-				temp_row_width = DConstants::INVALID_INDEX;
-				break;
-			}
+	sort_width = 0;
+	for (auto &order : orders) {
+		const auto &logical_type = order.expression->return_type;
+		const auto physical_type = logical_type.InternalType();
+		if (TypeIsConstantSize(physical_type)) {
+			// NULL byte + fixed-width type
+			sort_width += 1 + GetTypeIdSize(physical_type);
+		} else if (logical_type == LogicalType::VARCHAR && order.stats &&
+		           StringStats::HasMaxStringLength(*order.stats)) {
+			// NULL byte + maximum string length + string delimiter
+			sort_width += 1 + StringStats::MaxStringLength(*order.stats) + 1;
+		} else {
+			// We don't know how long the key will be
+			sort_width = DConstants::INVALID_INDEX;
+			break;
 		}
-		// TODO: if key size is <= 8 due to string statistics,
-		//  we have a confusing situation where the "type" is VARCHAR, but size is low
 	}
 
 	// Set row width and sort key type accordingly
+	idx_t temp_row_width = type.id() == LogicalTypeId::BIGINT ? 8 : sort_width;
+	if (has_payload) {
+		temp_row_width += 8;
+	}
 	if (temp_row_width <= 8) {
 		D_ASSERT(!has_payload);
 		row_width = 8;
