@@ -76,17 +76,17 @@ struct NumericCastImpl<TO, FROM, false> {
 
 		if (!NumericLimits<FROM>::IsSigned() && !NumericLimits<TO>::IsSigned() &&
 		    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(unsigned_min), static_cast<TO>(unsigned_max));
 		}
 
 		if (NumericLimits<FROM>::IsSigned() && NumericLimits<TO>::IsSigned() &&
 		    (signed_in < signed_min || signed_in > signed_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(signed_min), static_cast<TO>(signed_max));
 		}
 
 		if (NumericLimits<FROM>::IsSigned() != NumericLimits<TO>::IsSigned() &&
 		    (signed_in < signed_min || unsigned_in > unsigned_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(signed_min), static_cast<TO>(unsigned_max));
 		}
 
 		return static_cast<TO>(val);

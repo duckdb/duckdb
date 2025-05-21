@@ -2,10 +2,6 @@
 # description: Ensure that we serialize a bitpacking segment for 256KB databases.
 # group: [compact_block_size]
 
-require skip_reload
-
-require noforcestorage
-
 statement ok
 SET threads=1;
 

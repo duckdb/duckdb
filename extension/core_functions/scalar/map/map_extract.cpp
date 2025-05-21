@@ -57,7 +57,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 
 	// Collect the matching positions
 	Vector pos_vec(LogicalType::INTEGER, count);
-	ListSearchOp<true>(map_vec, key_vec, arg_vec, pos_vec, args.size());
+	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
@@ -68,7 +68,6 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
 	const auto inc_list_data = ListVector::GetData(map_vec);
 
-	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto lst_idx = lst_format.sel->get_index(row_idx);
 		if (!lst_format.validity.RowIsValid(lst_idx)) {
@@ -79,7 +78,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
 			// We didnt find the key in the map, so return NULL
-			result_validity.SetInvalid(row_idx);
+			FlatVector::SetNull(result, row_idx, true);
 			continue;
 		}
 
@@ -118,7 +117,7 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 
 	// Collect the matching positions
 	Vector pos_vec(LogicalType::INTEGER, count);
-	ListSearchOp<true>(map_vec, key_vec, arg_vec, pos_vec, args.size());
+	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
 	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat pos_format;

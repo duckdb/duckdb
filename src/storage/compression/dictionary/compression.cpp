@@ -14,8 +14,8 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
+	                                                                info.GetBlockManager());
 	current_segment = std::move(compressed_segment);
 
 	// Reset the buffers and the string map.

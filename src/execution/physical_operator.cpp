@@ -36,7 +36,7 @@ void PhysicalOperator::Print() const {
 vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		result.push_back(*child);
+		result.push_back(child.get());
 	}
 	return result;
 }
@@ -54,12 +54,12 @@ idx_t PhysicalOperator::EstimatedThreadCount() const {
 	} else if (type == PhysicalOperatorType::UNION) {
 		// We can run union pipelines in parallel, so we sum up the thread count of the children
 		for (auto &child : children) {
-			result += child->EstimatedThreadCount();
+			result += child.get().EstimatedThreadCount();
 		}
 	} else {
 		// For other operators we take the maximum of the children
 		for (auto &child : children) {
-			result = MaxValue(child->EstimatedThreadCount(), result);
+			result = MaxValue(child.get().EstimatedThreadCount(), result);
 		}
 	}
 	return result;
@@ -94,6 +94,11 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
 
 OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk,
                                                           GlobalOperatorState &gstate, OperatorState &state) const {
+	throw InternalException("Calling FinalExecute on a node that is not an operator!");
+}
+
+OperatorFinalResultType PhysicalOperator::OperatorFinalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                           OperatorFinalizeInput &input) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP
@@ -207,7 +212,7 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-		child_meta_pipeline.Build(*children[0]);
+		child_meta_pipeline.Build(children[0]);
 	} else {
 		// operator is not a sink! recurse in children
 		if (children.empty()) {
@@ -218,7 +223,7 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 				throw InternalException("Operator not supported in BuildPipelines");
 			}
 			state.AddPipelineOperator(current, *this);
-			children[0]->BuildPipelines(current, meta_pipeline);
+			children[0].get().BuildPipelines(current, meta_pipeline);
 		}
 	}
 }
@@ -238,7 +243,7 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 			if (children.size() != 1) {
 				throw InternalException("Operator not supported in GetSource");
 			}
-			return children[0]->GetSources();
+			return children[0].get().GetSources();
 		}
 	}
 }
@@ -258,7 +263,7 @@ void PhysicalOperator::Verify() {
 	auto sources = GetSources();
 	D_ASSERT(!sources.empty());
 	for (auto &child : children) {
-		child->Verify();
+		child.get().Verify();
 	}
 #endif
 }

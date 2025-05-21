@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
 
@@ -149,12 +149,12 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
-void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
+void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
                                               vector<unique_ptr<Expression>> &filters,
                                               const HivePartitioningFilterInfo &filter_info,
                                               MultiFilePushdownInfo &info) {
 
-	vector<string> pruned_files;
+	vector<OpenFileInfo> pruned_files;
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
 	unordered_set<idx_t> filters_applied_to_files;
@@ -167,7 +167,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
-		auto known_values = GetKnownColumnValues(file, filter_info);
+		auto known_values = GetKnownColumnValues(file.path, filter_info);
 
 		for (idx_t j = 0; j < filters.size(); j++) {
 			auto &filter = filters[j];

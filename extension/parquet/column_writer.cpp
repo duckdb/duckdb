@@ -76,6 +76,22 @@ string ColumnWriterStatistics::GetMaxValue() {
 	return string();
 }
 
+bool ColumnWriterStatistics::CanHaveNaN() {
+	return false;
+}
+
+bool ColumnWriterStatistics::HasNaN() {
+	return false;
+}
+
+bool ColumnWriterStatistics::MinIsExact() {
+	return true;
+}
+
+bool ColumnWriterStatistics::MaxIsExact() {
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
@@ -209,7 +225,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 //===--------------------------------------------------------------------===//
 // Used to store the metadata for a WKB-encoded geometry column when writing
 // GeoParquet files.
-class WKBColumnWriterState final : public StandardColumnWriterState<string_t, string_t, ParquetCastOperator> {
+class WKBColumnWriterState final : public StandardColumnWriterState<string_t, string_t, ParquetStringOperator> {
 public:
 	WKBColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : StandardColumnWriterState(writer, row_group, col_idx), geo_data(), geo_data_writer(writer.GetContext()) {
@@ -383,7 +399,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		repeated_element.__isset.num_children = true;
 		repeated_element.__isset.type = false;
 		repeated_element.__isset.repetition_type = true;
-		repeated_element.name = is_list ? "list" : "array";
+		repeated_element.name = "list";
 		schemas.push_back(std::move(repeated_element));
 
 		ParquetColumnSchema list_column(name, type, max_define, max_repeat, schema_idx, 0);
@@ -478,7 +494,7 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 	}
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
 		auto is_list = type.id() == LogicalTypeId::LIST;
-		path_in_schema.push_back(is_list ? "list" : "array");
+		path_in_schema.push_back("list");
 		auto child_writer = CreateWriterRecursive(context, writer, parquet_schemas, schema.children[0], path_in_schema);
 		if (is_list) {
 			return make_uniq<ListColumnWriter>(writer, schema, std::move(path_in_schema), std::move(child_writer),
@@ -556,11 +572,11 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 		return make_uniq<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema, std::move(path_in_schema),
 		                                                           can_have_nulls);
 	case LogicalTypeId::FLOAT:
-		return make_uniq<StandardColumnWriter<float_na_equal, float>>(writer, schema, std::move(path_in_schema),
-		                                                              can_have_nulls);
+		return make_uniq<StandardColumnWriter<float_na_equal, float, FloatingPointOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::DOUBLE:
-		return make_uniq<StandardColumnWriter<double_na_equal, double>>(writer, schema, std::move(path_in_schema),
-		                                                                can_have_nulls);
+		return make_uniq<StandardColumnWriter<double_na_equal, double, FloatingPointOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
@@ -576,6 +592,8 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 			return make_uniq<FixedDecimalColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(
 		    writer, schema, std::move(path_in_schema), can_have_nulls);

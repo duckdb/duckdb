@@ -5,6 +5,7 @@ pyarrow.dataset.Scanner
 pyarrow.dataset.Dataset
 pyarrow.Table
 pyarrow.RecordBatchReader
+pyarrow.ipc.MessageReader
 
 import pandas
 
@@ -58,7 +59,6 @@ ipywidgets.FloatProgress
 
 import numpy
 
-numpy.core.multiarray
 numpy.ma.masked
 numpy.ma.masked_array
 numpy.ndarray

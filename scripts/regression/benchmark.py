@@ -35,6 +35,7 @@ class BenchmarkRunnerConfig:
     disable_timeout: bool = False
     max_timeout: int = MAX_TIMEOUT
     root_dir: str = ""
+    no_summary: bool = False
 
     @classmethod
     def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
@@ -43,6 +44,7 @@ class BenchmarkRunnerConfig:
         disable_timeout = kwargs.get("disable_timeout", False)
         max_timeout = kwargs.get("max_timeout", MAX_TIMEOUT)
         root_dir = kwargs.get("root_dir", "")
+        no_summary = kwargs.get("no_summary", False)
 
         config = cls(
             benchmark_runner=benchmark_runner,
@@ -52,6 +54,7 @@ class BenchmarkRunnerConfig:
             disable_timeout=disable_timeout,
             max_timeout=max_timeout,
             root_dir=root_dir,
+            no_summary=no_summary,
         )
         return config
 
@@ -69,6 +72,9 @@ class BenchmarkRunnerConfig:
             "--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600)."
         )
         parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
+        parser.add_argument(
+            "--no-summary", type=str, default=False, help="No failures summary is outputed when passing this flag."
+        )
 
         # Parse arguments
         parsed_args = parser.parse_args()
@@ -82,6 +88,7 @@ class BenchmarkRunnerConfig:
             disable_timeout=parsed_args.disable_timeout,
             max_timeout=parsed_args.max_timeout,
             root_dir=parsed_args.root_dir,
+            no_summary=parsed_args.no_summary,
         )
         return config
 
@@ -103,9 +110,11 @@ class BenchmarkRunner:
             benchmark_args.extend([f"--threads={self.config.threads}"])
         if self.config.disable_timeout:
             benchmark_args.extend(["--disable-timeout"])
+        if self.config.no_summary:
+            benchmark_args.extend(["--no-summary"])
         return benchmark_args
 
-    def run_benchmark(self, benchmark) -> Union[float, str]:
+    def run_benchmark(self, benchmark) -> Tuple[Union[float, str], Optional[str]]:
         benchmark_args = self.construct_args(benchmark)
         timeout_seconds = DEFAULT_TIMEOUT
         if self.config.disable_timeout:
@@ -121,7 +130,10 @@ class BenchmarkRunner:
         except subprocess.TimeoutExpired:
             print("Failed to run benchmark " + benchmark)
             print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
-            return 'Failed to run benchmark ' + benchmark
+            return (
+                'Failed to run benchmark ' + benchmark,
+                f"Aborted due to exceeding the limit of {timeout_seconds} seconds",
+            )
         if returncode != 0:
             print("Failed to run benchmark " + benchmark)
             print(STDERR_HEADER)
@@ -131,7 +143,7 @@ class BenchmarkRunner:
             if 'HTTP' in err:
                 print("Ignoring HTTP error and terminating the running of the regression tests")
                 exit(0)
-            return 'Failed to run benchmark ' + benchmark
+            return 'Failed to run benchmark ' + benchmark, err
         if self.config.verbose:
             print(err)
         # read the input CSV
@@ -148,17 +160,20 @@ class BenchmarkRunner:
                 else:
                     timings.append(row[2])
                     self.complete_timings.append(row[2])
-            return float(statistics.median(timings))
+            return float(statistics.median(timings)), None
         except:
             print("Failed to run benchmark " + benchmark)
             print(err)
-            return 'Failed to run benchmark ' + benchmark
+            return 'Failed to run benchmark ' + benchmark, err
 
     def run_benchmarks(self, benchmark_list: List[str]):
         results = {}
+        failures = {}
         for benchmark in benchmark_list:
-            results[benchmark] = self.run_benchmark(benchmark)
-        return results
+            result, failure_message = self.run_benchmark(benchmark)
+            results[benchmark] = result
+            failures[benchmark] = failure_message if failure_message else None
+        return results, failures
 
 
 def main():

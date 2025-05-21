@@ -5,12 +5,16 @@
 statement ok
 PRAGMA enable_verification
 
-# conflicting column names
 statement ok
-create table test as select range i from range(3);
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+# Test conflicting column names.
+
+statement ok
+CREATE TABLE test AS SELECT range i FROM range(3);
 
 statement error
-create macro my_macro(i) as (select i in (select i from test));
+CREATE MACRO my_macro(i) AS (SELECT i IN (SELECT i FROM test));
 ----
 Binder Error: Conflicting column names for column i!
 
@@ -18,28 +22,29 @@ statement ok
 CREATE MACRO list_contains_macro(x, y) AS (list_contains(x, y))
 
 query I
-SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
+SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], lambda x: list_contains_macro(x, 3))
 ----
 [[1, 2, 3]]
 
 statement ok
-CREATE MACRO macro_with_lambda(list, num) AS (list_transform(list, x -> x + num))
+CREATE MACRO macro_with_lambda(list, num) AS (list_transform(list, lambda x: x + num))
 
 query I
-SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], f -> list_count(macro_with_lambda(f, 2)) > 1)
+SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], lambda f: list_count(macro_with_lambda(f, 2)) > 1)
 ----
 [[1, 2]]
 
-# this is a bit more tricky, because the operator mismatch is only detected when using the macro
+# Test a case where the operator mismatch is only detected when using the macro.
+
 statement ok
-CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, a -> x + y + z))
+CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, lambda a: x + y + z))
 
 statement error
 SELECT some_macro([1, 2], 3, 4);
 ----
 
 statement ok
-CREATE MACRO reduce_macro(list, num) AS (list_reduce(list, (x, y) -> x + y + num))
+CREATE MACRO reduce_macro(list, num) AS (list_reduce(list, lambda x, y: x + y + num))
 
 query I
 SELECT reduce_macro([1, 2, 3, 4], 5);
@@ -47,19 +52,25 @@ SELECT reduce_macro([1, 2, 3, 4], 5);
 25
 
 statement ok
-CREATE MACRO other_reduce_macro(list, num, bla) AS (SELECT list_reduce(list, (x, y) -> list + x + y + num + bla))
+CREATE MACRO other_reduce_macro(list, num, bla) AS (SELECT list_reduce(list, lambda x, y: list + x + y + num + bla))
 
 statement error
 SELECT other_reduce_macro([1, 2, 3, 4], 5, 6);
 ----
 
-# lambda scoping
+# Test lambda scoping.
 
 statement ok
-CREATE MACRO scoping_macro(x, y, z) AS (SELECT list_transform(x, x -> x + y + z));
+CREATE MACRO scoping_macro(x, y, z) AS (SELECT list_transform(x, lambda x: x + y + z));
 
 query I
 SELECT scoping_macro([11, 22], 3, 4);
 ----
 [18, 29]
+
+statement ok
+CREATE OR REPLACE MACRO foo(bar) AS (SELECT apply([bar], lambda x: 0));
+
+statement ok
+SELECT foo(v) FROM (SELECT 0 AS v);
 

@@ -99,3 +99,11 @@ SELECT '1992-01-'::DATE
 statement error
 SELECT '30000307-01-01 (BC)'::DATE
 ----
+
+# many ways to rome, we can use DATE also as a function
+query III
+SELECT '2021-03-01'::DATE, DATE '2021-03-01', DATE('2021-03-01')
+----
+2021-03-01
+2021-03-01
+2021-03-01

@@ -8,6 +8,9 @@ PRAGMA enable_verification
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
+statement ok
+CREATE TYPE IF NOT EXISTS mood AS ENUM ('sad', 'ok', 'happy');
+
 # Casts should work
 query I
 select 'happy'::mood;
@@ -32,6 +35,10 @@ CREATE TYPE bla AS ENUM ();
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 ----
+
+# unless we use IF NOT EXISTS
+statement ok
+CREATE TYPE IF NOT EXISTS mood AS ENUM ('sad', 'ok', 'happy');
 
 statement ok
 DROP TYPE bla;
@@ -100,14 +107,6 @@ DROP TYPE IF EXISTS mood;
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
 ----
-
-mode skip
-
-# CREATE TEMPORARY TYPE (Fixme : Parser doesn't support this yet)
-statement ok
-CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
-
-mode unskip
 
 #Enums in structs/lists/maps
 statement ok
@@ -179,12 +178,23 @@ select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])
 ----
 
 statement ok
-drop type mood;
-
-statement ok
-CREATE TYPE mood AS ENUM ();
+CREATE OR REPLACE TYPE mood AS ENUM ();
 
 query I
 SELECT enum_range(NULL::mood) AS my_enum_range;
 ----
 []
+
+require skip_reload
+
+# CREATE TEMPORARY TYPE
+statement ok
+CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+select ['happy','ok','ok']::mood[]
+----
+[happy, ok, ok]
+
+statement ok
+DROP TYPE mood

@@ -47,7 +47,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 }
 
-void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
+void ColumnLifetimeAnalyzer::ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_ref = expr.Cast<BoundColumnRefExpression>();
 		bindings.push_back(bound_ref.binding);
@@ -223,6 +223,9 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 
 	// Create a projection and swap the operators accordingly
 	auto projection = make_uniq<LogicalProjection>(table_index, std::move(expressions));
+	if (child->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(child->estimated_cardinality);
+	}
 	projection->children.emplace_back(std::move(child));
 	child = std::move(projection);
 

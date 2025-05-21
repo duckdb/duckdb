@@ -29,8 +29,8 @@
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+                                   vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
@@ -39,8 +39,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 	filter_pushdown = std::move(pushdown_info_p);
 
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 
 	// Collect condition types, and which conditions are just references (so we won't duplicate them in the payload)
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
@@ -52,7 +52,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		}
 	}
 
-	auto &lhs_input_types = children[0]->GetTypes();
+	auto &lhs_input_types = children[0].get().GetTypes();
 
 	// Create a projection map for the LHS (if it was empty), for convenience
 	lhs_output_columns.col_idxs = left_projection_map;
@@ -73,7 +73,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		return;
 	}
 
-	auto &rhs_input_types = children[1]->GetTypes();
+	auto &rhs_input_types = children[1].get().GetTypes();
 
 	// Create a projection map for the RHS (if it was empty), for convenience
 	auto right_projection_map_copy = right_projection_map;
@@ -102,11 +102,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
-                       estimated_cardinality, nullptr) {
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+                                   vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalHashJoin(op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -152,7 +150,7 @@ public:
 		// For external hash join
 		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 		// Set probe types
-		probe_types = op.children[0]->types;
+		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {
@@ -447,13 +445,13 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children[0]->types, ht.GetRadixBits(), gstate.num_threads);
+	    GetPartitioningSpaceRequirement(context, children[0].get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0]->types, all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0].get().GetTypes(), all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
@@ -469,6 +467,10 @@ public:
 		sink.hash_table->InitializePointerTable(entry_idx_from, entry_idx_to);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "HashJoinTableInitTask";
 	}
 
 private:
@@ -525,6 +527,9 @@ public:
 		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+	string TaskType() const override {
+		return "HashJoinFinalizeTask";
 	}
 
 private:
@@ -607,6 +612,10 @@ public:
 		local_ht.Repartition(global_ht);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "HashJoinRepartitionTask";
 	}
 
 private:
@@ -707,7 +716,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
 
 	// Scan the build keys in the hash table
-	Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
+	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], key_count);
 	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, build_idx,
 	                       build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
 
@@ -735,9 +744,9 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
-                                                       const PhysicalOperator &op) const {
+                                                       const PhysicalComparisonJoin &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -755,6 +764,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
+		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
@@ -769,22 +779,44 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				continue;
 			}
 			// if the HT is small we can generate a complete "OR" filter
-			if (ht.Count() > 1 && ht.Count() <= dynamic_or_filter_threshold) {
-				PushInFilter(info, ht, op, filter_idx, filter_col_idx);
+			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold) {
+				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
-				// min = max - generate an equality filter
-				auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
+				// min = max - single value
+				// generate a "one-sided" comparison filter for the LHS
+				// Note that this also works for equalities.
+				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
 			} else {
 				// min != max - generate a range filter
-				auto greater_equals =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
-				auto less_equals =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+				// for non-equalities, the range must be half-open
+				// e.g., for lhs < rhs we can only use lhs <= max
+				switch (cmp) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_GREATERTHAN:
+				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+					auto greater_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					break;
+				}
+				default:
+					break;
+				}
+				switch (cmp) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_LESSTHAN:
+				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+					auto less_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					break;
+				}
+				default:
+					break;
+				}
 			}
 		}
 	}
@@ -859,7 +891,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	Value min;
 	Value max;
 	if (filter_pushdown && !sink.skip_filter_pushdown && ht.Count() > 0) {
-		auto final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
+		auto final_min_max = filter_pushdown->Finalize(context, &ht, *sink.global_filter_state, *this);
 		min = final_min_max->data[0].GetValue(0);
 		max = final_min_max->data[1].GetValue(0);
 	} else if (TypeIsIntegral(conditions[0].right->return_type.InternalType())) {
@@ -1116,7 +1148,7 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
     : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
-      probe_chunk_done(0), probe_count(op.children[0]->estimated_cardinality),
+      probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
       parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 }
 

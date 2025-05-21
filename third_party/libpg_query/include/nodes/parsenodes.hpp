@@ -1488,7 +1488,8 @@ typedef enum PGAlterTableType {
 	PG_AT_AddIdentity,               /* ADD IDENTITY */
 	PG_AT_SetIdentity,               /* SET identity column options */
 	AT_DropIdentity,                 /* DROP IDENTITY */
-	PG_AT_SetPartitionedBy           /* SET PARTITIONED BY */
+	PG_AT_SetPartitionedBy,          /* SET PARTITIONED BY */
+	PG_AT_SetSortedBy                /* SET SORTED BY */
 } PGAlterTableType;
 
 typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
@@ -1833,6 +1834,7 @@ typedef struct PGRenameStmt {
 	PGNode *object;            /* in case it's some other object */
 	char *subname;             /* name of contained object (column, rule,
 								 * trigger, etc) */
+	PGList *name_list;         /* names of contained object (e.g. qualified column) */
 	char *newname;             /* the new name */
 	PGDropBehavior behavior;   /* RESTRICT or CASCADE behavior */
 	bool missing_ok;           /* skip error if missing? */
@@ -2127,15 +2129,27 @@ typedef struct PGLimitPercent {
 } PGLimitPercent;
 
 /* ----------------------
- *		Lambda Function (or Arrow Operator)
+ *		Lambda Function
  * ----------------------
  */
 typedef struct PGLambdaFunction {
 	PGNodeTag type;
-	PGNode *lhs;                 /* parameter expression */
+	PGList *lhs;                 /* parameter list */
 	PGNode *rhs;                 /* lambda expression */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;
+
+/* ----------------------
+ *		Single Arrow Function
+ * ----------------------
+ */
+
+typedef struct PGSingleArrowFunction {
+	PGNodeTag type;
+	PGNode *lhs;
+	PGNode *rhs;
+	int location;                /* token location, or -1 if unknown */
+} PGSingleArrowFunction;
 
 /* ----------------------
  *		Positional Reference
@@ -2162,6 +2176,7 @@ typedef struct PGCreateTypeStmt
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
     PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTypeStmt;
 
 /* ----------------------

@@ -16,7 +16,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, 'hello', ['x', 'y', 'z'], 40
 ON CONFLICT DO UPDATE SET
-	str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y);
+	str = list_reduce(EXCLUDED.str_list, lambda x, y: x || '||' || y);
 
 query IIII
 FROM foo;
@@ -29,7 +29,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, 'world', ['a', 'b', 'c'], 41
 ON CONFLICT DO UPDATE SET
-	str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y);
+	str = list_reduce(EXCLUDED.str_list, lambda x, y: x || '||' || y);
 
 query IIII
 FROM foo;
@@ -42,7 +42,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, '', ['1', '2'], 42
 ON CONFLICT DO UPDATE SET
-  str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y), 
+  str = list_reduce(EXCLUDED.str_list, lambda x, y: x || '||' || y),
   payload_col = EXCLUDED.payload_col;
 
 query IIII
@@ -56,7 +56,7 @@ statement ok
 INSERT INTO foo
 SELECT 1, '', ['l', 'm', 'n'], 43
 ON CONFLICT DO UPDATE SET
-  str = list_reduce(str_list, (x, y) -> x || '||' || y);
+  str = list_reduce(str_list, lambda x, y: x || '||' || y);
 
 query IIII
 FROM foo;
@@ -69,21 +69,21 @@ statement ok
 INSERT INTO foo
 SELECT 1, 'world', ['s', 't'], 42
 ON CONFLICT DO UPDATE SET
-  str = list_reduce(EXCLUDED.str_list, (x, y) -> x || str || y || EXCLUDED.str);
+  str = list_reduce(EXCLUDED.str_list, lambda x, y: x || str || y || EXCLUDED.str);
 
 query IIII
 FROM foo;
 ----
 1	sx||y||ztworld	[x, y, z]	42
 
-# Lambda function in the WHERE clause.
+# lambda function in the WHERE clause.
 
 statement ok
 INSERT INTO foo
 SELECT 1, 'motorcycle', ['brrr', 'brrrrrr'], 1042
 ON CONFLICT DO UPDATE SET
   str = 'black-bellied whistling duck'
-  WHERE list_reduce(EXCLUDED.str_list, (x, y) -> x || str || y || EXCLUDED.str) = 'brrrsx||y||ztworldbrrrrrrmotorcycle';
+  WHERE list_reduce(EXCLUDED.str_list, lambda x, y: x || str || y || EXCLUDED.str) = 'brrrsx||y||ztworldbrrrrrrmotorcycle';
 
 query IIII
 FROM foo;

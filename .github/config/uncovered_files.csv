@@ -358,7 +358,7 @@ include/duckdb/common/field_writer.hpp	5
 include/duckdb/common/gzip_file_system.hpp	3
 include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
-include/duckdb/common/multi_file_reader_options.hpp	3
+include/duckdb/common/multi_file/multi_file_options.hpp	3
 include/duckdb/common/opener_file_system.hpp	21
 include/duckdb/common/arrow/appender/append_data.hpp	1
 include/duckdb/common/arrow/appender/scalar_data.hpp	2

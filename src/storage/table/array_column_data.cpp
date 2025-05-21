@@ -150,7 +150,7 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 				// not consecutive - break
 				break;
 			}
-			end_idx = next_idx;
+			end_idx = next_idx + 1;
 		}
 		if (start_idx > current_position) {
 			// skip forward

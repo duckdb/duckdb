@@ -1,0 +1,57 @@
+# name: test/sql/transactions/conflict_rename_append.test
+# description: Conflict: rename, then drop a table, then append to it from another transaction
+# group: [transactions]
+
+load __TEST_DIR__/conflict_rename_append.db
+
+statement ok
+create or replace table original_table as from range(10) select 1 as col
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+statement ok con1
+create table new_incremental as
+  from range(10000)
+  select 42 as col
+
+statement ok con1
+insert into original_table
+  from new_incremental
+
+statement ok con1
+drop table new_incremental
+
+statement ok con1
+create table new_incremental as
+  from range(10000)
+  select 42 as col
+
+statement ok con2
+alter table original_table rename to backup_table
+
+statement ok con2
+create table temp_table as
+  from range(100) select 2 as col
+
+statement ok con2
+alter table temp_table rename to original_table
+
+statement ok con2
+drop table backup_table
+
+statement ok con2
+COMMIT
+
+statement error con1
+COMMIT
+----
+dropped
+
+restart

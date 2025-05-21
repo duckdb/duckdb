@@ -1,7 +1,7 @@
 #include "json_scan.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/main/extension_helper.hpp"

@@ -41,7 +41,7 @@ static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entrie
 		} catch (const NotImplementedException &) {
 			ss << entry.get().ToSQL();
 		}
-		ss << '\n';
+		ss << ";\n";
 	}
 	ss << '\n';
 }

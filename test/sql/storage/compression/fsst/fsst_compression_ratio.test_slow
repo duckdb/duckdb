@@ -2,8 +2,10 @@
 # description: Assert fsst compression ratio is within reasonable margins
 # group: [fsst]
 
+require no_latest_storage
+
 # load the DB from disk
-load __TEST_DIR__/test_dictionary.db
+load __TEST_DIR__/test_dictionary.db readwrite v1.0.0
 
 require tpch
 
@@ -20,6 +22,11 @@ CREATE TABLE test_compressed AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i 
 
 statement ok
 checkpoint
+
+query I
+SELECT DISTINCT lower(compression) FROM pragma_storage_info('test_compressed') where segment_type = 'VARCHAR'
+----
+fsst
 
 statement ok
 PRAGMA force_compression='uncompressed'

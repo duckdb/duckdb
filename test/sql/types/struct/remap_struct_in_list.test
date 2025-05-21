@@ -1,0 +1,58 @@
+# name: test/sql/types/struct/remap_struct_in_list.test
+# description: Test struct remapping
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# Remapping operations:
+# - rename 'list.i' -> 'list.v1'
+# - rename 'list.j' -> 'list.v2'
+# - add column 'list.v2.y'
+# - add column 'list.v3'
+
+# remap nested types
+query I
+SELECT remap_struct(
+	[
+		{
+			'i': 1,
+			'j': {
+				'x': 42,
+				'z': 100
+			}
+		}
+	], -- data
+	NULL::STRUCT(
+		v1 INT,
+		v2 STRUCT(
+			x INT,
+			y INT,
+			z INT
+		),
+		v3 VARCHAR
+	)[], -- target type
+	{
+		'list': ROW(
+			'list', {
+				'v1': 'i',
+				'v2': ROW(
+					'j', {
+						'x': 'x',
+						'z': 'z'
+					}
+				)
+			}
+		)
+	}, -- remapping data -> target_type
+	{
+		'list': {
+			'v2': {
+				'y': NULL::INT
+			},
+			'v3': NULL::VARCHAR
+		}
+	}
+); -- defaults
+----
+[{'v1': 1, 'v2': {'x': 42, 'y': NULL, 'z': 100}, 'v3': NULL}]

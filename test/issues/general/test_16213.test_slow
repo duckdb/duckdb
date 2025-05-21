@@ -1,0 +1,56 @@
+# name: test/issues/general/test_16213.test_slow
+# description: Issue 16213 - Specific query not finishing since v1.1.0 and filling up all temp disk space
+# group: [general]
+
+require icu
+
+# replicate date generation in issue, but in SQL
+statement ok
+create table records as
+	select
+		range id,
+		to_timestamp(1514764800 + range / 1_000_000 * (1704067200 - 1514764800)) as creation_dt,
+		creation_dt::date as creation_day,
+		printf('%02X', range % 200) category,
+	from range(1_000_000);
+
+statement ok
+create table labels as
+	select
+		id,
+		creation_dt + (1 * 60 * 60 + random() * (125 * 24 * 60 * 60 - 1 * 60 * 60) || ' seconds')::interval as label_dt,
+		1::bigint as label,
+	from (
+		from records
+		using sample 50_000
+	);
+
+# this should not time out
+statement ok
+with
+day_cat_rows as
+  (select category,
+          creation_day
+   from records
+   group by category,
+            creation_day),
+recs as
+  (select category,
+          records.creation_dt,
+          labels.label_dt,
+          labels.label
+   from records
+   left join labels on labels.id = records.id),
+counts as
+  (select day_cat_rows.creation_day,
+          category,
+     (select count(1)
+      from recs
+      where recs.creation_dt > day_cat_rows.creation_day - '30 days'::interval
+        and recs.creation_dt <= day_cat_rows.creation_day
+        and recs.category = day_cat_rows.category
+        and recs.label_dt <= day_cat_rows.creation_day
+        and recs.label = 1) as num_labeled_30d,
+   from day_cat_rows)
+select *
+from counts;

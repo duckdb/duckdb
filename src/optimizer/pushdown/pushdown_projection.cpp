@@ -32,7 +32,11 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 		D_ASSERT(colref.binding.column_index < proj.expressions.size());
 		D_ASSERT(colref.depth == 0);
 		// replace the binding with a copy to the expression at the referenced index
-		return proj.expressions[colref.binding.column_index]->Copy();
+		auto copy = proj.expressions[colref.binding.column_index]->Copy();
+		if (!colref.alias.empty()) {
+			copy->alias = colref.alias;
+		}
+		return copy;
 	}
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceProjectionBindings(proj, std::move(child)); });

@@ -76,6 +76,9 @@ public:
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+
+	InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
+	                                                      LocalSourceState &lstate) const override;
 };
 
 } // namespace duckdb

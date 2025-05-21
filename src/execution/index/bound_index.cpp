@@ -80,15 +80,25 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 }
 
 string BoundIndex::VerifyAndToString(const bool only_verify) {
-	IndexLock state;
-	InitializeLock(state);
-	return VerifyAndToString(state, only_verify);
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyAndToString(l, only_verify);
 }
 
 void BoundIndex::VerifyAllocations() {
-	IndexLock state;
-	InitializeLock(state);
-	return VerifyAllocations(state);
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyAllocations(l);
+}
+
+void BoundIndex::VerifyBuffers(IndexLock &l) {
+	throw NotImplementedException("this implementation of VerifyBuffers does not exist");
+}
+
+void BoundIndex::VerifyBuffers() {
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyBuffers(l);
 }
 
 void BoundIndex::Vacuum() {

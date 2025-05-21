@@ -17,7 +17,7 @@ CREATE VIEW integers2 AS SELECT 42
 statement error
 CREATE OR REPLACE TABLE integers2(i INTEGER)
 ----
-Catalog Error: integers2 is not an table
+is of type View
 
 statement ok
 CREATE TABLE IF NOT EXISTS integers(i INTEGER)

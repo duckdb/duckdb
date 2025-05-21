@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 
 #include "duckdb/common/atomic.hpp"
@@ -17,11 +19,13 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
-                               unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                               idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond),
-                        join_type, estimated_cardinality) {
+PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
+                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
+                               unique_ptr<JoinFilterPushdownInfo> pushdown_info)
+    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
+                        estimated_cardinality) {
+
+	filter_pushdown = std::move(pushdown_info);
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
@@ -62,61 +66,76 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOpe
 	}
 }
 
+PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
+                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalIEJoin(op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class IEJoinLocalState : public LocalSinkState {
-public:
-	using LocalSortedTable = PhysicalRangeJoin::LocalSortedTable;
-
-	IEJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child)
-	    : table(context, op, child) {
-	}
-
-	//! The local sort state
-	LocalSortedTable table;
-};
+class IEJoinLocalState;
 
 class IEJoinGlobalState : public GlobalSinkState {
 public:
 	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
 
 public:
-	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(0) {
+	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(1) {
 		tables.resize(2);
 		RowLayout lhs_layout;
-		lhs_layout.Initialize(op.children[0]->types);
+		lhs_layout.Initialize(op.children[0].get().GetTypes());
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout, op);
 
 		RowLayout rhs_layout;
-		rhs_layout.Initialize(op.children[1]->types);
+		rhs_layout.Initialize(op.children[1].get().GetTypes());
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
-	}
 
-	IEJoinGlobalState(IEJoinGlobalState &prev) : tables(std::move(prev.tables)), child(prev.child + 1) {
-		state = prev.state;
-	}
-
-	void Sink(DataChunk &input, IEJoinLocalState &lstate) {
-		auto &table = *tables[child];
-		auto &global_sort_state = table.global_sort_state;
-		auto &local_sort_state = lstate.table.local_sort_state;
-
-		// Sink the data into the local sort state
-		lstate.table.Sink(input, global_sort_state);
-
-		// When sorting data reaches a certain size, we sort it
-		if (local_sort_state.SizeInBytes() >= table.memory_per_thread) {
-			local_sort_state.Sort(global_sort_state, true);
+		if (op.filter_pushdown) {
+			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
+			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
 	}
 
+	void Sink(DataChunk &input, IEJoinLocalState &lstate);
+	void Finalize(Pipeline &pipeline, Event &event) {
+		// Sort the current input child
+		D_ASSERT(child < tables.size());
+		tables[child]->Finalize(pipeline, event);
+		child = child ? 0 : 2;
+		skip_filter_pushdown = true;
+	};
+
+	//! The two input tables (IEJoin materialises both sides)
 	vector<unique_ptr<GlobalSortedTable>> tables;
+	//! The child that is being materialised (right/1 then left/0)
 	size_t child;
+	//! Should we not bother pushing down filters?
+	bool skip_filter_pushdown = false;
+	//! The global filter states to push down (if any)
+	unique_ptr<JoinFilterGlobalState> global_filter_state;
+};
+
+class IEJoinLocalState : public LocalSinkState {
+public:
+	using LocalSortedTable = PhysicalRangeJoin::LocalSortedTable;
+
+	IEJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, IEJoinGlobalState &gstate)
+	    : table(context, op, gstate.child) {
+
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		}
+	}
+
+	//! The local sort state
+	LocalSortedTable table;
+	//! Local state for accumulating filter statistics
+	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalIEJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -125,12 +144,22 @@ unique_ptr<GlobalSinkState> PhysicalIEJoin::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &context) const {
-	idx_t sink_child = 0;
-	if (sink_state) {
-		const auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-		sink_child = ie_sink.child;
+	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
+	return make_uniq<IEJoinLocalState>(context.client, *this, ie_sink);
+}
+
+void IEJoinGlobalState::Sink(DataChunk &input, IEJoinLocalState &lstate) {
+	auto &table = *tables[child];
+	auto &global_sort_state = table.global_sort_state;
+	auto &local_sort_state = lstate.table.local_sort_state;
+
+	// Sink the data into the local sort state
+	lstate.table.Sink(input, global_sort_state);
+
+	// When sorting data reaches a certain size, we sort it
+	if (local_sort_state.SizeInBytes() >= table.memory_per_thread) {
+		local_sort_state.Sort(global_sort_state, true);
 	}
-	return make_uniq<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
 SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -138,6 +167,10 @@ SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 
 	gstate.Sink(chunk, lstate);
+
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Sink(lstate.table.keys, *lstate.local_filter_state);
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -151,6 +184,10 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
+	}
+
 	return SinkCombineResultType::FINISHED;
 }
 
@@ -160,6 +197,9 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		(void)filter_pushdown->Finalize(context, nullptr, *gstate.global_filter_state, *this);
+	}
 	auto &table = *gstate.tables[gstate.child];
 	auto &global_sort_state = table.global_sort_state;
 
@@ -172,11 +212,8 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
-	// Sort the current input child
-	table.Finalize(pipeline, event);
-
 	// Move to the next input child
-	++gstate.child;
+	gstate.Finalize(pipeline, event);
 
 	return SinkFinalizeType::READY;
 }
@@ -692,7 +729,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
 
-	const auto left_cols = children[0]->GetTypes().size();
+	const auto left_cols = children[0].get().GetTypes().size();
 	auto &chunk = state.unprojected;
 	do {
 		SelectionVector lsel(STANDARD_VECTOR_SIZE);
@@ -973,7 +1010,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	}
 
 	// Process LEFT OUTER results
-	const auto left_cols = children[0]->GetTypes().size();
+	const auto left_cols = children[0].get().GetTypes().size();
 	while (ie_lstate.left_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
 		if (!count) {
@@ -1042,16 +1079,16 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	// Create one child meta pipeline that will hold the LHS and RHS pipelines
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 
+	// Build out RHS first because that is the order the join planner expects.
+	auto rhs_pipeline = child_meta_pipeline.GetBasePipeline();
+	children[1].get().BuildPipelines(*rhs_pipeline, child_meta_pipeline);
+
 	// Build out LHS
-	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
-	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
+	auto &lhs_pipeline = child_meta_pipeline.CreatePipeline();
+	children[0].get().BuildPipelines(lhs_pipeline, child_meta_pipeline);
 
-	// Build out RHS
-	auto &rhs_pipeline = child_meta_pipeline.CreatePipeline();
-	children[1]->BuildPipelines(rhs_pipeline, child_meta_pipeline);
-
-	// Despite having the same sink, RHS and everything created after it need their own (same) PipelineFinishEvent
-	child_meta_pipeline.AddFinishEvent(rhs_pipeline);
+	// Despite having the same sink, LHS and everything created after it need their own (same) PipelineFinishEvent
+	child_meta_pipeline.AddFinishEvent(lhs_pipeline);
 }
 
 } // namespace duckdb

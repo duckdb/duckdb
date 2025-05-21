@@ -12,3 +12,8 @@ statement error
 ALTER TABLE tbl SET PARTITIONED BY (i)
 ----
 not supported
+
+statement error
+ALTER TABLE tbl RESET PARTITIONED BY;
+----
+not supported

@@ -297,17 +297,21 @@ uint64_t StringUtil::CIHash(const string &str) {
 	return hash;
 }
 
-bool StringUtil::CIEquals(const string &l1, const string &l2) {
-	if (l1.size() != l2.size()) {
+bool StringUtil::CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size) {
+	if (l1_size != l2_size) {
 		return false;
 	}
 	const auto charmap = ASCII_TO_LOWER_MAP;
-	for (idx_t c = 0; c < l1.size(); c++) {
+	for (idx_t c = 0; c < l1_size; c++) {
 		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool StringUtil::CIEquals(const string &l1, const string &l2) {
+	return CIEquals(l1.c_str(), l1.size(), l2.c_str(), l2.size());
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
@@ -558,18 +562,20 @@ unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore
 	yyjson_val *key, *value;
 	while ((key = yyjson_obj_iter_next(&iter))) {
 		value = yyjson_obj_iter_get_val(key);
+		const auto key_val = yyjson_get_str(key);
+		const auto key_len = yyjson_get_len(key);
 		auto type = yyjson_get_type(value);
 		if (type == YYJSON_TYPE_STR) {
 			// Since this is a string, we can directly add the value
-			const auto key_val = yyjson_get_str(key);
-			const auto key_len = yyjson_get_len(key);
 			const auto value_val = yyjson_get_str(value);
 			const auto value_len = yyjson_get_len(value);
 			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(string(value_val, value_len)));
+		} else if (type == YYJSON_TYPE_BOOL) {
+			// boolean values
+			bool bool_val = yyjson_get_bool(value);
+			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(bool_val ? "true" : "false"));
 		} else if (type == YYJSON_TYPE_OBJ) {
 			// We recurse, this is a complex json
-			const auto key_val = yyjson_get_str(key);
-			const auto key_len = yyjson_get_len(key);
 			// Convert the object value to a JSON string and recurse
 			size_t json_str_len;
 			char *json_str = yyjson_val_write(value, 0, &json_str_len);
@@ -839,6 +845,13 @@ void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *outp
 	if (!Utf8Proc::IsValid(output_start, NumericCast<idx_t>(output - output_start))) {
 		throw InvalidInputException("Failed to decode string \"%s\" using URL decoding - decoded value is invalid UTF8",
 		                            string(input, input_size));
+	}
+}
+
+void StringUtil::SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos) {
+	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
+	    buffer_pos == 0) {
+		buffer_pos = 3;
 	}
 }
 

@@ -7,7 +7,7 @@ import glob
 os.chdir(os.path.dirname(__file__))
 
 # Dont generate serialization for these enums
-blacklist = ["RegexOptions", "Flags", "ContainerType", "Type"]
+blacklist = ["RegexOptions", "Flags", "ContainerType", "Type", "DictionaryAppendState", "DictFSSTMode"]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
 enum_util_source_file = os.path.join("..", "src", "common", "enum_util.cpp")
@@ -46,6 +46,13 @@ overrides = {
         "LOG_WARN": "WARN",
         "LOG_ERROR": "ERROR",
         "LOG_FATAL": "FATAL",
+    },
+    "RequestType": {
+        "GET_REQUEST": "GET",
+        "PUT_REQUEST": "PUT",
+        "HEAD_REQUEST": "HEAD",
+        "DELETE_REQUEST": "DELETE",
+        "POST_REQUEST": "POST",
     },
 }
 

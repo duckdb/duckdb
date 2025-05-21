@@ -346,6 +346,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			// Secondary orders need to know where the frame is
 			result.insert(FRAME_BEGIN);
 			result.insert(FRAME_END);
+			result.insert(PEER_BEGIN);
 		}
 		break;
 	case ExpressionType::WINDOW_RANK_DENSE:
@@ -361,6 +362,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			// Secondary orders need to know where the frame is
 			result.insert(FRAME_BEGIN);
 			result.insert(FRAME_END);
+			result.insert(PEER_BEGIN);
 		}
 		break;
 	case ExpressionType::WINDOW_CUME_DIST:
@@ -372,6 +374,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			// Secondary orders need to know where the frame is
 			result.insert(FRAME_BEGIN);
 			result.insert(FRAME_END);
+			result.insert(PEER_END);
 		}
 		break;
 	case ExpressionType::WINDOW_LEAD:
@@ -506,7 +509,12 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_pt
 	bounds.Reset();
 	D_ASSERT(bounds.ColumnCount() == 8);
 
+	//	Have we jumped from the previous position?
 	const auto is_jump = (next_pos != row_idx);
+	if (is_jump) {
+		next_pos = row_idx;
+	}
+
 	if (required.count(PARTITION_BEGIN)) {
 		PartitionBegin(bounds, row_idx, count, is_jump, partition_mask);
 	}

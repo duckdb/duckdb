@@ -8,13 +8,13 @@ PRAGMA enable_verification
 query I
 SELECT * FROM read_csv('data/csv/test/struct_padding.csv', columns={'col': 'STRUCT(val VARCHAR)'}) ORDER BY 1;
 ----
-{'val': }
-{'val': }
-{'val': }
-{'val': }
-{'val': }
-{'val': }
-{'val': }
+{'val': ''}
+{'val': ''}
+{'val': ''}
+{'val': ''}
+{'val': ''}
+{'val': ''}
+{'val': ''}
 {'val': x}
 {'val': x}
 {'val': x}

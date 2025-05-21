@@ -145,11 +145,15 @@ order by j;
 statement ok
 SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'])
 
-# both have 5 rows, so if we set sample_size=1, we cannot read them together anymore, because we only sample 1 file
+# both have 5 rows, so if we set sample_size=1, and maximum_sample_files=1, we cannot read them together anymore
 statement error
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1)
+SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, maximum_sample_files=1)
 ----
 Invalid Input Error
+
+# if we increase maximum_sample_files, or set union_by_name=true, then we can read them again
+statement ok
+SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, maximum_sample_files=99)
 
 # if we set union_by_name=true, then we sample sample_size rows per file, so then we can read them again
 statement ok

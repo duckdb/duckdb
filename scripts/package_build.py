@@ -26,7 +26,6 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'brotli', 'common')]
     includes += [os.path.join('third_party', 'brotli', 'dec')]
     includes += [os.path.join('third_party', 'brotli', 'enc')]
-    includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'miniz')]
@@ -144,7 +143,7 @@ def get_relative_path(source_dir, target_file):
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = os.getenv('MAIN_BRANCH_VERSIONING') or 1
+main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
 
 
 def get_git_describe():
@@ -211,7 +210,7 @@ def git_dev_version():
         else:
             # not on a tag: increment the version by one and add a -devX suffix
             # this needs to keep in sync with changes to CMakeLists.txt
-            if main_branch_versioning == 1:
+            if main_branch_versioning == True:
                 # increment minor version
                 version_splits[1] = str(int(version_splits[1]) + 1)
             else:

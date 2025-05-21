@@ -11,6 +11,10 @@ require tpch
 statement ok
 SET force_download=true;
 
+# we query the same file multiple times, so we have to disable the cache to verify the GET request count
+statement ok
+set enable_external_file_cache=false;
+
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 ----
@@ -27,7 +31,7 @@ SET force_download=false;
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 3.*
+analyzed_plan	<REGEX>:.*GET: 2.*
 
 query I
 SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet')
@@ -106,7 +110,7 @@ SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 5.*
+analyzed_plan	<REGEX>:.*GET: 4.*
 
 statement ok
 SET force_download=true;
@@ -132,4 +136,4 @@ SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 8.*
+analyzed_plan	<REGEX>:.*GET: 6.*

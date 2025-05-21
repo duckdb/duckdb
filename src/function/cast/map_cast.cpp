@@ -1,6 +1,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -39,35 +40,103 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto &val_validity = FlatVector::Validity(val_str);
 	auto &struct_validity = FlatVector::Validity(ListVector::GetEntry(varchar_map));
 
+	//! {key=value[, ]}
+	static constexpr const idx_t SEP_LENGTH = 2;
+	static constexpr const idx_t KEY_VALUE_SEP_LENGTH = 1;
+	static constexpr const idx_t NULL_LENGTH = 4;
+	static constexpr const idx_t INVALID_LENGTH = 7;
+
+	auto &key_vec = MapVector::GetKeys(source);
+	auto &value_vec = MapVector::GetValues(source);
+
+	auto key_is_nested = key_vec.GetType().IsNested();
+	auto value_is_nested = value_vec.GetType().IsNested();
+
+	auto key_strlen_func = key_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                     : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto key_write_func = key_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
+
+	auto value_strlen_func = value_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                         : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto value_write_func =
+	    value_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
+
 	auto result_data = FlatVector::GetData<string_t>(result);
+	unsafe_unique_array<bool> key_needs_quotes;
+	unsafe_unique_array<bool> value_needs_quotes;
+	idx_t needs_quotes_length;
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
+
+		idx_t string_length = 2; // {}
 		auto list = list_data[i];
-		string ret = "{";
+
+		if (!key_needs_quotes || list.length > needs_quotes_length) {
+			key_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
+			value_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
+			needs_quotes_length = list.length;
+		}
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			if (list_idx > 0) {
-				ret += ", ";
+				string_length += SEP_LENGTH;
 			}
+
 			auto idx = list.offset + list_idx;
 
 			if (!struct_validity.RowIsValid(idx)) {
-				ret += "NULL";
+				string_length += NULL_LENGTH;
 				continue;
 			}
 			if (!key_validity.RowIsValid(idx)) {
 				// throw InternalException("Error in map: key validity invalid?!");
-				ret += "invalid";
+				string_length += INVALID_LENGTH;
 				continue;
 			}
-			ret += key_data[idx].GetString();
-			ret += "=";
-			ret += val_validity.RowIsValid(idx) ? val_data[idx].GetString() : "NULL";
+			string_length += key_strlen_func(key_data[idx], key_needs_quotes[list_idx]);
+			string_length += KEY_VALUE_SEP_LENGTH;
+			if (val_validity.RowIsValid(idx)) {
+				string_length += value_strlen_func(val_data[idx], value_needs_quotes[list_idx]);
+			} else {
+				string_length += NULL_LENGTH;
+			}
 		}
-		ret += "}";
-		result_data[i] = StringVector::AddString(result, ret);
+		result_data[i] = StringVector::EmptyString(result, string_length);
+		auto dataptr = result_data[i].GetDataWriteable();
+		idx_t offset = 0;
+
+		dataptr[offset++] = '{';
+		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
+			if (list_idx > 0) {
+				memcpy(dataptr + offset, ", ", SEP_LENGTH);
+				offset += SEP_LENGTH;
+			}
+
+			auto idx = list.offset + list_idx;
+			if (!struct_validity.RowIsValid(idx)) {
+				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
+				offset += NULL_LENGTH;
+				continue;
+			}
+			if (!key_validity.RowIsValid(idx)) {
+				// throw InternalException("Error in map: key validity invalid?!");
+				memcpy(dataptr + offset, "invalid", INVALID_LENGTH);
+				offset += INVALID_LENGTH;
+				continue;
+			}
+			offset += key_write_func(dataptr + offset, key_data[idx], key_needs_quotes[list_idx]);
+			dataptr[offset++] = '=';
+			if (val_validity.RowIsValid(idx)) {
+				offset += value_write_func(dataptr + offset, val_data[idx], value_needs_quotes[list_idx]);
+			} else {
+				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
+				offset += NULL_LENGTH;
+			}
+		}
+		dataptr[offset++] = '}';
+		result_data[i].Finalize();
 	}
 
 	if (constant) {

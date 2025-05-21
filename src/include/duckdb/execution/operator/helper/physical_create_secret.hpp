@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/main/secret/secret.hpp"
 
 namespace duckdb {
 
@@ -19,12 +19,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_SECRET;
 
 public:
-	PhysicalCreateSecret(CreateSecretInfo info_p, idx_t estimated_cardinality)
+	PhysicalCreateSecret(CreateSecretInput input_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_SECRET, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      info(std::move(info_p)) {
+	      create_input(std::move(input_p)) {
 	}
 
-	CreateSecretInfo info;
+	CreateSecretInput create_input;
 
 public:
 	// Source interface

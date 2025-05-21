@@ -3,6 +3,12 @@
 # group: [lambdas]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement ok
 CREATE TABLE tbl (tag_product VARCHAR);
 
 statement ok
@@ -10,7 +16,7 @@ INSERT INTO tbl VALUES ('milk chickpeas apples'), ('chocolate pepper');
 
 query II
 SELECT tag_product, list_aggr(list_transform(
-	string_split(tag_product, ' '), word -> lower(word)),
+	string_split(tag_product, ' '), lambda word: lower(word)),
     'string_agg', ',') AS tag_material,
 FROM tbl GROUP BY tag_product
 ORDER BY ALL;
@@ -19,7 +25,7 @@ chocolate pepper	chocolate,pepper
 milk chickpeas apples	milk,chickpeas,apples
 
 query II
-SELECT 1, list_transform([5, 4, 3], x -> x + 1) AS lst GROUP BY 1;
+SELECT 1, list_transform([5, 4, 3], lambda x: x + 1) AS lst GROUP BY 1;
 ----
 1	[6, 5, 4]
 
@@ -30,19 +36,19 @@ UNION ALL SELECT 'blue', 15
 UNION ALL SELECT 'red', 300;
 
 query I
-FROM uniform_purchase_forecast SELECT list(forecast).list_transform(x -> x + 10);
+FROM uniform_purchase_forecast SELECT list(forecast).list_transform(lambda x: x + 10);
 ----
 [20, 25, 310]
 
 # HAVING binder issues.
 
 query I
-FROM (SELECT 1) GROUP BY ALL HAVING list_filter(NULL, x -> x);
+FROM (SELECT 1) GROUP BY ALL HAVING list_filter(NULL, lambda x: x);
 ----
 
 statement ok
 FROM test_all_types() GROUP BY ALL HAVING array_intersect(NULL, NULL);
 
 query I
-SELECT x FROM (VALUES (42)) t(x) GROUP BY x HAVING list_filter(NULL, lambda_param -> lambda_param = 1);
+SELECT x FROM (VALUES (42)) t(x) GROUP BY x HAVING list_filter(NULL, lambda lambda_param: lambda_param = 1);
 ----

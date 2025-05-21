@@ -59,7 +59,7 @@ void ParquetEncryptionConfig::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig(deserializer.Get<ClientContext &>()));
+	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig());
 	deserializer.ReadPropertyWithDefault<string>(100, "footer_key", result->footer_key);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(101, "column_keys", result->column_keys);
 	return result;
@@ -68,7 +68,7 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deseria
 void ParquetOptionsSerialization::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", parquet_options.binary_as_string);
 	serializer.WritePropertyWithDefault<bool>(101, "file_row_number", parquet_options.file_row_number);
-	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
+	serializer.WriteProperty<MultiFileOptions>(102, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", parquet_options.schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", parquet_options.encryption_config, nullptr);
 	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", parquet_options.debug_use_openssl, true);
@@ -79,7 +79,7 @@ ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserialize
 	ParquetOptionsSerialization result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "binary_as_string", result.parquet_options.binary_as_string);
 	deserializer.ReadPropertyWithDefault<bool>(101, "file_row_number", result.parquet_options.file_row_number);
-	deserializer.ReadProperty<MultiFileReaderOptions>(102, "file_options", result.file_options);
+	deserializer.ReadProperty<MultiFileOptions>(102, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.parquet_options.schema);
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.parquet_options.encryption_config, nullptr);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(105, "debug_use_openssl", result.parquet_options.debug_use_openssl, true);

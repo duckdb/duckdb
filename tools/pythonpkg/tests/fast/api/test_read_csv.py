@@ -5,6 +5,7 @@ import platform
 import duckdb
 from io import StringIO, BytesIO
 from duckdb import CSVLineTerminator
+import sys
 
 
 def TestFile(name):
@@ -620,6 +621,7 @@ class TestReadCSV(object):
             {'hive_types': {'one': 'INTEGER', 'two': 'VARCHAR'}},
         ],
     )
+    @pytest.mark.skipif(sys.platform.startswith("win"), reason="Skipping on Windows because of lineterminator option")
     def test_read_csv_options(self, duckdb_cursor, options, tmp_path):
         file = tmp_path / "file.csv"
         file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
@@ -701,3 +703,24 @@ class TestReadCSV(object):
         rel = con.read_csv(file_path, union_by_name=True)
         assert rel.columns == ['one', 'two', 'three', 'four', 'five']
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
+
+    def test_thousands_separator(self, tmp_path):
+        file = tmp_path / "file_thousands.csv"
+        file.write_text('money\n"10,000.23"\n"1,000,000,000.01"')
+
+        con = duckdb.connect()
+        rel = con.read_csv(file, thousands=',')
+        assert rel.fetchall() == [(10000.23,), (1000000000.01,)]
+
+        with pytest.raises(
+            duckdb.BinderException, match="Unsupported parameter for THOUSANDS: should be max one character"
+        ):
+            con.read_csv(file, thousands=',,,')
+
+    def test_skip_comment_option(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('skip this line\n# comment\nx,y,z\n1,2,3\n4,5,6')
+        con = duckdb.connect()
+        rel = con.read_csv(file1, comment='#', skiprows=1, all_varchar=True)
+        assert rel.columns == ['x', 'y', 'z']
+        assert rel.fetchall() == [('1', '2', '3'), ('4', '5', '6')]

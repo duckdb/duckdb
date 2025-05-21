@@ -566,14 +566,14 @@ TEST_CASE("Test opening an invalid database file", "[api]") {
 	duckdb::unique_ptr<DuckDB> db;
 	bool success = false;
 	try {
-		db = make_uniq<DuckDB>("data/parquet-testing/blob.parquet");
+		db = make_uniq<DuckDB>("duckdb:data/parquet-testing/blob.parquet");
 		success = true;
 	} catch (std::exception &ex) {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
 	}
 	REQUIRE(!success);
 	try {
-		db = make_uniq<DuckDB>("data/parquet-testing/h2oai/h2oai_group_small.parquet");
+		db = make_uniq<DuckDB>("duckdb:data/parquet-testing/h2oai/h2oai_group_small.parquet");
 		success = true;
 	} catch (std::exception &ex) {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));

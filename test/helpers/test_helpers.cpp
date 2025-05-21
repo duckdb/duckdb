@@ -51,9 +51,7 @@ void TestDeleteDirectory(string path) {
 void TestDeleteFile(string path) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	try {
-		if (fs->FileExists(path)) {
-			fs->RemoveFile(path);
-		}
+		fs->TryRemoveFile(path);
 	} catch (...) {
 	}
 }
@@ -78,6 +76,11 @@ void DeleteDatabase(string path) {
 void TestCreateDirectory(string path) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	fs->CreateDirectory(path);
+}
+
+string TestJoinPath(string path1, string path2) {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	return fs->JoinPath(path1, path2);
 }
 
 void SetTestDirectory(string path) {
@@ -157,8 +160,7 @@ void ClearTestDirectory() {
 }
 
 string TestCreatePath(string suffix) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	return fs->JoinPath(TestDirectoryPath(), suffix);
+	return TestJoinPath(TestDirectoryPath(), suffix);
 }
 
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error) {
@@ -378,7 +380,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	DuckDB db;
 	Connection con(db);
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 	auto scanner_ptr = StringValueScanner::GetCSVScanner(*con.context, options, file_options);
 	auto &scanner = *scanner_ptr;
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);

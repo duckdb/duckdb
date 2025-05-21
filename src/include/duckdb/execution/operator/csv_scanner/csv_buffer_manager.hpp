@@ -21,7 +21,7 @@ class CSVStateMachine;
 //! A CSV Buffer Manager is created for each separate CSV File.
 class CSVBufferManager {
 public:
-	CSVBufferManager(ClientContext &context, const CSVReaderOptions &options, const string &file_path,
+	CSVBufferManager(ClientContext &context, const CSVReaderOptions &options, const OpenFileInfo &file,
 	                 bool per_file_single_threaded = false, unique_ptr<CSVFileHandle> file_handle = nullptr);
 
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
@@ -58,8 +58,8 @@ public:
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
 	bool ReadNextAndCacheIt();
-	//! The file path this Buffer Manager refers to
-	const string file_path;
+	//! The file this Buffer Manager refers to
+	const OpenFileInfo file;
 	//! The cached buffers
 	vector<shared_ptr<CSVBuffer>> cached_buffers;
 	//! The last buffer it was accessed

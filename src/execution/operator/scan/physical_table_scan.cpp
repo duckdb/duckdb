@@ -49,7 +49,7 @@ public:
 			}
 			input_chunk.Initialize(context, input_types);
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
-				input_chunk.data[c].SetValue(0, op.parameters[c]);
+				input_chunk.data[c].Reference(op.parameters[c]);
 			}
 			input_chunk.SetCardinality(1);
 		}
@@ -277,6 +277,18 @@ bool PhysicalTableScan::ParallelSource() const {
 		return false;
 	}
 	return true;
+}
+
+InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalSourceState &gstate_p,
+                                                                         LocalSourceState &lstate) const {
+	if (!function.dynamic_to_string) {
+		return InsertionOrderPreservingMap<string>();
+	}
+	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+	auto &state = lstate.Cast<TableScanLocalSourceState>();
+	TableFunctionDynamicToStringInput input(function, bind_data.get(), state.local_state.get(),
+	                                        gstate.global_state.get());
+	return function.dynamic_to_string(input);
 }
 
 } // namespace duckdb

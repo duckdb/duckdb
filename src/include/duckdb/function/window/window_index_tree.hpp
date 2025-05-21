@@ -36,7 +36,8 @@ public:
 	unique_ptr<WindowAggregatorState> GetLocalState() override;
 
 	//! Find the Nth index in the set of subframes
-	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
+	//! Returns {nth index, 0} or {nth offset, overflow}
+	pair<idx_t, idx_t> SelectNth(const SubFrames &frames, idx_t n) const;
 };
 
 } // namespace duckdb

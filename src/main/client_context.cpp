@@ -43,6 +43,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/logging/log_type.hpp"
 
 namespace duckdb {
 
@@ -218,7 +219,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
 	context.query_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
-	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
+	DUCKDB_LOG(*this, QueryLogType, query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
@@ -360,52 +361,48 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase(MetricsType::PLANNER);
-	Planner planner(*this);
+	Planner logical_planner(*this);
 	if (values) {
 		auto &parameter_values = *values;
 		for (auto &value : parameter_values) {
-			planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
+			logical_planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
 		}
 	}
 
-	planner.CreatePlan(std::move(statement));
-	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
+	logical_planner.CreatePlan(std::move(statement));
+	D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	profiler.EndPhase();
 
-	auto plan = std::move(planner.plan);
+	auto logical_plan = std::move(logical_planner.plan);
 	// extract the result column names from the plan
-	result->properties = planner.properties;
-	result->names = planner.names;
-	result->types = planner.types;
-	result->value_map = std::move(planner.value_map);
-	if (!planner.properties.bound_all_parameters) {
+	result->properties = logical_planner.properties;
+	result->names = logical_planner.names;
+	result->types = logical_planner.types;
+	result->value_map = std::move(logical_planner.value_map);
+	if (!logical_planner.properties.bound_all_parameters) {
 		return result;
 	}
 #ifdef DEBUG
-	plan->Verify(*this);
+	logical_plan->Verify(*this);
 #endif
-	if (config.enable_optimizer && plan->RequireOptimizer()) {
+	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricsType::ALL_OPTIMIZERS);
-		Optimizer optimizer(*planner.binder, *this);
-		plan = optimizer.Optimize(std::move(plan));
-		D_ASSERT(plan);
+		Optimizer optimizer(*logical_planner.binder, *this);
+		logical_plan = optimizer.Optimize(std::move(logical_plan));
+		D_ASSERT(logical_plan);
 		profiler.EndPhase();
 
 #ifdef DEBUG
-		plan->Verify(*this);
+		logical_plan->Verify(*this);
 #endif
 	}
 
+	// Convert the logical query plan into a physical query plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
-	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
-	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
+	result->physical_plan = physical_planner.Plan(std::move(logical_plan));
 	profiler.EndPhase();
-
-#ifdef DEBUG
-	D_ASSERT(!physical_plan->ToString().empty());
-#endif
-	result->plan = std::move(physical_plan);
+	D_ASSERT(result->physical_plan);
 	return result;
 }
 
@@ -1247,7 +1244,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	RunFunctionInTransaction([&]() { InternalTryBindRelation(relation, result_columns); });
 }
 
-unordered_set<string> ClientContext::GetTableNames(const string &query) {
+unordered_set<string> ClientContext::GetTableNames(const string &query, const bool qualified) {
 	auto lock = LockContext();
 
 	auto statements = ParseStatementsInternal(*lock, query);
@@ -1259,7 +1256,8 @@ unordered_set<string> ClientContext::GetTableNames(const string &query) {
 	RunFunctionInTransactionInternal(*lock, [&]() {
 		// bind the expressions
 		auto binder = Binder::CreateBinder(*this);
-		binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
+		auto mode = qualified ? BindingMode::EXTRACT_QUALIFIED_NAMES : BindingMode::EXTRACT_NAMES;
+		binder->SetBindingMode(mode);
 		binder->Bind(*statements[0]);
 		result = binder->GetTableNames();
 	});

@@ -212,7 +212,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (!catalog_entry) {
 		return false;
 	}
-	if (index == COLUMN_IDENTIFIER_ROW_ID) {
+	if (IsVirtualColumn(index)) {
 		return false;
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
@@ -265,6 +265,18 @@ optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
+string GetCandidateAlias(const BindingAlias &main_alias, const BindingAlias &new_alias) {
+	string candidate;
+	if (!main_alias.GetCatalog().empty() && !new_alias.GetCatalog().empty()) {
+		candidate += new_alias.GetCatalog() + ".";
+	}
+	if (!main_alias.GetSchema().empty() && !new_alias.GetSchema().empty()) {
+		candidate += new_alias.GetSchema() + ".";
+	}
+	candidate += new_alias.GetAlias();
+	return candidate;
+}
+
 vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, ErrorData &out_error) {
 	if (!alias.IsSet()) {
 		throw InternalException("BindingAlias is not set");
@@ -279,12 +291,13 @@ vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, E
 		// alias not found in this BindContext
 		vector<string> candidates;
 		for (auto &binding : bindings_list) {
-			candidates.push_back(binding->alias.GetAlias());
+			candidates.push_back(GetCandidateAlias(alias, binding->alias));
 		}
-		string candidate_str = StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, alias.GetAlias()),
-		                                                     "Candidate tables");
-		out_error = ErrorData(ExceptionType::BINDER, StringUtil::Format("Referenced table \"%s\" not found!%s",
-		                                                                alias.GetAlias(), candidate_str));
+		auto main_alias = GetCandidateAlias(alias, alias);
+		string candidate_str =
+		    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, main_alias), "Candidate tables");
+		out_error = ErrorData(ExceptionType::BINDER,
+		                      StringUtil::Format("Referenced table \"%s\" not found!%s", main_alias, candidate_str));
 	}
 	return matching_bindings;
 }
@@ -571,7 +584,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 	}
 
-	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		//! We only care about extracting the names of the referenced columns
 		//! remove the exclude + replace lists
 		expr.exclude_list.clear();
@@ -613,10 +627,10 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
-                               StandardEntry &entry, bool add_row_id) {
+                               TableCatalogEntry &entry, bool add_virtual_columns) {
 	virtual_column_map_t virtual_columns;
-	if (add_row_id) {
-		virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	if (add_virtual_columns) {
+		virtual_columns = entry.GetVirtualColumns();
 	}
 	AddBinding(
 	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
@@ -626,7 +640,6 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<st
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const string &table_name) {
 	virtual_column_map_t virtual_columns;
-	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
 	                                   index, std::move(virtual_columns)));
 }
@@ -694,7 +707,7 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
-                                const vector<LogicalType> &types) {
+                                const vector<LogicalType> &types, bool using_key) {
 	auto binding = make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
@@ -702,6 +715,13 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 	}
 	cte_bindings[alias] = std::move(binding);
 	cte_references[alias] = make_shared_ptr<idx_t>(0);
+
+	if (using_key) {
+		auto recurring_alias = "recurring." + alias;
+		cte_bindings[recurring_alias] =
+		    make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(recurring_alias), types, names, index);
+		cte_references[recurring_alias] = make_shared_ptr<idx_t>(0);
+	}
 }
 
 void BindContext::AddContext(BindContext other) {

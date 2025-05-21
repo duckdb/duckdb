@@ -1,0 +1,12 @@
+# name: test/issues/general/test_17310.test
+# description: Issue 17310 - Casting issue from float64 to decimal
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+# should not error
+query I
+select try_cast('nan'::double as decimal(18,2));
+----
+NULL

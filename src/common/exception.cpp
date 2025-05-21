@@ -334,8 +334,7 @@ FatalException::FatalException(ExceptionType type, const string &msg) : Exceptio
 
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 #ifdef DUCKDB_CRASH_ON_ASSERT
-	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg);
-	Printer::Print(StackTrace::GetStackTrace());
+	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg + "\n" + StackTrace::GetStackTrace());
 	abort();
 #endif
 }
@@ -356,7 +355,23 @@ InvalidConfigurationException::InvalidConfigurationException(const string &msg,
     : Exception(ExceptionType::INVALID_CONFIGURATION, msg, extra_info) {
 }
 
-OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {
+OutOfMemoryException::OutOfMemoryException(const string &msg)
+    : Exception(ExceptionType::OUT_OF_MEMORY, ExtendOutOfMemoryError(msg)) {
+}
+
+string OutOfMemoryException::ExtendOutOfMemoryError(const string &msg) {
+	string link = "https://duckdb.org/docs/stable/guides/performance/how_to_tune_workloads";
+	if (StringUtil::Contains(msg, link)) {
+		// already extended
+		return msg;
+	}
+	string new_msg = msg;
+	new_msg += "\n\nPossible solutions:\n";
+	new_msg += "* Reducing the number of threads (SET threads=X)\n";
+	new_msg += "* Disabling insertion-order preservation (SET preserve_insertion_order=false)\n";
+	new_msg += "* Increasing the memory limit (SET memory_limit='...GB')\n";
+	new_msg += "\nSee also " + link;
+	return new_msg;
 }
 
 ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
