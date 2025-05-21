@@ -1430,7 +1430,7 @@ struct SortStarter
 
     	// LNK: different templating for DuckDB
     	void (*next_sort)(It, It, size_t, ExtractKey &, void *) = nullptr;
-    	if (ExtractKey::REQUIRES_NEXT_SORT) {
+    	if (extract_key.requires_next_sort) {
     		next_sort = [](It b, It e, size_t, ExtractKey& ek, void*) {
     			StdSortFallback(b, e, ek);
     		};
