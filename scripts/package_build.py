@@ -143,8 +143,7 @@ def get_relative_path(source_dir, target_file):
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
-
+main_branch_versioning = True if os.getenv('MAIN_BRANCH_VERSIONING') == "1" else False
 
 def get_git_describe():
     override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''

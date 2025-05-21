@@ -389,8 +389,7 @@ import os
 ######
 
 # Whether to use main branch versioning logic, defaults to True
-MAIN_BRANCH_VERSIONING = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
-
+main_branch_versioning = True if os.getenv('MAIN_BRANCH_VERSIONING') == "1" else False
 
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     from setuptools_scm.git import parse as git_parse
@@ -414,7 +413,7 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
             raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
         return meta(tag=tag, distance=int(distance), config=config)
 
-    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
+    versioning_tag_match = 'v*.*.0' if main_branch_versioning else 'v*.*.*'
     git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
 
     try:
@@ -449,7 +448,7 @@ def version_scheme(version):
     major, minor, patch = [int(x) for x in str(version.tag).split('.')]
     # Increment minor version if main_branch_versioning is enabled (default),
     # otherwise increment patch version
-    if MAIN_BRANCH_VERSIONING == True:
+    if main_branch_versioning == True:
         minor += 1
         patch = 0
     else:

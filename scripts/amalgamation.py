@@ -277,8 +277,7 @@ def git_commit_hash():
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
-
+main_branch_versioning = True if os.getenv('MAIN_BRANCH_VERSIONING') == "1" else False
 
 def git_dev_version():
     try:

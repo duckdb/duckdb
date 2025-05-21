@@ -247,7 +247,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
