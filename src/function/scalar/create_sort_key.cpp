@@ -1173,9 +1173,8 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	UnifiedVectorFormat sort_key_vec_format;
 	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
 
-	if (!sort_key_vec_format.validity.AllValid()) {
-		throw InvalidInputException("Inputs to decode_sort_key cannot be NULL!");
-	}
+	// When doing aggressive vector verification, the "sort_key_vec_format.validity.AllValid()" is not always true
+	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode
 	DecodeSortKeyData decode_data[STANDARD_VECTOR_SIZE];
@@ -1185,10 +1184,12 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		if (sort_key_vec_format.sel->IsSet()) {
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = sort_key_vec_format.sel->get_index(i);
+				D_ASSERT(sort_key_vec_format.validity.RowIsValid(idx));
 				decode_data[i] = DecodeSortKeyData(sort_keys[idx]);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
+				D_ASSERT(sort_key_vec_format.validity.RowIsValid(i));
 				decode_data[i] = DecodeSortKeyData(sort_keys[i]);
 			}
 		}
@@ -1198,11 +1199,13 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		if (sort_key_vec_format.sel->IsSet()) {
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = sort_key_vec_format.sel->get_index(i);
+				D_ASSERT(sort_key_vec_format.validity.RowIsValid(idx));
 				bswapped_ints[i] = BSwap(sort_keys[idx]);
 				decode_data[i] = DecodeSortKeyData(bswapped_ints[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
+				D_ASSERT(sort_key_vec_format.validity.RowIsValid(i));
 				bswapped_ints[i] = BSwap(sort_keys[i]);
 				decode_data[i] = DecodeSortKeyData(bswapped_ints[i]);
 			}

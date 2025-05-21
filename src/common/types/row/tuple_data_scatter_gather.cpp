@@ -720,15 +720,32 @@ void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
 	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
-	D_ASSERT(source_data.validity.AllValid());
+	const auto &validity = source_data.validity;
 
 	// Target
 	const auto target_locations = FlatVector::GetData<SORT_KEY *>(row_locations);
 	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
-	for (idx_t i = 0; i < append_count; i++) {
-		const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-		target_locations[i]->Construct(data[source_idx], target_heap_locations[i]);
+	if (validity.AllValid()) {
+		// Fast path
+		if (!append_sel.IsSet() && !source_sel.IsSet()) {
+			for (idx_t i = 0; i < append_count; i++) {
+				target_locations[i]->Construct(data[i], target_heap_locations[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+				target_locations[i]->Construct(data[source_idx], target_heap_locations[i]);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			// validity.AllValid() may not be true when doing aggressive vector verification
+			// but the actual values should always all be valid
+			D_ASSERT(validity.RowIsValid(source_idx));
+			target_locations[i]->Construct(data[source_idx], target_heap_locations[i]);
+		}
 	}
 }
 
