@@ -88,7 +88,7 @@ mutable struct DB <: DBInterface.Connection
         return db
     end
 
-    function DB(f::AbstractString; config=[], readonly=false)
+    function DB(f::AbstractString; config = [], readonly = false)
         config = Config(config)
         if readonly
             config["access_mode"] = "READ_ONLY"

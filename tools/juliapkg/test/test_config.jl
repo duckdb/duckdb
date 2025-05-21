@@ -6,7 +6,7 @@
 
     results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
     tbl = rowtable(results)
-    @test isequal(tbl, [(a=42,), (a=missing,)])
+    @test isequal(tbl, [(a = 42,), (a = missing,)])
 
     DBInterface.close!(con)
 
@@ -17,7 +17,7 @@
     conf2 = DuckDB.Config()
     conf2["default_null_order"] = "nulls_first"
 
-    conf3 = DuckDB.Config(default_null_order="nulls_first")
+    conf3 = DuckDB.Config(default_null_order = "nulls_first")
     conf4 = DuckDB.Config(["default_null_order" => "nulls_first"])
 
     @testset for config in [conf1, conf2, conf3, conf4]
@@ -26,7 +26,7 @@
         # NULL should come last now
         results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
         tbl = rowtable(results)
-        @test isequal(tbl, [(a=missing,), (a=42,)])
+        @test isequal(tbl, [(a = missing,), (a = 42,)])
 
         DBInterface.close!(con)
 
@@ -38,14 +38,14 @@
     end
 
     # config options can be specified directly in the call
-    con = DBInterface.connect(DuckDB.DB, ":memory:"; config=["default_null_order" => "nulls_first"])
+    con = DBInterface.connect(DuckDB.DB, ":memory:"; config = ["default_null_order" => "nulls_first"])
     tbl = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a") |> rowtable
-    @test isequal(tbl, [(a=missing,), (a=42,)])
+    @test isequal(tbl, [(a = missing,), (a = 42,)])
     close(con)
 
-    con = DBInterface.connect(DuckDB.DB, ":memory:"; config=(;default_null_order="nulls_first"))
+    con = DBInterface.connect(DuckDB.DB, ":memory:"; config = (;default_null_order = "nulls_first"))
     tbl = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a") |> rowtable
-    @test isequal(tbl, [(a=missing,), (a=42,)])
+    @test isequal(tbl, [(a = missing,), (a = 42,)])
     close(con)
 
     # special handling of the readonly option
@@ -53,7 +53,7 @@
     con = DBInterface.connect(DuckDB.DB, file)
     DBInterface.execute(con, "CREATE TABLE t1(a INTEGER)")
     close(con)
-    con = DBInterface.connect(DuckDB.DB, file; readonly=true)
+    con = DBInterface.connect(DuckDB.DB, file; readonly = true)
     @test_throws DuckDB.QueryException DBInterface.execute(con, "CREATE TABLE t2(a INTEGER)")
     close(con)
 end
