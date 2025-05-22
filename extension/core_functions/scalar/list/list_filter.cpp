@@ -30,9 +30,9 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
 
-static LogicalType ListFilterBindLambda(const idx_t parameter_idx, ClientContext &context,
-                                        const vector<LogicalType> &function_child_types) {
-	return LambdaFunctions::BindBinaryLambda(parameter_idx, context, function_child_types);
+static LogicalType ListFilterBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                        const idx_t parameter_idx) {
+	return LambdaFunctions::BindBinaryChildren(function_child_types, parameter_idx);
 }
 
 ScalarFunction ListFilterFun::GetFunction() {

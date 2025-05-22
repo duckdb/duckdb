@@ -22,9 +22,9 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
 
-static LogicalType ListTransformBindLambda(const idx_t parameter_idx, ClientContext &context,
-                                           const vector<LogicalType> &function_child_types) {
-	return LambdaFunctions::BindBinaryLambda(parameter_idx, context, function_child_types);
+static LogicalType ListTransformBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                           const idx_t parameter_idx) {
+	return LambdaFunctions::BindBinaryChildren(function_child_types, parameter_idx);
 }
 
 ScalarFunction ListTransformFun::GetFunction() {
