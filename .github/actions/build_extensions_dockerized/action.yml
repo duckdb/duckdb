@@ -68,11 +68,10 @@ runs:
           echo "CXX=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}" >> docker_env.txt 
 
       - name: Generate timestamp for Ccache entry
-        shell: cmake -P {0}
+        shell: bash
         id: ccache_timestamp
         run: |
-          string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-          message("::set-output name=timestamp::${current_date}")
+          date --utc +'timestamp=%Y-%m-%d-%H;%M;%S' >> "$GITHUB_OUTPUT"
 
       - name: Create Ccache directory
         shell: bash

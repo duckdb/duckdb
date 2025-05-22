@@ -937,9 +937,6 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		auto this_row_id = leaf.GetRowId();
 
 		if (deleted_row_id == this_row_id) {
-			if (manager.AddMiss(i)) {
-				conflict_idx = i;
-			}
 			return;
 		}
 
@@ -980,9 +977,6 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 
 	auto deleted_row_id = deleted_leaf->GetRowId();
 	if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
-		if (manager.AddMiss(i)) {
-			conflict_idx = i;
-		}
 		return;
 	}
 
@@ -1019,9 +1013,6 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
 		if (!leaf) {
-			if (manager.AddMiss(i)) {
-				conflict_idx = i;
-			}
 			continue;
 		}
 		VerifyLeaf(*leaf, keys[i], delete_art, manager, conflict_idx, i);
