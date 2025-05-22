@@ -247,6 +247,10 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
 		}
+		if (input.context->config.disable_timestamptz_casts) {
+			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone "
+			                      "has been disabled  - use \"AT TIME ZONE ...\"");
+		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
