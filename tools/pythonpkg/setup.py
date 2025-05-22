@@ -396,6 +396,15 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     from setuptools_scm.git import parse as git_parse
     from setuptools_scm.version import meta
 
+    # First check if we have a PKG-INFO with a version already
+    pkg_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "PKG-INFO")
+    if os.path.exists(pkg_info_path):
+        with open(pkg_info_path, "r") as f:
+            for line in f:
+                if line.startswith("Version: "):
+                    version = line.split("Version: ")[1].strip()
+                    return meta(tag=f"v{version}", distance=0, node="00000000", config=config)
+
     override = os.getenv('OVERRIDE_GIT_DESCRIBE')
     if override:
         parts = override.split('-')
