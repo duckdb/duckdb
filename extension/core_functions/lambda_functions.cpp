@@ -244,33 +244,28 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 //===--------------------------------------------------------------------===//
 // LambdaFunctions
 //===--------------------------------------------------------------------===//
-LogicalType LambdaFunctions::DetermineListChildType(const vector<LogicalType> &function_child_types) {
-	// the first child is always the list
-	constexpr idx_t list_idx = 0;
-
-	LogicalType list_child_type = function_child_types[list_idx];
-	if (list_child_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child_type.id() != LogicalTypeId::UNKNOWN) {
-		if (list_child_type.id() == LogicalTypeId::ARRAY) {
-			list_child_type = ArrayType::GetChildType(list_child_type);
-		} else {
-			list_child_type = ListType::GetChildType(list_child_type);
+LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_type) {
+	if (child_type.id() != LogicalTypeId::SQLNULL && child_type.id() != LogicalTypeId::UNKNOWN) {
+		if (child_type.id() == LogicalTypeId::ARRAY) {
+			return ArrayType::GetChildType(child_type);
+		} else if (child_type.id() == LogicalTypeId::LIST) {
+			return ListType::GetChildType(child_type);
 		}
+		throw InternalException("The first argument must be a list or array type");
 	}
 
-	return list_child_type;
+	return child_type;
 }
 
-
-LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, ClientContext &context,
-                                              const vector<LogicalType> &function_child_types) {
-	auto list_child_type = DetermineListChildType(function_child_types);
+LogicalType LambdaFunctions::BindBinaryChildren(const vector<LogicalType> &function_child_types,
+                                                const idx_t parameter_idx) {
+	auto list_type = DetermineListChildType(function_child_types[0]);
 
 	switch (parameter_idx) {
 	case 0:
-		return list_child_type;
+		return list_type;
 	case 1:
-		return list_child_type;
+		return LogicalType::BIGINT;
 	default:
 		throw BinderException("This lambda function only supports up to two lambda parameters!");
 	}

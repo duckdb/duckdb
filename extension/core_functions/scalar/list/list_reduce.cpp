@@ -262,10 +262,9 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	                                     has_initial);
 }
 
-
-LogicalType LambdaFunctions::BindReduce(const idx_t parameter_idx, ClientContext &context,
-                                        const vector<LogicalType> &function_child_types) {
-	auto list_child_type = DetermineListChildType(function_child_types);
+LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,
+                               const idx_t parameter_idx) {
+	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
 
 	// if there is an initial value, find the max logical type
 	if (function_child_types.size() == 3) {
@@ -276,11 +275,11 @@ LogicalType LambdaFunctions::BindReduce(const idx_t parameter_idx, ClientContext
 		if (initial_value_type != list_child_type) {
 			// we need to check if the initial value type is the same as the return type of the lambda expression
 			LogicalType max_logical_type;
-			const auto has_max_logical_type = LogicalType::TryGetMaxLogicalType(
-				context, list_child_type, initial_value_type, max_logical_type);
+			const auto has_max_logical_type =
+			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
 			if (!has_max_logical_type) {
 				throw BinderException(
-					"The initial value type must be the same as the list child type or a common super type");
+				    "The initial value type must be the same as the list child type or a common super type");
 			}
 
 			list_child_type = max_logical_type;
@@ -288,20 +287,20 @@ LogicalType LambdaFunctions::BindReduce(const idx_t parameter_idx, ClientContext
 	}
 
 	switch (parameter_idx) {
-		case 0:
-			return list_child_type;
-		case 1:
-			return list_child_type;
-		case 2:
-			return LogicalType::BIGINT;
-		default:
-			throw BinderException("This lambda function only supports up to three lambda parameters!");
+	case 0:
+		return list_child_type;
+	case 1:
+		return list_child_type;
+	case 2:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to three lambda parameters!");
 	}
 }
 
-static LogicalType ListReduceBindLambda(const idx_t parameter_idx, ClientContext &context,
-                                        const vector<LogicalType> &function_child_types) {
-	return LambdaFunctions::BindReduce(parameter_idx, context, function_child_types);
+static LogicalType ListReduceBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                        const idx_t parameter_idx) {
+	return BindReduceChildren(context, function_child_types, parameter_idx);
 }
 
 ScalarFunctionSet ListReduceFun::GetFunctions() {
