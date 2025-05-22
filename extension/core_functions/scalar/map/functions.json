@@ -46,7 +46,7 @@
         "name": "map_concat",
         "parameters": "any,...",
         "description": "Returns a map created from merging the input maps, on key collision the value is taken from the last map with that key",
-        "example": "map_concat(map([1,2], ['a', 'b']), map([2,3], ['c', 'd']));",
+        "example": "map_concat(map([1, 2], ['a', 'b']), map([2, 3], ['c', 'd']));",
         "type": "scalar_function"
     },
     {
