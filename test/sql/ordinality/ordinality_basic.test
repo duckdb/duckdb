@@ -6,6 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 query II
-SELECT * FROM range(1) WITH ORDINALITY;
+SELECT o,range FROM range(1) WITH ORDINALITY AS _(range,o);
 ----
-0	1
+1	0

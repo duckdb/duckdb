@@ -1,0 +1,16 @@
+# name: test/sql/ordinality/ordinality_repeat.test
+# description: Test repeat function
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+
+query II
+SELECT * FROM repeat('x', 5) WITH ORDINALITY;
+x	1
+x	2
+x	3
+x	4
+x	5
+

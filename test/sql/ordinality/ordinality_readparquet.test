@@ -1,0 +1,26 @@
+# name: test/sql/ordinality/ordinality_readparquet.test
+# description: Test read_parquet function
+# group: [ordinality]
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+
+query III
+SELECT * FROM read_parquet('test/sql/ordinality/a0.parquet') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+----
+0	A	1
+1	B	2
+2	C	3
+3	D	4
+4	E	5
+5	F	6
+6	G	7
+7	H	8
+8	I	9
+9	J	10
+
+
+
+

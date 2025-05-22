@@ -1,0 +1,18 @@
+# name: test/sql/ordinality/ordinality_readcsv.test_slow
+# description: Test read_csv function
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+
+query III
+SELECT * FROM read_csv('test/sql/ordinality/glob/a1.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+----
+7800 values hashing to d86e8a5e8df33cec28e0ed7b6c386419
+
+
+query III
+SELECT * FROM read_csv_auto('test/sql/ordinality/glob/a1.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+----
+7800 values hashing to d86e8a5e8df33cec28e0ed7b6c386419
