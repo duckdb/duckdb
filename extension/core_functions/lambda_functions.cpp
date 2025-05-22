@@ -264,11 +264,11 @@ LogicalType LambdaFunctions::BindBinaryChildren(const vector<LogicalType> &funct
 
 	switch (parameter_idx) {
 	case 0:
-			return list_type;
-		case 1:
-			return LogicalType::BIGINT;
-		default:
-			throw BinderException("This lambda function only supports up to two lambda parameters!");
+		return list_type;
+	case 1:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to two lambda parameters!");
 	}
 }
 

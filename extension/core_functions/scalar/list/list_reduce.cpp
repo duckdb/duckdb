@@ -276,10 +276,10 @@ LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType>
 			// we need to check if the initial value type is the same as the return type of the lambda expression
 			LogicalType max_logical_type;
 			const auto has_max_logical_type =
-					LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
+			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
 			if (!has_max_logical_type) {
 				throw BinderException(
-					"The initial value type must be the same as the list child type or a common super type");
+				    "The initial value type must be the same as the list child type or a common super type");
 			}
 
 			list_child_type = max_logical_type;
