@@ -324,13 +324,13 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 
 		return_types.push_back(LogicalType::BIGINT);
 		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
-
 		return std::move(projection);
 	}
 
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get(), std::move(virtual_columns));
+	get->ordinality_column_id = table_function.ordinality_data.column_id;
 	return std::move(get);
 }
 
