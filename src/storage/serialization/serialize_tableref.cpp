@@ -208,14 +208,14 @@ void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
-	serializer.WriteProperty<Ordinality_request_t>(202, "with_ordinality", with_ordinality);
+	serializer.WritePropertyWithDefault<Ordinality_request_t>(202, "with_ordinality", with_ordinality, Ordinality_request_t::NOT_REQUESTED);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", result->function);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "column_name_alias", result->column_name_alias);
-	deserializer.ReadProperty<Ordinality_request_t>(202, "with_ordinality", result->with_ordinality);
+	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(202, "with_ordinality", result->with_ordinality, Ordinality_request_t::NOT_REQUESTED);
 	return std::move(result);
 }
 
