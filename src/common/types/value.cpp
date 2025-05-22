@@ -1637,6 +1637,15 @@ string Value::ToSQLString() const {
 		ret += "]";
 		return ret;
 	}
+	case LogicalTypeId::UNION: {
+		string ret = "union_value(";
+		auto union_tag = UnionValue::GetTag(*this);
+		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
+		ret += tag_name + " := ";
+		ret += UnionValue::GetValue(*this).ToSQLString();
+		ret += ")";
+		return ret;
+	}
 	default:
 		return ToString();
 	}

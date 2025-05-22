@@ -24,7 +24,7 @@
         "name": "regr_intercept",
         "parameters": "y,x",
         "description": "Returns the intercept of the univariate linear regression line for non-null pairs in a group.",
-        "example": "AVG(y)-REGR_SLOPE(y,x)*AVG(x)",
+        "example": "AVG(y)-REGR_SLOPE(y, x)*AVG(x)",
         "type": "aggregate_function"
     },
     {
@@ -38,7 +38,7 @@
         "name": "regr_slope",
         "parameters": "y,x",
         "description": "Returns the slope of the linear regression line for non-null pairs in a group.",
-        "example": "COVAR_POP(x,y) / VAR_POP(x)",
+        "example": "COVAR_POP(x, y) / VAR_POP(x)",
         "type": "aggregate_function"
     },
     {

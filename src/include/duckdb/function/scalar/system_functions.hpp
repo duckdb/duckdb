@@ -69,7 +69,7 @@ struct CurrentQueryId {
 	static constexpr const char *Name = "current_query_id";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current query_id";
-	static constexpr const char *Example = "current_transaction_id('Hello')";
+	static constexpr const char *Example = "current_query_id()";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
