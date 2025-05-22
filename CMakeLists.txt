@@ -241,6 +241,8 @@ endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
 ######
+# MAIN_BRANCH_VERSIONING default should be 'TRUE' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
 # - scripts/amalgamation.py
