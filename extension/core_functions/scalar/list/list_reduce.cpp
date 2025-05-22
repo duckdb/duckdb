@@ -288,13 +288,13 @@ LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType>
 
 	switch (parameter_idx) {
 	case 0:
-			return list_child_type;
-		case 1:
-			return list_child_type;
-		case 2:
-			return LogicalType::BIGINT;
-		default:
-			throw BinderException("This lambda function only supports up to three lambda parameters!");
+		return list_child_type;
+	case 1:
+		return list_child_type;
+	case 2:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to three lambda parameters!");
 	}
 }
 
