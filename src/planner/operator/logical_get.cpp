@@ -11,6 +11,8 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
+#include <assert.h>
+
 namespace duckdb {
 
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
@@ -276,8 +278,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
 		if (result->ordinality_request == Ordinality_request_t::REQUESTED && function.in_out_function) {
-			bind_return_types.emplace(bind_return_types.begin() + result->ordinality_column_id, LogicalType::BIGINT);
-			bind_names.emplace(bind_names.begin() + result->ordinality_column_id, "ordinality");
+			D_ASSERT(result->ordinality_column_id <= static_cast<idx_t>(std::numeric_limits<long>::max()));
+			bind_return_types.emplace(bind_return_types.begin() + static_cast<long>(result->ordinality_column_id),
+			                          LogicalType::BIGINT);
+			bind_names.emplace(bind_names.begin() + static_cast<long>(result->ordinality_column_id), "ordinality");
 			function.ordinality_data.ordinality_request = result->ordinality_request;
 			function.ordinality_data.column_id = result->ordinality_column_id;
 		}
