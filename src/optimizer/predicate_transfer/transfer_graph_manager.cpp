@@ -379,7 +379,7 @@ pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &co
 
 	for (auto i : unconstructed_set) {
 		for (auto j : constructed_set) {
-			auto &edges = neighbor_matrix[i][j];
+			auto &edges = neighbor_matrix[j][i];
 			if (edges.empty()) {
 				continue;
 			}
