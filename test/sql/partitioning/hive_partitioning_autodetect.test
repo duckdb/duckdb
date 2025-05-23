@@ -1,0 +1,69 @@
+# name: test/sql/partitioning/hive_partitioning_autodetect.test
+# group: [partitioning]
+
+require parquet
+
+statement ok
+CREATE TABLE test as SELECT i as value, i%2 as part from range(0,5) t(i); 
+
+### Parquet
+
+statement ok
+COPY test TO '__TEST_DIR__/tmp_parquet' (format parquet, partition_by part);
+
+# Parquet autodetects hive partitioning by default when globbing
+query II
+FROM '__TEST_DIR__/tmp_parquet/**/*.parquet' ORDER BY value
+----
+0	0
+1	1
+2	0
+3	1
+4	0
+
+# Without any glob patterns, partquet hive partitioning is not autodetected
+query I
+FROM '__TEST_DIR__/tmp_parquet/part=1/data_0.parquet'
+----
+1
+3
+
+# Without any glob patterns, you can still re-enable hive partitioning manually to get the partition parsed
+query II
+FROM parquet_scan('__TEST_DIR__/tmp_parquet/part=1/data_0.parquet', hive_partitioning=1)
+----
+1	1
+3	1
+
+
+# Also adding a glob pattern (even though it resolves to a single file) will re-enable hive partitioning auto-detect
+query II
+FROM '__TEST_DIR__/tmp_parquet/part=1/data_*.parquet'
+----
+1	1
+3	1
+
+### CSV
+
+statement ok
+COPY test TO '__TEST_DIR__/tmp_csv' (format csv, partition_by part);
+
+# CSV does not autodetect hive partitioning at all
+query I
+FROM '__TEST_DIR__/tmp_csv/**/*.csv' ORDER BY value
+----
+0
+1
+2
+3
+4
+
+# explicit hive detection is the way
+query II
+FROM read_csv('__TEST_DIR__/tmp_csv/**/*.csv', hive_partitioning=1) ORDER BY value
+----
+0	0
+1	1
+2	0
+3	1
+4	0

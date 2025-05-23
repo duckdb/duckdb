@@ -331,6 +331,13 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	return MultiFileReader::CreateFunctionSet(static_cast<TableFunction>(table_function));
 }
 
+MultiFileOptions ParquetMultiFileInfo::InitializeMultiFileOptions(ClientContext &context,
+                                                                  optional_ptr<TableFunctionInfo> info) {
+	MultiFileOptions options;
+	options.auto_detect_hive_partitioning = true;
+	return options;
+}
+
 unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(ClientContext &context,
                                                                           optional_ptr<TableFunctionInfo> info) {
 	return make_uniq<ParquetFileReaderOptions>(context);
