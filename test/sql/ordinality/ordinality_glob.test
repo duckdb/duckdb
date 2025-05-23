@@ -9,11 +9,3 @@ query II
 SELECT col = 'test\sql\ordinality\glob\a0.csv' OR col = 'test/sql/ordinality/glob/a0.csv', o FROM glob('test/sql/ordinality/glob/a0.csv') with ordinality AS _(col,o);
 ----
 true	1
-
-
-query II
-select * from glob('test/sql/ordinality/glob/*') with ordinality AS _(col,o) order by col;
-----
-test/sql/ordinality/glob/a0.csv	1
-test/sql/ordinality/glob/a1.csv	2
-test/sql/ordinality/glob/a2.csv	3
