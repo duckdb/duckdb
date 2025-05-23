@@ -24,6 +24,7 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	result.flag_width = this->flag_width;
 	result.data_width = this->data_width;
 	result.aggr_width = this->aggr_width;
+	result.sort_width = this->sort_width;
 	result.row_width = this->row_width;
 	result.offsets = this->offsets;
 	result.all_constant = this->all_constant;

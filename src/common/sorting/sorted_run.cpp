@@ -102,7 +102,7 @@ static void TemplatedSort(const TupleDataCollection &key_data, const bool is_ind
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
 }
 
-static void Sort(const TupleDataCollection &key_data, bool is_index_sort) {
+static void SortSwitch(const TupleDataCollection &key_data, bool is_index_sort) {
 	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
@@ -261,7 +261,7 @@ void SortedRun::Finalize(bool external) {
 	}
 
 	// Sort the fixed-size portion of the keys
-	Sort(*key_data, is_index_sort);
+	SortSwitch(*key_data, is_index_sort);
 
 	if (external) {
 		// Reorder variable-size portion of keys and/or payload data (if necessary)

@@ -1095,7 +1095,7 @@ inline bool StdSortIfLessThanThreshold(It begin, It end, size_t num_elements, Ex
 template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, typename SubKeyType = typename CurrentSubKey::sub_key_type>
 struct InplaceSorter;
 
-template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, size_t NumBytes, size_t Offset = 0>
+template<size_t StdSortThreshold, size_t AmericanFlagSortThreshold, typename CurrentSubKey, size_t NumBytes, size_t Offset = 1>
 struct UnsignedInplaceSorter
 {
     static constexpr size_t ShiftAmount = (((NumBytes - 1) - Offset) * 8);

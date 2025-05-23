@@ -87,8 +87,9 @@ public:
 	inline idx_t GetAggrWidth() const {
 		return aggr_width;
 	}
-	//! Returns the total width required for the aggregates, including padding
+	//! Returns the total width required for sorting
 	inline idx_t GetSortWidth() const {
+		D_ASSERT(IsSortKeyLayout());
 		return sort_width;
 	}
 	//! Returns the column offsets into each row
