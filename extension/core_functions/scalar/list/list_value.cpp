@@ -4,10 +4,13 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 
 namespace duckdb {
 
@@ -27,8 +30,8 @@ struct StringAssign {
 
 template <class T, class OP = PrimitiveAssign>
 static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
-	auto column_count = args.ColumnCount();
-	auto row_count = args.size();
+	const auto column_count = args.ColumnCount();
+	const auto row_count = args.size();
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
@@ -50,54 +53,83 @@ static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	}
 }
 
+static void PopulateChildFallback(DataChunk &args, Vector &result) {
+	auto &child_type = ListType::GetChildType(result.GetType());
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	for (idx_t i = 0; i < args.size(); i++) {
+		result_data[i].offset = ListVector::GetListSize(result);
+		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
+			ListVector::PushBack(result, val);
+		}
+		result_data[i].length = args.ColumnCount();
+	}
+}
+
 static void ListFunction(DataChunk &args, Vector &result);
-static void ArrayFunction(DataChunk &args, Vector &result);
 static void StructFunction(DataChunk &args, Vector &result);
 
 template <class OP = PrimitiveAssign>
-static void PopulateChild(DataChunk &args, Vector &result) {
+static bool PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return TemplatedPopulateChild<int8_t>(args, result);
+		TemplatedPopulateChild<int8_t>(args, result);
+		break;
 	case PhysicalType::INT16:
-		return TemplatedPopulateChild<int16_t>(args, result);
+		TemplatedPopulateChild<int16_t>(args, result);
+		break;
 	case PhysicalType::INT32:
-		return TemplatedPopulateChild<int32_t>(args, result);
+		TemplatedPopulateChild<int32_t>(args, result);
+		break;
 	case PhysicalType::INT64:
-		return TemplatedPopulateChild<int64_t>(args, result);
+		TemplatedPopulateChild<int64_t>(args, result);
+		break;
 	case PhysicalType::UINT8:
-		return TemplatedPopulateChild<uint8_t>(args, result);
+		TemplatedPopulateChild<uint8_t>(args, result);
+		break;
 	case PhysicalType::UINT16:
-		return TemplatedPopulateChild<uint16_t>(args, result);
+		TemplatedPopulateChild<uint16_t>(args, result);
+		break;
 	case PhysicalType::UINT32:
-		return TemplatedPopulateChild<uint32_t>(args, result);
+		TemplatedPopulateChild<uint32_t>(args, result);
+		break;
 	case PhysicalType::UINT64:
-		return TemplatedPopulateChild<uint64_t>(args, result);
+		TemplatedPopulateChild<uint64_t>(args, result);
+		break;
 	case PhysicalType::INT128:
-		return TemplatedPopulateChild<hugeint_t>(args, result);
+		TemplatedPopulateChild<hugeint_t>(args, result);
+		break;
 	case PhysicalType::UINT128:
-		return TemplatedPopulateChild<uhugeint_t>(args, result);
+		TemplatedPopulateChild<uhugeint_t>(args, result);
+		break;
 	case PhysicalType::FLOAT:
-		return TemplatedPopulateChild<float>(args, result);
+		TemplatedPopulateChild<float>(args, result);
+		break;
 	case PhysicalType::DOUBLE:
-		return TemplatedPopulateChild<double>(args, result);
+		TemplatedPopulateChild<double>(args, result);
+		break;
 	case PhysicalType::INTERVAL:
-		return TemplatedPopulateChild<interval_t>(args, result);
+		TemplatedPopulateChild<interval_t>(args, result);
+		break;
 	case PhysicalType::VARCHAR:
-		return TemplatedPopulateChild<string_t, StringAssign>(args, result);
+		TemplatedPopulateChild<string_t, StringAssign>(args, result);
+		break;
 	case PhysicalType::LIST:
-		return ListFunction(args, result);
-	case PhysicalType::ARRAY:
-		return ArrayFunction(args, result);
+		ListFunction(args, result);
+		break;
 	case PhysicalType::STRUCT:
-		return StructFunction(args, result);
-	default: {
-		throw InternalException("TODO");
+		StructFunction(args, result);
+		break;
+	case PhysicalType::UNKNOWN:
+	case PhysicalType::INVALID:
+		throw InternalException("Cannot create a list of types %s - an explicit cast is required",
+		                        result.GetType().ToString());
+	default:
+		// execute the fallback instead, which requires the parent result
+		return false;
 	}
-	}
-	// UNKNOWN and INVALID should throw
-	// Check ARRAY ? Check BIT ?
+	return true;
 }
 
 static void ListFunction(DataChunk &args, Vector &result) {
@@ -137,48 +169,19 @@ static void ListFunction(DataChunk &args, Vector &result) {
 
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
-			auto input_idx = unified_format[col].sel->get_index(row);
-			auto result_idx = row * column_count + col;
+			const auto input_idx = unified_format[col].sel->get_index(row);
+			const auto result_idx = row * column_count + col;
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
 				result_validity->SetInvalid(result_idx);
 				continue;
 			}
-			auto input = col_data[col][input_idx];
+			const auto input = col_data[col][input_idx];
 			const auto length = input.length;
 			const auto offset = col_offsets[col] + input.offset;
 			result_data[result_idx] = list_entry_t(offset, length);
 		}
 	}
 	ListVector::SetListSize(result, offset_sum);
-}
-
-static void ArrayFunction(DataChunk &args, Vector &result) {
-	const idx_t column_count = args.ColumnCount();
-	;
-	const auto array_total_size = ArrayType::GetSize(args.data[0].GetType()) * args.size();
-
-	// The result vector is [[a], [b], ...], result_child is [a, b, ...].
-	auto &result_child = ArrayVector::GetEntry(result);
-
-	auto unified_format = args.ToUnifiedFormat();
-	for (idx_t col = 0; col < column_count; col++) {
-		auto &array = args.data[col];
-		auto &child_vector = ArrayVector::GetEntry(array);
-		VectorOperations::Copy(child_vector, result_child, array_total_size, 0, col * array_total_size);
-	}
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_validity = &FlatVector::Validity(result);
-
-	for (idx_t row = 0; row < args.size(); row++) {
-		for (idx_t col = 0; col < column_count; col++) {
-			auto input_idx = unified_format[col].sel->get_index(row);
-			auto result_idx = row * column_count + col;
-			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_validity->SetInvalid(result_idx);
-			}
-		}
-	}
 }
 
 static void StructFunction(DataChunk &args, Vector &result) {
@@ -203,7 +206,9 @@ static void StructFunction(DataChunk &args, Vector &result) {
 			chunk.data[col].Reference(*struct_vector_members[member_idx]);
 		}
 
-		PopulateChild(chunk, *result_members[member_idx]);
+		if (!PopulateChild(chunk, *result_members[member_idx])) {
+			PopulateChildFallback(chunk, *result_members[member_idx]);
+		}
 	}
 
 	// Set the top level result validity
@@ -253,7 +258,10 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	ListVector::Reserve(result, args.size() * args.ColumnCount());
 	auto &result_child = ListVector::GetEntry(result);
-	PopulateChild(args, result_child);
+
+	if (!PopulateChild(args, result_child)) {
+		PopulateChildFallback(args, result);
+	}
 
 	const idx_t column_count = args.ColumnCount();
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -267,41 +275,47 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 template <bool IS_UNPIVOT = false>
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
-	// collect names and deconflict, construct return type
-	LogicalType child_type =
-	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
+	// check that all arguments are the same type
+	LogicalType max_logical_type = arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type;
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			if (IS_UNPIVOT) {
-				string list_arguments = "Full list: ";
-				idx_t error_index = list_arguments.size();
-				for (idx_t k = 0; k < arguments.size(); k++) {
-					if (k > 0) {
-						list_arguments += ", ";
+		LogicalType next_arg = arguments[i]->return_type;
+		if (next_arg != max_logical_type) {
+			if (!LogicalType::TryGetMaxLogicalType(context, max_logical_type, next_arg, max_logical_type)) {
+				if (IS_UNPIVOT) {
+					string list_arguments = "Full list: ";
+					idx_t error_index = list_arguments.size();
+					for (idx_t k = 0; k < arguments.size(); k++) {
+						if (k > 0) {
+							list_arguments += ", ";
+						}
+						if (k == i) {
+							error_index = list_arguments.size();
+						}
+						list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 					}
-					if (k == i) {
-						error_index = list_arguments.size();
-					}
-					list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+					const auto error =
+					    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+					                       max_logical_type.ToString(), next_arg.ToString());
+					throw BinderException(arguments[i]->GetQueryLocation(),
+					                      QueryErrorContext::Format(list_arguments, error, error_index, false));
+				} else {
+					throw BinderException("Cannot create a list of types %s and %s - an explicit cast is required",
+					                      max_logical_type.ToString(), next_arg.ToString());
 				}
-				auto error =
-				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-				                       child_type.ToString(), arg_type.ToString());
-				throw BinderException(arguments[i]->GetQueryLocation(),
-				                      QueryErrorContext::Format(list_arguments, error, error_index, false));
-			} else {
-				throw BinderException(arguments[i]->GetQueryLocation(),
-				                      "Cannot create a list of types %s and %s - an explicit cast is required",
-				                      child_type.ToString(), arg_type.ToString());
 			}
 		}
 	}
-	child_type = LogicalType::NormalizeType(child_type);
+
+	max_logical_type = LogicalType::NormalizeType(max_logical_type);
+
+	// if the first argument is different from the max_logical_type, we need to cast all arguments
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		arguments[i] = BoundCastExpression::AddCastToType(context, std::move(arguments[i]), max_logical_type);
+	}
 
 	// this is more for completeness reasons
-	bound_function.varargs = child_type;
-	bound_function.return_type = LogicalType::LIST(child_type);
+	bound_function.varargs = max_logical_type;
+	bound_function.return_type = LogicalType::LIST(max_logical_type);
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
