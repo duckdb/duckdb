@@ -432,8 +432,12 @@ unique_ptr<LocalSinkState> PhysicalCreateBF::GetLocalSinkState(ExecutionContext 
 class CreateBFGlobalSourceState : public GlobalSourceState {
 public:
 	explicit CreateBFGlobalSourceState(const ColumnDataCollection &collection)
-	    : max_threads(MaxValue<idx_t>(collection.ChunkCount(), 1)), data_collection(collection) {
+	    : max_threads(MaxValue<idx_t>(collection.ChunkCount() / 120, 1)), data_collection(collection) {
 		collection.InitializeScan(global_scan_state);
+	}
+
+	idx_t MaxThreads() override {
+		return max_threads;
 	}
 
 	const idx_t max_threads;
