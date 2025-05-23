@@ -1,0 +1,122 @@
+# name: test/sql/window/test_fill.test
+# description: Test Lead/Lag function
+# group: [window]
+
+#
+# Error checks
+#
+
+# Secondary orderings not supported
+statement error
+select fill(i order by 10-i) over (order by i) from range(3) tbl(i);
+----
+ORDER BY is not supported for the window function "fill"
+
+# Only one ordering allowed
+statement error
+select fill(i) over (order by i, 10-i) from range(3) tbl(i);
+----
+FILL functions must have only one ORDER BY expression
+
+# Streaming not supported because the interpolation values might be too far away.
+statement error
+select fill(i) over () from range(3) tbl(i);
+----
+FILL functions must have only one ORDER BY expression
+
+# Ordering must be numeric
+statement error
+select fill(i) over (order by i::VARCHAR) from range(3) tbl(i);
+----
+FILL orderings must support subtraction
+
+#
+# Simple interpolation coverage tests
+#
+
+# Between values
+query II
+select 
+	i,
+	fill(if(i = 1, NULL, i)) over(order by i)
+from range(3) tbl(i);
+----
+0	0
+1	1
+2	2
+
+# Before values
+query II
+select 
+	i,
+	fill(if(i = 0, NULL, i)) over(order by i)
+from range(3) tbl(i);
+----
+0	0
+1	1
+2	2
+
+# After values
+query II
+select 
+	i,
+	fill(if(i = 2, NULL, i)) over(order by i)
+from range(3) tbl(i);
+----
+0	0
+1	1
+2	2
+
+# Single values
+query II
+select 
+	i,
+	fill(if(i > 0, NULL, i)) over(order by i)
+from range(3) tbl(i);
+----
+0	0
+1	0
+2	0
+
+# Previous in another chunk
+query II
+select 
+	i,
+	fill(if(i = 2048, NULL, i)) over(order by i) f
+from range(2060) tbl(i)
+qualify i <> f
+----
+
+# No values in partition
+query II
+select 
+	i,
+	fill(if(i < 4, NULL, i)) over(partition by i // 2 order by i) f
+from range(8) tbl(i)
+order by i
+----
+0	NULL
+1	NULL
+2	NULL
+3	NULL
+4	4
+5	5
+6	6
+7	7
+
+# Outside valid sort values
+query II
+select 
+	i,
+	fill(if(i = 2, NULL, i)) over(order by if(i < 4, NULL, i)) f
+from range(8) tbl(i)
+order by i
+----
+0	0
+1	1
+2	NULL
+3	3
+4	4
+5	5
+6	6
+7	7
