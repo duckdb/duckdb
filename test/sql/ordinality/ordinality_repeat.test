@@ -8,6 +8,7 @@ PRAGMA enable_verification
 
 query II
 SELECT * FROM repeat('x', 5) WITH ORDINALITY;
+----
 x	1
 x	2
 x	3

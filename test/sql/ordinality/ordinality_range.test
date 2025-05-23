@@ -23,7 +23,7 @@ SELECT * FROM range(3) WITH ORDINALITY ORDER BY range,ordinality;
 
 
 query III
-SELECT * FROM test AS t, LATERAL range(t.a) WITH ORDINALITY AS _(range,ordinality) ORDER BY unnest;
+SELECT * FROM test AS t, LATERAL range(t.a) WITH ORDINALITY AS _(range,ordinality) ORDER BY range;
 ----
 1	0	1
 3	0	1
@@ -33,6 +33,7 @@ SELECT * FROM test AS t, LATERAL range(t.a) WITH ORDINALITY AS _(range,ordinalit
 
 query II
 SELECT * FROM generate_series(0,3,1) WITH ORDINALITY ORDER BY generate_series, ordinality;
+----
 0	1
 1	2
 2	3
@@ -41,6 +42,7 @@ SELECT * FROM generate_series(0,3,1) WITH ORDINALITY ORDER BY generate_series, o
 
 query III
 SELECT * FROM test AS t, LATERAL generate_series(0,t.a,1) WITH ORDINALITY ORDER BY t.a, ordinality;
+----
 1	0	1
 1	1	2
 3	0	1

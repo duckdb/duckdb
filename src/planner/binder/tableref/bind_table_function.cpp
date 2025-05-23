@@ -281,6 +281,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->input_table_names = input_table_names;
 	get->ordinality_request = table_function.ordinality_data.ordinality_request;
 	if (table_function.in_out_function) {
+		get->ordinality_column_id = table_function.ordinality_data.column_id;
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
@@ -330,7 +331,6 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get(), std::move(virtual_columns));
-	get->ordinality_column_id = table_function.ordinality_data.column_id;
 	return std::move(get);
 }
 
