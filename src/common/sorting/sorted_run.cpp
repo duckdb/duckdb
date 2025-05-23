@@ -67,16 +67,23 @@ void SortedRun::Sink(DataChunk &key, DataChunk &payload) {
 template <class SORT_KEY>
 struct SkaExtractKey {
 	using result_type = uint64_t;
-	SkaExtractKey(bool requires_next_sort_p, idx_t ska_sort_width_p)
-	    : requires_next_sort(requires_next_sort_p), ska_sort_width(ska_sort_width_p) {
+	SkaExtractKey(bool requires_next_sort_p, idx_t ska_sort_width_p, const vector<idx_t> &sort_skippable_bytes_p)
+	    : requires_next_sort(requires_next_sort_p), ska_sort_width(ska_sort_width_p),
+	      sort_skippable_bytes(sort_skippable_bytes_p) {
 	}
 
 	const result_type &operator()(const SORT_KEY &key) const {
 		return key.part0; // FIXME: this should only be used if there is a part0
 	}
 
+	bool ByteIsSkippable(const idx_t &offset) const {
+		return std::find(sort_skippable_bytes.begin(), sort_skippable_bytes.end(), offset) !=
+		       sort_skippable_bytes.end();
+	}
+
 	bool requires_next_sort;
 	idx_t ska_sort_width;
+	const vector<idx_t> &sort_skippable_bytes;
 };
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -94,7 +101,8 @@ static void TemplatedSort(const TupleDataCollection &key_data, const bool is_ind
 	const auto requires_next_sort =
 	    is_index_sort ? false : !SORT_KEY::CONSTANT_SIZE || SORT_KEY::INLINE_LENGTH != sizeof(uint64_t);
 	const auto ska_sort_width = MinValue<idx_t>(layout.GetSortWidth(), sizeof(uint64_t));
-	auto ska_extract_key = SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width);
+	const auto &sort_skippable_bytes = layout.GetSortSkippableBytes();
+	auto ska_extract_key = SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width, sort_skippable_bytes);
 
 	const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
 		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);

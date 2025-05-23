@@ -25,6 +25,7 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	result.data_width = this->data_width;
 	result.aggr_width = this->aggr_width;
 	result.sort_width = this->sort_width;
+	result.sort_skippable_bytes = this->sort_skippable_bytes;
 	result.row_width = this->row_width;
 	result.offsets = this->offsets;
 	result.all_constant = this->all_constant;
@@ -39,6 +40,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	aggr_destructor_idxs.clear();
 	types = std::move(types_p);
 	all_constant = true;
+	sort_skippable_bytes.clear();
 	variable_columns.clear();
 
 	// Null mask at the front - 1 bit per value.
@@ -155,9 +157,20 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 
 	// Compute row width
 	sort_width = 0;
-	for (auto &order : orders) {
+	bool all_valid_and_truely_constant = true;
+	for (idx_t order_idx = 0; order_idx < orders.size(); order_idx++) {
+		const auto &order = orders[order_idx];
 		const auto &logical_type = order.expression->return_type;
 		const auto physical_type = logical_type.InternalType();
+
+		if (all_valid_and_truely_constant && order.stats && !order.stats->CanHaveNull() &&
+		    TypeIsConstantSize(physical_type) && sort_width < 7) {
+			// We don't have to sort by this byte, all values are valid
+			sort_skippable_bytes.emplace_back(sort_width);
+		} else {
+			all_valid_and_truely_constant = false;
+		}
+
 		if (TypeIsConstantSize(physical_type)) {
 			// NULL byte + fixed-width type
 			sort_width += 1 + GetTypeIdSize(physical_type);
