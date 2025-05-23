@@ -36,6 +36,7 @@ public:
 		SHA256State();
 		~SHA256State();
 		void AddString(const std::string &str);
+		void AddSalt(unsigned char *salt, size_t salt_len);
 		std::string Finalize();
 		void FinishHex(char *out);
 

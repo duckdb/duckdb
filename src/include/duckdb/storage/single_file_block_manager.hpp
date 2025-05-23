@@ -22,6 +22,71 @@ namespace duckdb {
 class DatabaseInstance;
 struct MetadataHandle;
 
+struct EncryptionOptions {
+
+	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+
+	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
+
+	string CipherToString(CipherType cipher_p) const {
+		switch (cipher_p) {
+		case GCM:
+			return "gcm";
+		case CTR:
+			return "ctr";
+		case CBC:
+			return "cbc";
+		default:
+			return "unknown";
+		}
+	}
+
+	string KDFToString(KeyDerivationFunction kdf_p) const {
+		switch (kdf_p) {
+		case SHA256:
+			return "sha256";
+		case PBKDF2:
+			return "pbkdf2";
+		default:
+			return "default";
+		}
+	}
+
+	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
+		if (key_derivation_function == "sha256") {
+			return KeyDerivationFunction::SHA256;
+		} else if (key_derivation_function == "pbkdf2") {
+			return KeyDerivationFunction::PBKDF2;
+		} else {
+			return KeyDerivationFunction::DEFAULT;
+		}
+	}
+
+	CipherType StringToCipher(const string &encryption_cipher) const {
+		if (encryption_cipher == "gcm") {
+			return CipherType::GCM;
+		} else if (encryption_cipher == "ctr") {
+			return CipherType::CTR;
+		} else if (encryption_cipher == "cbc") {
+			return CipherType::CBC;
+		}
+		return CipherType::UNKNOWN;
+	}
+
+	//! indicates whether the db is encrypted
+	bool encryption_enabled = false;
+	//! Whether Additional Authenticated Data is used
+	bool aad = false;
+	//! derived encryption key id
+	string derived_key_id;
+	//! Cipher used for encryption
+	CipherType cipher;
+	//! key derivation function (kdf) used
+	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
+	//! Key Length
+	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
+};
+
 struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
@@ -31,12 +96,7 @@ struct StorageManagerOptions {
 	optional_idx version_number;
 	optional_idx block_header_size;
 
-	//! indicates whether db is encrypted
-	bool encryption = false;
-
-	bool NeedsEncryption() const {
-		return encryption;
-	}
+	EncryptionOptions encryption_options;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -49,10 +109,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase();
+	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase();
+	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -75,6 +135,9 @@ public:
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
 	void Read(Block &block) override;
+	//! Read individual blocks
+	void ReadBlock(Block &block, bool skip_block_header = false) const;
+	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
 	//! Read the content of a range of blocks into a buffer
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
 	//! Write the given block to disk
@@ -103,10 +166,24 @@ private:
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
+	void EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const;
+	void DecryptBuffer(data_ptr_t internal_buffer, uint64_t block_size, uint64_t delta) const;
+	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
+	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
+
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 
-	idx_t GetBlockLocation(block_id_t block_id);
+	idx_t GetBlockLocation(block_id_t block_id) const;
+
+	// Encrypt, Store, Decrypt the canary
+	void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const;
+	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
+	void StoreEncryptionMetadata(MainHeader &main_header) const;
+
+	// Add encryption key to cache
+	void AddDerivedKeyToCache(string &derived_key);
+	const string &GetKeyFromCache() const;
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
