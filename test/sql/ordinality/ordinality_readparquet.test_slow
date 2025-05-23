@@ -1,6 +1,7 @@
 # name: test/sql/ordinality/ordinality_readparquet.test_slow
 # description: Test read_parquet function
 # group: [ordinality]
+
 require parquet
 
 

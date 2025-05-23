@@ -249,7 +249,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
-	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(212, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
+	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(
+	    212, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
 	deserializer.ReadProperty(213, "ordinality_column_id", result->ordinality_column_id);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {

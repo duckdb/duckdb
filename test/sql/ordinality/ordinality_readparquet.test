@@ -1,6 +1,7 @@
 # name: test/sql/ordinality/ordinality_readparquet.test
 # description: Test read_parquet function
 # group: [ordinality]
+
 require parquet
 
 statement ok
