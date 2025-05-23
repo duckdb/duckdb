@@ -49,6 +49,10 @@ struct ReadTextFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ReadWalFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct QueryTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
