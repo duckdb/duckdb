@@ -8,6 +8,10 @@ namespace duckdb {
 // LCOV_EXCL_START
 string LogicalOperatorToString(LogicalOperatorType type) {
 	switch (type) {
+	case LogicalOperatorType::LOGICAL_CREATE_BF:
+		return "CREATE_BF";
+	case LogicalOperatorType::LOGICAL_USE_BF:
+		return "USE_BF";
 	case LogicalOperatorType::LOGICAL_GET:
 		return "GET";
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:

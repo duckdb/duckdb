@@ -6,6 +6,7 @@ add_library_unity(
   physical_batch_insert.cpp
   physical_copy_database.cpp
   physical_copy_to_file.cpp
+  physical_create_bf.cpp
   physical_delete.cpp
   physical_export.cpp
   physical_insert.cpp

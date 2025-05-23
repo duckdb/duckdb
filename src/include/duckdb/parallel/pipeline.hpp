@@ -82,6 +82,12 @@ public:
 
 	Executor &executor;
 
+	//! Runtime Statistics for Predicate Transfer
+	std::atomic<int64_t> num_source_chunks;
+	std::atomic<int64_t> num_source_rows;
+
+	bool is_building_bf = false;
+
 public:
 	ClientContext &GetClientContext();
 
@@ -124,6 +130,9 @@ public:
 	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
 
+	//! Adaptive Pipeline
+	void ModifyCreateBFPipeline();
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
@@ -153,6 +162,9 @@ private:
 	//! The reason is that when we start a new pipeline we insert the current minimum batch index as a placeholder
 	//! Which leads to duplicate entries in the set of active batch indexes
 	multiset<idx_t> batch_indexes;
+
+	//! If it is a probing side, creating BF pipeline, we need to check the scan selectivity.
+	atomic<bool> is_selectivity_checked;
 
 private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);

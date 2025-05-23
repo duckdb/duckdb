@@ -9,6 +9,7 @@ add_library_unity(
   plan_copy_database.cpp
   plan_copy_to_file.cpp
   plan_create.cpp
+  plan_create_bf.cpp
   plan_create_index.cpp
   plan_create_table.cpp
   plan_create_secret.cpp
@@ -42,6 +43,7 @@ add_library_unity(
   plan_window.cpp
   plan_vacuum.cpp
   plan_unnest.cpp
+  plan_use_bf.cpp
   plan_expression_get.cpp
   plan_recursive_cte.cpp
   plan_cte.cpp)
