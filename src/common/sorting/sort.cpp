@@ -330,7 +330,7 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType Sort::Finalize(Pipeline &, Event &, ClientContext &context, OperatorSinkFinalizeInput &input) const {
+SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
 	if (gstate.sorted_runs.empty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
