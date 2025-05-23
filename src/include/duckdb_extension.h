@@ -576,12 +576,12 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
-	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
 	void (*duckdb_vector_reference_value)(duckdb_vector vector, duckdb_value value);
 	void (*duckdb_vector_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
-	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
-	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector sel);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 #endif
 
 } duckdb_ext_api_v1;

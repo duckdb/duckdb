@@ -12,7 +12,11 @@
         }
       ],
       "comment": {
-        "description": "Creates a new selection vector of size `size`.\n"
+        "description": "Creates a new selection vector of size `size`.\nMust be destroyed with `duckdb_destroy_selection_vector`.\n\n",
+        "param_comments": {
+          "size": "The size of the selection vector."
+        },
+        "return_value": "The selection vector."
       }
     },
     {
@@ -21,11 +25,14 @@
       "params": [
         {
           "type": "duckdb_selection_vector",
-          "name": "vector"
+          "name": "sel"
         }
       ],
       "comment": {
-        "description": "Destroys a selection vector.\n"
+        "description": "Destroys the selection vector and de-allocates its memory.\n\n",
+        "param_comments": {
+          "sel": "The selection vector."
+        }
       }
     },
     {
@@ -34,11 +41,15 @@
       "params": [
         {
           "type": "duckdb_selection_vector",
-          "name": "vector"
+          "name": "sel"
         }
       ],
       "comment": {
-        "description": "Access the data pointer of a selection vector.\n"
+        "description": "Access the data pointer of a selection vector.\n\n",
+        "param_comments": {
+          "sel": "The selection vector."
+        },
+        "return_value": "The data pointer."
       }
     }
   ]

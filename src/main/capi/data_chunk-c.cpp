@@ -234,18 +234,18 @@ duckdb_selection_vector duckdb_create_selection_vector(idx_t size) {
 	return reinterpret_cast<duckdb_selection_vector>(new duckdb::SelectionVector(size));
 }
 
-void duckdb_destroy_selection_vector(duckdb_selection_vector vector) {
-	delete reinterpret_cast<duckdb::SelectionVector *>(vector);
+void duckdb_destroy_selection_vector(duckdb_selection_vector sel) {
+	delete reinterpret_cast<duckdb::SelectionVector *>(sel);
 }
 
-sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector) {
-	return reinterpret_cast<duckdb::SelectionVector *>(vector)->data();
+sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector sel) {
+	return reinterpret_cast<duckdb::SelectionVector *>(sel)->data();
 }
 
-void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector selection, idx_t len) {
-	auto ddict = reinterpret_cast<duckdb::Vector *>(dict);
-	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
-	ddict->Slice(*dselection, len);
+void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector sel, idx_t len) {
+	auto d_dict = reinterpret_cast<duckdb::Vector *>(dict);
+	auto d_sel = reinterpret_cast<duckdb::SelectionVector *>(sel);
+	d_dict->Slice(*d_sel, len);
 }
 
 void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {

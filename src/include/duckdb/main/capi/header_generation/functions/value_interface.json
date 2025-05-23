@@ -1144,7 +1144,7 @@
                 "param_comments": {
                     "union_type": "The union type",
                     "tag_index": "The index of the tag of the union",
-                    "value": "The value of the union"
+                    "value": "The value of the union for that tag"
                 },
                 "return_value": "The union value, or nullptr, if the parameters are invalid."
             }
