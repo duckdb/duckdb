@@ -5,9 +5,10 @@
 
 namespace duckdb {
 
-PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, PhysicalOperator &left,
+PhysicalPositionalJoin::PhysicalPositionalJoin(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
                                                PhysicalOperator &right, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
+	children.Init(arena);
 	children.push_back(left);
 	children.push_back(right);
 }
