@@ -228,7 +228,7 @@ NULL
 
 # ORDER BY correlated subquery
 query IR
-SELECT l, SUM(i1.l[1]) FROM lists i1 GROUP BY l ORDER BY (SELECT SUM(i1.l[1]));
+SELECT l, SUM(i1.l[1]) FROM lists i1 GROUP BY l ORDER BY (SELECT SUM(i1.l[1])), l;
 ----
 NULL	NULL
 [NULL]	NULL

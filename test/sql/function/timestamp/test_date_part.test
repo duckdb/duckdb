@@ -333,7 +333,7 @@ ORDER BY 1;
 query II
 SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow','doy', 'julian'], ts) AS parts
 FROM timestamps
-ORDER BY 1;
+ORDER BY ts;
 ----
 NULL	NULL
 -infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}

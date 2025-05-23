@@ -4,6 +4,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
 
@@ -28,7 +29,7 @@ static void TupleDataValueStore(const T &source, const data_ptr_t &row_location,
 template <>
 inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_location, const idx_t offset_in_row,
                                 data_ptr_t &heap_location) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
 	if (source.IsInlined()) {
@@ -49,7 +50,7 @@ static void TupleDataWithinListValueStore(const T &source, const data_ptr_t &loc
 template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
@@ -59,14 +60,14 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 
 template <class T>
 void TupleDataValueVerify(const LogicalType &, const T &) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// NOP
 #endif
 }
 
 template <>
 inline void TupleDataValueVerify(const LogicalType &type, const string_t &value) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		value.Verify();
 	}
@@ -87,7 +88,7 @@ inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 }
 
 static void ResetCombinedListData(vector<TupleDataVectorFormat> &vector_data) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	for (auto &vd : vector_data) {
 		vd.combined_list_data = nullptr;
 		ResetCombinedListData(vd.children);
@@ -133,12 +134,26 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	case PhysicalType::VARCHAR: {
 		// Only non-inlined strings are stored in the heap
 		const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			if (source_validity.RowIsValid(source_idx)) {
-				heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+		if (source_validity.AllValid()) {
+			if (!append_sel.IsSet() && !source_sel.IsSet()) {
+				// Fast path
+				for (idx_t i = 0; i < append_count; i++) {
+					heap_sizes[i] += StringHeapSize(source_data[i]);
+				}
 			} else {
-				heap_sizes[i] += StringHeapSize(NullValue<string_t>());
+				for (idx_t i = 0; i < append_count; i++) {
+					const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+				}
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+				if (source_validity.RowIsValid(source_idx)) {
+					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+				} else {
+					heap_sizes[i] += StringHeapSize(NullValue<string_t>());
+				}
 			}
 		}
 		break;
@@ -189,6 +204,32 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	}
 	default:
 		throw NotImplementedException("ComputeHeapSizes for %s", EnumUtil::ToString(source_v.GetType().id()));
+	}
+}
+
+void TupleDataCollection::SortKeyComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
+                                                  const SelectionVector &append_sel, const idx_t append_count,
+                                                  const SortKeyType sort_key_type) {
+	D_ASSERT(sort_key_type != SortKeyType::INVALID);
+	D_ASSERT(!SortKeyUtils::IsConstantSize(sort_key_type));
+	D_ASSERT(new_chunk.ColumnCount() == 1);
+	if (new_chunk.data[0].GetType().id() != LogicalTypeId::BLOB) {
+		return;
+	}
+
+	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+
+	const auto &source_vector_data = chunk_state.vector_data[0].unified;
+	const auto &source_sel = *source_vector_data.sel;
+	const auto &source_validity = source_vector_data.validity;
+	const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
+
+	const auto inlined_size = SortKeyUtils::GetInlineLength(sort_key_type);
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+		const auto &string_size = source_data[source_idx].GetSize();
+		// If valid, and string cannot be inlined, we need to allocate heap space
+		heap_sizes[i] = (source_validity.RowIsValid(source_idx) & (string_size > inlined_size)) * string_size;
 	}
 }
 
@@ -361,7 +402,7 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			auto &struct_source = *struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 			D_ASSERT(!struct_format.combined_list_data);
 #endif
 			if (!struct_format.combined_list_data) {
@@ -427,7 +468,7 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 
 	D_ASSERT(source_format.children.size() == 1);
 	auto &child_format = source_format.children[0];
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// In debug mode this should be deleted by ResetCombinedListData
 	D_ASSERT(!child_format.combined_list_data);
 #endif
@@ -559,7 +600,7 @@ static void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	Vector heap_locations_copy(LogicalType::POINTER);
 	if (!layout.AllConstant()) {
 		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
@@ -570,26 +611,33 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 	}
 #endif
 
-	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	if (layout.IsSortKeyLayout()) {
+		const auto &scatter_function = scatter_functions[0];
+		scatter_function.function(new_chunk.data[0], chunk_state.vector_data[0], append_sel, append_count, layout,
+		                          chunk_state.row_locations, chunk_state.heap_locations, 0,
+		                          chunk_state.vector_data[0].unified, scatter_function.child_functions);
+	} else {
+		const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
-	// Set the validity mask for each row before inserting data
-	InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
+		// Set the validity mask for each row before inserting data
+		InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
 
-	if (!layout.AllConstant()) {
-		// Set the heap size for each row
-		const auto heap_size_offset = layout.GetHeapSizeOffset();
-		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-		for (idx_t i = 0; i < append_count; i++) {
-			Store<uint32_t>(UnsafeNumericCast<uint32_t>(heap_sizes[i]), row_locations[i] + heap_size_offset);
+		if (!layout.AllConstant()) {
+			// Set the heap size for each row
+			const auto heap_size_offset = layout.GetHeapSizeOffset();
+			const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+			for (idx_t i = 0; i < append_count; i++) {
+				Store<idx_t>(heap_sizes[i], row_locations[i] + heap_size_offset);
+			}
+		}
+
+		// Write the data
+		for (const auto &col_idx : chunk_state.column_ids) {
+			Scatter(chunk_state, new_chunk.data[col_idx], col_idx, append_sel, append_count);
 		}
 	}
 
-	// Write the data
-	for (const auto &col_idx : chunk_state.column_ids) {
-		Scatter(chunk_state, new_chunk.data[col_idx], col_idx, append_sel, append_count);
-	}
-
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	// Verify that the size of the data written to the heap is the same as the size we computed it would be
 	if (!layout.AllConstant()) {
 		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
@@ -635,9 +683,16 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	if (validity.AllValid()) {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+		if (!append_sel.IsSet() && !source_sel.IsSet()) {
+			// Fast path
+			for (idx_t i = 0; i < append_count; i++) {
+				TupleDataValueStore<T>(data[i], target_locations[i], offset_in_row, target_heap_locations[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+				TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < append_count; i++) {
@@ -648,6 +703,48 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 				TupleDataValueStore<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
 				ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 			}
+		}
+	}
+}
+
+template <class T, SortKeyType SORT_KEY_TYPE>
+void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source_format,
+                             const SelectionVector &append_sel, const idx_t append_count, const TupleDataLayout &layout,
+                             const Vector &row_locations, Vector &heap_locations, const idx_t,
+                             const UnifiedVectorFormat &, const vector<TupleDataScatterFunction> &) {
+	D_ASSERT(layout.IsSortKeyLayout());
+	D_ASSERT(layout.GetSortKeyType() == SORT_KEY_TYPE);
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+
+	// Source
+	const auto &source_data = source_format.unified;
+	const auto &source_sel = *source_data.sel;
+	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
+	const auto &validity = source_data.validity;
+
+	// Target
+	const auto target_locations = FlatVector::GetData<SORT_KEY *>(row_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+
+	if (validity.AllValid()) {
+		// Fast path
+		if (!append_sel.IsSet() && !source_sel.IsSet()) {
+			for (idx_t i = 0; i < append_count; i++) {
+				target_locations[i]->Construct(data[i], target_heap_locations[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+				target_locations[i]->Construct(data[source_idx], target_heap_locations[i]);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			// validity.AllValid() may not be true when doing aggressive vector verification
+			// but the actual values should always all be valid
+			D_ASSERT(validity.RowIsValid(source_idx));
+			target_locations[i]->Construct(data[source_idx], target_heap_locations[i]);
 		}
 	}
 }
@@ -1072,6 +1169,55 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 	return result;
 }
 
+template <class T>
+TupleDataScatterFunction GetSortKeyScatterFunctionInternal(SortKeyType sort_key_type) {
+	TupleDataScatterFunction result;
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
+		break;
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_16:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_24>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_32:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_32>;
+		break;
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_VARIABLE_32>;
+		break;
+	default:
+		throw NotImplementedException("GetSortKeyScatterFunction for %s", EnumUtil::ToString(sort_key_type));
+	}
+	return result;
+}
+
+TupleDataScatterFunction TupleDataCollection::GetSortKeyScatterFunction(const LogicalType &type,
+                                                                        SortKeyType sort_key_type) {
+	switch (type.id()) {
+	case LogicalTypeId::BIGINT:
+		return GetSortKeyScatterFunctionInternal<int64_t>(sort_key_type);
+	case LogicalTypeId::BLOB:
+		return GetSortKeyScatterFunctionInternal<string_t>(sort_key_type);
+	default:
+		throw NotImplementedException("TupleDataCollection::GetSortKeyScatterFunction for %s", type.ToString());
+	}
+}
+
 //-------------------------------------------------------------------------------
 // Gather
 //-------------------------------------------------------------------------------
@@ -1125,20 +1271,40 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
-	for (idx_t i = 0; i < scan_count; i++) {
-		const auto &source_row = source_locations[scan_sel.get_index(i)];
-		const auto target_idx = target_sel.get_index(i);
-		target_data[target_idx] = Load<T>(source_row + offset_in_row);
-		ValidityBytes row_mask(source_row, layout.ColumnCount());
-		if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
-			target_validity.SetInvalid(target_idx);
+	const auto column_count = layout.ColumnCount();
+	if (!scan_sel.IsSet() && !target_sel.IsSet()) {
+		// Fast path
+		for (idx_t i = 0; i < scan_count; i++) {
+			const auto &source_row = source_locations[i];
+			target_data[i] = Load<T>(source_row + offset_in_row);
+			ValidityBytes row_mask(source_row, column_count);
+			if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				target_validity.SetInvalid(i);
+			} else {
+				TupleDataValueVerify<T>(target.GetType(), target_data[i]);
+			}
 		}
-#ifdef DEBUG
-		else {
-			TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+	} else {
+		for (idx_t i = 0; i < scan_count; i++) {
+			const auto &source_row = source_locations[scan_sel.get_index(i)];
+			const auto target_idx = target_sel.get_index(i);
+			target_data[target_idx] = Load<T>(source_row + offset_in_row);
+			ValidityBytes row_mask(source_row, column_count);
+			if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				target_validity.SetInvalid(target_idx);
+			} else {
+				TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+			}
 		}
-#endif
 	}
+}
+
+template <class T, SortKeyType SORT_KEY_TYPE>
+void TupleDataSortKeyGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+                            const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+                            const SelectionVector &target_sel, optional_ptr<Vector>,
+                            const vector<TupleDataGatherFunction> &) {
+	throw NotImplementedException("Unimplemented type for TupleDataSortKeyGather");
 }
 
 static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
@@ -1579,6 +1745,55 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 		}
 	}
 	return TupleDataGetGatherFunctionInternal(type, false);
+}
+
+template <class T>
+TupleDataGatherFunction GetSortKeyGatherFunctionInternal(SortKeyType sort_key_type) {
+	TupleDataGatherFunction result;
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
+		break;
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_16:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_24>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_32:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_32>;
+		break;
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_VARIABLE_32>;
+		break;
+	default:
+		throw NotImplementedException("GetSortKeyGatherFunction for %s", EnumUtil::ToString(sort_key_type));
+	}
+	return result;
+}
+
+TupleDataGatherFunction TupleDataCollection::GetSortKeyGatherFunction(const LogicalType &type,
+                                                                      SortKeyType sort_key_type) {
+	switch (type.id()) {
+	case LogicalTypeId::BIGINT:
+		return GetSortKeyGatherFunctionInternal<int64_t>(sort_key_type);
+	case LogicalTypeId::BLOB:
+		return GetSortKeyGatherFunctionInternal<string_t>(sort_key_type);
+	default:
+		throw NotImplementedException("TupleDataCollection::GetSortKeyGatherFunction for %s", type.ToString());
+	}
 }
 
 } // namespace duckdb
