@@ -3,6 +3,7 @@
 import ctypes
 import os
 import platform
+import re
 import sys
 import traceback
 from functools import lru_cache
@@ -395,6 +396,12 @@ if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
     MAIN_BRANCH_VERSIONING = True
 
+# Regexp to parse versions in PKG-INFO. Probably supports a little more than
+# we need right now (alpha, beta, rc, post), but might come in handy at some point.
+PKG_INFO_VERSION_RE = re.compile(
+    r"^(?P<version>\d+\.\d+\.\d+)"
+    r"(?P<suffix>(a\d+|b\d+|rc\d+|\.dev\d+|\.post\d+)?)$"
+)
 
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     from setuptools_scm.git import parse as git_parse
@@ -403,11 +410,20 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     # First check if we have a PKG-INFO with a version already
     pkg_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "PKG-INFO")
     if os.path.exists(pkg_info_path):
-        with open(pkg_info_path, "r") as f:
+        with open(pkg_info_path, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
                 if line.startswith("Version: "):
-                    version = line.split("Version: ")[1].strip()
-                    return meta(tag=f"v{version}", distance=0, node="00000000", config=config)
+                    version = line.partition("Version: ")[2].strip()
+                    parsed_version = PKG_INFO_VERSION_RE.match(version)
+                    if not parsed_version:
+                        raise ValueError(f"Invalid version format in PKG-INFO: {version}")
+                    base_version = parsed_version.group("version")
+                    suffix = parsed_version.group("suffix") or ""
+                    full_tag = f"v{base_version}{suffix}"
+                    # Only dev releases affect distance
+                    dev_match = re.search(r"\.dev(\d+)", suffix)
+                    dev_distance = int(dev_match.group(1)) if dev_match else 0
+                    return meta(tag=full_tag, distance=dev_distance, node="00000000", config=config)
 
     override = os.getenv('OVERRIDE_GIT_DESCRIBE')
     if override:
