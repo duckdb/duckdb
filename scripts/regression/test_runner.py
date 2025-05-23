@@ -106,13 +106,13 @@ class BenchmarkResult:
     new_result: Union[float, str]
     old_failure: Optional[str] = None
     new_failure: Optional[str] = None
-    improvement: Optional[float] = 0.0
+    improvement: Optional[int] = None
 
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
 other_results: List[BenchmarkResult] = []
 error_list: List[BenchmarkResult] = []
-improvments_list: List[BenchmarkResult] = []
+improvements_list: List[BenchmarkResult] = []
 for i in range(NUMBER_REPETITIONS):
     regression_list: List[BenchmarkResult] = []
     if len(benchmark_list) == 0:
@@ -143,9 +143,10 @@ for i in range(NUMBER_REPETITIONS):
         ):
             regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
         else:
-            improved = (new_res - old_res) * 100.0 / new_res
-            if improved > 0.05:
-                improvments_list.append(BenchmarkResult(benchmark, old_res, new_res, improved))
+            improved_by = int((new_res - old_res) * 100.0 / new_res)
+            # breakpoint()
+            if improved_by > 0:
+                improvements_list.append(BenchmarkResult(benchmark, old_res, new_res, improvement=improved_by))
             else:
                 other_results.append(BenchmarkResult(benchmark, old_res, new_res))
     benchmark_list = [res.benchmark for res in regression_list]
@@ -219,19 +220,19 @@ for res in other_results:
     print(f"New timing: {res.new_result}")
     print("")
 
-if len(improvments_list) > 0:
+if len(improvements_list) > 0:
     print(
         '''====================================================
-============== IMPROVEMENTS DETECTED  =============
+============== IMPROVEMENTS DETECTED  ==============
 ====================================================
 '''
     )
-improvments_list.sort(key=lambda x: x.benchmark)
-for res in other_results:
+improvements_list.sort(key=lambda x: x.benchmark)
+for res in improvements_list:
     print(f"{res.benchmark}")
     print(f"Old timing: {res.old_result}")
     print(f"New timing: {res.new_result}")
-    print(f"Improved to: {res.improvement} %")
+    print(f"Improved by: {res.improvement}%")
     print("")
 
 
