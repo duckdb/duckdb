@@ -167,6 +167,9 @@ jobs:
         if: always()
         shell: bash
         run: |
+          mkdir -p duckdb_benchmark_data
+          rm -R duckdb/duckdb_benchmark_data
+          mkdir -p duckdb/duckdb_benchmark_data
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2
 
       - name: Regression Test RealNest 
