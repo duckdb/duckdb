@@ -48,7 +48,7 @@ parser.add_argument(
     type=float,
     default=0.05,
     help="The threshold at which we consider individual benchmark a regression (percentage)",
- )
+)
 parser.add_argument(
     "--max-allowed-regression-percentage",
     type=int,
@@ -143,7 +143,7 @@ for i in range(NUMBER_REPETITIONS):
         ):
             regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
         else:
-            improved = (new_res - old_res) * 100.0 /new_res
+            improved = (new_res - old_res) * 100.0 / new_res
             if improved > 0.05:
                 improvments_list.append(BenchmarkResult(benchmark, old_res, new_res, improved))
             else:
@@ -204,7 +204,7 @@ if len(regression_list) > 0:
 ====================================================
 '''
     )
-else:    
+else:
     print(
         '''====================================================
 ============== NO REGRESSIONS DETECTED  =============
