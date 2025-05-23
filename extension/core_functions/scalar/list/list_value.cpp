@@ -74,20 +74,20 @@ static bool PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedPopulateChild<int8_t>(args, result);
-		break;
-	case PhysicalType::INT16:
-		TemplatedPopulateChild<int16_t>(args, result);
-		break;
+			TemplatedPopulateChild<int8_t>(args, result);
+			break;
+		case PhysicalType::INT16:
+			TemplatedPopulateChild<int16_t>(args, result);
+			break;
 	case PhysicalType::INT32:
-		TemplatedPopulateChild<int32_t>(args, result);
-		break;
+			TemplatedPopulateChild<int32_t>(args, result);
+			break;
 	case PhysicalType::INT64:
-		TemplatedPopulateChild<int64_t>(args, result);
-		break;
+			TemplatedPopulateChild<int64_t>(args, result);
+			break;
 	case PhysicalType::UINT8:
-		TemplatedPopulateChild<uint8_t>(args, result);
-		break;
+			TemplatedPopulateChild<uint8_t>(args, result);
+			break;
 	case PhysicalType::UINT16:
 		TemplatedPopulateChild<uint16_t>(args, result);
 		break;
@@ -119,15 +119,15 @@ static bool PopulateChild(DataChunk &args, Vector &result) {
 		ListFunction(args, result);
 		break;
 	case PhysicalType::STRUCT:
-		StructFunction(args, result);
-		break;
-	case PhysicalType::UNKNOWN:
-	case PhysicalType::INVALID:
-		throw InternalException("Cannot create a list of types %s - an explicit cast is required",
-		                        result.GetType().ToString());
-	default:
-		// execute the fallback instead, which requires the parent result
-		return false;
+			StructFunction(args, result);
+			break;
+		case PhysicalType::UNKNOWN:
+		case PhysicalType::INVALID:
+			throw InternalException("Cannot create a list of types %s - an explicit cast is required",
+			                        result.GetType().ToString());
+		default:
+			// execute the fallback instead, which requires the parent result
+			return false;
 	}
 	return true;
 }
@@ -261,7 +261,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 template <bool IS_UNPIVOT = false>
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+                                              vector<unique_ptr<Expression> > &arguments) {
 	// check that all arguments are the same type
 	LogicalType max_logical_type = arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type;
 	for (idx_t i = 1; i < arguments.size(); i++) {
@@ -281,8 +281,9 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 						list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 					}
 					const auto error =
-					    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-					                       max_logical_type.ToString(), next_arg.ToString());
+							StringUtil::Format(
+								"Cannot unpivot columns of types %s and %s - an explicit cast is required",
+								max_logical_type.ToString(), next_arg.ToString());
 					throw BinderException(arguments[i]->GetQueryLocation(),
 					                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 				} else {
