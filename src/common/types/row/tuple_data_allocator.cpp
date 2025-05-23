@@ -375,19 +375,40 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
 }
 
 template <SortKeyType SORT_KEY_TYPE>
-void SortKeyRecomputeHeapPointers(const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
+void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
+                                  const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
                                   const idx_t count) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	auto sort_keys = reinterpret_cast<SORT_KEY *const *>(row_locations);
 
+	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
+
 	UnifiedVectorFormat new_heap_data;
 	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
-	const auto new_heap_sel = *new_heap_data.sel;
+	const auto &new_heap_sel = *new_heap_data.sel;
 
-	for (idx_t i = 0; i < count; i++) {
-		const auto idx = offset + i;
-		sort_keys[idx]->SetData(new_heap_locations[new_heap_sel.get_index(idx)]);
+	if (!old_heap_sel.IsSet() && !new_heap_sel.IsSet()) {
+		// Fast path
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = offset + i;
+			const auto &old_heap_ptr = old_heap_locations[idx];
+			const auto &new_heap_ptr = new_heap_locations[idx];
+
+			auto &sort_key = *sort_keys[idx];
+			const auto diff = sort_key.GetData() - old_heap_ptr;
+			sort_keys[idx]->SetData(new_heap_ptr + diff);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = offset + i;
+			const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
+			const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
+
+			auto &sort_key = *sort_keys[idx];
+			const auto diff = sort_key.GetData() - old_heap_ptr;
+			sort_keys[idx]->SetData(new_heap_ptr + diff);
+		}
 	}
 }
 
@@ -398,11 +419,12 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	if (layout.IsSortKeyLayout()) {
 		switch (layout.GetSortKeyType()) {
 		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-			SortKeyRecomputeHeapPointers<SortKeyType::NO_PAYLOAD_VARIABLE_32>(row_locations, new_heap_ptrs, offset,
-			                                                                  count);
+			SortKeyRecomputeHeapPointers<SortKeyType::NO_PAYLOAD_VARIABLE_32>(
+			    old_heap_ptrs, old_heap_sel, row_locations, new_heap_ptrs, offset, count);
 			break;
 		case SortKeyType::PAYLOAD_VARIABLE_32:
-			SortKeyRecomputeHeapPointers<SortKeyType::PAYLOAD_VARIABLE_32>(row_locations, new_heap_ptrs, offset, count);
+			SortKeyRecomputeHeapPointers<SortKeyType::PAYLOAD_VARIABLE_32>(old_heap_ptrs, old_heap_sel, row_locations,
+			                                                               new_heap_ptrs, offset, count);
 			break;
 		default:
 			throw NotImplementedException("SortKeyRecomputeHeapPointers for %s",
