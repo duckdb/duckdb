@@ -489,13 +489,6 @@ def version_scheme(version):
 
     print("Version is", version)
 
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        formatted_version = version.format_with("{tag}")
-        print("formatted_version = ", formatted_version)
-        print("Early return due to OVERRIDE_GIT_DESCRIBE")
-        return formatted_version
-
     # If we're exactly on a tag (dev_iteration = 0, dirty=False)
     if version.exact:
         formatted_version = version.format_with("{tag}")
