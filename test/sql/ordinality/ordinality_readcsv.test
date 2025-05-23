@@ -1,0 +1,36 @@
+# name: test/sql/ordinality/ordinality_readcsv.test
+# description: Test read_csv function
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+
+query III
+SELECT * FROM read_csv('test/sql/ordinality/glob/a0.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+----
+0	a	1
+1	b	2
+2	c	3
+3	d	4
+4	e	5
+5	f	6
+6	g	7
+7	h	8
+8	i	9
+9	j	10
+
+
+query III
+SELECT * FROM read_csv_auto('test/sql/ordinality/glob/a0.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+----
+0	a	1
+1	b	2
+2	c	3
+3	d	4
+4	e	5
+5	f	6
+6	g	7
+7	h	8
+8	i	9
+9	j	10
