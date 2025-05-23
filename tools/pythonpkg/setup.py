@@ -381,26 +381,57 @@ from setuptools_scm import Configuration, ScmVersion
 from pathlib import Path
 import os
 
-######
-# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
-# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/amalgamation.py
-# - scripts/package_build.py
-# - tools/pythonpkg/setup.py
-######
+"""
+MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+MAIN_BRANCH_VERSIONING default should be 'False' for release branches
+MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+- CMakeLists.txt
+- scripts/amalgamation.py
+- scripts/package_build.py
+- tools/pythonpkg/setup.py
+"""
 MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
     MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
     MAIN_BRANCH_VERSIONING = True
 
-# Regexp to parse versions in PKG-INFO. Probably supports a little more than
-# we need right now (alpha, beta, rc, post), but might come in handy at some point.
+""" Regexp to parse versions in PKG-INFO in line with PEP 440. Supports a little more than we need right now
+(pre-, post- and dev-releases), but might come in handy at some point.
+"""
 PKG_INFO_VERSION_RE = re.compile(
     r"^(?P<version>\d+\.\d+\.\d+)"
     r"(?P<suffix>(a\d+|b\d+|rc\d+|\.dev\d+|\.post\d+)?)$"
+)
+
+""" Regexp to parse versions in OVERRIDE_GIT_DESCRIBE (i.e. git describe --tags output).Supports a little more than we
+need right now (pre-, post- and dev-releases), but might come in handy at some point.
+
+Assumptions:
+- The format is <version_tag>(-(dev)?<distance>(-<node>)?)?
+- <version_tag> is required and must start with 'v', followed by a PEP 440-compliant version:
+  e.g. v1.2.3, v2.0.0a1, v1.2.3.post1, v1.2.3.dev2
+- <distance> is optional and may optionally be prefixed with "dev" (which is not in line with git describe output
+  but seems to be used here and there...).
+- <node> is optional and represents the Git commit hash (usually prefixed by "g").
+"""
+GIT_DESCRIBE_RE = re.compile(
+    r"""^
+    (?P<version_tag>                       # Full version tag (starting with v)
+        v[0-9]+\.[0-9]+\.[0-9]+            # Core: v1.2.3
+        (?:                               
+            (?:a|b|rc)[0-9]+ |             # Pre-release: a1, b2, rc3
+            \.post[0-9]+ |                 # Post-release: .post1
+            \.dev[0-9]+                    # Dev-release: .dev2
+        )?
+    )
+    (?:
+        -(?:dev)?(?P<distance>[0-9]+)          # Optional: -4 or -dev4
+        (?:-g?(?P<node>[0-9a-fA-F]+))?         # Optional: -g<hash>
+    )?
+    $
+    """,
+    re.VERBOSE
 )
 
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
@@ -421,38 +452,35 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
                     suffix = parsed_version.group("suffix") or ""
                     full_tag = f"v{base_version}{suffix}"
                     # Only dev releases affect distance
-                    dev_match = re.search(r"\.dev(\d+)", suffix)
-                    dev_distance = int(dev_match.group(1)) if dev_match else 0
-                    return meta(tag=full_tag, distance=dev_distance, node="00000000", config=config)
+                    dist_match = re.search(r"\.dev(\d+)", suffix)
+                    distance = int(dist_match.group(1) or 0)
+                    return meta(tag=full_tag, distance=distance, node="00000000", config=config)
 
+    # Then check if OVERRIDE_GIT_DESCRIBE was set
     override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        parts = override.split('-')
-        if len(parts) == 3:
-            # Already in correct format tag-distance-gnode
-            tag, distance, node = parts
-            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
-        elif len(parts) == 1:
-            # Just tag, add -0-gnode
-            tag = parts[0]
-            distance = 0
-        elif len(parts) == 2:
-            # tag-distance, need to add -gnode
-            tag, distance = parts
-        else:
-            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
-        return meta(tag=tag, distance=int(distance), config=config)
+    if override is not None and len(override) > 0:
+        parsed_override = GIT_DESCRIBE_RE.match(override)
+        if not override:
+            raise ValueError(f"Invalid format in OVERRIDE_GIT_DESCRIBE: {override}")
+        tag = parsed_override.group("version_tag")
+        print(parsed_override.groupdict())
+        distance = int(parsed_override.group("distance") or 0)
+        node = parsed_override.group("node")
+        return meta(tag=tag, distance=distance, node=node, config=config)
 
+    # No PKG-INFO or OVERRIDE_GIT_DESCRIBE found, fetching info from git
     versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
     git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
 
     try:
         return git_parse(root, config, describe_command=git_describe_command)
     except Exception:
+        # Didn't work, fall back to deadbeeff
         return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
 
 
 def version_scheme(version):
+    print("!!!!!!!!!!!!!! version_scheme called")
     def prefix_version(version):
         """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
         if version.startswith('v'):
