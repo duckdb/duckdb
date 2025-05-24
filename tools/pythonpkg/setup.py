@@ -4,6 +4,7 @@ import ctypes
 import os
 import platform
 import re
+import subprocess
 import sys
 import traceback
 from functools import lru_cache
@@ -434,8 +435,47 @@ GIT_DESCRIBE_RE = re.compile(
     re.VERBOSE
 )
 
+def git_describe():
+    """ Get the git describe string either from the remote repo or from OVERRIDE_GIT_DESCRIBE.
+
+    :todo: this has a lot of overlap with package_build.get_git_describe() but we can't rely on
+           that being present.
+    :return: tag, distance, node triple. Tag is guaranteed to be a valid DuckDB version string,
+             distance is guaranteed to be an integer, and node may or may not be None.
+    """
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override is None or len(override) == 0:
+        try:
+            describe_str = subprocess.check_output(
+                    ['git', 'describe', '--tags', '--long', '--debug', '--match', 'v*.*.*']
+                ).strip().decode('utf8')
+        except subprocess.CalledProcessError:
+            describe_str = "v0.0.0-0-gdeadbeeff"
+    else:
+        describe_str = override
+    parsed_describe = GIT_DESCRIBE_RE.match(describe_str)
+    if not parsed_describe:
+        describe_str_source = override and "OVERRIDE_GIT_DESCRIBE" or "git describe output"
+        raise ValueError(f"Invalid format in {describe_str_source}: {describe_str}")
+    tag = parsed_describe.group("version_tag")
+    distance = int(parsed_describe.group("distance") or 0)
+    node = parsed_describe.group("node")
+    return tag, distance, node
+
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
-    from setuptools_scm.git import parse as git_parse
+    """ Parse the current version. Used to override setuptools_scm default parse function.
+
+    The version determination logic works as follows:
+    1. If a PKG-INFO file exists then we must be in a source distribution (sdist) already.
+       This means the correct version has been established already. We can just parse the
+       value and pass it on. PKG-INFO _always_ corresponds to PEP 440 versioning because
+       PyPi and tooling require this.
+    2. If OVERRIDE_GIT_DESCRIBE is set then we use this as the source of truth. Note that we
+       do need to check whether the format is correct, since this is passed in from outside.
+    3. Otherwise, we try to figure out the current tag, distance and node from git describe.
+    4. If that fails, as a last resort, we set the tag to v0.0.0, distance to 0, and node to
+       deadbeeff.
+    """
     from setuptools_scm.version import meta
 
     # First check if we have a PKG-INFO with a version already
@@ -456,38 +496,17 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
                     distance = int(dist_match.group(1) or 0)
                     return meta(tag=full_tag, distance=distance, node="00000000", config=config)
 
-    # Then check if OVERRIDE_GIT_DESCRIBE was set
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override is not None and len(override) > 0:
-        parsed_override = GIT_DESCRIBE_RE.match(override)
-        if not override:
-            raise ValueError(f"Invalid format in OVERRIDE_GIT_DESCRIBE: {override}")
-        tag = parsed_override.group("version_tag")
-        print(parsed_override.groupdict())
-        distance = int(parsed_override.group("distance") or 0)
-        node = parsed_override.group("node")
-        return meta(tag=tag, distance=distance, node=node, config=config)
-
-    # No PKG-INFO or OVERRIDE_GIT_DESCRIBE found, fetching info from git
-    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
-    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
-
-    try:
-        return git_parse(root, config, describe_command=git_describe_command)
-    except Exception:
-        # Didn't work, fall back to deadbeeff
-        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
-
+    # Otherwise we try to get the tag, distance and node through git describe
+    tag, distance, node = git_describe()
+    return meta(tag=tag, distance=distance, node=node, config=config)
 
 def version_scheme(version):
-    print("!!!!!!!!!!!!!! version_scheme called")
+    """ DuckDB versioning scheme. Note that this does not affect the PKG-INFO value. """
     def prefix_version(version):
         """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
         if version.startswith('v'):
             return version
         return 'v' + version
-
-    print("Version is", version)
 
     # If we're exactly on a tag (dev_iteration = 0, dirty=False)
     if version.exact:
