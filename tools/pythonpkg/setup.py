@@ -400,10 +400,7 @@ if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
 """ Regexp to parse versions in PKG-INFO in line with PEP 440. Supports a little more than we need right now
 (pre-, post- and dev-releases), but might come in handy at some point.
 """
-PKG_INFO_VERSION_RE = re.compile(
-    r"^(?P<version>\d+\.\d+\.\d+)"
-    r"(?P<suffix>(a\d+|b\d+|rc\d+|\.dev\d+|\.post\d+)?)$"
-)
+PKG_INFO_VERSION_RE = re.compile(r"^(?P<version>\d+\.\d+\.\d+)" r"(?P<suffix>(a\d+|b\d+|rc\d+|\.dev\d+|\.post\d+)?)$")
 
 """ Regexp to parse versions in OVERRIDE_GIT_DESCRIBE (i.e. git describe --tags output).Supports a little more than we
 need right now (pre-, post- and dev-releases), but might come in handy at some point.
@@ -432,11 +429,12 @@ GIT_DESCRIBE_RE = re.compile(
     )?
     $
     """,
-    re.VERBOSE
+    re.VERBOSE,
 )
 
+
 def git_describe():
-    """ Get the git describe string either from the remote repo or from OVERRIDE_GIT_DESCRIBE.
+    """Get the git describe string either from the remote repo or from OVERRIDE_GIT_DESCRIBE.
 
     :todo: this has a lot of overlap with package_build.get_git_describe() but we can't rely on
            that being present.
@@ -448,9 +446,11 @@ def git_describe():
     if override is None or len(override) == 0:
         try:
             print("Calling git describe --tags --long --debug --match v*.*.*")
-            describe_str = subprocess.check_output(
-                    ['git', 'describe', '--tags', '--long', '--debug', '--match', 'v*.*.*']
-                ).strip().decode('utf8')
+            describe_str = (
+                subprocess.check_output(['git', 'describe', '--tags', '--long', '--debug', '--match', 'v*.*.*'])
+                .strip()
+                .decode('utf8')
+            )
         except subprocess.CalledProcessError:
             print("Calling git failed, using mock describe string")
             describe_str = "v0.0.0-0-gdeadbeeff"
@@ -467,8 +467,9 @@ def git_describe():
     print(f"Parsed {describe_str} into tag={tag}, distance={distance}, node={node}")
     return tag, distance, node
 
+
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
-    """ Parse the current version. Used to override setuptools_scm default parse function.
+    """Parse the current version. Used to override setuptools_scm default parse function.
 
     The version determination logic works as follows:
     1. If a PKG-INFO file exists then we must be in a source distribution (sdist) already.
@@ -509,8 +510,9 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     tag, distance, node = git_describe()
     return meta(tag=tag, distance=distance, node=node, config=config)
 
+
 def version_scheme(version):
-    """ DuckDB versioning scheme. Note that this does not affect the PKG-INFO value. """
+    """DuckDB versioning scheme. Note that this does not affect the PKG-INFO value."""
 
     def prefix_version(version):
         """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
