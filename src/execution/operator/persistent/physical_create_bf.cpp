@@ -267,8 +267,7 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 	gstate.global_aggregate_state->Combine(*state.local_aggregate_state);
 
 	auto guard = gstate.Lock();
-	size_t global_size =
-	    gstate.temporary_memory_state->GetMinimumReservation() + state.temporary_memory_state->GetMinimumReservation();
+	size_t global_size = gstate.temporary_memory_state->GetMinimumReservation() + state.local_data->SizeInBytes();
 	gstate.temporary_memory_state->SetMinimumReservation(global_size);
 	gstate.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.client, global_size);
 
