@@ -43,7 +43,7 @@ public:
 	    : context(context), op(op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), is_selectivity_checked(false),
-	      num_input_rows(0) {
+	      num_input_rows(0), total_row_size(0) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
 
 		// init min max aggregation
@@ -150,6 +150,7 @@ public:
 	// runtime statistics
 	atomic<bool> is_selectivity_checked;
 	atomic<int64_t> num_input_rows;
+	atomic<int64_t> total_row_size;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
@@ -201,6 +202,7 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 	// Early Stop: Unfiltered Table or estimated OOM
 	if (!gstate.is_selectivity_checked) {
 		gstate.num_input_rows += static_cast<int64_t>(chunk.size());
+		gstate.total_row_size += static_cast<int64_t>(chunk.GetAllocationSize());
 
 		if (this_pipeline->num_source_chunks > 32) {
 			gstate.is_selectivity_checked = true;
@@ -210,7 +212,8 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 			double input_rows = static_cast<double>(gstate.num_input_rows);
 			double source_rows = static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE);
 			double selectivity = input_rows / source_rows;
-			if (selectivity > 0.35) {
+			double row_length = gstate.total_row_size / gstate.num_input_rows;
+			if (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2)) {
 				is_successful = false;
 				return true;
 			}
@@ -431,7 +434,7 @@ unique_ptr<LocalSinkState> PhysicalCreateBF::GetLocalSinkState(ExecutionContext 
 class CreateBFGlobalSourceState : public GlobalSourceState {
 public:
 	explicit CreateBFGlobalSourceState(const ColumnDataCollection &collection)
-	    : max_threads(MaxValue<idx_t>(collection.ChunkCount() / 120, 1)), data_collection(collection) {
+	    : max_threads(MaxValue<idx_t>(collection.ChunkCount(), 1)), data_collection(collection) {
 		collection.InitializeScan(global_scan_state);
 	}
 
