@@ -3,6 +3,8 @@
 import ctypes
 import os
 import platform
+import re
+import subprocess
 import sys
 import traceback
 from functools import lru_cache
@@ -380,68 +382,145 @@ from setuptools_scm import Configuration, ScmVersion
 from pathlib import Path
 import os
 
-######
-# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
-# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/amalgamation.py
-# - scripts/package_build.py
-# - tools/pythonpkg/setup.py
-######
+"""
+MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+MAIN_BRANCH_VERSIONING default should be 'False' for release branches
+MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+- CMakeLists.txt
+- scripts/amalgamation.py
+- scripts/package_build.py
+- tools/pythonpkg/setup.py
+"""
 MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
     MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
     MAIN_BRANCH_VERSIONING = True
 
+""" Regexp to parse versions in PKG-INFO in line with PEP 440. Supports a little more than we need right now
+(pre-, post- and dev-releases), but might come in handy at some point.
+"""
+PKG_INFO_VERSION_RE = re.compile(r"^(?P<version>\d+\.\d+\.\d+)" r"(?P<suffix>(a\d+|b\d+|rc\d+|\.dev\d+|\.post\d+)?)$")
+
+""" Regexp to parse versions in OVERRIDE_GIT_DESCRIBE (i.e. git describe --tags output).Supports a little more than we
+need right now (pre-, post- and dev-releases), but might come in handy at some point.
+
+Assumptions:
+- The format is <version_tag>(-(dev)?<distance>(-<node>)?)?
+- <version_tag> is required and must start with 'v', followed by a PEP 440-compliant version:
+  e.g. v1.2.3, v2.0.0a1, v1.2.3.post1, v1.2.3.dev2
+- <distance> is optional and may optionally be prefixed with "dev" (which is not in line with git describe output
+  but seems to be used here and there...).
+- <node> is optional and represents the Git commit hash (usually prefixed by "g").
+"""
+GIT_DESCRIBE_RE = re.compile(
+    r"""^
+    (?P<version_tag>                       # Full version tag (starting with v)
+        v[0-9]+\.[0-9]+\.[0-9]+            # Core: v1.2.3
+        (?:                               
+            (?:a|b|rc)[0-9]+ |             # Pre-release: a1, b2, rc3
+            \.post[0-9]+ |                 # Post-release: .post1
+            \.dev[0-9]+                    # Dev-release: .dev2
+        )?
+    )
+    (?:
+        -(?:dev)?(?P<distance>[0-9]+)          # Optional: -4 or -dev4
+        (?:-g?(?P<node>[0-9a-fA-F]+))?         # Optional: -g<hash>
+    )?
+    $
+    """,
+    re.VERBOSE,
+)
+
+
+def git_describe():
+    """Get the git describe string either from the remote repo or from OVERRIDE_GIT_DESCRIBE.
+
+    :todo: this has a lot of overlap with package_build.get_git_describe() but we can't rely on
+           that being present.
+    :return: tag, distance, node triple. Tag is guaranteed to be a valid DuckDB version string,
+             distance is guaranteed to be an integer, and node may or may not be None.
+    """
+    print("Starting git describe...")
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override is None or len(override) == 0:
+        try:
+            print("Calling git describe --tags --long --debug --match v*.*.*")
+            describe_str = (
+                subprocess.check_output(['git', 'describe', '--tags', '--long', '--debug', '--match', 'v*.*.*'])
+                .strip()
+                .decode('utf8')
+            )
+        except subprocess.CalledProcessError:
+            print("Calling git failed, using mock describe string")
+            describe_str = "v0.0.0-0-gdeadbeeff"
+    else:
+        print("Found OVERRIDE_GIT_DESCRIBE")
+        describe_str = override
+    parsed_describe = GIT_DESCRIBE_RE.match(describe_str)
+    if not parsed_describe:
+        describe_str_source = override and "OVERRIDE_GIT_DESCRIBE" or "git describe output"
+        raise ValueError(f"Invalid format in {describe_str_source}: {describe_str}")
+    tag = parsed_describe.group("version_tag")
+    distance = int(parsed_describe.group("distance") or 0)
+    node = parsed_describe.group("node")
+    print(f"Parsed {describe_str} into tag={tag}, distance={distance}, node={node}")
+    return tag, distance, node
+
 
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
-    from setuptools_scm.git import parse as git_parse
+    """Parse the current version. Used to override setuptools_scm default parse function.
+
+    The version determination logic works as follows:
+    1. If a PKG-INFO file exists then we must be in a source distribution (sdist) already.
+       This means the correct version has been established already. We can just parse the
+       value and pass it on. PKG-INFO _always_ corresponds to PEP 440 versioning because
+       PyPi and tooling require this.
+    2. If OVERRIDE_GIT_DESCRIBE is set then we use this as the source of truth. Note that we
+       do need to check whether the format is correct, since this is passed in from outside.
+    3. Otherwise, we try to figure out the current tag, distance and node from git describe.
+    4. If that fails, as a last resort, we set the tag to v0.0.0, distance to 0, and node to
+       deadbeeff.
+    """
     from setuptools_scm.version import meta
 
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        parts = override.split('-')
-        if len(parts) == 3:
-            # Already in correct format tag-distance-gnode
-            tag, distance, node = parts
-            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
-        elif len(parts) == 1:
-            # Just tag, add -0-gnode
-            tag = parts[0]
-            distance = 0
-        elif len(parts) == 2:
-            # tag-distance, need to add -gnode
-            tag, distance = parts
-        else:
-            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
-        return meta(tag=tag, distance=int(distance), config=config)
+    print(f"Finding version (root={root}, config={config})")
 
-    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
-    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
+    # First check if we have a PKG-INFO with a version already
+    pkg_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "PKG-INFO")
+    if os.path.exists(pkg_info_path):
+        print("Found PKG-INFO")
+        with open(pkg_info_path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith("Version: "):
+                    version = line.partition("Version: ")[2].strip()
+                    print(f"Found Version line in PKG-INFO: {version}")
+                    parsed_version = PKG_INFO_VERSION_RE.match(version)
+                    if not parsed_version:
+                        raise ValueError(f"Invalid version format in PKG-INFO: {version}")
+                    tag = "v{}".format(parsed_version.group("version"))
+                    suffix = parsed_version.group("suffix") or ""
+                    # Only dev releases affect distance
+                    dist_match = re.search(r"\.dev(\d+)", suffix)
+                    distance = int(dist_match.group(1) or 0)
+                    print(f"Done: tag={tag}, distance={distance}")
+                    return meta(tag=tag, distance=distance, node="00000000", config=config)
 
-    try:
-        return git_parse(root, config, describe_command=git_describe_command)
-    except Exception:
-        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
+    # Otherwise we try to get the tag, distance and node through git describe
+    tag, distance, node = git_describe()
+    return meta(tag=tag, distance=distance, node=node, config=config)
 
 
 def version_scheme(version):
+    """DuckDB versioning scheme. Note that this does not affect the PKG-INFO value."""
+
     def prefix_version(version):
         """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
         if version.startswith('v'):
             return version
         return 'v' + version
 
-    print("Version is", version)
-
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        formatted_version = version.format_with("{tag}")
-        print("formatted_version = ", formatted_version)
-        print("Early return due to OVERRIDE_GIT_DESCRIBE")
-        return formatted_version
+    print(f"Starting version_scheme with {version}")
 
     # If we're exactly on a tag (dev_iteration = 0, dirty=False)
     if version.exact:
@@ -461,6 +540,7 @@ def version_scheme(version):
 
     # Format as v{major}.{minor}.{patch}-dev{distance}
     next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
+    print(f"Returning {prefix_version(next_version)}")
     return prefix_version(next_version)
 
 
