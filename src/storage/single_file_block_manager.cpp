@@ -40,7 +40,10 @@ void MainHeader::Write(WriteStream &ser) {
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
-	data_t magic_bytes[MAGIC_BYTE_SIZE];
+	void *magic_bytes;
+	posix_memalign(&magic_bytes, Storage::SECTOR_SIZE, MAGIC_BYTE_SIZE);
+
+	// data_t magic_bytes[MAGIC_BYTE_SIZE];
 	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
@@ -48,6 +51,7 @@ void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
+	free(magic_bytes);
 }
 
 MainHeader MainHeader::Read(ReadStream &source) {
@@ -232,7 +236,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
-	MainHeader::CheckMagicBytes(*handle);
+	// MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(header_buffer, 0);
 	DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);

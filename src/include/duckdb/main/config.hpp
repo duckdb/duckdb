@@ -126,7 +126,7 @@ struct DBConfigOptions {
 	//! Checkpoint when WAL reaches this size (default: 16MB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
-	bool use_direct_io = false;
+	bool use_direct_io = true;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT

@@ -14,7 +14,9 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	}
 
 	constexpr const idx_t MAGIC_BYTES_READ_SIZE = 16;
-	char buffer[MAGIC_BYTES_READ_SIZE];
+	// char buffer[MAGIC_BYTES_READ_SIZE];
+	void *buffer;
+	posix_memalign(&buffer, Storage::SECTOR_SIZE, MAGIC_BYTES_READ_SIZE);
 
 	handle->Read(buffer, MAGIC_BYTES_READ_SIZE);
 	if (memcmp(buffer, "SQLite format 3\0", 16) == 0) {
@@ -26,6 +28,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	if (memcmp(buffer + MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) == 0) {
 		return DataFileType::DUCKDB_FILE;
 	}
+	free(buffer);
 	return DataFileType::FILE_DOES_NOT_EXIST;
 }
 

@@ -186,10 +186,15 @@ data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t 
 #ifdef USE_JEMALLOC
 	return JemallocExtension::Allocate(private_data, size);
 #else
-	auto default_allocate_result = malloc(size);
-	if (!default_allocate_result) {
+	int result = posix_memalign(&default_allocate_result, Storage::SECTOR_SIZE, size);
+	if (result != 0) {
 		throw std::bad_alloc();
 	}
+
+	// auto default_allocate_result = malloc(size);
+	// if (!default_allocate_result) {
+	// 	throw std::bad_alloc();
+	// }
 	return data_ptr_cast(default_allocate_result);
 #endif
 }
