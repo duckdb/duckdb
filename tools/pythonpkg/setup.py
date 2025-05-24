@@ -443,15 +443,19 @@ def git_describe():
     :return: tag, distance, node triple. Tag is guaranteed to be a valid DuckDB version string,
              distance is guaranteed to be an integer, and node may or may not be None.
     """
+    print("Starting git describe...")
     override = os.getenv('OVERRIDE_GIT_DESCRIBE')
     if override is None or len(override) == 0:
         try:
+            print("Calling git describe --tags --long --debug --match v*.*.*")
             describe_str = subprocess.check_output(
                     ['git', 'describe', '--tags', '--long', '--debug', '--match', 'v*.*.*']
                 ).strip().decode('utf8')
         except subprocess.CalledProcessError:
+            print("Calling git failed, using mock describe string")
             describe_str = "v0.0.0-0-gdeadbeeff"
     else:
+        print("Found OVERRIDE_GIT_DESCRIBE")
         describe_str = override
     parsed_describe = GIT_DESCRIBE_RE.match(describe_str)
     if not parsed_describe:
@@ -460,6 +464,7 @@ def git_describe():
     tag = parsed_describe.group("version_tag")
     distance = int(parsed_describe.group("distance") or 0)
     node = parsed_describe.group("node")
+    print(f"Parsed {describe_str} into tag={tag}, distance={distance}, node={node}")
     return tag, distance, node
 
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
@@ -478,23 +483,27 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
     """
     from setuptools_scm.version import meta
 
+    print(f"Finding version (root={root}, config={config})")
+
     # First check if we have a PKG-INFO with a version already
     pkg_info_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "PKG-INFO")
     if os.path.exists(pkg_info_path):
+        print("Found PKG-INFO")
         with open(pkg_info_path, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
                 if line.startswith("Version: "):
                     version = line.partition("Version: ")[2].strip()
+                    print(f"Found Version line in PKG-INFO: {version}")
                     parsed_version = PKG_INFO_VERSION_RE.match(version)
                     if not parsed_version:
                         raise ValueError(f"Invalid version format in PKG-INFO: {version}")
-                    base_version = parsed_version.group("version")
+                    tag = "v{}".format(parsed_version.group("version"))
                     suffix = parsed_version.group("suffix") or ""
-                    full_tag = f"v{base_version}{suffix}"
                     # Only dev releases affect distance
                     dist_match = re.search(r"\.dev(\d+)", suffix)
                     distance = int(dist_match.group(1) or 0)
-                    return meta(tag=full_tag, distance=distance, node="00000000", config=config)
+                    print(f"Done: tag={tag}, distance={distance}")
+                    return meta(tag=tag, distance=distance, node="00000000", config=config)
 
     # Otherwise we try to get the tag, distance and node through git describe
     tag, distance, node = git_describe()
@@ -502,11 +511,14 @@ def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
 
 def version_scheme(version):
     """ DuckDB versioning scheme. Note that this does not affect the PKG-INFO value. """
+
     def prefix_version(version):
         """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
         if version.startswith('v'):
             return version
         return 'v' + version
+
+    print(f"Starting version_scheme with {version}")
 
     # If we're exactly on a tag (dev_iteration = 0, dirty=False)
     if version.exact:
@@ -526,6 +538,7 @@ def version_scheme(version):
 
     # Format as v{major}.{minor}.{patch}-dev{distance}
     next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
+    print(f"Returning {prefix_version(next_version)}")
     return prefix_version(next_version)
 
 
