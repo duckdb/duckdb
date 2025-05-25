@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 
 query III
-SELECT * FROM read_csv('test/sql/ordinality/glob/a0.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+SELECT * FROM read_csv('test/sql/ordinality/a0.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
 ----
 0	a	1
 1	b	2
@@ -22,7 +22,7 @@ SELECT * FROM read_csv('test/sql/ordinality/glob/a0.csv') WITH ORDINALITY ORDER 
 
 
 query III
-SELECT * FROM read_csv_auto('test/sql/ordinality/glob/a0.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
+SELECT * FROM read_csv_auto('test/sql/ordinality/a0.csv') WITH ORDINALITY ORDER BY Numbers,Chars,ordinality;
 ----
 0	a	1
 1	b	2
