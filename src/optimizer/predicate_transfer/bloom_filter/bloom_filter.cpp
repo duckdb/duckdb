@@ -22,7 +22,7 @@ static uint32_t CeilPowerOfTwo(uint32_t n) {
 	return n + 1;
 }
 
-static Vector HashColumns(DataChunk &chunk, vector<idx_t> &cols) {
+static Vector HashColumns(DataChunk &chunk, const vector<idx_t> &cols) {
 	auto count = chunk.size();
 	Vector hashes(LogicalType::HASH);
 	VectorOperations::Hash(chunk.data[cols[0]], hashes, count);
@@ -38,12 +38,9 @@ static Vector HashColumns(DataChunk &chunk, vector<idx_t> &cols) {
 }
 } // namespace
 
-void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows, const vector<idx_t> &applied,
-                             const vector<idx_t> &built) {
+void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
-	bound_cols_applied = applied;
-	bound_cols_built = built;
 
 	uint32_t min_bits = std::max<uint32_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
 	num_sectors = std::min(CeilPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
@@ -55,14 +52,14 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows, co
 	std::fill_n(blocks, num_sectors, 0);
 }
 
-int BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results) {
+int BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const {
 	int count = static_cast<int>(chunk.size());
 	Vector hashes = HashColumns(chunk, bound_cols_applied);
 	BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
 	return count;
 }
 
-void BloomFilter::Insert(DataChunk &chunk) {
+void BloomFilter::Insert(DataChunk &chunk, const vector<idx_t> &bound_cols_built) {
 	int count = static_cast<int>(chunk.size());
 	Vector hashes = HashColumns(chunk, bound_cols_built);
 	std::lock_guard<std::mutex> lock(insert_lock);

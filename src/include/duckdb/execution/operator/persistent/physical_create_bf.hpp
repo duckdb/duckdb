@@ -35,7 +35,21 @@ public:
 	shared_ptr<Pipeline> this_pipeline;
 
 	vector<shared_ptr<FilterPlan>> filter_plans;
-	vector<shared_ptr<BloomFilter>> bf_to_create;
+
+	//! Unified BFs contain all BFs, and they can be reused by PhysicalUseBF.
+	struct VectorHash {
+		size_t operator()(const std::vector<idx_t> &key) const {
+			size_t hash = 0;
+			for (const auto &elem : key) {
+				hash ^= std::hash<idx_t> {}(elem) + (hash << 1); // Combine the hash values
+			}
+			return hash;
+		}
+	};
+	unordered_map<vector<idx_t>, shared_ptr<BloomFilter>, VectorHash> unique_bloom_filters;
+	vector<unique_ptr<BloomFilterUsage>> bf_to_create;
+
+	//! Min-max Filters
 	vector<vector<ColumnBinding>> min_max_applied_cols;
 	vector<shared_ptr<DynamicTableFilterSet>> min_max_to_create;
 

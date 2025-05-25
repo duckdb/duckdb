@@ -127,14 +127,20 @@ void TransferGraphManager::IgnoreUnfilteredTable() {
 		auto idx = pair.first;
 		auto *table = pair.second;
 
-		if (table->type != LogicalOperatorType::LOGICAL_GET) {
+		// A filtered table: Filter --> Scan
+		if (table->type == LogicalOperatorType::LOGICAL_FILTER) {
 			continue;
 		}
 
-		auto &get = table->Cast<LogicalGet>();
-		if (get.table_filters.filters.empty()) {
-			unfiltered_table_idx.push_back(idx);
+		// A filtered table: Scan with pushdown filters
+		if (table->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = table->Cast<LogicalGet>();
+			if (!get.table_filters.filters.empty()) {
+				continue;
+			}
 		}
+
+		unfiltered_table_idx.push_back(idx);
 	}
 
 	// 2. Collect received BFs for each unfiltered table
@@ -265,8 +271,16 @@ void TransferGraphManager::IgnoreUnfilteredTable() {
 					link->protect_left = true;
 				}
 			}
+		}
+	}
 
-			// remove invalid edges
+	// 4. Remove invalid links
+	for (auto &pair : table_operator_manager.table_operators) {
+		auto idx = pair.first;
+		auto &edges = neighbor_matrix[idx];
+
+		for (auto &edge : edges) {
+			auto &links = edge.second;
 			links.erase(std::remove_if(
 			                links.begin(), links.end(),
 			                [](const shared_ptr<EdgeInfo> &link) { return link->protect_left && link->protect_right; }),
@@ -365,22 +379,8 @@ pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &co
 
 	for (auto i : unconstructed_set) {
 		for (auto j : constructed_set) {
-			auto &edges = neighbor_matrix[i][j];
+			auto &edges = neighbor_matrix[j][i];
 			if (edges.empty()) {
-				continue;
-			}
-
-			bool connected = false;
-			for (auto &edge : edges) {
-				bool is_left = (edge->left_binding.table_index == j && !edge->protect_right);
-				bool is_right = (edge->right_binding.table_index == j && !edge->protect_left);
-
-				if (is_left || is_right) {
-					connected = true;
-					break;
-				}
-			}
-			if (!connected) {
 				continue;
 			}
 

@@ -35,19 +35,16 @@ static constexpr const int32_t SIMD_BATCH_SIZE = 16;
 class BloomFilter {
 public:
 	BloomFilter() = default;
-	void Initialize(ClientContext &context_p, uint32_t est_num_rows, const vector<idx_t> &applied,
-	                const vector<idx_t> &built);
+	void Initialize(ClientContext &context_p, uint32_t est_num_rows);
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
 
 	bool finalized_;
-	vector<idx_t> bound_cols_applied;
-	vector<idx_t> bound_cols_built;
 
 public:
-	int Lookup(DataChunk &chunk, vector<uint32_t> &results);
-	void Insert(DataChunk &chunk);
+	int Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const;
+	void Insert(DataChunk &chunk, const vector<idx_t> &bound_cols_built);
 
 	uint32_t num_sectors;
 	uint32_t num_sectors_log;
@@ -153,6 +150,30 @@ private:
 	}
 
 	AllocatedData buf_;
+};
+
+class BloomFilterUsage {
+public:
+	BloomFilterUsage(shared_ptr<BloomFilter> bloom_filter, const vector<idx_t> &applied, const vector<idx_t> &built)
+	    : bloom_filter(std::move(bloom_filter)), bound_cols_applied(applied), bound_cols_built(built) {
+	}
+
+	bool IsValid() const {
+		return bloom_filter->finalized_;
+	}
+
+public:
+	int Lookup(DataChunk &chunk, vector<uint32_t> &results) const {
+		return bloom_filter->Lookup(chunk, results, bound_cols_applied);
+	}
+	void Insert(DataChunk &chunk) const {
+		return bloom_filter->Insert(chunk, bound_cols_applied);
+	}
+
+private:
+	shared_ptr<BloomFilter> bloom_filter;
+	vector<idx_t> bound_cols_applied;
+	vector<idx_t> bound_cols_built;
 };
 
 } // namespace duckdb

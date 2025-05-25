@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
 
 namespace duckdb {
 vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
@@ -55,6 +56,7 @@ ColumnBinding TableOperatorManager::GetRenaming(ColumnBinding binding) {
 
 idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -65,17 +67,7 @@ idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 		return op->GetTableIndex()[0];
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-			return op->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
-		}
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			// For In-Clause optimization
-			return op->children[0]->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
-		}
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-			return op->children[0]->Cast<LogicalAggregate>().GetTableIndex()[0];
-		}
-		return op->Cast<LogicalGet>().GetTableIndex()[0];
+		return GetScalarTableIndex(op->children[0].get());
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		return op->GetTableIndex()[1];
@@ -87,6 +79,7 @@ idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 
 bool TableOperatorManager::OperatorNeedsRelation(LogicalOperatorType op_type) {
 	switch (op_type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -109,51 +102,8 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 
 void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
-	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
-		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
-			LogicalOperator *child = op->children[0].get();
-			if (child->type == LogicalOperatorType::LOGICAL_GET) {
-				AddTableOperator(op);
-				return;
-			}
 
-			// TODO: support mark join
-			// if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
-			//     child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			// 	auto &join = child->Cast<LogicalComparisonJoin>();
-			//
-			// 	// if it is a mark join and the left table is small, we can build a BF based on it.
-			// 	if (join.join_type == JoinType::MARK && join.children[1]->estimated_cardinality < 1000) {
-			// 		AddTableOperator(op);
-			// 	}
-			// }
-
-			D_ASSERT(!op->expressions.empty());
-			ExtractOperatorsInternal(*child, joins);
-			return;
-		}
-
-		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			LogicalOperator *child = op->children[0].get();
-
-			// TODO: support mark join
-			// if (op->expressions.size() == 1 && op->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF &&
-			//     child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			// 	auto &join = child->Cast<LogicalComparisonJoin>();
-			//
-			// 	// if it is a mark join and the left table is small, we can build a BF based on it.
-			// 	if (join.join_type == JoinType::MARK && join.children[1]->estimated_cardinality < 1000) {
-			// 		AddTableOperator(op);
-			// 	}
-			// }
-
-			D_ASSERT(!op->expressions.empty());
-			ExtractOperatorsInternal(*child, joins);
-			return;
-		}
-		op = op->children[0].get();
-	}
-
+	// 1. collect joins
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
@@ -180,17 +130,28 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		}
 	}
 
+	// 2. collect base tables
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		LogicalOperator *child = op->children[0].get();
+		if (child->type == LogicalOperatorType::LOGICAL_GET) {
+			AddTableOperator(op);
+			return;
+		}
+		ExtractOperatorsInternal(*child, joins);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
 		if (agg.groups.empty() && agg.grouping_sets.size() <= 1) {
-			ExtractOperatorsInternal(*op->children[0], joins);
 			AddTableOperator(op);
+			ExtractOperatorsInternal(*op->children[0], joins);
 		} else {
+			auto old_refs = agg.GetColumnBindings();
 			for (size_t i = 0; i < agg.groups.size(); i++) {
 				if (agg.groups[i]->type == ExpressionType::BOUND_COLUMN_REF) {
 					auto &col_ref = agg.groups[i]->Cast<BoundColumnRefExpression>();
-					rename_col_bindings.insert({agg.GetColumnBindings()[i], col_ref.binding});
+					rename_col_bindings.insert({old_refs[i], col_ref.binding});
 				}
 			}
 			ExtractOperatorsInternal(*op->children[0], joins);
@@ -198,10 +159,11 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto old_refs = op->GetColumnBindings();
 		for (size_t i = 0; i < op->expressions.size(); i++) {
 			if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-				rename_col_bindings.insert({op->GetColumnBindings()[i], col_ref.binding});
+				rename_col_bindings.insert({old_refs[i], col_ref.binding});
 			}
 		}
 		ExtractOperatorsInternal(*op->children[0], joins);
@@ -209,12 +171,18 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-		// AddTableOperator(op);
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		AddTableOperator(op);
 		ExtractOperatorsInternal(*op->children[0], joins);
 		ExtractOperatorsInternal(*op->children[1], joins);
 		return;
-	case LogicalOperatorType::LOGICAL_WINDOW:
+	}
+	case LogicalOperatorType::LOGICAL_WINDOW: {
+		// TODO: how can we handle the window?
+		AddTableOperator(op);
+		// ExtractOperatorsInternal(*op->children[0], joins);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:

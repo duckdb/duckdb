@@ -20,11 +20,17 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
                                    vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality,
                                    bool is_probing_side)
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
-      is_probing_side(is_probing_side), is_successful(true), filter_plans(filter_plans),
+      is_probing_side(is_probing_side), is_successful(true), filter_plans(filter_plans), unique_bloom_filters(),
       min_max_applied_cols(std::move(dynamic_filter_cols)), min_max_to_create(std::move(dynamic_filter_sets)) {
-	// TODO: we may unify the creation of BFs if they are built on the same columns.
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
-		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
+		auto &plan = filter_plans[i];
+		auto &cols_build = plan->bound_cols_build;
+
+		if (unique_bloom_filters.find(cols_build) == unique_bloom_filters.end()) {
+			unique_bloom_filters[cols_build] = make_shared_ptr<BloomFilter>();
+		}
+		auto &bf = unique_bloom_filters[cols_build];
+		bf_to_create.emplace_back(make_uniq<BloomFilterUsage>(bf, plan->bound_cols_apply, plan->bound_cols_build));
 	}
 }
 
@@ -37,7 +43,7 @@ public:
 	    : context(context), op(op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), is_selectivity_checked(false),
-	      num_input_rows(0) {
+	      num_input_rows(0), total_row_size(0) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
 
 		// init min max aggregation
@@ -144,6 +150,7 @@ public:
 	// runtime statistics
 	atomic<bool> is_selectivity_checked;
 	atomic<int64_t> num_input_rows;
+	atomic<int64_t> total_row_size;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
@@ -195,41 +202,28 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 	// Early Stop: Unfiltered Table or estimated OOM
 	if (!gstate.is_selectivity_checked) {
 		gstate.num_input_rows += static_cast<int64_t>(chunk.size());
+		gstate.total_row_size += static_cast<int64_t>(chunk.GetAllocationSize());
 
 		if (this_pipeline->num_source_chunks > 32) {
 			gstate.is_selectivity_checked = true;
 
-			bool has_logical_filter = true;
-			switch (this_pipeline->GetSource()->type) {
-			case PhysicalOperatorType::TABLE_SCAN: {
-				auto &source = this_pipeline->GetSource()->Cast<PhysicalTableScan>();
-				has_logical_filter = source.table_filters && !source.table_filters->filters.empty();
-				break;
-			}
-			default:
-				break;
-			}
-
-			// Check the selectivity
+			// 1. Check the selectivity: a high selectivity means that the base table is not filtered. It is not
+			// beneficial to build a BF on a full table.
 			double input_rows = static_cast<double>(gstate.num_input_rows);
-			double source_rows = has_logical_filter
-			                         ? static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE)
-			                         : static_cast<double>(this_pipeline->num_source_rows);
+			double source_rows = static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE);
 			double selectivity = input_rows / source_rows;
-
-			// Such a high selectivity means that the base table is not filtered. It is not beneficial to build a BF on
-			// a full table.
-			if (selectivity > 0.35) {
+			double row_length = static_cast<double>(gstate.total_row_size) / input_rows;
+			if (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2)) {
 				is_successful = false;
 				return true;
 			}
 
-			// Estimate the lower bound of required memory, which is used to materialize this table. If it is very
+			// 2. Estimate the lower bound of required memory, which is used to materialize this table. If it is very
 			// large, give up creating BF.
 			ProgressData progress;
 			this_pipeline->GetProgress(progress);
-			double percent = progress.done / progress.total;
-			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / percent;
+			double progress_percent = progress.done / progress.total;
+			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / progress_percent;
 			idx_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
 			idx_t estimated_required_memory = static_cast<idx_t>(estimated_num_rows) * per_tuple_size;
 			if (estimated_required_memory >= lstate.temporary_memory_state->GetReservation()) {
@@ -276,8 +270,7 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 	gstate.global_aggregate_state->Combine(*state.local_aggregate_state);
 
 	auto guard = gstate.Lock();
-	size_t global_size =
-	    gstate.temporary_memory_state->GetMinimumReservation() + state.temporary_memory_state->GetMinimumReservation();
+	size_t global_size = gstate.temporary_memory_state->GetMinimumReservation() + state.local_data->SizeInBytes();
 	gstate.temporary_memory_state->SetMinimumReservation(global_size);
 	gstate.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.client, global_size);
 
@@ -323,8 +316,10 @@ public:
 		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 			chunk.SetValue(i, 0, Value());
 		}
-		for (auto &bf : sink.op.bf_to_create) {
-			bf->Insert(chunk);
+		for (auto &pair : sink.op.unique_bloom_filters) {
+			auto &cols_build = pair.first;
+			auto &bf = pair.second;
+			bf->Insert(chunk, cols_build);
 		}
 	}
 
@@ -333,8 +328,10 @@ public:
 		sink.data_collection->InitializeScanChunk(chunk);
 		for (idx_t i = chunk_idx_from; i < chunk_idx_to; i++) {
 			sink.data_collection->FetchChunk(i, chunk);
-			for (auto &bf : sink.op.bf_to_create) {
-				bf->Insert(chunk);
+			for (auto &pair : sink.op.unique_bloom_filters) {
+				auto &cols_build = pair.first;
+				auto &bf = pair.second;
+				bf->Insert(chunk, cols_build);
 			}
 		}
 		event->FinishTask();
@@ -380,7 +377,8 @@ public:
 	}
 
 	void FinishEvent() override {
-		for (auto &bf : sink.op.bf_to_create) {
+		for (auto &pair : sink.op.unique_bloom_filters) {
+			auto &bf = pair.second;
 			bf->finalized_ = true;
 		}
 	}
@@ -413,10 +411,9 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// Initialize the bloom filter
 	uint32_t num_rows = static_cast<uint32_t>(sink.data_collection->Count());
-	for (size_t i = 0; i < filter_plans.size(); i++) {
-		auto &plan = filter_plans[i];
-		auto &filter = bf_to_create[i];
-		filter->Initialize(context, num_rows, plan->bound_cols_apply, plan->bound_cols_build);
+	for (auto &pair : unique_bloom_filters) {
+		auto &bf = pair.second;
+		bf->Initialize(context, num_rows);
 	}
 
 	sink.ScheduleFinalize(pipeline, event);
@@ -439,6 +436,10 @@ public:
 	explicit CreateBFGlobalSourceState(const ColumnDataCollection &collection)
 	    : max_threads(MaxValue<idx_t>(collection.ChunkCount(), 1)), data_collection(collection) {
 		collection.InitializeScan(global_scan_state);
+	}
+
+	idx_t MaxThreads() override {
+		return max_threads;
 	}
 
 	const idx_t max_threads;
