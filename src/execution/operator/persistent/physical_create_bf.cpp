@@ -212,7 +212,7 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 			double input_rows = static_cast<double>(gstate.num_input_rows);
 			double source_rows = static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE);
 			double selectivity = input_rows / source_rows;
-			double row_length = gstate.total_row_size / gstate.num_input_rows;
+			double row_length = static_cast<double>(gstate.total_row_size) / input_rows;
 			if (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2)) {
 				is_successful = false;
 				return true;
