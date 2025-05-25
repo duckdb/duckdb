@@ -44,7 +44,7 @@ float Float16ToFloat32(const uint16_t &float16_value) {
 	}
 
 	memcpy(&out, &float32_value, sizeof(out));
-	return(out);
+	return (out);
 }
 
 } // namespace duckdb
