@@ -48,8 +48,8 @@ struct FromBase64Fun {
 struct ToBase64Fun {
 	static constexpr const char *Name = "to_base64";
 	static constexpr const char *Parameters = "blob";
-	static constexpr const char *Description = "Converts a `blob` to a base64 encoded `string`.";
-	static constexpr const char *Example = "base64('A'::BLOB)";
+	static constexpr const char *Description = "Converts a `blob` to a base64 encoded string.";
+	static constexpr const char *Example = "to_base64('A'::BLOB)";
 	static constexpr const char *Categories = "string,blob";
 
 	static ScalarFunction GetFunction();

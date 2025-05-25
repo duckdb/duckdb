@@ -20,7 +20,7 @@ struct ListSelectFun {
 	static constexpr const char *Parameters = "value_list,index_list";
 	static constexpr const char *Description = "Returns a list based on the elements selected by the index_list.";
 	static constexpr const char *Example = "list_select([10, 20, 30, 40], [1, 4])";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
 };
@@ -36,7 +36,7 @@ struct ListWhereFun {
 	static constexpr const char *Parameters = "value_list,mask_list";
 	static constexpr const char *Description = "Returns a list with the BOOLEANs in mask_list applied as a mask to the value_list.";
 	static constexpr const char *Example = "list_where([10, 20, 30, 40], [true, false, false, true])";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
 };
@@ -52,7 +52,7 @@ struct ListContainsFun {
 	static constexpr const char *Parameters = "list,element";
 	static constexpr const char *Description = "Returns true if the list contains the element.";
 	static constexpr const char *Example = "list_contains([1, 2, NULL], 1)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
 };
@@ -80,7 +80,7 @@ struct ListPositionFun {
 	static constexpr const char *Parameters = "list,element";
 	static constexpr const char *Description = "Returns the index of the element if the list contains the element. If the element is not found, it returns NULL.";
 	static constexpr const char *Example = "list_position([1, 2, NULL], 2)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
 };
@@ -108,7 +108,7 @@ struct ListZipFun {
 	static constexpr const char *Parameters = "list1,list2,...";
 	static constexpr const char *Description = "Zips k LISTs to a new LIST whose length will be that of the longest list. Its elements are structs of k elements from each list list_1, …, list_k, missing elements are replaced with NULL. If truncate is set, all lists are truncated to the smallest list length.";
 	static constexpr const char *Example = "list_zip([1, 2], [3, 4], [5, 6])";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
 };
@@ -124,7 +124,7 @@ struct ListExtractFun {
 	static constexpr const char *Parameters = "list,index";
 	static constexpr const char *Description = "Extract the indexth (1-based) value from the list.";
 	static constexpr const char *Example = "list_extract([4, 5, 6], 3)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -140,7 +140,7 @@ struct ListResizeFun {
 	static constexpr const char *Parameters = "list,size[,value]";
 	static constexpr const char *Description = "Resizes the list to contain size elements. Initializes new elements with value or NULL if value is not set.";
 	static constexpr const char *Example = "list_resize([1, 2, 3], 5, 0)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -153,10 +153,10 @@ struct ArrayResizeFun {
 
 struct ArrayExtractFun {
 	static constexpr const char *Name = "array_extract";
-	static constexpr const char *Parameters = "list,index";
-	static constexpr const char *Description = "Extract the indexth (1-based) value from the array.";
-	static constexpr const char *Example = "array_extract('DuckDB', 2)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR,index::ANY\001struct::STRUCT,entry::VARCHAR\001struct::STRUCT,index::ANY\001list::ANY[],index::ANY";
+	static constexpr const char *Description = "Extracts a single character from a `string` using a (1-based) `index`.\001Extracts the named `entry` from the `STRUCT`.\001Extracts the entry from an unnamed `STRUCT` (tuple) using an index (1-based).\001Extracts the `index`th (1-based) value from the `list`.";
+	static constexpr const char *Example = "array_extract('DuckDB', 2)\001array_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')\001array_extract(row(42, 84), 1)\001array_extract([4, 5, 6], 3)";
+	static constexpr const char *Categories = "string\001struct\001struct\001list";
 
 	static ScalarFunctionSet GetFunctions();
 };
