@@ -4275,7 +4275,7 @@ jemalloc_constructor(void) {
 	if (cpu_count == 0) {
 		cpu_count = duckdb_malloc_ncpus();
 	}
-	unsigned long long narenas = cpu_count / 2;
+	unsigned long long narenas = cpu_count;
 	if (narenas == 0) {
 	    narenas = 1;
 	}
@@ -4286,9 +4286,9 @@ jemalloc_constructor(void) {
 	// decay is in ms
 	unsigned long long decay = DUCKDB_JEMALLOC_DECAY * 1000;
 #ifdef DEBUG
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, narenas, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "thp:always,metadata_thp:always,junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, narenas, bgt_count);
 #else
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, narenas, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "thp:always,metadata_thp:always,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, narenas, bgt_count);
 #endif
 	je_malloc_conf = JE_MALLOC_CONF_BUFFER;
 	malloc_init();
