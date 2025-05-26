@@ -758,12 +758,12 @@ infinity	NULL
 statement error
 select epoch_ms(9223372036854775807)
 ----
-Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
+Binder Error: No function matches the given name and argument types
 
 statement error
 select epoch_ms(-9223372036854775808)
 ----
-Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
+Binder Error: No function matches the given name and argument types
 
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;
