@@ -13,8 +13,6 @@ float Float16ToFloat32(const uint16_t &float16_value) {
 	uint32_t fraction = (float16_value & 0x3FF);
 	// Avoid strict aliasing issues and compiler warnings
 	uint32_t float32_value = 0;
-	float out;
-	static_assert(sizeof(out) == sizeof(float32_value), "Size of float and uint32_t must match");
 
 	if (exponent == 0) {
 		if (fraction == 0) {
@@ -43,8 +41,7 @@ float Float16ToFloat32(const uint16_t &float16_value) {
 		float32_value = (sign << 31) | ((exponent + (127 - 15)) << 23) | (fraction << 13);
 	}
 
-	memcpy(&out, &float32_value, sizeof(out));
-	return (out);
+	return Load<float>(const_data_ptr_cast(&float32_value));
 }
 
 } // namespace duckdb
