@@ -148,6 +148,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	data_width = DConstants::INVALID_INDEX;
 	aggr_width = DConstants::INVALID_INDEX;
 	offsets.clear();
+	sort_skippable_bytes.clear();
 	all_constant = true;
 	heap_size_offset = DConstants::INVALID_INDEX;
 	aggr_destructor_idxs.clear();
