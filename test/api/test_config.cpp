@@ -51,6 +51,41 @@ TEST_CASE("Test allowed options", "[api]") {
 		option = "allowed_paths";
 	}
 
+	SECTION("enable_logging") {
+		config_dict.emplace("enable_logging", Value::BOOLEAN(false));
+		option = "enable_logging";
+	}
+
+	SECTION("disabled_filesystems") {
+		config_dict.emplace("disabled_filesystems", Value::BOOLEAN(false));
+		option = "disabled_filesystems";
+	}
+
+	SECTION("logging_mode") {
+		config_dict.emplace("logging_mode", Value::BOOLEAN(false));
+		option = "logging_mode";
+	}
+
+	SECTION("logging_storage") {
+		config_dict.emplace("logging_storage", Value::BOOLEAN(false));
+		option = "logging_storage";
+	}
+
+	SECTION("logging_level") {
+		config_dict.emplace("logging_level", Value::BOOLEAN(false));
+		option = "logging_level";
+	}
+
+	SECTION("enabled_log_types") {
+		config_dict.emplace("enabled_log_types", Value::BOOLEAN(false));
+		option = "enabled_log_types";
+	}
+
+	SECTION("disabled_log_types") {
+		config_dict.emplace("disabled_log_types", Value::BOOLEAN(false));
+		option = "disabled_log_types";
+	}
+
 	try {
 		DBConfig config(config_dict, false);
 	} catch (std::exception &ex) {
