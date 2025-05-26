@@ -26,7 +26,7 @@ static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noex
 	std::swap(a.lock, b.lock);
 }
 
-TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept {
+TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept : count(0) {
 	SwapTupleDataChunk(*this, other);
 }
 
