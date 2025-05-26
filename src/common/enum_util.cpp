@@ -2868,14 +2868,15 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::EXTENSION), "EXTENSION" },
 		{ static_cast<uint32_t>(OptimizerType::MATERIALIZED_CTE), "MATERIALIZED_CTE" },
 		{ static_cast<uint32_t>(OptimizerType::SUM_REWRITER), "SUM_REWRITER" },
-		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" }
+		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" },
+		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 28, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 29, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>

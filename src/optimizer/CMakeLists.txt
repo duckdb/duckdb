@@ -27,6 +27,7 @@ add_library_unity(
   join_filter_pushdown_optimizer.cpp
   late_materialization.cpp
   optimizer.cpp
+  join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
