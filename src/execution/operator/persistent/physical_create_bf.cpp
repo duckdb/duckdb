@@ -209,20 +209,20 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 
 			// 1. Check the selectivity: a high selectivity means that the base table is not filtered. It is not
 			// beneficial to build a BF on a full table.
+			ProgressData progress;
+			this_pipeline->GetProgress(progress);
+			double progress_percent = progress.done / progress.total;
 			double input_rows = static_cast<double>(gstate.num_input_rows);
 			double source_rows = static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE);
 			double selectivity = input_rows / source_rows;
 			double row_length = static_cast<double>(gstate.total_row_size) / input_rows;
-			if (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2)) {
+			if (progress_percent < 0.1 && (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2))) {
 				is_successful = false;
 				return true;
 			}
 
 			// 2. Estimate the lower bound of required memory, which is used to materialize this table. If it is very
 			// large, give up creating BF.
-			ProgressData progress;
-			this_pipeline->GetProgress(progress);
-			double progress_percent = progress.done / progress.total;
 			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / progress_percent;
 			idx_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
 			idx_t estimated_required_memory = static_cast<idx_t>(estimated_num_rows) * per_tuple_size;
