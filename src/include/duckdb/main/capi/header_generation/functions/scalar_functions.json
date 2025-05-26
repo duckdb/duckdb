@@ -299,6 +299,23 @@
             }
         },
         {
+            "name": "duckdb_scalar_function_bind_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in the bind info.\n\n",
+                "param_comments": {
+                    "info": "The info object."
+                },
+                "return_value": "The extra info."
+            }
+        },
+        {
             "name": "duckdb_scalar_function_get_bind_data",
             "return_type": "void *",
             "params": [

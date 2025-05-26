@@ -558,6 +558,7 @@ typedef struct {
 	void (*duckdb_scalar_function_set_bind_data)(duckdb_bind_info info, void *bind_data,
 	                                             duckdb_delete_callback_t destroy);
 	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
+	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
 #endif
 
 // New string functions that are added
@@ -1013,11 +1014,12 @@ typedef struct {
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
 
 // Version unstable_new_scalar_function_functions
-#define duckdb_scalar_function_set_bind           duckdb_ext_api.duckdb_scalar_function_set_bind
-#define duckdb_scalar_function_set_bind_data      duckdb_ext_api.duckdb_scalar_function_set_bind_data
-#define duckdb_scalar_function_bind_set_error     duckdb_ext_api.duckdb_scalar_function_bind_set_error
-#define duckdb_scalar_function_get_bind_data      duckdb_ext_api.duckdb_scalar_function_get_bind_data
-#define duckdb_scalar_function_get_client_context duckdb_ext_api.duckdb_scalar_function_get_client_context
+#define duckdb_scalar_function_set_bind            duckdb_ext_api.duckdb_scalar_function_set_bind
+#define duckdb_scalar_function_set_bind_data       duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_bind_set_error      duckdb_ext_api.duckdb_scalar_function_bind_set_error
+#define duckdb_scalar_function_bind_get_extra_info duckdb_ext_api.duckdb_scalar_function_bind_get_extra_info
+#define duckdb_scalar_function_get_bind_data       duckdb_ext_api.duckdb_scalar_function_get_bind_data
+#define duckdb_scalar_function_get_client_context  duckdb_ext_api.duckdb_scalar_function_get_client_context
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string

@@ -3343,6 +3343,14 @@ Retrieves the extra info of the function as set in `duckdb_scalar_function_set_e
 DUCKDB_C_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info info);
 
 /*!
+Retrieves the extra info of the function as set in the bind info.
+
+* @param info The info object.
+* @return The extra info.
+*/
+DUCKDB_C_API void *duckdb_scalar_function_bind_get_extra_info(duckdb_bind_info info);
+
+/*!
 Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.
 
 Note that the bind data is read-only.
