@@ -693,7 +693,7 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing tasks
-	idx_t task_idx;
+	atomic<idx_t> task_idx;
 	atomic<idx_t> task_done;
 };
 
@@ -753,12 +753,11 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
                                                       InterruptState &interrupt_state) {
 	// First, try to get a partition index
-	auto guard = sink.Lock();
-	if (finished || task_idx == sink.partitions.size()) {
+	lstate.task_idx = task_idx++;
+	if (finished || lstate.task_idx >= sink.partitions.size()) {
 		lstate.ht.reset();
 		return SourceResultType::FINISHED;
 	}
-	lstate.task_idx = task_idx++;
 
 	// We got a partition index
 	auto &partition = *sink.partitions[lstate.task_idx];

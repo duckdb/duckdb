@@ -62,11 +62,7 @@ idx_t TupleDataCollection::ChunkCount() const {
 }
 
 idx_t TupleDataCollection::SizeInBytes() const {
-	idx_t total_size = 0;
-	for (const auto &segment : segments) {
-		total_size += segment.SizeInBytes();
-	}
-	return total_size;
+	return data_size;
 }
 
 void TupleDataCollection::Unpin() {

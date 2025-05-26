@@ -159,9 +159,15 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
 		// This needs to be initialized, even if we go the short path here
-		for (sel_t i = 0; i < append_count; i++) {
-			const auto index = append_sel.get_index(i);
-			state.reverse_partition_sel[index] = i;
+		if (append_sel.IsSet()) {
+			for (sel_t i = 0; i < append_count; i++) {
+				const auto index = append_sel.get_index(i);
+				state.reverse_partition_sel[index] = i;
+			}
+		} else {
+			for (sel_t i = 0; i < append_count; i++) {
+				state.reverse_partition_sel[i] = i;
+			}
 		}
 		return;
 	}
@@ -177,12 +183,21 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	// Now initialize a single selection vector that acts as a selection vector for every partition
 	auto &partition_sel = state.partition_sel;
 	auto &reverse_partition_sel = state.reverse_partition_sel;
-	for (idx_t i = 0; i < append_count; i++) {
-		const auto index = append_sel.get_index(i);
-		const auto &partition_index = partition_indices[i];
-		auto &partition_offset = partition_entries[partition_index].offset;
-		reverse_partition_sel[index] = UnsafeNumericCast<sel_t>(partition_offset);
-		partition_sel[partition_offset++] = UnsafeNumericCast<sel_t>(index);
+	if (append_sel.IsSet()) {
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto index = append_sel[i];
+			const auto &partition_index = partition_indices[i];
+			auto &partition_offset = partition_entries[partition_index].offset;
+			reverse_partition_sel[index] = UnsafeNumericCast<sel_t>(partition_offset);
+			partition_sel[partition_offset++] = index;
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto &partition_index = partition_indices[i];
+			auto &partition_offset = partition_entries[partition_index].offset;
+			reverse_partition_sel.set_index(i, partition_offset);
+			partition_sel[partition_offset++] = i;
+		}
 	}
 }
 
@@ -324,11 +339,7 @@ idx_t PartitionedTupleData::Count() const {
 }
 
 idx_t PartitionedTupleData::SizeInBytes() const {
-	idx_t total_size = 0;
-	for (auto &partition : partitions) {
-		total_size += partition->SizeInBytes();
-	}
-	return total_size;
+	return data_size;
 }
 
 idx_t PartitionedTupleData::PartitionCount() const {

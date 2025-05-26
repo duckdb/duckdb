@@ -31,9 +31,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 
 GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState(ArenaAllocator &allocator)
     : hashes(LogicalType::HASH), ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH),
-      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER),
-      row_state(allocator) {
+      new_groups(STANDARD_VECTOR_SIZE), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER), row_state(allocator) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, Allocator &allocator,
@@ -588,6 +587,41 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	RowOperations::FinalizeStates(state.row_state, *layout_ptr, state.addresses, result, 0);
 }
 
+template <bool HAS_SEL>
+static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const idx_t capacity, const hash_t bitmask,
+                                               const hash_t *const hash_salts, uint64_t *const ht_offsets,
+                                               const SelectionVector *const sel_vector, const idx_t remaining_entries,
+                                               SelectionVector &empty_vector, SelectionVector &compare_vector,
+                                               idx_t &empty_count, idx_t &compare_count) {
+	// For each remaining entry, figure out whether or not it belongs to a full or empty group
+	for (idx_t i = 0; i < remaining_entries; i++) {
+		const auto index = HAS_SEL ? UnsafeNumericCast<idx_t>((*sel_vector)[i]) : i;
+		const auto salt = hash_salts[index];
+		auto &ht_offset = ht_offsets[index];
+
+		idx_t inner_iteration_count;
+		for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
+			auto &entry = entries[ht_offset];
+			if (!entry.IsOccupied()) { // Unoccupied: claim it
+				entry.SetSalt(salt);
+				empty_vector.set_index(empty_count++, index);
+				break;
+			}
+
+			if (DUCKDB_LIKELY(entry.GetSalt() == salt)) { // Matching salt: compare groups
+				compare_vector.set_index(compare_count++, index);
+				break;
+			}
+
+			// Linear probing
+			IncrementAndWrap(ht_offset, bitmask);
+		}
+		if (DUCKDB_UNLIKELY(inner_iteration_count == capacity)) {
+			throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
+		}
+	}
+}
+
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
                                                             Vector &addresses_v, SelectionVector &new_groups_out) {
 	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
@@ -669,6 +703,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
 	}
 
+	SelectionVector empty_vector;
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = chunk_size;
 	idx_t iteration_count;
@@ -677,34 +712,19 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		idx_t need_compare_count = 0;
 		idx_t no_match_count = 0;
 
-		// For each remaining entry, figure out whether or not it belongs to a full or empty group
-		for (idx_t i = 0; i < remaining_entries; i++) {
-			const auto index = sel_vector->get_index(i);
-			const auto salt = hash_salts[index];
-			auto &ht_offset = ht_offsets[index];
-
-			idx_t inner_iteration_count;
-			for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
-				auto &entry = entries[ht_offset];
-				if (!entry.IsOccupied()) { // Unoccupied: claim it
-					entry.SetSalt(salt);
-					state.empty_vector.set_index(new_entry_count++, index);
-					new_groups_out.set_index(new_group_count++, index);
-					break;
-				}
-
-				if (DUCKDB_LIKELY(entry.GetSalt() == salt)) { // Matching salt: compare groups
-					state.group_compare_vector.set_index(need_compare_count++, index);
-					break;
-				}
-
-				// Linear probing
-				IncrementAndWrap(ht_offset, bitmask);
-			}
-			if (DUCKDB_UNLIKELY(inner_iteration_count == capacity)) {
-				throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
-			}
+		// "new_groups_out" contains ALL groups for the chunk, "empty_vector" only the groups for this iteration,
+		// so it's just the same selection vector, but offset by the current "new_group_count".
+		empty_vector.Initialize(new_groups_out.data() + new_group_count);
+		if (sel_vector->IsSet()) {
+			GroupedAggregateHashTableInnerLoop<true>(entries, capacity, bitmask, hash_salts, ht_offsets, sel_vector,
+			                                         remaining_entries, empty_vector, state.group_compare_vector,
+			                                         new_entry_count, need_compare_count);
+		} else {
+			GroupedAggregateHashTableInnerLoop<false>(entries, capacity, bitmask, hash_salts, ht_offsets, sel_vector,
+			                                          remaining_entries, empty_vector, state.group_compare_vector,
+			                                          new_entry_count, need_compare_count);
 		}
+		new_group_count += new_entry_count;
 
 		if (DUCKDB_UNLIKELY(occupied_count > new_entry_count + need_compare_count)) {
 			// We use the useless occupied_count we summed above here so the variable is used,
@@ -726,7 +746,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				data = partitioned_data.get();
 				append_state = &state.partitioned_append_state;
 			}
-			data->AppendUnified(*append_state, state.group_chunk, state.empty_vector, new_entry_count);
+			data->AppendUnified(*append_state, state.group_chunk, empty_vector, new_entry_count);
 			RowOperations::InitializeStates(*layout_ptr, append_state->chunk_state.row_locations,
 			                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
 
@@ -734,7 +754,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			const auto row_locations = FlatVector::GetData<data_ptr_t>(append_state->chunk_state.row_locations);
 			const auto &row_sel = append_state->reverse_partition_sel;
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
-				const auto &index = state.empty_vector[new_entry_idx];
+				const auto &index = empty_vector[new_entry_idx];
 				const auto &row_idx = row_sel[index];
 				const auto &row_location = row_locations[row_idx];
 
