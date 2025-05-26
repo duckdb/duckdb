@@ -108,9 +108,6 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
-		case JoinType::MARK: {
-			return;
-		}
 		case JoinType::INNER:
 		case JoinType::LEFT:
 		case JoinType::RIGHT:
