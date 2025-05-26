@@ -1,0 +1,236 @@
+# name: test/temp.test
+# group: [test]
+
+require json
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_attach.json';
+
+# Test ATTACH.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+ATTACH '__TEST_DIR__/profile_attach.db';
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+SET profiling_coverage='SELECT';
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+
+query I
+SELECT contains(query_name, 'ATTACH') FROM metrics_output;
+----
+true
+
+# Test CREATE TABLE.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CREATE TABLE profile_attach.tbl AS SELECT range AS id FROM range(10000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+SET profiling_coverage='SELECT';
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+
+query I
+SELECT contains(query_name, 'CREATE TABLE') FROM metrics_output;
+----
+true
+
+# Test INSERT.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+INSERT INTO profile_attach.tbl SELECT range + 20000 FROM range(10000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+SET profiling_coverage='SELECT';
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+
+query I
+SELECT contains(query_name, 'INSERT INTO') FROM metrics_output;
+----
+true
+
+# Test CREATE INDEX.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CREATE INDEX idx ON profile_attach.tbl(id);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+SET profiling_coverage='SELECT';
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+
+query I
+SELECT contains(query_name, 'CREATE INDEX') FROM metrics_output;
+----
+true
+
+# Test DETACH.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+DETACH profile_attach;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+SET profiling_coverage='SELECT';
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+
+query I
+SELECT contains(query_name, 'DETACH') FROM metrics_output;
+----
+true
+
+mode skip
+
+
+
+
+
+
+
+
+
+statement ok
+PRAGMA disable_profiling;
+
+# query I
+# SELECT unnest(res) FROM (
+# 	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+# 	raw_setting.trim('{}') AS setting,
+# 	string_split(setting, ', ') AS res
+# ) ORDER BY ALL
+# ----
+# "BLOCKED_THREAD_TIME": "true"
+
+
+
+mode skip
+
+statement ok
+SET threads = 1;
+
+statement ok
+copy (
+  select
+    "#CHROM",
+    "POS",
+    "ID",
+    "REF",
+    "ALT",
+    "QUAL",
+    "FILTER",
+    "INFO",
+    "FORMAT",
+    unnest(range(len(string_split(entries, '	')))) as col_idx, -- always 1 (index 0)
+    string_split(entries, '	')[col_idx + 1] as entry
+  from 'foo2.parquet'
+) to 'foo3.parquet'
+
+mode skip
+
+statement ok
+create or replace macro foo(x) as (
+    select apply([x], z->y) as tmp from (select 1 as y)
+);
+
+statement ok
+select foo(range) from range(1)
+
+
+
+mode skip
+
+statement ok
+SELECT DISTINCT ON(x) x FROM (SELECT 1 as x UNION ALL BY NAME SELECT '1' as x);
+
+
+# select distinct on (a) * from tbl;
+
+# statement ok
+# CREATE TABLE tbl (a INT, b INT);
+#
+# statement ok
+# INSERT INTO tbl VALUES (0, 0), (0, 1);
+#
+# query II
+# SELECT DISTINCT ON (a, b) * FROM tbl ORDER BY ALL;
+# ----
+# 0	0
+# 0	1
+#
+mode skip
+
+# 		// FIXME: maybe the result type should not be just one?
+
+statement ok
+CREATE TABLE tbl (a STRUCT(m1 INT, m2 INT));
+
+statement ok
+INSERT INTO tbl VALUES ({'m1': '0', 'm2': '0'}), ({'m1': '0', 'm2': '1'});
+
+query II
+SELECT DISTINCT UNNEST(a)
+FROM tbl
+ORDER BY ALL
+----
+0	0
+0	1
+
+# query II
+# SELECT DISTINCT UNNEST(a)
+# FROM (SELECT {'m1': '0', 'm2': '0'} AS a UNION ALL SELECT {'m1': '0', 'm2': '1'})
+# ORDER BY ALL
+# ----
+# 0	0
+# 0	1

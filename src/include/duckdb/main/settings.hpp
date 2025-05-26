@@ -1121,6 +1121,16 @@ struct ProfileOutputSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ProfilingCoverageSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "profiling_coverage";
+	static constexpr const char *Description = "The profiling level (SELECT or ALL)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ProfilingModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_mode";

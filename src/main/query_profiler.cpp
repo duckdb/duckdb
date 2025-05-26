@@ -25,7 +25,8 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
-    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false) {
+    : context(context_p), query_requires_profiling(false), is_explain_analyze(false) {
+	runningg = false;
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -99,13 +100,13 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool sta
 		// This is the StartQuery call before the optimizer, but we don't have to print optimizer output
 		return;
 	}
-	if (running) {
+	if (runningg) {
 		// Called while already running: this should only happen when we print optimizer output
 		D_ASSERT(PrintOptimizerOutput());
 		return;
 	}
 
-	running = true;
+	runningg = true;
 	query_info.query_name = std::move(query);
 	tree_map.clear();
 	root = nullptr;
@@ -114,7 +115,12 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool sta
 	main_query.Start();
 }
 
-bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
+bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
+	const auto &config = ClientConfig::GetConfig(context);
+	if (config.profiling_coverage == ProfilingCoverage::ALL) {
+		return true;
+	}
+
 	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
@@ -210,7 +216,7 @@ Value GetCumulativeOptimizers(ProfilingNode &node) {
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !runningg) {
 		return;
 	}
 
@@ -221,7 +227,7 @@ void QueryProfiler::EndQuery() {
 			Finalize(*root->GetChild(0));
 		}
 	}
-	running = false;
+	runningg = false;
 
 	bool emit_output = false;
 
@@ -327,7 +333,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 
 void QueryProfiler::StartPhase(MetricsType phase_metric) {
 	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !runningg) {
 		return;
 	}
 
@@ -339,7 +345,7 @@ void QueryProfiler::StartPhase(MetricsType phase_metric) {
 
 void QueryProfiler::EndPhase() {
 	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !runningg) {
 		return;
 	}
 	D_ASSERT(!phase_stack.empty());
@@ -488,7 +494,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !runningg) {
 		return;
 	}
 	for (auto &node : profiler.operator_infos) {
@@ -538,7 +544,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 void QueryProfiler::SetInfo(const double &blocked_thread_time) {
 	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !runningg) {
 		return;
 	}
 
@@ -884,7 +890,7 @@ string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
 
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !runningg) {
 		return;
 	}
 	query_requires_profiling = false;
@@ -892,7 +898,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	root = CreateTree(root_op, config.profiler_settings, 0);
 	if (!query_requires_profiling) {
 		// query does not require profiling: disable profiling for this query
-		this->running = false;
+		runningg = false;
 		tree_map.clear();
 		root = nullptr;
 		phase_timings.clear();
