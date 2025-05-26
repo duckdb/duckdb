@@ -555,7 +555,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 	}
 
-	if (!config->options.autoload_known_extensions) {
+	if (!config->options.autoload_known_extensions || excluded_from_autoloading) {
 		auto result = ExtensionHelper::LoadExtension(*db, param);
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
@@ -566,8 +566,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			// extension known but not build: skip this test
 			return RequireResult::MISSING;
 		}
-	} else if (excluded_from_autoloading) {
-		return RequireResult::MISSING;
 	}
 	return RequireResult::PRESENT;
 }
