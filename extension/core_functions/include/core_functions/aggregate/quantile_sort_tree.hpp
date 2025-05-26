@@ -171,6 +171,8 @@ timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d
 template <>
 hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, const hugeint_t &hi);
 template <>
+uhugeint_t CastInterpolation::Interpolate(const uhugeint_t &lo, const double d, const uhugeint_t &hi);
+template <>
 interval_t CastInterpolation::Interpolate(const interval_t &lo, const double d, const interval_t &hi);
 template <>
 string_t CastInterpolation::Cast(const string_t &src, Vector &result);

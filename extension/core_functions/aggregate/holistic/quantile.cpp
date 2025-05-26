@@ -6,7 +6,6 @@
 #include "duckdb/common/operator/abs.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
@@ -163,6 +162,11 @@ timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d
 template <>
 hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, const hugeint_t &hi) {
 	return Hugeint::Convert(Interpolate(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+}
+
+template <>
+uhugeint_t CastInterpolation::Interpolate(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
+	return Hugeint::Convert(Interpolate(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
 }
 
 static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
@@ -588,7 +592,7 @@ AggregateFunction GetContinuousQuantileList(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 // Quantile binding
 //===--------------------------------------------------------------------===//
-static const Value &CheckQuantile(const Value &quantile_val) {
+static Value CheckQuantile(const Value &quantile_val) {
 	if (quantile_val.IsNull()) {
 		throw BinderException("QUANTILE parameter cannot be NULL");
 	}
@@ -820,7 +824,7 @@ struct ContinuousQuantileListFunction {
 };
 
 template <class OP>
-AggregateFunction EmptyQuantileFunction(LogicalType input, LogicalType result, const LogicalType &extra_arg) {
+AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalType &result, const LogicalType &extra_arg) {
 	AggregateFunction fun({std::move(input)}, std::move(result), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
