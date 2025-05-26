@@ -739,7 +739,7 @@
     },
     {
         "name": "profiling_coverage",
-        "description": "The profiling level (SELECT or ALL)",
+        "description": "The profiling coverage (SELECT or ALL)",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true

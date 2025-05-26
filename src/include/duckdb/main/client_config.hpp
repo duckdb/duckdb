@@ -139,7 +139,8 @@ struct ClientConfig {
 	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda
 	//! functions. Otherwise, DISABLE_SINGLE_ARROW.
 	LambdaSyntax lambda_syntax = LambdaSyntax::DEFAULT;
-	//! TODO.
+	//! The profiling coverage. SELECT is the default behavior, and ALL emits profiling information for all operator
+	//! types.
 	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
 	//! Output error messages as structured JSON instead of as a raw string

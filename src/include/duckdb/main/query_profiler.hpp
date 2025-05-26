@@ -198,7 +198,7 @@ private:
 	ClientContext &context;
 
 	//! Whether or not the query profiler is running
-	bool runningg;
+	bool running;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
 	mutable std::mutex lock;
 
