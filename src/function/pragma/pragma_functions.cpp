@@ -125,8 +125,26 @@ static void PragmaEnableLogging(ClientContext &context, const FunctionParameters
 		throw InvalidInputException("PragmaEnableLogging: expected 0 or 1 parameter");
 	}
 
-	vector<string> types;
+	case_insensitive_map_t<Value> storage_config;
 
+	for (const auto &param : parameters.named_parameters) {
+		if (StringUtil::Lower(param.first) == "storage") {
+			context.db->GetLogManager().SetLogStorage(*context.db, param.second.ToString());
+		} else if (StringUtil::Lower(param.first) == "storage_config") {
+			auto &children = StructValue::GetChildren(param.second);
+			for (idx_t i = 0; i < children.size(); i++) {
+				storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
+			}
+		} else {
+			throw InvalidInputException("PragmaEnableLogging: unknown named parameter: %s", param.first.c_str());
+		}
+	}
+
+	if (storage_config.size() > 0) {
+		context.db->GetLogManager().UpdateLogStorageConfig(*context.db, storage_config);
+	}
+
+	vector<string> types;
 	if (parameters.values[0].type() == LogicalType::VARCHAR) {
 		types.push_back(parameters.values[0].GetValue<string>());
 	} else if (parameters.values[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
@@ -176,7 +194,11 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
 
-	set.AddFunction(PragmaFunction::PragmaCall("enable_logging", PragmaEnableLogging, {}, LogicalType::VARCHAR));
+	auto logging_enable_function =
+	    PragmaFunction::PragmaCall("enable_logging", PragmaEnableLogging, {}, LogicalType::ANY);
+	logging_enable_function.named_parameters = {{"storage", LogicalType::VARCHAR},
+	                                            {"storage_config", LogicalType::ANY}};
+	set.AddFunction(logging_enable_function);
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));

@@ -32,7 +32,6 @@ class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
-class FileHandleLogger;
 class Logger;
 
 enum class FileType {

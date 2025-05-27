@@ -146,15 +146,20 @@ void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name)
 	if (storage_name_to_lower == LogConfig::IN_MEMORY_STORAGE_NAME) {
 		log_storage = make_shared_ptr<InMemoryLogStorage>(db);
 	} else if (storage_name_to_lower == LogConfig::STDOUT_STORAGE_NAME) {
-		log_storage = make_shared_ptr<StdOutLogStorage>();
+		log_storage = make_shared_ptr<StdOutLogStorage>(db);
 	} else if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
-		throw NotImplementedException("File log storage is not yet implemented");
+		log_storage = make_shared_ptr<FileLogStorage>(db);
 	} else if (registered_log_storages.find(storage_name_to_lower) != registered_log_storages.end()) {
 		log_storage = registered_log_storages[storage_name_to_lower];
 	} else {
 		throw InvalidInputException("Log storage '%s' is not yet registered", storage_name);
 	}
 	config.storage = storage_name_to_lower;
+}
+
+void LogManager::UpdateLogStorageConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config_value) {
+	unique_lock<mutex> lck(lock);
+	log_storage->UpdateConfig(db, config_value);
 }
 
 void LogManager::SetEnableStructuredLoggers(vector<string> &enabled_logger_types) {

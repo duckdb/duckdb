@@ -1,4 +1,9 @@
 #include "duckdb/logging/log_storage.hpp"
+
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -29,32 +34,423 @@ void LogStorage::Truncate() {
 	throw NotImplementedException("Not implemented for this LogStorage: TruncateLogStorage");
 }
 
-StdOutLogStorage::StdOutLogStorage() {
+void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	if (config.size() > 1) {
+		throw InvalidInputException("LogStorage does not support passing configuration");
+	}
+}
+
+// TODO: modified from csv copy code
+static void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
+	if (quote_or_escape != '\0') {
+		writer.Write(quote_or_escape);
+	}
+}
+
+// TODO: modified from csv copy code
+static string AddEscapes(char to_be_escaped, const char escape, const string &val) {
+	idx_t i = 0;
+	string new_val = "";
+	idx_t found = val.find(to_be_escaped);
+
+	while (found != string::npos) {
+		while (i < found) {
+			new_val += val[i];
+			i++;
+		}
+		if (escape != '\0') {
+			new_val += escape;
+			found = val.find(to_be_escaped, found + 1);
+		}
+	}
+	while (i < val.length()) {
+		new_val += val[i];
+		i++;
+	}
+	return new_val;
+}
+
+// TODO: modified from csv copy code
+static bool RequiresQuotes(unsafe_unique_array<bool> &require_quote_map, vector<string> &null_strings, const char *str,
+                           idx_t len) {
+	// check if the string is equal to the null string
+	if (len == null_strings[0].size() && memcmp(str, null_strings[0].c_str(), len) == 0) {
+		return true;
+	}
+	auto str_data = reinterpret_cast<const_data_ptr_t>(str);
+	for (idx_t i = 0; i < len; i++) {
+		if (require_quote_map[str_data[i]]) {
+			// this byte requires quotes - write a quoted string
+			return true;
+		}
+	}
+	// no newline, quote or delimiter in the string
+	// no quoting or escaping necessary
+	return false;
+}
+
+// TODO: modified from csv copy code
+static void WriteQuotedString(WriteStream &writer, unsafe_unique_array<bool> &require_quote_map,
+                              vector<string> &null_strings, char quote, char escape, const char *str, idx_t len) {
+	bool requires_quoting = RequiresQuotes(require_quote_map, null_strings, str, len);
+
+	// If a quote is set to none (i.e., null-terminator) we skip the quotation
+	if (requires_quoting && quote != '\0') {
+		// quoting is enabled: we might need to escape things in the string
+		bool requires_escape = false;
+		// simple CSV
+		// do a single loop to check for a quote or escape value
+		for (idx_t i = 0; i < len; i++) {
+			if (str[i] == quote || str[i] == escape) {
+				requires_escape = true;
+				break;
+			}
+		}
+
+		if (!requires_escape) {
+			// fast path: no need to escape anything
+			WriteQuoteOrEscape(writer, quote);
+			writer.WriteData(const_data_ptr_cast(str), len);
+			WriteQuoteOrEscape(writer, quote);
+			return;
+		}
+
+		// slow path: need to add escapes
+		string new_val(str, len);
+		new_val = AddEscapes(escape, escape, new_val);
+
+		if (escape != quote) {
+			// need to escape quotes separately
+			new_val = AddEscapes(quote, escape, new_val);
+		}
+
+		WriteQuoteOrEscape(writer, quote);
+		writer.WriteData(const_data_ptr_cast(new_val.c_str()), new_val.size());
+		WriteQuoteOrEscape(writer, quote);
+	} else {
+		writer.WriteData(const_data_ptr_cast(str), len);
+	}
+}
+
+static void WriteDelim(LogStorageCsvConfig &config, WriteStream &writer) {
+	writer.WriteData(const_data_ptr_cast(config.delim.c_str()), config.delim.size());
+}
+
+static void WriteOptionalId(LogStorageCsvConfig &config, WriteStream &writer, const optional_idx &id,
+                            bool write_delim = true) {
+	string result_string;
+	if (id.IsValid()) {
+		result_string = to_string(id.GetIndex());
+	}
+	writer.WriteData(const_data_ptr_cast(result_string.c_str()), result_string.size());
+	if (write_delim) {
+		WriteDelim(config, writer);
+	}
+}
+
+static void WriteString(LogStorageCsvConfig &config, WriteStream &writer, const string &value,
+                        bool write_delim = true) {
+	writer.WriteData(const_data_ptr_cast(value.c_str()), value.size());
+	if (write_delim) {
+		WriteDelim(config, writer);
+	}
+}
+
+template <class T>
+static void WriteEnum(LogStorageCsvConfig &config, WriteStream &writer, const T &enum_value, bool write_delim = true) {
+	auto scope_string = EnumUtil::ToString(enum_value);
+	writer.WriteData(const_data_ptr_cast(scope_string.c_str()), scope_string.size());
+	if (write_delim) {
+		WriteDelim(config, writer);
+	}
+}
+
+static void WriteLogEntryToCSVString(LogStorageCsvConfig &config, WriteStream &writer, timestamp_t timestamp,
+                                     LogLevel level, const string &log_type, const string &log_message,
+                                     const RegisteredLoggingContext &context, bool normalize_context = false) {
+
+	auto context_id_string = to_string(context.context_id);
+	writer.WriteData(const_data_ptr_cast(context_id_string.c_str()), context_id_string.size());
+	WriteDelim(config, writer);
+	if (!normalize_context) {
+		WriteEnum(config, writer, context.context.scope);
+		WriteOptionalId(config, writer, context.context.connection_id);
+		WriteOptionalId(config, writer, context.context.transaction_id);
+		WriteOptionalId(config, writer, context.context.query_id);
+		WriteOptionalId(config, writer, context.context.thread_id);
+	}
+
+	// Write timestamp
+	auto timestamp_string = Value::TIMESTAMP(timestamp).ToString();
+	writer.WriteData(const_data_ptr_cast(timestamp_string.c_str()), timestamp_string.size());
+	WriteDelim(config, writer);
+
+	// Write level
+	WriteEnum(config, writer, level);
+
+	// Write log type
+	writer.WriteData(const_data_ptr_cast(log_type.c_str()), log_type.size());
+	WriteDelim(config, writer);
+
+	// Write message
+	WriteQuotedString(writer, config.requires_quotes, config.null_strings, config.quote, config.escape,
+	                  log_message.c_str(), log_message.size());
+
+	writer.WriteData(const_data_ptr_cast(config.newline.c_str()), config.newline.size());
+}
+
+static void WriteLogContextToCSVString(LogStorageCsvConfig &config, WriteStream &writer,
+                                       const RegisteredLoggingContext &context) {
+	auto context_id_string = to_string(context.context_id);
+	writer.WriteData(const_data_ptr_cast(context_id_string.c_str()), context_id_string.size());
+	WriteDelim(config, writer);
+	WriteEnum(config, writer, context.context.scope);
+	WriteOptionalId(config, writer, context.context.connection_id);
+	WriteOptionalId(config, writer, context.context.transaction_id);
+	WriteOptionalId(config, writer, context.context.query_id);
+	WriteOptionalId(config, writer, context.context.thread_id, false);
+}
+
+CSVLogStorage::CSVLogStorage(DatabaseInstance &db) {
+	log_entries_stream = make_uniq<MemoryStream>();
+	log_contexts_stream = make_uniq<MemoryStream>();
+}
+
+CSVLogStorage::~CSVLogStorage() {
+}
+
+void CSVLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+                                  const string &log_message, const RegisteredLoggingContext &context) {
+	lock_guard<mutex> lck(lock);
+
+	if (normalize_contexts && registered_contexts.find(context.context_id) == registered_contexts.end()) {
+		WriteLogContextToCSVString(csv_config, *log_contexts_stream, context);
+		registered_contexts.insert(context.context_id);
+	}
+
+	WriteLogEntryToCSVString(csv_config, *log_entries_stream, timestamp, level, log_type, log_message, context,
+	                         normalize_contexts);
+
+	if (log_entries_stream->GetPosition() > buffer_limit) {
+		FlushInternal();
+	}
+}
+
+void CSVLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
+	throw NotImplementedException("CSVLogStorage::WriteLogEntries");
+}
+
+void CSVLogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	lock_guard<mutex> lck(lock);
+	return UpdateConfigInternal(db, config);
+}
+
+void CSVLogStorage::Flush() {
+	lock_guard<mutex> lck(lock);
+	FlushInternal();
+}
+
+void CSVLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	for (const auto &it : config) {
+		if (StringUtil::Lower(it.first) == "buffer_size") {
+			buffer_limit = it.second.GetValue<uint64_t>();
+		} else {
+			throw InvalidInputException("Unrecognized log storage config option: '%s'", it.first);
+		}
+	}
+}
+
+StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db) {
 }
 
 StdOutLogStorage::~StdOutLogStorage() {
-}
-
-void StdOutLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
-                                     const string &log_message, const RegisteredLoggingContext &context) {
-	std::cout << StringUtil::Format(
-	    "[LOG] %s, %s, %s, %s, %s, %s, %s, %s\n", Value::TIMESTAMP(timestamp).ToString(), log_type,
-	    EnumUtil::ToString(level), log_message, EnumUtil::ToString(context.context.scope),
-	    context.context.connection_id.IsValid() ? to_string(context.context.connection_id.GetIndex()) : "NULL",
-	    context.context.transaction_id.IsValid() ? to_string(context.context.transaction_id.GetIndex()) : "NULL",
-	    context.context.thread_id.IsValid() ? to_string(context.context.thread_id.GetIndex()) : "NULL");
-}
-
-void StdOutLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
-	throw NotImplementedException("StdOutLogStorage::WriteLogEntries");
 }
 
 void StdOutLogStorage::Truncate() {
 	// NOP
 }
 
-void StdOutLogStorage::Flush() {
-	// NOP
+void StdOutLogStorage::FlushInternal() {
+	std::cout.write((const char *)log_entries_stream->GetData(), (long)log_entries_stream->GetPosition());
+	std::cout.flush();
+	log_entries_stream->Rewind();
+}
+
+static string GetDefaultPath(DatabaseInstance &db, const string &filename) {
+	auto &fs = db.GetFileSystem();
+	DatabaseFileOpener opener(db);
+	auto default_path = FileSystem::GetHomeDirectory(opener);
+	default_path = fs.JoinPath(default_path, ".duckdb");
+	default_path = fs.JoinPath(default_path, "logs");
+	default_path = fs.JoinPath(default_path, filename);
+	return default_path;
+}
+
+string FileLogStorage::GetDefaultLogEntriesFilePath(DatabaseInstance &db) {
+	return GetDefaultPath(db, "log_entries.csv");
+}
+string FileLogStorage::GetDefaultLogContextsFilePath(DatabaseInstance &db) {
+	return GetDefaultPath(db, "log_contexts.csv");
+}
+
+FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p), db(db_p) {
+}
+
+FileLogStorage::~FileLogStorage() {
+}
+
+void FileLogStorage::WriteLogEntriesHeader() {
+	MemoryStream buffer;
+	WriteString(csv_config, buffer, "context_id");
+	if (!normalize_contexts) {
+		WriteString(csv_config, buffer, "scope");
+		WriteString(csv_config, buffer, "connection_id");
+		WriteString(csv_config, buffer, "transaction_id");
+		WriteString(csv_config, buffer, "query_id");
+		WriteString(csv_config, buffer, "thread_id");
+	}
+	WriteString(csv_config, buffer, "timestamp");
+	WriteString(csv_config, buffer, "level");
+	WriteString(csv_config, buffer, "log_type");
+	WriteString(csv_config, buffer, "message", false);
+	buffer.WriteData(const_data_ptr_cast(csv_config.newline.c_str()), csv_config.newline.size());
+	log_entries_file_handle->Write(buffer.GetData(), buffer.GetPosition());
+	log_entries_should_write_header = false;
+}
+
+void FileLogStorage::WriteLogContextsHeader() {
+	MemoryStream buffer;
+	WriteString(csv_config, buffer, "context_id");
+	WriteString(csv_config, buffer, "scope");
+	WriteString(csv_config, buffer, "connection_id");
+	WriteString(csv_config, buffer, "transaction_id");
+	WriteString(csv_config, buffer, "query_id");
+	WriteString(csv_config, buffer, "thread_id", false);
+	buffer.WriteData(const_data_ptr_cast(csv_config.newline.c_str()), csv_config.newline.size());
+	log_contexts_file_handle->Write(buffer.GetData(), buffer.GetPosition());
+	log_contexts_should_write_header = false;
+}
+
+void FileLogStorage::InitializeLogContextsFile(DatabaseInstance &db, const string &path) {
+	if (path.empty()) {
+		return InitializeFile(db, GetDefaultLogContextsFilePath(db), log_contexts_file_handle,
+		                      log_contexts_should_write_header);
+	}
+	return InitializeFile(db, path, log_contexts_file_handle, log_contexts_should_write_header);
+}
+
+void FileLogStorage::InitializeLogEntriesFile(DatabaseInstance &db, const string &path) {
+	if (path.empty()) {
+		return InitializeFile(db, GetDefaultLogEntriesFilePath(db), log_entries_file_handle,
+		                      log_entries_should_write_header);
+	}
+	return InitializeFile(db, path, log_entries_file_handle, log_entries_should_write_header);
+}
+
+void FileLogStorage::InitializeFile(DatabaseInstance &db, const string &path, unique_ptr<FileHandle> &handle,
+                                    bool &should_write_header) {
+	auto &fs = db.GetFileSystem();
+
+	// Create parent directories if non existent
+	auto pos = path.find_last_of(fs.PathSeparator(path));
+	if (pos != path.npos) {
+		fs.CreateDirectoriesRecursive(path.substr(0, pos));
+	}
+
+	if (!fs.FileExists(path)) {
+		handle = fs.OpenFile(path,
+		                     FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE |
+		                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
+		                     nullptr);
+	} else {
+		handle = fs.OpenFile(
+		    path, FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND,
+		    nullptr);
+	}
+
+	if (handle->GetFileSize() == 0) {
+		should_write_header = true;
+	}
+}
+
+void FileLogStorage::Truncate() {
+	lock_guard<mutex> lck(lock);
+
+	log_entries_file_handle->Truncate(0);
+	log_entries_stream->Rewind();
+
+	if (log_contexts_file_handle) {
+		log_contexts_file_handle->Truncate(0);
+		log_contexts_stream->Rewind();
+	}
+}
+
+void FileLogStorage::FlushInternal() {
+	if (!initialized) {
+		InitializeLogEntriesFile(db);
+		if (normalize_contexts) {
+			InitializeLogContextsFile(db);
+		}
+		initialized = true;
+	}
+
+	// Write entries
+	if (log_entries_stream->GetPosition() > 0) {
+		if (log_entries_should_write_header) {
+			WriteLogEntriesHeader();
+		}
+		log_entries_file_handle->Write((void *)log_entries_stream->GetData(), log_entries_stream->GetPosition());
+		log_entries_stream->Rewind();
+	}
+
+	// Write contexts
+	if (log_contexts_stream->GetPosition() > 0) {
+		if (log_contexts_should_write_header) {
+			WriteLogContextsHeader();
+		}
+		log_contexts_file_handle->Write((void *)log_contexts_stream->GetData(), log_contexts_stream->GetPosition());
+		log_contexts_stream->Rewind();
+	}
+}
+
+void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	auto config_copy = config;
+
+	string contexts_path;
+	string entries_path;
+
+	vector<string> to_remove;
+	for (const auto &it : config_copy) {
+		if (StringUtil::Lower(it.first) == "path") {
+			entries_path = it.second.ToString();
+			to_remove.push_back(it.first);
+			normalize_contexts = false;
+		} else if (StringUtil::Lower(it.first) == "contexts_path") {
+			contexts_path = it.second.ToString();
+			to_remove.push_back(it.first);
+			normalize_contexts = true;
+		} else if (StringUtil::Lower(it.first) == "entries_path") {
+			entries_path = it.second.ToString();
+			to_remove.push_back(it.first);
+			normalize_contexts = true;
+		}
+	}
+
+	if (!contexts_path.empty() || !entries_path.empty()) {
+		FlushInternal();
+	}
+	if (!entries_path.empty()) {
+		InitializeLogEntriesFile(db, entries_path);
+	}
+	if (!contexts_path.empty()) {
+		InitializeLogContextsFile(db, contexts_path);
+	}
+
+	for (const auto &it : to_remove) {
+		config_copy.erase(it);
+	}
+
+	CSVLogStorage::UpdateConfigInternal(db, config_copy);
 }
 
 InMemoryLogStorageScanState::InMemoryLogStorageScanState() {
@@ -69,7 +465,7 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	    LogicalType::UBIGINT,   // context_id
 	    LogicalType::TIMESTAMP, // timestamp
 	    LogicalType::VARCHAR,   // log_type TODO: const vector where possible?
-	    LogicalType::VARCHAR,   // level TODO: enumify
+	    LogicalType::VARCHAR,   // level TODO: enumify?
 	    LogicalType::VARCHAR,   // message
 	};
 

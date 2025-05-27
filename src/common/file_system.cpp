@@ -61,6 +61,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -766,11 +767,16 @@ FileType FileHandle::GetType() {
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {
+	if (flags.DisableLogging()) {
+		return;
+	}
+
 	auto context = opener.TryGetClientContext();
 	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = context->logger;
 		return;
 	}
+
 	auto database = opener.TryGetDatabase();
 	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = database->GetLogManager().GlobalLoggerReference();
