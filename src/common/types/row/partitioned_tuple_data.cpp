@@ -124,21 +124,24 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
                                              const idx_t append_count) const {
 	if (UseFixedSizeMap()) {
-		BuildPartitionSel<true>(state, append_sel, append_count);
+		BuildPartitionSel<true>(state, append_sel, append_count, MaxPartitionIndex());
 	} else {
-		BuildPartitionSel<false>(state, append_sel, append_count);
+		BuildPartitionSel<false>(state, append_sel, append_count, MaxPartitionIndex());
 	}
 }
 
-template <bool fixed>
+template <bool FIXED>
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-                                             const idx_t append_count) {
-	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
-	auto &partition_entries = state.GetMap<fixed>();
+                                             const idx_t append_count, const idx_t max_partition_idx) {
+	using GETTER = TemplatedMapGetter<list_entry_t, FIXED>;
+	auto &partition_entries = state.GetMap<FIXED>();
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	partition_entries.clear();
-	switch (state.partition_indices.GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
+
+	if (max_partition_idx == 0 || state.partition_indices.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		partition_entries[partition_indices[0]] = list_entry_t(0, append_count);
+	} else {
+		D_ASSERT(state.partition_indices.GetVectorType() == VectorType::FLAT_VECTOR);
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto &partition_index = partition_indices[i];
 			auto partition_entry = partition_entries.find(partition_index);
@@ -148,12 +151,6 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 				GETTER::GetValue(partition_entry).length++;
 			}
 		}
-		break;
-	case VectorType::CONSTANT_VECTOR:
-		partition_entries[partition_indices[0]] = list_entry_t(0, append_count);
-		break;
-	default:
-		throw InternalException("Unexpected VectorType in PartitionedTupleData::Append");
 	}
 
 	// Early out: check if everything belongs to a single partition
