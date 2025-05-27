@@ -647,14 +647,12 @@ double LossyFillCast(uhugeint_t val) {
 
 template <typename T>
 static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
-	const auto x = cursor.GetCell<T>(0, row_idx);
-	const auto x0 = cursor.GetCell<T>(0, prev_valid);
-	const auto x1 = cursor.GetCell<T>(0, next_valid);
+	//	Cast everything to doubles immediately so we can interpolate backwards (x < x0)
+	const auto x = LossyFillCast<double>(cursor.GetCell<T>(0, row_idx));
+	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
+	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
 
-	const auto num = LossyFillCast<double>(x - x0);
-	const auto den = LossyFillCast<double>(x1 - x0);
-
-	return num / den;
+	return (x - x0) / (x1 - x0);
 }
 
 typedef double (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);

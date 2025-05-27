@@ -34,13 +34,15 @@ FILL orderings must support subtraction
 # Simple interpolation coverage tests
 #
 
+foreach ordertype tinyint smallint integer bigint hugeint float double utinyint usmallint uinteger ubigint uhugeint
+
 foreach filltype tinyint smallint integer bigint hugeint float double utinyint usmallint uinteger ubigint uhugeint
 
 # Between values
 query II
 select 
 	i,
-	fill(if(i = 1, NULL, i)::${filltype}) over(order by i)
+	fill(if(i = 1, NULL, i)::${filltype}) over(order by i::${ordertype})
 from range(3) tbl(i);
 ----
 0	0
@@ -51,7 +53,7 @@ from range(3) tbl(i);
 query II
 select 
 	i,
-	fill(if(i = 0, NULL, i)::${filltype}) over(order by i)
+	fill(if(i = 0, NULL, i)::${filltype}) over(order by i::${ordertype})
 from range(3) tbl(i);
 ----
 0	0
@@ -62,7 +64,7 @@ from range(3) tbl(i);
 query II
 select 
 	i,
-	fill(if(i = 2, NULL, i)::${filltype}) over(order by i)
+	fill(if(i = 2, NULL, i)::${filltype}) over(order by i::${ordertype})
 from range(3) tbl(i);
 ----
 0	0
@@ -73,7 +75,7 @@ from range(3) tbl(i);
 query II
 select 
 	i,
-	fill(if(i > 0, NULL, i)::${filltype}) over(order by i)
+	fill(if(i > 0, NULL, i)::${filltype}) over(order by i::${ordertype})
 from range(3) tbl(i);
 ----
 0	0
@@ -84,7 +86,7 @@ from range(3) tbl(i);
 query II
 select 
 	i,
-	fill(if(i < 4, NULL, i)::${filltype}) over(partition by i // 2 order by i) f
+	fill(if(i < 4, NULL, i)::${filltype}) over(partition by i // 2 order by i::${ordertype}) f
 from range(8) tbl(i)
 order by i
 ----
@@ -101,7 +103,7 @@ order by i
 query II
 select 
 	i,
-	fill(if(i = 2, NULL, i)::${filltype}) over(order by if(i < 4, NULL, i)) f
+	fill(if(i = 2, NULL, i)::${filltype}) over(order by if(i < 4, NULL, i)::${ordertype}) f
 from range(8) tbl(i)
 order by i
 ----
@@ -116,16 +118,22 @@ order by i
 
 endloop
 
+endloop
+
+foreach ordertype smallint integer bigint hugeint float double usmallint uinteger ubigint uhugeint
+
 foreach filltype smallint integer bigint hugeint float double usmallint uinteger ubigint uhugeint
 
 # Previous in another chunk
 query II
 select 
 	i,
-	fill(if(i = 2048, NULL, i)::${filltype}) over(order by i) f
+	fill(if(i = 2048, NULL, i)::${filltype}) over(order by i::${ordertype}) f
 from range(2060) tbl(i)
 qualify i <> f
 ----
+
+endloop
 
 endloop
 
@@ -133,13 +141,15 @@ endloop
 # Temporal coverage
 #
 
+foreach ordertype date timestamp timestamptz
+
 foreach filltype date timestamp timestamptz
 
 # Between values
 query II
 select 
 	i,
-	fill(if(day(i) = 2, NULL, i)::${filltype}) over(order by i) f
+	fill(if(day(i) = 2, NULL, i)::${filltype}) over(order by i::${ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f <> i
 ----
@@ -148,7 +158,7 @@ qualify f <> i
 query II
 select 
 	i,
-	fill(if(day(i) = 1, NULL, i)::${filltype}) over(order by i) f
+	fill(if(day(i) = 1, NULL, i)::${filltype}) over(order by i::${ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f <> i
 ----
@@ -157,7 +167,7 @@ qualify f <> i
 query II
 select 
 	i,
-	fill(if(day(i) = 3, NULL, i)::${filltype}) over(order by i) f
+	fill(if(day(i) = 3, NULL, i)::${filltype}) over(order by i::${ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f <> i
 ----
@@ -166,7 +176,7 @@ qualify f <> i
 query II
 select 
 	i,
-	fill(if(day(i) > 1, NULL, i)::${filltype}) over(order by i) f
+	fill(if(day(i) > 1, NULL, i)::${filltype}) over(order by i::${ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify f <> '2025-01-01'::DATE
 ----
@@ -175,7 +185,7 @@ qualify f <> '2025-01-01'::DATE
 query II
 select 
 	i,
-	fill(if(day(i) < 5, NULL, i)::${filltype}) over(partition by (day(i) - 1) // 2 order by i) f
+	fill(if(day(i) < 5, NULL, i)::${filltype}) over(partition by (day(i) - 1) // 2 order by i::${ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-09'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify i is distinct from f
 order by i
@@ -189,7 +199,7 @@ order by i
 query II
 select 
 	i,
-	fill(if(day(i) = 3, NULL, i)::${filltype}) over(order by if(day(i) < 5, NULL, i)) f
+	fill(if(day(i) = 3, NULL, i)::${filltype}) over(order by if(day(i) < 5, NULL, i)::${ordertype}) f
 from range('2025-01-01'::DATE, '2025-01-09'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify i is distinct from f
 order by i
@@ -200,10 +210,12 @@ order by i
 query II
 select 
 	i,
-	fill(if(i = '2015-01-01'::DATE + 2048, NULL, i)::${filltype}) over(order by i) f
+	fill(if(i = '2015-01-01'::DATE + 2048, NULL, i)::${filltype}) over(order by i::${ordertype}) f
 from range('2025-01-01'::DATE, '2020-08-22'::DATE, INTERVAL 1 DAY) tbl(i)
 qualify i <> f
 ----
+
+endloop
 
 endloop
 
@@ -213,7 +225,7 @@ endloop
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) = 2, NULL, i)::TIME) over(order by i) f
+	fill(if(minute(i) = 2, NULL, i)::TIME) over(order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify f <> t
 ----
@@ -222,7 +234,7 @@ qualify f <> t
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) = 1, NULL, i)::TIME) over(order by i) f
+	fill(if(minute(i) = 1, NULL, i)::TIME) over(order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify f <> t
 ----
@@ -231,7 +243,7 @@ qualify f <> t
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) = 3, NULL, i)::TIME) over(order by i) f
+	fill(if(minute(i) = 3, NULL, i)::TIME) over(order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify f <> t
 ----
@@ -240,7 +252,7 @@ qualify f <> t
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) > 0, NULL, i)::TIME) over(order by i) f
+	fill(if(minute(i) > 0, NULL, i)::TIME) over(order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify f <> '00:00:00'::TIME
 ----
@@ -249,7 +261,7 @@ qualify f <> '00:00:00'::TIME
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) < 4, NULL, i)::TIME) over(partition by minute(i) // 2 order by i) f
+	fill(if(minute(i) < 4, NULL, i)::TIME) over(partition by minute(i) // 2 order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:09'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify t is distinct from f
 order by t
@@ -263,7 +275,7 @@ order by t
 query II
 select 
 	i::TIME t,
-	fill(if(minute(i) = 3, NULL, i)::TIME) over(order by if(minute(i) < 4, NULL, i)) f
+	fill(if(minute(i) = 3, NULL, i)::TIME) over(order by if(minute(i) < 4, NULL, i)::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:09'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
 qualify t is distinct from f
 order by t
@@ -274,7 +286,7 @@ order by t
 query II
 select 
 	i::TIME t,
-	fill(if(i = '2015-01-01'::TIMESTAMP + INTERVAL 2048 SECOND, NULL, i)::TIME) over(order by i) f
+	fill(if(i = '2015-01-01'::TIMESTAMP + INTERVAL 2048 SECOND, NULL, i)::TIME) over(order by i::TIME) f
 from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:34:20'::TIMESTAMP, INTERVAL 1 SECOND) tbl(i)
 qualify t <> f
 ----
