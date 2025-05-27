@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_use_bf.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -141,8 +142,8 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 		LogicalOperator *bf_tail = join.children[0].get();
 		LogicalOperator *last_creator = nullptr;
 
-		while (bf_tail->children[0]->type == LogicalOperatorType::LOGICAL_CREATE_BF ||
-		       bf_tail->children[0]->type == LogicalOperatorType::LOGICAL_USE_BF) {
+		while (bf_tail->type == LogicalOperatorType::LOGICAL_CREATE_BF ||
+		       bf_tail->type == LogicalOperatorType::LOGICAL_USE_BF) {
 			if (bf_tail->type == LogicalOperatorType::LOGICAL_CREATE_BF) {
 				last_creator = bf_tail;
 			}
