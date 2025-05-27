@@ -193,7 +193,7 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 			const auto &partition_index = partition_indices[i];
 			auto &partition_offset = partition_entries[partition_index].offset;
 			reverse_partition_sel.set_index(i, partition_offset);
-			partition_sel[partition_offset++] = i;
+			partition_sel.set_index(partition_offset++, i);
 		}
 	}
 }
