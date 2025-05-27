@@ -244,13 +244,12 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 //===--------------------------------------------------------------------===//
 // LambdaFunctions
 //===--------------------------------------------------------------------===//
-LogicalType LambdaFunctions::DetermineListChildType(LogicalType child_type) {
-	;
+LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_type) {
 	if (child_type.id() != LogicalTypeId::SQLNULL && child_type.id() != LogicalTypeId::UNKNOWN) {
 		if (child_type.id() == LogicalTypeId::ARRAY) {
 			return ArrayType::GetChildType(child_type);
 		} else if (child_type.id() == LogicalTypeId::LIST) {
-			return child_type = ListType::GetChildType(child_type);
+			return ListType::GetChildType(child_type);
 		}
 		throw InternalException("The first argument must be a list or array type");
 	}

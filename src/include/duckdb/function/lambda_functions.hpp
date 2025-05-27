@@ -54,7 +54,7 @@ public:
 class LambdaFunctions {
 public:
 	//! Returns the list child type
-	static LogicalType DetermineListChildType(LogicalType child_type);
+	static LogicalType DetermineListChildType(const LogicalType &child_type);
 
 	//! Returns the parameter type for binary lambdas
 	static LogicalType BindBinaryChildren(const vector<LogicalType> &function_child_types, const idx_t parameter_idx);
