@@ -243,7 +243,8 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	PrintLineSep();
 }
 
-void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result, string &expected_hash, string &actual_hash) {
+void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result,
+                                         const string &expected_hash, const string &actual_hash) {
 	PrintErrorHeader("Wrong result hash!");
 	PrintLineSep();
 	PrintSQL();
