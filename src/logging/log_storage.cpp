@@ -8,6 +8,9 @@
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
 #include <iostream>
 
@@ -39,6 +42,14 @@ void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value
 	if (config.size() > 1) {
 		throw InvalidInputException("LogStorage does not support passing configuration");
 	}
+}
+
+unique_ptr<TableRef> LogStorage::BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input) {
+	return nullptr;
+}
+
+unique_ptr<TableRef> LogStorage::BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) {
+	return nullptr;
 }
 
 static void WriteDelim(LogStorageCsvConfig &config, WriteStream &writer) {
@@ -219,8 +230,8 @@ void FileLogStorage::WriteLogEntriesHeader() {
 		WriteString(csv_config, buffer, "thread_id");
 	}
 	WriteString(csv_config, buffer, "timestamp");
-	WriteString(csv_config, buffer, "level");
-	WriteString(csv_config, buffer, "log_type");
+	WriteString(csv_config, buffer, "log_level");
+	WriteString(csv_config, buffer, "type");
 	WriteString(csv_config, buffer, "message", false);
 	buffer.WriteData(const_data_ptr_cast(csv_config.newline.c_str()), csv_config.newline.size());
 	log_entries_file_handle->Write(buffer.GetData(), buffer.GetPosition());
@@ -360,6 +371,67 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 	}
 
 	CSVLogStorage::UpdateConfigInternal(db, config_copy);
+}
+
+static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {
+	Parser parser(options);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw ParserException(err_msg);
+	}
+	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
+}
+
+unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
+                                                         const string &path, const string &select_clause) {
+	if (LogManager::Get(context).GetConfig().enabled) {
+		throw InvalidInputException("Please disable logging before scanning the logging csv file to avoid duckdb "
+		                            "getting stuck in infinite logging limbo");
+	}
+
+	string sub_query_string;
+
+	string escaped_path = KeywordHelper::WriteOptionallyQuoted(path);
+	sub_query_string = StringUtil::Format("%s FROM %s", select_clause, escaped_path);
+
+	auto subquery_ref =
+	    ParseSubquery(sub_query_string, context.GetParserOptions(),
+	                  "Something went wrong trying to construct the subquery to scan the FileLogStorage");
+	return std::move(subquery_ref);
+}
+
+unique_ptr<TableRef> FileLogStorage::BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input) {
+	lock_guard<mutex> lck(lock);
+	FlushInternal();
+
+	if (log_entries_file_handle) {
+		return BindReplaceInternal(
+		    context, input, log_entries_file_handle->path,
+		    "SELECT context_id::UBIGINT as context_id, timestamp::TIMESTAMP as timestamp, type::VARCHAR as type, "
+		    "log_level::VARCHAR as log_level, message::VARCHAR as message");
+	}
+	return nullptr;
+}
+
+unique_ptr<TableRef> FileLogStorage::BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) {
+	lock_guard<mutex> lck(lock);
+	FlushInternal();
+	if (normalize_contexts) {
+		D_ASSERT(log_contexts_file_handle);
+		return BindReplaceInternal(context, input, log_contexts_file_handle->path,
+		                           "SELECT context_id::UBIGINT as context_id, scope::VARCHAR as scope, "
+		                           "connection_id::UBIGINT as connection_id, transaction_id::UBIGINT as "
+		                           "transaction_id, query_id::UBIGINT as query_id, thread_id::UBIGINT as thread_id");
+	}
+
+	// When log contexts are denormalized in the csv files, we will be reading them horribly inefficiently by doing a
+	// select DISTINCT on the log_entries_file_handle
+	// TODO: fix? throw?
+	return BindReplaceInternal(context, input, log_entries_file_handle->path,
+	                           "SELECT DISTINCT context_id::UBIGINT as context_id, scope::VARCHAR as scope, "
+	                           "connection_id::UBIGINT as connection_id, transaction_id::UBIGINT as transaction_id, "
+	                           "query_id::UBIGINT as query_id, thread_id::UBIGINT as thread_id");
 }
 
 InMemoryLogStorageScanState::InMemoryLogStorageScanState() {

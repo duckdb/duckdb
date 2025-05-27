@@ -67,6 +67,9 @@ public:
 	DUCKDB_API virtual void Truncate();
 
 	DUCKDB_API virtual void UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
+
+	DUCKDB_API virtual unique_ptr<TableRef> BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input);
+	DUCKDB_API virtual unique_ptr<TableRef> BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input);
 };
 
 struct LogStorageCsvConfig {
@@ -110,7 +113,7 @@ protected:
 
 	// Configuration for csv logger
 	idx_t buffer_limit = 0;
-	bool normalize_contexts = false;
+	bool normalize_contexts = true;
 
 	LogStorageCsvConfig csv_config;
 	unique_ptr<MemoryStream> log_entries_stream;
@@ -137,6 +140,9 @@ public:
 
 	void Truncate() override;
 
+	unique_ptr<TableRef> BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input) override;
+	unique_ptr<TableRef> BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) override;
+
 protected:
 	static string GetDefaultLogEntriesFilePath(DatabaseInstance &db);
 	static string GetDefaultLogContextsFilePath(DatabaseInstance &db);
@@ -151,6 +157,9 @@ protected:
 
 	void WriteLogEntriesHeader();
 	void WriteLogContextsHeader();
+
+	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input, const string &path,
+	                                         const string &select_clause);
 
 	DatabaseInstance &db;
 

@@ -585,7 +585,7 @@
     },
     {
         "name": "logging_mode",
-        "description": "Enables the logger",
+        "description": "Determines which types of log messages are logged",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingMode",
@@ -593,7 +593,7 @@
     },
     {
         "name": "logging_storage",
-        "description": "Set the logging storage (memory/stdout/file)",
+        "description": "Set the logging storage (memory/stdout/file/<custom>)",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingStorage",
