@@ -860,6 +860,10 @@ public:
 			merged_groups++;
 
 			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
+			// modify index`s row_ids
+			DataTableInfo &table_info = current_row_group.GetTableInfo();
+			row_t old_row_idx = (row_t)current_row_group.start;
+			row_t new_row_idx = (row_t)new_row_groups[current_append_idx]->start;
 
 			current_row_group.InitializeScan(scan_state.table_state);
 			while (true) {
@@ -870,6 +874,27 @@ public:
 				if (scan_chunk.size() == 0) {
 					break;
 				}
+				// update indexed row_id
+				if (table_info.GetIndexes().Count() > 0) {
+					Vector rows_old(LogicalType::ROW_TYPE);
+					Vector rows_new(LogicalType::ROW_TYPE);
+					// is the old_rows_id a sequence?
+					VectorOperations::GenerateSequence(rows_old, scan_chunk.size(), old_row_idx, 1);
+					VectorOperations::GenerateSequence(rows_new, scan_chunk.size(), new_row_idx, 1);
+					old_row_idx += (row_t)scan_chunk.size();
+					new_row_idx += (row_t)scan_chunk.size();
+					table_info.GetIndexes().Scan([&](Index &index) {
+						if (index.IsBound()) {
+							DataChunk key_chunk;
+							key_chunk.Initialize(Allocator::DefaultAllocator(), index.Cast<BoundIndex>().logical_types);
+							key_chunk.ReferenceColumns(scan_chunk, index.GetColumnIds());
+							index.Cast<BoundIndex>().Delete(key_chunk, rows_old);
+							index.Cast<BoundIndex>().Append(key_chunk, rows_new);
+						}
+						return false;
+					});
+				}
+
 				scan_chunk.Flatten();
 				idx_t remaining = scan_chunk.size();
 				while (remaining > 0) {
@@ -928,8 +953,8 @@ private:
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                vector<SegmentNode<RowGroup>> &segments) {
 	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
-	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->GetIndexes().Empty() && is_full_checkpoint;
+	// currently we can only vacuum deletes if we are doing a full checkpoint
+	state.can_vacuum_deletes = is_full_checkpoint;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
