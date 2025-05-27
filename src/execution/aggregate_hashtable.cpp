@@ -296,6 +296,14 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 }
 
+static void SaltIncrementAndWrap(idx_t &offset, const idx_t &salt, const idx_t &capacity_mask) {
+	// How many of the uppermost bits of the salt to determine the linear probing increment
+	static constexpr idx_t INCREMENT_BITS = 5;
+	// Extract the bits and make sure it's odd so we cover the entire domain when adding modulo a power of two
+	offset += (salt >> (64 - INCREMENT_BITS)) | 1;
+	offset &= capacity_mask;
+}
+
 void GroupedAggregateHashTable::ReinsertTuples(PartitionedTupleData &data) {
 	for (auto &data_collection : data.GetPartitions()) {
 		if (data_collection->Count() == 0) {
@@ -307,16 +315,17 @@ void GroupedAggregateHashTable::ReinsertTuples(PartitionedTupleData &data) {
 			for (idx_t i = 0; i < iterator.GetCurrentChunkCount(); i++) {
 				const auto &row_location = row_locations[i];
 				const auto hash = Load<hash_t>(row_location + hash_offset);
+				const auto salt = ht_entry_t::ExtractSalt(hash);
 
 				// Find an empty entry
 				auto ht_offset = ApplyBitMask(hash);
 				D_ASSERT(ht_offset == hash % capacity);
 				while (entries[ht_offset].IsOccupied()) {
-					IncrementAndWrap(ht_offset, bitmask);
+					SaltIncrementAndWrap(ht_offset, salt, bitmask);
 				}
 				auto &entry = entries[ht_offset];
 				D_ASSERT(!entry.IsOccupied());
-				entry.SetSalt(ht_entry_t::ExtractSalt(hash));
+				entry.SetSalt(salt);
 				entry.SetPointer(row_location);
 				D_ASSERT(entry.IsOccupied());
 			}
@@ -593,7 +602,13 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
                                                const SelectionVector *const sel_vector, const idx_t remaining_entries,
                                                SelectionVector &empty_vector, SelectionVector &compare_vector,
                                                idx_t &empty_count, idx_t &compare_count) {
+	union {
+		uint64_t all;
+		uint8_t bytes[8];
+	} probe_helper;
+
 	// For each remaining entry, figure out whether or not it belongs to a full or empty group
+	idx_t max_inner = 0;
 	for (idx_t i = 0; i < remaining_entries; i++) {
 		const auto index = HAS_SEL ? UnsafeNumericCast<idx_t>((*sel_vector)[i]) : i;
 		const auto salt = hash_salts[index];
@@ -614,12 +629,14 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
 			}
 
 			// Linear probing
-			IncrementAndWrap(ht_offset, bitmask);
+			SaltIncrementAndWrap(ht_offset, salt, bitmask);
 		}
 		if (DUCKDB_UNLIKELY(inner_iteration_count == capacity)) {
 			throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 		}
+		max_inner = MaxValue(max_inner, inner_iteration_count);
 	}
+	Printer::PrintF("# %llu #", max_inner);
 }
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
@@ -783,7 +800,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		for (idx_t i = 0; i < no_match_count; i++) {
 			const auto &index = state.no_match_vector[i];
 			auto &ht_offset = ht_offsets[index];
-			IncrementAndWrap(ht_offset, bitmask);
+			const auto salt = hash_salts[index];
+			SaltIncrementAndWrap(ht_offset, salt, bitmask);
 		}
 		sel_vector = &state.no_match_vector;
 		remaining_entries = no_match_count;
