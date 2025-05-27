@@ -149,7 +149,7 @@ public:
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE);
 	//!  Return NULL if the file exist instead of throwing an error
 	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_EXISTS = FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_EXISTS);
-	//! Disables logging to avoid infinite loops
+	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
 	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
 };

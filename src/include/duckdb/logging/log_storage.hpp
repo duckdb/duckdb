@@ -157,10 +157,12 @@ protected:
 	unique_ptr<FileHandle> log_entries_file_handle;
 	unique_ptr<FileHandle> log_contexts_file_handle;
 
+	//! Used for lazily opening the `log_entries_file_handle` and `log_contexts_file_handle` on first Flush
+	bool initialized = false;
+
+	//! Used to lazily write the csv header of the log files on first Flush
 	bool log_entries_should_write_header = false;
 	bool log_contexts_should_write_header = false;
-
-	bool initialized = false;
 };
 
 class InMemoryLogStorageScanState : public LogStorageScanState {

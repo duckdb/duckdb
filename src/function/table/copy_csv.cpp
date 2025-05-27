@@ -1,4 +1,5 @@
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/csv_utils.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -54,11 +55,6 @@ void StringDetection(const string &str_1, const string &str_2, const string &nam
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
-void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
-	if (quote_or_escape != '\0') {
-		writer.Write(quote_or_escape);
-	}
-}
 
 void BaseCSVData::Finalize() {
 	auto delimiter_string = options.dialect_options.state_machine_options.delimiter.GetValue();
@@ -232,94 +228,13 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	return std::move(bind_data);
 }
 
-//===--------------------------------------------------------------------===//
-// Helper writing functions
-//===--------------------------------------------------------------------===//
-static string AddEscapes(char to_be_escaped, const char escape, const string &val) {
-	idx_t i = 0;
-	string new_val = "";
-	idx_t found = val.find(to_be_escaped);
-
-	while (found != string::npos) {
-		while (i < found) {
-			new_val += val[i];
-			i++;
-		}
-		if (escape != '\0') {
-			new_val += escape;
-			found = val.find(to_be_escaped, found + 1);
-		}
-	}
-	while (i < val.length()) {
-		new_val += val[i];
-		i++;
-	}
-	return new_val;
-}
-
-static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
-	auto &options = csv_data.options;
-	// check if the string is equal to the null string
-	if (len == options.null_str[0].size() && memcmp(str, options.null_str[0].c_str(), len) == 0) {
-		return true;
-	}
-	auto str_data = reinterpret_cast<const_data_ptr_t>(str);
-	for (idx_t i = 0; i < len; i++) {
-		if (csv_data.requires_quotes[str_data[i]]) {
-			// this byte requires quotes - write a quoted string
-			return true;
-		}
-	}
-	// no newline, quote or delimiter in the string
-	// no quoting or escaping necessary
-	return false;
-}
-
 static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const char *str, idx_t len,
                               bool force_quote) {
-	auto &options = csv_data.options;
-	if (!force_quote) {
-		// force quote is disabled: check if we need to add quotes anyway
-		force_quote = RequiresQuotes(csv_data, str, len);
-	}
-	// If a quote is set to none (i.e., null-terminator) we skip the quotation
-	if (force_quote && options.dialect_options.state_machine_options.quote.GetValue() != '\0') {
-		// quoting is enabled: we might need to escape things in the string
-		bool requires_escape = false;
-		// simple CSV
-		// do a single loop to check for a quote or escape value
-		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == options.dialect_options.state_machine_options.quote.GetValue() ||
-			    str[i] == options.dialect_options.state_machine_options.escape.GetValue()) {
-				requires_escape = true;
-				break;
-			}
-		}
-
-		if (!requires_escape) {
-			// fast path: no need to escape anything
-			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
-			writer.WriteData(const_data_ptr_cast(str), len);
-			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
-			return;
-		}
-
-		// slow path: need to add escapes
-		string new_val(str, len);
-		new_val = AddEscapes(options.dialect_options.state_machine_options.escape.GetValue(),
-		                     options.dialect_options.state_machine_options.escape.GetValue(), new_val);
-		if (options.dialect_options.state_machine_options.escape !=
-		    options.dialect_options.state_machine_options.quote) {
-			// need to escape quotes separately
-			new_val = AddEscapes(options.dialect_options.state_machine_options.quote.GetValue(),
-			                     options.dialect_options.state_machine_options.escape.GetValue(), new_val);
-		}
-		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
-		writer.WriteData(const_data_ptr_cast(new_val.c_str()), new_val.size());
-		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote.GetValue());
-	} else {
-		writer.WriteData(const_data_ptr_cast(str), len);
-	}
+	auto quote = csv_data.options.dialect_options.state_machine_options.quote.GetValue();
+	auto escape = csv_data.options.dialect_options.state_machine_options.escape.GetValue();
+	auto &null_str = csv_data.options.null_str;
+	auto &requires_quotes = csv_data.requires_quotes;
+	return CSVUtils::WriteQuotedString(writer, str, len, force_quote, null_str, requires_quotes, quote, escape);
 }
 
 //===--------------------------------------------------------------------===//
@@ -412,7 +327,8 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
+				CSVUtils::WriteQuoteOrEscape(stream,
+				                             options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
 			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -449,7 +365,8 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		D_ASSERT(options.null_str.size() == 1);
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
+				CSVUtils::WriteQuoteOrEscape(writer,
+				                             options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value

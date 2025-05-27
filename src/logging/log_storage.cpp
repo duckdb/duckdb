@@ -1,5 +1,6 @@
 #include "duckdb/logging/log_storage.hpp"
 
+#include "duckdb/common/csv_utils.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -37,98 +38,6 @@ void LogStorage::Truncate() {
 void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	if (config.size() > 1) {
 		throw InvalidInputException("LogStorage does not support passing configuration");
-	}
-}
-
-// TODO: modified from csv copy code
-static void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
-	if (quote_or_escape != '\0') {
-		writer.Write(quote_or_escape);
-	}
-}
-
-// TODO: modified from csv copy code
-static string AddEscapes(char to_be_escaped, const char escape, const string &val) {
-	idx_t i = 0;
-	string new_val = "";
-	idx_t found = val.find(to_be_escaped);
-
-	while (found != string::npos) {
-		while (i < found) {
-			new_val += val[i];
-			i++;
-		}
-		if (escape != '\0') {
-			new_val += escape;
-			found = val.find(to_be_escaped, found + 1);
-		}
-	}
-	while (i < val.length()) {
-		new_val += val[i];
-		i++;
-	}
-	return new_val;
-}
-
-// TODO: modified from csv copy code
-static bool RequiresQuotes(unsafe_unique_array<bool> &require_quote_map, vector<string> &null_strings, const char *str,
-                           idx_t len) {
-	// check if the string is equal to the null string
-	if (len == null_strings[0].size() && memcmp(str, null_strings[0].c_str(), len) == 0) {
-		return true;
-	}
-	auto str_data = reinterpret_cast<const_data_ptr_t>(str);
-	for (idx_t i = 0; i < len; i++) {
-		if (require_quote_map[str_data[i]]) {
-			// this byte requires quotes - write a quoted string
-			return true;
-		}
-	}
-	// no newline, quote or delimiter in the string
-	// no quoting or escaping necessary
-	return false;
-}
-
-// TODO: modified from csv copy code
-static void WriteQuotedString(WriteStream &writer, unsafe_unique_array<bool> &require_quote_map,
-                              vector<string> &null_strings, char quote, char escape, const char *str, idx_t len) {
-	bool requires_quoting = RequiresQuotes(require_quote_map, null_strings, str, len);
-
-	// If a quote is set to none (i.e., null-terminator) we skip the quotation
-	if (requires_quoting && quote != '\0') {
-		// quoting is enabled: we might need to escape things in the string
-		bool requires_escape = false;
-		// simple CSV
-		// do a single loop to check for a quote or escape value
-		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == quote || str[i] == escape) {
-				requires_escape = true;
-				break;
-			}
-		}
-
-		if (!requires_escape) {
-			// fast path: no need to escape anything
-			WriteQuoteOrEscape(writer, quote);
-			writer.WriteData(const_data_ptr_cast(str), len);
-			WriteQuoteOrEscape(writer, quote);
-			return;
-		}
-
-		// slow path: need to add escapes
-		string new_val(str, len);
-		new_val = AddEscapes(escape, escape, new_val);
-
-		if (escape != quote) {
-			// need to escape quotes separately
-			new_val = AddEscapes(quote, escape, new_val);
-		}
-
-		WriteQuoteOrEscape(writer, quote);
-		writer.WriteData(const_data_ptr_cast(new_val.c_str()), new_val.size());
-		WriteQuoteOrEscape(writer, quote);
-	} else {
-		writer.WriteData(const_data_ptr_cast(str), len);
 	}
 }
 
@@ -193,8 +102,8 @@ static void WriteLogEntryToCSVString(LogStorageCsvConfig &config, WriteStream &w
 	WriteDelim(config, writer);
 
 	// Write message
-	WriteQuotedString(writer, config.requires_quotes, config.null_strings, config.quote, config.escape,
-	                  log_message.c_str(), log_message.size());
+	CSVUtils::WriteQuotedString(writer, log_message.c_str(), log_message.size(), false, config.null_strings,
+	                            config.requires_quotes, config.quote, config.escape);
 
 	writer.WriteData(const_data_ptr_cast(config.newline.c_str()), config.newline.size());
 }
@@ -465,7 +374,7 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	    LogicalType::UBIGINT,   // context_id
 	    LogicalType::TIMESTAMP, // timestamp
 	    LogicalType::VARCHAR,   // log_type TODO: const vector where possible?
-	    LogicalType::VARCHAR,   // level TODO: enumify?
+	    LogicalType::VARCHAR,   // level TODO: enumify
 	    LogicalType::VARCHAR,   // message
 	};
 
