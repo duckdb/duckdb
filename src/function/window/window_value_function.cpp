@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/function/window/window_collection.hpp"
@@ -7,7 +8,6 @@
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "core_functions/aggregate/quantile_sort_tree.hpp"
 
 namespace duckdb {
 
@@ -700,7 +700,7 @@ static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, i
 
 	FlatVector::SetNull(result, i, false);
 	auto data = FlatVector::GetData<T>(result);
-	data[i] = CastInterpolation::Interpolate<T>(y0, slope, y1);
+	data[i] = InterpolateOperator::Operation<T>(y0, slope, y1);
 }
 
 static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
