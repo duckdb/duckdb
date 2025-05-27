@@ -602,13 +602,7 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
                                                const SelectionVector *const sel_vector, const idx_t remaining_entries,
                                                SelectionVector &empty_vector, SelectionVector &compare_vector,
                                                idx_t &empty_count, idx_t &compare_count) {
-	union {
-		uint64_t all;
-		uint8_t bytes[8];
-	} probe_helper;
-
 	// For each remaining entry, figure out whether or not it belongs to a full or empty group
-	idx_t max_inner = 0;
 	for (idx_t i = 0; i < remaining_entries; i++) {
 		const auto index = HAS_SEL ? UnsafeNumericCast<idx_t>((*sel_vector)[i]) : i;
 		const auto salt = hash_salts[index];
@@ -634,9 +628,7 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
 		if (DUCKDB_UNLIKELY(inner_iteration_count == capacity)) {
 			throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 		}
-		max_inner = MaxValue(max_inner, inner_iteration_count);
 	}
-	Printer::PrintF("# %llu #", max_inner);
 }
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
