@@ -65,12 +65,16 @@ struct ArrowResultWrapper {
 
 struct AppenderWrapper {
 	unique_ptr<Appender> appender;
-	string error;
+	ErrorData error_data;
 };
 
 struct TableDescriptionWrapper {
 	unique_ptr<TableDescription> description;
 	string error;
+};
+
+struct ErrorDataWrapper {
+	ErrorData error_data;
 };
 
 enum class CAPIResultSetType : uint8_t {
@@ -93,5 +97,7 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
 idx_t GetCTypeSize(duckdb_type type);
 duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
 bool DeprecatedMaterializeResult(duckdb_result *result);
-duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type);
+duckdb_statement_type StatementTypeToC(const duckdb::StatementType type);
+duckdb_error_type ErrorTypeToC(const duckdb::ExceptionType type);
+duckdb::ExceptionType ErrorTypeFromC(const duckdb_error_type type);
 } // namespace duckdb

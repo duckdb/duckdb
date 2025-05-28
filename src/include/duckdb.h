@@ -558,6 +558,12 @@ typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
 
+//! Holds error data.
+//! Must be destroyed with `duckdb_destroy_error_data`.
+typedef struct _duckdb_error_data {
+	void *internal_ptr;
+} * duckdb_error_data;
+
 //===--------------------------------------------------------------------===//
 // C API extension information
 //===--------------------------------------------------------------------===//
@@ -945,6 +951,54 @@ Destroys the specified configuration object and de-allocates all memory allocate
 * @param config The configuration object to destroy.
 */
 DUCKDB_C_API void duckdb_destroy_config(duckdb_config *config);
+
+//===--------------------------------------------------------------------===//
+// Error Data
+//===--------------------------------------------------------------------===//
+
+// Functions that can throw DuckDB errors must return duckdb_error_data.
+// Please use this interface for all new functions, as it deprecates all previous error handling approaches.
+
+/*!
+Creates duckdb_error_data.
+Must be destroyed with `duckdb_destroy_error_data`.
+
+* @param type The error type.
+* @param message The error message.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_create_error_data(duckdb_error_type type, const char *message);
+
+/*!
+Destroys the error data and deallocates its memory.
+
+* @param error_data The error data to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_error_data(duckdb_error_data *error_data);
+
+/*!
+Returns the duckdb_error_type of the error data.
+
+* @param error_data The error data.
+* @return The error type.
+*/
+DUCKDB_C_API duckdb_error_type duckdb_error_data_error_type(duckdb_error_data error_data);
+
+/*!
+Returns the error message of the error data. Must not be freed.
+
+* @param error_data The error data.
+* @return The error message.
+*/
+DUCKDB_C_API const char *duckdb_error_data_message(duckdb_error_data error_data);
+
+/*!
+Returns whether the error data contains an error or not.
+
+* @param error_data The error data.
+* @return True, if the error data contains an exception, else false.
+*/
+DUCKDB_C_API bool duckdb_error_data_has_error(duckdb_error_data error_data);
 
 //===--------------------------------------------------------------------===//
 // Query Execution
@@ -4114,6 +4168,15 @@ The error message should not be freed. It will be de-allocated when `duckdb_appe
 * @return The error message, or `nullptr` if there is none.
 */
 DUCKDB_C_API const char *duckdb_appender_error(duckdb_appender appender);
+
+/*!
+Returns the error data associated with the given appender.
+Must be destroyed with duckdb_destroy_error_data.
+
+* @param appender The appender to get the error data from.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_appender_error_data(duckdb_appender appender);
 
 /*!
 Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a

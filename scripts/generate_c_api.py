@@ -46,6 +46,7 @@ CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation
 ORIGINAL_FUNCTION_GROUP_ORDER = [
     'open_connect',
     'configuration',
+    'error_data',
     'query_execution',
     'result_functions',
     'safe_fetch_functions',

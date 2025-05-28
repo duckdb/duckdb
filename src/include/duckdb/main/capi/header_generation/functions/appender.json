@@ -129,6 +129,23 @@
             }
         },
         {
+            "name": "duckdb_appender_error_data",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error data associated with the given appender.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
+                "param_comments": {
+                    "appender": "The appender to get the error data from."
+                },
+                "return_value": "The error data."
+            }
+        },
+        {
             "name": "duckdb_appender_flush",
             "return_type": "duckdb_state",
             "params": [
