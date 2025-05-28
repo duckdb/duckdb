@@ -1,16 +1,10 @@
 # name: test/sql/window/test_fill.test
-# description: Test Lead/Lag function
+# description: Test Fill function
 # group: [window]
 
 #
 # Error checks
 #
-
-# Secondary orderings not supported
-statement error
-select fill(i order by 10-i) over (order by i) from range(3) tbl(i);
-----
-ORDER BY is not supported for the window function "fill"
 
 # Only one ordering allowed
 statement error

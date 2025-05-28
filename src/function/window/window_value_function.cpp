@@ -31,7 +31,7 @@ public:
 
 	void Finalize(CollectionPtr collection) {
 		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (child_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+		if (child_idx != DConstants::INVALID_INDEX && executor.IgnoreNulls()) {
 			ignore_nulls = &collection->validities[child_idx];
 		}
 	}
@@ -61,7 +61,7 @@ public:
 
 		if (gvstate.value_tree) {
 			local_value = gvstate.value_tree->GetLocalState();
-			if (gvstate.executor.wexpr.ignore_nulls) {
+			if (gvstate.executor.IgnoreNulls()) {
 				sort_nulls.Initialize();
 			}
 		}
@@ -101,7 +101,7 @@ void WindowValueLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &s
 		UnifiedVectorFormat child_data;
 		child.ToUnifiedFormat(coll_count, child_data);
 		const auto &validity = child_data.validity;
-		if (gstate.executor.wexpr.ignore_nulls && !validity.AllValid()) {
+		if (gstate.executor.IgnoreNulls() && !validity.AllValid()) {
 			const auto &sel = *child_data.sel;
 			for (sel_t i = 0; i < coll_count; ++i) {
 				const auto idx = sel.get_index(i);
@@ -145,7 +145,7 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
 
 	//	The children have to be handled separately because only the first one is global
 	if (!wexpr.children.empty()) {
-		child_idx = shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls);
+		child_idx = shared.RegisterCollection(wexpr.children[0], IgnoreNulls());
 
 		if (wexpr.children.size() > 1) {
 			nth_idx = shared.RegisterEvaluate(wexpr.children[1]);
@@ -737,10 +737,18 @@ WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientConte
                                        WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, context, shared) {
 
-	//	We use the range ordering, even if it has not been defined
-	//	We don't need the validity mask because we have also requested the valid range for the ordering.
-	if (!range_expr) {
-		range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
+	//	We need the sort values for interpolation, so either use the range or the secondary ordering expression
+	if (arg_order_idx.empty()) {
+		//	We use the range ordering, even if it has not been defined
+		if (!range_expr) {
+			D_ASSERT(wexpr.orders.size() == 1);
+			//	We don't need the validity mask because we have also requested the valid range for the ordering.
+			range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
+		}
+	} else {
+		//	For secondary sorts, we need the entire collection so we can interpolate using the values
+		D_ASSERT(arg_order_idx.size() == 1);
+		order_idx = shared.RegisterCollection(wexpr.arg_orders[0].expression, false);
 	}
 }
 
@@ -755,11 +763,55 @@ static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, id
 	}
 }
 
+class WindowFillGlobalState : public WindowLeadLagGlobalState {
+public:
+	explicit WindowFillGlobalState(const WindowFillExecutor &executor, const idx_t payload_count,
+	                               const ValidityMask &partition_mask, const ValidityMask &order_mask)
+	    : WindowLeadLagGlobalState(executor, payload_count, partition_mask, order_mask), order_idx(executor.order_idx) {
+	}
+
+	//! Collection index of the secondary sort values
+	const idx_t order_idx;
+};
+
+class WindowFillLocalState : public WindowLeadLagLocalState {
+public:
+	explicit WindowFillLocalState(const WindowLeadLagGlobalState &gvstate) : WindowLeadLagLocalState(gvstate) {
+	}
+
+	//! Finish the sinking and prepare to scan
+	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+
+	//! Cursor for the secondary sort values
+	unique_ptr<WindowCursor> order_cursor;
+};
+
+void WindowFillLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
+	WindowLeadLagLocalState::Finalize(gstate, collection);
+
+	// Prepare to scan
+	auto &gfstate = gvstate.Cast<WindowFillGlobalState>();
+	if (!order_cursor && gfstate.order_idx != DConstants::INVALID_INDEX) {
+		order_cursor = make_uniq<WindowCursor>(*collection, gfstate.order_idx);
+	}
+}
+
+unique_ptr<WindowExecutorGlobalState> WindowFillExecutor::GetGlobalState(const idx_t payload_count,
+                                                                         const ValidityMask &partition_mask,
+                                                                         const ValidityMask &order_mask) const {
+	return make_uniq<WindowFillGlobalState>(*this, payload_count, partition_mask, order_mask);
+}
+
+unique_ptr<WindowExecutorLocalState> WindowFillExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	const auto &gfstate = gstate.Cast<WindowFillGlobalState>();
+	return make_uniq<WindowFillLocalState>(gfstate);
+}
+
 void WindowFillExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                           DataChunk &, Vector &result, idx_t count, idx_t row_idx) const {
 
-	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &cursor = *lvstate.cursor;
+	auto &lfstate = lstate.Cast<WindowFillLocalState>();
+	auto &cursor = *lfstate.cursor;
 
 	//	Assume the best and just batch copy all the values
 	WindowFillCopy(cursor, result, count, row_idx, 0);
@@ -772,20 +824,133 @@ void WindowFillExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
 	}
 
 	//	Missing values - linear interpolation
-	// auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_END]);
-	auto valid_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[VALID_BEGIN]);
-	auto valid_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[VALID_END]);
+	auto &gfstate = gstate.Cast<WindowFillGlobalState>();
+	auto partition_begin = FlatVector::GetData<const idx_t>(lfstate.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(lfstate.bounds.data[PARTITION_END]);
 
-	auto fill_slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
-	auto &range_cursor = *lvstate.range_cursor;
-
-	auto fill_interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->return_type);
-
-	idx_t prev_partition = DConstants::INVALID_INDEX;
 	idx_t prev_valid = DConstants::INVALID_INDEX;
 	idx_t next_valid = DConstants::INVALID_INDEX;
+
+	auto fill_slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
+	auto fill_interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->return_type);
+
+	//	Secondary sort - use the MSTs
+	if (gfstate.value_tree) {
+		//	Roughly what we need to do is find the previous and next non-null values
+		//	with non-null ordering values. This is essentially LEAD/LAG(IGNORE NULLS)
+		auto &frames = lfstate.frames;
+		frames.resize(1);
+		auto &frame = frames[0];
+		auto &order_cursor = *lfstate.order_cursor;
+		for (idx_t i = 0; i < count; ++i, ++row_idx) {
+			//	If this value is valid, move on
+			const auto idx = arg_data.sel->get_index(i);
+			if (arg_data.validity.RowIsValid(idx)) {
+				continue;
+			}
+
+			//	Frame is the entire partition
+			frame = {partition_begin[i], partition_end[i]};
+			const auto frame_width = frame.end - frame.start;
+			if (frame.end == frame.start) {
+				//	No values - give up
+				continue;
+			}
+
+			//	If we are outside the validity range of the sort column, we can't fix this value.
+			if (order_cursor.CellIsNull(0, row_idx)) {
+				continue;
+			}
+
+			//	Find the own row number in the secondary sort
+			const auto own_row = gfstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
+
+			//	Find the previous valid value, scanning backwards from the current row
+			//	Note that we can't reuse previous values as the scan order is not the sort order
+			prev_valid = DConstants::INVALID_INDEX;
+			idx_t prev_n = DConstants::INVALID_INDEX;
+			for (idx_t n = own_row; n-- > 0;) {
+				auto j = gfstate.value_tree->SelectNth(frames, n).first;
+				if (order_cursor.CellIsNull(0, j)) {
+					break;
+				}
+				if (!cursor.CellIsNull(0, j)) {
+					prev_valid = j;
+					prev_n = n;
+					break;
+				}
+			}
+
+			//	If there is nothing beind us (missing early value) then scan forward
+			if (prev_valid == DConstants::INVALID_INDEX) {
+				for (idx_t n = own_row + 1; n < frame_width; ++n) {
+					auto j = gfstate.value_tree->SelectNth(frames, n).first;
+					if (order_cursor.CellIsNull(0, j)) {
+						break;
+					}
+					if (!cursor.CellIsNull(0, j)) {
+						prev_valid = j;
+						prev_n = n;
+						break;
+					}
+				}
+			}
+
+			//	No valid values!
+			if (prev_valid == DConstants::INVALID_INDEX) {
+				//	Skip to the next partition
+				i += partition_end[i] - row_idx - 1;
+				row_idx = partition_end[i] - 1;
+				continue;
+			}
+
+			//	Find the next valid value after the previous
+			next_valid = DConstants::INVALID_INDEX;
+			for (idx_t n = prev_n + 1; n < frame_width; ++n) {
+				auto j = gfstate.value_tree->SelectNth(frames, n).first;
+				if (order_cursor.CellIsNull(0, j)) {
+					break;
+				}
+				if (!cursor.CellIsNull(0, j)) {
+					next_valid = j;
+					break;
+				}
+			}
+
+			//	Nothing after, so scan backwards from the previous
+			if (next_valid == DConstants::INVALID_INDEX && prev_valid > frame.start) {
+				for (idx_t n = prev_n; n-- > 0;) {
+					auto j = gfstate.value_tree->SelectNth(frames, n).first;
+					if (order_cursor.CellIsNull(0, j)) {
+						break;
+					}
+					if (!cursor.CellIsNull(0, j)) {
+						next_valid = j;
+						//	Restore ordering
+						std::swap(prev_valid, next_valid);
+						break;
+					}
+				}
+			}
+
+			//	If we only have one value, then just copy it
+			if (next_valid == DConstants::INVALID_INDEX) {
+				cursor.CopyCell(0, prev_valid, result, i);
+				continue;
+			}
+
+			//	Two values, so interpolate
+			//	y = y0 + (x - x0) / (x1 - x0) * (y1 - y0)
+			const auto slope = fill_slope_func(order_cursor, row_idx, prev_valid, next_valid);
+			fill_interpolate_func(result, i, cursor, prev_valid, next_valid, slope);
+		}
+		return;
+	}
+
+	auto valid_begin = FlatVector::GetData<const idx_t>(lfstate.bounds.data[VALID_BEGIN]);
+	auto valid_end = FlatVector::GetData<const idx_t>(lfstate.bounds.data[VALID_END]);
+	auto &range_cursor = *lfstate.range_cursor;
+	idx_t prev_partition = DConstants::INVALID_INDEX;
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		//	Did we change partitions?
@@ -795,7 +960,7 @@ void WindowFillExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
 			next_valid = DConstants::INVALID_INDEX;
 		}
 
-		//	If we are outside the validity range of the sort column, we can't use this value.
+		//	If we are outside the validity range of the sort column, we can't fix this value.
 		if (row_idx < valid_begin[i] || valid_end[i] <= row_idx) {
 			continue;
 		}
