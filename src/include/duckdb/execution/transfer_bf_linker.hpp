@@ -33,7 +33,13 @@ protected:
 	void VisitOperator(LogicalOperator &op, bool is_probing_side);
 
 protected:
-	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS, CLEAN_USELESS_OPERATORS, UPDATE_MIN_MAX_BINDING };
+	enum class State {
+		COLLECT_BF_CREATORS,
+		LINK_BF_USERS,
+		CLEAN_USELESS_OPERATORS,
+		UPDATE_MIN_MAX_BINDING,
+		SMOOTH_MARK_JOIN
+	};
 	State state;
 
 	struct FilterPlanHash {

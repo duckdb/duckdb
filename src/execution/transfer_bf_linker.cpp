@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_use_bf.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -19,6 +20,9 @@ void TransferBFLinker::LinkBFOperators(LogicalOperator &op) {
 	VisitOperator(op);
 
 	state = State::UPDATE_MIN_MAX_BINDING;
+	VisitOperator(op);
+
+	state = State::SMOOTH_MARK_JOIN;
 	VisitOperator(op);
 }
 
@@ -111,13 +115,63 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 					related_creator->min_max_applied_cols[plan_idx] = std::move(updated_bindings);
 				}
 			}
-		} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = op.Cast<LogicalComparisonJoin>();
-			if (join.join_type == JoinType::MARK) {
-				// min-max filter does not support mark join
-				return;
-			}
 		}
+		break;
+	}
+	case State::SMOOTH_MARK_JOIN: {
+		// Reorder BF-related operators above a MARK join:
+		// From: op -> filter -> join(MARK) -> create_bf_chain -> real_child
+		// To:   op -> create_bf_chain -> filter -> join(MARK) -> real_child
+		if (op.children.empty() || op.children[0]->type != LogicalOperatorType::LOGICAL_FILTER) {
+			break;
+		}
+
+		auto &filter = op.children[0]->Cast<LogicalFilter>();
+		if (filter.expressions.size() != 1 || filter.expressions[0]->type != ExpressionType::BOUND_COLUMN_REF ||
+		    filter.children.empty() || filter.children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			break;
+		}
+
+		auto &join = filter.children[0]->Cast<LogicalComparisonJoin>();
+		if (join.join_type != JoinType::MARK || !(join.children[0]->type == LogicalOperatorType::LOGICAL_CREATE_BF ||
+		                                          join.children[0]->type == LogicalOperatorType::LOGICAL_USE_BF)) {
+			break;
+		}
+
+		// Step 1: Identify the last CREATE_BF in the BF chain (which may include USE_BF in between)
+		LogicalOperator *bf_tail = join.children[0].get();
+		LogicalOperator *last_creator = nullptr;
+
+		while (bf_tail->type == LogicalOperatorType::LOGICAL_CREATE_BF ||
+		       bf_tail->type == LogicalOperatorType::LOGICAL_USE_BF) {
+			if (bf_tail->type == LogicalOperatorType::LOGICAL_CREATE_BF) {
+				last_creator = bf_tail;
+			}
+			bf_tail = bf_tail->children[0].get();
+		}
+
+		// If there is no CREATE_BF in the chain, skip the transformation
+		if (!last_creator) {
+			break;
+		}
+
+		bf_tail = last_creator;
+		D_ASSERT(bf_tail->type == LogicalOperatorType::LOGICAL_CREATE_BF);
+
+		// Step 2: Detach the BF chain from the join and isolate the real child that follows it
+		auto bf_chain = std::move(join.children[0]);
+		auto real_child = std::move(bf_tail->children[0]);
+
+		// Step 3: Rewire the filter subtree under the end of the BF chain
+		bf_tail->children[0] = std::move(op.children[0]);
+
+		// Step 4: Fix the join's left child to point to the real child
+		auto &new_filter = bf_tail->children[0]->Cast<LogicalFilter>();
+		auto &new_join = new_filter.children[0]->Cast<LogicalComparisonJoin>();
+		new_join.children[0] = std::move(real_child);
+
+		// Step 5: Replace op's child with the head of the new reordered BF chain
+		op.children[0] = std::move(bf_chain);
 		break;
 	}
 	default:

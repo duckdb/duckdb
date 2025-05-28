@@ -209,20 +209,20 @@ bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInpu
 
 			// 1. Check the selectivity: a high selectivity means that the base table is not filtered. It is not
 			// beneficial to build a BF on a full table.
+			ProgressData progress;
+			this_pipeline->GetProgress(progress);
+			double progress_percent = progress.done / progress.total;
 			double input_rows = static_cast<double>(gstate.num_input_rows);
 			double source_rows = static_cast<double>(this_pipeline->num_source_chunks * STANDARD_VECTOR_SIZE);
 			double selectivity = input_rows / source_rows;
 			double row_length = static_cast<double>(gstate.total_row_size) / input_rows;
-			if (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2)) {
+			if (progress_percent < 0.65 && (selectivity > 0.35 || (row_length > 40 && selectivity > 0.2))) {
 				is_successful = false;
 				return true;
 			}
 
 			// 2. Estimate the lower bound of required memory, which is used to materialize this table. If it is very
 			// large, give up creating BF.
-			ProgressData progress;
-			this_pipeline->GetProgress(progress);
-			double progress_percent = progress.done / progress.total;
 			double estimated_num_rows = static_cast<double>(gstate.num_input_rows) / progress_percent;
 			idx_t per_tuple_size = chunk.GetAllocationSize() / chunk.size();
 			idx_t estimated_required_memory = static_cast<idx_t>(estimated_num_rows) * per_tuple_size;
@@ -307,20 +307,6 @@ public:
 	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p)
 	    : ExecutorTask(context, std::move(event_p), sink_p.op), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p) {
-
-		// Because null values should not be filtered in many cases (e.g., mark join), we insert null into each bloom
-		// filter.
-		DataChunk chunk;
-		sink.data_collection->InitializeScanChunk(chunk);
-		chunk.SetCardinality(1);
-		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-			chunk.SetValue(i, 0, Value());
-		}
-		for (auto &pair : sink.op.unique_bloom_filters) {
-			auto &cols_build = pair.first;
-			auto &bf = pair.second;
-			bf->Insert(chunk, cols_build);
-		}
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
