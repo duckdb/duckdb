@@ -447,6 +447,10 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		}
 		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
 	}
+	case TableFilterType::DYNAMIC_FILTER: {
+		//! Ignore dynamic filters for now, not necessary for correctness
+		return py::none();
+	}
 	default:
 		throw NotImplementedException("Pushdown Filter Type %s is not currently supported in PyArrow Scans",
 		                              EnumUtil::ToString(filter.filter_type));
