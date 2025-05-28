@@ -408,12 +408,9 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	if (partition_output || per_thread_output || rotate) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		if (fs.FileExists(file_path)) {
-			// the target file exists AND is a file (not a directory)
-			if (fs.IsRemoteFile(file_path)) {
-				// for remote files we cannot do anything - as we cannot delete the file
-				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory!", file_path);
-			} else {
+		if (!fs.IsRemoteFile(file_path)) {
+			if (fs.FileExists(file_path)) {
+				// the target file exists AND is a file (not a directory)
 				// for local files we can remove the file if OVERWRITE_OR_IGNORE is enabled
 				if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
 					fs.RemoveFile(file_path);
