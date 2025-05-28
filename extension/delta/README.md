@@ -5,7 +5,7 @@ tables, both local and remote.
 
 # Supported platforms
 The supported platforms are:
-- `linux_amd64` and `linux_amd64_gcc4`
+- `linux_amd64`
 - `osx_amd64` and `osx_arm64`
 
 Support for the [other](https://duckdb.org/docs/stable/extensions/extension_distribution#platforms) DuckDB platforms is

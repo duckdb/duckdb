@@ -4,16 +4,13 @@
 
 require parquet
 
-require skip_reload
-
 # requires notwindows for embedded spaces in the path
 require notwindows
 
 statement ok
 PRAGMA enable_verification
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 CREATE TABLE raw_data (

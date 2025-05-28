@@ -3,6 +3,44 @@
     "deprecated": false,
     "entries": [
         {
+            "name": "duckdb_create_vector",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "capacity"
+                }
+            ],
+            "comment": {
+                "description": "Creates a flat vector. Must be destroyed with `duckdb_destroy_vector`.\n\n",
+                "param_comments": {
+                    "type": "The logical type of the vector.",
+                    "capacity": "The capacity of the vector."
+                },
+                "return_value": "The vector."
+            }
+        },
+        {
+            "name": "duckdb_destroy_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector *",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the vector and de-allocates its memory.\n\n",
+                "param_comments": {
+                    "vector": "A pointer to the vector."
+                }
+            }
+        },
+        {
             "name": "duckdb_vector_get_column_type",
             "return_type": "duckdb_logical_type",
             "params": [
@@ -218,7 +256,7 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child vector of a struct vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "description": "Retrieves the child vector of a struct vector.\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
                 "param_comments": {
                     "vector": "The vector",
                     "index": "The child index"
@@ -236,7 +274,7 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child vector of an array vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
+                "description": "Retrieves the child vector of an array vector.\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
                 "param_comments": {
                     "vector": "The vector"
                 },
@@ -253,7 +291,7 @@
                 },
                 {
                     "type": "duckdb_selection_vector",
-                    "name": "selection"
+                    "name": "sel"
                 },
                 {
                     "type": "idx_t",
@@ -261,11 +299,53 @@
                 }
             ],
             "comment": {
-                "description": "Slice a vector with a selection vector.\n\nThe max value in the selection vector must be less than the length of the vector\n\nThe resulting vector happens to be a dictionary vector.\n\n",
+                "description": "Slice a vector with a selection vector.\nThe length of the selection vector must be less than or equal to the length of the vector.\nTurns the vector into a dictionary vector.\n\n",
                 "param_comments": {
-                    "vector": "The vector which is to become a dictionary",
-                    "selection": "The selection vector",
-                    "len": "The length of the selection vector"
+                    "vector": "The vector to slice.",
+                    "sel": "The selection vector.",
+                    "len": "The length of the selection vector."
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_reference_value",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Copies the value from `value` to `vector`.\n\n",
+                "param_comments": {
+                    "vector": "The receiving vector.",
+                    "value": "The value to copy into the vector."
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_reference_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "to_vector"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "from_vector"
+                }
+            ],
+            "comment": {
+                "description": "Changes `to_vector` to reference `from_vector. After, the vectors share ownership of the data.\n\n",
+                "param_comments": {
+                    "to_vector": "The receiving vector.",
+                    "from_vector": "The vector to reference."
                 }
             }
         }

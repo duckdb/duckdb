@@ -1,6 +1,8 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
+
 namespace duckdb {
 
 struct DefaultEncodeMethod {
@@ -10,18 +12,18 @@ struct DefaultEncodeMethod {
 	idx_t bytes_per_iteration;
 };
 
-void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_position, const idx_t source_buffer_size,
-                       char *target_buffer, idx_t &target_buffer_current_position, const idx_t target_buffer_size,
-                       char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
-
-	for (; source_buffer_current_position < source_buffer_size; source_buffer_current_position += 2) {
+void DecodeUTF16ToUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+                       const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                       EncodingFunction *encoding_function) {
+	auto encoded_ptr = encoded_buffer.Ptr();
+	for (; encoded_buffer.cur_pos < encoded_buffer.actual_encoded_buffer_size; encoded_buffer.cur_pos += 2) {
 		if (target_buffer_current_position == target_buffer_size) {
 			// We are done
 			return;
 		}
 		const uint16_t ch =
-		    static_cast<uint16_t>(static_cast<unsigned char>(source_buffer[source_buffer_current_position]) |
-		                          (static_cast<unsigned char>(source_buffer[source_buffer_current_position + 1]) << 8));
+		    static_cast<uint16_t>(static_cast<unsigned char>(encoded_ptr[encoded_buffer.cur_pos]) |
+		                          (static_cast<unsigned char>(encoded_ptr[encoded_buffer.cur_pos + 1]) << 8));
 		if (ch >= 0xD800 && ch <= 0xDFFF) {
 			throw InvalidInputException("File is not utf-16 encoded");
 		}
@@ -33,7 +35,7 @@ void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_p
 			target_buffer[target_buffer_current_position++] = static_cast<char>(0xC0 | (ch >> 6));
 			if (target_buffer_current_position == target_buffer_size) {
 				// We are done, but we have to store one byte for the next chunk!
-				source_buffer_current_position += 2;
+				encoded_buffer.cur_pos += 2;
 				remaining_bytes_buffer[0] = static_cast<char>(0x80 | (ch & 0x3F));
 				remaining_bytes_size = 1;
 				return;
@@ -44,7 +46,7 @@ void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_p
 			target_buffer[target_buffer_current_position++] = static_cast<char>(0xE0 | (ch >> 12));
 			if (target_buffer_current_position == target_buffer_size) {
 				// We are done, but we have to store two bytes for the next chunk!
-				source_buffer_current_position += 2;
+				encoded_buffer.cur_pos += 2;
 				remaining_bytes_buffer[0] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
 				remaining_bytes_buffer[1] = static_cast<char>(0x80 | (ch & 0x3F));
 				remaining_bytes_size = 2;
@@ -53,7 +55,7 @@ void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_p
 			target_buffer[target_buffer_current_position++] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
 			if (target_buffer_current_position == target_buffer_size) {
 				// We are done, but we have to store one byte for the next chunk!
-				source_buffer_current_position += 2;
+				encoded_buffer.cur_pos += 2;
 				remaining_bytes_buffer[0] = static_cast<char>(0x80 | (ch & 0x3F));
 				remaining_bytes_size = 1;
 				return;
@@ -63,15 +65,16 @@ void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_p
 	}
 }
 
-void DecodeLatin1ToUTF8(const char *source_buffer, idx_t &source_buffer_current_position,
-                        const idx_t source_buffer_size, char *target_buffer, idx_t &target_buffer_current_position,
-                        const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
-	for (; source_buffer_current_position < source_buffer_size; source_buffer_current_position++) {
+void DecodeLatin1ToUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+                        const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                        EncodingFunction *encoding_function) {
+	auto encoded_ptr = encoded_buffer.Ptr();
+	for (; encoded_buffer.cur_pos < encoded_buffer.actual_encoded_buffer_size; encoded_buffer.cur_pos++) {
 		if (target_buffer_current_position == target_buffer_size) {
 			// We are done
 			return;
 		}
-		const unsigned char ch = static_cast<unsigned char>(source_buffer[source_buffer_current_position]);
+		const unsigned char ch = static_cast<unsigned char>(encoded_ptr[encoded_buffer.cur_pos]);
 		if (ch > 0x7F && ch <= 0x9F) {
 			throw InvalidInputException("File is not latin-1 encoded");
 		}
@@ -83,7 +86,7 @@ void DecodeLatin1ToUTF8(const char *source_buffer, idx_t &source_buffer_current_
 			target_buffer[target_buffer_current_position++] = static_cast<char>(0xc2 + (ch > 0xbf));
 			if (target_buffer_current_position == target_buffer_size) {
 				// We are done, but we have to store one byte for the next chunk!
-				source_buffer_current_position++;
+				encoded_buffer.cur_pos++;
 				remaining_bytes_buffer[0] = static_cast<char>((ch & 0x3f) + 0x80);
 				remaining_bytes_size = 1;
 				return;
@@ -93,9 +96,9 @@ void DecodeLatin1ToUTF8(const char *source_buffer, idx_t &source_buffer_current_
 	}
 }
 
-void DecodeUTF8(const char *source_buffer, idx_t &source_buffer_current_position, const idx_t source_buffer_size,
-                char *target_buffer, idx_t &target_buffer_current_position, const idx_t target_buffer_size,
-                char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+void DecodeUTF8(CSVEncoderBuffer &encoded_buffer, char *target_buffer, idx_t &target_buffer_current_position,
+                const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size,
+                EncodingFunction *encoding_function) {
 	throw InternalException("Decode UTF8 is not a valid function, and should be verified one level up.");
 }
 
@@ -107,11 +110,11 @@ void EncodingFunctionSet::Initialize(DBConfig &config) {
 
 void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
 	lock_guard<mutex> l(encoding_functions->lock);
-	const auto decode_type = function.GetType();
-	if (encoding_functions->functions.find(decode_type) != encoding_functions->functions.end()) {
-		throw InvalidInputException("Decoding function with name %s already registered", decode_type);
+	const auto name = function.GetName();
+	if (encoding_functions->functions.find(name) != encoding_functions->functions.end()) {
+		throw InvalidInputException("Decoding function with name %s already registered", name);
 	}
-	encoding_functions->functions[decode_type] = function;
+	encoding_functions->functions[name] = function;
 }
 
 optional_ptr<EncodingFunction> DBConfig::GetEncodeFunction(const string &name) const {

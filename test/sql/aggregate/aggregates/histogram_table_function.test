@@ -28,7 +28,7 @@ SELECT * FROM histogram_values(integers, i, bin_count := 2)
 statement error
 SELECT * FROM histogram_values(integers, k)
 ----
-not found in FROM clause
+<REGEX>:.*Binder Error.*not found in FROM clause.*
 
 statement ok
 INSERT INTO integers FROM range(127)
@@ -84,13 +84,13 @@ SELECT * FROM histogram_values(integers, (i%2)::VARCHAR)
 1	64
 
 # FIXME: there are some minor rounding problems on ARM64 with the below tests
-mode skip
+# mode skip
 
 # varchar does not work with equi-width-bins
 statement error
 SELECT * FROM histogram_values(integers, (i%2)::VARCHAR, technique := 'equi-width')
 ----
-Unsupported
+<REGEX>:.*Binder Error.*Unsupported type "VARCHAR" for equi_width_bins.*
 
 # but it works with equi-height
 query II
@@ -100,19 +100,9 @@ SELECT COUNT(*), AVG(count)  FROM histogram_values(integers, i::VARCHAR, techniq
 
 # histogram with ranges
 query II
-SELECT bin, count FROM histogram(integers, i::VARCHAR, technique := 'equi-height')
+SELECT COUNT(bin), AVG(count) FROM histogram(integers, i::VARCHAR, technique := 'equi-height')
 ----
-x <= 109	13
-109 < x <= 120	13
-120 < x <= 19	13
-19 < x <= 30	13
-30 < x <= 42	14
-42 < x <= 53	12
-53 < x <= 65	13
-65 < x <= 77	13
-77 < x <= 88	13
-88 < x <= 99999999	13
-
+10	13
 
 # booleans
 statement ok

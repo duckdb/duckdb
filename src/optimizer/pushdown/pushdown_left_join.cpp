@@ -127,15 +127,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				for (auto &left_filter : left_pushdown.filters) {
 					filters.push_back(std::move(left_filter));
 				}
+				for (auto &filter : remaining_filters) {
+					filters.push_back(std::move(filter));
+				}
 				// now push down the inner join
 				return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 			}
-			// we should keep the filters which only matched the right side
-			if (side == JoinSide::RIGHT) {
-				remaining_filters.push_back(std::move(filters[i]));
-				filters.erase_at(i);
-				i--;
-			}
+			// we should keep the filters which do not remove NULL values
+			remaining_filters.push_back(std::move(filters[i]));
+			filters.erase_at(i);
+			i--;
 		}
 	}
 	// finally we check the FilterCombiner to see if there are any predicates we can push into the RHS

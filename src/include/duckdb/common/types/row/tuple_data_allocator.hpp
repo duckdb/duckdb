@@ -82,6 +82,8 @@ public:
 	static void RecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
 	                                  const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
 	                                  const idx_t count, const TupleDataLayout &layout, const idx_t base_col_offset);
+	static void FindHeapPointers(TupleDataChunkState &chunk_state, SelectionVector &not_found, idx_t &not_found_count,
+	                             const TupleDataLayout &layout, const idx_t base_col_offset);
 	//! Releases or stores any handles in the management state that are no longer required
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment, TupleDataChunk &chunk,
 	                           bool release_heap);
@@ -89,6 +91,9 @@ public:
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
 	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
 	void SetDestroyBufferUponUnpin();
+	//! Destroy the blocks between the given indices
+	void DestroyRowBlocks(idx_t row_block_begin, idx_t row_block_end);
+	void DestroyHeapBlocks(idx_t heap_block_begin, idx_t heap_block_end);
 
 private:
 	//! Builds out a single part (grabs the lock)

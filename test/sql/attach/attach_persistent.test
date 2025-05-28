@@ -2,8 +2,6 @@
 # description: Test attaching of a persistent database
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 

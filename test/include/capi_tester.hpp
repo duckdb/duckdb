@@ -259,10 +259,12 @@ public:
 		if (duckdb_open(path, &database) != DuckDBSuccess) {
 			return false;
 		}
-		if (duckdb_connect(database, &connection) != DuckDBSuccess) {
-			return false;
-		}
-		return true;
+		return duckdb_connect(database, &connection) == DuckDBSuccess;
+	}
+
+	bool ChangeConnection() {
+		duckdb_disconnect(&connection);
+		return duckdb_connect(database, &connection) == DuckDBSuccess;
 	}
 
 	duckdb::unique_ptr<CAPIResult> Query(string query) {

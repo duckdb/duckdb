@@ -38,6 +38,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
 
@@ -55,6 +56,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
+class HTTPUtil;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -266,6 +268,8 @@ struct DBConfigOptions {
 	bool old_implicit_casting = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
+	//! The default block header size for new duckdb database files.
+	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.
@@ -290,6 +294,8 @@ struct DBConfigOptions {
 	set<string> allowed_directories;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
+	//! Whether to enable external file caching using CachingFileSystem
+	bool enable_external_file_cache = true;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;
@@ -345,6 +351,8 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! HTTP Request utility functions
+	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 

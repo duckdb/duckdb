@@ -787,6 +787,10 @@ public:
 		checkpoint_state.write_data[index] = row_group.WriteToDisk(*checkpoint_state.writers[index]);
 	}
 
+	string TaskType() const override {
+		return "CheckpointTask";
+	}
+
 private:
 	idx_t index;
 };
@@ -906,6 +910,10 @@ public:
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);
 			checkpoint_task->ExecuteTask();
 		}
+	}
+
+	string TaskType() const override {
+		return "VacuumTask";
 	}
 
 private:

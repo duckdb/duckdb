@@ -173,7 +173,7 @@ unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType t
 		// compatibility mode with old versions - disable roaring
 		return nullptr;
 	}
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<RoaringAnalyzeState>(info);
 	return std::move(state);
 }

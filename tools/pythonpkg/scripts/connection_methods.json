@@ -301,6 +301,12 @@
 		"return": "None"
 	},
 	{
+		"name": "query_progress",
+		"function": "QueryProgress",
+		"docs": "Query progress of pending operation",
+		"return": "float"
+	},
+	{
 		"name": "fetchone",
 		"function": "FetchOne",
 		"docs": "Fetch a single row from a result following execute",

@@ -10,13 +10,21 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/common/multi_file/union_by_name.hpp"
 #include <algorithm>
 
 namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX;
+constexpr int32_t MultiFileReader::ORDINAL_FIELD_ID;
+constexpr int32_t MultiFileReader::FILENAME_FIELD_ID;
+constexpr int32_t MultiFileReader::ROW_ID_FIELD_ID;
+constexpr int32_t MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID;
 
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }
@@ -34,6 +42,31 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_f
 		res->function_name = table_function.name;
 	}
 	return res;
+}
+
+unique_ptr<MultiFileReader> MultiFileReader::Copy() const {
+	return CreateDefault(function_name);
+}
+
+MultiFileBindData::~MultiFileBindData() {
+}
+
+unique_ptr<FunctionData> MultiFileBindData::Copy() const {
+	auto result = make_uniq<MultiFileBindData>();
+	if (bind_data) {
+		result->bind_data = unique_ptr_cast<FunctionData, TableFunctionData>(bind_data->Copy());
+	}
+	result->file_list = make_uniq<SimpleMultiFileList>(file_list->GetAllFiles());
+	result->multi_file_reader = multi_file_reader->Copy();
+	result->interface = interface->Copy();
+	result->columns = columns;
+	result->reader_bind = reader_bind;
+	result->file_options = file_options;
+	result->types = types;
+	result->names = names;
+	result->virtual_columns = virtual_columns;
+	result->table_columns = table_columns;
+	return std::move(result);
 }
 
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
@@ -84,7 +117,11 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
+	vector<OpenFileInfo> open_files;
+	for (auto &path : paths) {
+		open_files.emplace_back(path);
+	}
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), options);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -197,27 +234,27 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
-		auto partitions = HivePartitioning::Parse(files.GetFirstFile());
+		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
 		// verify that all files have the same hive partitioning scheme
 		for (const auto &file : files.Files()) {
-			auto file_partitions = HivePartitioning::Parse(file);
+			auto file_partitions = HivePartitioning::Parse(file.path);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(),
-						                        file, part_info.first);
+						throw InternalException(error + "(hive partitioning was autodetected)",
+						                        files.GetFirstFile().path, file.path, part_info.first);
 					}
-					throw BinderException(error.c_str(), files.GetFirstFile(), file, part_info.first);
+					throw BinderException(error.c_str(), files.GetFirstFile().path, file.path, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(),
-					                        file);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)",
+					                        files.GetFirstFile().path, file.path);
 				}
-				throw BinderException(error_msg.c_str(), files.GetFirstFile(), file);
+				throw BinderException(error_msg.c_str(), files.GetFirstFile().path, file.path);
 			}
 		}
 
@@ -249,10 +286,12 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 
 void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
                                         virtual_column_map_t &result) {
-	if (bind_data.filename_idx == DConstants::INVALID_INDEX || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
+	if (!bind_data.filename_idx.IsValid() || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
 		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
 		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
 	}
+	result.insert(make_pair(COLUMN_IDENTIFIER_FILE_INDEX, TableColumn("file_index", LogicalType::UBIGINT)));
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
 void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,
@@ -275,9 +314,15 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		auto global_idx = MultiFileGlobalIndex(i);
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
-		if (column_id == options.filename_idx) {
+		if ((options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) ||
+		    column_id == COLUMN_IDENTIFIER_FILENAME) {
 			// filename
 			reader_data.constant_map.Add(global_idx, Value(filename));
+			continue;
+		}
+		if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
+			// filename
+			reader_data.constant_map.Add(global_idx, Value::UBIGINT(reader_data.reader->file_list_idx.GetIndex()));
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {
@@ -329,11 +374,12 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileOp
 ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
                                                     const vector<MultiFileColumnDefinition> &global_columns,
                                                     const vector<ColumnIndex> &global_column_ids,
-                                                    optional_ptr<TableFilterSet> filters, const string &initial_file,
+                                                    optional_ptr<TableFilterSet> filters,
+                                                    const OpenFileInfo &initial_file,
                                                     const MultiFileReaderBindData &bind_data,
                                                     const virtual_column_map_t &virtual_columns) {
-	MultiFileColumnMapper column_mapper(context, reader_data, global_columns, global_column_ids, filters, initial_file,
-	                                    bind_data, virtual_columns);
+	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
+	                                    initial_file, bind_data, virtual_columns);
 	return column_mapper.CreateMapping();
 }
 
@@ -368,7 +414,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",
-		    reader.file_name, local_col.name, source_type, target_column, target_type, reader_type, function_name,
+		    reader.GetFileName(), local_col.name, source_type, target_column, target_type, reader_type, function_name,
 		    function_name);
 	} else {
 		// read_parquet() with multiple files
@@ -379,7 +425,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
 		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
-		    reader.file_name, local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
+		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
 	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
 	                                   target_type);
@@ -404,8 +450,8 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 			string first_message;
 			string extended_error =
 			    GetExtendedMultiFileError(bind_data, *executor.expressions[i], reader, i, first_message);
-			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.file_name, first_message,
-			                          original_error, extended_error);
+			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.GetFileName(),
+			                          first_message, original_error, extended_error);
 		}
 	}
 	output_chunk.SetCardinality(input_chunk.size());
@@ -463,6 +509,136 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	return function_set;
 }
 
+unique_ptr<Expression> MultiFileReader::GetConstantVirtualColumn(MultiFileReaderData &reader_data, idx_t column_id,
+                                                                 const LogicalType &type) {
+	if (column_id == COLUMN_IDENTIFIER_EMPTY || column_id == COLUMN_IDENTIFIER_FILENAME) {
+		return make_uniq<BoundConstantExpression>(Value(type));
+	}
+	return nullptr;
+}
+
+unique_ptr<Expression> MultiFileReader::GetVirtualColumnExpression(ClientContext &, MultiFileReaderData &,
+                                                                   const vector<MultiFileColumnDefinition> &,
+                                                                   idx_t &column_id, const LogicalType &type,
+                                                                   MultiFileLocalIndex local_idx,
+                                                                   optional_ptr<MultiFileColumnDefinition> &) {
+	return make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
+}
+
+MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
+                                                         vector<string> &names, MultiFileList &files,
+                                                         MultiFileBindData &result, BaseFileReaderOptions &options,
+                                                         MultiFileOptions &file_options) {
+	D_ASSERT(file_options.union_by_name);
+	vector<string> union_col_names;
+	vector<LogicalType> union_col_types;
+
+	// obtain the set of union column names + types by unifying the types of all of the files
+	// note that this requires opening readers for each file and reading the metadata of each file
+	// note also that it requires fully expanding the MultiFileList
+	auto materialized_file_list = files.GetAllFiles();
+	auto union_readers = UnionByName::UnionCols(context, materialized_file_list, union_col_types, union_col_names,
+	                                            options, file_options, *this, *result.interface);
+
+	std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
+	// perform the binding on the obtained set of names + types
+	MultiFileReaderBindData bind_data;
+	BindOptions(file_options, files, union_col_types, union_col_names, bind_data);
+	names = union_col_names;
+	return_types = union_col_types;
+	result.Initialize(context, *result.union_readers[0]);
+	D_ASSERT(names.size() == return_types.size());
+	return bind_data;
+}
+
+MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vector<LogicalType> &return_types,
+                                                    vector<string> &names, MultiFileList &files,
+                                                    MultiFileBindData &result, BaseFileReaderOptions &options,
+                                                    MultiFileOptions &file_options) {
+	if (file_options.union_by_name) {
+		return BindUnionReader(context, return_types, names, files, result, options, file_options);
+	} else {
+		shared_ptr<BaseFileReader> reader;
+		reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
+		auto &columns = reader->GetColumns();
+		for (auto &column : columns) {
+			return_types.emplace_back(column.type);
+			names.emplace_back(column.name);
+		}
+		result.Initialize(std::move(reader));
+		MultiFileReaderBindData bind_data;
+		BindOptions(file_options, files, return_types, names, bind_data);
+		return bind_data;
+	}
+}
+
+ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &reader_data,
+                                                       const MultiFileBindData &bind_data,
+                                                       const vector<MultiFileColumnDefinition> &global_columns,
+                                                       const vector<ColumnIndex> &global_column_ids,
+                                                       optional_ptr<TableFilterSet> table_filters,
+                                                       ClientContext &context,
+                                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
+	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids, context,
+	             global_state);
+	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
+	                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
+}
+
+shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+                                                         BaseUnionData &union_data,
+                                                         const MultiFileBindData &bind_data) {
+	return bind_data.interface->CreateReader(context, gstate, union_data, bind_data);
+}
+
+shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+                                                         const OpenFileInfo &file, idx_t file_idx,
+                                                         const MultiFileBindData &bind_data) {
+	return bind_data.interface->CreateReader(context, gstate, file, file_idx, bind_data);
+}
+
+shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, const OpenFileInfo &file,
+                                                         BaseFileReaderOptions &options,
+                                                         const MultiFileOptions &file_options,
+                                                         MultiFileReaderInterface &interface) {
+	return interface.CreateReader(context, file, options, file_options);
+}
+
+void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_list) {
+	unordered_set<string> file_set;
+
+	// Avoid materializing the file list if there's nothing to prune
+	if (!data.initial_reader && data.union_readers.empty()) {
+		return;
+	}
+
+	for (const auto &file : file_list.Files()) {
+		file_set.insert(file.path);
+	}
+
+	if (data.initial_reader) {
+		// check if the initial reader should still be read
+		auto entry = file_set.find(data.initial_reader->GetFileName());
+		if (entry == file_set.end()) {
+			data.initial_reader.reset();
+		}
+	}
+	for (idx_t r = 0; r < data.union_readers.size(); r++) {
+		if (!data.union_readers[r]) {
+			data.union_readers.erase_at(r);
+			r--;
+			continue;
+		}
+		// check if the union reader should still be read or not
+		auto entry = file_set.find(data.union_readers[r]->GetFileName());
+		if (entry == file_set.end()) {
+			data.union_readers.erase_at(r);
+			r--;
+			continue;
+		}
+	}
+}
+
 HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
 }
 
@@ -497,14 +673,14 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 
 bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
 	auto first_file = files.GetFirstFile();
-	auto partitions = HivePartitioning::Parse(first_file);
+	auto partitions = HivePartitioning::Parse(first_file.path);
 	if (partitions.empty()) {
 		// no partitions found in first file
 		return false;
 	}
 
 	for (const auto &file : files.Files()) {
-		auto new_partitions = HivePartitioning::Parse(file);
+		auto new_partitions = HivePartitioning::Parse(file.path);
 		if (new_partitions.size() != partitions.size()) {
 			// partition count mismatch
 			return false;
@@ -524,7 +700,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
-		auto partitions = HivePartitioning::Parse(file);
+		auto partitions = HivePartitioning::Parse(file.path);
 		if (partitions.empty()) {
 			return;
 		}

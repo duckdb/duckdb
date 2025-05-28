@@ -14,7 +14,7 @@ pragma enable_logging;
 statement ok
 set logging_level='info';
 
-# We use these to offet the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
+# We use these to offset the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
 statement ok
 set variable base_connection_id = current_connection_id()
 

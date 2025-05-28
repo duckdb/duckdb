@@ -21,7 +21,7 @@ class BaseUUID {
 public:
 	constexpr static const uint8_t STRING_SIZE = 36;
 	//! Convert a uuid string to a hugeint object
-	static bool FromString(const string &str, hugeint_t &result);
+	static bool FromString(const string &str, hugeint_t &result, bool strict = false);
 	//! Convert a uuid string to a hugeint object
 	static bool FromCString(const char *str, idx_t len, hugeint_t &result) {
 		return FromString(string(str, 0, len), result);

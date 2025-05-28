@@ -32,7 +32,6 @@ public:
 
 public:
 	// These methods return a boolean indicating whether we should throw or not
-	bool AddMiss(idx_t chunk_index);
 	bool AddHit(idx_t chunk_index, row_t row_id);
 	bool AddNull(idx_t chunk_index);
 	VerifyExistenceType LookupType() const;
@@ -42,7 +41,7 @@ public:
 	Vector &RowIds();
 	const ConflictInfo &GetConflictInfo() const;
 	void FinishLookup();
-	void SetMode(ConflictManagerMode mode);
+	void SetMode(const ConflictManagerMode mode_p);
 
 	//! Returns a reference to all conflicts in this conflict manager.
 	const ManagedSelection &Conflicts() const;

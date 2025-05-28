@@ -174,8 +174,8 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &
 	return read_size;
 }
 
-JSONReader::JSONReader(ClientContext &context, JSONReaderOptions options_p, string file_name_p)
-    : BaseFileReader(std::move(file_name_p)), context(context), options(std::move(options_p)), initialized(0),
+JSONReader::JSONReader(ClientContext &context, JSONReaderOptions options_p, OpenFileInfo file_p)
+    : BaseFileReader(std::move(file_p)), context(context), options(std::move(options_p)), initialized(0),
       next_buffer_index(0), thrown(false) {
 }
 
@@ -183,7 +183,7 @@ void JSONReader::OpenJSONFile() {
 	lock_guard<mutex> guard(lock);
 	if (!IsOpen()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		auto regular_file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ | options.compression);
+		auto regular_file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | options.compression);
 		file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
@@ -242,7 +242,7 @@ void JSONReader::SetRecordType(duckdb::JSONRecordType type) {
 }
 
 const string &JSONReader::GetFileName() const {
-	return file_name;
+	return file.path;
 }
 
 JSONFileHandle &JSONReader::GetFileHandle() const {
@@ -290,8 +290,8 @@ void JSONReader::SetBufferLineOrObjectCount(JSONBufferHandle &handle, idx_t coun
 void JSONReader::AddParseError(JSONReaderScanState &scan_state, idx_t line_or_object_in_buf, yyjson_read_err &err,
                                const string &extra) {
 	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
-	auto error_msg = StringUtil::Format("Malformed JSON in file \"%s\", at byte %llu in %s {line}: %s. %s", file_name,
-	                                    err.pos + 1, unit, err.msg, extra);
+	auto error_msg = StringUtil::Format("Malformed JSON in file \"%s\", at byte %llu in %s {line}: %s. %s",
+	                                    GetFileName(), err.pos + 1, unit, err.msg, extra);
 	lock_guard<mutex> guard(lock);
 	AddError(scan_state.current_buffer_handle->buffer_index, line_or_object_in_buf + 1, error_msg);
 	ThrowErrorsIfPossible();
@@ -306,7 +306,7 @@ void JSONReader::AddTransformError(JSONReaderScanState &scan_state, idx_t object
 	auto line_or_object_in_buffer = scan_state.lines_or_objects_in_buffer - scan_state.scan_count + object_index;
 	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 	auto error_msg =
-	    StringUtil::Format("JSON transform error in file \"%s\", in %s {line}: %s", file_name, unit, error_message);
+	    StringUtil::Format("JSON transform error in file \"%s\", in %s {line}: %s", GetFileName(), unit, error_message);
 	lock_guard<mutex> guard(lock);
 	AddError(scan_state.current_buffer_handle->buffer_index, line_or_object_in_buffer, error_msg);
 	ThrowErrorsIfPossible();
@@ -701,7 +701,8 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	    GetRecordType() != JSONRecordType::RECORDS) {
 		string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 		throw InvalidInputException(
-		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead", file_name);
+		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead",
+		    GetFileName());
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	if (!file_handle->IsPipe()) {

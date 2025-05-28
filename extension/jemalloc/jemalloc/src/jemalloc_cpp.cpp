@@ -2,6 +2,10 @@
 #include <new>
 // NOLINTBEGIN(misc-use-anonymous-namespace)
 
+#ifndef DUCKDB_OVERRIDE_NEW_DELETE
+#error "OVERRIDE_NEW_DELETE not properly defined"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

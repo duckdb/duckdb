@@ -28,7 +28,8 @@ link_threads(sqlite3_api_wrapper_static "")
 
 if(NOT WIN32 AND NOT ZOS)
   add_library(sqlite3_api_wrapper SHARED ${SQLITE_API_WRAPPER_FILES})
-  target_link_libraries(sqlite3_api_wrapper duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+  target_link_libraries(sqlite3_api_wrapper duckdb_static
+                        ${DUCKDB_EXTRA_LINK_FLAGS})
   link_threads(sqlite3_api_wrapper "")
 endif()
 

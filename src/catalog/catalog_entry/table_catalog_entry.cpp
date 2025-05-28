@@ -226,8 +226,8 @@ DataTable &TableCatalogEntry::GetStorage() {
 }
 // LCOV_EXCL_STOP
 
-static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
-                             physical_index_set_t &bound_columns) {
+void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
+                                     LogicalUpdate &update, physical_index_set_t &bound_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
@@ -276,7 +276,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();
 			// check constraint! check if we need to add any extra columns to the UPDATE clause
-			BindExtraColumns(*this, get, proj, update, check.bound_columns);
+			LogicalUpdate::BindExtraColumns(*this, get, proj, update, check.bound_columns);
 		}
 	}
 	if (update.return_chunk) {
@@ -284,7 +284,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		for (auto &column : GetColumns().Physical()) {
 			all_columns.insert(column.Physical());
 		}
-		BindExtraColumns(*this, get, proj, update, all_columns);
+		LogicalUpdate::BindExtraColumns(*this, get, proj, update, all_columns);
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
@@ -317,7 +317,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		for (auto &column : GetColumns().Physical()) {
 			all_columns.insert(column.Physical());
 		}
-		BindExtraColumns(*this, get, proj, update, all_columns);
+		LogicalUpdate::BindExtraColumns(*this, get, proj, update, all_columns);
 	}
 }
 
@@ -341,6 +341,12 @@ virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
 	virtual_column_map_t virtual_columns;
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	return virtual_columns;
+}
+
+vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
+	vector<column_t> result;
+	result.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	return result;
 }
 
 } // namespace duckdb

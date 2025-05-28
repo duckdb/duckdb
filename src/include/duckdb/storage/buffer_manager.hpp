@@ -34,7 +34,12 @@ public:
 	}
 
 public:
+	virtual shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
+	                                                        bool can_destroy = true) = 0;
+	virtual shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
+	                                               bool can_destroy = true) = 0;
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
+	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
@@ -47,16 +52,18 @@ public:
 	//! Returns the maximum available memory
 	virtual idx_t GetMaxMemory() const = 0;
 	//! Returns the currently used swap space
-	virtual idx_t GetUsedSwap() = 0;
+	virtual idx_t GetUsedSwap() const = 0;
 	//! Returns the maximum swap space that can be used
 	virtual optional_idx GetMaxSwap() const = 0;
 	//! Returns the block allocation size for buffer-managed blocks.
 	virtual idx_t GetBlockAllocSize() const = 0;
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
+	//! Returns the block header size for buffer-managed blocks.
+	virtual idx_t GetTemporaryBlockHeaderSize() const = 0;
 
 	//! Returns a new block of transient memory.
-	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size);
+	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager);
 	//! Returns a new block of memory that is smaller than the block size setting.
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size);
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size);
@@ -76,7 +83,8 @@ public:
 	virtual bool HasTemporaryDirectory() const;
 
 	//! Construct a managed buffer.
-	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
+	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size,
+	                                                      unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool() const;
@@ -89,9 +97,10 @@ public:
 	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-	static idx_t GetAllocSize(const idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	static idx_t GetAllocSize(const idx_t alloc_size) {
+		return AlignValue<idx_t, Storage::SECTOR_SIZE>(alloc_size);
 	}
+
 	//! Returns the maximum available memory for a given query
 	idx_t GetQueryMaxMemory() const;
 

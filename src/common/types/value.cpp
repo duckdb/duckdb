@@ -805,7 +805,7 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	return result;
 }
 
-Value Value::MAP(const unordered_map<string, string> &kv_pairs) {
+Value Value::MAP(const InsertionOrderPreservingMap<string> &kv_pairs) {
 	Value result;
 	result.type_ = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	result.is_null = false;
@@ -1635,6 +1635,15 @@ string Value::ToSQLString() const {
 			}
 		}
 		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::UNION: {
+		string ret = "union_value(";
+		auto union_tag = UnionValue::GetTag(*this);
+		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
+		ret += tag_name + " := ";
+		ret += UnionValue::GetValue(*this).ToSQLString();
+		ret += ")";
 		return ret;
 	}
 	default:

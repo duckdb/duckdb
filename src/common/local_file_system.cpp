@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/logging/file_system_logger.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -152,11 +153,15 @@ public:
 
 	int fd;
 
+	// Kept for logging purposes
+	idx_t current_pos = 0;
+
 public:
 	void Close() override {
 		if (fd != -1) {
 			close(fd);
 			fd = -1;
+			DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
 		}
 	};
 };
@@ -301,10 +306,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 
-	if (opener) {
-		DUCKDB_LOG_INFO(*opener, "duckdb.FileSystem.LocalFileSystem.OpenFile", path_p);
-	}
-
 	flags.Verify();
 
 	int open_flags = 0;
@@ -439,7 +440,13 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			}
 		}
 	}
-	return make_uniq<UnixFileHandle>(*this, path, fd, flags);
+
+	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
+	if (opener) {
+		file_handle->TryAddLogger(*opener);
+		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
+	}
+	return std::move(file_handle);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -462,6 +469,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 }
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	auto bytes_to_read = nr_bytes;
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
@@ -480,24 +488,32 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		nr_bytes -= bytes_read;
 		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_to_read, location - UnsafeNumericCast<idx_t>(bytes_to_read));
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
 	}
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, unix_handle.current_pos);
+	unix_handle.current_pos += UnsafeNumericCast<idx_t>(bytes_read);
 	return bytes_read;
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto write_buffer = char_ptr_cast(buffer);
-	while (nr_bytes > 0) {
-		int64_t bytes_written =
-		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
+
+	auto bytes_to_write = nr_bytes;
+	auto current_location = location;
+
+	while (bytes_to_write > 0) {
+		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
+		                               UnsafeNumericCast<off_t>(current_location));
 		if (bytes_written < 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -507,26 +523,34 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
 		}
 		write_buffer += bytes_written;
-		nr_bytes -= bytes_written;
-		location += UnsafeNumericCast<idx_t>(bytes_written);
+		bytes_to_write -= bytes_written;
+		current_location += UnsafeNumericCast<idx_t>(bytes_written);
 	}
+
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, nr_bytes, location);
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = 0;
-	while (nr_bytes > 0) {
-		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
-		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	int fd = unix_handle.fd;
+
+	auto bytes_to_write = nr_bytes;
+	while (bytes_to_write > 0) {
+		auto bytes_to_write_this_call =
+		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
 		if (current_bytes_written <= 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
 		}
-		bytes_written += current_bytes_written;
 		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
-		nr_bytes -= current_bytes_written;
+		bytes_to_write -= current_bytes_written;
 	}
-	return bytes_written;
+
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, nr_bytes, unix_handle.current_pos);
+	unix_handle.current_pos += UnsafeNumericCast<idx_t>(nr_bytes);
+
+	return nr_bytes;
 }
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
@@ -662,8 +686,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                FileOpener *opener) {
+bool LocalFileSystem::ListFilesExtended(const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback,
+                                        optional_ptr<FileOpener> opener) {
 	auto normalized_dir = NormalizeLocalPath(directory);
 	auto dir = opendir(normalized_dir);
 	if (!dir) {
@@ -676,7 +701,8 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 	struct dirent *ent;
 	// loop over all files in the directory
 	while ((ent = readdir(dir)) != nullptr) {
-		string name = string(ent->d_name);
+		OpenFileInfo info(ent->d_name);
+		auto &name = info.path;
 		// skip . .. and empty files
 		if (name.empty() || name == "." || name == "..") {
 			continue;
@@ -692,18 +718,53 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 			// not a file or directory: skip
 			continue;
 		}
-		// invoke callback
-		callback(name, status.st_mode & S_IFDIR);
-	}
+		// create extended info
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		auto &options = info.extended_info->options;
+		// file type
+		Value file_type(status.st_mode & S_IFDIR ? "directory" : "file");
+		options.emplace("type", std::move(file_type));
+		// file size
+		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
+		// last modified time
+		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(status.st_mtime)));
 
+		// invoke callback
+		callback(info);
+	}
 	return true;
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	if (fsync(fd) != 0) {
+
+#if HAVE_FULLFSYNC
+	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
+	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
+	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+		return;
+	}
+#endif // HAVE_FULLFSYNC
+
+#if HAVE_FDATASYNC
+	bool sync_success = ::fdatasync(fd) == 0;
+#else
+	bool sync_success = ::fsync(fd) == 0;
+#endif // HAVE_FDATASYNC
+
+	if (sync_success) {
+		return;
+	}
+
+	// Use fatal exception to handle fsyncgate issue: `fsync` only reports EIO for once, which makes it unretriable and
+	// data loss unrecoverable.
+	if (errno == EIO) {
 		throw FatalException("fsync failed!");
 	}
+
+	// For other types of errors, throw normal IO exception.
+	throw IOException("Could not fsync file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.GetPath(),
+	                  strerror(errno));
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
@@ -762,6 +823,7 @@ public:
 		}
 		CloseHandle(fd);
 		fd = nullptr;
+		DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
 	};
 };
 
@@ -841,10 +903,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 	flags.Verify();
 
-	if (opener) {
-		DUCKDB_LOG_INFO(*opener, "duckdb.FileSystem.LocalFileSystem.OpenFile", path_p);
-	}
-
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
@@ -904,6 +962,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
 	}
+	if (opener) {
+		handle->TryAddLogger(*opener);
+		DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
+	}
 	return std::move(handle);
 }
 
@@ -943,6 +1005,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
 		                  bytes_read);
 	}
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, location);
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -951,6 +1014,8 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
 	auto bytes_read = FSInternalRead(handle, hFile, buffer, n, pos);
 	pos += bytes_read;
+
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, pos - bytes_read);
 	return bytes_read;
 }
 
@@ -994,6 +1059,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
 	}
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, bytes_written, location);
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -1001,6 +1067,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, bytes_written, pos - bytes_written);
 	return bytes_written;
 }
 
@@ -1019,20 +1086,11 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-
-	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
-	FILETIME last_write;
-	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
-	}
-
+time_t FiletimeToTimeT(FILETIME file_time) {
 	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
 	ULARGE_INTEGER ul;
-	ul.LowPart = last_write.dwLowDateTime;
-	ul.HighPart = last_write.dwHighDateTime;
+	ul.LowPart = file_time.dwLowDateTime;
+	ul.HighPart = file_time.dwHighDateTime;
 	int64_t fileTime64 = ul.QuadPart;
 
 	// fileTime64 contains a 64-bit value representing the number of
@@ -1044,6 +1102,18 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
 	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 	return result;
+}
+
+time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
+	}
+	return FiletimeToTimeT(last_write);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1115,8 +1185,9 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                FileOpener *opener) {
+bool LocalFileSystem::ListFilesExtended(const string &directory,
+                                        const std::function<void(OpenFileInfo &info)> &callback,
+                                        optional_ptr<FileOpener> opener) {
 	string search_dir = JoinPath(directory, "*");
 	auto unicode_path = NormalizePathAndConvertToUnicode(search_dir);
 
@@ -1126,11 +1197,27 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		return false;
 	}
 	do {
-		string cFileName = WindowsUtil::UnicodeToUTF8(ffd.cFileName);
-		if (cFileName == "." || cFileName == "..") {
+		OpenFileInfo info(WindowsUtil::UnicodeToUTF8(ffd.cFileName));
+		auto &name = info.path;
+		if (name == "." || name == "..") {
 			continue;
 		}
-		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+		// create extended info
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		auto &options = info.extended_info->options;
+		// file type
+		Value file_type(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "directory" : "file");
+		options.emplace("type", std::move(file_type));
+		// file size
+		int64_t file_size_bytes =
+		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
+		options.emplace("file_size", Value::BIGINT(file_size_bytes));
+		// last modified time
+		auto last_modified_time = FiletimeToTimeT(ffd.ftLastWriteTime);
+		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(last_modified_time)));
+
+		// callback
+		callback(info);
 	} while (FindNextFileW(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();
@@ -1220,48 +1307,49 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
-                                     bool join_path) {
+static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
+                                     bool match_directory, bool join_path) {
 
-	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
-		string concat;
+	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		if (join_path) {
-			concat = fs.JoinPath(path, fname);
-		} else {
-			concat = fname;
+			info.path = fs.JoinPath(path, info.path);
 		}
-		if (IsSymbolicLink(concat)) {
+		if (IsSymbolicLink(info.path)) {
 			return;
 		}
-		if (is_directory == match_directory) {
-			result.push_back(concat);
-		}
+		bool is_directory = FileSystem::IsDirectory(info);
+		bool return_file = is_directory == match_directory;
 		if (is_directory) {
-			RecursiveGlobDirectories(fs, concat, result, match_directory, true);
+			if (return_file) {
+				result.push_back(info);
+			}
+			RecursiveGlobDirectories(fs, info.path, result, match_directory, true);
+		} else if (return_file) {
+			result.push_back(std::move(info));
 		}
 	});
 }
 
 static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<string> &result, bool join_path) {
-	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+                              vector<OpenFileInfo> &result, bool join_path) {
+	fs.ListFiles(path, [&](OpenFileInfo &info) {
+		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
 			return;
 		}
-		if (Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
+		if (Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
 			if (join_path) {
-				result.push_back(fs.JoinPath(path, fname));
-			} else {
-				result.push_back(fname);
+				info.path = fs.JoinPath(path, info.path);
 			}
+			result.push_back(std::move(info));
 		}
 	});
 }
 
-vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
-	vector<string> result;
+vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
+	vector<OpenFileInfo> result;
 	if (FileExists(path, opener) || IsPipe(path, opener)) {
-		result.push_back(path);
+		result.emplace_back(path);
 	} else if (!absolute_path) {
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
@@ -1270,7 +1358,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
 				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
-					result.push_back(joined_path);
+					result.emplace_back(joined_path);
 				}
 			}
 		}
@@ -1319,9 +1407,9 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	return path.c_str() + GetFileUrlOffset(path);
 }
 
-vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
-		return vector<string>();
+		return vector<OpenFileInfo>();
 	}
 	// split up the path into separate chunks
 	vector<string> splits;
@@ -1372,7 +1460,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		// no glob: return only the file (if it exists or is a pipe)
 		return FetchFileWithoutGlob(path, opener, absolute_path);
 	}
-	vector<string> previous_directories;
+	vector<OpenFileInfo> previous_directories;
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
 		previous_directories.push_back(splits[0]);
@@ -1406,7 +1494,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
-		vector<string> result;
+		vector<OpenFileInfo> result;
 		if (!has_glob) {
 			// no glob, just append as-is
 			if (previous_directories.empty()) {
@@ -1414,14 +1502,14 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			} else {
 				if (is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
-						const string filename = JoinPath(prev_directory, splits[i]);
+						const string filename = JoinPath(prev_directory.path, splits[i]);
 						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
 							result.push_back(filename);
 						}
 					}
 				} else {
 					for (auto &prev_directory : previous_directories) {
-						result.push_back(JoinPath(prev_directory, splits[i]));
+						result.push_back(JoinPath(prev_directory.path, splits[i]));
 					}
 				}
 			}
@@ -1434,7 +1522,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
 				} else {
 					for (auto &prev_dir : previous_directories) {
-						RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk, true);
+						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
 					}
 				}
 			} else {
@@ -1445,7 +1533,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 					// previous directories
 					// we iterate over each of the previous directories, and apply the glob of the current directory
 					for (auto &prev_directory : previous_directories) {
-						GlobFilesInternal(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
 					}
 				}
 			}
@@ -1460,7 +1548,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 		previous_directories = std::move(result);
 	}
-	return vector<string>();
+	return vector<OpenFileInfo>();
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {

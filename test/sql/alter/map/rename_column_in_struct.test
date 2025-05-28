@@ -1,0 +1,98 @@
+# name: test/sql/alter/map/rename_column_in_struct.test
+# group: [map]
+
+statement ok
+CREATE TABLE test(
+	s MAP(
+		STRUCT(
+			n INTEGER,
+			m INTEGER
+		),
+		STRUCT(
+			i INTEGER,
+			j INTEGER
+		)
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(MAP {ROW(3,3): ROW(1, 1)}),
+	(MAP {ROW(4,4): ROW(2, 2)})
+
+# attempt to rename 'key'
+statement error
+ALTER TABLE test RENAME COLUMN s.key to anything
+----
+Catalog Error: Cannot rename field 'key' from column 's' - can only rename fields inside a struct
+
+# attempt to rename 'value'
+statement error
+ALTER TABLE test RENAME COLUMN s.value to anything
+----
+Catalog Error: Cannot rename field 'value' from column 's' - can only rename fields inside a struct
+
+
+# rename a column from the struct inside the 'value'
+statement ok
+ALTER TABLE test RENAME COLUMN s.value.j TO abc
+
+query I
+select * from test;
+----
+{{'n': 3, 'm': 3}={'i': 1, 'abc': 1}}
+{{'n': 4, 'm': 4}={'i': 2, 'abc': 2}}
+
+# rename a column from the struct inside the 'key'
+statement ok
+ALTER TABLE test RENAME COLUMN s.key.n TO def
+
+query I
+select * from test;
+----
+{{'def': 3, 'm': 3}={'i': 1, 'abc': 1}}
+{{'def': 4, 'm': 4}={'i': 2, 'abc': 2}}
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		a MAP(
+			STRUCT(
+				n INTEGER,
+				m INTEGER
+			),
+			STRUCT(
+				i INTEGER,
+				j INTEGER
+			)
+		)
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(ROW(MAP {ROW(3,3): ROW(1, 1)})),
+	(ROW(MAP {ROW(4,4): ROW(2, 2)}))
+
+# rename a column from the struct in the 'key'
+statement ok
+ALTER TABLE test RENAME COLUMN s.a.key.m TO abc
+
+query I
+select * from test;
+----
+{'a': {{'n': 3, 'abc': 3}={'i': 1, 'j': 1}}}
+{'a': {{'n': 4, 'abc': 4}={'i': 2, 'j': 2}}}
+
+# rename a column from the struct in the 'value'
+statement ok
+ALTER TABLE test RENAME COLUMN s.a.value.j TO def
+
+query I
+select * from test;
+----
+{'a': {{'n': 3, 'abc': 3}={'i': 1, 'def': 1}}}
+{'a': {{'n': 4, 'abc': 4}={'i': 2, 'def': 2}}}

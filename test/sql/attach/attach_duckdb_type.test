@@ -2,8 +2,6 @@
 # description: Test attaching a file with type DUCKDB
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 

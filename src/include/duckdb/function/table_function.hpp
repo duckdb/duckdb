@@ -266,6 +266,9 @@ public:
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
+typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
+                                                                      TableFunctionBindInput &input, idx_t bind_index,
+                                                                      vector<string> &return_names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,
@@ -295,6 +298,7 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
+typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 typedef InsertionOrderPreservingMap<string> (*table_function_dynamic_to_string_t)(
     TableFunctionDynamicToStringInput &input);
@@ -313,6 +317,9 @@ typedef vector<PartitionStatistics> (*table_function_get_partition_stats_t)(Clie
 
 typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientContext &context,
                                                                      optional_ptr<FunctionData> bind_data);
+
+typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
+                                                              optional_ptr<FunctionData> bind_data);
 
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
@@ -337,6 +344,10 @@ public:
 	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
 	//! also return a nullptr to indicate a regular bind needs to be performed instead.
 	table_function_bind_replace_t bind_replace;
+	//! (Optional) Bind operator function
+	//! This function is called before the regular bind function - similar to bind_replace - but allows returning a
+	//! custom LogicalOperator instead.
+	table_function_bind_operator_t bind_operator;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
 	//! The global operator state is used to keep track of the progress in the table function and is shared between
@@ -364,6 +375,8 @@ public:
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
+	//! (Optional) whether or not this table function supports pushing down an expression into a TableFilter
+	table_function_pushdown_expression_t pushdown_expression;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
 	//! (Optional) function for rendering the operator to a string in profiling output (invoked post-execution)
@@ -386,6 +399,8 @@ public:
 	table_function_get_partition_stats_t get_partition_stats;
 	//! (Optional) returns a list of virtual columns emitted by the table function
 	table_function_get_virtual_columns_t get_virtual_columns;
+	//! (Optional) returns a list of row id columns
+	table_function_get_row_id_columns get_row_id_columns;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

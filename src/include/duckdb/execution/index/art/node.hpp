@@ -87,8 +87,6 @@ public:
 	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
-	//! Get the first child greater than or equal to the byte.
-	unsafe_optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(ART &art, uint8_t &byte) const;
 	//! Get the first byte greater than or equal to the byte.
@@ -102,14 +100,6 @@ public:
 
 	//! Returns the node type for a count.
 	static NType GetNodeType(const idx_t count);
-
-	//! Initialize a merge by incrementing the buffer IDs of a node and its children.
-	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
-	//! Merge a node into this node.
-	bool Merge(ART &art, Node &other, const GateStatus status);
-
-	//! Vacuum all nodes exceeding their vacuum threshold.
-	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
 
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node,
@@ -159,15 +149,6 @@ public:
 	}
 
 private:
-	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status);
-	void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte);
-	bool MergeNodes(ART &art, Node &other, const GateStatus status);
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const GateStatus status);
-	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos);
-	bool MergePrefixes(ART &art, Node &other, const GateStatus status);
-	bool MergeInternal(ART &art, Node &other, const GateStatus status);
-
-private:
 	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
 	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
@@ -176,4 +157,16 @@ private:
 		}
 	}
 };
+
+//! NodeChildren holds the extracted bytes of a node, and their respective children.
+//! The bytes and children are valid as long as the arena is valid,
+//! even if the original node has been freed.
+struct NodeChildren {
+	NodeChildren() = delete;
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
+
+	array_ptr<uint8_t> bytes;
+	array_ptr<Node> children;
+};
+
 } // namespace duckdb

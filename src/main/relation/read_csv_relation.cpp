@@ -31,14 +31,15 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	auto file_list = MultiFileReader::CreateValueFromFileList(input);
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("ReadCSVRelation");
-	vector<string> files;
+	vector<OpenFileInfo> files;
 	files = multi_file_reader->CreateFileList(*context, file_list)->GetAllFiles();
 
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
-	CSVReaderOptions csv_options;
-	csv_options.file_path = file_name;
+	CSVFileReaderOptions csv_file_options;
+	auto &csv_options = csv_file_options.options;
+	csv_options.file_path = file_name.path;
 	vector<string> empty;
 	csv_options.FromNamedParameters(options, *context, file_options);
 
@@ -50,9 +51,10 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		vector<string> names;
 		auto result = make_uniq<MultiFileBindData>();
 		auto csv_data = make_uniq<ReadCSVData>();
+		result->interface = make_uniq<CSVMultiFileInfo>();
 
-		multi_file_reader->BindUnionReader<CSVMultiFileInfo>(*context, types, names, multi_file_list, *result,
-		                                                     csv_options, file_options);
+		multi_file_reader->BindUnionReader(*context, types, names, multi_file_list, *result, csv_file_options,
+		                                   file_options);
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {
@@ -72,7 +74,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	} else {
 		if (csv_options.auto_detect) {
 			shared_ptr<CSVBufferManager> buffer_manager;
-			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
+			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0].path, 0);
 			CSVSniffer sniffer(csv_options, file_options, buffer_manager, CSVStateMachineCache::Get(*context));
 			auto sniffer_result = sniffer.SniffCSV();
 			auto &types = sniffer_result.return_types;
@@ -91,6 +93,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		csv_options.dialect_options.state_machine_options.escape.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.delimiter.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.quote.ChangeSetByUserTrue();
+		csv_options.dialect_options.state_machine_options.comment.ChangeSetByUserTrue();
 		csv_options.dialect_options.header.ChangeSetByUserTrue();
 		csv_options.dialect_options.skip_rows.ChangeSetByUserTrue();
 	}

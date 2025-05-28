@@ -11,6 +11,9 @@ unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery:
 
 	for (auto cell = root->head; cell != nullptr; cell = cell->next) {
 		auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(cell->data.ptr_value);
+		if (target->indirection) {
+			throw ParserException("Qualified column names in UPDATE .. SET not supported");
+		}
 		result->columns.emplace_back(target->name);
 		result->expressions.push_back(TransformExpression(target->val));
 	}

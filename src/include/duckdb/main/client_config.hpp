@@ -15,13 +15,14 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
-class HTTPLogger;
 
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
@@ -133,6 +134,14 @@ struct ClientConfig {
 	bool ieee_floating_point_ops = true;
 	//! Allow ordering by non-integer literals - ordering by such literals has no effect
 	bool order_by_non_integer_literal = false;
+	//! Disable casting from timestamp => timestamptz (naïve timestamps)
+	bool disable_timestamptz_casts = false;
+	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda
+	//! functions. Otherwise, DISABLE_SINGLE_ARROW.
+	LambdaSyntax lambda_syntax = LambdaSyntax::DEFAULT;
+	//! The profiling coverage. SELECT is the default behavior, and ALL emits profiling information for all operator
+	//! types.
+	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;
@@ -148,9 +157,10 @@ struct ClientConfig {
 	get_result_collector_t result_collector = nullptr;
 
 	//! If HTTP logging is enabled or not.
-	bool enable_http_logging = false;
-	//! The file to save query HTTP logging information to, instead of printing it to the console
-	//! (empty = print to console)
+	bool enable_http_logging = true;
+
+	//! **DEPRECATED** The file to save query HTTP logging information to, instead of printing it to the console
+	//! (empty = output to the DuckDB logger)
 	string http_logging_output;
 
 public:

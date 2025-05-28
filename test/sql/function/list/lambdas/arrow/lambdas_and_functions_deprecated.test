@@ -1,0 +1,38 @@
+# name: test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test
+# description: Test mixing lambdas and functions
+# group: [arrow]
+
+require json
+
+statement ok
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), x -> z) AS row
+);
+
+query I
+FROM demo(3, 0);
+----
+[0, 0, 0]
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), x -> 0 + z) AS row
+);
+
+query I
+FROM demo(3, 0);
+----
+[0, 0, 0]
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), x -> (z -> 'a')) AS row
+);
+
+query I
+FROM demo(3, {'a': 2});
+----
+[2, 2, 2]

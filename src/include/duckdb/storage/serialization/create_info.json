@@ -53,8 +53,8 @@
 	  {
         "id": 108,
         "name": "tags",
-        "type": "unordered_map<string, string>",
-        "default": "unordered_map<string, string>()"
+        "type": "InsertionOrderPreservingMap<string>",
+        "default": "InsertionOrderPreservingMap<string>()"
       },
       {
         "id": 109,
