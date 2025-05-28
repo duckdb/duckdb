@@ -755,9 +755,14 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &collection = state.result->Collection();
 	auto &names = state.result->names;
 	auto &types = state.result->types;
+	case_insensitive_set_t name_set;
 	// first create the (empty) table
 	string create_tbl = "CREATE OR REPLACE TEMP TABLE __answer(";
 	for (idx_t i = 0; i < names.size(); i++) {
+		if (!name_set.insert(names[i]).second) {
+			auto err_str = StringUtil::Format("Duplicate column name \"%s\" in benchmark query", names[i]);
+			throw std::runtime_error(err_str);
+		}
 		if (i > 0) {
 			create_tbl += ", ";
 		}
