@@ -4,6 +4,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -25,45 +26,63 @@ namespace duckdb {
 		if (distinct.distinct_type != DistinctType::DISTINCT) {
 			break;
 		}
+		column_binding_set_t distinct_group;
+		idx_t table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().binding.table_index;
 		for (auto &target : distinct.distinct_targets) {
-			if (target->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				auto &col_ref = target->Cast<BoundColumnRefExpression>();
-				distinct_column_references.insert(col_ref.binding);
-			}
+			D_ASSERT(target->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
+			auto &col_ref = target->Cast<BoundColumnRefExpression>();
+			distinct_group.insert(col_ref.binding);
+			D_ASSERT(table_idx == col_ref.binding.table_index);
 		}
+		distinct_groups[table_idx] = std::move(distinct_group);
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_UNNEST:
-	//FIXME: not sure window function could be eliminated, maybe harder
-	case LogicalOperatorType::LOGICAL_WINDOW: {
-		return std::move(op);
-	}
+	// case LogicalOperatorType::LOGICAL_UNNEST:
+	// //FIXME: not sure window function could be eliminated, maybe harder
+	// case LogicalOperatorType::LOGICAL_WINDOW: {
+	// 	return std::move(op);
+	// }
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = op->Cast<LogicalAggregate>();
 		if (aggr.grouping_sets.size() > 1) {
 			break;
 		}
-		//????
+		// only resolve group by columns for now
+		column_binding_set_t distinct_group;
+		idx_t table_idx = aggr.group_index;
 		for (idx_t i = 0; i < aggr.groups.size(); i++) {
-			distinct_column_references.insert(ColumnBinding(aggr.group_index, i));
+			distinct_group.insert(ColumnBinding(aggr.group_index, i));
 			column_references.insert(ColumnBinding(aggr.group_index, i));
 		}
+		distinct_groups[table_idx] = std::move(distinct_group);
 		VisitOperatorExpressions(*op);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &projection = op->Cast<LogicalProjection>();
-		for (idx_t idx = 0; idx < projection.expressions.size(); idx++) {
-			auto &expression = projection.expressions[idx];
-			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
-				auto binding = ColumnBinding(projection.table_index, idx);
-				if (distinct_column_references.find(binding) != distinct_column_references.end()) {
-					distinct_column_references.insert(col_ref.binding);
-				}
-				column_references.insert(col_ref.binding);
-				column_references.insert(binding);
+		VisitOperatorExpressions(*op);
+		unordered_map<idx_t, vector<idx_t>> reference_records;
+		// for select distinct * from table, first projection then distinct. distinct_groups has record projection table id
+		// for select * from table group by col, first aggregate then projection. projection has aggregate table id.
+		auto it = distinct_groups.find(projection.table_index);
+		if (it != distinct_groups.end()) {
+			column_binding_set_t new_distinct_group;
+			auto &expression = projection.expressions.get(it->second.begin()->column_index);
+			if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				// if the expression is not a column ref, we cannot eliminate the join
+				break;
 			}
+			idx_t ref_id = expression->Cast<BoundColumnRefExpression>().binding.table_index;
+			for (auto &col: it->second) {
+				auto &expression = projection.expressions.get(col.column_index);
+				if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+					break;
+				}
+				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
+				D_ASSERT(ref_id == col_ref.binding.table_index);
+				new_distinct_group.insert(col_ref.binding);
+			}
+			distinct_groups[ref_id] = std::move(new_distinct_group);
 		}
 		break;
 	}
@@ -86,10 +105,6 @@ namespace duckdb {
 		child = OptimizeChildren(std::move(child));
 	}
 	return std::move(op);
-}
-
-bool JoinElimination::IsDistinctExpression(Expression &expr) {
-	return false;
 }
 
 unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator> op) {
@@ -136,14 +151,16 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 	}
 
 	for (auto &elimination : children_elimination) {
-		distinct_column_references.insert(elimination.distinct_column_references.begin(),
-			                                      elimination.distinct_column_references.end());
+		for (auto &distinct: elimination.distinct_groups) {
+			distinct_groups[distinct.first]= distinct.second;
+		}
 	}
 	// 1. TODO: gurantee by primary/foreign key
 
 	if (!is_output_unique) {
 		is_output_unique = true;
-		// 2. inner table join condition columns are distinct
+		// 2. inner table join condition columns contains a whole distinct group
+		vector<ColumnBinding> col_bindings;
 		for (auto &condition: join.conditions) {
 			if (condition.comparison != ExpressionType::COMPARE_EQUAL ||
 				condition.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
@@ -152,21 +169,17 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 				break;
 			}
 			auto inner_binding = inner_idx ==0? condition.left->Cast<BoundColumnRefExpression>().binding:condition.right->Cast<BoundColumnRefExpression>().binding;
-			if (distinct_column_references.find(inner_binding) == distinct_column_references.end()) {
-				is_output_unique = false;
-				break;
-			}
+			col_bindings.push_back(inner_binding);
+		}
+		if (is_output_unique && !ContainDistinctGroup(col_bindings)) {
+			is_output_unique = false;
 		}
 	}
 	if (!is_output_unique) {
-		is_output_unique = true;
-		// 3. join result columns in join condition are all distinct
+		// 3. join result columns in join condition contains a whole distinct group
 		auto outer_bindings = join.children[outer_idx]->GetColumnBindings();
-		for (auto &binding : outer_bindings) {
-			if (distinct_column_references.find(binding) == distinct_column_references.end()) {
-				is_output_unique = false;
-				break;
-			}
+		if (ContainDistinctGroup(outer_bindings)) {
+			is_output_unique = true;
 		}
 	}
 
@@ -174,6 +187,28 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 		return std::move(op->children[outer_idx]);
 	}
 	return std::move(op);
+}
+
+bool JoinElimination::ContainDistinctGroup(vector<ColumnBinding> &column_bindings) {
+	D_ASSERT(!column_bindings.empty());
+	auto &column_binding = column_bindings[0];
+	auto it =distinct_groups.find(column_binding.table_index);
+	if (it == distinct_groups.end()) {
+		return false;
+	}
+	unordered_set<idx_t> used_column_ids;
+	for (auto &binding : column_bindings) {
+		if (it->second.find(binding) == it->second.end()) {
+			continue;
+		}
+		used_column_ids.emplace(binding.column_index);
+	}
+	return used_column_ids.size() == it->second.size();
+}
+
+unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	column_references.insert(expr.binding);
+	return nullptr;
 }
 
 } // namespace duckdb

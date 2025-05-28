@@ -59,6 +59,16 @@ explain select  b.* from b left join (select distinct ida as ida from a) as a1 o
 physical_plan	<!REGEX>:.*JOIN.*
 
 query II
+explain select  b.* from b left join (select distinct ida as ida, valuea as valuea from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb and a1.valuea = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida, valuea as valuea from a) as a1 on a1.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
 explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb or a1.ida = 1 ;
 ----
 physical_plan	<REGEX>:.*JOIN.*
@@ -70,5 +80,49 @@ physical_plan	<REGEX>:.*JOIN.*
 
 query II
 explain select b.* from b left join a on a.ida=b.idb+1;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select tan(b.idb) from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.valueb from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# this should eliminate inner join but keep outer one
+query II
+explain SELECT c.* 
+  FROM c 
+  LEFT JOIN (
+      SELECT DISTINCT b.* 
+      FROM b 
+      LEFT JOIN a ON a.ida = b.idb
+  ) AS ab ON c.idc = ab.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# this should eliminate all join
+query II
+explain SELECT c.* 
+  FROM c 
+  LEFT JOIN (
+      SELECT DISTINCT b.* 
+      FROM b 
+      LEFT JOIN a ON a.ida = b.idb
+  ) AS ab ON c.idc = ab.idb and c.valuec = ab.valueb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*

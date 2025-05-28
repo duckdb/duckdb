@@ -11,6 +11,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -29,22 +30,23 @@ public:
 	// 1. output can only have outer table columns
 	// 2. join result cannot filter by inner table columns(ex. in where clause/ having clause)
 	// 3. must ensure each outer row can match at most one inner table row, such as:
-	//  1) inner table join condition is unique(ex. 1. join conditions have inner table's primary key 2. inner table join condition columns are all distinct)
-	//  2) join result columns are all distinct
+	//  1) inner table join condition is unique(ex. 1. join conditions have inner table's primary key 2. inner table join condition columns contains a whole distinct group)
+	//  2) join result columns contains a whole distinct group
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
-
-	unique_ptr<LogicalOperator> EliminateJoin(LogicalOperator &op);
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:
 	unique_ptr<LogicalOperator> OptimizeChildren(unique_ptr<LogicalOperator> op);
 	unique_ptr<LogicalOperator> TryEliminateJoin(unique_ptr<LogicalOperator> op);
-	bool IsDistinctExpression(Expression &expr);
+	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
+	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
 
 	idx_t inner_idx = 0;
 	idx_t outer_idx = 0;
 
 	column_binding_set_t column_references;
-	column_binding_set_t distinct_column_references;
+
+	unordered_map<idx_t, column_binding_set_t> distinct_groups;
 	// pushdown filter condition(ex in table scan operator),
 	// if have outer table columns then cannot elimination
 	bool inner_has_filter = false;
