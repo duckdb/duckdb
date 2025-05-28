@@ -11,6 +11,8 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
+#include <assert.h>
+
 namespace duckdb {
 
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
@@ -219,6 +221,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
+	serializer.WriteProperty(212, "ordinality_request", ordinality_request);
+	serializer.WriteProperty(213, "ordinality_column_id", ordinality_column_id);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -247,6 +251,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(
+	    212, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
+	deserializer.ReadProperty(213, "ordinality_column_id", result->ordinality_column_id);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -270,10 +277,17 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		if (result->ordinality_request == Ordinality_request_t::REQUESTED && function.in_out_function) {
+			D_ASSERT(result->ordinality_column_id <= static_cast<idx_t>(std::numeric_limits<long>::max()));
+			bind_return_types.emplace(bind_return_types.begin() + static_cast<long>(result->ordinality_column_id),
+			                          LogicalType::BIGINT);
+			bind_names.emplace(bind_names.begin() + static_cast<long>(result->ordinality_column_id), "ordinality");
+			function.ordinality_data.ordinality_request = result->ordinality_request;
+			function.ordinality_data.column_id = result->ordinality_column_id;
+		}
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
-
 		for (auto &col_id : result->column_ids) {
 			if (col_id.IsVirtualColumn()) {
 				auto idx = col_id.GetPrimaryIndex();

@@ -43,6 +43,7 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -2965,6 +2966,24 @@ const char* EnumUtil::ToChars<OrderType>(OrderType value) {
 template<>
 OrderType EnumUtil::FromString<OrderType>(const char *value) {
 	return static_cast<OrderType>(StringUtil::StringToEnum(GetOrderTypeValues(), 7, "OrderType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOrdinality_request_tValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(Ordinality_request_t::NOT_REQUESTED), "NOT_REQUESTED" },
+		{ static_cast<uint32_t>(Ordinality_request_t::REQUESTED), "REQUESTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<Ordinality_request_t>(Ordinality_request_t value) {
+	return StringUtil::EnumToString(GetOrdinality_request_tValues(), 2, "Ordinality_request_t", static_cast<uint32_t>(value));
+}
+
+template<>
+Ordinality_request_t EnumUtil::FromString<Ordinality_request_t>(const char *value) {
+	return static_cast<Ordinality_request_t>(StringUtil::StringToEnum(GetOrdinality_request_tValues(), 2, "Ordinality_request_t", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOutputStreamValues() {
