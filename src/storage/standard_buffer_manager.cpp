@@ -114,6 +114,10 @@ uint64_t StandardBufferManager::GetTemporaryBlockHeaderSize() const {
 	return temp_block_manager->GetBlockHeaderSize();
 }
 
+idx_t StandardBufferManager::GetQueryMaxMemory() const {
+	return GetBufferPool().GetQueryMaxMemory();
+}
+
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta,
                                                                     unique_ptr<FileBuffer> *buffer, ARGS... args) {

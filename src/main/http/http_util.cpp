@@ -1,11 +1,14 @@
 #include "duckdb/common/http_util.hpp"
-#include "duckdb/main/database.hpp"
+
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
+
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
