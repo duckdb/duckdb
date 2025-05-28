@@ -8,6 +8,7 @@ add_library_unity(
   logical_copy_to_file.cpp
   logical_copy_database.cpp
   logical_create.cpp
+  logical_create_bf.cpp
   logical_create_index.cpp
   logical_create_table.cpp
   logical_cross_product.cpp
@@ -43,6 +44,7 @@ add_library_unity(
   logical_unconditional_join.cpp
   logical_unnest.cpp
   logical_update.cpp
+  logical_use_bf.cpp
   logical_vacuum.cpp
   logical_window.cpp)
 set(ALL_OBJECT_FILES

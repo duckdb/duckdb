@@ -19,6 +19,8 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 
 namespace duckdb {
@@ -344,6 +346,30 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		comp_join.conditions = std::move(unique_conditions);
+	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
+		auto &create_bf = op.Cast<LogicalCreateBF>();
+		for (const auto &cell : create_bf.filter_plans) {
+			for (auto &expr : cell->build) {
+				auto &v = expr->Cast<BoundColumnRefExpression>().binding;
+				if (column_references.find(v) != column_references.end()) {
+					auto exprs = column_references[v];
+					v = exprs.bindings[0].get().binding;
+				}
+			}
+		}
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
+		auto &use_bf = op.Cast<LogicalUseBF>();
+		auto &cell = use_bf.filter_plan;
+		for (auto &expr : cell->apply) {
+			auto &v = expr->Cast<BoundColumnRefExpression>().binding;
+			if (column_references.find(v) != column_references.end()) {
+				auto exprs = column_references[v];
+				v = exprs.bindings[0].get().binding;
+			}
+		}
 	}
 }
 
