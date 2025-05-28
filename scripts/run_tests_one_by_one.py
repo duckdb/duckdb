@@ -147,6 +147,11 @@ def get_test_name_from(text):
     return match[0] if match else ''
 
 
+def get_clean_error_message_from(text):
+    match = re.split(r'^=+\n', text, maxsplit=1, flags=re.MULTILINE)
+    return match[1] if len(match) > 0 else text
+
+
 def print_interval_background(interval):
     global is_active
     current_ticker = 0.0
@@ -175,6 +180,7 @@ def launch_test(test, list_of_tests=False):
             test_cmd = ['valgrind'] + test_cmd
         # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
         env = os.environ.copy()
+        # pass env variables globally
         if list_of_tests or no_exit or tests_per_invocation:
             env['SUMMARIZE_FAILURES'] = '0'
             env['NO_DUPLICATING_HEADERS'] = '1'
@@ -195,7 +201,8 @@ def launch_test(test, list_of_tests=False):
     if len(stderr) > 0:
         # when list_of_tests test name gets transformed, but we can get it from stderr
         test = test[0] if not list_of_tests else get_test_name_from(stderr)
-        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
+        error_message = get_clean_error_message_from(stderr)
+        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": error_message}
         error_container.append(new_data)
 
     end = time.time()
@@ -290,6 +297,6 @@ if len(error_container):
 '''
     )
     for i, error in enumerate(error_container.get_errors(), start=1):
-        print(f"{i}:", error["test"])
+        print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
 exit(1)
