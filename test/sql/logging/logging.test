@@ -1,5 +1,5 @@
 # name: test/sql/logging/logging.test
-# description: Test logging functionality
+# description: Test basic logging functionality
 # group: [logging]
 
 require noforcestorage

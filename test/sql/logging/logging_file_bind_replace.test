@@ -81,3 +81,27 @@ query IIII
 SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN';
 ----
 CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
+
+statement ok
+pragma truncate_duckdb_logs;
+
+# Now rerun with all log types enabled 
+
+statement ok
+pragma enable_logging(level='trace', storage='memory');
+
+# Read some data to trigger FileSystem log
+statement ok
+FROM "data/csv/big_number.csv"
+
+statement ok
+pragma disable_logging;
+
+query IIIIII nosort describe_duckdb_logs
+DESCRIBE FROM duckdb_logs
+----
+
+query IIII
+SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN';
+----
+CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN

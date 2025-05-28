@@ -116,19 +116,16 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 }
 
 static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	if (parameters.values.empty()) {
-		context.db->GetLogManager().SetEnableLogging(true);
-		return;
-	}
-
-	if (parameters.values.size() != 1) {
+	if (parameters.values.size() > 1) {
 		throw InvalidInputException("PragmaEnableLogging: expected 0 or 1 parameter");
 	}
 
 	case_insensitive_map_t<Value> storage_config;
 
 	for (const auto &param : parameters.named_parameters) {
-		if (StringUtil::Lower(param.first) == "storage") {
+		if (StringUtil::Lower(param.first) == "level") {
+			context.db->GetLogManager().SetLogLevel(EnumUtil::FromString<LogLevel>(param.second.ToString()));
+		} else if (StringUtil::Lower(param.first) == "storage") {
 			context.db->GetLogManager().SetLogStorage(*context.db, param.second.ToString());
 		} else if (StringUtil::Lower(param.first) == "storage_config") {
 			auto &children = StructValue::GetChildren(param.second);
@@ -140,8 +137,13 @@ static void PragmaEnableLogging(ClientContext &context, const FunctionParameters
 		}
 	}
 
-	if (storage_config.size() > 0) {
+	if (!storage_config.empty()) {
 		context.db->GetLogManager().UpdateLogStorageConfig(*context.db, storage_config);
+	}
+
+	if (parameters.values.empty()) {
+		context.db->GetLogManager().SetEnableLogging(true);
+		return;
 	}
 
 	vector<string> types;
@@ -196,8 +198,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	auto logging_enable_function =
 	    PragmaFunction::PragmaCall("enable_logging", PragmaEnableLogging, {}, LogicalType::ANY);
-	logging_enable_function.named_parameters = {{"storage", LogicalType::VARCHAR},
-	                                            {"storage_config", LogicalType::ANY}};
+	logging_enable_function.named_parameters = {
+	    {"storage", LogicalType::VARCHAR}, {"level", LogicalType::VARCHAR}, {"storage_config", LogicalType::ANY}};
 	set.AddFunction(logging_enable_function);
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
 

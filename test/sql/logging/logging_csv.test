@@ -2,6 +2,8 @@
 # description: Test csv formatted log storages (stdout & file)
 # group: [logging]
 
+require noforcestorage
+
 # Enable FileSystem logging to single csv file  
 statement ok
 pragma enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv'});
