@@ -622,22 +622,6 @@ Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Extension Directory
-//===----------------------------------------------------------------------===//
-void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.extension_directory = input.GetValue<string>();
-}
-
-void ExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.extension_directory = DBConfig().options.extension_directory;
-}
-
-Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.extension_directory);
-}
-
-//===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1148,22 +1132,6 @@ void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.scheduler_process_partial);
-}
-
-//===----------------------------------------------------------------------===//
-// Secondary Extension Directory
-//===----------------------------------------------------------------------===//
-void SecondaryExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.secondary_extension_directory = input.GetValue<string>();
-}
-
-void SecondaryExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.secondary_extension_directory = DBConfig().options.secondary_extension_directory;
-}
-
-Value SecondaryExtensionDirectorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.secondary_extension_directory);
 }
 
 //===----------------------------------------------------------------------===//

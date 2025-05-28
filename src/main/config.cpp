@@ -167,7 +167,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(SchedulerProcessPartialSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
-    DUCKDB_GLOBAL(SecondaryExtensionDirectorySetting),
     DUCKDB_GLOBAL(SecretDirectorySetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),

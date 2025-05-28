@@ -123,9 +123,9 @@ public:
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
 
-	// Get the extension directory path
-	static string GetExtensionDirectoryPath(ClientContext &context);
-	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
+	// Get all extension directory paths
+	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
+	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
@@ -245,8 +245,7 @@ private:
 	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
-	static string DefaultExtensionFolder(FileSystem &fs);
-	static string DefaultSecondaryExtensionFolder(FileSystem &fs);
+	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
