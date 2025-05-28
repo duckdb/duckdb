@@ -1116,7 +1116,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = fs.OpenFile(file_handle->GetPath(), flags);
+		state.file_handle = fs.OpenFile(file, flags);
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();

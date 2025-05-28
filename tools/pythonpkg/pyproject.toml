@@ -1,7 +1,7 @@
 [build-system]
 requires = [
 	"setuptools>=60",
-	"setuptools_scm>=6.4",
+	"setuptools_scm>=6.4,<8.0",
 	"pybind11>=2.6.0",
 ]
 build-backend = "setuptools.build_meta"
@@ -38,9 +38,6 @@ dev = [
     "pandas",
     "mypy<=1.13"
 ]
-
-[tool.setuptools_scm]
-root = "../.."
 
 ### CI Builwheel configurations ###
 

@@ -210,7 +210,10 @@ hugeint_t UUIDv7::GenerateRandomUUID(RandomEngine &engine) {
 	// Fill in variant field.
 	bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
-	return Convert(bytes);
+	// Flip the top byte
+	auto result = Convert(bytes);
+	result.upper ^= NumericLimits<int64_t>::Minimum();
+	return result;
 }
 
 hugeint_t UUIDv7::GenerateRandomUUID() {
