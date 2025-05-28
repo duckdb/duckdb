@@ -362,26 +362,31 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 				local_path = fs.JoinPath(local_path, path_ele);
 			}
 			return fs.JoinPath(local_path, extension_name + ".duckdb_extension");
-			;
 		};
 
-		string local_path = !db.config.options.extension_directory.empty()
-		                        ? db.config.options.extension_directory
-		                        : ExtensionHelper::DefaultExtensionFolder(fs);
+		// Collect all directories to search for extensions
+		vector<string> search_directories(db.config.options.extension_directory);
 
-		filename = ComputeLocalExtensionPath(local_path, extension_name);
-
-		// Check if the extension is in the secondary extension directory
-		// This is a fallback for extensions that are not in the main extension directory
-		// and are installed via a package manager.
-		string secondary_path = !db.config.options.secondary_extension_directory.empty()
-		                            ? db.config.options.secondary_extension_directory
-		                            : ExtensionHelper::DefaultSecondaryExtensionFolder(fs);
-		if (!fs.FileExists(filename) && !secondary_path.empty()) {
-			string secondary_filename = ComputeLocalExtensionPath(secondary_path, extension_name);
-			if (fs.FileExists(secondary_filename)) {
-				filename = secondary_filename;
+		// Add default extension directory if no custom directories configured
+		if (search_directories.empty()) {
+			for (const auto &path : ExtensionHelper::DefaultExtensionFolders(fs)) {
+				search_directories.push_back(path);
 			}
+		}
+
+		// Try each directory in sequence until extension is found
+		bool found = false;
+		for (const auto &directory : search_directories) {
+			filename = ComputeLocalExtensionPath(directory, extension_name);
+			if (fs.FileExists(filename)) {
+				found = true;
+				break;
+			}
+		}
+
+		// If not found in any directory, use the first directory for error reporting
+		if (!found) {
+			filename = ComputeLocalExtensionPath(search_directories[0], extension_name);
 		}
 #endif
 	} else {

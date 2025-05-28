@@ -699,10 +699,10 @@ struct ExplainOutputSetting {
 };
 
 struct ExtensionDirectorySetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "extension_directory";
 	static constexpr const char *Description = "Set the directory to store extensions in";
-	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *InputType = "VARCHAR[]";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -1229,17 +1229,6 @@ struct SearchPathSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct SecondaryExtensionDirectorySetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "secondary_extension_directory";
-	static constexpr const char *Description =
-	    "Set the alternate directory to store extensions in (should be set by package managers)";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
