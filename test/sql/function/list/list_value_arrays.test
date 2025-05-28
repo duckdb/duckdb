@@ -161,7 +161,7 @@ SELECT list_value(a, b, c) FROM nested_array_table;
 statement error
 SELECT list_value([1, 2]::INTEGER[2], [3, 4, 5]::INTEGER[3], [6]::INTEGER[1]);
 ----
-Conversion Error: Cannot cast array of size 2 to array of size 3
+Invalid Input Error: Failed to cast value: Cannot cast array of size 2 to array of size 3
 
 statement ok
 CREATE TABLE mixed_array_table (a INTEGER[2], b VARCHAR[2], c DOUBLE[2]);

@@ -67,7 +67,7 @@ static void PopulateChildFallback(DataChunk &args, Vector &result) {
 }
 
 static void ListFunction(DataChunk &args, Vector &result);
-static void StructFunction(DataChunk &args, Vector &result);
+static bool StructFunction(DataChunk &args, Vector &result);
 
 template <class OP = PrimitiveAssign>
 static bool PopulateChild(DataChunk &args, Vector &result) {
@@ -119,8 +119,7 @@ static bool PopulateChild(DataChunk &args, Vector &result) {
 		ListFunction(args, result);
 		break;
 	case PhysicalType::STRUCT:
-		StructFunction(args, result);
-		break;
+		return StructFunction(args, result);
 	case PhysicalType::UNKNOWN:
 	case PhysicalType::INVALID:
 		throw InternalException("Cannot create a list of types %s - an explicit cast is required",
@@ -184,7 +183,7 @@ static void ListFunction(DataChunk &args, Vector &result) {
 	ListVector::SetListSize(result, offset_sum);
 }
 
-static void StructFunction(DataChunk &args, Vector &result) {
+static bool StructFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
 	auto &result_members = StructVector::GetEntries(result);
 
@@ -207,7 +206,7 @@ static void StructFunction(DataChunk &args, Vector &result) {
 		}
 
 		if (!PopulateChild(chunk, *result_members[member_idx])) {
-			PopulateChildFallback(chunk, *result_members[member_idx]);
+			return false;
 		}
 	}
 
@@ -224,18 +223,7 @@ static void StructFunction(DataChunk &args, Vector &result) {
 		}
 	}
 
-	// Set the top level result validity
-	const auto unified_format = args.ToUnifiedFormat();
-	auto &result_validity = FlatVector::Validity(result_child);
-	for (idx_t row = 0; row < args.size(); row++) {
-		for (idx_t col = 0; col < column_count; col++) {
-			const auto input_idx = unified_format[col].sel->get_index(row);
-			const auto result_idx = row * column_count + col;
-			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_validity.SetInvalid(result_idx);
-			}
-		}
-	}
+	return true;
 }
 
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -275,47 +263,41 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 template <bool IS_UNPIVOT = false>
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
-	// check that all arguments are the same type
-	LogicalType max_logical_type = arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type;
+	// collect names and deconflict, construct return type
+	LogicalType child_type =
+	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		LogicalType next_arg = arguments[i]->return_type;
-		if (next_arg != max_logical_type) {
-			if (!LogicalType::TryGetMaxLogicalType(context, max_logical_type, next_arg, max_logical_type)) {
-				if (IS_UNPIVOT) {
-					string list_arguments = "Full list: ";
-					idx_t error_index = list_arguments.size();
-					for (idx_t k = 0; k < arguments.size(); k++) {
-						if (k > 0) {
-							list_arguments += ", ";
-						}
-						if (k == i) {
-							error_index = list_arguments.size();
-						}
-						list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
+			if (IS_UNPIVOT) {
+				string list_arguments = "Full list: ";
+				idx_t error_index = list_arguments.size();
+				for (idx_t k = 0; k < arguments.size(); k++) {
+					if (k > 0) {
+						list_arguments += ", ";
 					}
-					const auto error =
-					    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-					                       max_logical_type.ToString(), next_arg.ToString());
-					throw BinderException(arguments[i]->GetQueryLocation(),
-					                      QueryErrorContext::Format(list_arguments, error, error_index, false));
-				} else {
-					throw BinderException("Cannot create a list of types %s and %s - an explicit cast is required",
-					                      max_logical_type.ToString(), next_arg.ToString());
+					if (k == i) {
+						error_index = list_arguments.size();
+					}
+					list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 				}
+				auto error =
+				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+				                       child_type.ToString(), arg_type.ToString());
+				throw BinderException(arguments[i]->GetQueryLocation(),
+				                      QueryErrorContext::Format(list_arguments, error, error_index, false));
+			} else {
+				throw BinderException(arguments[i]->GetQueryLocation(),
+				                      "Cannot create a list of types %s and %s - an explicit cast is required",
+				                      child_type.ToString(), arg_type.ToString());
 			}
 		}
 	}
-
-	max_logical_type = LogicalType::NormalizeType(max_logical_type);
-
-	// if the first argument is different from the max_logical_type, we need to cast all arguments
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		arguments[i] = BoundCastExpression::AddCastToType(context, std::move(arguments[i]), max_logical_type);
-	}
+	child_type = LogicalType::NormalizeType(child_type);
 
 	// this is more for completeness reasons
-	bound_function.varargs = max_logical_type;
-	bound_function.return_type = LogicalType::LIST(max_logical_type);
+	bound_function.varargs = child_type;
+	bound_function.return_type = LogicalType::LIST(child_type);
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 

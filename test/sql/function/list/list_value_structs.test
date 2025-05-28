@@ -31,7 +31,6 @@ SELECT list_value({'a': 1, 'b': 'a'}, {'x': 2, 'y': 'b'});
 ----
 [{'a': 1, 'b': a, 'y': NULL, 'x': NULL}, {'a': NULL, 'b': NULL, 'y': b, 'x': 2}]
 
-
 statement ok
 CREATE TABLE tbl (s struct(a int, b varchar));
 
@@ -107,3 +106,11 @@ SELECT list_value(s, s, s, s) AS res FROM mixed_structs;
 [{'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}, {'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}, {'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}, {'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}]
 [{'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}, {'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}, {'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}, {'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}]
 [{'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}, {'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}, {'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}, {'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}]
+
+# struct with array
+query I
+SELECT list_value(ROW(ARRAY_VALUE(1,2,3), ARRAY_VALUE('a','b','c')), 
+				  ROW(ARRAY_VALUE(4,5,6), ARRAY_VALUE('d','e','f')), 
+				  ROW(ARRAY_VALUE(7,8,9), ARRAY_VALUE('g','h','i')));
+----
+[([1, 2, 3], [a, b, c]), ([4, 5, 6], [d, e, f]), ([7, 8, 9], [g, h, i])]

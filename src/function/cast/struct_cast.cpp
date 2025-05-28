@@ -68,6 +68,9 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		target_null_indexes.push_back(target_child.second);
 	}
 
+	// Sort this to prevent the order changing each run
+	std::sort(target_null_indexes.begin(), target_null_indexes.end());
+
 	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(source_indexes),
 	                                      std::move(target_indexes), std::move(target_null_indexes));
 }

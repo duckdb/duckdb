@@ -176,3 +176,11 @@ statement error
 SELECT LIST_VALUE([1, 1], ['a', 'a'], [ROW(2, 2), ROW(3, 3)]);
 ----
 Binder Error: Cannot create a list of types INTEGER[] and VARCHAR[] - an explicit cast is required
+
+# list with array
+query I
+SELECT list_value([ARRAY_VALUE(1,2,3)], 
+				  [ARRAY_VALUE(4,5,6)], 
+				  [ARRAY_VALUE(7,8,9)]);
+----
+[[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]]]
