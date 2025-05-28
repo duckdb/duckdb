@@ -18,8 +18,8 @@ JoinHashTable::SharedState::SharedState()
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
-      non_empty_sel(STANDARD_VECTOR_SIZE) {
+    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH), lookup_results(STANDARD_VECTOR_SIZE),
+      non_empty_sel(STANDARD_VECTOR_SIZE), bf_found_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
@@ -253,7 +253,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    bool has_row_sel) {
 
 	// in case of a hash collision, we need this information to correctly retrieve the salt of this hash
-	bool uses_unified = false;
+	bool uses_unified = true;
 	UnifiedVectorFormat hashes_unified_v;
 
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
@@ -275,11 +275,32 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		state.hashes_dense_v.Reference(hashes_v);
 	}
 
+	// 1. Lookup the BloomFilter
+	ht.bloom_filter.LookupHashes(state.hashes_dense_v, count, state.lookup_results);
+
+	// 2. Fill results
+	idx_t bf_found_count = 0;
+	for (size_t flat_idx = 0; flat_idx < count; flat_idx++) {
+		const idx_t row_idx = row_sel->get_index(flat_idx);
+		state.bf_found_sel.set_index(bf_found_count, row_idx);
+		bf_found_count += state.lookup_results[flat_idx];
+	}
+	auto hashes_dense = FlatVector::GetData<idx_t>(state.hashes_dense_v);
+
+	// 3. Densify the hashes again!
+	for (idx_t i = 0; i < bf_found_count; i++) {
+		const auto found_idx = state.bf_found_sel.get_index(i);
+		hashes_dense[i] = hashes_dense[found_idx];
+	}
+
+	idx_t elements_to_probe_count = bf_found_count;
+	row_sel = &state.bf_found_sel;
+	has_row_sel = true;
+
 	// the number of keys that match for all iterations of the following loop
 	idx_t match_count = 0;
-
 	idx_t keys_no_match_count;
-	idx_t elements_to_probe_count = count;
+
 
 	do {
 
@@ -724,6 +745,10 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 
 void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataChunkState &chunk_state,
                                  InsertState &insert_state, bool parallel) {
+
+	// Insert Hashes into the BF
+	bloom_filter.InsertHashes(hashes_v, count);
+
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
 	auto row_locations = chunk_state.row_locations;
 	if (parallel) {
@@ -736,6 +761,8 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 void JoinHashTable::AllocatePointerTable() {
 	capacity = PointerTableCapacity(Count());
 	D_ASSERT(IsPowerOfTwo(capacity));
+
+	bloom_filter.Initialize(context, Count());
 
 	if (hash_map.get()) {
 		// There is already a hash map
@@ -803,9 +830,9 @@ void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataC
 	scan_structure.count = PrepareKeys(keys, key_state.vector_data, current_sel, scan_structure.sel_vector, false);
 
 	if (scan_structure.count < keys.size()) {
-		scan_structure.has_null_value_filter = true;
+		scan_structure.filtered_probe_keys = true;
 	} else {
-		scan_structure.has_null_value_filter = false;
+		scan_structure.filtered_probe_keys = false;
 	}
 }
 
@@ -818,7 +845,7 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 	}
 	if (precomputed_hashes) {
 		GetRowPointers(keys, key_state, probe_state, *precomputed_hashes, current_sel, scan_structure.count,
-		               scan_structure.pointers, scan_structure.sel_vector, scan_structure.has_null_value_filter);
+		               scan_structure.pointers, scan_structure.sel_vector, scan_structure.filtered_probe_keys);
 	} else {
 		Vector hashes(LogicalType::HASH);
 		// hash all the keys
@@ -826,7 +853,7 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 
 		// now initialize the pointers of the scan structure based on the hashes
 		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count, scan_structure.pointers,
-		               scan_structure.sel_vector, scan_structure.has_null_value_filter);
+		               scan_structure.sel_vector, scan_structure.filtered_probe_keys);
 	}
 }
 
@@ -1671,7 +1698,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &prob
 
 	// now initialize the pointers of the scan structure based on the hashes
 	GetRowPointers(probe_keys, key_state, probe_state, hashes, current_sel, scan_structure.count,
-	               scan_structure.pointers, scan_structure.sel_vector, scan_structure.has_null_value_filter);
+	               scan_structure.pointers, scan_structure.sel_vector, scan_structure.filtered_probe_keys);
 }
 
 ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)

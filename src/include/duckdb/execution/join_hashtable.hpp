@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "bloom_filter.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -81,7 +82,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
-		bool has_null_value_filter = false;
+		bool filtered_probe_keys = false;
 
 		// it records the RHS pointers for the result chunk
 		Vector rhs_pointers;
@@ -149,9 +150,11 @@ public:
 	struct ProbeState : SharedState {
 		ProbeState();
 
+		vector<uint32_t> lookup_results;
 		Vector ht_offsets_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
+		SelectionVector bf_found_sel;
 	};
 
 	struct InsertState : SharedState {
@@ -333,6 +336,7 @@ public:
 	// External Join
 	//===--------------------------------------------------------------------===//
 	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
+	BloomFilter bloom_filter;
 
 	struct ProbeSpillLocalAppendState {
 		ProbeSpillLocalAppendState() {
