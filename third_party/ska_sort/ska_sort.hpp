@@ -1107,7 +1107,9 @@ struct UnsignedInplaceSorter
     template<typename It, typename ExtractKey>
     static void sort(It begin, It end, size_t num_elements, ExtractKey & extract_key, void (*next_sort)(It, It, size_t, ExtractKey &, void *), void * sort_data)
     {
-    	if (extract_key.ByteIsSkippable(Offset))
+    	if (extract_key.Interrupted())
+    		return;
+    	else if (extract_key.ByteIsSkippable(Offset))
     		UnsignedInplaceSorter<StdSortThreshold, AmericanFlagSortThreshold, CurrentSubKey, NumBytes, Offset + 1>::sort(begin, end, num_elements, extract_key, next_sort, sort_data);
         else if (num_elements < AmericanFlagSortThreshold)
             american_flag_sort(begin, end, extract_key, next_sort, sort_data);
