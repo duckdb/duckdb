@@ -113,7 +113,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 
 	// If we can't seek, we can't use the cache for these calls,
 	// because we won't be able to seek over any parts we skipped by reading from the cache
-	if (!external_file_cache.IsEnabled() || !GetFileHandle().CanSeek()) {
+	if (!external_file_cache.IsEnabled() || !CanSeek()) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
