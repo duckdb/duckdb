@@ -35,145 +35,136 @@ private:
 //! ClientBufferManager wraps the buffer manager to optionally forward the client context.
 class ClientBufferManager : public BufferManager {
 public:
-	explicit ClientBufferManager(ClientContext &context_p) : context(context_p) {
+	explicit ClientBufferManager(BufferManager &buffer_manager_p) : buffer_manager(buffer_manager_p) {
 	}
 
 public:
 	shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
-		return Get().AllocateTemporaryMemory(tag, block_size, can_destroy);
+		return buffer_manager.AllocateTemporaryMemory(tag, block_size, can_destroy);
 	}
 	shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
 	                                       bool can_destroy = true) override {
-		return Get().AllocateMemory(tag, block_manager, can_destroy);
+		return buffer_manager.AllocateMemory(tag, block_manager, can_destroy);
 	}
 	BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
-		return Get().Allocate(tag, block_size, can_destroy);
+		return buffer_manager.Allocate(tag, block_size, can_destroy);
 	}
 	BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) override {
-		return Get().Allocate(tag, block_manager, can_destroy);
+		return buffer_manager.Allocate(tag, block_manager, can_destroy);
 	}
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) override {
-		return Get().ReAllocate(handle, block_size);
+		return buffer_manager.ReAllocate(handle, block_size);
 	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
-		return Get().Pin(handle);
+		return buffer_manager.Pin(handle);
 	}
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
-		return Get().Prefetch(handles);
+		return buffer_manager.Prefetch(handles);
 	}
 	void Unpin(shared_ptr<BlockHandle> &handle) override {
-		return Get().Unpin(handle);
+		return buffer_manager.Unpin(handle);
 	}
 
 	idx_t GetUsedMemory() const override {
-		return Get().GetUsedMemory();
+		return buffer_manager.GetUsedMemory();
 	}
 	idx_t GetMaxMemory() const override {
-		return Get().GetMaxMemory();
+		return buffer_manager.GetMaxMemory();
 	}
 	idx_t GetUsedSwap() const override {
-		return Get().GetUsedSwap();
+		return buffer_manager.GetUsedSwap();
 	}
 	optional_idx GetMaxSwap() const override {
-		return Get().GetMaxSwap();
+		return buffer_manager.GetMaxSwap();
 	}
 	idx_t GetBlockAllocSize() const override {
-		return Get().GetBlockAllocSize();
+		return buffer_manager.GetBlockAllocSize();
 	}
 	idx_t GetBlockSize() const override {
-		return Get().GetBlockSize();
+		return buffer_manager.GetBlockSize();
 	}
 	idx_t GetTemporaryBlockHeaderSize() const override {
-		return Get().GetTemporaryBlockHeaderSize();
+		return buffer_manager.GetTemporaryBlockHeaderSize();
 	}
 	idx_t GetQueryMaxMemory() const override {
-		return Get().GetQueryMaxMemory();
+		return buffer_manager.GetQueryMaxMemory();
 	}
 
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) override {
-		return Get().RegisterTransientMemory(size, block_manager);
+		return buffer_manager.RegisterTransientMemory(size, block_manager);
 	}
 	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size) override {
-		return Get().RegisterSmallMemory(size);
+		return buffer_manager.RegisterSmallMemory(size);
 	}
 	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size) override {
-		return Get().RegisterSmallMemory(tag, size);
+		return buffer_manager.RegisterSmallMemory(tag, size);
 	}
 
 	Allocator &GetBufferAllocator() override {
-		return Get().GetBufferAllocator();
+		return buffer_manager.GetBufferAllocator();
 	}
 	void ReserveMemory(idx_t size) override {
-		return Get().ReserveMemory(size);
+		return buffer_manager.ReserveMemory(size);
 	}
 	void FreeReservedMemory(idx_t size) override {
-		return Get().FreeReservedMemory(size);
+		return buffer_manager.FreeReservedMemory(size);
 	}
 	vector<MemoryInformation> GetMemoryUsageInfo() const override {
-		return Get().GetMemoryUsageInfo();
+		return buffer_manager.GetMemoryUsageInfo();
 	}
 	void SetMemoryLimit(idx_t limit = (idx_t)-1) override {
-		return Get().SetMemoryLimit(limit);
+		return buffer_manager.SetMemoryLimit(limit);
 	}
 	void SetSwapLimit(optional_idx limit = optional_idx()) override {
-		return Get().SetSwapLimit(limit);
+		return buffer_manager.SetSwapLimit(limit);
 	}
 
 	vector<TemporaryFileInformation> GetTemporaryFiles() override {
-		return Get().GetTemporaryFiles();
+		return buffer_manager.GetTemporaryFiles();
 	}
 	const string &GetTemporaryDirectory() const override {
-		return Get().GetTemporaryDirectory();
+		return buffer_manager.GetTemporaryDirectory();
 	}
 	void SetTemporaryDirectory(const string &new_dir) override {
-		return Get().SetTemporaryDirectory(new_dir);
+		return buffer_manager.SetTemporaryDirectory(new_dir);
 	}
 	bool HasTemporaryDirectory() const override {
-		return Get().HasTemporaryDirectory();
+		return buffer_manager.HasTemporaryDirectory();
 	}
 
 	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
 	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER) override {
-		return Get().ConstructManagedBuffer(size, block_header_size, std::move(source), type);
+		return buffer_manager.ConstructManagedBuffer(size, block_header_size, std::move(source), type);
 	}
 	BufferPool &GetBufferPool() const override {
-		return Get().GetBufferPool();
+		return buffer_manager.GetBufferPool();
 	}
 	DatabaseInstance &GetDatabase() override {
-		return Get().GetDatabase();
+		return buffer_manager.GetDatabase();
 	}
 	TemporaryMemoryManager &GetTemporaryMemoryManager() override {
-		return Get().GetTemporaryMemoryManager();
+		return buffer_manager.GetTemporaryMemoryManager();
 	}
 
 	void PurgeQueue(const BlockHandle &handle) override {
-		return Get().PurgeQueue(handle);
+		return buffer_manager.PurgeQueue(handle);
 	}
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) override {
-		return Get().AddToEvictionQueue(handle);
+		return buffer_manager.AddToEvictionQueue(handle);
 	}
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
-		return Get().WriteTemporaryBuffer(tag, block_id, buffer);
+		return buffer_manager.WriteTemporaryBuffer(tag, block_id, buffer);
 	}
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer) override {
-		return Get().ReadTemporaryBuffer(tag, block, std::move(buffer));
+		return buffer_manager.ReadTemporaryBuffer(tag, block, std::move(buffer));
 	}
 	void DeleteTemporaryFile(BlockHandle &block) override {
-		return Get().DeleteTemporaryFile(block);
+		return buffer_manager.DeleteTemporaryFile(block);
 	}
 
 private:
-	BufferManager &Get() {
-		auto &db = DatabaseInstance::GetDatabase(context);
-		return BufferManager::GetBufferManager(db);
-	}
-	const BufferManager &Get() const {
-		auto &db = DatabaseInstance::GetDatabase(context);
-		return BufferManager::GetBufferManager(db);
-	}
-
-	ClientContext &context;
+	BufferManager &buffer_manager;
 };
 
 ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<CatalogSearchPath>(context)) {
@@ -185,7 +176,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
-	client_buffer_manager = make_uniq<ClientBufferManager>(context);
+	client_buffer_manager = make_uniq<ClientBufferManager>(db.GetBufferManager());
 
 	temporary_objects->Initialize();
 }
