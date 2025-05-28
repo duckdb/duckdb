@@ -22,6 +22,7 @@ class FileSystem;
 class QueryProfiler;
 class PreparedStatementData;
 class RandomEngine;
+class BufferManager;
 
 struct ClientData {
 public:
