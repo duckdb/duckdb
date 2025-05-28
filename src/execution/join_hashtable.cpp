@@ -253,7 +253,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    bool has_row_sel) {
 
 	// in case of a hash collision, we need this information to correctly retrieve the salt of this hash
-	bool uses_unified = true;
+	bool uses_unified = false;
 	UnifiedVectorFormat hashes_unified_v;
 
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
