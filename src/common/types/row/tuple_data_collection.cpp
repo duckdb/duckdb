@@ -313,9 +313,15 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 
 	// Copy rows
 	const auto row_width = layout.GetRowWidth();
-	for (idx_t i = 0; i < append_count; i++) {
-		auto idx = append_sel.get_index(i);
-		FastMemcpy(target_locations[i], source_locations[idx], row_width);
+	if (append_sel.IsSet()) {
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto idx = append_sel[i];
+			FastMemcpy(target_locations[i], source_locations[idx], row_width);
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			FastMemcpy(target_locations[i], source_locations[i], row_width);
+		}
 	}
 
 	// Copy heap if we need to

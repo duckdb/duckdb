@@ -185,7 +185,7 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 			const auto index = append_sel[i];
 			const auto &partition_index = partition_indices[i];
 			auto &partition_offset = partition_entries[partition_index].offset;
-			reverse_partition_sel[index] = UnsafeNumericCast<sel_t>(partition_offset);
+			reverse_partition_sel.set_index(index, partition_offset);
 			partition_sel[partition_offset++] = index;
 		}
 	} else {
