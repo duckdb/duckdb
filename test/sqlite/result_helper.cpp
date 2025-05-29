@@ -89,7 +89,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
 		auto fname = StringUtil::Replace(values[0], "<FILE>:", "");
-		fname = runner.ReplaceKeywords(values[0]);
+		fname = runner.ReplaceKeywords(fname);
 		fname = runner.LoopReplacement(fname, context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
