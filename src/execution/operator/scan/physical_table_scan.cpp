@@ -30,7 +30,7 @@ public:
 		}
 
 		if (op.function.init_global) {
-			auto filters = table_filters ? *table_filters : GetTableFilters(op);
+			auto filters = GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
 			                             op.extra_info.sample_options);
 

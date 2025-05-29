@@ -778,10 +778,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				// hash table e.g. because they are part of a RIGHT join
 				continue;
 			}
-			// if the HT is small we can generate a complete "OR" filter
-			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold) {
-				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
-			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
 				// min = max - single value
@@ -794,7 +790,19 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				// for non-equalities, the range must be half-open
 				// e.g., for lhs < rhs we can only use lhs <= max
 				switch (cmp) {
-				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_EQUAL: {
+					// if the HT is small we can generate a complete "OR" filter
+					if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold) {
+						PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
+					}
+					auto greater_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					auto less_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					break;
+				}
 				case ExpressionType::COMPARE_GREATERTHAN:
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
@@ -802,11 +810,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
 					break;
 				}
-				default:
-					break;
-				}
-				switch (cmp) {
-				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_LESSTHAN:
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
