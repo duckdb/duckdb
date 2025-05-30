@@ -888,6 +888,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESET) {
+			if (token.parameters.size() != 2) {
+				parser.Fail("Expected reset [type] [name] (e.g reset label my_label)");
+			}
+			auto &reset_type = token.parameters[0];
+			auto &reset_item = token.parameters[1];
+			if (StringUtil::CIEquals("label", reset_type)) {
+				auto reset_label_command = make_uniq<ResetLabel>(*this);
+				reset_label_command->query_label = reset_item;
+				ExecuteCommand(std::move(reset_label_command));
+			} else {
+				parser.Fail("unrecognized reset parameter: %s", reset_type);
+			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOOP ||
 		           token.type == SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP) {
 			if (token.parameters.size() != 3) {
