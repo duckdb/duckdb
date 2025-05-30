@@ -362,9 +362,9 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	auto &http_util = HTTPUtil::Get(db);
 	unique_ptr<HTTPParams> params;
 	if (context) {
-		params = http_util.InitializeParameters(*context, url);
+		params = http_util.InitializeParameters(*context);
 	} else {
-		params = http_util.InitializeParameters(db, url);
+		params = http_util.InitializeParameters(db);
 	}
 
 	// Unclear what's peculiar about extension install flow, but those two parameters are needed
