@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -79,7 +80,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
-	    {"extension_directory", {"test"}},
+	    {"extension_directory", {"test", "[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
@@ -238,6 +239,11 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			REQUIRE(false);
 		}
 		for (auto &value_pair : value_set.pairs) {
+			// special case for extension_directory to do backward-compatibility testing
+			if (strcmp(op->name, "extension_directory") == 0) {
+				parameter_type = LogicalType::VARCHAR;
+			}
+
 			// Get the new value for the option
 			auto input = value_pair.input.DefaultCastAs(parameter_type);
 			// Set the new option
