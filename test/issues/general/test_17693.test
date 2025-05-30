@@ -1,0 +1,52 @@
+# name: test/issues/general/test_17693.test
+# description: Issue 17693 - Filter inequality condition fail
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table source(
+  id uuid,
+  created_at int
+);
+
+statement ok
+create table temporal_data(
+  id uuid,
+  start_ts_inclusive int,
+  end_ts_exclusive int,
+  value text
+);
+
+statement ok
+insert into source (id, created_at)
+values
+('faceb00c-feed-dead-beef-abcdef123456'::uuid, 100),
+('feed1234-5678-abcd-eeee-bada55ba11ad'::uuid, 111),
+('decafbad-c0de-cafe-babe-0000deadbeef'::uuid, 122)
+;
+
+statement ok
+insert into temporal_data (id, start_ts_inclusive, end_ts_exclusive, value)
+values
+('faceb00c-feed-dead-beef-abcdef123456'::uuid, 100,122, 'Beef'),
+('feed1234-5678-abcd-eeee-bada55ba11ad'::uuid, 111,144, 'Pork'),
+('decafbad-c0de-cafe-babe-0000deadbeef'::uuid, 122,166, 'Double Shot Espresso')
+;
+
+query III
+select
+  source.id,
+  temporal_data.value,
+  created_at
+from source
+join temporal_data
+  on source.id = temporal_data.id
+    and source.created_at >= temporal_data.start_ts_inclusive
+    and source.created_at < temporal_data.end_ts_exclusive
+where source.created_at < 122
+order by created_at;
+----
+faceb00c-feed-dead-beef-abcdef123456	Beef	100
+feed1234-5678-abcd-eeee-bada55ba11ad	Pork	111
