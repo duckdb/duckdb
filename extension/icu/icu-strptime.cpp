@@ -293,7 +293,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 				    // Change TZ if one was provided.
 				    if (tz.GetSize()) {
-					    SetTimeZone(calendar, tz);
+					    SetTimeZone(calendar, tz, parameters.error_message);
 				    }
 
 				    // Now get the parts in the given time zone
