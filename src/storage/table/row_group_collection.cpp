@@ -862,9 +862,8 @@ public:
 			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
 			// modify index`s row_ids
 			DataTableInfo &table_info = current_row_group.GetTableInfo();
-			row_t old_row_idx = (row_t)current_row_group.start;
-			row_t new_row_idx = (row_t)new_row_groups[current_append_idx]->start;
-
+			idx_t old_row_idx = current_row_group.start;
+			idx_t new_row_idx = new_row_groups[current_append_idx]->start + append_counts[current_append_idx];
 			current_row_group.InitializeScan(scan_state.table_state);
 			while (true) {
 				scan_chunk.Reset();
@@ -879,17 +878,14 @@ public:
 					Vector rows_old(LogicalType::ROW_TYPE);
 					Vector rows_new(LogicalType::ROW_TYPE);
 					// is the old_rows_id a sequence?
-					VectorOperations::GenerateSequence(rows_old, scan_chunk.size(), old_row_idx, 1);
-					VectorOperations::GenerateSequence(rows_new, scan_chunk.size(), new_row_idx, 1);
-					old_row_idx += (row_t)scan_chunk.size();
-					new_row_idx += (row_t)scan_chunk.size();
+					VectorOperations::GenerateSequence(rows_old, scan_chunk.size(), (row_t)old_row_idx, 1);
+					VectorOperations::GenerateSequence(rows_new, scan_chunk.size(), (row_t)new_row_idx, 1);
+					old_row_idx += scan_chunk.size();
+					new_row_idx += scan_chunk.size();
 					table_info.GetIndexes().Scan([&](Index &index) {
-						if (index.IsBound()) {
-							DataChunk key_chunk;
-							key_chunk.Initialize(Allocator::DefaultAllocator(), index.Cast<BoundIndex>().logical_types);
-							key_chunk.ReferenceColumns(scan_chunk, index.GetColumnIds());
-							index.Cast<BoundIndex>().Delete(key_chunk, rows_old);
-							index.Cast<BoundIndex>().Append(key_chunk, rows_new);
+						if (index.IsBound() && old_row_idx != new_row_idx) {
+							index.Cast<BoundIndex>().Delete(scan_chunk, rows_old);
+							index.Cast<BoundIndex>().Append(scan_chunk, rows_new);
 						}
 						return false;
 					});

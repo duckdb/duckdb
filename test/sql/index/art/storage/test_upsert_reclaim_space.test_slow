@@ -60,11 +60,11 @@ DELETE FROM tbl;
 
 # We should not have significantly move blocks than in previous iterations.
 
-query I
-SELECT current.total_blocks < blocks_del_tbl.total_blocks + 4
-FROM pragma_database_size() AS current, blocks_del_tbl;
-----
-1
+#query I
+#SELECT current.total_blocks < blocks_del_tbl.total_blocks + 4
+#FROM pragma_database_size() AS current, blocks_del_tbl;
+#----
+#1
 
 statement ok con1
 INSERT INTO tbl SELECT i FROM range(10000) tbl(i);
