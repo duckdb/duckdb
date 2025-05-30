@@ -191,7 +191,8 @@ void StdOutLogStorage::Truncate() {
 }
 
 void StdOutLogStorage::FlushInternal() {
-	std::cout.write(const_char_ptr_cast(log_entries_stream->GetData()), NumericCast<int64_t>(log_entries_stream->GetPosition()));
+	std::cout.write(const_char_ptr_cast(log_entries_stream->GetData()),
+	                NumericCast<int64_t>(log_entries_stream->GetPosition()));
 	std::cout.flush();
 	log_entries_stream->Rewind();
 }
@@ -373,35 +374,31 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 	CSVLogStorage::UpdateConfigInternal(db, config_copy);
 }
 
-static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {
-	Parser parser(options);
-	parser.ParseQuery(query);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException(err_msg);
-	}
-	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
-}
-
 unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
                                                          const string &path, const string &select_clause) {
-	if (LogManager::Get(context).GetConfig().enabled) {
-		throw InvalidInputException("Please disable logging before scanning the logging csv file to avoid duckdb "
-		                            "getting stuck in infinite logging limbo");
-	}
-
 	string sub_query_string;
 
 	string escaped_path = KeywordHelper::WriteOptionallyQuoted(path);
 	sub_query_string = StringUtil::Format("%s FROM %s", select_clause, escaped_path);
 
-	auto subquery_ref =
-	    ParseSubquery(sub_query_string, context.GetParserOptions(),
-	                  "Something went wrong trying to construct the subquery to scan the FileLogStorage");
-	return std::move(subquery_ref);
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(sub_query_string);
+	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+
+	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
+}
+
+// TODO: we can remove this once the CSV reader handles growing CSV files properly
+static void ThrowIfLogging(ClientContext &context) {
+	if (LogManager::Get(context).GetConfig().enabled) {
+		throw InvalidInputException("Please disable logging before scanning the logging csv file to avoid duckdb "
+		                            "getting stuck in infinite logging limbo");
+	}
 }
 
 unique_ptr<TableRef> FileLogStorage::BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input) {
+	ThrowIfLogging(context);
+
 	lock_guard<mutex> lck(lock);
 	FlushInternal();
 
@@ -415,6 +412,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceEntries(ClientContext &context, 
 }
 
 unique_ptr<TableRef> FileLogStorage::BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) {
+	ThrowIfLogging(context);
+
 	lock_guard<mutex> lck(lock);
 	FlushInternal();
 	if (normalize_contexts) {
