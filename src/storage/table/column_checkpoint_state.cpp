@@ -172,6 +172,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
+	segment->UpdateBlockUsage(segment_size);
 	// construct the data pointer
 	DataPointer data_pointer(segment->stats.statistics.Copy());
 	data_pointer.block_pointer.block_id = block_id;
