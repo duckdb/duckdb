@@ -76,6 +76,8 @@ public:
 	//! Builds out the chunks for next append, given the metadata in the append state
 	void Build(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	           const idx_t append_offset, const idx_t append_count);
+	bool BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+	                   const idx_t append_offset, const idx_t append_count);
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	                          idx_t chunk_idx, bool init_heap);

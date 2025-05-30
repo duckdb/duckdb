@@ -109,7 +109,7 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
-	payload_layout->Initialize(payload_types);
+	payload_layout->Initialize(payload_types, false);
 
 	// Sort the output projection columns so we're gathering the columns in order
 	std::sort(output_projection_columns.begin(), output_projection_columns.end(),

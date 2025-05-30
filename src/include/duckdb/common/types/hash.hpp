@@ -45,9 +45,13 @@ inline hash_t CombineHash(hash_t left, hash_t right) {
 }
 
 template <>
-DUCKDB_API hash_t Hash(uint64_t val);
+DUCKDB_API inline hash_t Hash(uint64_t val) {
+	return MurmurHash64(val);
+}
 template <>
-DUCKDB_API hash_t Hash(int64_t val);
+DUCKDB_API inline hash_t Hash(int64_t val) {
+	return MurmurHash64(static_cast<uint64_t>(val));
+}
 template <>
 DUCKDB_API hash_t Hash(hugeint_t val);
 template <>
