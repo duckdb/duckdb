@@ -374,6 +374,8 @@ enum class SubqueryType : uint8_t;
 
 enum class TableColumnType : uint8_t;
 
+enum class TableDataType : uint8_t;
+
 enum class TableFilterType : uint8_t;
 
 enum class TablePartitionInfo : uint8_t;
@@ -933,6 +935,9 @@ const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
 
 template<>
 const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
+
+template<>
+const char* EnumUtil::ToChars<TableDataType>(TableDataType value);
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
@@ -1516,6 +1521,9 @@ SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);
 
 template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);
+
+template<>
+TableDataType EnumUtil::FromString<TableDataType>(const char *value);
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
