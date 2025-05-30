@@ -92,6 +92,8 @@ void SQLLogicTestRunner::EndLoop() {
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
+	// auto &oss = GetSummary();
+
 	// restart the database with the specified db path
 	db.reset();
 	con.reset();
@@ -104,6 +106,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 		ExtensionHelper::LoadExtension(*db, "core_functions");
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
+		ExecuteContext context;
 		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
 		FAIL();
 	}
