@@ -149,7 +149,7 @@ def get_test_name_from(text):
 
 def get_clean_error_message_from(text):
     match = re.split(r'^=+\n', text, maxsplit=1, flags=re.MULTILINE)
-    return match[1] if len(match) > 0 else text
+    return match[1] if len(match) > 1 else text
 
 
 def print_interval_background(interval):
