@@ -218,10 +218,10 @@ SELECT COUNT(*) FROM GLOB('__TEST_DIR__/directory0/a=7/*');
 ----
 1
 
-query III sort
+query II sort
 SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
 ----
-35	16807	7
+35	16807
 
 # When partition columns are written to files, `select *` returns in order of columns
 statement ok

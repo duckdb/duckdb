@@ -20,7 +20,7 @@ FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv')
 No files found that match the pattern
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz') order by all;
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz', hive_partitioning=1) order by all;
 ----
 1	a	bar
 1	a	foo
@@ -28,7 +28,7 @@ FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz') order by all;
 2	a	foo
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.*') order by all;
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.*', hive_partitioning=1) order by all;
 ----
 1	a	bar
 1	a	foo
@@ -47,7 +47,7 @@ FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv')
 No files found that match the pattern
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst') order by all;
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst', hive_partitioning=1) order by all;
 ----
 1	a	bar
 1	a	foo
@@ -55,7 +55,7 @@ FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst') order by all;
 2	a	foo
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.*')  order by all;
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.*', hive_partitioning=1)  order by all;
 ----
 1	a	bar
 1	a	foo

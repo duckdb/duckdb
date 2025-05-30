@@ -151,7 +151,7 @@ COPY test TO '__TEST_DIR__/csv-no-part-cols' (FORMAT CSV, PARTITION_BY (part_col
 
 # SELECT query returns all columns, but written files do not have partition columns
 query III
-SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols/part_col=0/*.csv' ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM read_csv('__TEST_DIR__/csv-no-part-cols/part_col=0/*.csv', hive_partitioning=1) ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
@@ -165,7 +165,7 @@ COPY test TO '__TEST_DIR__/csv-no-part-cols-explicit' (FORMAT CSV, PARTITION_BY 
 
 # SELECT query returns all columns, but written files do not have partition columns
 query III
-SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols-explicit/part_col=0/*.csv' ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM read_csv('__TEST_DIR__/csv-no-part-cols-explicit/part_col=0/*.csv', hive_partitioning=1) ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
@@ -178,7 +178,7 @@ statement ok
 COPY test TO '__TEST_DIR__/csv-no-part-cols2' (FORMAT CSV, PARTITION_BY (part_col, value_col));
 
 query III
-SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols2/part_col=0/value_col=*/*.csv' ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM read_csv('__TEST_DIR__/csv-no-part-cols2/part_col=0/value_col=*/*.csv', hive_partitioning=1) ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
@@ -191,7 +191,7 @@ statement ok
 COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO '__TEST_DIR__/csv-no-part-cols3' (FORMAT CSV, PARTITION_BY (part_col));
 
 query III
-SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols3/part_col=prefix-0/*.csv' ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM read_csv('__TEST_DIR__/csv-no-part-cols3/part_col=prefix-0/*.csv', hive_partitioning=1) ORDER BY value2_col;
 ----
 prefix-0	1	0
 prefix-0	3	2
@@ -204,7 +204,7 @@ statement ok
 COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols4' (FORMAT CSV, PARTITION_BY (part_col));
 
 query IIIIIIIIII
-SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols4/part_col=1/*.csv' ORDER BY 1;
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM read_csv('__TEST_DIR__/csv-no-part-cols4/part_col=1/*.csv', hive_partitioning=1) ORDER BY 1;
 ----
 1	2	3	4	5	6	7	8	9	10
 
@@ -213,7 +213,7 @@ statement ok
 COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols5' (FORMAT CSV, PARTITION_BY (value9_col));
 
 query IIIIIIIIII
-SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols5/value9_col=*/*.csv' ORDER BY 1;
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM read_csv('__TEST_DIR__/csv-no-part-cols5/value9_col=*/*.csv', hive_partitioning=1) ORDER BY 1;
 ----
 1	2	3	4	5	6	7	8	9	10
 
@@ -222,7 +222,7 @@ statement ok
 COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols6' (FORMAT CSV, PARTITION_BY (value8_col, value9_col));
 
 query IIIIIIIIII
-SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols6/value8_col=*/value9_col=*/*.csv' ORDER BY 1;
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM read_csv('__TEST_DIR__/csv-no-part-cols6/value8_col=*/value9_col=*/*.csv', hive_partitioning=1) ORDER BY 1;
 ----
 1	2	3	4	5	6	7	8	9	10
 
@@ -231,7 +231,7 @@ statement ok
 COPY (SELECT 1 AS part_col, 2 AS value_col, 3 AS value2_col, 4 AS value3_col, 5 AS value4_col, 6 AS value5_col, 7 AS value6_col, 8 AS value7_col, 9 AS value8_col, 10 AS value9_col) TO '__TEST_DIR__/csv-no-part-cols7' (FORMAT CSV, PARTITION_BY (value9_col, value8_col, value7_col));
 
 query IIIIIIIIII
-SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM '__TEST_DIR__/csv-no-part-cols7/value9_col=*/value8_col=*/value7_col=*/*.csv' ORDER BY 1;
+SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, value6_col, value7_col, value8_col, value9_col FROM read_csv('__TEST_DIR__/csv-no-part-cols7/value9_col=*/value8_col=*/value7_col=*/*.csv', hive_partitioning=1) ORDER BY 1;
 ----
 1	2	3	4	5	6	7	8	9	10
 
@@ -265,7 +265,7 @@ statement ok
 COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*', OVERWRITE, WRITE_PARTITION_COLUMNS);
 
 query III
-SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols9/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM read_csv('__TEST_DIR__/csv-no-part-cols9/part_col=0/value_col=*/value2_col=*/*.csv', hive_partitioning=1) ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
