@@ -62,10 +62,6 @@ runs:
           echo "DUCKDB_PLATFORM=${{ inputs.duckdb_arch }}" >> docker_env.txt
           echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}" >> docker_env.txt
           echo "LINUX_CI_IN_DOCKER=1" >> docker_env.txt
-          # TODO: no more cross compilation for extension builds
-          echo "TOOLCHAIN_FLAGS=${{ inputs.duckdb_arch == 'linux_arm64' && '-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DCMAKE_Fortran_COMPILER=aarch64-linux-gnu-gfortran' || '' }}" >> docker_env.txt
-          echo "CC=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-gcc' || '' }}" >> docker_env.txt
-          echo "CXX=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}" >> docker_env.txt 
 
       - name: Generate timestamp for Ccache entry
         shell: bash
@@ -98,6 +94,6 @@ runs:
 
       - name: Test extension (inside docker)
         shell: bash
-        if: ${{ inputs.run_tests == 1 && inputs.duckdb_arch != 'linux_arm64'}}
+        if: ${{ inputs.run_tests == 1 }}
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make test_release
