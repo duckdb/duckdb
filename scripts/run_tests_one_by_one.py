@@ -61,6 +61,7 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
+tests_per_invocation = args.tests_per_invocation
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
