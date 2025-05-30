@@ -252,7 +252,7 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", query);
-	serializer.WriteProperty<CTEMaterialize>(102, "materialized", materialized);
+	serializer.WritePropertyWithDefault<CTEMaterialize>(102, "materialized", materialized, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
 }
 
@@ -260,7 +260,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 	auto result = duckdb::unique_ptr<CommonTableExpressionInfo>(new CommonTableExpressionInfo());
 	deserializer.ReadPropertyWithDefault<vector<string>>(100, "aliases", result->aliases);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", result->query);
-	deserializer.ReadProperty<CTEMaterialize>(102, "materialized", result->materialized);
+	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(102, "materialized", result->materialized, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", result->key_targets);
 	return result;
 }
