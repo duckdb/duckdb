@@ -89,6 +89,8 @@ public:
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 
+	std::function<void(QueryProgress)> progress_callback = nullptr;
+
 public:
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
