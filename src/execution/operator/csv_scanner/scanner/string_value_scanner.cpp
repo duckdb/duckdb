@@ -504,8 +504,9 @@ void StringValueResult::Reset() {
 	}
 	// We keep a reference to the buffer from our current iteration if it already exists
 	shared_ptr<CSVBufferHandle> cur_buffer;
-	if (buffer_handles.find(iterator.GetBufferIdx()) != buffer_handles.end()) {
-		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
+	auto handle_iter = buffer_handles.find(iterator.GetBufferIdx());
+	if (handle_iter != buffer_handles.end()) {
+		cur_buffer = handle_iter->second;
 	}
 	buffer_handles.clear();
 	idx_t actual_size = 0;
