@@ -66,7 +66,7 @@ SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, Clien
                                          OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
 	OperatorSinkFinalizeInput sort_input {*gstate.state, input.interrupt_state};
-	return gstate.sort.Finalize(pipeline, event, context, sort_input);
+	return gstate.sort.Finalize(context, sort_input);
 }
 
 ProgressData PhysicalOrder::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,

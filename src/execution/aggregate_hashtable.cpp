@@ -858,7 +858,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
-		if (context.interrupted) {
+		if (context.interrupted.load(std::memory_order_relaxed)) {
 			throw InterruptException();
 		}
 		const auto input_chunk_size = fm_state.groups.size();

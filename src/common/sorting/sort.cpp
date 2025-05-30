@@ -138,10 +138,9 @@ public:
 public:
 	void InitializeSortedRun(const Sort &sort, ClientContext &context) {
 		D_ASSERT(!sorted_run);
-		auto &buffer_manager = BufferManager::GetBufferManager(context);
 		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
 		//  so that we can do an approximate sort, but that causes issues in the ART
-		sorted_run = make_uniq<SortedRun>(buffer_manager, sort.key_layout, sort.payload_layout, false);
+		sorted_run = make_uniq<SortedRun>(context, sort.key_layout, sort.payload_layout, false);
 	}
 
 public:
@@ -330,7 +329,7 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType Sort::Finalize(Pipeline &, Event &, ClientContext &context, OperatorSinkFinalizeInput &input) const {
+SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
 	if (gstate.sorted_runs.empty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
