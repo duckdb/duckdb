@@ -4,10 +4,10 @@
 using duckdb::Appender;
 using duckdb::AppenderWrapper;
 using duckdb::Connection;
-using duckdb::ErrorDataWrapper;
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::ErrorData;
+using duckdb::ErrorDataWrapper;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::string_t;

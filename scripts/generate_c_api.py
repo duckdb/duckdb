@@ -465,7 +465,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
             for function in curr_group['entries']:
                 function_is_deprecated = group_is_deprecated or ('deprecated' in function and function['deprecated'])
                 if deprecated_state and not function_is_deprecated:
-                    declarations += '#endif\n'
+                    declarations += '#endif\n\n'
                     deprecated_state = False
                 elif not deprecated_state and function_is_deprecated:
                     declarations += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
@@ -488,7 +488,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
                 declarations += '\n'
 
             if deprecated_state:
-                declarations += '#endif\n'
+                declarations += '#endif\n\n'
 
     declarations += '#endif\n'
 

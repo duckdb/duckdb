@@ -354,7 +354,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(result->deprecated_columns, 0, sizeof(duckdb_column) * column_count);
 	for (idx_t i = 0; i < column_count; i++) {
-		result->deprecated_columns[i].deprecated_type = ConvertCPPTypeToC(result_data->result->types[i]);
+		result->deprecated_columns[i].deprecated_type = LogicalTypeIdToC(result_data->result->types[i].id());
 		result->deprecated_columns[i].deprecated_name = (char *)result_data->result->names[i].c_str(); // NOLINT
 	}
 
@@ -432,7 +432,7 @@ duckdb_type duckdb_column_type(duckdb_result *result, idx_t col) {
 		return DUCKDB_TYPE_INVALID;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	return duckdb::ConvertCPPTypeToC(result_data.result->types[col]);
+	return duckdb::LogicalTypeIdToC(result_data.result->types[col].id());
 }
 
 duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col) {

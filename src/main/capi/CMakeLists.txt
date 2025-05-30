@@ -12,6 +12,7 @@ add_library_unity(
   datetime-c.cpp
   duckdb-c.cpp
   duckdb_value-c.cpp
+  error_data-c.cpp
   helper-c.cpp
   hugeint-c.cpp
   logical_types-c.cpp
@@ -25,8 +26,7 @@ add_library_unity(
   table_description-c.cpp
   table_function-c.cpp
   threading-c.cpp
-  value-c.cpp
-error_data-c.cpp)
+  value-c.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_capi>

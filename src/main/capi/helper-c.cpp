@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
-	switch (c_type) {
+LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
+	switch (type) {
 	case DUCKDB_TYPE_INVALID:
 		return LogicalTypeId::INVALID;
 	case DUCKDB_TYPE_BOOLEAN:
@@ -88,8 +88,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 	} // LCOV_EXCL_STOP
 }
 
-duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
-	switch (sql_type.id()) {
+duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
+	switch (type) {
 	case LogicalTypeId::INVALID:
 		return DUCKDB_TYPE_INVALID;
 	case LogicalTypeId::BOOLEAN:
@@ -174,7 +174,7 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	} // LCOV_EXCL_STOP
 }
 
-idx_t GetCTypeSize(duckdb_type type) {
+idx_t GetCTypeSize(const duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return sizeof(bool);
@@ -384,92 +384,92 @@ duckdb_error_type ErrorTypeToC(const ExceptionType type) {
 
 ExceptionType ErrorTypeFromC(const duckdb_error_type type) {
 	switch (type) {
-		case	DUCKDB_ERROR_INVALID:
-			return ExceptionType::INVALID;
-		case	DUCKDB_ERROR_OUT_OF_RANGE:
-			return ExceptionType::OUT_OF_RANGE;
-		case	DUCKDB_ERROR_CONVERSION:
-			return ExceptionType::CONVERSION;
-		case	DUCKDB_ERROR_UNKNOWN_TYPE:
-			return ExceptionType::UNKNOWN_TYPE;
-		case	DUCKDB_ERROR_DECIMAL:
-			return ExceptionType::DECIMAL;
-		case	DUCKDB_ERROR_MISMATCH_TYPE:
-			return ExceptionType::MISMATCH_TYPE;
-		case	DUCKDB_ERROR_DIVIDE_BY_ZERO:
-			return ExceptionType::DIVIDE_BY_ZERO;
-		case	DUCKDB_ERROR_OBJECT_SIZE:
-			return ExceptionType::OBJECT_SIZE;
-		case	DUCKDB_ERROR_INVALID_TYPE:
-			return ExceptionType::INVALID_TYPE;
-		case	DUCKDB_ERROR_SERIALIZATION:
-			return ExceptionType::SERIALIZATION;
-		case	DUCKDB_ERROR_TRANSACTION:
-			return ExceptionType::TRANSACTION;
-		case	DUCKDB_ERROR_NOT_IMPLEMENTED:
-			return ExceptionType::NOT_IMPLEMENTED;
-		case	DUCKDB_ERROR_EXPRESSION:
-			return ExceptionType::EXPRESSION;
-		case	DUCKDB_ERROR_CATALOG:
-			return ExceptionType::CATALOG;
-		case	DUCKDB_ERROR_PARSER:
-			return ExceptionType::PARSER;
-		case	DUCKDB_ERROR_PLANNER:
-			return ExceptionType::PLANNER;
-		case	DUCKDB_ERROR_SCHEDULER:
-			return ExceptionType::SCHEDULER;
-		case	DUCKDB_ERROR_EXECUTOR:
-			return ExceptionType::EXECUTOR;
-		case	DUCKDB_ERROR_CONSTRAINT:
-			return ExceptionType::CONSTRAINT;
-		case	DUCKDB_ERROR_INDEX:
-			return ExceptionType::INDEX;
-		case	DUCKDB_ERROR_STAT:
-			return ExceptionType::STAT;
-		case	DUCKDB_ERROR_CONNECTION:
-			return ExceptionType::CONNECTION;
-		case	DUCKDB_ERROR_SYNTAX:
-			return ExceptionType::SYNTAX;
-		case	DUCKDB_ERROR_SETTINGS:
-			return ExceptionType::SETTINGS;
-		case	DUCKDB_ERROR_BINDER:
-			return ExceptionType::BINDER;
-		case	DUCKDB_ERROR_NETWORK:
-			return ExceptionType::NETWORK;
-		case	DUCKDB_ERROR_OPTIMIZER:
-			return ExceptionType::OPTIMIZER;
-		case	DUCKDB_ERROR_NULL_POINTER:
-			return ExceptionType::NULL_POINTER;
-		case	DUCKDB_ERROR_IO:
-			return ExceptionType::IO;
-		case	DUCKDB_ERROR_INTERRUPT:
-			return ExceptionType::INTERRUPT;
-		case	DUCKDB_ERROR_FATAL:
-			return ExceptionType::FATAL;
-		case	DUCKDB_ERROR_INTERNAL:
-			return ExceptionType::INTERNAL;
-		case	DUCKDB_ERROR_INVALID_INPUT:
-			return ExceptionType::INVALID_INPUT;
-		case	DUCKDB_ERROR_OUT_OF_MEMORY:
-			return ExceptionType::OUT_OF_MEMORY;
-		case	DUCKDB_ERROR_PERMISSION:
-			return ExceptionType::PERMISSION;
-		case	DUCKDB_ERROR_PARAMETER_NOT_RESOLVED:
-			return ExceptionType::PARAMETER_NOT_RESOLVED;
-		case	DUCKDB_ERROR_PARAMETER_NOT_ALLOWED:
-			return ExceptionType::PARAMETER_NOT_ALLOWED;
-		case	DUCKDB_ERROR_DEPENDENCY:
-			return ExceptionType::DEPENDENCY;
-		case	DUCKDB_ERROR_HTTP:
-			return ExceptionType::HTTP;
-		case	DUCKDB_ERROR_MISSING_EXTENSION:
-			return ExceptionType::MISSING_EXTENSION;
-		case	DUCKDB_ERROR_AUTOLOAD:
-			return ExceptionType::AUTOLOAD;
-		case	DUCKDB_ERROR_SEQUENCE:
-			return ExceptionType::SEQUENCE;
-		case	DUCKDB_INVALID_CONFIGURATION:
-			return ExceptionType::INVALID_CONFIGURATION;
+	case DUCKDB_ERROR_INVALID:
+		return ExceptionType::INVALID;
+	case DUCKDB_ERROR_OUT_OF_RANGE:
+		return ExceptionType::OUT_OF_RANGE;
+	case DUCKDB_ERROR_CONVERSION:
+		return ExceptionType::CONVERSION;
+	case DUCKDB_ERROR_UNKNOWN_TYPE:
+		return ExceptionType::UNKNOWN_TYPE;
+	case DUCKDB_ERROR_DECIMAL:
+		return ExceptionType::DECIMAL;
+	case DUCKDB_ERROR_MISMATCH_TYPE:
+		return ExceptionType::MISMATCH_TYPE;
+	case DUCKDB_ERROR_DIVIDE_BY_ZERO:
+		return ExceptionType::DIVIDE_BY_ZERO;
+	case DUCKDB_ERROR_OBJECT_SIZE:
+		return ExceptionType::OBJECT_SIZE;
+	case DUCKDB_ERROR_INVALID_TYPE:
+		return ExceptionType::INVALID_TYPE;
+	case DUCKDB_ERROR_SERIALIZATION:
+		return ExceptionType::SERIALIZATION;
+	case DUCKDB_ERROR_TRANSACTION:
+		return ExceptionType::TRANSACTION;
+	case DUCKDB_ERROR_NOT_IMPLEMENTED:
+		return ExceptionType::NOT_IMPLEMENTED;
+	case DUCKDB_ERROR_EXPRESSION:
+		return ExceptionType::EXPRESSION;
+	case DUCKDB_ERROR_CATALOG:
+		return ExceptionType::CATALOG;
+	case DUCKDB_ERROR_PARSER:
+		return ExceptionType::PARSER;
+	case DUCKDB_ERROR_PLANNER:
+		return ExceptionType::PLANNER;
+	case DUCKDB_ERROR_SCHEDULER:
+		return ExceptionType::SCHEDULER;
+	case DUCKDB_ERROR_EXECUTOR:
+		return ExceptionType::EXECUTOR;
+	case DUCKDB_ERROR_CONSTRAINT:
+		return ExceptionType::CONSTRAINT;
+	case DUCKDB_ERROR_INDEX:
+		return ExceptionType::INDEX;
+	case DUCKDB_ERROR_STAT:
+		return ExceptionType::STAT;
+	case DUCKDB_ERROR_CONNECTION:
+		return ExceptionType::CONNECTION;
+	case DUCKDB_ERROR_SYNTAX:
+		return ExceptionType::SYNTAX;
+	case DUCKDB_ERROR_SETTINGS:
+		return ExceptionType::SETTINGS;
+	case DUCKDB_ERROR_BINDER:
+		return ExceptionType::BINDER;
+	case DUCKDB_ERROR_NETWORK:
+		return ExceptionType::NETWORK;
+	case DUCKDB_ERROR_OPTIMIZER:
+		return ExceptionType::OPTIMIZER;
+	case DUCKDB_ERROR_NULL_POINTER:
+		return ExceptionType::NULL_POINTER;
+	case DUCKDB_ERROR_IO:
+		return ExceptionType::IO;
+	case DUCKDB_ERROR_INTERRUPT:
+		return ExceptionType::INTERRUPT;
+	case DUCKDB_ERROR_FATAL:
+		return ExceptionType::FATAL;
+	case DUCKDB_ERROR_INTERNAL:
+		return ExceptionType::INTERNAL;
+	case DUCKDB_ERROR_INVALID_INPUT:
+		return ExceptionType::INVALID_INPUT;
+	case DUCKDB_ERROR_OUT_OF_MEMORY:
+		return ExceptionType::OUT_OF_MEMORY;
+	case DUCKDB_ERROR_PERMISSION:
+		return ExceptionType::PERMISSION;
+	case DUCKDB_ERROR_PARAMETER_NOT_RESOLVED:
+		return ExceptionType::PARAMETER_NOT_RESOLVED;
+	case DUCKDB_ERROR_PARAMETER_NOT_ALLOWED:
+		return ExceptionType::PARAMETER_NOT_ALLOWED;
+	case DUCKDB_ERROR_DEPENDENCY:
+		return ExceptionType::DEPENDENCY;
+	case DUCKDB_ERROR_HTTP:
+		return ExceptionType::HTTP;
+	case DUCKDB_ERROR_MISSING_EXTENSION:
+		return ExceptionType::MISSING_EXTENSION;
+	case DUCKDB_ERROR_AUTOLOAD:
+		return ExceptionType::AUTOLOAD;
+	case DUCKDB_ERROR_SEQUENCE:
+		return ExceptionType::SEQUENCE;
+	case DUCKDB_INVALID_CONFIGURATION:
+		return ExceptionType::INVALID_CONFIGURATION;
 	}
 }
 

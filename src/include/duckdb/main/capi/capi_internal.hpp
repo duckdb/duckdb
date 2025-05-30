@@ -92,12 +92,14 @@ struct DuckDBResultData {
 	CAPIResultSetType result_set_type;
 };
 
-duckdb_type ConvertCPPTypeToC(const LogicalType &type);
-LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
-idx_t GetCTypeSize(duckdb_type type);
+duckdb_type LogicalTypeIdToC(const LogicalTypeId type);
+LogicalTypeId LogicalTypeIdFromC(const duckdb_type type);
+idx_t GetCTypeSize(const duckdb_type type);
+duckdb_statement_type StatementTypeToC(const StatementType type);
+duckdb_error_type ErrorTypeToC(const ExceptionType type);
+ExceptionType ErrorTypeFromC(const duckdb_error_type type);
+
 duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
 bool DeprecatedMaterializeResult(duckdb_result *result);
-duckdb_statement_type StatementTypeToC(const duckdb::StatementType type);
-duckdb_error_type ErrorTypeToC(const duckdb::ExceptionType type);
-duckdb::ExceptionType ErrorTypeFromC(const duckdb_error_type type);
+
 } // namespace duckdb
