@@ -1,4 +1,5 @@
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
