@@ -139,7 +139,7 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 		result_data[j].length = offset - result_data[j].offset;
 	}
-	result_entry.Slice(input_entry, result_selection_vec, count);
+	result_entry.Slice(input_entry, result_selection_vec, offset);
 	result_entry.Flatten(offset);
 	ListVector::SetListSize(result, offset);
 	FlatVector::SetValidity(result_entry, entry_validity_mask);

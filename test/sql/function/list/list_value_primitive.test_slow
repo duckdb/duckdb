@@ -1,0 +1,118 @@
+# name: test/sql/function/list/list_value_primitive.test_slow
+# description: Test the list_value function with primitive types
+# group: [list]
+
+statement ok
+pragma enable_verification
+
+# type casting
+foreach type <integral>
+
+query I
+SELECT list_value(1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+----
+[1, 2, 3, 4, 5]
+
+query I
+SELECT list_value(NULL::${type}, 1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+----
+[NULL, 1, 2, 3, 4, 5]
+
+# in a table
+statement ok
+CREATE TABLE tbl (i ${type}, j ${type}, k ${type}, l ${type}, m ${type});
+
+statement ok
+INSERT INTO tbl VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20);
+
+query I
+SELECT list_value(i, j, k, l, m) FROM tbl;
+----
+[1, 2, 3, 4, 5]
+[6, 7, 8, 9, 10]
+[11, 12, 13, 14, 15]
+[16, 17, 18, 19, 20]
+
+statement ok
+DROP TABLE tbl;
+
+endloop
+
+# test with two different types
+foreach type_a <signed>
+
+foreach type_b <signed>
+
+query I
+SELECT list_value(1::${type_a}, 2::${type_b}, 3::${type_b}, 4::${type_a}, 5::${type_a});
+----
+[1, 2, 3, 4, 5]
+
+query I
+SELECT list_value(NULL::${type_a}, 1::${type_b}, 2::${type_a}, 3::${type_b}, 4::${type_a}, 5::${type_a});
+----
+[NULL, 1, 2, 3, 4, 5]
+
+# in a table
+statement ok
+CREATE TABLE tbl (i ${type_b}, j ${type_b}, k ${type_a}, l ${type_b}, m ${type_a});
+
+statement ok
+INSERT INTO tbl VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20);
+
+query I
+SELECT list_value(i, j, k, l, m) FROM tbl;
+----
+[1, 2, 3, 4, 5]
+[6, 7, 8, 9, 10]
+[11, 12, 13, 14, 15]
+[16, 17, 18, 19, 20]
+
+statement ok
+DROP TABLE tbl;
+
+endloop
+
+endloop
+
+foreach type float double
+
+query I
+SELECT list_value(1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+----
+[1.0, 2.0, 3.0, 4.0, 5.0]
+
+query I
+SELECT list_value(NULL::${type}, 1::${type}, 2::${type}, 3::${type}, 4::${type}, 5::${type});
+----
+[NULL, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+# in a table
+statement ok
+CREATE TABLE tbl (i ${type}, j ${type}, k ${type}, l ${type}, m ${type});
+
+statement ok
+INSERT INTO tbl VALUES (1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20);
+
+query I
+SELECT list_value(i, j, k, l, m) FROM tbl;
+----
+[1.0, 2.0, 3.0, 4.0, 5.0]
+[6.0, 7.0, 8.0, 9.0, 10.0]
+[11.0, 12.0, 13.0, 14.0, 15.0]
+[16.0, 17.0, 18.0, 19.0, 20.0]
+
+statement ok
+DROP TABLE tbl;
+
+endloop
+
+query I
+SELECT list_value('a', 'b', 'c', 'd', 'e');
+----
+[a, b, c, d, e]
+
+query I
+SELECT list_value(123::BIT, 456::BIT, 789::BIT, 101112::BIT, 131415::BIT);
+----
+[00000000000000000000000001111011, 00000000000000000000000111001000, 00000000000000000000001100010101, 00000000000000011000101011111000, 00000000000000100000000101010111]
