@@ -2,6 +2,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "termcolor.hpp"
 #include "result_helper.hpp"
+#include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 
 namespace duckdb {
