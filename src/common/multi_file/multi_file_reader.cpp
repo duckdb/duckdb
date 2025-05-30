@@ -134,6 +134,19 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return CreateFileList(context, paths, options);
 }
 
+void MultiFileReader::SetDefaultOptions(ClientContext &context, MultiFileOptions &file_options, MultiFileList &files) {
+	// We disable hive partitioning autodetection for paths without glob patterns
+	if (file_options.auto_detect_hive_partitioning) {
+		auto &paths = files.GetPaths();
+		if (paths.size() == 1) {
+			auto &fs = FileSystem::GetFileSystem(context);
+			if (!fs.HasGlob(paths[0].path)) {
+				file_options.auto_detect_hive_partitioning = false;
+			}
+		}
+	}
+}
+
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
