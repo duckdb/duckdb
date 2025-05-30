@@ -10,11 +10,12 @@
 
 namespace duckdb {
 
-PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                                 unique_ptr<Expression> condition, JoinType join_type,
-                                                 idx_t estimated_cardinality)
+PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
+                                                 PhysicalOperator &right, unique_ptr<Expression> condition,
+                                                 JoinType join_type, idx_t estimated_cardinality)
     : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
       condition(std::move(condition)) {
+	children.Init(arena);
 	children.push_back(left);
 	children.push_back(right);
 	// MARK and SINGLE joins not handled

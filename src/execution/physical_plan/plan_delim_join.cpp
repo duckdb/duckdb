@@ -55,11 +55,11 @@ PhysicalOperator &PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op
 
 	// Create the duplicate eliminated join.
 	if (op.delim_flipped) {
-		return Make<PhysicalRightDelimJoin>(*this, op.types, plan, distinct, delim_scans, op.estimated_cardinality,
-		                                    optional_idx(this->delim_index));
+		return Make<PhysicalRightDelimJoin>(GetArena(), *this, op.types, plan, distinct, delim_scans,
+		                                    op.estimated_cardinality, optional_idx(this->delim_index));
 	}
-	return Make<PhysicalLeftDelimJoin>(*this, op.types, plan, distinct, delim_scans, op.estimated_cardinality,
-	                                   optional_idx(this->delim_index));
+	return Make<PhysicalLeftDelimJoin>(GetArena(), *this, op.types, plan, distinct, delim_scans,
+	                                   op.estimated_cardinality, optional_idx(this->delim_index));
 }
 
 } // namespace duckdb

@@ -165,9 +165,9 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 	}
 }
 
-PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type, PhysicalOperator &left,
-                                     PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-                                     idx_t estimated_cardinality)
+PhysicalRangeJoin::PhysicalRangeJoin(ArenaAllocator &arena, LogicalComparisonJoin &op, PhysicalOperatorType type,
+                                     PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                                     JoinType join_type, idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
@@ -192,6 +192,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 		}
 	}
 
+	children.Init(arena);
 	children.push_back(left);
 	children.push_back(right);
 
