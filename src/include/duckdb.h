@@ -558,6 +558,12 @@ typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
 
+//! Holds error data.
+//! Must be destroyed with `duckdb_destroy_error_data`.
+typedef struct _duckdb_error_data {
+	void *internal_ptr;
+} * duckdb_error_data;
+
 //===--------------------------------------------------------------------===//
 // C API extension information
 //===--------------------------------------------------------------------===//
@@ -947,6 +953,54 @@ Destroys the specified configuration object and de-allocates all memory allocate
 DUCKDB_C_API void duckdb_destroy_config(duckdb_config *config);
 
 //===--------------------------------------------------------------------===//
+// Error Data
+//===--------------------------------------------------------------------===//
+
+// Functions that can throw DuckDB errors must return duckdb_error_data.
+// Please use this interface for all new functions, as it deprecates all previous error handling approaches.
+
+/*!
+Creates duckdb_error_data.
+Must be destroyed with `duckdb_destroy_error_data`.
+
+* @param type The error type.
+* @param message The error message.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_create_error_data(duckdb_error_type type, const char *message);
+
+/*!
+Destroys the error data and deallocates its memory.
+
+* @param error_data The error data to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_error_data(duckdb_error_data *error_data);
+
+/*!
+Returns the duckdb_error_type of the error data.
+
+* @param error_data The error data.
+* @return The error type.
+*/
+DUCKDB_C_API duckdb_error_type duckdb_error_data_error_type(duckdb_error_data error_data);
+
+/*!
+Returns the error message of the error data. Must not be freed.
+
+* @param error_data The error data.
+* @return The error message.
+*/
+DUCKDB_C_API const char *duckdb_error_data_message(duckdb_error_data error_data);
+
+/*!
+Returns whether the error data contains an error or not.
+
+* @param error_data The error data.
+* @return True, if the error data contains an exception, else false.
+*/
+DUCKDB_C_API bool duckdb_error_data_has_error(duckdb_error_data error_data);
+
+//===--------------------------------------------------------------------===//
 // Query Execution
 //===--------------------------------------------------------------------===//
 
@@ -1036,6 +1090,7 @@ Returns the number of rows present in the result object.
 DUCKDB_C_API idx_t duckdb_row_count(duckdb_result *result);
 
 #endif
+
 /*!
 Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
 queries. For other queries the rows_changed will be 0.
@@ -1091,6 +1146,7 @@ if (nullmask[row]) {
 DUCKDB_C_API bool *duckdb_nullmask_data(duckdb_result *result, idx_t col);
 
 #endif
+
 /*!
 Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
 
@@ -1157,6 +1213,7 @@ Returns the number of data chunks present in the result.
 DUCKDB_C_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
 #endif
+
 /*!
 Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
 
@@ -1356,6 +1413,7 @@ DUCKDB_C_API duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx
 DUCKDB_C_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row);
 
 #endif
+
 //===--------------------------------------------------------------------===//
 // Helpers
 //===--------------------------------------------------------------------===//
@@ -1872,6 +1930,7 @@ DUCKDB_C_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_stat
                                                             duckdb_result *out_result);
 
 #endif
+
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
@@ -1963,6 +2022,7 @@ DUCKDB_C_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_stat
                                                             duckdb_pending_result *out_result);
 
 #endif
+
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
 
@@ -4104,8 +4164,12 @@ Note: The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
+#ifndef DUCKDB_API_NO_DEPRECATED
 /*!
-Returns the error message associated with the given appender.
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+Use duckdb_appender_error_data instead.
+
+Returns the error message associated with the appender.
 If the appender has no error message, this returns `nullptr` instead.
 
 The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
@@ -4115,10 +4179,21 @@ The error message should not be freed. It will be de-allocated when `duckdb_appe
 */
 DUCKDB_C_API const char *duckdb_appender_error(duckdb_appender appender);
 
+#endif
+
+/*!
+Returns the error data associated with the appender.
+Must be destroyed with duckdb_destroy_error_data.
+
+* @param appender The appender to get the error data from.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_appender_error_data(duckdb_appender appender);
+
 /*!
 Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a
 constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
-It is not possible to append more values. Call duckdb_appender_error to obtain the error message followed by
+It is not possible to append more values. Call duckdb_appender_error_data to obtain the error data followed by
 duckdb_appender_destroy to destroy the invalidated appender.
 
 * @param appender The appender to flush.
@@ -4129,7 +4204,7 @@ DUCKDB_C_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
 /*!
 Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data
 triggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
-Call duckdb_appender_error to obtain the error message followed by duckdb_appender_destroy to destroy the invalidated
+Call duckdb_appender_error_data to obtain the error data followed by duckdb_appender_destroy to destroy the invalidated
 appender.
 
 * @param appender The appender to flush and close.
@@ -4571,6 +4646,7 @@ DUCKDB_C_API duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, 
                                                   duckdb_arrow_stream *out_stream);
 
 #endif
+
 //===--------------------------------------------------------------------===//
 // Threading Information
 //===--------------------------------------------------------------------===//
@@ -4678,6 +4754,7 @@ It is not known beforehand how many chunks will be returned by this result.
 DUCKDB_C_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 
 #endif
+
 /*!
 Fetches a data chunk from a duckdb_result. This function should be called repeatedly until the result is exhausted.
 

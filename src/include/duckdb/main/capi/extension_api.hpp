@@ -471,6 +471,14 @@ typedef struct {
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	// New functions for duckdb error data
+
+	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
+	void (*duckdb_destroy_error_data)(duckdb_error_data *error_data);
+	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
+	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
@@ -919,6 +927,12 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
+	result.duckdb_appender_error_data = duckdb_appender_error_data;
+	result.duckdb_create_error_data = duckdb_create_error_data;
+	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
+	result.duckdb_error_data_error_type = duckdb_error_data_error_type;
+	result.duckdb_error_data_message = duckdb_error_data_message;
+	result.duckdb_error_data_has_error = duckdb_error_data_has_error;
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
