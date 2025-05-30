@@ -191,7 +191,7 @@ void StdOutLogStorage::Truncate() {
 }
 
 void StdOutLogStorage::FlushInternal() {
-	std::cout.write((const char *)log_entries_stream->GetData(), (long)log_entries_stream->GetPosition());
+	std::cout.write(const_char_ptr_cast(log_entries_stream->GetData()), NumericCast<int64_t>(log_entries_stream->GetPosition()));
 	std::cout.flush();
 	log_entries_stream->Rewind();
 }
