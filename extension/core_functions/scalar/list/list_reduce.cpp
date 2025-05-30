@@ -1,7 +1,6 @@
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -219,12 +218,6 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	if (bound_lambda_expr.parameter_count < 2 || bound_lambda_expr.parameter_count > 3) {
-		throw BinderException("list_reduce expects a function with 2 or 3 arguments");
-	}
-	auto has_index = bound_lambda_expr.parameter_count == 3;
-
 	unique_ptr<FunctionData> bind_data = LambdaFunctions::ListLambdaPrepareBind(arguments, context, bound_function);
 	if (bind_data) {
 		return bind_data;
@@ -236,7 +229,7 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	bool has_initial = arguments.size() == 3;
 	if (has_initial) {
 		const auto initial_value_type = arguments[2]->return_type;
-		// Check if the initial value type is the same as the list child type and if not find the max logical type
+		// Check if the initial value type is the same as the return type of the lambda expression
 		if (list_child_type != initial_value_type) {
 			LogicalType max_logical_type;
 			const auto has_max_logical_type =
@@ -253,6 +246,12 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 		}
 	}
 
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+	if (bound_lambda_expr.parameter_count < 2 || bound_lambda_expr.parameter_count > 3) {
+		throw BinderException("list_reduce expects a function with 2 or 3 arguments");
+	}
+	auto has_index = bound_lambda_expr.parameter_count == 3;
+
 	auto cast_lambda_expr =
 	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type);
 	if (!cast_lambda_expr) {
@@ -263,8 +262,45 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	                                     has_initial);
 }
 
-static LogicalType ListReduceBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	return LambdaFunctions::BindTernaryLambda(parameter_idx, list_child_type);
+LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,
+                               const idx_t parameter_idx) {
+	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
+
+	// if there is an initial value, find the max logical type
+	if (function_child_types.size() == 3) {
+		// the initial value is the third child
+		constexpr idx_t initial_idx = 2;
+
+		const LogicalType initial_value_type = function_child_types[initial_idx];
+		if (initial_value_type != list_child_type) {
+			// we need to check if the initial value type is the same as the return type of the lambda expression
+			LogicalType max_logical_type;
+			const auto has_max_logical_type =
+			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
+			if (!has_max_logical_type) {
+				throw BinderException(
+				    "The initial value type must be the same as the list child type or a common super type");
+			}
+
+			list_child_type = max_logical_type;
+		}
+	}
+
+	switch (parameter_idx) {
+	case 0:
+		return list_child_type;
+	case 1:
+		return list_child_type;
+	case 2:
+		return LogicalType::BIGINT;
+	default:
+		throw BinderException("This lambda function only supports up to three lambda parameters!");
+	}
+}
+
+static LogicalType ListReduceBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                        const idx_t parameter_idx) {
+	return BindReduceChildren(context, function_child_types, parameter_idx);
 }
 
 ScalarFunctionSet ListReduceFun::GetFunctions() {
