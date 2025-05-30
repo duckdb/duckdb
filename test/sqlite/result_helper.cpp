@@ -88,7 +88,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		auto fname = runner.LoopReplacement(values[0], context.running_loops);
+		auto fname = StringUtil::Replace(values[0], "<FILE>:", "");
+		fname = runner.ReplaceKeywords(fname);
+		fname = runner.LoopReplacement(fname, context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
@@ -316,7 +318,6 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	Connection con(db);
 	auto threads = MaxValue<idx_t>(std::thread::hardware_concurrency(), 1);
 	con.Query("PRAGMA threads=" + to_string(threads));
-	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
 	for (idx_t i = 0; i < names.size(); i++) {
