@@ -1,0 +1,50 @@
+# name: test/sql/copy/encryption/tpch_sf1_encrypted.test_slow
+# description: Test TPC-H SF1
+# group: [encryption]
+
+require tpch
+
+statement ok
+pragma verify_external
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE encrypted;
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+USE memory;
+
+statement ok
+DETACH encrypted;
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE encrypted;
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

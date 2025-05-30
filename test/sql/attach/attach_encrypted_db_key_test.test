@@ -1,0 +1,60 @@
+# name: test/sql/attach/attach_encrypted_db_key_test.test
+# group: [attach]
+
+require noforcestorage
+
+# workaround - alternative verify always forces the latest storage
+require no_alternative_verify
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
+----
+"true" is not a valid key. A key must not be empty
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
+----
+Binder Error: "" is not a valid key. A key must not be empty
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
+
+statement ok
+DETACH encrypted
+
+statement ok
+DETACH encrypted_aws
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'xxxx');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted;
+----
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdfx');
+----
+Wrong encryption key used to open the database file
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement error
+ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEX');
+----
+Wrong encryption key used to open the database file
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
+
+
+

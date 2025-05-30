@@ -100,6 +100,10 @@ void FileBuffer::Resize(BlockManager &block_manager) {
 	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
 }
 
+void FileBuffer::Resize(const BlockManager &block_manager) {
+	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
+}
+
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	handle.Read(internal_buffer, internal_size, location);
