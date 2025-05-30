@@ -67,6 +67,7 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	}
 	auto wrapper = reinterpret_cast<AppenderWrapper *>(appender);
 	if (!wrapper->appender) {
+		wrapper->error_data = ErrorData("not a valid appender");
 		return DuckDBError;
 	}
 	try {
