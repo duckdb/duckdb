@@ -2,18 +2,14 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/function/function.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
@@ -42,14 +38,6 @@ StorageManager &StorageManager::Get(Catalog &catalog) {
 
 DatabaseInstance &StorageManager::GetDatabase() {
 	return db.GetDatabase();
-}
-
-BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
-	return BufferManager::GetBufferManager(*context.db);
-}
-
-const BufferManager &BufferManager::GetBufferManager(const ClientContext &context) {
-	return BufferManager::GetBufferManager(*context.db);
 }
 
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
