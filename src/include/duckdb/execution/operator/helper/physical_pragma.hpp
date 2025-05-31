@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PRAGMA;
 
 public:
-	PhysicalPragma(unique_ptr<BoundPragmaInfo> info_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::PRAGMA, {LogicalType::BOOLEAN}, estimated_cardinality),
+	PhysicalPragma(ArenaAllocator &arena, unique_ptr<BoundPragmaInfo> info_p, idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::PRAGMA, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info_p)) {
 	}
 

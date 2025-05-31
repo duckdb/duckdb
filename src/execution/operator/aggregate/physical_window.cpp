@@ -177,7 +177,7 @@ public:
 	using WindowHashGroupPtr = unique_ptr<WindowHashGroup>;
 
 	WindowPartitionGlobalSinkState(WindowGlobalSinkState &gsink, const BoundWindowExpression &wexpr)
-	    : PartitionGlobalSinkState(gsink.context, wexpr.partitions, wexpr.orders, gsink.op.children[0].get().GetTypes(),
+	    : PartitionGlobalSinkState(gsink.context, wexpr.partitions, wexpr.orders, gsink.op.Child().GetTypes(),
 	                               wexpr.partitions_stats, gsink.op.estimated_cardinality),
 	      gsink(gsink) {
 	}
@@ -218,9 +218,10 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
-                               idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)),
+PhysicalWindow::PhysicalWindow(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+                               vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
+                               PhysicalOperatorType type)
+    : PhysicalOperator(arena, type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)),
       order_idx(0), is_order_dependent(false) {
 
 	idx_t max_orders = 0;
@@ -237,6 +238,8 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 			max_orders = bound_window.orders.size();
 		}
 	}
+
+	children.Append(child);
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,

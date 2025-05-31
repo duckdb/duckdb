@@ -21,7 +21,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::FILTER;
 
 public:
-	PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
+	PhysicalFilter(ArenaAllocator &arena, optional_ptr<PhysicalOperator> child, vector<LogicalType> types,
+	               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
 
 	//! The filter expression
 	unique_ptr<Expression> expression;

@@ -22,18 +22,18 @@
 
 namespace duckdb {
 
-PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &table,
-                               vector<unique_ptr<BoundConstraint>> bound_constraints_p,
+PhysicalInsert::PhysicalInsert(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types_p,
+                               TableCatalogEntry &table, vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns,
                                vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk,
                                bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p, unordered_set<column_t> conflict_target_p,
                                vector<column_t> columns_to_fetch_p, bool update_is_del_and_insert)
-    : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality), insert_table(&table),
-      insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)), return_chunk(return_chunk),
-      parallel(parallel), action_type(action_type), set_expressions(std::move(set_expressions)),
-      set_columns(std::move(set_columns)), set_types(std::move(set_types)),
+    : PhysicalOperator(arena, PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
+      insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)),
+      return_chunk(return_chunk), parallel(parallel), action_type(action_type),
+      set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
       on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
       conflict_target(std::move(conflict_target_p)), update_is_del_and_insert(update_is_del_and_insert) {
 
@@ -52,14 +52,19 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &t
 		types_to_fetch[i] = insert_types[id];
 		columns_to_fetch.emplace_back(id);
 	}
+
+	children.Append(child);
 }
 
-PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info_p,
+PhysicalInsert::PhysicalInsert(ArenaAllocator &arena, PhysicalOperator &child, LogicalOperator &op,
+                               SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info_p,
                                idx_t estimated_cardinality, bool parallel)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
-      return_chunk(false), schema(&schema), info(std::move(info_p)), parallel(parallel),
+    : PhysicalOperator(arena, PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality),
+      insert_table(nullptr), return_chunk(false), schema(&schema), info(std::move(info_p)), parallel(parallel),
       action_type(OnConflictAction::THROW), update_is_del_and_insert(false) {
+
 	GetInsertInfo(*info, insert_types);
+	children.Append(child);
 }
 
 void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types) {

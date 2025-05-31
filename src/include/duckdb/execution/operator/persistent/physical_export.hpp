@@ -34,8 +34,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPORT;
 
 public:
-	PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
-	               idx_t estimated_cardinality, unique_ptr<BoundExportData> exported_tables);
+	PhysicalExport(ArenaAllocator &arena, optional_ptr<PhysicalOperator> child, vector<LogicalType> types,
+	               CopyFunction function, unique_ptr<CopyInfo> info, idx_t estimated_cardinality,
+	               unique_ptr<BoundExportData> exported_tables);
 
 	//! The copy function to use to read the file
 	CopyFunction function;

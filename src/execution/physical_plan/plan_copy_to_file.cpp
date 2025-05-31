@@ -42,20 +42,20 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 			throw InternalException("BATCH_COPY_TO_FILE can only be used if batch indexes are supported");
 		}
 		// batched copy to file
-		auto &copy =
-		    Make<PhysicalBatchCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
+		auto &copy = Make<PhysicalBatchCopyToFile>(plan, op.types, op.function, std::move(op.bind_data),
+		                                           op.estimated_cardinality);
 
 		auto &cast_copy = copy.Cast<PhysicalBatchCopyToFile>();
 		cast_copy.file_path = op.file_path;
 		cast_copy.use_tmp_file = op.use_tmp_file;
-		cast_copy.children.push_back(plan);
 		cast_copy.return_type = op.return_type;
 		cast_copy.write_empty_file = op.write_empty_file;
 		return copy;
 	}
 
 	// COPY from select statement to file
-	auto &copy = Make<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
+	auto &copy =
+	    Make<PhysicalCopyToFile>(plan, op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
 
 	auto &cast_copy = copy.Cast<PhysicalCopyToFile>();
 	cast_copy.file_path = op.file_path;
@@ -80,7 +80,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.write_empty_file = op.write_empty_file;
 	cast_copy.hive_file_pattern = op.hive_file_pattern;
 
-	cast_copy.children.push_back(plan);
 	return copy;
 }
 

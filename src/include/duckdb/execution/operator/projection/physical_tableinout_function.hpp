@@ -19,9 +19,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INOUT_FUNCTION;
 
 public:
-	PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
-	                           unique_ptr<FunctionData> bind_data_p, vector<ColumnIndex> column_ids_p,
-	                           idx_t estimated_cardinality, vector<column_t> projected_input);
+	PhysicalTableInOutFunction(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+	                           TableFunction function_p, unique_ptr<FunctionData> bind_data_p,
+	                           vector<ColumnIndex> column_ids_p, idx_t estimated_cardinality,
+	                           vector<column_t> projected_input);
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;

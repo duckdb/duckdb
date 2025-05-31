@@ -21,10 +21,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UPDATE;
 
 public:
-	PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-	               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
-	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<BoundConstraint>> bound_constraints,
-	               idx_t estimated_cardinality, bool return_chunk);
+	PhysicalUpdate(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+	               TableCatalogEntry &tableref, DataTable &table, vector<PhysicalIndex> columns,
+	               vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> bound_defaults,
+	               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
+	               bool return_chunk);
 
 	TableCatalogEntry &tableref;
 	DataTable &table;

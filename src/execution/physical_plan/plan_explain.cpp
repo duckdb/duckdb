@@ -13,9 +13,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	auto logical_plan_opt = op.children[0]->ToString(op.explain_format);
 	auto &plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
-		auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.explain_format);
-		explain.children.push_back(plan);
-		return explain;
+		return Make<PhysicalExplainAnalyze>(plan, op.types, op.explain_format);
 	}
 
 	// Format the plan and set the output of the EXPLAIN.

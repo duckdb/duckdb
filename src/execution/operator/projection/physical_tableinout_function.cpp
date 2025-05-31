@@ -21,13 +21,15 @@ public:
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
-PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
+PhysicalTableInOutFunction::PhysicalTableInOutFunction(ArenaAllocator &arena, PhysicalOperator &child,
+                                                       vector<LogicalType> types, TableFunction function_p,
                                                        unique_ptr<FunctionData> bind_data_p,
                                                        vector<ColumnIndex> column_ids_p, idx_t estimated_cardinality,
                                                        vector<column_t> project_input_p)
-    : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
       projected_input(std::move(project_input_p)) {
+	children.Append(child);
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
@@ -39,7 +41,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 	}
 	if (!projected_input.empty()) {
 		vector<LogicalType> input_types;
-		auto &child_types = children[0].get().GetTypes();
+		auto &child_types = Child().GetTypes();
 		idx_t input_length = child_types.size() - projected_input.size();
 		for (idx_t k = 0; k < input_length; k++) {
 			input_types.push_back(child_types[k]);

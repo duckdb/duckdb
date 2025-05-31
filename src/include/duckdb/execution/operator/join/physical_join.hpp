@@ -19,7 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
 
 public:
-	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperatorType type, JoinType join_type,
+	             idx_t estimated_cardinality);
 
 	JoinType join_type;
 

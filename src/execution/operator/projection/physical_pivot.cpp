@@ -5,11 +5,10 @@ namespace duckdb {
 
 PhysicalPivot::PhysicalPivot(ArenaAllocator &arena, vector<LogicalType> types_p, PhysicalOperator &child,
                              BoundPivotInfo bound_pivot_p)
-    : PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
       bound_pivot(std::move(bound_pivot_p)) {
 
-	children.Init(arena);
-	children.push_back(child);
+	children.Append(child);
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
 		auto entry = pivot_map.find(bound_pivot.pivot_values[p]);
 		if (entry != pivot_map.end()) {

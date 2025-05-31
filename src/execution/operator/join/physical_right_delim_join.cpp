@@ -15,16 +15,22 @@ PhysicalRightDelimJoin::PhysicalRightDelimJoin(ArenaAllocator &arena, PhysicalPl
                                                PhysicalOperator &distinct,
                                                const vector<const_reference<PhysicalOperator>> &delim_scans,
                                                idx_t estimated_cardinality, optional_idx delim_idx)
-    : PhysicalDelimJoin(PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), original_join, distinct, delim_scans,
-                        estimated_cardinality, delim_idx) {
+    : PhysicalDelimJoin(arena, PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), original_join, distinct,
+                        delim_scans, estimated_cardinality, delim_idx) {
+	// Get the second child.
 	D_ASSERT(join.children.size() == 2);
-	// now for the original join
-	// we take its right child, this is the side that we will duplicate eliminate
-	children.Init(arena);
-	children.push_back(join.children[1]);
-
-	// we replace it with a PhysicalDummyScan, which contains no data, just the types, it won't be scanned anyway
-	join.children[1] = planner.Make<PhysicalDummyScan>(children[0].get().GetTypes(), estimated_cardinality);
+	idx_t i = 0;
+	for (auto &elem : join.children) {
+		if (i == 1) {
+			// Use the right child for the original join.
+			// It is the side that we will duplicate eliminate.
+			children.Append(elem);
+			// Replace the second child with a PhysicalDummyScan.
+			// The PhysicalDummyScan contains only the types.
+			elem = planner.Make<PhysicalDummyScan>(Child().GetTypes(), estimated_cardinality);
+		}
+		i++;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -106,7 +112,7 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 	sink_state.reset();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(children[0]);
+	child_meta_pipeline.Build(Child());
 
 	D_ASSERT(type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
 	// recurse into the actual join

@@ -18,11 +18,11 @@ namespace duckdb {
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(ArenaAllocator &arena, string ctename, idx_t table_index,
                                            vector<LogicalType> types, bool union_all, PhysicalOperator &top,
                                            PhysicalOperator &bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
       ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
-	children.Init(arena);
-	children.push_back(top);
-	children.push_back(bottom);
+
+	children.Append(top);
+	children.Append(bottom);
 }
 
 PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
@@ -291,15 +291,15 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 	// the LHS of the recursive CTE is our initial state
 	auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	initial_state_pipeline.Build(children[0]);
+	initial_state_pipeline.Build(Child());
 
 	// the RHS is the recursive pipeline
 	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
-	recursive_meta_pipeline->Build(children[1]);
+	recursive_meta_pipeline->Build(ChildAt(1));
 
 	vector<const_reference<PhysicalOperator>> ops;
-	GatherColumnDataScans(children[1], ops);
+	GatherColumnDataScans(ChildAt(1), ops);
 
 	for (auto op : ops) {
 		auto entry = state.cte_dependencies.find(op);

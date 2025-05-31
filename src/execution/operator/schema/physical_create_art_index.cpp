@@ -14,12 +14,13 @@
 
 namespace duckdb {
 
-PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table_p,
-                                               const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+PhysicalCreateARTIndex::PhysicalCreateARTIndex(ArenaAllocator &arena, PhysicalOperator &child, LogicalOperator &op,
+                                               TableCatalogEntry &table_p, const vector<column_t> &column_ids,
+                                               unique_ptr<CreateIndexInfo> info,
                                                vector<unique_ptr<Expression>> unbound_expressions,
                                                idx_t estimated_cardinality, const bool sorted,
                                                unique_ptr<AlterTableInfo> alter_table_info)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
       sorted(sorted), alter_table_info(std::move(alter_table_info)) {
 
@@ -27,6 +28,8 @@ PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalog
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
 	}
+
+	children.Append(child);
 }
 
 //===--------------------------------------------------------------------===//

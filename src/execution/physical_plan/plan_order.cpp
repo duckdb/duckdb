@@ -20,10 +20,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOrder &op) {
 			projection_map.push_back(i);
 		}
 	}
-	auto &order =
-	    Make<PhysicalOrder>(op.types, std::move(op.orders), std::move(projection_map), op.estimated_cardinality);
-	order.children.push_back(plan);
-	return order;
+
+	return Make<PhysicalOrder>(plan, op.types, std::move(op.orders), std::move(projection_map),
+	                           op.estimated_cardinality);
 }
 
 } // namespace duckdb

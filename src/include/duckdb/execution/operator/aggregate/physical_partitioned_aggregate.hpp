@@ -24,9 +24,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PARTITIONED_AGGREGATE;
 
 public:
-	PhysicalPartitionedAggregate(ClientContext &context, vector<LogicalType> types,
+	PhysicalPartitionedAggregate(ArenaAllocator &arena, ClientContext &context, vector<LogicalType> types,
 	                             vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
-	                             vector<column_t> partitions, idx_t estimated_cardinality);
+	                             vector<column_t> partitions, idx_t estimated_cardinality, PhysicalOperator &child);
 
 	//! The partitions over which this is grouped
 	vector<column_t> partitions;

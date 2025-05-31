@@ -25,7 +25,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_INDEX;
 
 public:
-	PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
+	PhysicalCreateARTIndex(ArenaAllocator &arena, PhysicalOperator &child, LogicalOperator &op,
+	                       TableCatalogEntry &table, const vector<column_t> &column_ids,
 	                       unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
 	                       idx_t estimated_cardinality, const bool sorted,
 	                       unique_ptr<AlterTableInfo> alter_table_info = nullptr);

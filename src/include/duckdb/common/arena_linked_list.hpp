@@ -12,7 +12,8 @@ public:
 	static_assert(std::is_trivially_destructible<T>::value, "T must be trivially destructible");
 
 public:
-	ArenaLinkedList() = default;
+	explicit ArenaLinkedList(ArenaAllocator &arena) : arena(arena) {
+	}
 
 	ArenaLinkedList(const ArenaLinkedList &) = delete;
 	ArenaLinkedList &operator=(const ArenaLinkedList &) = delete;
@@ -32,13 +33,6 @@ public:
 	}
 
 public:
-	void Init(ArenaAllocator &arena_p) {
-		if (arena) {
-			return;
-		}
-		arena = arena_p;
-	}
-
 	bool empty() const {
 		return head == nullptr;
 	}
@@ -46,40 +40,8 @@ public:
 	idx_t size() const {
 		return _size;
 	}
-
-	T &operator[](const idx_t index) {
-		idx_t i = 0;
-		for (auto &elem : *this) {
-			if (i == index) {
-				return elem;
-			}
-			i++;
-		}
-		throw InternalException("index out of bounds in ArenaLinkedList");
-	}
-
-	T operator[](const idx_t index) const {
-		idx_t i = 0;
-		for (const auto &elem : *this) {
-			if (i == index) {
-				return elem;
-			}
-			i++;
-		}
-		throw InternalException("index out of bounds in ArenaLinkedList");
-	}
-
-	void push_back(const T &value) {
+	void Append(const T &value) {
 		auto node = arena->Make<Node>(value);
-		auto ptr = head ? &tail->next : &head;
-		*ptr = node;
-		tail = node;
-		_size++;
-	}
-
-	template <class... ARGS>
-	void emplace_back(ARGS &&... args) {
-		auto node = arena->Make<Node>(std::forward<ARGS>(args)...);
 		auto ptr = head ? &tail->next : &head;
 		*ptr = node;
 		tail = node;

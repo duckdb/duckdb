@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DROP;
 
 public:
-	explicit PhysicalDrop(unique_ptr<DropInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::DROP, {LogicalType::BOOLEAN}, estimated_cardinality),
+	explicit PhysicalDrop(ArenaAllocator &arena, unique_ptr<DropInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::DROP, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

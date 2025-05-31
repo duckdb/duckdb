@@ -17,22 +17,16 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 	}
 
 	switch (op.sample_options->method) {
-	case SampleMethod::RESERVOIR_SAMPLE: {
-		auto &sample = Make<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
-		sample.children.push_back(plan);
-		return sample;
-	}
+	case SampleMethod::RESERVOIR_SAMPLE:
+		return Make<PhysicalReservoirSample>(plan, op.types, std::move(op.sample_options), op.estimated_cardinality);
 	case SampleMethod::SYSTEM_SAMPLE:
-	case SampleMethod::BERNOULLI_SAMPLE: {
+	case SampleMethod::BERNOULLI_SAMPLE:
 		if (!op.sample_options->is_percentage) {
 			throw ParserException("Sample method %s cannot be used with a discrete sample count, either switch to "
 			                      "reservoir sampling or use a sample_size",
 			                      EnumUtil::ToString(op.sample_options->method));
 		}
-		auto &sample = Make<PhysicalStreamingSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
-		sample.children.push_back(plan);
-		return sample;
-	}
+		return Make<PhysicalStreamingSample>(plan, op.types, std::move(op.sample_options), op.estimated_cardinality);
 	default:
 		throw InternalException("Unimplemented sample method");
 	}

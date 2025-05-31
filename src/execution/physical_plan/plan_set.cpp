@@ -13,9 +13,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
 
 	// Set a variable.
 	auto &plan = CreatePlan(*op.children[0]);
-	auto &set_variable = Make<PhysicalSetVariable>(std::move(op.name), op.estimated_cardinality);
-	set_variable.children.push_back(plan);
-	return set_variable;
+	return Make<PhysicalSetVariable>(plan, std::move(op.name), op.estimated_cardinality);
 }
 
 } // namespace duckdb

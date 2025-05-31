@@ -19,7 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_TYPE;
 
 public:
-	explicit PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality);
+	explicit PhysicalCreateType(ArenaAllocator &arena, unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality);
 
 	unique_ptr<CreateTypeInfo> info;
 

@@ -24,8 +24,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNGROUPED_AGGREGATE;
 
 public:
-	PhysicalUngroupedAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                           idx_t estimated_cardinality);
+	PhysicalUngroupedAggregate(ArenaAllocator &arena, vector<LogicalType> types,
+	                           vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality,
+	                           PhysicalOperator &child);
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;

@@ -30,7 +30,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 		if (!op.children.empty()) {
 			D_ASSERT(op.children.size() == 1);
 			auto &plan = CreatePlan(*op.children[0]);
-			create.children.push_back(plan);
+			create.children.Append(plan);
 		}
 		return create;
 	}

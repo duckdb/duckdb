@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TRANSACTION;
 
 public:
-	explicit PhysicalTransaction(unique_ptr<TransactionInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::TRANSACTION, {LogicalType::BOOLEAN}, estimated_cardinality),
+	explicit PhysicalTransaction(ArenaAllocator &arena, unique_ptr<TransactionInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::TRANSACTION, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

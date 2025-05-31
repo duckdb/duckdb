@@ -14,23 +14,24 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(ArenaAllocator &arena, PhysicalPlan
                                              PhysicalOperator &distinct,
                                              const vector<const_reference<PhysicalOperator>> &delim_scans,
                                              idx_t estimated_cardinality, optional_idx delim_idx)
-    : PhysicalDelimJoin(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), original_join, distinct, delim_scans,
-                        estimated_cardinality, delim_idx) {
+    : PhysicalDelimJoin(arena, PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), original_join, distinct,
+                        delim_scans, estimated_cardinality, delim_idx) {
 	D_ASSERT(join.children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
-	children.Init(arena);
-	children.push_back(join.children[0]);
+	children.Append(join.Child());
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
-	auto &cached_scan = planner.Make<PhysicalColumnDataScan>(
-	    children[0].get().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
+	auto &cached_scan = planner.Make<PhysicalColumnDataScan>(Child().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN,
+	                                                         estimated_cardinality, nullptr);
 	if (delim_idx.IsValid()) {
 		auto &cast_cached_scan = cached_scan.Cast<PhysicalColumnDataScan>();
 		cast_cached_scan.cte_index = delim_idx.GetIndex();
 	}
-	join.children[0] = cached_scan;
+
+	auto &child_ref = *join.children.begin();
+	child_ref = cached_scan;
 }
 
 //===--------------------------------------------------------------------===//
@@ -39,10 +40,10 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(ArenaAllocator &arena, PhysicalPlan
 class LeftDelimJoinGlobalState : public GlobalSinkState {
 public:
 	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
+	    : lhs_data(context, delim_join.Child().GetTypes()) {
 		D_ASSERT(!delim_join.delim_scans.empty());
 		// set up the delim join chunk to scan in the original join
-		auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
+		auto &cast_cached_scan = delim_join.join.Child().Cast<PhysicalColumnDataScan>();
 		cast_cached_scan.collection = &lhs_data;
 	}
 
@@ -58,7 +59,7 @@ public:
 class LeftDelimJoinLocalState : public LocalSinkState {
 public:
 	explicit LeftDelimJoinLocalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
+	    : lhs_data(context, delim_join.Child().GetTypes()) {
 		lhs_data.InitializeAppend(append_state);
 	}
 
@@ -127,7 +128,7 @@ void PhysicalLeftDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta
 	sink_state.reset();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(children[0]);
+	child_meta_pipeline.Build(Child());
 
 	D_ASSERT(type == PhysicalOperatorType::LEFT_DELIM_JOIN);
 	// recurse into the actual join

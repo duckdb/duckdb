@@ -11,10 +11,9 @@ PhysicalOperator &DuckCatalog::PlanDelete(ClientContext &context, PhysicalPlanGe
                                           PhysicalOperator &plan) {
 	// Get the row_id column index.
 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
-	auto &del = planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(), std::move(op.bound_constraints),
-	                                         bound_ref.index, op.estimated_cardinality, op.return_chunk);
-	del.children.push_back(plan);
-	return del;
+	return planner.Make<PhysicalDelete>(plan, op.types, op.table, op.table.GetStorage(),
+	                                    std::move(op.bound_constraints), bound_ref.index, op.estimated_cardinality,
+	                                    op.return_chunk);
 }
 
 PhysicalOperator &Catalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op) {

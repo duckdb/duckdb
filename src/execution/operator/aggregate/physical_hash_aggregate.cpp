@@ -103,26 +103,28 @@ bool PhysicalHashAggregate::CanSkipRegularSink() const {
 	return true;
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
+PhysicalHashAggregate::PhysicalHashAggregate(ArenaAllocator &arena, ClientContext &context,
+                                             optional_ptr<PhysicalOperator> child, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), {}, estimated_cardinality) {
-}
-
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
-                                             vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), std::move(groups_p), {}, {},
+    : PhysicalHashAggregate(arena, context, child, std::move(types), std::move(expressions), {},
                             estimated_cardinality) {
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
+PhysicalHashAggregate::PhysicalHashAggregate(ArenaAllocator &arena, ClientContext &context,
+                                             optional_ptr<PhysicalOperator> child, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups_p,
-                                             vector<GroupingSet> grouping_sets_p,
-                                             vector<unsafe_vector<idx_t>> grouping_functions_p,
-                                             idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
+                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
+    : PhysicalHashAggregate(arena, context, child, std::move(types), std::move(expressions), std::move(groups_p), {},
+                            {}, estimated_cardinality) {
+}
+
+PhysicalHashAggregate::PhysicalHashAggregate(
+    ArenaAllocator &arena, ClientContext &context, optional_ptr<PhysicalOperator> child, vector<LogicalType> types,
+    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups_p,
+    vector<GroupingSet> grouping_sets_p, vector<unsafe_vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality)
+    : PhysicalOperator(arena, PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
       grouping_sets(std::move(grouping_sets_p)) {
+
 	// get a list of all aggregates to be computed
 	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
@@ -172,6 +174,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 
 	for (idx_t i = 0; i < grouping_sets.size(); i++) {
 		groupings.emplace_back(grouping_sets[i], grouped_aggregate_data, distinct_collection_info);
+	}
+
+	if (child) {
+		children.Append(*child);
 	}
 }
 

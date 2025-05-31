@@ -15,8 +15,9 @@
 
 namespace duckdb {
 
-PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-                               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
+PhysicalUpdate::PhysicalUpdate(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+                               TableCatalogEntry &tableref, DataTable &table, vector<PhysicalIndex> columns,
+                               vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
                                vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
                                bool return_chunk)
@@ -43,6 +44,8 @@ PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tab
 		index_update = true;
 		break;
 	}
+
+	children.Append(child);
 }
 
 //===--------------------------------------------------------------------===//

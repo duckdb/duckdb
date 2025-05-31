@@ -12,7 +12,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &op) {
 	auto &right = CreatePlan(*op.children[1]);
 
 	// Create the blockwise NL join.
-	return Make<PhysicalBlockwiseNLJoin>(GetArena(), op, left, right, std::move(op.condition), op.join_type,
+	return Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(op.condition), op.join_type,
 	                                     op.estimated_cardinality);
 }
 

@@ -7,13 +7,16 @@
 
 namespace duckdb {
 
-PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types_p,
+PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ArenaAllocator &arena, ClientContext &context,
+                                                           vector<LogicalType> types_p,
                                                            vector<unique_ptr<Expression>> aggregates_p,
                                                            vector<unique_ptr<Expression>> groups_p,
                                                            const vector<unique_ptr<BaseStatistics>> &group_stats,
-                                                           vector<idx_t> required_bits_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, std::move(types_p), estimated_cardinality),
+                                                           vector<idx_t> required_bits_p, idx_t estimated_cardinality,
+                                                           PhysicalOperator &child)
+    : PhysicalOperator(arena, PhysicalOperatorType::PERFECT_HASH_GROUP_BY, std::move(types_p), estimated_cardinality),
       groups(std::move(groups_p)), aggregates(std::move(aggregates_p)), required_bits(std::move(required_bits_p)) {
+
 	D_ASSERT(groups.size() == group_stats.size());
 	group_minima.reserve(group_stats.size());
 	for (auto &stats : group_stats) {
@@ -36,8 +39,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 		D_ASSERT(!aggr.IsDistinct());
 		D_ASSERT(aggr.function.combine);
-		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+		for (auto &aggr_child : aggr.children) {
+			payload_types.push_back(aggr_child->return_type);
 		}
 		if (aggr.filter) {
 			payload_types_filters.push_back(aggr.filter->return_type);
@@ -67,6 +70,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 			}
 		}
 	}
+
+	children.Append(child);
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,

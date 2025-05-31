@@ -13,14 +13,12 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(ArenaAllocator &arena, LogicalOpe
                                                PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
+    : PhysicalComparisonJoin(arena, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
                              estimated_cardinality) {
 
 	filter_pushdown = std::move(pushdown_info_p);
-
-	children.Init(arena);
-	children.push_back(left);
-	children.push_back(right);
+	children.Append(left);
+	children.Append(right);
 }
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
@@ -144,9 +142,8 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
 	explicit NestedLoopJoinGlobalState(ClientContext &context, const PhysicalNestedLoopJoin &op)
-	    : right_payload_data(context, op.children[1].get().GetTypes()),
-	      right_condition_data(context, op.GetJoinTypes()), has_null(false),
-	      right_outer(PropagatesBuildSide(op.join_type)) {
+	    : right_payload_data(context, op.ChildAt(1).GetTypes()), right_condition_data(context, op.GetJoinTypes()),
+	      has_null(false), right_outer(PropagatesBuildSide(op.join_type)) {
 		if (op.filter_pushdown) {
 			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
@@ -283,7 +280,7 @@ public:
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
-		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
+		right_payload.Initialize(allocator, op.ChildAt(1).GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 	}
 

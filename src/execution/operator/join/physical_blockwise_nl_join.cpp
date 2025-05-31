@@ -13,11 +13,11 @@ namespace duckdb {
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
                                                  PhysicalOperator &right, unique_ptr<Expression> condition,
                                                  JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
+    : PhysicalJoin(arena, op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
       condition(std::move(condition)) {
-	children.Init(arena);
-	children.push_back(left);
-	children.push_back(right);
+
+	children.Append(left);
+	children.Append(right);
 	// MARK and SINGLE joins not handled
 	D_ASSERT(join_type != JoinType::MARK);
 	D_ASSERT(join_type != JoinType::SINGLE);
@@ -35,7 +35,7 @@ public:
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
 	explicit BlockwiseNLJoinGlobalState(ClientContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : right_chunks(context, op.children[1].get().GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
+	    : right_chunks(context, op.ChildAt(1).GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex lock;
@@ -109,10 +109,10 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 	auto result = make_uniq<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
-		for (auto &type : children[0].get().GetTypes()) {
+		for (auto &type : Child().GetTypes()) {
 			intermediate_types.emplace_back(type);
 		}
-		for (auto &type : children[1].get().GetTypes()) {
+		for (auto &type : ChildAt(1).GetTypes()) {
 			intermediate_types.emplace_back(type);
 		}
 		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);

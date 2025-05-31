@@ -7,10 +7,10 @@ namespace duckdb {
 
 PhysicalPositionalJoin::PhysicalPositionalJoin(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
                                                PhysicalOperator &right, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
-	children.Init(arena);
-	children.push_back(left);
-	children.push_back(right);
+    : PhysicalOperator(arena, PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
+
+	children.Append(left);
+	children.Append(right);
 }
 
 //===--------------------------------------------------------------------===//
@@ -19,7 +19,7 @@ PhysicalPositionalJoin::PhysicalPositionalJoin(ArenaAllocator &arena, vector<Log
 class PositionalJoinGlobalState : public GlobalSinkState {
 public:
 	explicit PositionalJoinGlobalState(ClientContext &context, const PhysicalPositionalJoin &op)
-	    : rhs(context, op.children[1].get().GetTypes()), initialized(false), source_offset(0), exhausted(false) {
+	    : rhs(context, op.ChildAt(1).GetTypes()), initialized(false), source_offset(0), exhausted(false) {
 		rhs.InitializeAppend(append_state);
 	}
 
@@ -187,7 +187,7 @@ void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalPositionalJoin::GetSources() const {
-	auto result = children[0].get().GetSources();
+	auto result = Child().GetSources();
 	if (IsSource()) {
 		result.push_back(*this);
 	}

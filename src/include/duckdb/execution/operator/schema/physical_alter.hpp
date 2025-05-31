@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ALTER;
 
 public:
-	explicit PhysicalAlter(unique_ptr<AlterInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::ALTER, {LogicalType::BOOLEAN}, estimated_cardinality),
+	explicit PhysicalAlter(ArenaAllocator &arena, unique_ptr<AlterInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::ALTER, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

@@ -203,15 +203,12 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	window_types.emplace_back(pk_type);
 
 	idx_t probe_cardinality = op.children[0]->EstimateCardinality(context);
-	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
-	window.children.emplace_back(probe);
-
-	auto &join = Make<PhysicalNestedLoopJoin>(GetArena(), join_op, build, window, std::move(join_op.conditions),
-	                                          join_op.join_type, probe_cardinality);
+	auto &window = Make<PhysicalStreamingWindow>(probe, window_types, std::move(window_select), probe_cardinality);
+	auto &join = Make<PhysicalNestedLoopJoin>(join_op, build, window, std::move(join_op.conditions), join_op.join_type,
+	                                          probe_cardinality);
 
 	// Plan a projection of the compare column
-	auto &comp_proj = Make<PhysicalProjection>(std::move(comp_types), std::move(comp_list), probe_cardinality);
-	comp_proj.children.emplace_back(join);
+	auto &comp_proj = Make<PhysicalProjection>(std::move(comp_types), std::move(comp_list), probe_cardinality, join);
 
 	// Plan an aggregation on the output of the join, grouping by key;
 	// TODO: Can we make it perfect?
@@ -220,9 +217,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto pk_ref = make_uniq<BoundReferenceExpression>(pk_type, join_op.types.size() - 1);
 	groups.emplace_back(std::move(pk_ref));
 
-	auto &aggr =
-	    Make<PhysicalHashAggregate>(context, aggr_types, std::move(aggregates), std::move(groups), probe_cardinality);
-	aggr.children.emplace_back(comp_proj);
+	auto &aggr = Make<PhysicalHashAggregate>(context, aggr_types, std::move(aggregates), std::move(groups),
+	                                         probe_cardinality, comp_proj);
 
 	// Project away primary/grouping key
 	// The aggregates were generated in the output order of the original ASOF,
@@ -233,9 +229,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		project_list.emplace_back(std::move(col_ref));
 	}
 
-	auto &proj = Make<PhysicalProjection>(op.types, std::move(project_list), probe_cardinality);
-	proj.children.emplace_back(aggr);
-	return proj;
+	return Make<PhysicalProjection>(op.types, std::move(project_list), probe_cardinality, aggr);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
@@ -277,7 +271,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 				return *result;
 			}
 		}
-		return Make<PhysicalAsOfJoin>(GetArena(), op, left, right);
+		return Make<PhysicalAsOfJoin>(op, left, right);
 	}
 
 	//	Strip extra column from rhs projections
@@ -326,8 +320,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	auto &window_types = op.children[1]->types;
 	window_types.emplace_back(asof_type);
 
-	auto &window = Make<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
-	window.children.emplace_back(right);
+	auto &window = Make<PhysicalWindow>(right, window_types, std::move(window_select), rhs_cardinality);
 
 	// IEJoin(left, window, conditions || asof_comp ~op asof_end)
 	JoinCondition asof_upper;
@@ -351,7 +344,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	}
 
 	op.conditions.emplace_back(std::move(asof_upper));
-	return Make<PhysicalIEJoin>(GetArena(), op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
+	return Make<PhysicalIEJoin>(op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
 }
 
 } // namespace duckdb

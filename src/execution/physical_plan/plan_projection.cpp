@@ -36,9 +36,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
 		}
 	}
 
-	auto &proj = Make<PhysicalProjection>(op.types, std::move(op.expressions), op.estimated_cardinality);
-	proj.children.push_back(plan);
-	return proj;
+	return Make<PhysicalProjection>(plan, op.types, std::move(op.expressions), op.estimated_cardinality);
 }
 
 } // namespace duckdb

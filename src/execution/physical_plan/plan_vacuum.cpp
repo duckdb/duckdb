@@ -6,13 +6,12 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalVacuum &op) {
-	auto &vacuum = Make<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(std::move(op.info)), op.table,
-	                                    std::move(op.column_id_map), op.estimated_cardinality);
+	optional_ptr<PhysicalOperator> plan;
 	if (!op.children.empty()) {
-		auto &plan = CreatePlan(*op.children[0]);
-		vacuum.children.push_back(plan);
+		plan = CreatePlan(*op.children[0]);
 	}
-	return vacuum;
+	return Make<PhysicalVacuum>(plan, unique_ptr_cast<ParseInfo, VacuumInfo>(std::move(op.info)), op.table,
+	                            std::move(op.column_id_map), op.estimated_cardinality);
 }
 
 } // namespace duckdb

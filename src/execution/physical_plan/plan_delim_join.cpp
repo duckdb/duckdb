@@ -32,7 +32,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op
 	// first gather the scans on the duplicate eliminated data set from the delim side
 	const idx_t delim_idx = op.delim_flipped ? 0 : 1;
 	vector<const_reference<PhysicalOperator>> delim_scans;
-	GatherDelimScans(plan.children[delim_idx], delim_scans, ++this->delim_index);
+	GatherDelimScans(plan.ChildAt(delim_idx), delim_scans, ++this->delim_index);
 	if (delim_scans.empty()) {
 		// no duplicate eliminated scans in the delim side!
 		// in this case we don't need to create a delim join
@@ -50,16 +50,16 @@ PhysicalOperator &PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op
 
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
 	auto &distinct =
-	    Make<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions), std::move(distinct_groups),
-	                                delim_scans[0].get().estimated_cardinality);
+	    Make<PhysicalHashAggregate>(context, nullptr, delim_types, std::move(distinct_expressions),
+	                                std::move(distinct_groups), delim_scans[0].get().estimated_cardinality);
 
 	// Create the duplicate eliminated join.
 	if (op.delim_flipped) {
-		return Make<PhysicalRightDelimJoin>(GetArena(), *this, op.types, plan, distinct, delim_scans,
-		                                    op.estimated_cardinality, optional_idx(this->delim_index));
+		return Make<PhysicalRightDelimJoin>(*this, op.types, plan, distinct, delim_scans, op.estimated_cardinality,
+		                                    optional_idx(this->delim_index));
 	}
-	return Make<PhysicalLeftDelimJoin>(GetArena(), *this, op.types, plan, distinct, delim_scans,
-	                                   op.estimated_cardinality, optional_idx(this->delim_index));
+	return Make<PhysicalLeftDelimJoin>(*this, op.types, plan, distinct, delim_scans, op.estimated_cardinality,
+	                                   optional_idx(this->delim_index));
 }
 
 } // namespace duckdb

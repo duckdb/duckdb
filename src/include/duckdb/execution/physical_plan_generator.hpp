@@ -37,14 +37,9 @@ public:
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
-		auto ptr = arena.Make<T>(std::forward<ARGS>(args)...);
-		ptr->children.Init(arena);
+		auto ptr = arena.Make<T>(arena, std::forward<ARGS>(args)...);
 		ops.push_back(*ptr);
 		return *ptr;
-	}
-
-	ArenaAllocator &GetArena() {
-		return arena;
 	}
 
 	PhysicalOperator &Root() {
@@ -97,10 +92,6 @@ public:
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
-	}
-
-	ArenaAllocator &GetArena() {
-		return physical_plan->GetArena();
 	}
 
 public:

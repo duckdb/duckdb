@@ -21,10 +21,10 @@
 
 namespace duckdb {
 
-PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
+PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(ArenaAllocator &arena, vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
-                                                       idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
+                                                       idx_t estimated_cardinality, PhysicalOperator &child)
+    : PhysicalOperator(arena, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
       aggregates(std::move(expressions)) {
 
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
@@ -32,6 +32,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
 		return;
 	}
 	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info);
+	children.Append(child);
 }
 
 //===--------------------------------------------------------------------===//
@@ -281,8 +282,8 @@ unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
-	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalSinkState>();
-	return make_uniq<UngroupedAggregateLocalSinkState>(*this, children[0].get().GetTypes(), gstate, context);
+	auto &g_state = sink_state->Cast<UngroupedAggregateGlobalSinkState>();
+	return make_uniq<UngroupedAggregateLocalSinkState>(*this, Child().GetTypes(), g_state, context);
 }
 
 void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChunk &chunk,

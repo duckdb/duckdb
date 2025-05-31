@@ -45,8 +45,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result =
-		    Make<PhysicalUnion>(GetArena(), op.types, left, right, op.estimated_cardinality, op.allow_out_of_order);
+		result = Make<PhysicalUnion>(op.types, left, right, op.estimated_cardinality, op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
@@ -64,14 +63,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 			auto select_list = CreatePartitionedRowNumExpression(types);
 			auto &left_window =
-			    Make<PhysicalWindow>(window_types, std::move(select_list), left.get().estimated_cardinality);
-			left_window.children.push_back(left);
+			    Make<PhysicalWindow>(left, window_types, std::move(select_list), left.get().estimated_cardinality);
 			left = left_window;
 
 			select_list = CreatePartitionedRowNumExpression(types);
 			auto &right_window =
-			    Make<PhysicalWindow>(window_types, std::move(select_list), right.get().estimated_cardinality);
-			right_window.children.push_back(right);
+			    Make<PhysicalWindow>(right, window_types, std::move(select_list), right.get().estimated_cardinality);
 			right = right_window;
 
 			// add window expression result to join condition
@@ -84,8 +81,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		// INTERSECT is SEMI join
 
 		JoinType join_type = op.type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		result = Make<PhysicalHashJoin>(GetArena(), op, left, right, std::move(conditions), join_type,
-		                                op.estimated_cardinality);
+		result = Make<PhysicalHashJoin>(op, left, right, std::move(conditions), join_type, op.estimated_cardinality);
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
@@ -93,8 +89,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 			for (idx_t i = 0; i < types.size(); i++) {
 				select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 			}
-			auto &proj = Make<PhysicalProjection>(types, std::move(select_list), op.estimated_cardinality);
-			proj.children.push_back(*result);
+			auto &proj = Make<PhysicalProjection>(*result, types, std::move(select_list), op.estimated_cardinality);
 			result = proj;
 		}
 		break;
@@ -110,9 +105,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		for (idx_t i = 0; i < types.size(); i++) {
 			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 		}
-		auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
-		                                             result->estimated_cardinality);
-		group_by.children.push_back(*result);
+		auto &group_by = Make<PhysicalHashAggregate>(context, *result, op.types, std::move(aggregates),
+		                                             std::move(groups), result->estimated_cardinality);
 		result = group_by;
 	}
 

@@ -67,17 +67,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		}
 
 		if (any_cast_required) {
-			auto &proj = Make<PhysicalProjection>(std::move(return_types), std::move(expressions),
+			auto &proj = Make<PhysicalProjection>(child, std::move(return_types), std::move(expressions),
 			                                      child.get().estimated_cardinality);
-			proj.children.push_back(child);
 			child = proj;
 		}
 
-		auto &table_in_out =
-		    Make<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
-		                                     op.estimated_cardinality, std::move(op.projected_input));
-		table_in_out.children.push_back(child);
-		return table_in_out;
+		return Make<PhysicalTableInOutFunction>(child, op.types, op.function, std::move(op.bind_data), column_ids,
+		                                        op.estimated_cardinality, std::move(op.projected_input));
 	}
 
 	if (!op.projected_input.empty()) {
@@ -132,7 +128,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				auto column_id = column_ids[c].GetPrimaryIndex();
 				filter_types.push_back(op.returned_types[column_id]);
 			}
-			filter = Make<PhysicalFilter>(filter_types, std::move(select_list), op.estimated_cardinality);
+			filter = Make<PhysicalFilter>(nullptr, filter_types, std::move(select_list), op.estimated_cardinality);
 		}
 	}
 	op.ResolveOperatorTypes();
@@ -156,7 +152,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				// a projection is not necessary if all columns have been requested in-order
 				// in that case we just return the node
 				if (filter) {
-					filter->children.push_back(table_scan);
+					filter->children.Append(table_scan);
 					return *filter;
 				}
 				return table_scan;
@@ -175,14 +171,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				expressions.push_back(make_uniq<BoundReferenceExpression>(type, col_id));
 			}
 		}
-		auto &proj = Make<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 		if (filter) {
-			filter->children.push_back(table_scan);
-			proj.children.push_back(*filter);
-			return proj;
+			filter->children.Append(table_scan);
+			return Make<PhysicalProjection>(*filter, std::move(types), std::move(expressions),
+			                                op.estimated_cardinality);
 		}
-		proj.children.push_back(table_scan);
-		return proj;
+		return Make<PhysicalProjection>(table_scan, std::move(types), std::move(expressions), op.estimated_cardinality);
 	}
 
 	auto &table_scan =
@@ -192,7 +186,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
 	if (filter) {
-		filter->children.push_back(table_scan);
+		filter->children.Append(table_scan);
 		return *filter;
 	}
 	return table_scan;

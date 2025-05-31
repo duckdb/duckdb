@@ -9,9 +9,12 @@
 
 namespace duckdb {
 
-PhysicalStreamingWindow::PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalStreamingWindow::PhysicalStreamingWindow(ArenaAllocator &arena, PhysicalOperator &child,
+                                                 vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                                  idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+    : PhysicalOperator(arena, type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+
+	children.Append(child);
 }
 
 class StreamingWindowGlobalState : public GlobalOperatorState {
@@ -486,7 +489,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 
 	// Compute window functions
 	const idx_t count = output.size();
-	const column_t input_width = children[0].get().GetTypes().size();
+	const column_t input_width = Child().GetTypes().size();
 	for (column_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		column_t col_idx = input_width + expr_idx;
 		auto &expr = *select_list[expr_idx];

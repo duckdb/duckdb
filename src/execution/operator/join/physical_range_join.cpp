@@ -168,7 +168,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 PhysicalRangeJoin::PhysicalRangeJoin(ArenaAllocator &arena, LogicalComparisonJoin &op, PhysicalOperatorType type,
                                      PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
                                      JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
+    : PhysicalComparisonJoin(arena, op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
@@ -192,14 +192,13 @@ PhysicalRangeJoin::PhysicalRangeJoin(ArenaAllocator &arena, LogicalComparisonJoi
 		}
 	}
 
-	children.Init(arena);
-	children.push_back(left);
-	children.push_back(right);
+	children.Append(left);
+	children.Append(right);
 
 	//	Fill out the left projection map.
 	left_projection_map = op.left_projection_map;
 	if (left_projection_map.empty()) {
-		const auto left_count = children[0].get().GetTypes().size();
+		const auto left_count = Child().GetTypes().size();
 		left_projection_map.reserve(left_count);
 		for (column_t i = 0; i < left_count; ++i) {
 			left_projection_map.emplace_back(i);
@@ -208,7 +207,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(ArenaAllocator &arena, LogicalComparisonJoi
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
+		const auto right_count = ChildAt(1).GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -216,8 +215,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(ArenaAllocator &arena, LogicalComparisonJoi
 	}
 
 	//	Construct the unprojected type layout from the children's types
-	unprojected_types = children[0].get().GetTypes();
-	auto &types = children[1].get().GetTypes();
+	unprojected_types = Child().GetTypes();
+	auto &types = ChildAt(1).GetTypes();
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
@@ -318,7 +317,7 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 	for (idx_t i = 0; i < left_projected; ++i) {
 		result.data[i].Reference(chunk.data[left_projection_map[i]]);
 	}
-	const auto left_width = children[0].get().GetTypes().size();
+	const auto left_width = Child().GetTypes().size();
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
 		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}

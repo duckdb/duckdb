@@ -3,9 +3,11 @@
 
 namespace duckdb {
 
-PhysicalSetVariable::PhysicalSetVariable(string name_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::SET_VARIABLE, {LogicalType::BOOLEAN}, estimated_cardinality),
+PhysicalSetVariable::PhysicalSetVariable(ArenaAllocator &arena, PhysicalOperator &child, string name_p,
+                                         idx_t estimated_cardinality)
+    : PhysicalOperator(arena, PhysicalOperatorType::SET_VARIABLE, {LogicalType::BOOLEAN}, estimated_cardinality),
       name(std::move(name_p)) {
+	children.Append(child);
 }
 
 SourceResultType PhysicalSetVariable::GetData(ExecutionContext &context, DataChunk &chunk,

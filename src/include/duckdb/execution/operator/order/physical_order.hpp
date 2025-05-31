@@ -22,8 +22,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ORDER_BY;
 
 public:
-	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
-	              idx_t estimated_cardinality);
+	PhysicalOrder(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+	              vector<BoundOrderByNode> orders, vector<idx_t> projections, idx_t estimated_cardinality);
 
 	//! Input data
 	vector<BoundOrderByNode> orders;

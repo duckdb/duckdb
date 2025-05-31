@@ -37,7 +37,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 
 	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
-		return Make<PhysicalCrossProduct>(GetArena(), op.types, left, right, op.estimated_cardinality);
+		return Make<PhysicalCrossProduct>(op.types, left, right, op.estimated_cardinality);
 	}
 
 	idx_t has_range = 0;
@@ -62,7 +62,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	const auto prefer_range_joins = client_config.prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
 		// Equality join with small number of keys : possible perfect join optimization
-		auto &join = Make<PhysicalHashJoin>(GetArena(), op, left, right, std::move(op.conditions), op.join_type,
+		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
@@ -84,17 +84,17 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	if (can_iejoin) {
-		return Make<PhysicalIEJoin>(GetArena(), op, left, right, std::move(op.conditions), op.join_type,
-		                            op.estimated_cardinality, std::move(op.filter_pushdown));
+		return Make<PhysicalIEJoin>(op, left, right, std::move(op.conditions), op.join_type, op.estimated_cardinality,
+		                            std::move(op.filter_pushdown));
 	}
 	if (can_merge) {
 		// range join: use piecewise merge join
-		return Make<PhysicalPiecewiseMergeJoin>(GetArena(), op, left, right, std::move(op.conditions), op.join_type,
+		return Make<PhysicalPiecewiseMergeJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                        op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 	if (PhysicalNestedLoopJoin::IsSupported(op.conditions, op.join_type)) {
 		// inequality join: use nested loop
-		return Make<PhysicalNestedLoopJoin>(GetArena(), op, left, right, std::move(op.conditions), op.join_type,
+		return Make<PhysicalNestedLoopJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 	}
 
@@ -102,8 +102,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		RewriteJoinCondition(*cond.right, left.types.size());
 	}
 	auto condition = JoinCondition::CreateExpression(std::move(op.conditions));
-	return Make<PhysicalBlockwiseNLJoin>(GetArena(), op, left, right, std::move(condition), op.join_type,
-	                                     op.estimated_cardinality);
+	return Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(condition), op.join_type, op.estimated_cardinality);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {

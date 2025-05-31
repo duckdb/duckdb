@@ -11,11 +11,11 @@ namespace duckdb {
 
 PhysicalCTE::PhysicalCTE(ArenaAllocator &arena, string ctename, idx_t table_index, vector<LogicalType> types,
                          PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality), table_index(table_index),
-      ctename(std::move(ctename)) {
-	children.Init(arena);
-	children.push_back(top);
-	children.push_back(bottom);
+    : PhysicalOperator(arena, PhysicalOperatorType::CTE, std::move(types), estimated_cardinality),
+      table_index(table_index), ctename(std::move(ctename)) {
+
+	children.Append(top);
+	children.Append(bottom);
 }
 
 PhysicalCTE::~PhysicalCTE() {
@@ -90,17 +90,17 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	auto &state = meta_pipeline.GetState();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(children[0]);
+	child_meta_pipeline.Build(Child());
 
 	for (auto &cte_scan : cte_scans) {
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	children[1].get().BuildPipelines(current, meta_pipeline);
+	ChildAt(1).BuildPipelines(current, meta_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
-	return children[1].get().GetSources();
+	return ChildAt(1).GetSources();
 }
 
 InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {

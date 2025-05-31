@@ -19,8 +19,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPLAIN_ANALYZE;
 
 public:
-	explicit PhysicalExplainAnalyze(vector<LogicalType> types, ExplainFormat format)
-	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1), format(format) {
+	explicit PhysicalExplainAnalyze(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+	                                ExplainFormat format)
+	    : PhysicalOperator(arena, PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1), format(format) {
+
+		children.Append(child);
 	}
 
 public:

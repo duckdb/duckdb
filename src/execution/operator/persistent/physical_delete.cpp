@@ -12,12 +12,14 @@
 
 namespace duckdb {
 
-PhysicalDelete::PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
+PhysicalDelete::PhysicalDelete(ArenaAllocator &arena, PhysicalOperator &child, vector<LogicalType> types,
+                               TableCatalogEntry &tableref, DataTable &table,
                                vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
                                idx_t estimated_cardinality, bool return_chunk)
-    : PhysicalOperator(PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
       return_chunk(return_chunk) {
+	children.Append(child);
 }
 //===--------------------------------------------------------------------===//
 // Sink

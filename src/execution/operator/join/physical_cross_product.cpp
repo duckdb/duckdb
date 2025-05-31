@@ -8,10 +8,10 @@ namespace duckdb {
 
 PhysicalCrossProduct::PhysicalCrossProduct(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
                                            PhysicalOperator &right, idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, std::move(types), estimated_cardinality) {
-	children.Init(arena);
-	children.push_back(left);
-	children.push_back(right);
+    : CachingPhysicalOperator(arena, PhysicalOperatorType::CROSS_PRODUCT, std::move(types), estimated_cardinality) {
+
+	children.Append(left);
+	children.Append(right);
 }
 
 //===--------------------------------------------------------------------===//
@@ -20,7 +20,7 @@ PhysicalCrossProduct::PhysicalCrossProduct(ArenaAllocator &arena, vector<Logical
 class CrossProductGlobalState : public GlobalSinkState {
 public:
 	explicit CrossProductGlobalState(ClientContext &context, const PhysicalCrossProduct &op)
-	    : rhs_materialized(context, op.children[1].get().GetTypes()) {
+	    : rhs_materialized(context, op.ChildAt(1).GetTypes()) {
 		rhs_materialized.InitializeAppend(append_state);
 	}
 
@@ -141,7 +141,7 @@ void PhysicalCrossProduct::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCrossProduct::GetSources() const {
-	return children[0].get().GetSources();
+	return Child().GetSources();
 }
 
 } // namespace duckdb

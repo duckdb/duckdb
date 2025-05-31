@@ -23,9 +23,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::SET;
 
 public:
-	PhysicalSet(const string &name_p, Value value_p, SetScope scope_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
-	      value(std::move(value_p)), scope(scope_p) {
+	PhysicalSet(ArenaAllocator &arena, const string &name_p, Value value_p, SetScope scope_p,
+	            idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality),
+	      name(name_p), value(std::move(value_p)), scope(scope_p) {
 	}
 
 public:
