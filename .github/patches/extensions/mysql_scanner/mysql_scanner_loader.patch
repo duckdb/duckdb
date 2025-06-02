@@ -1,8 +1,8 @@
 diff --git a/src/include/mysql_scanner_extension.hpp b/src/include/mysql_scanner_extension.hpp
-index dc69b08..3ab6e1c 100644
+index dc69b08..59e5459 100644
 --- a/src/include/mysql_scanner_extension.hpp
 +++ b/src/include/mysql_scanner_extension.hpp
-@@ -13,7 +13,7 @@ public:
+@@ -13,11 +13,11 @@ public:
  	std::string Name() override {
  		return "mysql_scanner";
  	}
@@ -11,6 +11,11 @@ index dc69b08..3ab6e1c 100644
  };
  
  extern "C" {
+-DUCKDB_EXTENSION_API void mysql_scanner_init(duckdb::DatabaseInstance &db);
++DUCKDB_EXTENSION_API void mysql_scanner_init(duckdb::ExtensionLoader &loader);
+ DUCKDB_EXTENSION_API const char *mysql_scanner_version();
+ DUCKDB_EXTENSION_API void mysql_scanner_storage_init(DBConfig &config);
+ }
 diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
 index 9d51436..c8c019f 100644
 --- a/src/mysql_extension.cpp
