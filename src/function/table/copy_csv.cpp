@@ -221,6 +221,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
 	bind_data->requires_quotes['\n'] = true;
 	bind_data->requires_quotes['\r'] = true;
+	bind_data->requires_quotes['#'] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
 	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
