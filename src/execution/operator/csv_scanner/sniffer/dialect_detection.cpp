@@ -284,7 +284,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			num_cols = sniffed_column_counts[row].number_of_columns;
 			dirty_notes = row + sniffed_column_counts[row].empty_lines;
 			empty_lines = sniffed_column_counts[row].empty_lines;
-			dirty_notes_minus_comments = dirty_notes  - comment_rows;
+			dirty_notes_minus_comments = dirty_notes - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
 		} else if (sniffed_column_counts[row].number_of_columns == num_cols || (use_most_frequent_columns)) {
@@ -293,7 +293,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 				dirty_notes = row + sniffed_column_counts[row].empty_lines;
 				empty_lines = sniffed_column_counts[row].empty_lines;
-				dirty_notes_minus_comments = dirty_notes  - comment_rows;
+				dirty_notes_minus_comments = dirty_notes - comment_rows;
 				num_cols = sniffed_column_counts[row].number_of_columns;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
@@ -329,9 +329,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
-	const bool rows_consistent =
-	    consistent_rows + (dirty_notes_minus_comments - options.dialect_options.skip_rows.GetValue()) + comment_rows - empty_lines ==
-	    sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
+	const bool rows_consistent = consistent_rows +
+	                                 (dirty_notes_minus_comments - options.dialect_options.skip_rows.GetValue()) +
+	                                 comment_rows - empty_lines ==
+	                             sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
 	// If there are more than one consistent row.
 	const bool more_than_one_row = consistent_rows > 1;
 
