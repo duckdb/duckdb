@@ -1,0 +1,29 @@
+# name: test/issues/general/test_17700.test
+# description: Issue 17446 - unexpected internal error in multi-join query (ExpressionExecutor::Execute called with a result vector of type BOOLEAN that does not match expression type INTEGER)
+# group: [general]
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN);
+
+statement ok
+CREATE TABLE t2(c1 INT);
+
+statement ok
+CREATE TABLE t3(c0 INT);
+
+statement ok
+INSERT INTO t3(c0) VALUES (1);
+
+statement ok
+INSERT INTO t0(c0) VALUES (TRUE);
+
+statement ok
+CREATE VIEW v0(c0, c1, c2) AS SELECT DISTINCT t0.c0 AS col_0, t0.c0 AS col_1, t3.c0 AS col_2 FROM t0, t3;
+
+statement ok
+INSERT INTO t2(c1) VALUES (1);
+
+query IIIII
+SELECT * FROM t2, v0 INNER JOIN ( SELECT t2.c1 AS col_0 WHERE v0.c2) as subQuery0 ON v0.c2;
+----
+1	true	true	1	1

@@ -118,6 +118,7 @@ public:
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
 			                                           *written_file_info->file_stats);
 		}
+		initialized = true;
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {

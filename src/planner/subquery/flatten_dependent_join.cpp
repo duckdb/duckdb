@@ -114,7 +114,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		delim_join->children[1] =
 		    flatten.PushDownDependentJoin(std::move(delim_join->children[1]), propagate_null_values, lateral_depth);
 		data_offset = flatten.data_offset;
-		delim_offset = flatten.delim_offset;
+		auto left_offset = delim_join->children[0]->GetColumnBindings().size();
+		delim_offset = left_offset + flatten.delim_offset;
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -423,7 +424,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 
 		base_binding.table_index = proj.table_index;
-		this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
+		base_binding.column_index = plan->expressions.size() - correlated_columns.size();
+		this->delim_offset = base_binding.column_index;
 		this->data_offset = 0;
 		return plan;
 	}
@@ -656,6 +658,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// push into both sides
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+		auto left_delim_offset = delim_offset;
 		auto left_binding = this->base_binding;
 		plan->children[1] =
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
@@ -665,6 +668,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// because the RIGHT binding might contain NULL values
 		if (join.join_type == JoinType::LEFT) {
 			this->base_binding = left_binding;
+			delim_offset = left_delim_offset;
 		} else if (join.join_type == JoinType::RIGHT) {
 			this->base_binding = right_binding;
 			delim_offset += plan->children[0]->GetColumnBindings().size();

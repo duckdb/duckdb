@@ -344,6 +344,18 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
                                                              unsafe_vector<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
 	if (!row_ids.empty()) {
+		// Duplicate-eliminate row IDs.
+		unordered_set<row_t> row_id_set;
+		auto it = row_ids.begin();
+		while (it != row_ids.end()) {
+			if (row_id_set.find(*it) == row_id_set.end()) {
+				row_id_set.insert(*it++);
+				continue;
+			}
+			// Found a duplicate.
+			it = row_ids.erase(it);
+		}
+
 		std::sort(row_ids.begin(), row_ids.end());
 		g_state->row_ids = std::move(row_ids);
 	}
