@@ -94,7 +94,7 @@ void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_s
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
-             optional_idx footer_size) {
+             optional_idx &footer_size) {
 	auto file_proto = CreateThriftFileProtocol(file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
@@ -130,6 +130,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 		uint32_t footer_len;
 		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+
+		footer_size = footer_len;
 
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
@@ -796,6 +798,15 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	} else {
 		metadata = std::move(metadata_p);
 	}
+
+	if (!file.extended_info) {
+		file.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	}
+	file.extended_info->options.emplace("file_size", Value::UBIGINT(file_handle->GetFileSize()));
+	if (footer_size.IsValid()) {
+		file.extended_info->options.emplace("footer_size", Value::UINTEGER(footer_size.GetIndex()));
+	}
+
 	InitializeSchema(context_p);
 }
 
