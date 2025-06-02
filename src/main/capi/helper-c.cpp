@@ -378,8 +378,9 @@ duckdb_error_type ErrorTypeToC(const ExceptionType type) {
 		return DUCKDB_ERROR_SEQUENCE;
 	case ExceptionType::INVALID_CONFIGURATION:
 		return DUCKDB_INVALID_CONFIGURATION;
+	default:
+		return DUCKDB_ERROR_INVALID;
 	}
-	return DUCKDB_ERROR_INVALID;
 }
 
 ExceptionType ErrorTypeFromC(const duckdb_error_type type) {
@@ -470,6 +471,8 @@ ExceptionType ErrorTypeFromC(const duckdb_error_type type) {
 		return ExceptionType::SEQUENCE;
 	case DUCKDB_INVALID_CONFIGURATION:
 		return ExceptionType::INVALID_CONFIGURATION;
+	default:
+		return ExceptionType::INVALID;
 	}
 }
 
