@@ -116,7 +116,7 @@ private:
 
 class SegmentHandle {
 public:
-	SegmentHandle() : buffer_ptr(nullptr), ptr(nullptr) {};
+	SegmentHandle() = delete;
 	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
 		lock_guard<mutex> l(buffer_ptr->lock);
 
@@ -184,10 +184,6 @@ public:
 	void MarkModified() {
 		lock_guard<mutex> l(buffer_ptr->lock);
 		buffer_ptr->dirty = true;
-	}
-
-	bool Empty() const {
-		return buffer_ptr == nullptr;
 	}
 
 private:
