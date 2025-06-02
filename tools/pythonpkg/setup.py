@@ -381,15 +381,19 @@ from pathlib import Path
 import os
 
 ######
+# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-
-# Whether to use main branch versioning logic, defaults to True
-MAIN_BRANCH_VERSIONING = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
+MAIN_BRANCH_VERSIONING = True
+if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
+    MAIN_BRANCH_VERSIONING = False
+if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
+    MAIN_BRANCH_VERSIONING = True
 
 
 def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
@@ -430,9 +434,21 @@ def version_scheme(version):
             return version
         return 'v' + version
 
+    print("Version is", version)
+
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override:
+        formatted_version = version.format_with("{tag}")
+        print("formatted_version = ", formatted_version)
+        print("Early return due to OVERRIDE_GIT_DESCRIBE")
+        return formatted_version
+
     # If we're exactly on a tag (dev_iteration = 0, dirty=False)
     if version.exact:
-        return version.format_with("{tag}")
+        formatted_version = version.format_with("{tag}")
+        print("formatted_version = ", formatted_version)
+        print("Early return due to version.exact")
+        return formatted_version
 
     major, minor, patch = [int(x) for x in str(version.tag).split('.')]
     # Increment minor version if main_branch_versioning is enabled (default),

@@ -26,7 +26,7 @@ static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noex
 	std::swap(a.lock, b.lock);
 }
 
-TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept {
+TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept : count(0) {
 	SwapTupleDataChunk(*this, other);
 }
 
@@ -48,7 +48,7 @@ TupleDataChunkPart &TupleDataChunk::AddPart(TupleDataSegment &segment, TupleData
 }
 
 void TupleDataChunk::Verify(const TupleDataSegment &segment) const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	idx_t total_count = 0;
 	for (auto part_id = part_ids.Start(); part_id < part_ids.End(); part_id++) {
 		total_count += segment.chunk_parts[part_id].count;
@@ -150,7 +150,7 @@ void TupleDataSegment::Unpin() {
 }
 
 void TupleDataSegment::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	const auto &layout = allocator->GetLayout();
 
 	idx_t total_count = 0;
@@ -172,7 +172,7 @@ void TupleDataSegment::Verify() const {
 }
 
 void TupleDataSegment::VerifyEverythingPinned() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	D_ASSERT(pinned_row_handles.size() == allocator->RowBlockCount());
 	D_ASSERT(pinned_heap_handles.size() == allocator->HeapBlockCount());
 #endif
