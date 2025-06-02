@@ -17,7 +17,6 @@ class OpenerFileSystem : public FileSystem {
 public:
 	virtual FileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
-	virtual optional_ptr<ClientContext> GetClientContext() = 0;
 
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
 	void VerifyCanAccessDirectory(const string &path);

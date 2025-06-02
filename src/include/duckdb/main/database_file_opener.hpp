@@ -53,9 +53,6 @@ public:
 	optional_ptr<FileOpener> GetOpener() const override {
 		return &database_opener;
 	}
-	optional_ptr<ClientContext> GetClientContext() override {
-		return nullptr;
-	};
 
 private:
 	DatabaseInstance &db;
