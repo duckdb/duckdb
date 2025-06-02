@@ -55,23 +55,6 @@ public:
 		return SegmentHandle(buffer, offset);
 	}
 
-	//! Get a segment handle, unless it exists solely in persistent storage.
-	//! I.e. it has not been loaded, created in memory, or evicted.
-	inline SegmentHandle GetIfUsed(const IndexPointer ptr) {
-		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-
-		auto buffer_it = buffers.find(ptr.GetBufferId());
-		D_ASSERT(buffer_it != buffers.end());
-		auto &buffer = *buffer_it->second;
-
-		if (!buffer.InMemory() && !buffer.loaded) {
-			return SegmentHandle();
-		}
-
-		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
-		return SegmentHandle(buffer, offset);
-	}
-
 	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
 	//! DEPRECATED. Use segment handles.
 	template <class T>
@@ -100,6 +83,7 @@ public:
 	}
 
 	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
+	//! DEPRECATED. Use segment handles.
 	inline data_ptr_t GetDeprecatedIfLoaded(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
