@@ -5,10 +5,9 @@ namespace duckdb {
 
 PhysicalPivot::PhysicalPivot(ArenaAllocator &arena, vector<LogicalType> types_p, PhysicalOperator &child,
                              BoundPivotInfo bound_pivot_p)
-    : PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
       bound_pivot(std::move(bound_pivot_p)) {
 
-	children.Init(arena);
 	children.push_back(child);
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
 		auto entry = pivot_map.find(bound_pivot.pivot_values[p]);
@@ -18,7 +17,6 @@ PhysicalPivot::PhysicalPivot(ArenaAllocator &arena, vector<LogicalType> types_p,
 		pivot_map[bound_pivot.pivot_values[p]] = bound_pivot.group_count + p;
 	}
 	// extract the empty aggregate expressions
-	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	for (auto &aggr_expr : bound_pivot.aggregates) {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
@@ -26,7 +24,7 @@ PhysicalPivot::PhysicalPivot(ArenaAllocator &arena, vector<LogicalType> types_p,
 		aggr.function.initialize(aggr.function, state.get());
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())));
 		Vector result_vector(aggr_expr->return_type);
-		AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggr.bind_info.get(), arena);
 		aggr.function.finalize(state_vector, aggr_input_data, result_vector, 1, 0);
 		empty_aggregates.push_back(result_vector.GetValue(0));
 	}

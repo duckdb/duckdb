@@ -24,7 +24,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPositionalJoin &op) {
 	default:
 		break;
 	}
-	return Make<PhysicalPositionalJoin>(GetArena(), op.types, left, right, op.estimated_cardinality);
+	return Make<PhysicalPositionalJoin>(op.types, left, right, op.estimated_cardinality);
 }
 
 } // namespace duckdb

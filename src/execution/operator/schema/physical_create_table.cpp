@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry &schema,
+PhysicalCreateTable::PhysicalCreateTable(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE, op.types, estimated_cardinality), schema(schema),
+    : PhysicalOperator(arena, PhysicalOperatorType::CREATE_TABLE, op.types, estimated_cardinality), schema(schema),
       info(std::move(info)) {
 }
 

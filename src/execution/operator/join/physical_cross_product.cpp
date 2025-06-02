@@ -8,8 +8,7 @@ namespace duckdb {
 
 PhysicalCrossProduct::PhysicalCrossProduct(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
                                            PhysicalOperator &right, idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, std::move(types), estimated_cardinality) {
-	children.Init(arena);
+    : CachingPhysicalOperator(arena, PhysicalOperatorType::CROSS_PRODUCT, std::move(types), estimated_cardinality) {
 	children.push_back(left);
 	children.push_back(right);
 }

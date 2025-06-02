@@ -27,8 +27,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	// then we create a normal recursive CTE operator.
 	if (op.key_targets.empty()) {
 		auto &right = CreatePlan(*op.children[1]);
-		auto &cte = Make<PhysicalRecursiveCTE>(GetArena(), op.ctename, op.table_index, op.types, op.union_all, left,
-		                                       right, op.estimated_cardinality);
+		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
+		                                       op.estimated_cardinality);
 		auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 		cast_cte.distinct_types = op.types;
 		cast_cte.working_table = working_table;
@@ -85,7 +85,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	recurring_cte_tables[op.table_index] = recurring_table;
 
 	auto &right = CreatePlan(*op.children[1]);
-	auto &cte = Make<PhysicalRecursiveCTE>(GetArena(), op.ctename, op.table_index, op.types, op.union_all, left, right,
+	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
 	                                       op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 	cast_cte.using_key = true;

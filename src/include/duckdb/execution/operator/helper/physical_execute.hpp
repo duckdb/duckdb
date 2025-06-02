@@ -18,7 +18,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXECUTE;
 
 public:
-	explicit PhysicalExecute(PhysicalOperator &plan);
+	explicit PhysicalExecute(ArenaAllocator &arena, PhysicalOperator &plan);
 
 	PhysicalOperator &plan;
 	shared_ptr<PreparedStatementData> prepared;

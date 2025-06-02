@@ -21,11 +21,11 @@ public:
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
-PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
-                                                       unique_ptr<FunctionData> bind_data_p,
+PhysicalTableInOutFunction::PhysicalTableInOutFunction(ArenaAllocator &arena, vector<LogicalType> types,
+                                                       TableFunction function_p, unique_ptr<FunctionData> bind_data_p,
                                                        vector<ColumnIndex> column_ids_p, idx_t estimated_cardinality,
                                                        vector<column_t> project_input_p)
-    : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
       projected_input(std::move(project_input_p)) {
 }

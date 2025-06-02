@@ -7,8 +7,7 @@ namespace duckdb {
 
 PhysicalPositionalJoin::PhysicalPositionalJoin(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
                                                PhysicalOperator &right, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
-	children.Init(arena);
+    : PhysicalOperator(arena, PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
 	children.push_back(left);
 	children.push_back(right);
 }

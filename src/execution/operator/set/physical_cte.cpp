@@ -11,9 +11,8 @@ namespace duckdb {
 
 PhysicalCTE::PhysicalCTE(ArenaAllocator &arena, string ctename, idx_t table_index, vector<LogicalType> types,
                          PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality), table_index(table_index),
-      ctename(std::move(ctename)) {
-	children.Init(arena);
+    : PhysicalOperator(arena, PhysicalOperatorType::CTE, std::move(types), estimated_cardinality),
+      table_index(table_index), ctename(std::move(ctename)) {
 	children.push_back(top);
 	children.push_back(bottom);
 }

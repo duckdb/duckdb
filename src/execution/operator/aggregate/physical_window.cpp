@@ -218,9 +218,10 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
-                               idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)),
+PhysicalWindow::PhysicalWindow(ArenaAllocator &arena, vector<LogicalType> types,
+                               vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
+                               PhysicalOperatorType type)
+    : PhysicalOperator(arena, type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)),
       order_idx(0), is_order_dependent(false) {
 
 	idx_t max_orders = 0;

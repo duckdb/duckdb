@@ -52,7 +52,6 @@ public:
 	static Executor &Get(ClientContext &context);
 
 	void Initialize(PhysicalOperator &physical_plan);
-	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
@@ -148,7 +147,6 @@ private:
 
 private:
 	optional_ptr<PhysicalOperator> physical_plan;
-	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
 	//! All pipelines of the query plan

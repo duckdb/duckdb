@@ -28,8 +28,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UPDATE_EXTENSIONS;
 
 public:
-	explicit PhysicalUpdateExtensions(unique_ptr<UpdateExtensionsInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::UPDATE_EXTENSIONS,
+	explicit PhysicalUpdateExtensions(ArenaAllocator &arena, unique_ptr<UpdateExtensionsInfo> info,
+	                                  idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::UPDATE_EXTENSIONS,
 	                       {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                        LogicalType::VARCHAR},
 	                       estimated_cardinality),

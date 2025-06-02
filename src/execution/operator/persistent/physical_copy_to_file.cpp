@@ -476,9 +476,9 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 	return fs.JoinPath(path, base);
 }
 
-PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
+PhysicalCopyToFile::PhysicalCopyToFile(ArenaAllocator &arena, vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 

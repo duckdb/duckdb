@@ -8,9 +8,8 @@ namespace duckdb {
 
 PhysicalUnion::PhysicalUnion(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &top,
                              PhysicalOperator &bottom, idx_t estimated_cardinality, bool allow_out_of_order)
-    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
       allow_out_of_order(allow_out_of_order) {
-	children.Init(arena);
 	children.push_back(top);
 	children.push_back(bottom);
 }

@@ -13,12 +13,10 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(ArenaAllocator &arena, LogicalOpe
                                                PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
+    : PhysicalComparisonJoin(arena, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
                              estimated_cardinality) {
 
 	filter_pushdown = std::move(pushdown_info_p);
-
-	children.Init(arena);
 	children.push_back(left);
 	children.push_back(right);
 }

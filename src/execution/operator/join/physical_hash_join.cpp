@@ -34,12 +34,12 @@ PhysicalHashJoin::PhysicalHashJoin(ArenaAllocator &arena, LogicalOperator &op, P
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
+    : PhysicalComparisonJoin(arena, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
+                             estimated_cardinality),
       delim_types(std::move(delim_types)) {
 
 	filter_pushdown = std::move(pushdown_info_p);
 
-	children.Init(arena);
 	children.push_back(left);
 	children.push_back(right);
 

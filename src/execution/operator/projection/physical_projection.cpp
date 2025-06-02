@@ -19,9 +19,9 @@ public:
 	}
 };
 
-PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-                                       idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::PROJECTION, std::move(types), estimated_cardinality),
+PhysicalProjection::PhysicalProjection(ArenaAllocator &arena, vector<LogicalType> types,
+                                       vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
+    : PhysicalOperator(arena, PhysicalOperatorType::PROJECTION, std::move(types), estimated_cardinality),
       select_list(std::move(select_list)) {
 }
 

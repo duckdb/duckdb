@@ -8,9 +8,10 @@
 
 namespace duckdb {
 
-PhysicalStreamingWindow::PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalStreamingWindow::PhysicalStreamingWindow(ArenaAllocator &arena, vector<LogicalType> types,
+                                                 vector<unique_ptr<Expression>> select_list,
                                                  idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+    : PhysicalOperator(arena, type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
 }
 
 class StreamingWindowGlobalState : public GlobalOperatorState {

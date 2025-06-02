@@ -10,9 +10,9 @@
 
 namespace duckdb {
 
-PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, PhysicalOperator &left,
+PhysicalPositionalScan::PhysicalPositionalScan(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
                                                PhysicalOperator &right)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
+    : PhysicalOperator(arena, PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
                        MaxValue(left.estimated_cardinality, right.estimated_cardinality)) {
 
 	// Manage the children ourselves

@@ -45,8 +45,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result =
-		    Make<PhysicalUnion>(GetArena(), op.types, left, right, op.estimated_cardinality, op.allow_out_of_order);
+		result = Make<PhysicalUnion>(op.types, left, right, op.estimated_cardinality, op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
@@ -84,8 +83,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		// INTERSECT is SEMI join
 
 		JoinType join_type = op.type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		result = Make<PhysicalHashJoin>(GetArena(), op, left, right, std::move(conditions), join_type,
-		                                op.estimated_cardinality);
+		result = Make<PhysicalHashJoin>(op, left, right, std::move(conditions), join_type, op.estimated_cardinality);
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {

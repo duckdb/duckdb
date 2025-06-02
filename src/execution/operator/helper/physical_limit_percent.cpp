@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-PhysicalLimitPercent::PhysicalLimitPercent(vector<LogicalType> types, BoundLimitNode limit_val_p,
+PhysicalLimitPercent::PhysicalLimitPercent(ArenaAllocator &arena, vector<LogicalType> types, BoundLimitNode limit_val_p,
                                            BoundLimitNode offset_val_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LIMIT_PERCENT, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::LIMIT_PERCENT, std::move(types), estimated_cardinality),
       limit_val(std::move(limit_val_p)), offset_val(std::move(offset_val_p)) {
 	D_ASSERT(limit_val.Type() == LimitNodeType::CONSTANT_PERCENTAGE ||
 	         limit_val.Type() == LimitNodeType::EXPRESSION_PERCENTAGE);

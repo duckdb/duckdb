@@ -21,10 +21,10 @@
 
 namespace duckdb {
 
-PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
+PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(ArenaAllocator &arena, vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
                                                        idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
       aggregates(std::move(expressions)) {
 
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);

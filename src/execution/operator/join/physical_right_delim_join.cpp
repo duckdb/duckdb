@@ -15,12 +15,11 @@ PhysicalRightDelimJoin::PhysicalRightDelimJoin(ArenaAllocator &arena, PhysicalPl
                                                PhysicalOperator &distinct,
                                                const vector<const_reference<PhysicalOperator>> &delim_scans,
                                                idx_t estimated_cardinality, optional_idx delim_idx)
-    : PhysicalDelimJoin(PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), original_join, distinct, delim_scans,
-                        estimated_cardinality, delim_idx) {
+    : PhysicalDelimJoin(arena, PhysicalOperatorType::RIGHT_DELIM_JOIN, std::move(types), original_join, distinct,
+                        delim_scans, estimated_cardinality, delim_idx) {
 	D_ASSERT(join.children.size() == 2);
 	// now for the original join
 	// we take its right child, this is the side that we will duplicate eliminate
-	children.Init(arena);
 	children.push_back(join.children[1]);
 
 	// we replace it with a PhysicalDummyScan, which contains no data, just the types, it won't be scanned anyway

@@ -19,9 +19,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPRESSION_SCAN;
 
 public:
-	PhysicalExpressionScan(vector<LogicalType> types, vector<vector<unique_ptr<Expression>>> expressions,
-	                       idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::EXPRESSION_SCAN, std::move(types), estimated_cardinality),
+	PhysicalExpressionScan(ArenaAllocator &arena, vector<LogicalType> types,
+	                       vector<vector<unique_ptr<Expression>>> expressions, idx_t estimated_cardinality)
+	    : PhysicalOperator(arena, PhysicalOperatorType::EXPRESSION_SCAN, std::move(types), estimated_cardinality),
 	      expressions(std::move(expressions)) {
 	}
 

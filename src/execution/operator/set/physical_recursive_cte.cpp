@@ -18,9 +18,8 @@ namespace duckdb {
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(ArenaAllocator &arena, string ctename, idx_t table_index,
                                            vector<LogicalType> types, bool union_all, PhysicalOperator &top,
                                            PhysicalOperator &bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(arena, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
       ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
-	children.Init(arena);
 	children.push_back(top);
 	children.push_back(bottom);
 }

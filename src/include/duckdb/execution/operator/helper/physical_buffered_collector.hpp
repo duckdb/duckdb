@@ -15,7 +15,7 @@ namespace duckdb {
 
 class PhysicalBufferedCollector : public PhysicalResultCollector {
 public:
-	PhysicalBufferedCollector(PreparedStatementData &data, bool parallel);
+	PhysicalBufferedCollector(ArenaAllocator &arena, PreparedStatementData &data, bool parallel);
 
 	bool parallel;
 
