@@ -132,12 +132,14 @@ SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN 22 ELSE NULL END) SELECT
 12	NULL
 13	NULL
 
-query II
-SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) SELECT * FROM cte) FROM test ORDER BY a
-----
-11	22
-12	NULL
-13	NULL
+# This test case is broken with PR #17459. Without CTE inlining, the result is arbitrary due to the materialization of the CTE.
+# Previously no_alternative_verify prevented that, but now it does not suffice anymore.
+# query II
+# SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) SELECT * FROM cte) FROM test ORDER BY a
+# ----
+# 11	22
+# 12	NULL
+# 13	NULL
 
 query II
 SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) SELECT * FROM cte) FROM test ORDER BY a
