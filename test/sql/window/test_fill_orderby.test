@@ -105,3 +105,74 @@ qualify filled is distinct from permuted
 order by i
 ----
 7	2	NULL
+
+# NULL sort key covreage
+query III
+with source as (
+	select 
+		i, 
+		(i + 1) * 3 % 5 as permuted,
+		if(permuted = 0, NULL, permuted) as missing
+	from (
+		from range(5) tbl(i)
+		union all 
+		select NULL::INTEGER as i
+	) t(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls first) over (order by i) as filled
+from source
+qualify filled is distinct from permuted
+----
+
+query III
+with source as (
+	select 
+		i, 
+		(i + 1) * 3 % 5 as permuted,
+		if(permuted = 4, NULL, permuted) as missing
+	from (
+		from range(5) tbl(i)
+		union all 
+		select NULL::INTEGER as i
+	) t(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls last) over (order by i) as filled
+from source
+qualify filled is distinct from permuted
+----
+
+query III
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls last) over (order by i) as filled
+from (values
+	(0, 1, NULL),
+	(1, NULL, 0)
+) source(i, missing, permuted)
+order by i
+----
+0	NULL	1
+1	0	NULL
+
+query III
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls first) over (order by i) as filled
+from (values
+	(0, NULL, 2),
+	(1, 0, NULL),
+	(2, 1, 1),
+) source(i, missing, permuted)
+order by i
+----
+0	2	1
+1	NULL	0
+2	1	1

@@ -918,7 +918,7 @@ void WindowFillExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
 			}
 
 			//	Nothing after, so scan backwards from the previous
-			if (next_valid == DConstants::INVALID_INDEX && prev_valid > frame.start) {
+			if (next_valid == DConstants::INVALID_INDEX && prev_n > 0) {
 				for (idx_t n = prev_n; n-- > 0;) {
 					auto j = gfstate.value_tree->SelectNth(frames, n).first;
 					if (order_cursor.CellIsNull(0, j)) {
