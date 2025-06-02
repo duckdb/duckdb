@@ -1,0 +1,10 @@
+
+
+# name: test/sql/peg_parser/struct_identifier.test
+# description: Test on conflict on insert in peg parser
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO tbl_comp VALUES (2, 'hello', 1, 'world') ON CONFLICT (c, b) DO UPDATE SET a = excluded.a, d = excluded.d;$TEST_PEG_PARSER$);
