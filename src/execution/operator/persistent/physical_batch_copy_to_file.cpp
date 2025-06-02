@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/logging/log_utils.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -67,12 +68,14 @@ public:
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4ULL * 1024ULL * 1024ULL;
 
 public:
-	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
-	    : memory_manager(context_p, minimum_memory_per_thread), initialized(false), rows_copied(0), batch_size(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
-	      minimum_memory_per_thread(minimum_memory_per_thread) {
+	explicit FixedBatchCopyGlobalState(ClientContext &context_p, const PhysicalBatchCopyToFile &op,
+	                                   idx_t minimum_memory_per_thread)
+	    : logger(context_p, op), memory_manager(context_p, minimum_memory_per_thread), initialized(false),
+	      rows_copied(0), batch_size(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false),
+	      any_finished(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
+	const PhysicalOperatorLogger logger;
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
@@ -112,6 +115,9 @@ public:
 		}
 		// initialize writing to the file
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.function.initialize_logger) {
+			op.function.initialize_logger(*global_state, logger);
+		}
 		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
 			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
@@ -627,7 +633,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().GetTypes().size();
-	auto result = make_uniq<FixedBatchCopyGlobalState>(context, minimum_memory_per_thread);
+	auto result = make_uniq<FixedBatchCopyGlobalState>(context, *this, minimum_memory_per_thread);
 	if (write_empty_file) {
 		// if we are writing the file also if it is empty - initialize now
 		result->Initialize(context, *this);

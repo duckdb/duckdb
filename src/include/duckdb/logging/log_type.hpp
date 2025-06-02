@@ -9,11 +9,15 @@
 #pragma once
 
 #include "duckdb/logging/logging.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
+
 struct FileHandle;
 struct BaseRequest;
 struct HTTPResponse;
+class PhysicalOperator;
+enum class PhysicalOperatorType : uint8_t;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -86,6 +90,21 @@ public:
 	static string ConstructLogMessage(const string &str) {
 		return str;
 	}
+};
+
+class PhysicalOperatorLogType : public LogType {
+public:
+	static constexpr const char *NAME = "PhysicalOperator";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	PhysicalOperatorLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const PhysicalOperator &physical_operator, const string &message);
+	static string ConstructLogMessage(const PhysicalOperatorType &operator_type,
+	                                  const InsertionOrderPreservingMap<string> &parameters, const string &message);
 };
 
 } // namespace duckdb

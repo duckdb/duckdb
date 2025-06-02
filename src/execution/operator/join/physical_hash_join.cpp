@@ -7,6 +7,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/logging/log_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
@@ -129,12 +130,12 @@ unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientC
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
-	    : context(context_p), op(op_p),
+	    : context(context_p), op(op_p), logger(context, op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
 	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
 	      probe_side_requirement(0), scanned_data(false) {
-		hash_table = op.InitializeHashTable(context);
+		hash_table = op.InitializeHashTable(context, logger);
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
@@ -165,6 +166,7 @@ public:
 public:
 	ClientContext &context;
 	const PhysicalHashJoin &op;
+	const PhysicalOperatorLogger logger;
 
 	const idx_t num_threads;
 	//! Temporary memory state for managing this operator's memory usage
@@ -221,7 +223,7 @@ public:
 			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
 		}
 
-		hash_table = op.InitializeHashTable(context);
+		hash_table = op.InitializeHashTable(context, gstate.logger);
 		hash_table->GetSinkCollection().InitializeAppendState(append_state);
 
 		gstate.active_local_states++;
@@ -245,8 +247,9 @@ public:
 	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
-unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, conditions, payload_columns.col_types, join_type,
+unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
+                                                                const PhysicalOperatorLogger &logger) const {
+	auto result = make_uniq<JoinHashTable>(context, logger, conditions, payload_columns.col_types, join_type,
 	                                       rhs_output_columns.col_idxs);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -853,6 +856,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 	if (sink.external) {
 		// External Hash Join
+		sink.logger.Log("External hash join: enabled. Size (%llu) greater than reservation (%llu)", sink.total_size,
+		                sink.temporary_memory_state->GetReservation());
+
 		sink.perfect_join_executor.reset();
 
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
@@ -861,8 +867,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		if (!very_very_skewed &&
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
+			const auto radix_bits_before = ht.GetRadixBits();
 			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
 			                           sink.max_partition_count);
+			sink.logger.Log("External hash join: repartitioning. Increasing from %llu to %llu partitions",
+			                RadixPartitioning::NumberOfPartitions(radix_bits_before),
+			                RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
 			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, *this, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
