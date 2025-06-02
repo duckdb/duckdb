@@ -27,22 +27,27 @@
 #include <stack>
 
 namespace duckdb {
+
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
 
+enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
+
 struct OperatorInformation {
-	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t elements_scanned_p = 0,
-	                             idx_t result_set_size_p = 0)
-	    : time(time_p), elements_returned(elements_returned_p), result_set_size(result_set_size_p) {
+	explicit OperatorInformation() {
 	}
 
-	double time;
-	idx_t elements_returned;
-	idx_t result_set_size;
 	string name;
+
+	double time = 0;
+	idx_t elements_returned = 0;
+	idx_t result_set_size = 0;
+	idx_t system_peak_buffer_manager_memory = 0;
+	idx_t system_peak_temp_directory_size = 0;
+
 	InsertionOrderPreservingMap<string> extra_info;
 
 	void AddTime(double n_time) {
@@ -55,6 +60,18 @@ struct OperatorInformation {
 
 	void AddResultSetSize(idx_t n_result_set_size) {
 		result_set_size += n_result_set_size;
+	}
+
+	void UpdateSystemPeakBufferManagerMemory(idx_t used_memory) {
+		if (used_memory > system_peak_buffer_manager_memory) {
+			system_peak_buffer_manager_memory = used_memory;
+		}
+	}
+
+	void UpdateSystemPeakTempDirectorySize(idx_t used_swap) {
+		if (used_swap > system_peak_temp_directory_size) {
+			system_peak_temp_directory_size = used_swap;
+		}
 	}
 };
 
@@ -97,9 +114,10 @@ private:
 };
 
 struct QueryInfo {
-	QueryInfo() : blocked_thread_time(0) {};
+	QueryInfo() {
+	}
 	string query_name;
-	double blocked_thread_time;
+	ProfilingInfo query_global_info;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -219,7 +237,7 @@ private:
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
-	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	bool OperatorRequiresProfiling(const PhysicalOperatorType op_type);
 	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 

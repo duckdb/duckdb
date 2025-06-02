@@ -47,6 +47,8 @@ public:
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API time_t GetLastModifiedTime();
+	DUCKDB_API string GetVersionTag();
+	DUCKDB_API bool Validate() const;
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
@@ -79,6 +81,8 @@ private:
 	OpenFileInfo path;
 	//! Flags used to open the file
 	FileOpenFlags flags;
+	//! Whether to validate the cache entry
+	bool validate;
 	//! The associated CachedFile with cached ranges
 	CachedFile &cached_file;
 
@@ -113,8 +117,6 @@ private:
 	FileSystem &file_system;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
-	//! Whether to validate cache entries
-	bool validate;
 };
 
 } // namespace duckdb

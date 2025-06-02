@@ -87,7 +87,7 @@ void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState 
 			if (!hotrun) {
 				runner->Log(StringUtil::Format("%s\t%d\t", benchmark->name, 0));
 			}
-			runner->LogResult("KILLED");
+			runner->LogResult("Benchmark timeout reached; Interrupt failed. Benchmark killed by benchmark runner");
 			exit(1);
 		}
 	}
@@ -304,6 +304,17 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 			}
 		} else if (arg == "--no-summary") {
 			summarize = false;
+		} else if (StringUtil::StartsWith(arg, "--")) {
+			// custom argument
+			auto arg_name = arg.substr(2);
+			if (arg_index + 1 >= arg_counter) {
+				fprintf(stderr, "Benchmark argument %s requires an argument\n", arg_name.c_str());
+				print_help();
+				exit(1);
+			}
+			arg_index++;
+			auto arg_value = arg_values[arg_index];
+			instance.custom_arguments.emplace(std::move(arg_name), std::move(arg_value));
 		} else {
 			if (!instance.configuration.name_pattern.empty()) {
 				fprintf(stderr, "Only one benchmark can be specified.\n");

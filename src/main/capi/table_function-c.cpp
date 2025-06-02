@@ -118,16 +118,17 @@ struct CTableInternalFunctionInfo {
 //===--------------------------------------------------------------------===//
 // Helper Functions
 //===--------------------------------------------------------------------===//
+
 duckdb::TableFunction &GetCTableFunction(duckdb_table_function function) {
 	return *reinterpret_cast<duckdb::TableFunction *>(function);
 }
 
-duckdb::CTableInternalBindInfo &GetCBindInfo(duckdb_bind_info info) {
+duckdb::CTableInternalBindInfo &GetCTableFunctionBindInfo(duckdb_bind_info info) {
 	D_ASSERT(info);
 	return *reinterpret_cast<duckdb::CTableInternalBindInfo *>(info);
 }
 
-duckdb_bind_info ToCBindInfo(duckdb::CTableInternalBindInfo &info) {
+duckdb_bind_info ToCTableFunctionBindInfo(duckdb::CTableInternalBindInfo &info) {
 	return reinterpret_cast<duckdb_bind_info>(&info);
 }
 
@@ -140,25 +141,27 @@ duckdb_init_info ToCInitInfo(duckdb::CTableInternalInitInfo &info) {
 	return reinterpret_cast<duckdb_init_info>(&info);
 }
 
-duckdb::CTableInternalFunctionInfo &GetCFunctionInfo(duckdb_function_info info) {
+duckdb::CTableInternalFunctionInfo &GetCTableFunctionInfo(duckdb_function_info info) {
 	D_ASSERT(info);
 	return *reinterpret_cast<duckdb::CTableInternalFunctionInfo *>(info);
 }
 
-duckdb_function_info ToCFunctionInfo(duckdb::CTableInternalFunctionInfo &info) {
+duckdb_function_info ToCTableFunctionInfo(duckdb::CTableInternalFunctionInfo &info) {
 	return reinterpret_cast<duckdb_function_info>(&info);
 }
 
 //===--------------------------------------------------------------------===//
-// Table Callbacks
+// Table Function Callbacks
 //===--------------------------------------------------------------------===//
+
 unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto &info = input.info->Cast<CTableFunctionInfo>();
 	D_ASSERT(info.bind && info.function && info.init);
+
 	auto result = make_uniq<CTableBindData>(info);
 	CTableInternalBindInfo bind_info(context, input, return_types, names, *result, info);
-	info.bind(ToCBindInfo(bind_info));
+	info.bind(ToCTableFunctionBindInfo(bind_info));
 	if (!bind_info.success) {
 		throw BinderException(bind_info.error);
 	}
@@ -207,7 +210,7 @@ void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChun
 	auto &global_data = data_p.global_state->Cast<CTableGlobalInitData>();
 	auto &local_data = data_p.local_state->Cast<CTableLocalInitData>();
 	CTableInternalFunctionInfo function_info(bind_data, global_data.init_data, local_data.init_data);
-	bind_data.info.function(ToCFunctionInfo(function_info), reinterpret_cast<duckdb_data_chunk>(&output));
+	bind_data.info.function(ToCTableFunctionInfo(function_info), reinterpret_cast<duckdb_data_chunk>(&output));
 	if (!function_info.success) {
 		throw InvalidInputException(function_info.error);
 	}
@@ -355,13 +358,13 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 //===--------------------------------------------------------------------===//
 // Bind Interface
 //===--------------------------------------------------------------------===//
-using duckdb::GetCBindInfo;
+using duckdb::GetCTableFunctionBindInfo;
 
 void *duckdb_bind_get_extra_info(duckdb_bind_info info) {
 	if (!info) {
 		return nullptr;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	return bind_info.function_info.extra_info;
 }
 
@@ -375,7 +378,7 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 		return;
 	}
 
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	bind_info.names.push_back(name);
 	bind_info.return_types.push_back(*logical_type);
 }
@@ -384,7 +387,7 @@ idx_t duckdb_bind_get_parameter_count(duckdb_bind_info info) {
 	if (!info) {
 		return 0;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	return bind_info.input.inputs.size();
 }
 
@@ -392,7 +395,7 @@ duckdb_value duckdb_bind_get_parameter(duckdb_bind_info info, idx_t index) {
 	if (!info || index >= duckdb_bind_get_parameter_count(info)) {
 		return nullptr;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(bind_info.input.inputs[index]));
 }
 
@@ -400,7 +403,7 @@ duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *
 	if (!info || !name) {
 		return nullptr;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	auto t = bind_info.input.named_parameters.find(name);
 	if (t == bind_info.input.named_parameters.end()) {
 		return nullptr;
@@ -413,7 +416,7 @@ void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_de
 	if (!info) {
 		return;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	bind_info.bind_data.bind_data = bind_data;
 	bind_info.bind_data.delete_callback = destroy;
 }
@@ -422,7 +425,7 @@ void duckdb_bind_set_cardinality(duckdb_bind_info info, idx_t cardinality, bool 
 	if (!info) {
 		return;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	if (is_exact) {
 		bind_info.bind_data.stats = duckdb::make_uniq<duckdb::NodeStatistics>(cardinality);
 	} else {
@@ -434,7 +437,7 @@ void duckdb_bind_set_error(duckdb_bind_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
-	auto &bind_info = GetCBindInfo(info);
+	auto &bind_info = GetCTableFunctionBindInfo(info);
 	bind_info.error = error;
 	bind_info.success = false;
 }
@@ -508,13 +511,13 @@ void duckdb_init_set_max_threads(duckdb_init_info info, idx_t max_threads) {
 //===--------------------------------------------------------------------===//
 // Function Interface
 //===--------------------------------------------------------------------===//
-using duckdb::GetCFunctionInfo;
+using duckdb::GetCTableFunctionInfo;
 
 void *duckdb_function_get_extra_info(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;
 	}
-	auto &function_info = GetCFunctionInfo(info);
+	auto &function_info = GetCTableFunctionInfo(info);
 	return function_info.bind_data.info.extra_info;
 }
 
@@ -522,7 +525,7 @@ void *duckdb_function_get_bind_data(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;
 	}
-	auto &function_info = GetCFunctionInfo(info);
+	auto &function_info = GetCTableFunctionInfo(info);
 	return function_info.bind_data.bind_data;
 }
 
@@ -530,7 +533,7 @@ void *duckdb_function_get_init_data(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;
 	}
-	auto &function_info = GetCFunctionInfo(info);
+	auto &function_info = GetCTableFunctionInfo(info);
 	return function_info.init_data.init_data;
 }
 
@@ -538,7 +541,7 @@ void *duckdb_function_get_local_init_data(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;
 	}
-	auto &function_info = GetCFunctionInfo(info);
+	auto &function_info = GetCTableFunctionInfo(info);
 	return function_info.local_data.init_data;
 }
 
@@ -546,7 +549,7 @@ void duckdb_function_set_error(duckdb_function_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
-	auto &function_info = GetCFunctionInfo(info);
+	auto &function_info = GetCTableFunctionInfo(info);
 	function_info.error = error;
 	function_info.success = false;
 }

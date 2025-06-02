@@ -140,6 +140,7 @@ public:
 	static int64_t GetMilli(const interval_t &val);
 
 	//! Get Interval in microseconds
+	static bool TryGetMicro(const interval_t &val, int64_t &micros);
 	static int64_t GetMicro(const interval_t &val);
 
 	//! Get Interval in Nanoseconds

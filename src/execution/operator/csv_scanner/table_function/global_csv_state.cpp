@@ -72,6 +72,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, current_file_ptr, false, current_boundary);
+
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 	// We initialize the scan
 	return csv_scanner;

@@ -648,6 +648,34 @@ bool LogicalType::IsIntegral() const {
 	}
 }
 
+bool LogicalType::IsSigned() const {
+	switch (id_) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool LogicalType::IsUnsigned() const {
+	switch (id_) {
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
 bool LogicalType::IsFloating() const {
 	switch (id_) {
 	case LogicalTypeId::FLOAT:
@@ -659,7 +687,11 @@ bool LogicalType::IsFloating() const {
 }
 
 bool LogicalType::IsNumeric() const {
-	switch (id_) {
+	return IsNumeric(id_);
+}
+
+bool LogicalType::IsNumeric(const LogicalTypeId type) {
+	switch (type) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:

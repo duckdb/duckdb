@@ -219,6 +219,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
+	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -256,6 +257,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			result->column_ids.emplace_back(col_id);
 		}
 	}
+	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;
 	if (!has_serialize) {
@@ -281,14 +283,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 				if (ventry == virtual_columns.end()) {
 					throw SerializationException(
 					    "Table function deserialization failure - could not find virtual column with id %d", idx);
-				}
-				auto &ret_type = ventry->second.type;
-				auto &col_name = ventry->second.name;
-				if (bind_return_types[idx] != ret_type) {
-					throw SerializationException(
-					    "Table function deserialization failure in function \"%s\" - virtual column with "
-					    "name %s was serialized with type %s, but now has type %s",
-					    function.name, col_name, ret_type, bind_return_types[idx]);
 				}
 			} else {
 				auto idx = col_id.GetPrimaryIndex();

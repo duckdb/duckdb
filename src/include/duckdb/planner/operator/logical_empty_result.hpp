@@ -22,6 +22,7 @@ public:
 
 public:
 	explicit LogicalEmptyResult(unique_ptr<LogicalOperator> op);
+	LogicalEmptyResult(vector<LogicalType> return_types, vector<ColumnBinding> bindings);
 
 	//! The set of return types of the empty result
 	vector<LogicalType> return_types;

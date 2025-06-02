@@ -1,7 +1,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -27,6 +26,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
 		}
+		// resolve any single-side predicates
+		// for now, only ASOF supports this, and we are guaranteed that all right side predicates
+		// have been pushed into a filter.
+		if (comp_join.predicate) {
+			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			VisitExpression(&comp_join.predicate);
+		}
 		// visit the duplicate eliminated columns on the LHS, if any
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
@@ -38,40 +44,32 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
+		types = op.types;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		// depending on whether the delim join has been flipped, get the appropriate bindings
-		if (comp_join.delim_flipped) {
-			VisitOperator(*comp_join.children[1]);
-			for (auto &cond : comp_join.conditions) {
-				VisitExpression(&cond.right);
-			}
-		} else {
-			VisitOperator(*comp_join.children[0]);
-			for (auto &cond : comp_join.conditions) {
-				VisitExpression(&cond.left);
-			}
+		// get bindings from the duplicate-eliminated side
+		auto &delim_side = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
+		VisitOperator(delim_side);
+		for (auto &cond : comp_join.conditions) {
+			auto &expr = comp_join.delim_flipped ? cond.right : cond.left;
+			VisitExpression(&expr);
 		}
 		// visit the duplicate eliminated columns
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
 		}
-		// now get the other side
-		if (comp_join.delim_flipped) {
-			VisitOperator(*comp_join.children[0]);
-			for (auto &cond : comp_join.conditions) {
-				VisitExpression(&cond.left);
-			}
-		} else {
-			VisitOperator(*comp_join.children[1]);
-			for (auto &cond : comp_join.conditions) {
-				VisitExpression(&cond.right);
-			}
+		// now the other side
+		auto &other_side = comp_join.delim_flipped ? *comp_join.children[0] : *comp_join.children[1];
+		VisitOperator(other_side);
+		for (auto &cond : comp_join.conditions) {
+			auto &expr = comp_join.delim_flipped ? cond.left : cond.right;
+			VisitExpression(&expr);
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
+		types = op.types;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
@@ -80,10 +78,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// this operator
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
+		types = op.types;
 		auto &any_join = op.Cast<LogicalAnyJoin>();
 		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+			auto &right_types = op.children[1]->types;
+			types.insert(types.end(), right_types.begin(), right_types.end());
 		}
 		if (any_join.join_type == JoinType::RIGHT_SEMI || any_join.join_type == JoinType::RIGHT_ANTI) {
 			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
@@ -96,12 +97,15 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = op.Cast<LogicalCreateIndex>();
 		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.GetColumns().LogicalColumnCount());
+		// TODO: fill types in too (clearing skips type checks)
+		types.clear();
 		VisitOperatorExpressions(op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		//! We first need to update the current set of bindings and then visit operator expressions
 		bindings = op.GetColumnBindings();
+		types = op.types;
 		VisitOperatorExpressions(op);
 		return;
 	}
@@ -117,6 +121,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			// Now insert our dummy bindings at the start of the bindings,
 			// so the first 'column_count' indices of the chunk are reserved for our 'excluded' columns
 			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
+			// TODO: fill types in too (clearing skips type checks)
+			types.clear();
 			if (insert_op.on_conflict_condition) {
 				VisitExpression(&insert_op.on_conflict_condition);
 			}
@@ -125,20 +131,25 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			}
 			VisitOperatorExpressions(op);
 			bindings = op.GetColumnBindings();
+			types = op.types;
 			return;
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		// Just to be very sure, we clear before and after resolving extension operator column bindings
+		// This skips checks, but makes sure we don't break any extension operators with type verification
+		types.clear();
 		ext_op.ResolveColumnBindings(*this, bindings);
+		types.clear();
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto &rec = op.Cast<LogicalRecursiveCTE>();
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
-
+		types = op.types;
 		for (auto &expr : rec.key_targets) {
 			VisitExpression(&expr);
 		}
@@ -155,6 +166,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 	// finally update the current set of bindings to the current set of column bindings
 	bindings = op.GetColumnBindings();
+	types = op.types;
 }
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
@@ -163,6 +175,19 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
+			if (!types.empty()) {
+				if (bindings.size() != types.size()) {
+					throw InternalException(
+					    "Failed to bind column reference \"%s\" [%d.%d]: inequal num bindings/types (%llu != %llu)",
+					    expr.GetAlias(), expr.binding.table_index, expr.binding.column_index, bindings.size(),
+					    types.size());
+				}
+				if (expr.return_type != types[i]) {
+					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
+					                        expr.GetAlias(), expr.binding.table_index, expr.binding.column_index,
+					                        expr.return_type.ToString(), types[i].ToString());
+				}
+			}
 			if (verify_only) {
 				// in verification mode
 				return nullptr;
@@ -204,6 +229,7 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
 #ifdef DEBUG
+	op.ResolveOperatorTypes();
 	ColumnBindingResolver resolver(true);
 	resolver.VisitOperator(op);
 	VerifyInternal(op);

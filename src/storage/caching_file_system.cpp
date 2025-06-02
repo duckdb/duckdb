@@ -11,8 +11,7 @@
 namespace duckdb {
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)), validate(true) {
-	// TODO: "validate" defaults to true (for now)
+    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
@@ -29,8 +28,15 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &pa
 CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, const OpenFileInfo &path_p,
                                      FileOpenFlags flags_p, CachedFile &cached_file_p)
     : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
-      path(path_p), flags(flags_p), cached_file(cached_file_p), position(0) {
-	if (!external_file_cache.IsEnabled() || caching_file_system.validate) {
+      path(path_p), flags(flags_p), validate(true), cached_file(cached_file_p), position(0) {
+	if (path.extended_info) {
+		const auto &open_options = path.extended_info->options;
+		const auto validate_entry = open_options.find("validate_external_file_cache");
+		if (validate_entry != open_options.end()) {
+			validate = BooleanValue::Get(validate_entry->second);
+		}
+	}
+	if (!external_file_cache.IsEnabled() || validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
 		return;
@@ -48,13 +54,12 @@ CachingFileHandle::~CachingFileHandle() {
 
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
-		const auto current_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 		file_handle = caching_file_system.file_system.OpenFile(path, flags);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!cached_file.IsValid(guard, caching_file_system.validate, version_tag, last_modified, current_time)) {
+		if (!cached_file.IsValid(guard, validate, version_tag, last_modified)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -143,7 +148,7 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (file_handle || caching_file_system.validate) {
+	if (file_handle || validate) {
 		return GetFileHandle().GetFileSize();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -151,7 +156,7 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 time_t CachingFileHandle::GetLastModifiedTime() {
-	if (file_handle || caching_file_system.validate) {
+	if (file_handle || validate) {
 		GetFileHandle();
 		return last_modified;
 	}
@@ -159,8 +164,21 @@ time_t CachingFileHandle::GetLastModifiedTime() {
 	return cached_file.LastModified(guard);
 }
 
+string CachingFileHandle::GetVersionTag() {
+	if (file_handle || validate) {
+		GetFileHandle();
+		return version_tag;
+	}
+	auto guard = cached_file.lock.GetSharedLock();
+	return cached_file.VersionTag(guard);
+}
+
+bool CachingFileHandle::Validate() const {
+	return validate;
+}
+
 bool CachingFileHandle::CanSeek() {
-	if (file_handle || caching_file_system.validate) {
+	if (file_handle || validate) {
 		return GetFileHandle().CanSeek();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -172,7 +190,7 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (file_handle || caching_file_system.validate) {
+	if (file_handle || validate) {
 		return GetFileHandle().OnDiskFile();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -180,7 +198,7 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	if (file_handle || caching_file_system.validate) {
+	if (file_handle || validate) {
 		GetFileHandle();
 		return version_tag;
 	}
@@ -218,7 +236,7 @@ BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_by
 	if (it != ranges.begin()) {
 		--it;
 	}
-	for (it = ranges.begin(); it != ranges.end();) {
+	while (it != ranges.end()) {
 		if (it->second->location >= this_end) {
 			// We're past the requested location
 			break;
@@ -239,7 +257,9 @@ BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_by
 			if (result.IsValid()) {
 				return result;
 			}
-			continue;
+			break;
+		default:
+			throw InternalException("Unknown CachedFileRangeOverlap");
 		}
 		++it;
 	}
@@ -251,9 +271,6 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
                                                      CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,
                                                      idx_t location) {
 	D_ASSERT(file_range.GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL);
-	if (file_range.block_handle->IsUnloaded()) {
-		return BufferHandle(); // Purely in-memory (for now)
-	}
 	auto result = external_file_cache.GetBufferManager().Pin(file_range.block_handle);
 	if (result.IsValid()) {
 		buffer = result.Ptr() + (location - file_range.location);
@@ -268,12 +285,16 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 	auto &ranges = cached_file.Ranges(guard);
 
 	// Start at lower_bound (first range with location not less than location of newly created range)
-	for (auto it = ranges.lower_bound(location); it != ranges.end();) {
+	auto it = ranges.lower_bound(location);
+	if (it != ranges.begin()) {
+		--it;
+	}
+	while (it != ranges.end()) {
 		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
 			// Another thread has read a range that fully contains the requested range in the meantime
-			pin = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
-			if (pin.IsValid()) {
-				return std::move(pin);
+			auto other_pin = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
+			if (other_pin.IsValid()) {
+				return other_pin;
 			}
 			it = ranges.erase(it);
 			continue;
@@ -291,12 +312,16 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 			// Since we have the write lock here, we can do some cleanup
 			it = ranges.erase(it);
 			continue;
+		default:
+			throw InternalException("Unknown CachedFileRangeOverlap");
 		}
 		if (break_loop) {
 			break;
 		}
+
 		++it;
 	}
+	D_ASSERT(pin.IsValid());
 
 	// Finally, insert newly created buffer into the map
 	new_file_range->AddCheckSum();

@@ -279,6 +279,12 @@
         "custom_implementation": true
     },
     {
+        "name": "disable_timestamptz_casts",
+        "description": "Disable casting from timestamp to timestamptz ",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "disabled_compression_methods",
         "description": "Disable a specific set of compression methods (comma separated)",
         "type": "VARCHAR",
@@ -544,6 +550,13 @@
         "scope": "local"
     },
     {
+        "name": "lambda_syntax",
+        "description": "Configures the use of the deprecated single arrow operator (->) for lambda functions.",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "late_materialization_max_rows",
         "description": "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization",
         "type": "UBIGINT",
@@ -723,6 +736,13 @@
         "aliases": [
             "profiling_output"
         ]
+    },
+    {
+        "name": "profiling_coverage",
+        "description": "The profiling coverage (SELECT or ALL)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "profiling_mode",

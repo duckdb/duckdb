@@ -2,9 +2,6 @@
 # description: Test metadata info
 # group: [pragma]
 
-# skip reload because of attach
-require skip_reload
-
 load __TEST_DIR__/test_metadata_info.db
 
 statement ok

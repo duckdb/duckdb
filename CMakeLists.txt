@@ -100,6 +100,10 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+if (DUCKDB_EXPLICIT_PLATFORM)
+    add_definitions(-DDUCKDB_CUSTOM_PLATFORM=${DUCKDB_EXPLICIT_PLATFORM})
+endif()
+
 option (WASM_ENABLED "Are DuckDB-Wasm extensions build enabled" FALSE)
 if (DEFINED ENV{WASM_EXTENSIONS})
      set(WASM_ENABLED "$ENV{WASM_EXTENSIONS}")
@@ -237,6 +241,8 @@ endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
 ######
+# MAIN_BRANCH_VERSIONING default should be 'TRUE' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
 # - scripts/amalgamation.py
@@ -284,6 +290,15 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
+if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-rc[0-9]+$")
+  if (DUCKDB_EXPLICIT_VERSION)
+    if (DUCKDB_EXPLICIT_PLATFORM STREQUAL DUCKDB_EXPLICIT_PLATFORM)
+      message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' and DUCKDB_EXPLICIT_PLATFORM '${DUCKDB_EXPLICIT_PLATFORM}' are both set and different")
+    endif()
+  endif()
+  set (DUCKDB_EXPLICIT_VERSION "${OVERRIDE_GIT_DESCRIBE}")
+  unset (OVERRIDE_GIT_DESCRIBE CACHE)
+endif()
 
 if (OVERRIDE_GIT_DESCRIBE)
   if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
@@ -306,7 +321,7 @@ if (OVERRIDE_GIT_DESCRIBE)
       set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
     endif()
   else()
-    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or version only 'vX.Y.Z'")
+    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or version only 'vX.Y.Z' or rc like 'vX.Y.Z-rcW")
   endif()
 else()
   find_package(Git)
@@ -358,7 +373,8 @@ endif()
 
 string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
 
-if(NOT "${DUCKDB_EXPLICIT_VERSION}" STREQUAL "")
+if(DUCKDB_EXPLICIT_VERSION)
+  # Use with care, this forces the version to the provided string, potentially breaking invariants in the process
   set(DUCKDB_VERSION "${DUCKDB_EXPLICIT_VERSION}")
 elseif(DUCKDB_DEV_ITERATION EQUAL 0)
   # on a tag; directly use the version
@@ -375,7 +391,9 @@ endif()
 
 string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
 
-if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND NOT GIT_COMMIT_HASH STREQUAL "")
+if(DUCKDB_EXPLICIT_VERSION)
+  set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_EXPLICIT_VERSION}")
+elseif(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND NOT GIT_COMMIT_HASH STREQUAL "")
   set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
@@ -410,6 +428,7 @@ option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(PYTHON_DEV "Build Intellisense and clang-tidy support and install dev dependencies" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -656,15 +675,18 @@ include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)
 include_directories(third_party/skiplist)
+include_directories(third_party/ska_sort)
 include_directories(third_party/fast_float)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
+include_directories(third_party/pdqsort)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/jaro_winkler)
+include_directories(third_party/vergesort)
 include_directories(third_party/yyjson/include)
 include_directories(third_party/zstd/include)
 
@@ -1289,7 +1311,7 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load client specific config
+# Load Python client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
@@ -1447,7 +1469,11 @@ if(BUILD_PYTHON)
       DUCKDB_LIBS="${duckdb_libs}"
     )
 
-  if(PYTHON_EDITABLE_BUILD)
+  if(PYTHON_DEV)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .[dev])
+    # Enable intellisense / clang-tidy support for IDEs
+    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
+  elseif(PYTHON_EDITABLE_BUILD)
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
   else()
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)

@@ -3,5 +3,5 @@
 # group: [clickbench]
 
 template benchmark/clickbench/clickbench.benchmark.in
-QUERY_NUMBER=9
+QUERY_NUMBER=09
 QUERY_NUMBER_PADDED=09

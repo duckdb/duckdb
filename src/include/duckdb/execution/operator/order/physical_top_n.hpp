@@ -33,12 +33,29 @@ public:
 
 public:
 	// Source interface
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate,
+	                                       const OperatorPartitionInfo &partition_info) const override;
 
 	bool IsSource() const override {
 		return true;
 	}
+
+	bool ParallelSource() const override {
+		return true;
+	}
+
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override {
+		if (partition_info.RequiresPartitionColumns()) {
+			return false;
+		}
+		return true;
+	}
+
 	OrderPreservationType SourceOrder() const override {
 		return OrderPreservationType::FIXED_ORDER;
 	}

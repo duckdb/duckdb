@@ -181,7 +181,7 @@
                     {"name": "month"},
                     {"name": "day"}
                 ],
-                "description": "The date for the given parts",
+                "description": "The date for the given parts.",
                 "example": "make_date(1992, 9, 20)"
             },
             {
@@ -212,7 +212,7 @@
         "name": "make_timestamp_ns",
         "parameters": "nanos",
         "description": "The timestamp for the given nanoseconds since epoch",
-        "example": "make_timestamp(1732117793000000000)",
+        "example": "make_timestamp_ns(1732117793000000000)",
         "type": "scalar_function_set"
     },
     {
@@ -325,7 +325,7 @@
         "name": "timetz_byte_comparable",
         "parameters": "time_tz",
         "description": "Converts a TIME WITH TIME ZONE to an integer sort key",
-        "example": "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)",
+        "example": "timetz_byte_comparable('18:18:16.21-07:00'::TIMETZ)",
         "type": "scalar_function"
     },
     {

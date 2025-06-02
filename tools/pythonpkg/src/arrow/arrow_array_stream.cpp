@@ -282,7 +282,23 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	case LogicalTypeId::BLOB:
 		return dataset_scalar(py::bytes(constant.GetValueUnsafe<string>()));
 	case LogicalTypeId::DECIMAL: {
-		py::object decimal_type = py::module_::import("pyarrow").attr("decimal128");
+		py::object decimal_type;
+		auto &datetime_info = type.GetTypeInfo<ArrowDecimalInfo>();
+		auto bit_width = datetime_info.GetBitWidth();
+		switch (bit_width) {
+		case DecimalBitWidth::DECIMAL_32:
+			decimal_type = py::module_::import("pyarrow").attr("decimal32");
+			break;
+		case DecimalBitWidth::DECIMAL_64:
+			decimal_type = py::module_::import("pyarrow").attr("decimal64");
+			break;
+		case DecimalBitWidth::DECIMAL_128:
+			decimal_type = py::module_::import("pyarrow").attr("decimal128");
+			break;
+		default:
+			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
+		}
+
 		uint8_t width;
 		uint8_t scale;
 		constant.type().GetDecimalProperties(width, scale);
@@ -430,6 +446,10 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
 		}
 		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+	}
+	case TableFilterType::DYNAMIC_FILTER: {
+		//! Ignore dynamic filters for now, not necessary for correctness
+		return py::none();
 	}
 	default:
 		throw NotImplementedException("Pushdown Filter Type %s is not currently supported in PyArrow Scans",

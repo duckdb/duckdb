@@ -37,10 +37,10 @@ struct CurrentSettingFun {
 
 struct HashFun {
 	static constexpr const char *Name = "hash";
-	static constexpr const char *Parameters = "param";
-	static constexpr const char *Description = "Returns an integer with the hash of the value. Note that this is not a cryptographic hash";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.";
 	static constexpr const char *Example = "hash('🦆')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -48,9 +48,9 @@ struct HashFun {
 struct LeastFun {
 	static constexpr const char *Name = "least";
 	static constexpr const char *Parameters = "arg1, arg2, ...";
-	static constexpr const char *Description = "Returns the lowest value of the set of input parameters";
-	static constexpr const char *Example = "least(42, 84)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Description = "Returns the smallest value. For strings lexicographical ordering is used. Note that uppercase characters are considered “smaller” than lowercase characters, and collations are not supported.";
+	static constexpr const char *Example = "least(42, 84)\002least('abc', 'bcd', 'cde', 'EFG')";
+	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -58,9 +58,9 @@ struct LeastFun {
 struct GreatestFun {
 	static constexpr const char *Name = "greatest";
 	static constexpr const char *Parameters = "arg1, arg2, ...";
-	static constexpr const char *Description = "Returns the highest value of the set of input parameters";
-	static constexpr const char *Example = "greatest(42, 84)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Description = "Returns the largest value. For strings lexicographical ordering is used. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.";
+	static constexpr const char *Example = "greatest(42, 84)\002greatest('abc', 'bcd', 'cde', 'EFG')";
+	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -89,7 +89,7 @@ struct CanCastImplicitlyFun {
 	static constexpr const char *Name = "can_cast_implicitly";
 	static constexpr const char *Parameters = "source_type,target_type";
 	static constexpr const char *Description = "Whether or not we can implicitly cast from the source type to the other type";
-	static constexpr const char *Example = "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)";
+	static constexpr const char *Example = "can_cast_implicitly(NULL::INTEGER, NULL::BIGINT)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -180,6 +180,16 @@ struct IsHistogramOtherBinFun {
 	static constexpr const char *Parameters = "val";
 	static constexpr const char *Description = "Whether or not the provided value is the histogram \"other\" bin (used for values not belonging to any provided bin)";
 	static constexpr const char *Example = "is_histogram_other_bin(v)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct CastToTypeFun {
+	static constexpr const char *Name = "cast_to_type";
+	static constexpr const char *Parameters = "param,type";
+	static constexpr const char *Description = "Casts the first argument to the type of the second argument";
+	static constexpr const char *Example = "cast_to_type('42', NULL::INTEGER)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

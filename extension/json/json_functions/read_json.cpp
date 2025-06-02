@@ -132,6 +132,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "JSONSchemaTask";
+	}
+
 private:
 	AutoDetectState &auto_detect_state;
 	JSONStructureNode &node;
