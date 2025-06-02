@@ -30,7 +30,7 @@ pragma disable_logging
 
 # enabling external hash join happens exactly once
 query I
-select count(*) from duckdb_logs_parsed('PhysicalOperator') where message like '%External hash join enabled%'
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where message like '%External hash join: enabled%'
 ----
 1
 
