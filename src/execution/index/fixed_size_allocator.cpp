@@ -267,8 +267,8 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer old_ptr) {
 	// new increases the allocation count, we need to counter that here
 	total_segment_count--;
 
-	auto old_handle = Get(old_ptr);
-	auto new_handle = Get(new_ptr);
+	auto old_handle = GetHandle(old_ptr);
+	auto new_handle = GetHandle(new_ptr);
 
 	memcpy(new_handle.GetPtr(), old_handle.GetPtr(), segment_size);
 	return new_ptr;

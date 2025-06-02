@@ -44,7 +44,7 @@ public:
 	void Free(const IndexPointer ptr);
 
 	//! Get a segment handle.
-	inline SegmentHandle Get(const IndexPointer ptr) {
+	inline SegmentHandle GetHandle(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 
 		auto buffer_it = buffers.find(ptr.GetBufferId());
@@ -58,13 +58,13 @@ public:
 	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
 	//! DEPRECATED. Use segment handles.
 	template <class T>
-	inline unsafe_optional_ptr<T> GetDeprecated(const IndexPointer ptr, const bool dirty = true) {
-		return (T *)GetDeprecated(ptr, dirty);
+	inline unsafe_optional_ptr<T> Get(const IndexPointer ptr, const bool dirty = true) {
+		return (T *)Get(ptr, dirty);
 	}
 
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
 	//! DEPRECATED. Use segment handles.
-	inline data_ptr_t GetDeprecated(const IndexPointer ptr, const bool dirty = true) {
+	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 
 		auto buffer_it = buffers.find(ptr.GetBufferId());
@@ -78,13 +78,13 @@ public:
 	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
 	//! DEPRECATED. Use segment handles.
 	template <class T>
-	inline unsafe_optional_ptr<T> GetDeprecatedIfLoaded(const IndexPointer ptr) {
-		return (T *)GetDeprecatedIfLoaded(ptr);
+	inline unsafe_optional_ptr<T> GetIfLoaded(const IndexPointer ptr) {
+		return (T *)GetIfLoaded(ptr);
 	}
 
 	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
 	//! DEPRECATED. Use segment handles.
-	inline data_ptr_t GetDeprecatedIfLoaded(const IndexPointer ptr) {
+	inline data_ptr_t GetIfLoaded(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 

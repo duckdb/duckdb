@@ -64,13 +64,13 @@ public:
 	template <class NODE>
 	static inline NODE &Ref(const ART &art, const Node ptr, const NType type) {
 		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return *(GetAllocator(art, type).GetDeprecated<NODE>(ptr, !std::is_const<NODE>::value));
+		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
 	}
 	//! Get a node pointer, if the node is in memory, else nullptr.
 	template <class NODE>
 	static inline unsafe_optional_ptr<NODE> InMemoryRef(const ART &art, const Node ptr, const NType type) {
 		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return GetAllocator(art, type).GetDeprecatedIfLoaded<NODE>(ptr);
+		return GetAllocator(art, type).GetIfLoaded<NODE>(ptr);
 	}
 
 	//! Replace the child at byte.
@@ -173,7 +173,7 @@ template <class T>
 class NodeHandle {
 public:
 	NodeHandle(ART &art, const Node node)
-	    : handle(Node::GetAllocator(art, node.GetType()).Get(node)), n(handle.GetRef<T>()) {
+	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
 		handle.MarkModified();
 	}
 
