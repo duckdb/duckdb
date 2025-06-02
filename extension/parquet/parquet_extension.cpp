@@ -51,7 +51,6 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
 #include "parquet_multi_file_info.hpp"
-#include "duckdb/logging/log_utils.hpp"
 
 namespace duckdb {
 
@@ -244,14 +243,15 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
 	unique_ptr<ParquetWriter> writer;
-	optional_ptr<const PhysicalOperatorLogger> logger;
+	optional_ptr<const PhysicalOperator> op;
 
 	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
-		if (!logger) {
+		if (!op) {
 			return;
 		}
-		logger->Log("Flushing row group (%llu rows, %llu bytes) to file \"%s\" (%s)", buffer.Count(),
-		            buffer.SizeInBytes(), writer->GetFileName(), reason);
+		DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op,
+		           "Flushing row group (%llu rows, %llu bytes) to file \"%s\" (%s)", buffer.Count(),
+		           buffer.SizeInBytes(), writer->GetFileName(), reason);
 	}
 
 	mutex lock;
@@ -710,9 +710,9 @@ CopyFunctionExecutionMode ParquetWriteExecutionMode(bool preserve_insertion_orde
 //===--------------------------------------------------------------------===//
 // Initialize Logger
 //===--------------------------------------------------------------------===//
-void ParquetWriteInitializeLogger(GlobalFunctionData &gstate, const PhysicalOperatorLogger &logger) {
+void ParquetWriteInitializeOperator(GlobalFunctionData &gstate, const PhysicalOperator &op) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	global_state.logger = &logger;
+	global_state.op = &op;
 }
 //===--------------------------------------------------------------------===//
 // Prepare Batch
@@ -913,7 +913,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;
 	function.execution_mode = ParquetWriteExecutionMode;
-	function.initialize_logger = ParquetWriteInitializeLogger;
+	function.initialize_operator = ParquetWriteInitializeOperator;
 	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = scan_fun.functions[0];
 	function.prepare_batch = ParquetWritePrepareBatch;

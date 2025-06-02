@@ -17,8 +17,6 @@
 
 namespace duckdb {
 
-class PhysicalOperatorLogger;
-
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
@@ -38,7 +36,7 @@ public:
 	                 JoinType join_type, idx_t estimated_cardinality);
 
 	//! Initialize HT for this operator
-	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context, const PhysicalOperatorLogger &logger) const;
+	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 
 	//! The types of the join keys
 	vector<LogicalType> condition_types;

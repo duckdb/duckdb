@@ -124,7 +124,7 @@ typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, Functio
 
 typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &input);
 
-typedef void (*copy_to_initialize_logger_t)(GlobalFunctionData &gstate, const PhysicalOperatorLogger &logger);
+typedef void (*copy_to_initialize_operator_t)(GlobalFunctionData &gstate, const PhysicalOperator &op);
 
 enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS = 0,
@@ -148,7 +148,7 @@ public:
 	    : Function(name), plan(nullptr), copy_to_select(nullptr), copy_to_bind(nullptr),
 	      copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr),
 	      copy_to_get_written_statistics(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
-	      copy_to_finalize(nullptr), execution_mode(nullptr), initialize_logger(nullptr), prepare_batch(nullptr),
+	      copy_to_finalize(nullptr), execution_mode(nullptr), initialize_operator(nullptr), prepare_batch(nullptr),
 	      flush_batch(nullptr), desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr),
 	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
 	}
@@ -165,7 +165,7 @@ public:
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;
-	copy_to_initialize_logger_t initialize_logger;
+	copy_to_initialize_operator_t initialize_operator;
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;

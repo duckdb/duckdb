@@ -4,7 +4,6 @@ add_library_unity(
   log_manager.cpp
   log_storage.cpp
   log_types.cpp
-  log_utils.cpp
   logger.cpp
   logging.cpp)
 set(ALL_OBJECT_FILES

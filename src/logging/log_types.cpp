@@ -99,29 +99,23 @@ LogicalType PhysicalOperatorLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"operator_type", LogicalType::VARCHAR},
 	    {"parameters", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
-	    {"message", LogicalType::VARCHAR},
+	    {"info", LogicalType::VARCHAR},
 	};
 	return LogicalType::STRUCT(child_list);
 }
 
-string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &message) {
-	return ConstructLogMessage(physical_operator.type, physical_operator.ParamsToString(), message);
-}
-
-string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperatorType &operator_type,
-                                                    const InsertionOrderPreservingMap<string> &parameters,
-                                                    const string &message) {
+string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &info) {
 	vector<Value> keys;
 	vector<Value> values;
-	for (auto &parameter : parameters) {
+	for (auto &parameter : physical_operator.ParamsToString()) {
 		keys.emplace_back(parameter.first);
 		values.emplace_back(parameter.second);
 	}
 
 	child_list_t<Value> child_list = {
-	    {"operator_type", EnumUtil::ToString(operator_type)},
+	    {"operator_type", EnumUtil::ToString(physical_operator.type)},
 	    {"parameters", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values))},
-	    {"message", message},
+	    {"info", info},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();

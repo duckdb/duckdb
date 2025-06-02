@@ -26,7 +26,6 @@ class BufferHandle;
 class ColumnDataCollection;
 struct ColumnDataAppendState;
 struct ClientConfig;
-class PhysicalOperatorLogger;
 
 struct JoinHTScanState {
 public:
@@ -169,7 +168,7 @@ public:
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(ClientContext &context, const PhysicalOperatorLogger &logger, const vector<JoinCondition> &conditions,
+	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
@@ -215,7 +214,7 @@ public:
 	}
 
 	ClientContext &context;
-	const PhysicalOperatorLogger &logger;
+	const PhysicalOperator &op;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
