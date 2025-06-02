@@ -170,29 +170,6 @@ struct NodeChildren {
 };
 
 template <class T>
-class ConstNodeHandle {
-public:
-	ConstNodeHandle(ART &art, const Node node)
-	    : handle(Node::GetAllocator(art, node.GetType()).Get(node)), n(handle.GetRef<T>()) {
-	}
-
-	ConstNodeHandle(const ConstNodeHandle &) = delete;
-	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;
-
-	ConstNodeHandle(ConstNodeHandle &&other) noexcept = delete;
-	ConstNodeHandle &operator=(ConstNodeHandle &&other) noexcept = delete;
-
-public:
-	const T &Get() const {
-		return n;
-	}
-
-private:
-	SegmentHandle handle;
-	const T &n;
-};
-
-template <class T>
 class NodeHandle {
 public:
 	NodeHandle(ART &art, const Node node)
