@@ -279,7 +279,7 @@ files.sort()
 
 start = args.offset if args.offset is not None else 0
 end = start + args.count if args.count is not None else len(files)
-
+failed_tests = 0
 for i in range(start, end):
     file = files[i]
     if not args.print_failing_only:
@@ -293,6 +293,7 @@ for i in range(start, end):
         stderr = proc.stderr.decode('utf8')
         if proc.returncode == 0 and ' Error:' not in stderr:
             continue
+        failed_tests += 1
         if args.print_failing_only:
             print(f"Failed test {i}/{end}: {file}")
         else:
@@ -311,3 +312,4 @@ for i in range(start, end):
             exit(1)
         else:
             break
+print(f"Total of {failed_tests} out of {len(files)} failed ({round(failed_tests/len(files) * 100,2)}%). ")
