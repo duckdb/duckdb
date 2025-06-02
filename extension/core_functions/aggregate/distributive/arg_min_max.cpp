@@ -25,7 +25,7 @@ struct ArgMinMaxStateBase {
 	}
 
 	template <class T>
-	static inline void AssignValue(T &target, T new_value) {
+	static inline void AssignValue(T &target, T new_value, duckdb::unique_ptr<char[]> &buffer) {
 		target = new_value;
 	}
 
@@ -41,28 +41,19 @@ struct ArgMinMaxStateBase {
 // Out-of-line specialisations
 template <>
 void ArgMinMaxStateBase::CreateValue(string_t &value) {
-	value = string_t(uint32_t(0));
+	value = string_t(static_cast<uint32_t>(0));
 }
 
 template <>
-void ArgMinMaxStateBase::DestroyValue(string_t &value) {
-	if (!value.IsInlined()) {
-		delete[] value.GetData();
-	}
-}
-
-template <>
-void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value) {
-	DestroyValue(target);
+void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value, duckdb::unique_ptr<char[]> &buffer) {
 	if (new_value.IsInlined()) {
 		target = new_value;
 	} else {
 		// non-inlined string, need to allocate space for it
 		auto len = new_value.GetSize();
-		auto ptr = new char[len];
-		memcpy(ptr, new_value.GetData(), len);
-
-		target = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+		buffer = duckdb::unique_ptr<char[]>(new char[len]);
+		memcpy(buffer.get(), new_value.GetData(), len);
+		target = string_t(buffer.get(), UnsafeNumericCast<uint32_t>(len));
 	}
 }
 
@@ -79,17 +70,16 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 	ARG_TYPE arg;
 	BY_TYPE value;
 
+	unique_ptr<char[]> arg_data;
+	unique_ptr<char[]> value_data;
+
 	ArgMinMaxState() {
 		CreateValue(arg);
 		CreateValue(value);
 	}
 
 	~ArgMinMaxState() {
-		if (is_initialized) {
-			DestroyValue(arg);
-			DestroyValue(value);
-			is_initialized = false;
-		}
+		is_initialized = false;
 	}
 };
 
@@ -108,14 +98,14 @@ struct ArgMinMaxBase {
 	template <class A_TYPE, class B_TYPE, class STATE>
 	static void Assign(STATE &state, const A_TYPE &x, const B_TYPE &y, const bool x_null) {
 		if (IGNORE_NULL) {
-			STATE::template AssignValue<A_TYPE>(state.arg, x);
-			STATE::template AssignValue<B_TYPE>(state.value, y);
+			STATE::template AssignValue<A_TYPE>(state.arg, x, state.arg_data);
+			STATE::template AssignValue<B_TYPE>(state.value, y, state.value_data);
 		} else {
 			state.arg_null = x_null;
 			if (!state.arg_null) {
-				STATE::template AssignValue<A_TYPE>(state.arg, x);
+				STATE::template AssignValue<A_TYPE>(state.arg, x, state.arg_data);
 			}
-			STATE::template AssignValue<B_TYPE>(state.value, y);
+			STATE::template AssignValue<B_TYPE>(state.value, y, state.value_data);
 		}
 	}
 
@@ -238,7 +228,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			const auto sidx = sdata.sel->get_index(i);
 			auto &state = *states[sidx];
 			if (!state.is_initialized || COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
-				STATE::template AssignValue<BY_TYPE>(state.value, bval);
+				STATE::template AssignValue<BY_TYPE>(state.value, bval, state.value_data);
 				state.arg_null = arg_null;
 				// micro-adaptivity: it is common we overwrite the same state repeatedly
 				// e.g. when running arg_max(val, ts) and ts is sorted in ascending order
@@ -271,7 +261,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		for (idx_t i = 0; i < assign_count; i++) {
 			const auto sidx = sdata.sel->get_index(sel.get_index(i));
 			auto &state = *states[sidx];
-			STATE::template AssignValue<ARG_TYPE>(state.arg, sort_key_data[i]);
+			STATE::template AssignValue<ARG_TYPE>(state.arg, sort_key_data[i], state.arg_data);
 		}
 	}
 
@@ -281,10 +271,10 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			return;
 		}
 		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
-			STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value);
+			STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value, target.value_data);
 			target.arg_null = source.arg_null;
 			if (!target.arg_null) {
-				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg);
+				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg, target.arg_data);
 			}
 			target.is_initialized = true;
 		}
@@ -358,7 +348,7 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 }
 #endif
 
-static const vector<LogicalType> ArgMaxByTypes() {
+static vector<LogicalType> ArgMaxByTypes() {
 	vector<LogicalType> types = {LogicalType::INTEGER,   LogicalType::BIGINT,       LogicalType::HUGEINT,
 	                             LogicalType::DOUBLE,    LogicalType::VARCHAR,      LogicalType::DATE,
 	                             LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
