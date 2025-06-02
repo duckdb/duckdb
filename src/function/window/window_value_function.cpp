@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
@@ -689,15 +690,70 @@ static fill_slope_t GetFillSlopeFunction(const LogicalType &type) {
 	}
 }
 
+struct TryExtrapolateOperator {
+	template <typename T>
+	static bool Operation(const T &lo, const double d, const T &hi, T &result) {
+		if (lo > hi) {
+			return Operation<T>(hi, -d, lo, result);
+		}
+		const auto delta = hi - lo;
+		T offset;
+		if (d < 0) {
+			if (!TryCast::Operation(delta * (-d), offset)) {
+				return false;
+			}
+			return TrySubtractOperator::Operation(lo, offset, result);
+			;
+		}
+
+		if (!TryCast::Operation(delta * d, offset)) {
+			return false;
+		}
+		return TryAddOperator::Operation(lo, offset, result);
+	}
+};
+
+template <>
+bool TryExtrapolateOperator::Operation(const double &lo, const double d, const double &hi, double &result) {
+	result = InterpolateOperator::Operation<double>(lo, d, hi);
+	return true;
+}
+
+template <>
+bool TryExtrapolateOperator::Operation(const float &lo, const double d, const float &hi, float &result) {
+	result = InterpolateOperator::Operation<float>(lo, d, hi);
+	return true;
+}
+
+template <>
+bool TryExtrapolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi, hugeint_t &result) {
+	double temp;
+	return Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi), temp) &&
+	       Hugeint::TryConvert(temp, result);
+}
+
+template <>
+bool TryExtrapolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi, uhugeint_t &result) {
+	double temp;
+	return Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi), temp) &&
+	       Uhugeint::TryConvert(temp, result);
+}
+
 typedef void (*fill_interpolate_t)(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope);
 
 template <typename T>
 static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope) {
 	const auto y0 = cursor.GetCell<T>(0, lo);
 	const auto y1 = cursor.GetCell<T>(0, hi);
+	auto data = FlatVector::GetData<T>(result);
+	if (slope < 0 || slope > 1) {
+		if (TryExtrapolateOperator::Operation(y0, slope, y1, data[i])) {
+			FlatVector::SetNull(result, i, false);
+		}
+		return;
+	}
 
 	FlatVector::SetNull(result, i, false);
-	auto data = FlatVector::GetData<T>(result);
 	data[i] = InterpolateOperator::Operation<T>(y0, slope, y1);
 }
 

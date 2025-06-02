@@ -285,3 +285,36 @@ from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:34:20'::TIMESTAMP, INTERVAL 1
 qualify t <> f
 ----
 
+#
+# Extrapolation failures
+#
+query II
+with source as (
+	select 
+		i, 
+		if(i = -129, NULL, i)::TINYINT as missing
+	from range(-129, -120) tbl(i)
+)
+select
+	i,
+	fill(missing) over (order by i) as filled
+from source
+qualify filled is distinct from i
+----
+-129	NULL
+
+query II
+with source as (
+	select 
+		i, 
+		if(i = 128, NULL, i)::TINYINT as missing
+	from range(120, 129) tbl(i)
+)
+select
+	i,
+	fill(missing) over (order by i) as filled
+from source
+qualify filled is distinct from i
+----
+128	NULL
+
