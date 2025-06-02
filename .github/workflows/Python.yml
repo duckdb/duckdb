@@ -294,7 +294,7 @@ jobs:
 
   win-python3:
       name: Python 3 Windows
-      runs-on: windows-2019
+      runs-on: windows-latest
       needs: linux-python3-10
       strategy:
        matrix:
