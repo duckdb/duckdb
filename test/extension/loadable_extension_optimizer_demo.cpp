@@ -1,4 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"

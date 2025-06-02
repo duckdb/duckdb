@@ -139,7 +139,7 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 // The C++ init function
-typedef void (*ext_init_fun_t)(DatabaseInstance &);
+typedef void (*ext_init_fun_t)(ExtensionLoader &);
 // The C init function
 typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 typedef const char *(*ext_version_fun_t)(void);
@@ -536,7 +536,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			(*init_fun)(db);
+			ExtensionLoader loader(db, extension);
+			(*init_fun)(loader);
+			loader.FinalizeLoad();
 		} catch (std::exception &e) {
 			ErrorData error(e);
 			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
