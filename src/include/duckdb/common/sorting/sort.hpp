@@ -55,8 +55,7 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
-	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          OperatorSinkFinalizeInput &input) const;
+	SinkFinalizeType Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const;
 	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                             const ProgressData source_progress) const;
 
