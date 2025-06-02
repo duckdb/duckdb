@@ -1,17 +1,3 @@
-diff --git a/duckdb b/duckdb
-index 3c0d466..71c5c07 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 3c0d466943444de3cfb5fcf2db08e5c4a6eb6c5e
-+Subproject commit 71c5c07cdd295e9409c0505885033ae9eb6b5ddd
-diff --git a/extension-ci-tools b/extension-ci-tools
-index 5ae521a..71d2002 160000
---- a/extension-ci-tools
-+++ b/extension-ci-tools
-@@ -1 +1 @@
--Subproject commit 5ae521a4c9709bb3cb35dc6d79e044f67bc58bf0
-+Subproject commit 71d20029c5314dfc34f3bbdab808b9bce03b8003
 diff --git a/src/excel/excel_extension.cpp b/src/excel/excel_extension.cpp
 index 84a4e4a..c76ab91 100644
 --- a/src/excel/excel_extension.cpp

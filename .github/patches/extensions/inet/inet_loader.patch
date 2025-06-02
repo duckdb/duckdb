@@ -1,10 +1,3 @@
-diff --git a/extension-ci-tools b/extension-ci-tools
-index 5ae521a..32bae39 160000
---- a/extension-ci-tools
-+++ b/extension-ci-tools
-@@ -1 +1 @@
--Subproject commit 5ae521a4c9709bb3cb35dc6d79e044f67bc58bf0
-+Subproject commit 32bae39aa495853e78d4a1a06b7ea6244edc3e51
 diff --git a/src/include/inet_extension.hpp b/src/include/inet_extension.hpp
 index bb9b18b..fbd22d6 100644
 --- a/src/include/inet_extension.hpp

@@ -1,17 +1,3 @@
-diff --git a/duckdb b/duckdb
-index a35d8b6..71c5c07 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit a35d8b6d5ba121f2601b917e1a7732207c944ae5
-+Subproject commit 71c5c07cdd295e9409c0505885033ae9eb6b5ddd
-diff --git a/extension-ci-tools b/extension-ci-tools
-index 5ae521a..71d2002 160000
---- a/extension-ci-tools
-+++ b/extension-ci-tools
-@@ -1 +1 @@
--Subproject commit 5ae521a4c9709bb3cb35dc6d79e044f67bc58bf0
-+Subproject commit 71d20029c5314dfc34f3bbdab808b9bce03b8003
 diff --git a/src/include/postgres_scanner_extension.hpp b/src/include/postgres_scanner_extension.hpp
 index ccf7b84..ddc655e 100644
 --- a/src/include/postgres_scanner_extension.hpp
