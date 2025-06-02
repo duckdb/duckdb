@@ -2,7 +2,6 @@ import argparse
 import os
 import sqllogictest
 from sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
-import duckdb
 import subprocess
 
 parser = argparse.ArgumentParser(description="Test serialization")
@@ -11,6 +10,7 @@ parser.add_argument("--offset", type=int, help="File offset", default=None)
 parser.add_argument("--count", type=int, help="File count", default=None)
 parser.add_argument('--no-exit', action='store_true', help='Do not exit after a test fails', default=False)
 parser.add_argument('--print-failing-only', action='store_true', help='Print failing tests only', default=False)
+parser.add_argument("--write-to-file", type=str, help="Write failing tests to a file", default='')
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
 group.add_argument(
@@ -291,7 +291,7 @@ for i in range(start, end):
             f.write(f'CALL check_peg_parser($TEST_PEG_PARSER${statement}$TEST_PEG_PARSER$);\n')
         proc = subprocess.run([args.shell, '-init', 'peg_test.sql', '-c', '.exit'], capture_output=True)
         stderr = proc.stderr.decode('utf8')
-        if proc.returncode == 2 and ' Error:' not in stderr:
+        if proc.returncode == 0 and ' Error:' not in stderr:
             continue
         if args.print_failing_only:
             print(f"Failed test {i}/{end}: {file}")
@@ -301,6 +301,12 @@ for i in range(start, end):
             print(proc.stdout.decode('utf8'))
             print(f'-- STDERR --')
             print(stderr)
+            if args.write_to_file != '':
+                with open(args.write_to_file, 'a+') as output_file:
+                    output_file.write(f'{file}\n')
+                    output_file.write(f'--- STDERR ---\n')
+                    output_file.write(stderr)
+                    output_file.write('\n')
         if not args.no_exit:
             exit(1)
         else:
