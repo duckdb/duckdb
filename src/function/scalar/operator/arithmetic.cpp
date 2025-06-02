@@ -883,8 +883,14 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, double, interval_t, MultiplyOperator>));
 	multiply.AddFunction(
+	    ScalarFunction({LogicalType::DOUBLE, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<double, interval_t, interval_t, MultiplyOperator>));
+	multiply.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	multiply.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	for (auto &func : multiply.functions) {
 		ScalarFunction::SetReturnsError(func);
 	}
