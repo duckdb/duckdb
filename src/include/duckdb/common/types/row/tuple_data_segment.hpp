@@ -46,7 +46,7 @@ public:
 	uint32_t heap_block_offset;
 	data_ptr_t base_heap_ptr;
 	//! Total heap size for this chunk part
-	uint32_t total_heap_size;
+	idx_t total_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
 	//! Lock for recomputing heap pointers (owned by TupleDataChunk)

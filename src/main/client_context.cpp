@@ -224,8 +224,6 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
-	client_data->profiler->EndQuery();
-
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
 	}
@@ -258,6 +256,8 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
 
+	client_data->profiler->EndQuery();
+
 	// Refresh the logger
 	logger->Flush();
 	LoggingContext context(LogContextScope::CONNECTION);
@@ -272,7 +272,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 			s->QueryEnd(*this, previous_error);
 		}
 	}
-
 	return error;
 }
 

@@ -227,6 +227,14 @@ void *duckdb_scalar_function_get_extra_info(duckdb_function_info info) {
 	return function_info.bind_data.info.extra_info;
 }
 
+void *duckdb_scalar_function_bind_get_extra_info(duckdb_bind_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	return bind_info.bind_data.info.extra_info;
+}
+
 void *duckdb_scalar_function_get_bind_data(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;

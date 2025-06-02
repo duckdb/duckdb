@@ -35,7 +35,7 @@ struct PowOperatorFun {
 	static constexpr const char *Name = "**";
 	static constexpr const char *Parameters = "x,y";
 	static constexpr const char *Description = "Computes x to the power of y";
-	static constexpr const char *Example = "pow(2, 3)";
+	static constexpr const char *Example = "pow(2, 3)\002power(2, 3)\0022 ** 3\0022 ^ 3";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

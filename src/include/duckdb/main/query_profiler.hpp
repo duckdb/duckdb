@@ -27,11 +27,14 @@
 #include <stack>
 
 namespace duckdb {
+
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
+
+enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 struct OperatorInformation {
 	explicit OperatorInformation() {
@@ -234,7 +237,7 @@ private:
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
-	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	bool OperatorRequiresProfiling(const PhysicalOperatorType op_type);
 	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 

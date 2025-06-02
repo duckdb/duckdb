@@ -49,7 +49,7 @@ struct RegrInterceptFun {
 	static constexpr const char *Name = "regr_intercept";
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the intercept of the univariate linear regression line for non-null pairs in a group.";
-	static constexpr const char *Example = "AVG(y)-REGR_SLOPE(y,x)*AVG(x)";
+	static constexpr const char *Example = "AVG(y)-REGR_SLOPE(y, x)*AVG(x)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
@@ -69,7 +69,7 @@ struct RegrSlopeFun {
 	static constexpr const char *Name = "regr_slope";
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the slope of the linear regression line for non-null pairs in a group.";
-	static constexpr const char *Example = "COVAR_POP(x,y) / VAR_POP(x)";
+	static constexpr const char *Example = "COVAR_POP(x, y) / VAR_POP(x)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();

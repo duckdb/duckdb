@@ -39,6 +39,7 @@ struct HTTPParams {
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
+	bool follow_location = true;
 
 	string http_proxy;
 	idx_t http_proxy_port;

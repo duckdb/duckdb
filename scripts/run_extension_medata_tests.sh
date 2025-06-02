@@ -120,7 +120,7 @@ EOL
 EOL
 
   # Build the extensions using the incorrect platform
-  EXTRA_CMAKE_VARIABLES=-DDUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
+  DUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
 
   cp $DUCKDB_BUILD_DIR/extension/json/json.duckdb_extension $DIRECT_INSTALL_DIR/json_incorrect_version.duckdb_extension
 
@@ -134,7 +134,7 @@ EOL
 EOL
 
   # Build the extensions using the incorrect platform
-  DUCKDB_PLATFORM=test_platform EXTRA_CMAKE_VARIABLES=-DDUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
+  DUCKDB_PLATFORM=test_platform DUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
 
   cp $DUCKDB_BUILD_DIR/extension/json/json.duckdb_extension $DIRECT_INSTALL_DIR/json_incorrect_version_and_platform.duckdb_extension
 

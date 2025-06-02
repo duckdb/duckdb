@@ -2,11 +2,19 @@
 # description: Test for disabling timestamp => timestamptz casts
 # group: [timezone]
 
+# Setting has no effect when ICU is not loaded as the two types are equivalent
 statement ok
 set disable_timestamptz_casts=false;
 
-statement ok
+query I
 select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+----
+2020-01-01 00:00:00+00
+
+query I
+select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+----
+2020-01-01 15:00:00
 
 statement ok
 set disable_timestamptz_casts=true;
@@ -16,6 +24,12 @@ select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
 ----
 2020-01-01 00:00:00+00
 
+query I
+select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+----
+2020-01-01 15:00:00
+
+# With ICU loaded, the casts are disabled in both directions when the flag is set.
 require icu
 
 statement ok
@@ -24,12 +38,13 @@ set calendar='gregorian';
 statement ok
 set TimeZone='America/Los_Angeles';
 
-
 statement ok
 set disable_timestamptz_casts=false;
 
-statement ok
+query I
 select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+----
+2020-01-01 00:00:00-08
 
 statement ok
 set disable_timestamptz_casts=true;
@@ -38,3 +53,8 @@ statement error
 select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
 ----
 Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone has been disabled
+
+statement error
+select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+----
+Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone has been disabled
