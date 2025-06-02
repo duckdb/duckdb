@@ -600,8 +600,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::ExtensionLoader &
 	loader.RegisterFunction(bounded_to_ascii);
 
 	// Enable explicit casting to our specialized type
-	loader.RegisterCastFunction(bounded_type, bounded_specialized_type, BoundCastInfo(BoundedToBoundedCast),
-	                                    0);
+	loader.RegisterCastFunction(bounded_type, bounded_specialized_type, BoundCastInfo(BoundedToBoundedCast), 0);
 	// Casts
 	loader.RegisterCastFunction(LogicalType::INTEGER, bounded_type, BoundCastInfo(IntToBoundedCast), 0);
 
@@ -609,8 +608,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::ExtensionLoader &
 	auto minmax_type = MinMaxType::GetDefault();
 	loader.RegisterType("MINMAX", minmax_type, MinMaxType::Bind);
 	loader.RegisterCastFunction(LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
-	loader.RegisterFunction(
-	    ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
+	loader.RegisterFunction(ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
 }
 
 DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {

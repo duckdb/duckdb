@@ -284,7 +284,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 
 void RegisterICUDateSubFunctions(ExtensionLoader &loader) {
 	ICUCalendarSub::AddFunctions("date_sub", loader);
-	ICUCalendarSub::AddFunctions("datesub",  loader);
+	ICUCalendarSub::AddFunctions("datesub", loader);
 
 	ICUCalendarDiff::AddFunctions("date_diff", loader);
 	ICUCalendarDiff::AddFunctions("datediff", loader);

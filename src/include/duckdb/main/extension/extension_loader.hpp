@@ -19,6 +19,7 @@ struct CreateTableFunctionInfo;
 class ExtensionLoader {
 	friend class DuckDB;
 	friend class ExtensionHelper;
+
 public:
 	ExtensionLoader(DatabaseInstance &db, const string &extension_name);
 

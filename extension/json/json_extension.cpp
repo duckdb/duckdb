@@ -37,7 +37,7 @@ static DefaultMacro json_macros[] = {
     {nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}};
 
 static void LoadInternal(ExtensionLoader &loader) {
-	//auto &db_instance = *db.instance;
+	// auto &db_instance = *db.instance;
 
 	// JSON type
 	auto json_type = LogicalType::JSON();

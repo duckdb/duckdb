@@ -213,7 +213,7 @@ void ExtensionLoader::RegisterSecretType(SecretType secret_type) {
 }
 
 void ExtensionLoader::RegisterCastFunction(const LogicalType &source, const LogicalType &target,
-										   bind_cast_function_t bind_function, int64_t implicit_cast_cost) {
+                                           bind_cast_function_t bind_function, int64_t implicit_cast_cost) {
 	auto &config = DBConfig::GetConfig(db);
 	auto &casts = config.GetCastFunctions();
 	casts.RegisterCastFunction(source, target, bind_function, implicit_cast_cost);
