@@ -56,10 +56,10 @@ IndexPointer FixedSizeAllocator::New() {
 		D_ASSERT(buffers.find(buffer_id) != buffers.end());
 		auto &buffer = buffers.find(buffer_id)->second;
 
-		SegmentHandle segment_handle(*buffer, 0);
-		const auto validity_ptr = segment_handle.GetPtr<validity_t>();
-
-		ValidityMask mask(validity_ptr, available_segments_per_buffer);
+		// Get a handle to the buffer's validity mask (offset 0).
+		SegmentHandle handle(*buffer, 0);
+		const auto bitmask_ptr = handle.GetPtr<validity_t>();
+		ValidityMask mask(bitmask_ptr, available_segments_per_buffer);
 		mask.SetAllValid(available_segments_per_buffer);
 	}
 
@@ -92,12 +92,15 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	D_ASSERT(buffer_it != buffers.end());
 	auto &buffer = buffer_it->second;
 
-	SegmentHandle handle(*buffer, 0);
-	const auto bitmask_ptr = handle.GetPtr<validity_t>();
+	{
+		// Get a handle to the buffer's validity mask (offset 0).
+		SegmentHandle handle(*buffer, 0);
+		const auto bitmask_ptr = handle.GetPtr<validity_t>();
 
-	ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
-	D_ASSERT(!mask.RowIsValid(offset));
-	mask.SetValid(offset);
+		ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
+		D_ASSERT(!mask.RowIsValid(offset));
+		mask.SetValid(offset);
+	}
 
 	D_ASSERT(total_segment_count > 0);
 	D_ASSERT(buffer->segment_count > 0);
@@ -306,6 +309,7 @@ vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	for (auto &buffer : buffers) {
 		buffer.second->SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
 
+		// Get a handle to the buffer's memory (offset 0).
 		SegmentHandle handle(*buffer.second, 0);
 		buffer_infos.emplace_back(handle.GetPtr(), buffer.second->allocation_size);
 	}

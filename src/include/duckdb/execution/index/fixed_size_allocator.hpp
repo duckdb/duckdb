@@ -43,37 +43,75 @@ public:
 	//! Free the segment of the IndexPointer
 	void Free(const IndexPointer ptr);
 
-	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
+	//! Get a segment handle.
 	inline SegmentHandle Get(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
 		auto buffer_it = buffers.find(ptr.GetBufferId());
+		D_ASSERT(buffer_it != buffers.end());
 
 		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
 		auto &buffer = *buffer_it->second;
-
-		SegmentHandle res(buffer, offset);
-		return std::move(res);
+		return SegmentHandle(buffer, offset);
 	}
 
-	// Fetches a segment handle, unless it exists solely in persistent storage.
-	// I.e. it has not been loaded, created in memory, or evicted.
-	inline bool GetIfNotOnDisk(SegmentHandle &result, const IndexPointer ptr) {
+	//! Get a segment handle, unless it exists solely in persistent storage.
+	//! I.e. it has not been loaded, created in memory, or evicted.
+	inline SegmentHandle GetIfUsed(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
-		auto &buffer_it = buffers.find(ptr.GetBufferId())->second;
-		auto &buffer = *buffer_it;
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		D_ASSERT(buffer_it != buffers.end());
+		auto &buffer = *buffer_it->second;
 
 		if (!buffer.InMemory() && !buffer.loaded) {
-			return false;
+			return SegmentHandle();
 		}
 
 		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
+		return SegmentHandle(buffer, offset);
+	}
 
-		result = SegmentHandle(buffer, offset);
-		return true;
+	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
+	//! DEPRECATED. Use segment handles.
+	template <class T>
+	inline unsafe_optional_ptr<T> GetDeprecated(const IndexPointer ptr, const bool dirty = true) {
+		return (T *)GetDeprecated(ptr, dirty);
+	}
+
+	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
+	//! DEPRECATED. Use segment handles.
+	inline data_ptr_t GetDeprecated(const IndexPointer ptr, const bool dirty = true) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		D_ASSERT(buffer_it != buffers.end());
+
+		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
+		auto buffer_ptr = buffer_it->second->GetDeprecated(dirty);
+		return buffer_ptr + offset;
+	}
+
+	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
+	//! DEPRECATED. Use segment handles.
+	template <class T>
+	inline unsafe_optional_ptr<T> GetDeprecatedIfLoaded(const IndexPointer ptr) {
+		return (T *)GetDeprecatedIfLoaded(ptr);
+	}
+
+	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
+	inline data_ptr_t GetDeprecatedIfLoaded(const IndexPointer ptr) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
+
+		auto &buffer = buffers.find(ptr.GetBufferId())->second;
+		if (!buffer->InMemory()) {
+			return nullptr;
+		}
+
+		auto buffer_ptr = buffer->GetDeprecated();
+		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+		return raw_ptr;
 	}
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'

@@ -31,8 +31,7 @@ public:
 };
 
 //! A fixed-size buffer holds fixed-size segments of data. It lazily deserializes a buffer, if on-disk and not
-//! yet in memory, and it only serializes dirty and non-written buffers to disk during
-//! serialization.
+//! in memory, and it only serializes dirty and non-written buffers to disk during serialization.
 class FixedSizeBuffer {
 	friend class FixedSizeAllocator;
 	friend class SegmentHandle;
@@ -52,6 +51,19 @@ public:
 	~FixedSizeBuffer();
 
 private:
+	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory.
+	//! DEPRECATED. Use segment handles.
+	data_ptr_t GetDeprecated(const bool dirty_p = true) {
+		lock_guard<mutex> l(lock);
+		if (!InMemory()) {
+			LoadFromDisk();
+		}
+		if (dirty_p) {
+			dirty = dirty_p;
+		}
+		return buffer_handle.Ptr();
+	}
+
 	//! Returns true, if the buffer is in-memory
 	bool InMemory() const {
 		return buffer_handle.IsValid();
@@ -62,11 +74,11 @@ private:
 		return block_pointer.IsValid();
 	}
 
-	//! Serializes a buffer (if dirty or not on disk)
+	//! Serializes a buffer, if dirty or not on disk.
 	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
 	               const idx_t bitmask_offset);
 
-	//! Load a buffer from disk (if not in-memory)
+	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(const idx_t bitmask_count, const idx_t available_segments);
@@ -77,7 +89,7 @@ private:
 	//! Block manager of the database instance
 	BlockManager &block_manager;
 
-	// Number of active segments
+	//! The number of active segments.
 	atomic<idx_t> readers;
 
 	//! The number of allocated segments
@@ -85,11 +97,11 @@ private:
 	//! The size of allocated memory in this buffer (necessary for copying while pinning)
 	idx_t allocation_size;
 
-	//! True: the in-memory buffer is no longer consistent with a (possibly existing) copy on disk
+	//! True: the in-memory buffer is no longer consistent with its optional copy on disk.
 	bool dirty;
-	//! True: can be vacuumed after the vacuum operation
+	//! True: can be vacuumed after the vacuum operation.
 	bool vacuum;
-	//! True: has been loaded from disk
+	//! True: has been loaded from disk.
 	bool loaded;
 
 	//! Partial block id and offset
@@ -104,58 +116,51 @@ private:
 
 class SegmentHandle {
 public:
-	SegmentHandle() = default;
+	SegmentHandle() : buffer_ptr(nullptr), ptr(nullptr) {};
+	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
+		lock_guard<mutex> l(buffer_ptr->lock);
+
+		if (!buffer_ptr->InMemory() && !buffer_ptr->loaded) {
+			buffer_ptr->LoadFromDisk();
+		}
+		if (!buffer_ptr->InMemory() && buffer_ptr->loaded) {
+			buffer_ptr->block_manager.buffer_manager.Pin(buffer_ptr->block_handle);
+		}
+
+		ptr = buffer_ptr->buffer_handle.Ptr() + offset;
+		buffer_ptr->readers++;
+	}
+
+	~SegmentHandle() {
+		if (!buffer_ptr) {
+			return;
+		}
+
+		lock_guard<mutex> l(buffer_ptr->lock);
+		buffer_ptr->readers--;
+
+		// FIXME: Enable unpinning buffers with zero readers while preventing oscillation.
+		// FIXME: loaded must be set to true.
+	}
 
 	SegmentHandle(const SegmentHandle &) = delete;
 	SegmentHandle &operator=(const SegmentHandle &) = delete;
 
-	// Support move!
 	SegmentHandle(SegmentHandle &&other) noexcept : buffer_ptr(other.buffer_ptr), ptr(other.ptr) {
-		other.ptr = nullptr;
 		other.buffer_ptr = nullptr;
+		other.ptr = nullptr;
 	}
-
 	SegmentHandle &operator=(SegmentHandle &&other) noexcept {
 		if (this != &other) {
 			buffer_ptr = other.buffer_ptr;
 			ptr = other.ptr;
-			other.ptr = nullptr;
 			other.buffer_ptr = nullptr;
+			other.ptr = nullptr;
 		}
 		return *this;
 	}
 
-	SegmentHandle(FixedSizeBuffer &buffer_p, idx_t offset) : buffer_ptr(&buffer_p) {
-
-		auto &buffer = *buffer_ptr;
-		lock_guard<mutex> l(buffer.lock);
-
-		if (!buffer.InMemory() && !buffer.loaded) {
-			buffer.LoadFromDisk();
-		}
-		if (!buffer.InMemory() && buffer.loaded) {
-			buffer.block_manager.buffer_manager.Pin(buffer.block_handle);
-		}
-
-		ptr = buffer.buffer_handle.Ptr() + offset;
-
-		++buffer.readers;
-	}
-
-	~SegmentHandle() {
-		if (buffer_ptr) {
-			auto &buffer = *buffer_ptr;
-
-			lock_guard<mutex> l(buffer.lock);
-			--buffer.readers;
-
-			if (buffer.readers == 0) {
-				D_ASSERT(buffer.InMemory());
-				buffer.buffer_handle.Destroy();
-			}
-		}
-	}
-
+public:
 	template <class T>
 	const T &GetRef() const {
 		return *reinterpret_cast<const T *>(ptr);
@@ -177,9 +182,12 @@ public:
 	}
 
 	void MarkModified() {
-		auto &buffer = *buffer_ptr;
-		lock_guard<mutex> l(buffer.lock);
-		buffer.dirty = true;
+		lock_guard<mutex> l(buffer_ptr->lock);
+		buffer_ptr->dirty = true;
+	}
+
+	bool Empty() const {
+		return buffer_ptr == nullptr;
 	}
 
 private:
