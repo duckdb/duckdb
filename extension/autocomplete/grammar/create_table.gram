@@ -42,7 +42,8 @@ ColumnIdList <- Parens(List(Identifier))
 
 PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-Identifier <- QuotedIdentifier / PlainIdentifier
+StructIdentifier <- (Identifier '.')* Identifier
+Identifier <- QuotedIdentifier / PlainIdentifier / StructIdentifier
 
 GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
 

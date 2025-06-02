@@ -162,7 +162,7 @@ DescribeStatement <- ShowSelect / ShowAllTables / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatement
 ShowAllTables <- ShowOrDescribe 'ALL'i 'TABLES'
-ShowQualifiedName <- ShowOrDescribeOrSummarize (QualifiedName / StringLiteral)?
+ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
 
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'i
 ShowOrDescribe <- 'SHOW'i / 'DESCRIBE'i / 'DESC'i
@@ -225,7 +225,8 @@ ColumnIdList <- Parens(List(Identifier))
 
 PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-Identifier <- QuotedIdentifier / PlainIdentifier
+StructIdentifier <- (Identifier '.')* Identifier
+Identifier <- QuotedIdentifier / PlainIdentifier / StructIdentifier
 
 GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
 
@@ -279,7 +280,7 @@ UpdateStatement <- WithClause? 'UPDATE'i UpdateTarget 'SET'i UpdateSetClause Fro
 UpdateTarget <- BaseTableName UpdateAlias?
 UpdateAlias <- 'AS'i Identifier
 UpdateSetClause <- List(UpdateSetElement)
-UpdateSetElement <- Identifier '=' Expression
+UpdateSetElement <- ColumnName '=' Expression
 
 InsertStatement <- WithClause? 'INSERT'i OrAction? 'INTO'i InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
@@ -339,7 +340,7 @@ InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / Pare
 
 TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
-BaseTableRef <- BaseTableName TableAlias?
+BaseTableRef <- BaseTableName TableAlias? AtClause?
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- Parens(TableRef)
 
@@ -367,12 +368,16 @@ NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'i? Identifier ColumnAliases?
 
+AtClause <- 'AT'i Parens(AtSpecifier)
+AtSpecifier <- AtUnit '=>' Expression
+AtUnit <- 'VERSION'i / 'TIMESTAMP'i
+
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- 'ASOF'i? JoinType? 'JOIN'i InnerTableRef JoinQualifier
 JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON'i Expression
-UsingClause <- 'USING'i Parens(List(Identifier))
+UsingClause <- 'USING'i Parens(List(ColumnName))
 
 OuterJoinType <- 'FULL'i / 'LEFT'i / 'RIGHT'i
 JoinType <- (OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i
@@ -504,7 +509,7 @@ AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt
 
 AlterTableStmt <- 'TABLE'i IfExists? BaseTableName AlterTableOptions
 
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
 
 AddConstraint <- 'ADD'i TopLevelConstraint
 AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
@@ -512,6 +517,10 @@ DropColumn <- 'DROP'i 'COLUMN'i? IfExists? ColumnName DropBehavior?
 AlterColumn <- 'ALTER'i 'COLUMN'i? Identifier AlterColumnEntry
 RenameColumn <- 'RENAME'i 'COLUMN'i? ColumnName 'TO'i Identifier
 RenameAlter <- 'RENAME'i 'TO'i Identifier
+SetPartitionedBy <- 'SET'i 'PARTITIONED'i 'BY'i Parens(List(Expression))
+ResetPartitionedBy <- 'RESET'i 'PARTITIONED'i 'BY'i
+SetSortedBy <- 'SET'i 'SORTED'i 'BY'i OrderByExpressions
+ResetSortedBy <- 'RESET'i 'SORTED'i 'BY'i
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
 
@@ -533,6 +542,7 @@ QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- List(SequenceOption)
+
 CreateSequenceStmt <- 'SEQUENCE'i IfNotExists? QualifiedName SequenceOption*
 
 SequenceOption <-
