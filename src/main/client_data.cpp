@@ -28,6 +28,10 @@ public:
 		return ClientData::Get(context).file_opener.get();
 	}
 
+	optional_ptr<ClientContext> GetClientContext() override {
+		return context;
+	}
+
 private:
 	ClientContext &context;
 };

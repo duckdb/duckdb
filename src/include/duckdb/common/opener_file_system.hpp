@@ -17,6 +17,7 @@ class OpenerFileSystem : public FileSystem {
 public:
 	virtual FileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
+	virtual optional_ptr<ClientContext> GetClientContext() = 0;
 
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
 	void VerifyCanAccessDirectory(const string &path);
@@ -24,10 +25,12 @@ public:
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
-	};
+	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		GetFileSystem().Write(handle, buffer, nr_bytes, location);
+		// FIXME: Add profiling.
+		D_ASSERT(!RefersToSameObject(handle.file_system, this->Cast<FileSystem>()));
+		handle.file_system.Write(handle, buffer, nr_bytes, location);
 	}
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
