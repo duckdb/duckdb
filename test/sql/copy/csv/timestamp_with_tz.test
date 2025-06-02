@@ -18,6 +18,11 @@ require icu
 
 require no_extension_autoloading "FIXME: In CSV value conversion we don't autoload ICU"
 
+query I
+SELECT TRY_CAST('2022/01/27 11:04:57 PM' AS TIMESTAMPTZ);
+----
+NULL
+
 # we can load this into a timestamptz table
 statement ok
 CREATE TABLE tbl_tz(id int, ts timestamptz);
