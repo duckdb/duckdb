@@ -173,8 +173,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 }
 
 // Returns true if a comment is acceptable
-bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool comment_set_by_user) {
-	if (comment_set_by_user) {
+bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, const CSVReaderOptions &options) {
+	if (options.dialect_options.state_machine_options.comment.IsSetByUser()) {
 		return true;
 	}
 	// For a comment to be acceptable, we want 3/5th's the majority of unmatched in the columns
@@ -192,7 +192,9 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool
 				has_full_line_comment = true;
 				valid_comments++;
 			}
-			if (result.column_counts[i].number_of_columns == num_cols && result.column_counts[i].is_mid_comment) {
+			if ((result.column_counts[i].number_of_columns == num_cols ||
+			     (result.column_counts[i].number_of_columns <= num_cols && options.null_padding)) &&
+			    result.column_counts[i].is_mid_comment) {
 				valid_comments++;
 			}
 		}
@@ -342,8 +344,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If padding happened but it is not allowed.
 	const bool invalid_padding = !allow_padding && padding_count > 0;
 
-	const bool comments_are_acceptable = AreCommentsAcceptable(
-	    sniffed_column_counts, num_cols, options.dialect_options.state_machine_options.comment.IsSetByUser());
+	const bool comments_are_acceptable = AreCommentsAcceptable(sniffed_column_counts, num_cols, options);
 
 	const bool quoted =
 	    scanner->ever_quoted &&
