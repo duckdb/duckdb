@@ -241,6 +241,8 @@ endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
 ######
+# MAIN_BRANCH_VERSIONING default should be 'TRUE' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
 # - scripts/amalgamation.py
@@ -289,7 +291,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
 endif()
 
 if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-rc[0-9]+$")
-  message(STATUS "HI FROM ME")
   if (DUCKDB_EXPLICIT_VERSION)
     if (DUCKDB_EXPLICIT_PLATFORM STREQUAL DUCKDB_EXPLICIT_PLATFORM)
       message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' and DUCKDB_EXPLICIT_PLATFORM '${DUCKDB_EXPLICIT_PLATFORM}' are both set and different")

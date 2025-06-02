@@ -19,7 +19,7 @@ class TupleDataLayout;
 
 class SortedRun {
 public:
-	SortedRun(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> key_layout,
+	SortedRun(ClientContext &context, shared_ptr<TupleDataLayout> key_layout,
 	          shared_ptr<TupleDataLayout> payload_layout, bool is_index_sort);
 
 	~SortedRun();
@@ -37,6 +37,8 @@ public:
 	idx_t SizeInBytes() const;
 
 public:
+	ClientContext &context;
+
 	//! Key and payload collections (and associated append states)
 	unique_ptr<TupleDataCollection> key_data;
 	unique_ptr<TupleDataCollection> payload_data;

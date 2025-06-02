@@ -92,6 +92,10 @@ public:
 		D_ASSERT(IsSortKeyLayout());
 		return sort_width;
 	}
+	inline const vector<idx_t> &GetSortSkippableBytes() const {
+		D_ASSERT(IsSortKeyLayout());
+		return sort_skippable_bytes;
+	}
 	//! Returns the column offsets into each row
 	inline const vector<idx_t> &GetOffsets() const {
 		return offsets;
@@ -133,6 +137,8 @@ private:
 	idx_t aggr_width;
 	//! The width of the sort key
 	idx_t sort_width;
+	//! Bytes that are skippable during sorting
+	vector<idx_t> sort_skippable_bytes;
 	//! The width of the entire row
 	idx_t row_width;
 	//! The offsets to the columns and aggregate data in each row

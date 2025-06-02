@@ -5032,7 +5032,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-version") == 0) {
-			printf("%s %s\n", sqlite3_libversion(), sqlite3_sourceid());
+			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
+			       duckdb::DuckDB::SourceID());
 			free(azCmd);
 			return 0;
 		} else if (strcmp(z, "-interactive") == 0) {

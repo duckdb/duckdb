@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/function/window/window_collection.hpp"
@@ -620,6 +621,254 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 		}
 		FlatVector::SetNull(result, i, true);
 	});
+}
+
+//===--------------------------------------------------------------------===//
+// WindowFillExecutor
+//===--------------------------------------------------------------------===//
+template <class TO, class FROM>
+TO LossyFillCast(FROM val) {
+	return LossyNumericCast<TO, FROM>(val);
+}
+
+template <>
+double LossyFillCast(hugeint_t val) {
+	double d;
+	(void)Hugeint::TryCast(val, d);
+	return d;
+}
+
+template <>
+double LossyFillCast(uhugeint_t val) {
+	double d;
+	(void)Hugeint::TryCast(val, d);
+	return d;
+}
+
+template <typename T>
+static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
+	//	Cast everything to doubles immediately so we can interpolate backwards (x < x0)
+	const auto x = LossyFillCast<double>(cursor.GetCell<T>(0, row_idx));
+	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
+	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
+
+	return (x - x0) / (x1 - x0);
+}
+
+typedef double (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);
+
+static fill_slope_t GetFillSlopeFunction(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+		return FillSlopeFunc<uint8_t>;
+	case PhysicalType::UINT16:
+		return FillSlopeFunc<uint16_t>;
+	case PhysicalType::UINT32:
+		return FillSlopeFunc<uint32_t>;
+	case PhysicalType::UINT64:
+		return FillSlopeFunc<uint64_t>;
+	case PhysicalType::UINT128:
+		return FillSlopeFunc<uhugeint_t>;
+	case PhysicalType::INT8:
+		return FillSlopeFunc<int8_t>;
+	case PhysicalType::INT16:
+		return FillSlopeFunc<int16_t>;
+	case PhysicalType::INT32:
+		return FillSlopeFunc<int32_t>;
+	case PhysicalType::INT64:
+		return FillSlopeFunc<int64_t>;
+	case PhysicalType::INT128:
+		return FillSlopeFunc<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return FillSlopeFunc<float>;
+	case PhysicalType::DOUBLE:
+		return FillSlopeFunc<double>;
+	default:
+		throw InternalException("Unsupported FILL slow ordering type.");
+	}
+}
+
+typedef void (*fill_interpolate_t)(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope);
+
+template <typename T>
+static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope) {
+	const auto y0 = cursor.GetCell<T>(0, lo);
+	const auto y1 = cursor.GetCell<T>(0, hi);
+
+	FlatVector::SetNull(result, i, false);
+	auto data = FlatVector::GetData<T>(result);
+	data[i] = InterpolateOperator::Operation<T>(y0, slope, y1);
+}
+
+static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+		return FillInterpolateFunc<uint8_t>;
+	case PhysicalType::UINT16:
+		return FillInterpolateFunc<uint16_t>;
+	case PhysicalType::UINT32:
+		return FillInterpolateFunc<uint32_t>;
+	case PhysicalType::UINT64:
+		return FillInterpolateFunc<uint64_t>;
+	case PhysicalType::UINT128:
+		return FillInterpolateFunc<uhugeint_t>;
+	case PhysicalType::INT8:
+		return FillInterpolateFunc<int8_t>;
+	case PhysicalType::INT16:
+		return FillInterpolateFunc<int16_t>;
+	case PhysicalType::INT32:
+		return FillInterpolateFunc<int32_t>;
+	case PhysicalType::INT64:
+		return FillInterpolateFunc<int64_t>;
+	case PhysicalType::INT128:
+		return FillInterpolateFunc<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return FillInterpolateFunc<float>;
+	case PhysicalType::DOUBLE:
+		return FillInterpolateFunc<double>;
+	default:
+		throw InternalException("Unsupported FILL slow ordering type.");
+	}
+}
+
+WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                       WindowSharedExpressions &shared)
+    : WindowValueExecutor(wexpr, context, shared) {
+
+	//	We use the range ordering, even if it has not been defined
+	//	We don't need the validity mask because we have also requested the valid range for the ordering.
+	if (!range_expr) {
+		range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
+	}
+}
+
+static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, idx_t row_idx, column_t col_idx = 0) {
+	for (idx_t target_offset = 0; target_offset < count;) {
+		const auto source_offset = cursor.Seek(row_idx);
+		auto &source = cursor.chunk.data[col_idx];
+		const auto copied = MinValue<idx_t>(cursor.chunk.size() - source_offset, count - target_offset);
+		VectorOperations::Copy(source, result, source_offset + copied, source_offset, target_offset);
+		target_offset += copied;
+		row_idx += copied;
+	}
+}
+
+void WindowFillExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                          DataChunk &, Vector &result, idx_t count, idx_t row_idx) const {
+
+	auto &lvstate = lstate.Cast<WindowValueLocalState>();
+	auto &cursor = *lvstate.cursor;
+
+	//	Assume the best and just batch copy all the values
+	WindowFillCopy(cursor, result, count, row_idx, 0);
+
+	//	If all are valid, we are done
+	UnifiedVectorFormat arg_data;
+	result.ToUnifiedFormat(count, arg_data);
+	if (arg_data.validity.AllValid()) {
+		return;
+	}
+
+	//	Missing values - linear interpolation
+	// auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto partition_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_END]);
+	auto valid_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[VALID_BEGIN]);
+	auto valid_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[VALID_END]);
+
+	auto fill_slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
+	auto &range_cursor = *lvstate.range_cursor;
+
+	auto fill_interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->return_type);
+
+	idx_t prev_partition = DConstants::INVALID_INDEX;
+	idx_t prev_valid = DConstants::INVALID_INDEX;
+	idx_t next_valid = DConstants::INVALID_INDEX;
+
+	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+		//	Did we change partitions?
+		if (prev_partition != partition_begin[i]) {
+			prev_partition = partition_begin[i];
+			prev_valid = DConstants::INVALID_INDEX;
+			next_valid = DConstants::INVALID_INDEX;
+		}
+
+		//	If we are outside the validity range of the sort column, we can't use this value.
+		if (row_idx < valid_begin[i] || valid_end[i] <= row_idx) {
+			continue;
+		}
+
+		//	If this value is valid, track it for the next gap.
+		const auto idx = arg_data.sel->get_index(i);
+		if (arg_data.validity.RowIsValid(idx)) {
+			prev_valid = row_idx;
+			continue;
+		}
+
+		//	Missing value, so look for interpolation values
+
+		//	Find the previous valid value, scanning backwards from the current row
+		if (prev_valid == DConstants::INVALID_INDEX) {
+			for (idx_t j = row_idx; j > valid_begin[i];) {
+				if (!cursor.CellIsNull(0, --j)) {
+					prev_valid = j;
+					break;
+				}
+			}
+		}
+
+		//	If there is nothing beind us (missing early value) then scan forward
+		if (prev_valid == DConstants::INVALID_INDEX) {
+			for (idx_t j = row_idx + 1; j < valid_end[i]; ++j) {
+				if (!cursor.CellIsNull(0, j)) {
+					prev_valid = j;
+					break;
+				}
+			}
+		}
+
+		//	No valid values!
+		if (prev_valid == DConstants::INVALID_INDEX) {
+			//	Skip to the next partition
+			i += partition_end[i] - row_idx - 1;
+			row_idx = partition_end[i] - 1;
+			continue;
+		}
+
+		//	Find the next valid value after the previous
+		next_valid = DConstants::INVALID_INDEX;
+		for (idx_t j = prev_valid + 1; j < valid_end[i]; ++j) {
+			if (!cursor.CellIsNull(0, j)) {
+				next_valid = j;
+				break;
+			}
+		}
+
+		//	Nothing after, so scan backwards
+		if (next_valid == DConstants::INVALID_INDEX) {
+			for (idx_t j = prev_valid; j > valid_begin[i];) {
+				if (!cursor.CellIsNull(0, --j)) {
+					next_valid = j;
+					//	Restore ordering
+					std::swap(prev_valid, next_valid);
+					break;
+				}
+			}
+		}
+
+		//	If we only have one value, then just copy it
+		if (next_valid == DConstants::INVALID_INDEX) {
+			cursor.CopyCell(0, prev_valid, result, i);
+			continue;
+		}
+
+		//	Two values, so interpolate
+		//	y = y0 + (x - x0) / (x1 - x0) * (y1 - y0)
+		const auto slope = fill_slope_func(range_cursor, row_idx, prev_valid, next_valid);
+		fill_interpolate_func(result, i, cursor, prev_valid, next_valid, slope);
+	}
 }
 
 } // namespace duckdb

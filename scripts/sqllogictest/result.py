@@ -63,9 +63,6 @@ class ExecuteResult:
 
 BUILTIN_EXTENSIONS = [
     'json',
-    'fts',
-    'tpcds',
-    'tpch',
     'parquet',
     'icu',
 ]
@@ -823,6 +820,9 @@ class SQLLogicContext:
         else:
             additional_config['access_mode'] = 'automatic'
 
+        if load.version:
+            additional_config['storage_compatibility_version'] = str(load.version)
+
         self.pool = None
         self.runner.database = None
         self.runner.database = SQLLogicDatabase(dbpath, self, additional_config)
@@ -958,13 +958,20 @@ class SQLLogicContext:
 
     def execute_set(self, statement: Set):
         option = statement.header.parameters[0]
-        string_set = (
-            self.runner.ignore_error_messages
-            if option == "ignore_error_messages"
-            else self.runner.always_fail_error_messages
-        )
-        string_set.clear()
-        string_set = statement.error_messages
+        if option == 'ignore_error_messages':
+            string_set = (
+                self.runner.ignore_error_messages
+                if option == "ignore_error_messages"
+                else self.runner.always_fail_error_messages
+            )
+            string_set.clear()
+            string_set = statement.error_messages
+        elif option == 'seed':
+            con = self.get_connection()
+            con.execute(f"SELECT SETSEED({statement.header.parameters[1]})")
+            self.runner.skip_reload = True
+        else:
+            self.skiptest(f"SET '{option}' is not implemented!")
 
     def execute_hash_threshold(self, statement: HashThreshold):
         self.runner.hash_threshold = statement.threshold

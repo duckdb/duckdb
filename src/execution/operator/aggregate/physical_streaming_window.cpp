@@ -4,7 +4,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -413,6 +412,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 
 	// Compute the arguments
 	auto &arg_chunk = aggr_state.arg_chunk;
+	arg_chunk.Reset();
 	executor.Execute(input, arg_chunk);
 	arg_chunk.Flatten();
 
