@@ -246,7 +246,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"OnConflictExpressionTarget <- Parens(List(Identifier)) WhereClause?\n"
 	"OnConflictIndexTarget <- 'ON'i 'CONSTRAINT'i ConstraintName\n"
 	"OnConflictAction <- OnConflictUpdate / OnConflictNothing\n"
-	"OnConflictUpdate <- 'DO'i 'UPDATE'i UpdateSetClause WhereClause?\n"
+	"OnConflictUpdate <- 'DO'i 'UPDATE'i 'SET'i UpdateSetClause WhereClause?\n"
 	"OnConflictNothing <- 'DO'i 'NOTHING'i\n"
 	"ReturningClause <- 'RETURNING'i TargetList\n"
 	"CreateSchemaStmt <- 'SCHEMA'i IfNotExists? QualifiedName\n"
