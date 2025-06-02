@@ -27,8 +27,8 @@ struct ListFlattenFun {
 
 struct ListAggregateFun {
 	static constexpr const char *Name = "list_aggregate";
-	static constexpr const char *Parameters = "list,name";
-	static constexpr const char *Description = "Executes the aggregate function name on the elements of list.";
+	static constexpr const char *Parameters = "list,function_name";
+	static constexpr const char *Description = "Executes the aggregate function `function_name` on the elements of `list`.";
 	static constexpr const char *Example = "list_aggregate([1, 2, NULL], 'min')";
 	static constexpr const char *Categories = "list";
 
@@ -179,10 +179,10 @@ struct ArrayReverseSortFun {
 
 struct ListTransformFun {
 	static constexpr const char *Name = "list_transform";
-	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description = "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.";
-	static constexpr const char *Example = "list_transform([1, 2, 3], x -> x + 1)";
-	static constexpr const char *Categories = "list";
+	static constexpr const char *Parameters = "list,lambda(x)";
+	static constexpr const char *Description = "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. The return type is defined by the return type of the `lambda` function.";
+	static constexpr const char *Example = "list_transform([1, 2, 3], lambda x : x + 1)";
+	static constexpr const char *Categories = "list,lambda";
 
 	static ScalarFunction GetFunction();
 };
@@ -213,10 +213,10 @@ struct ApplyFun {
 
 struct ListFilterFun {
 	static constexpr const char *Name = "list_filter";
-	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description = "Constructs a list from those elements of the input `list` for which the `lambda` function returns true. See the Lambda Functions page for more details.";
-	static constexpr const char *Example = "list_filter([3, 4, 5], x -> x > 4)";
-	static constexpr const char *Categories = "list";
+	static constexpr const char *Parameters = "list,lambda(x)";
+	static constexpr const char *Description = "Constructs a list from those elements of the input `list` for which the `lambda` function returns `true`. DuckDB must be able to cast the `lambda` function's return type to `BOOL`. The return type of `list_filter` is the same as the input list's.";
+	static constexpr const char *Example = "list_filter([3, 4, 5], lambda x : x > 4)";
+	static constexpr const char *Categories = "list,lambda";
 
 	static ScalarFunction GetFunction();
 };
@@ -235,10 +235,10 @@ struct FilterFun {
 
 struct ListReduceFun {
 	static constexpr const char *Name = "list_reduce";
-	static constexpr const char *Parameters = "list,lambda[,initial]";
-	static constexpr const char *Description = "Returns a single value that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.";
-	static constexpr const char *Example = "list_reduce([1, 2, 3], (x, y) -> x + y)";
-	static constexpr const char *Categories = "list";
+	static constexpr const char *Parameters = "list,lambda(x,y),initial_value";
+	static constexpr const char *Description = "Reduces all elements of the input `list` into a single scalar value by executing the `lambda` function on a running result and the next list element. The `lambda` function has an optional `initial_value` argument.";
+	static constexpr const char *Example = "list_reduce([1, 2, 3], lambda x, y : x + y)";
+	static constexpr const char *Categories = "list,lambda";
 
 	static ScalarFunctionSet GetFunctions();
 };
