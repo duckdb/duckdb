@@ -17,12 +17,17 @@
 namespace duckdb {
 
 static DefaultMacro json_macros[] = {
-    {DEFAULT_SCHEMA, "json_group_array", {"x", nullptr}, {{nullptr, nullptr}}, "to_json(list(x))"},
+    {DEFAULT_SCHEMA,
+     "json_group_array",
+     {"x", nullptr},
+     {{nullptr, nullptr}},
+     "CAST('[' || string_agg(CASE WHEN x IS NULL THEN 'null'::JSON ELSE to_json(x) END, ',') || ']' AS JSON)"},
     {DEFAULT_SCHEMA,
      "json_group_object",
-     {"name", "value", nullptr},
+     {"n", "v", nullptr},
      {{nullptr, nullptr}},
-     "to_json(map(list(name), list(value)))"},
+     "CAST('{' || string_agg(to_json(n::VARCHAR) || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE to_json(v) END, "
+     "',') || '}' AS JSON)"},
     {DEFAULT_SCHEMA,
      "json_group_structure",
      {"x", nullptr},
@@ -63,7 +68,13 @@ void JsonExtension::Load(DuckDB &db) {
 
 	// JSON copy function
 	auto copy_fun = JSONFunctions::GetJSONCopyFunction();
-	ExtensionUtil::RegisterFunction(db_instance, std::move(copy_fun));
+	ExtensionUtil::RegisterFunction(db_instance, copy_fun);
+	copy_fun.extension = "ndjson";
+	copy_fun.name = "ndjson";
+	ExtensionUtil::RegisterFunction(db_instance, copy_fun);
+	copy_fun.extension = "jsonl";
+	copy_fun.name = "jsonl";
+	ExtensionUtil::RegisterFunction(db_instance, copy_fun);
 
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {

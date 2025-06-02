@@ -42,6 +42,7 @@ struct PersistentRowGroupData;
 struct RowGroupPointer;
 struct TransactionData;
 class CollectionScanState;
+class TableFilter;
 class TableFilterSet;
 struct ColumnFetchState;
 struct RowGroupAppendState;
@@ -102,7 +103,7 @@ public:
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
-	void CommitDropColumn(idx_t index);
+	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
 
@@ -182,6 +183,8 @@ public:
 	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 	idx_t GetRowGroupSize() const;
+
+	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();

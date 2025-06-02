@@ -1,0 +1,19 @@
+# name: test/sql/alter/alter_table_set_partitioned_by.test
+# description: Test ALTER TABLE SET PARTITIONED BY
+# group: [alter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement error
+ALTER TABLE tbl SET PARTITIONED BY (i)
+----
+not supported
+
+statement error
+ALTER TABLE tbl RESET PARTITIONED BY;
+----
+not supported

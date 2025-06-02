@@ -46,8 +46,7 @@ public:
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
-	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info,
-	                                              const AttachOptions &options);
+	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Returns a reference to the system catalog
@@ -68,6 +67,8 @@ public:
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
 	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
+	//! Scans the catalog set and returns each committed database entry
+	vector<reference<AttachedDatabase>> GetDatabases();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
@@ -77,6 +78,12 @@ public:
 	}
 	transaction_t ActiveQueryNumber() const {
 		return current_query_number;
+	}
+	transaction_t GetNewTransactionNumber() {
+		return current_transaction_id++;
+	}
+	transaction_t ActiveTransactionNumber() const {
+		return current_transaction_id;
 	}
 	idx_t NextOid() {
 		return next_oid++;
@@ -101,6 +108,8 @@ private:
 	atomic<idx_t> next_oid;
 	//! The current query number
 	atomic<transaction_t> current_query_number;
+	//! The current transaction number
+	atomic<transaction_t> current_transaction_id;
 	//! The current default database
 	string default_database;
 

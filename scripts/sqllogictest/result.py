@@ -63,9 +63,6 @@ class ExecuteResult:
 
 BUILTIN_EXTENSIONS = [
     'json',
-    'fts',
-    'tpcds',
-    'tpch',
     'parquet',
     'icu',
 ]
@@ -95,10 +92,11 @@ class SQLLogicStatementData:
 
 
 class TestException(Exception):
+    __test__ = False
     __slots__ = ['data', 'message', 'result']
 
     def __init__(self, data: SQLLogicStatementData, message: str, result: ExecuteResult):
-        self.message = f'{str(data)} {message}'
+        self.message = message
         super().__init__(self.message)
         self.data = data
         self.result = result
@@ -822,6 +820,9 @@ class SQLLogicContext:
         else:
             additional_config['access_mode'] = 'automatic'
 
+        if load.version:
+            additional_config['storage_compatibility_version'] = str(load.version)
+
         self.pool = None
         self.runner.database = None
         self.runner.database = SQLLogicDatabase(dbpath, self, additional_config)
@@ -933,6 +934,7 @@ class SQLLogicContext:
         self.runner.database = SQLLogicDatabase(path, self)
         self.pool = self.runner.database.connect()
         con = self.pool.get_connection()
+
         for setting in old_settings:
             name, value = setting
             if name in [
@@ -942,23 +944,34 @@ class SQLLogicContext:
                 'allow_unredacted_secrets',
                 'duckdb_api',
             ]:
-                # Can not be set after initialization
+                # Cannot be set after initialization
                 continue
-            if name in ['profiling_mode', 'enable_profiling']:
-                # FIXME: 'profiling_mode' becomes "standard" when requested, but that's not actually the default setting
+
+            # If enable_profiling is NULL, skip setting custom_profiling_settings to not
+            # accidentally enable profiling.
+            # In that case, custom_profiling_settings is set to the default value anyway.
+            if name == "custom_profiling_settings" and "enable_profiling" not in old_settings:
                 continue
-            query = f"set {name}='{value}'"
+
+            query = f"SET {name}='{value}'"
             con.execute(query)
 
     def execute_set(self, statement: Set):
         option = statement.header.parameters[0]
-        string_set = (
-            self.runner.ignore_error_messages
-            if option == "ignore_error_messages"
-            else self.runner.always_fail_error_messages
-        )
-        string_set.clear()
-        string_set = statement.error_messages
+        if option == 'ignore_error_messages':
+            string_set = (
+                self.runner.ignore_error_messages
+                if option == "ignore_error_messages"
+                else self.runner.always_fail_error_messages
+            )
+            string_set.clear()
+            string_set = statement.error_messages
+        elif option == 'seed':
+            con = self.get_connection()
+            con.execute(f"SELECT SETSEED({statement.header.parameters[1]})")
+            self.runner.skip_reload = True
+        else:
+            self.skiptest(f"SET '{option}' is not implemented!")
 
     def execute_hash_threshold(self, statement: HashThreshold):
         self.runner.hash_threshold = statement.threshold
@@ -1089,6 +1102,15 @@ class SQLLogicContext:
         if param == "no_extension_autoloading":
             if autoload_known_extensions:
                 # If autoloading is on, we skip this test
+                return RequireResult.MISSING
+            return RequireResult.PRESENT
+
+        allow_unsigned_extensions = connection.execute(
+            "select value::BOOLEAN from duckdb_settings() where name == 'allow_unsigned_extensions'"
+        ).fetchone()[0]
+        if param == "allow_unsigned_extensions":
+            if allow_unsigned_extensions == False:
+                # If extension validation is turned on (that is allow_unsigned_extensions=False), skip test
                 return RequireResult.MISSING
             return RequireResult.PRESENT
 

@@ -37,6 +37,12 @@ foreach debug False True
 statement ok 
 PRAGMA debug_asof_iejoin=${debug}
 
+# Check NLJ results against both
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 #
 # Strictly Greater Than
 #
@@ -227,5 +233,7 @@ ORDER BY ALL ASC
 2023-03-21 21:00:00	infinity	9
 NULL	-infinity	-1
 NULL	NULL	-10
+
+endloop
 
 endloop

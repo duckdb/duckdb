@@ -107,10 +107,9 @@ DROP TABLE number_str;
 statement ok
 DROP TYPE number_enum;
 
-# Throw exception for NULL
-statement error
-CREATE TYPE number_enum AS ENUM (SELECT NULL::VARCHAR);
-----
+# This just creates an empty enum type
+statement ok
+CREATE TYPE empty_number_enum AS ENUM (SELECT NULL::VARCHAR);
 
 # Test inserted order
 statement ok

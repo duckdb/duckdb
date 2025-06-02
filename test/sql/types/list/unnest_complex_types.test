@@ -7,6 +7,14 @@ PRAGMA enable_verification
 
 # varchars
 query III
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
+----
+3	hello	NULL
+3	NULL	NULL
+3	world	NULL
+
+# varchars
+query III
 SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, ['abcd', 'efgh'], ['123456789abcd']), (2, NULL, ['123456789efgh', '123456789klmnop']), (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
 ----
 1	abcd	123456789abcd

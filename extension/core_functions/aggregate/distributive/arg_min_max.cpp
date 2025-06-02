@@ -545,8 +545,8 @@ public:
 	BinaryAggregateHeap<K, V, COMPARATOR> heap;
 
 	bool is_initialized = false;
-	void Initialize(idx_t nval) {
-		heap.Initialize(nval);
+	void Initialize(ArenaAllocator &allocator, idx_t nval) {
+		heap.Initialize(allocator, nval);
 		is_initialized = true;
 	}
 };
@@ -601,7 +601,7 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 			if (nval >= MAX_N) {
 				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be < %d", MAX_N);
 			}
-			state.Initialize(UnsafeNumericCast<idx_t>(nval));
+			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}
 
 		// Now add the input to the heap

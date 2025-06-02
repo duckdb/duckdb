@@ -90,6 +90,8 @@ private:
 	GateStatus status;
 	//! Depth in a nested leaf.
 	uint8_t nested_depth = 0;
+	//! True, if we entered a nested leaf to retrieve the next node.
+	bool entered_nested_leaf = false;
 
 private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,

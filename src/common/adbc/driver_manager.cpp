@@ -1080,6 +1080,7 @@ AdbcStatusCode AdbcConnectionGetTableTypes(struct AdbcConnection *connection, st
 
 AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                                   struct AdbcError *error) {
+
 	if (!connection->private_data) {
 		SetError(error, "Must call AdbcConnectionNew first");
 		return ADBC_STATUS_INVALID_STATE;
@@ -1087,6 +1088,7 @@ AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct Adbc
 		SetError(error, "Database is not initialized");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+
 	TempConnection *args = reinterpret_cast<TempConnection *>(connection->private_data);
 	connection->private_data = nullptr;
 	std::unordered_map<std::string, std::string> options = std::move(args->options);
@@ -1176,7 +1178,7 @@ AdbcStatusCode AdbcConnectionRollback(struct AdbcConnection *connection, struct 
 
 AdbcStatusCode AdbcConnectionSetOption(struct AdbcConnection *connection, const char *key, const char *value,
                                        struct AdbcError *error) {
-	if (!connection->private_data) {
+	if (!connection || !connection->private_data) {
 		SetError(error, "AdbcConnectionSetOption: must AdbcConnectionNew first");
 		return ADBC_STATUS_INVALID_STATE;
 	}

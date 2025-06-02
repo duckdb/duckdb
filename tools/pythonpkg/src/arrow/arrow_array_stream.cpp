@@ -52,23 +52,21 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(DBConfig &config, 
 	py::list projection_list = py::cast(column_list);
 
 	bool has_filter = filters && !filters->filters.empty();
+	py::dict kwargs;
+	if (!column_list.empty()) {
+		kwargs["columns"] = projection_list;
+	}
 
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
-		}
-	} else {
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
+		if (!filter.is(py::none())) {
+			kwargs["filter"] = filter;
 		}
 	}
+	return arrow_scanner(arrow_obj_handle, **kwargs);
 }
+
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
@@ -284,7 +282,23 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	case LogicalTypeId::BLOB:
 		return dataset_scalar(py::bytes(constant.GetValueUnsafe<string>()));
 	case LogicalTypeId::DECIMAL: {
-		py::object decimal_type = py::module_::import("pyarrow").attr("decimal128");
+		py::object decimal_type;
+		auto &datetime_info = type.GetTypeInfo<ArrowDecimalInfo>();
+		auto bit_width = datetime_info.GetBitWidth();
+		switch (bit_width) {
+		case DecimalBitWidth::DECIMAL_32:
+			decimal_type = py::module_::import("pyarrow").attr("decimal32");
+			break;
+		case DecimalBitWidth::DECIMAL_64:
+			decimal_type = py::module_::import("pyarrow").attr("decimal64");
+			break;
+		case DecimalBitWidth::DECIMAL_128:
+			decimal_type = py::module_::import("pyarrow").attr("decimal128");
+			break;
+		default:
+			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
+		}
+
 		uint8_t width;
 		uint8_t scale;
 		constant.type().GetDecimalProperties(width, scale);
@@ -308,6 +322,37 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		auto &constant_filter = filter.Cast<ConstantFilter>();
 		auto constant_field = field(py::tuple(py::cast(column_ref)));
 		auto constant_value = GetScalar(constant_filter.constant, timezone_config, type);
+
+		bool is_nan = false;
+		auto &constant = constant_filter.constant;
+		auto &constant_type = constant.type();
+		if (constant_type.id() == LogicalTypeId::FLOAT) {
+			is_nan = Value::IsNan(constant.GetValue<float>());
+		} else if (constant_type.id() == LogicalTypeId::DOUBLE) {
+			is_nan = Value::IsNan(constant.GetValue<double>());
+		}
+
+		// Special handling for NaN comparisons (to explicitly violate IEEE-754)
+		if (is_nan) {
+			switch (constant_filter.comparison_type) {
+			case ExpressionType::COMPARE_EQUAL:
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				return constant_field.attr("is_nan")();
+			case ExpressionType::COMPARE_LESSTHAN:
+			case ExpressionType::COMPARE_NOTEQUAL:
+				return constant_field.attr("is_nan")().attr("__invert__")();
+			case ExpressionType::COMPARE_GREATERTHAN:
+				// Nothing is greater than NaN
+				return import_cache.pyarrow.dataset().attr("scalar")(false);
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+				// Everything is less than or equal to NaN
+				return import_cache.pyarrow.dataset().attr("scalar")(true);
+			default:
+				throw NotImplementedException("Unsupported comparison type (%s) for NaN values",
+				                              EnumUtil::ToString(constant_filter.comparison_type));
+			}
+		}
+
 		switch (constant_filter.comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
 			return constant_field.attr("__eq__")(constant_value);
@@ -342,6 +387,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
 			auto &child_filter = *or_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
 			} else {
@@ -356,6 +404,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < and_filter.child_filters.size(); i++) {
 			auto &child_filter = *and_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
 			} else {
@@ -395,6 +446,10 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
 		}
 		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+	}
+	case TableFilterType::DYNAMIC_FILTER: {
+		//! Ignore dynamic filters for now, not necessary for correctness
+		return py::none();
 	}
 	default:
 		throw NotImplementedException("Pushdown Filter Type %s is not currently supported in PyArrow Scans",

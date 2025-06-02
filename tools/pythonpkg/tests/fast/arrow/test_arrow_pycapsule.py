@@ -57,6 +57,17 @@ class TestArrowPyCapsule(object):
         rel2 = duckdb_cursor.sql("select * from capsule")
         assert rel2.fetchall() == [(i, i + 1, -i) for i in range(100)]
 
+    def test_automatic_reexecution(self, duckdb_cursor):
+        other_con = duckdb_cursor.cursor()
+        rel = duckdb_cursor.sql("select i, i+1, -i from range(100) t(i)")
+
+        capsule_one = rel.__arrow_c_stream__()
+        res1 = other_con.sql("select * from capsule_one").fetchall()
+        capsule_two = rel.__arrow_c_stream__()
+        res2 = other_con.sql("select * from capsule_two").fetchall()
+        assert len(res1) == 100
+        assert res1 == res2
+
     def test_consumer_interface_roundtrip(self, duckdb_cursor):
         def create_table():
             class MyTable:

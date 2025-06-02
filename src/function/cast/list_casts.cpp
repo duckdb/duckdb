@@ -2,6 +2,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -76,6 +77,13 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
+	auto &child_vec = ListVector::GetEntry(source);
+	auto child_is_nested = child_vec.GetType().IsNested();
+	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                          : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto write_string_func =
+	    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
+
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
 	auto &child = ListVector::GetEntry(varchar_list);
@@ -89,6 +97,9 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
+	unsafe_unique_array<bool> needs_quotes;
+	idx_t needs_quotes_length;
+
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
@@ -97,13 +108,21 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		auto list = list_data[i];
 		// figure out how long the result needs to be
 		idx_t list_length = 2; // "[" and "]"
+		if (!needs_quotes || list.length > needs_quotes_length) {
+			needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
+			needs_quotes_length = list.length;
+		}
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			auto idx = list.offset + list_idx;
 			if (list_idx > 0) {
 				list_length += SEP_LENGTH; // ", "
 			}
 			// string length, or "NULL"
-			list_length += child_validity.RowIsValid(idx) ? child_data[idx].GetSize() : NULL_LENGTH;
+			if (child_validity.RowIsValid(idx)) {
+				list_length += string_length_func(child_data[idx], needs_quotes[list_idx]);
+			} else {
+				list_length += NULL_LENGTH;
+			}
 		}
 		result_data[i] = StringVector::EmptyString(result, list_length);
 		auto dataptr = result_data[i].GetDataWriteable();
@@ -116,9 +135,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(idx)) {
-				auto len = child_data[idx].GetSize();
-				memcpy(dataptr + offset, child_data[idx].GetData(), len);
-				offset += len;
+				offset += write_string_func(dataptr + offset, child_data[idx], needs_quotes[list_idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

@@ -21,7 +21,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -45,7 +45,7 @@ env:
 jobs:
   regression-test-benchmark-runner:
     name: Regression Tests
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: gcc-10
       CXX: g++-10
@@ -182,7 +182,7 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: gcc-10
       CXX: g++-10
@@ -262,7 +262,7 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: gcc-10
       CXX: g++-10
@@ -304,7 +304,7 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: gcc-10
       CXX: g++-10

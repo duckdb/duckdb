@@ -121,11 +121,17 @@ COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 ----
 "sep" expects a string argument!
 
-# multiple format options
+# multiple format options/1, last one wins
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'json');
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'some_other_copy_function');
 ----
-Copy Function with name "json" is not in the catalog, but it exists in the json extension.
+Catalog Error: Copy Function with name some_other_copy_function does not exist
+
+# multiple format options/2, last one wins
+query I
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'some_other_copy_function', FORMAT 'csv');
+----
+5000
 
 # number as escape string
 statement error

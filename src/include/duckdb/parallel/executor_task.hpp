@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/parallel/event.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
+class Event;
 class PhysicalOperator;
 class ThreadContext;
 
@@ -33,6 +33,9 @@ public:
 	shared_ptr<Event> event;
 	unique_ptr<ThreadContext> thread_context;
 	optional_ptr<const PhysicalOperator> op;
+
+private:
+	ClientContext &context;
 
 public:
 	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;

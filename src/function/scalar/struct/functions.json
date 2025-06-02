@@ -11,7 +11,8 @@
         "parameters": "struct,'entry'",
         "description": "Extract the entry from the STRUCT by position (starts at 1!).",
         "example": "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)",
-        "type": "scalar_function_set"
+        "type": "scalar_function",
+        "extra_functions": ["static unique_ptr<FunctionData> GetBindData(idx_t index);"]
     },
     {
         "name": "struct_pack",
@@ -25,6 +26,13 @@
         "parameters": "any,...",
         "description": "Create an unnamed STRUCT (tuple) containing the argument values.",
         "example": "row(i, i % 4, i / 4)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "remap_struct",
+        "parameters": "input,target_type,mapping,defaults",
+        "description": "Map a struct to another struct type, potentially re-ordering, renaming and casting members and filling in defaults for missing values",
+        "example": "remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})",
         "type": "scalar_function"
     },
     {

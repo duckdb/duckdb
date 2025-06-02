@@ -129,43 +129,43 @@ SELECT list_where(['2021-08-20'::DATE], [true])
 query I
 SELECT list_where(['14:59:37'::TIME], [true])
 ----
-[14:59:37]
+['14:59:37']
 
 # timestamp
 query I
 SELECT list_where(['2021-08-20'::TIMESTAMP], [true])
 ----
-[2021-08-20 00:00:00]
+['2021-08-20 00:00:00']
 
 # timestamp s
 query I
 SELECT list_where(['2021-08-20'::TIMESTAMP_S], [true])
 ----
-[2021-08-20 00:00:00]
+['2021-08-20 00:00:00']
 
 # timestamp ms
 query I
 SELECT list_where(['2021-08-20 00:00:00.123'::TIMESTAMP_MS], [true])
 ----
-[2021-08-20 00:00:00.123]
+['2021-08-20 00:00:00.123']
 
 # timestamp ns
 query I
 SELECT list_where(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS], [true])
 ----
-[2021-08-20 00:00:00.123456]
+['2021-08-20 00:00:00.123456']
 
 # time with time zone
 query I
 SELECT list_where(['14:59:37'::TIMETZ], [true])
 ----
-[14:59:37+00]
+['14:59:37+00']
 
 # timestamp with time zone
 query I
 SELECT list_where(['2021-08-20'::TIMESTAMPTZ], [true])
 ----
-[2021-08-20 00:00:00+00]
+['2021-08-20 00:00:00+00']
 
 # interval
 query I
@@ -187,7 +187,7 @@ endloop
 query I
 SELECT list_where(['{a: 1}'::BLOB, '{a: 3}'::BLOB], [true, false])
 ----
-[{a: 1}]
+['{a: 1}']
 
 query I
 SELECT list_where([NULL::BLOB], [true])

@@ -8,103 +8,144 @@
 
 #pragma once
 
-#include "parquet_types.h"
-#include "thrift_tools.hpp"
-#include "resizable_buffer.hpp"
+#include "decode_utils.hpp"
 
 namespace duckdb {
 
 class RleBpEncoder {
 public:
-	explicit RleBpEncoder(uint32_t bit_width)
-	    : byte_width((bit_width + 7) / 8), byte_count(idx_t(-1)), run_count(idx_t(-1)) {
+	explicit RleBpEncoder(uint32_t bit_width_p) : bit_width(bit_width_p), byte_width((bit_width + 7) / 8) {
 	}
 
 public:
-	//! NOTE: Prepare is only required if a byte count is required BEFORE writing
-	//! This is the case with e.g. writing repetition/definition levels
-	//! If GetByteCount() is not required, prepare can be safely skipped
-	void BeginPrepare(uint32_t first_value) {
-		byte_count = 0;
-		run_count = 1;
-		current_run_count = 1;
-		last_value = first_value;
-	}
-	void PrepareValue(uint32_t value) {
-		if (value != last_value) {
-			FinishRun();
-			last_value = value;
-		} else {
-			current_run_count++;
-		}
-	}
-	void FinishPrepare() {
-		FinishRun();
+	void BeginWrite() {
+		rle_count = 0;
+		bp_block_count = 0;
 	}
 
-	void BeginWrite(WriteStream &writer, uint32_t first_value) {
-		// start the RLE runs
-		last_value = first_value;
-		current_run_count = 1;
-	}
-	void WriteValue(WriteStream &writer, uint32_t value) {
-		if (value != last_value) {
-			WriteRun(writer);
-			last_value = value;
-		} else {
-			current_run_count++;
+	void WriteValue(WriteStream &writer, const uint32_t &value) {
+		if (bp_block_count != 0) {
+			// We already committed to a BP run
+			D_ASSERT(rle_count == 0);
+			bp_block[bp_block_count++] = value;
+			if (bp_block_count == BP_BLOCK_SIZE) {
+				WriteRun(writer);
+			}
+			return;
 		}
+
+		if (rle_count == 0) {
+			// Starting fresh, try for an RLE run first
+			rle_value = value;
+			rle_count = 1;
+			return;
+		}
+
+		// We're trying for an RLE run
+		if (rle_value == value) {
+			// Same as current RLE value
+			rle_count++;
+			return;
+		}
+
+		// Value differs from current RLE value
+		if (rle_count >= MINIMUM_RLE_COUNT) {
+			// We have enough values for an RLE run
+			WriteRun(writer);
+			rle_value = value;
+			rle_count = 1;
+			return;
+		}
+
+		// Not enough values, convert and commit to a BP run
+		D_ASSERT(bp_block_count == 0);
+		for (idx_t i = 0; i < rle_count; i++) {
+			bp_block[bp_block_count++] = rle_value;
+		}
+		bp_block[bp_block_count++] = value;
+		rle_count = 0;
 	}
+
+	void WriteMany(WriteStream &writer, uint32_t value, idx_t count) {
+		if (rle_count != 0) {
+			// If an RLE run is going on, write a single value to either finish it or convert to BP
+			WriteValue(writer, value);
+			count--;
+		}
+
+		if (bp_block_count != 0) {
+			// If a BP run is going on, finish it
+			while (bp_block_count != 0 && count > 0) {
+				WriteValue(writer, value);
+				count--;
+			}
+		}
+
+		// Set remaining as current RLE run
+		rle_value = value;
+		rle_count += count;
+	}
+
 	void FinishWrite(WriteStream &writer) {
 		WriteRun(writer);
 	}
 
-	idx_t GetByteCount() {
-		D_ASSERT(byte_count != idx_t(-1));
-		return byte_count;
-	}
-
 private:
-	//! meta information
+	//! Meta information
+	uint32_t bit_width;
 	uint32_t byte_width;
-	//! RLE run information
-	idx_t byte_count;
-	idx_t run_count;
-	idx_t current_run_count;
-	uint32_t last_value;
+
+	//! RLE stuff
+	static constexpr idx_t MINIMUM_RLE_COUNT = 4;
+	uint32_t rle_value;
+	idx_t rle_count;
+
+	//! BP stuff
+	static constexpr idx_t BP_BLOCK_SIZE = 256;
+	static_assert(BP_BLOCK_SIZE % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0,
+	              "BP_BLOCK_SIZE must be divisible by BITPACKING_ALGORITHM_GROUP_SIZE");
+	uint32_t bp_block[BP_BLOCK_SIZE] = {0};
+	uint32_t bp_block_packed[BP_BLOCK_SIZE] = {0};
+	idx_t bp_block_count;
 
 private:
-	void FinishRun() {
-		// last value, or value has changed
-		// write out the current run
-		byte_count += ParquetDecodeUtils::GetVarintSize(current_run_count << 1) + byte_width;
-		current_run_count = 1;
-		run_count++;
-	}
 	void WriteRun(WriteStream &writer) {
-		// write the header of the run
-		ParquetDecodeUtils::VarintEncode(current_run_count << 1, writer);
-		// now write the value
-		D_ASSERT(last_value >> (byte_width * 8) == 0);
+		if (rle_count != 0) {
+			WriteCurrentBlockRLE(writer);
+		} else {
+			WriteCurrentBlockBP(writer);
+		}
+	}
+
+	void WriteCurrentBlockRLE(WriteStream &writer) {
+		ParquetDecodeUtils::VarintEncode(rle_count << 1 | 0, writer); // (... | 0) signals RLE run
+		D_ASSERT(rle_value >> (byte_width * 8) == 0);
 		switch (byte_width) {
 		case 1:
-			writer.Write<uint8_t>(last_value);
+			writer.Write<uint8_t>(rle_value);
 			break;
 		case 2:
-			writer.Write<uint16_t>(last_value);
+			writer.Write<uint16_t>(rle_value);
 			break;
 		case 3:
-			writer.Write<uint8_t>(last_value & 0xFF);
-			writer.Write<uint8_t>((last_value >> 8) & 0xFF);
-			writer.Write<uint8_t>((last_value >> 16) & 0xFF);
+			writer.Write<uint8_t>(rle_value & 0xFF);
+			writer.Write<uint8_t>((rle_value >> 8) & 0xFF);
+			writer.Write<uint8_t>((rle_value >> 16) & 0xFF);
 			break;
 		case 4:
-			writer.Write<uint32_t>(last_value);
+			writer.Write<uint32_t>(rle_value);
 			break;
 		default:
 			throw InternalException("unsupported byte width for RLE encoding");
 		}
-		current_run_count = 1;
+		rle_count = 0;
+	}
+
+	void WriteCurrentBlockBP(WriteStream &writer) {
+		ParquetDecodeUtils::VarintEncode(BP_BLOCK_SIZE / 8 << 1 | 1, writer); // (... | 1) signals BP run
+		ParquetDecodeUtils::BitPackAligned(bp_block, data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE, bit_width);
+		writer.WriteData(data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE * bit_width / 8);
+		bp_block_count = 0;
 	}
 };
 

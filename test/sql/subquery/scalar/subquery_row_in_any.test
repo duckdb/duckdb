@@ -13,6 +13,12 @@ SELECT (1, 2) IN (SELECT i, i + 1 FROM integers)
 ----
 true
 
+# mixed types
+query I
+SELECT (date '1992-01-02', 2) IN (SELECT date '1992-01-01' + interval (i) days, i + 1 FROM integers)
+----
+true
+
 # it still works with the row inside the subquery
 query I
 SELECT (1, 2) IN (SELECT (i, i + 1) FROM integers)

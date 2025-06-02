@@ -320,6 +320,15 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    },
 	    "Interrupt pending operations", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
+	    "query_progress",
+	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->QueryProgress();
+	    },
+	    "Query progress of pending operation", py::kw_only(), py::arg("connection") = py::none());
+	m.def(
 	    "fetchone",
 	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
@@ -1039,6 +1048,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
+	m.attr("__formatted_python_version__") = DuckDBPyConnection::FormattedPythonVersion();
 	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
 	      "Retrieve the connection currently registered as the default to be used by the module");
 	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,

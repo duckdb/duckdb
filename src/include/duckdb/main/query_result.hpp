@@ -135,6 +135,9 @@ private:
 		QueryResultIterator &iterator;
 		idx_t row;
 
+		bool IsNull(idx_t col_idx) const {
+			return iterator.chunk->GetValue(col_idx, row).IsNull();
+		}
 		template <class T>
 		T GetValue(idx_t col_idx) const {
 			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();

@@ -1,0 +1,52 @@
+# name: test/sql/function/uuid/test_uuid_function.test
+# description: Test uuid related functions
+# group: [uuid]
+
+query I
+SELECT uuid_extract_version('ac227128-7d55-7ee0-a765-5025cc52e55a');
+----
+7
+
+query I
+SELECT uuid_extract_version(uuidv7());
+----
+7
+
+# Test UUIDv4 in string format.
+query I
+SELECT uuid_extract_version('ac227128-7d55-4ee0-a765-5025cc52e55a');
+----
+4
+
+query I
+SELECT uuid_extract_version(uuidv4());
+----
+4
+
+query I
+SELECT uuid_extract_version(gen_random_uuid());
+----
+4
+
+# Test timestamp extraction with UUID v4.
+statement error
+SELECT uuid_extract_timestamp(uuidv4());
+----
+Given UUID is with version 4, not version 7.
+
+require icu
+
+statement ok
+SET TimeZone='UTC'
+
+# Test timestamp extraction with UUID v7.
+query I
+SELECT uuid_extract_timestamp('0196f97a-db14-71c3-9132-9f0b1334466f');
+----
+2025-05-22 19:31:40.436+00
+
+# verify the generated timestamp is consistent with NOW()
+query I
+SELECT datediff('month', uuid_extract_timestamp(uuidv7()), now());
+----
+0

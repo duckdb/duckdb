@@ -39,7 +39,7 @@
                 }
             ],
             "comment": {
-                "description": "Closes the result and de-allocates all memory allocated for that connection.\n\n",
+                "description": "Closes the result and de-allocates all memory allocated for that result.\n\n",
                 "param_comments": {
                     "result": "The result to destroy."
                 }

@@ -8,7 +8,7 @@ statement ok
 SET threads=8;
 
 statement ok
-SET memory_limit='100MiB';
+SET memory_limit='200MiB';
 
 query I
 SELECT * FROM read_json_objects('data/json/example_rn.ndjson', format='nd');

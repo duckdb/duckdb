@@ -1,5 +1,5 @@
 # name: test/optimizer/regex_optimizer.test
-# description: Test Like Optimization Rules
+# description: Test Regex Optimization Rules
 # group: [optimizer]
 
 statement ok

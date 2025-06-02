@@ -101,48 +101,48 @@ NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	1	0
 NULL	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 NULL	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 NULL	{'x': NULL, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+NULL	{'x': duck, 'y': ''}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 NULL	{'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 NULL	{'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-NULL	{'x': duck, 'y': }	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	0	1	1	0	0	1	1	0
 {'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': 0}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
+{'x': NULL, 'y': 0}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': 0}	{'x': duck, 'y': NULL}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': 0}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': 0}	{'x': duck, 'y': }	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	0	1	1	0	0	1	1	0
 {'x': NULL, 'y': NULL}	{'x': NULL, 'y': goose}	0	0	0	1	1	1	0	1
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': NULL}	{'x': duck, 'y': NULL}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': NULL}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': }	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': NULL, 'y': goose}	{'x': NULL, 'y': 0}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': goose}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': NULL, 'y': goose}	{'x': NULL, 'y': goose}	0	1	1	0	0	1	1	0
+{'x': NULL, 'y': goose}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': goose}	{'x': duck, 'y': NULL}	0	0	0	1	1	1	0	1
 {'x': NULL, 'y': goose}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
-{'x': NULL, 'y': goose}	{'x': duck, 'y': }	0	0	0	1	1	1	0	1
+{'x': duck, 'y': ''}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
+{'x': duck, 'y': ''}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': ''}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': ''}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': ''}	{'x': duck, 'y': ''}	0	1	1	0	0	1	1	0
+{'x': duck, 'y': ''}	{'x': duck, 'y': NULL}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': ''}	{'x': duck, 'y': goose}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': duck, 'y': NULL}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': NULL}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': NULL}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': NULL}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
 {'x': duck, 'y': NULL}	{'x': duck, 'y': NULL}	0	1	1	0	0	1	1	0
 {'x': duck, 'y': NULL}	{'x': duck, 'y': goose}	0	0	0	1	1	1	0	1
-{'x': duck, 'y': NULL}	{'x': duck, 'y': }	0	0	0	1	1	1	0	1
 {'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
 {'x': duck, 'y': goose}	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': goose}	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': goose}	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
+{'x': duck, 'y': goose}	{'x': duck, 'y': ''}	0	0	0	1	1	1	0	1
 {'x': duck, 'y': goose}	{'x': duck, 'y': NULL}	1	1	0	1	0	0	0	1
 {'x': duck, 'y': goose}	{'x': duck, 'y': goose}	0	1	1	0	0	1	1	0
-{'x': duck, 'y': goose}	{'x': duck, 'y': }	0	0	0	1	1	1	0	1
-{'x': duck, 'y': }	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	1
-{'x': duck, 'y': }	{'x': NULL, 'y': 0}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': }	{'x': NULL, 'y': NULL}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': }	{'x': NULL, 'y': goose}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': }	{'x': duck, 'y': NULL}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': }	{'x': duck, 'y': goose}	1	1	0	1	0	0	0	1
-{'x': duck, 'y': }	{'x': duck, 'y': }	0	1	1	0	0	1	1	0

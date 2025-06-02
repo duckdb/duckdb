@@ -32,6 +32,7 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
 		param_count = 1;
 		break;
 	case ExpressionType::WINDOW_NTH_VALUE:
@@ -58,6 +59,7 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
 		return child_types[0];
 	default:
 		throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
@@ -144,8 +146,9 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
 	//	Check for macros pretending to be aggregates
-	auto entry = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
-	                             window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.function_name, error_context);
+	auto entry = GetCatalogEntry(window.catalog, window.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (window.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE && entry &&
 	    entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
@@ -170,6 +173,9 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	     window.end == WindowBoundary::EXPR_PRECEDING_RANGE || window.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 	if (is_range && window.orders.size() != 1) {
 		throw BinderException(error_context, "RANGE frames must have only one ORDER BY expression");
+	} else if (window.GetExpressionType() == ExpressionType::WINDOW_FILL &&
+	           (window.arg_orders.size() > 1 || (window.arg_orders.empty() && window.orders.size() != 1))) {
+		throw BinderException(error_context, "FILL functions must have only one ORDER BY expression");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
@@ -371,6 +377,20 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto null_order = config.ResolveNullOrder(type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->arg_orders.emplace_back(type, null_order, std::move(expression));
+	}
+
+	//	Check FILL orderings support subtraction
+	if (window.GetExpressionType() == ExpressionType::WINDOW_FILL) {
+		LogicalType order_type;
+		if (window.arg_orders.empty()) {
+			D_ASSERT(!result->orders.empty());
+			order_type = result->orders[0].expression->return_type;
+		} else {
+			order_type = result->arg_orders[0].expression->return_type;
+		}
+		if (!order_type.IsNumeric() && (!order_type.IsTemporal() || order_type.id() == LogicalTypeId::TIME_TZ)) {
+			throw BinderException(error_context, "FILL orderings must support subtraction");
+		}
 	}
 
 	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);

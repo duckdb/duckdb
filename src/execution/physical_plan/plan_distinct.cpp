@@ -10,14 +10,13 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto child = CreatePlan(*op.children[0]);
+	reference<PhysicalOperator> child = CreatePlan(*op.children[0]);
 	auto &distinct_targets = op.distinct_targets;
-	D_ASSERT(child);
 	D_ASSERT(!distinct_targets.empty());
 
-	auto &types = child->GetTypes();
+	auto &types = child.get().GetTypes();
 	vector<unique_ptr<Expression>> groups, aggregates, projections;
 	idx_t group_count = distinct_targets.size();
 	unordered_map<idx_t, idx_t> group_by_references;
@@ -82,20 +81,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 		}
 	}
 
-	child = ExtractAggregateExpressions(std::move(child), aggregates, groups);
+	child = ExtractAggregateExpressions(child, aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby = make_uniq<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
-	                                                child->estimated_cardinality);
-	groupby->children.push_back(std::move(child));
+	auto &group_by = Make<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
+	                                             child.get().estimated_cardinality);
+	group_by.children.push_back(child);
 	if (!requires_projection) {
-		return std::move(groupby);
+		return group_by;
 	}
 
 	// we add a physical projection on top of the aggregation to project all members in the select list
-	auto aggr_projection = make_uniq<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
-	aggr_projection->children.push_back(std::move(groupby));
-	return std::move(aggr_projection);
+	auto &proj = Make<PhysicalProjection>(types, std::move(projections), group_by.estimated_cardinality);
+	proj.children.push_back(group_by);
+	return proj;
 }
 
 } // namespace duckdb

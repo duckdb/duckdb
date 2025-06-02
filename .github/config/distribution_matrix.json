@@ -3,17 +3,12 @@
     "include": [
       {
         "duckdb_arch": "linux_amd64",
-        "container": "ubuntu:18.04",
-        "vcpkg_triplet": "x64-linux"
-      },
-      {
-        "duckdb_arch": "linux_amd64_gcc4",
-        "container": "quay.io/pypa/manylinux2014_x86_64",
+        "container": "quay.io/pypa/manylinux_2_28_x86_64",
         "vcpkg_triplet": "x64-linux"
       },
       {
         "duckdb_arch": "linux_arm64",
-        "container": "ubuntu:18.04",
+        "container": "quay.io/pypa/manylinux_2_28_aarch64",
         "vcpkg_triplet": "arm64-linux"
       },
       {

@@ -21,7 +21,7 @@
 %type <ival> TableLikeOptionList
 %type <str> generic_option_name
 %type <ival> ConstraintAttributeElem
-%type <node> columnDef
+%type <node> columnDef regularColumnDef generatedColumnDef
 %type <list> def_list
 %type <str> index_name
 %type <node> TableElement

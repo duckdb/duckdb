@@ -16,6 +16,7 @@ namespace duckdb {
 struct TupleDataSegment;
 struct TupleDataChunk;
 struct TupleDataChunkPart;
+class ContinuousIdSet;
 
 struct TupleDataBlock {
 public:
@@ -52,7 +53,7 @@ public:
 
 class TupleDataAllocator {
 public:
-	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
+	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> &layout_ptr);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	~TupleDataAllocator();
@@ -62,6 +63,7 @@ public:
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the layout
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	//! Number of row blocks
 	idx_t RowBlockCount() const;
@@ -74,12 +76,16 @@ public:
 	//! Builds out the chunks for next append, given the metadata in the append state
 	void Build(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	           const idx_t append_offset, const idx_t append_count);
+	bool BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+	                   const idx_t append_offset, const idx_t append_count);
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	                          idx_t chunk_idx, bool init_heap);
 	static void RecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
 	                                  const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
 	                                  const idx_t count, const TupleDataLayout &layout, const idx_t base_col_offset);
+	static void FindHeapPointers(TupleDataChunkState &chunk_state, SelectionVector &not_found, idx_t &not_found_count,
+	                             const TupleDataLayout &layout, const idx_t base_col_offset);
 	//! Releases or stores any handles in the management state that are no longer required
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment, TupleDataChunk &chunk,
 	                           bool release_heap);
@@ -87,6 +93,9 @@ public:
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
 	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
 	void SetDestroyBufferUponUnpin();
+	//! Destroy the blocks between the given indices
+	void DestroyRowBlocks(idx_t row_block_begin, idx_t row_block_end);
+	void DestroyHeapBlocks(idx_t heap_block_begin, idx_t heap_block_end);
 
 private:
 	//! Builds out a single part (grabs the lock)
@@ -99,7 +108,7 @@ private:
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
 	                                          unsafe_vector<BufferHandle> &pinned_row_handles,
-	                                          perfect_map_t<BufferHandle> &handles, const perfect_set_t &block_ids,
+	                                          buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
 	                                          unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
@@ -114,7 +123,8 @@ private:
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows

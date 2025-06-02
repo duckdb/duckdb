@@ -144,6 +144,9 @@ static void InitializeAppenderForType(ArrowAppendData &append_data) {
 static void InitializeFunctionPointers(ArrowAppendData &append_data, const LogicalType &type) {
 	// handle special logical types
 	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+		InitializeAppenderForType<ArrowNullData>(append_data);
+		break;
 	case LogicalTypeId::BOOLEAN:
 		InitializeAppenderForType<ArrowBoolData>(append_data);
 		break;
@@ -212,13 +215,13 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			InitializeAppenderForType<ArrowScalarData<int32_t, int16_t>>(append_data);
 			break;
 		case PhysicalType::INT32:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
 			break;
 		case PhysicalType::INT64:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
 			break;
 		case PhysicalType::INT128:
 			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);

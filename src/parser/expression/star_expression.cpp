@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -13,10 +14,6 @@ StarExpression::StarExpression(string relation_name_p)
 
 string StarExpression::ToString() const {
 	string result;
-	if (unpacked) {
-		D_ASSERT(columns);
-		result += "*";
-	}
 	if (expr) {
 		D_ASSERT(columns);
 		result += "COLUMNS(" + expr->ToString() + ")";
@@ -79,9 +76,6 @@ bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
 	if (a.columns != b.columns) {
 		return false;
 	}
-	if (a.unpacked != b.unpacked) {
-		return false;
-	}
 	if (a.replace_list.size() != b.replace_list.size()) {
 		return false;
 	}
@@ -113,15 +107,36 @@ bool StarExpression::IsColumns(const ParsedExpression &a) {
 		return false;
 	}
 	auto &star = a.Cast<StarExpression>();
-	return star.columns == true && star.unpacked == false;
+	return star.columns == true;
 }
 
 bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
-	if (a.GetExpressionClass() != ExpressionClass::STAR) {
+	if (a.GetExpressionType() != ExpressionType::OPERATOR_UNPACK) {
 		return false;
 	}
-	auto &star = a.Cast<StarExpression>();
-	return star.columns == true && star.unpacked == true;
+	return true;
+}
+
+unique_ptr<ParsedExpression>
+StarExpression::DeserializeStarExpression(string &&relation_name, const case_insensitive_set_t &exclude_list,
+                                          case_insensitive_map_t<unique_ptr<ParsedExpression>> &&replace_list,
+                                          bool columns, unique_ptr<ParsedExpression> expr, bool unpacked,
+                                          const qualified_column_set_t &qualified_exclude_list,
+                                          qualified_column_map_t<string> &&rename_list) {
+	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
+	result->relation_name = std::move(relation_name);
+	result->replace_list = std::move(replace_list);
+	result->columns = columns;
+	result->expr = std::move(expr);
+	result->rename_list = std::move(rename_list);
+	if (unpacked) {
+		//! This was previously a member of StarExpression, but not anymore
+		//! We wrap it into an OPERATOR_UNPACK instead
+		vector<unique_ptr<ParsedExpression>> unpack_children;
+		unpack_children.push_back(std::move(result));
+		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(unpack_children));
+	}
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
@@ -134,7 +149,6 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	copy->columns = columns;
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
-	copy->unpacked = unpacked;
 	return std::move(copy);
 }
 

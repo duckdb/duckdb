@@ -15,11 +15,10 @@ class EnumWriterPageState;
 
 class EnumColumnWriter : public PrimitiveColumnWriter {
 public:
-	EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx, vector<string> schema_path_p,
-	                 idx_t max_repeat, idx_t max_define, bool can_have_nulls);
+	EnumColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,
+	                 bool can_have_nulls);
 	~EnumColumnWriter() override = default;
 
-	LogicalType enum_type;
 	uint32_t bit_width;
 
 public:
@@ -28,7 +27,7 @@ public:
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override;
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state) override;
+	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state, idx_t page_idx) override;
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override;
 

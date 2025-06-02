@@ -2,18 +2,14 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/function/function.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
@@ -42,14 +38,6 @@ StorageManager &StorageManager::Get(Catalog &catalog) {
 
 DatabaseInstance &StorageManager::GetDatabase() {
 	return db.GetDatabase();
-}
-
-BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
-	return BufferManager::GetBufferManager(*context.db);
-}
-
-const BufferManager &BufferManager::GetBufferManager(const ClientContext &context) {
-	return BufferManager::GetBufferManager(*context.db);
 }
 
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
@@ -132,8 +120,10 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 }
 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
+
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
+		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
@@ -166,13 +156,9 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// file does not exist and we are in read-write mode
 		// create a new file
 
-		// check if a WAL file already exists
 		auto wal_path = GetWALPath();
-		if (fs.FileExists(wal_path)) {
-			// WAL file exists but database file does not
-			// remove the WAL
-			fs.RemoveFile(wal_path);
-		}
+		// try to remove the WAL file if it exists
+		fs.TryRemoveFile(wal_path);
 
 		// Set the block allocation size for the new database file.
 		if (storage_options.block_alloc_size.IsValid()) {
@@ -182,6 +168,19 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
+		}
+		//! set the block header size for the encrypted database files
+		//! set the database to encrypted
+		//! update the storage version to 1.3.0
+		if (storage_options.block_header_size.IsValid()) {
+			// Use the header size for the corresponding encryption algorithm.
+			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
+			options.block_header_size = storage_options.block_header_size;
+			options.encryption = storage_options.encryption;
+			options.storage_version = storage_options.storage_version;
+		} else {
+			// No encryption; use the default option.
+			options.block_header_size = config.options.default_block_header_size;
 		}
 		if (!options.storage_version.IsValid()) {
 			// when creating a new database we default to the serialization version specified in the config
@@ -198,6 +197,18 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
 
+		// set the block header size for the encrypted database files
+		// (also if they already exist)
+		if (storage_options.block_header_size.IsValid()) {
+			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
+			options.block_header_size = storage_options.block_header_size;
+			options.encryption = storage_options.encryption;
+			options.storage_version = storage_options.storage_version;
+		} else {
+			// No explicit option provided: use the default option.
+			options.block_header_size = config.options.default_block_header_size;
+		}
+
 		// Initialize the block manager while loading the database file.
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
@@ -213,6 +224,16 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 				throw InvalidInputException(
 				    "block size parameter does not match the file's block size, got %llu, expected %llu",
 				    storage_options.block_alloc_size.GetIndex(), block_manager->GetBlockAllocSize());
+			}
+		}
+
+		if (storage_options.block_header_size.IsValid()) {
+			// block header size for encrypted database files
+			idx_t block_header_size = storage_options.block_header_size.GetIndex();
+			if (block_header_size != block_manager->GetBlockHeaderSize()) {
+				throw InvalidInputException(
+				    "block header size does not match the file's block header size, got %llu, expected %llu",
+				    storage_options.block_header_size.GetIndex(), block_manager->GetBlockHeaderSize());
 			}
 		}
 
@@ -355,7 +376,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
+void SingleFileStorageManager::CreateCheckpoint(optional_ptr<ClientContext> client_context, CheckpointOptions options) {
 	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
@@ -366,7 +387,7 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
+			SingleFileCheckpointWriter checkpointer(client_context, db, *block_manager, options.type);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

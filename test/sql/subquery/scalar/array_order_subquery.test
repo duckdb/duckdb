@@ -86,6 +86,16 @@ SELECT ARRAY
 ----
 [3, 2, 1]
 
+query I
+select array(select * from unnest(['a', 'b']) as _t(u) order by if(u='a',100, 1)) as out;
+----
+[b, a]
+
+query I
+select array(select * from unnest(['a', 'b']) as _t(u) order by if(u='a',100, 1) desc) as out;
+----
+[a, b]
+
 statement error
 SELECT ARRAY
   (SELECT 1 UNION ALL

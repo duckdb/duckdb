@@ -39,7 +39,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 	}
 	if (!projected_input.empty()) {
 		vector<LogicalType> input_types;
-		auto &child_types = children[0]->types;
+		auto &child_types = children[0].get().GetTypes();
 		idx_t input_length = child_types.size() - projected_input.size();
 		for (idx_t k = 0; k < input_length; k++) {
 			input_types.push_back(child_types[k]);

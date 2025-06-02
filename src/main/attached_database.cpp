@@ -84,7 +84,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
-                                   const AttachOptions &options)
+                                   AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
 	if (options.access_mode == AccessMode::READ_ONLY) {
@@ -94,6 +94,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	}
 	for (auto &entry : options.options) {
 		if (StringUtil::CIEquals(entry.first, "block_size")) {
+			continue;
+		}
+		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
 			continue;
 		}
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
@@ -113,11 +116,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
-                                   ClientContext &context, string name_p, const AttachInfo &info,
-                                   const AttachOptions &options)
+                                   ClientContext &context, string name_p, AttachInfo &info, AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
       storage_extension(&storage_extension_p) {
-
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -125,7 +126,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 
 	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
-	catalog = storage_extension->attach(storage_info, context, *this, name, *info.Copy(), options.access_mode);
+	catalog = storage_extension->attach(storage_info, context, *this, name, info, options.access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
@@ -173,11 +174,11 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(StorageOptions options) {
+void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
 	if (IsSystem()) {
-		catalog->Initialize(true);
+		catalog->Initialize(context, true);
 	} else {
-		catalog->Initialize(false);
+		catalog->Initialize(context, false);
 	}
 	if (storage) {
 		storage->Initialize(options);
@@ -219,6 +220,13 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 	type = AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
+void AttachedDatabase::OnDetach(ClientContext &context) {
+	if (!catalog) {
+		return;
+	}
+	catalog->OnDetach(context);
+}
+
 void AttachedDatabase::Close() {
 	D_ASSERT(catalog);
 	if (is_closed) {
@@ -247,7 +255,7 @@ void AttachedDatabase::Close() {
 			}
 			CheckpointOptions options;
 			options.wal_action = CheckpointWALAction::DELETE_WAL;
-			storage->CreateCheckpoint(options);
+			storage->CreateCheckpoint(nullptr, options);
 		}
 	} catch (...) { // NOLINT
 	}

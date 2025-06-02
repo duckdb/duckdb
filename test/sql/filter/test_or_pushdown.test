@@ -9,7 +9,7 @@ statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 statement ok
-create table t1 as select range a, 'foo' || (range%100)::VARCHAR b, 100000-range c from range(900000);
+create table t1 as select range a, 'foo' || (range%100)::VARCHAR b, 100000-range c, timestamp '1992-01-01' + interval (range * 20) minute d from range(900000);
 
 query I
 select count(*) from t1 where a < 5 or b = 'foo8';
@@ -75,3 +75,15 @@ query II
 explain select b from t1 where b = 'foo9' or b = 'foo10';
 ----
 physical_plan	<REGEX>:.*optional.*
+
+# two different row groups can be propagated here.
+query I
+select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
+----
+5
+899999
+
+query II
+explain select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
+----
+physical_plan	<REGEX>:.*optional.*d.*

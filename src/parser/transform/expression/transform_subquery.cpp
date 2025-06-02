@@ -107,6 +107,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 			}
 		}
 		// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
+		idx_t array_idx = 0;
 		if (aggr->order_bys) {
 			for (auto &order : aggr->order_bys->orders) {
 				if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
@@ -120,8 +121,10 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 					}
 				} else if (sub_select) {
 					// if we have a SELECT we can push the ORDER BY clause into the SELECT list and reference it
+					auto alias = "__array_internal_idx_" + to_string(++array_idx);
+					order.expression->alias = alias;
 					sub_select->select_list.push_back(std::move(order.expression));
-					order.expression = make_uniq<PositionalReferenceExpression>(sub_select->select_list.size() - 1);
+					order.expression = make_uniq<ColumnRefExpression>(alias);
 				} else {
 					// otherwise we remove order qualifications
 					RemoveOrderQualificationRecursive(order.expression);

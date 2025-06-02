@@ -53,7 +53,7 @@ public:
 
 struct GlobalSortState {
 public:
-	GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
+	GlobalSortState(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
 
 	//! Add local state sorted data to this global state
 	void AddLocalState(LocalSortState &local_sort_state);
@@ -68,6 +68,8 @@ public:
 	void Print();
 
 public:
+	//! The client context
+	ClientContext &context;
 	//! The lock for updating the order global state
 	mutex lock;
 	//! The buffer manager

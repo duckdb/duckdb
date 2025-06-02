@@ -132,6 +132,44 @@ string RenameColumnInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
+// RenameFieldInfo
+//===--------------------------------------------------------------------===//
+RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<string> column_path_p, string new_name_p)
+    : AlterTableInfo(AlterTableType::RENAME_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      new_name(std::move(new_name_p)) {
+}
+
+RenameFieldInfo::RenameFieldInfo() : AlterTableInfo(AlterTableType::RENAME_FIELD) {
+}
+
+RenameFieldInfo::~RenameFieldInfo() {
+}
+
+unique_ptr<AlterInfo> RenameFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name);
+}
+
+string RenameFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME COLUMN ";
+	for (idx_t i = 0; i < column_path.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+	}
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 RenameTableInfo::RenameTableInfo() : AlterTableInfo(AlterTableType::RENAME_TABLE) {
@@ -191,7 +229,48 @@ string AddColumnInfo::ToString() const {
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
 	}
-	throw NotImplementedException("COLUMN SERIALIZATION");
+	throw NotImplementedException("FIXME: column definition to string");
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// AddFieldInfo
+//===--------------------------------------------------------------------===//
+AddFieldInfo::AddFieldInfo(ColumnDefinition new_field_p)
+    : AlterTableInfo(AlterTableType::ADD_FIELD), new_field(std::move(new_field_p)) {
+}
+
+AddFieldInfo::AddFieldInfo(AlterEntryData data, vector<string> column_path_p, ColumnDefinition new_field_p,
+                           bool if_field_not_exists)
+    : AlterTableInfo(AlterTableType::ADD_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      new_field(std::move(new_field_p)), if_field_not_exists(if_field_not_exists) {
+}
+
+AddFieldInfo::~AddFieldInfo() {
+}
+
+unique_ptr<AlterInfo> AddFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, AddFieldInfo>(GetAlterEntryData(), column_path, new_field.Copy(),
+	                                               if_field_not_exists);
+}
+
+string AddFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD COLUMN";
+	if (if_field_not_exists) {
+		result += " IF NOT EXISTS";
+	}
+	for (auto &path : column_path) {
+		result += KeywordHelper::WriteOptionallyQuoted(path);
+		result += ".";
+	}
+	throw NotImplementedException("FIXME: column definition to string");
 	result += ";";
 	return result;
 }
@@ -225,6 +304,47 @@ string RemoveColumnInfo::ToString() const {
 		result += "IF EXISTS ";
 	}
 	result += KeywordHelper::WriteOptionallyQuoted(removed_column);
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// RemoveFieldInfo
+//===--------------------------------------------------------------------===//
+RemoveFieldInfo::RemoveFieldInfo() : AlterTableInfo(AlterTableType::REMOVE_FIELD) {
+}
+
+RemoveFieldInfo::RemoveFieldInfo(AlterEntryData data, vector<string> column_path_p, bool if_column_exists, bool cascade)
+    : AlterTableInfo(AlterTableType::REMOVE_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      if_column_exists(if_column_exists), cascade(cascade) {
+}
+RemoveFieldInfo::~RemoveFieldInfo() {
+}
+
+unique_ptr<AlterInfo> RemoveFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RemoveFieldInfo>(GetAlterEntryData(), column_path, if_column_exists, cascade);
+}
+
+string RemoveFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP COLUMN ";
+	if (if_column_exists) {
+		result += "IF EXISTS ";
+	}
+	for (idx_t i = 0; i < column_path.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+	}
 	if (cascade) {
 		result += " CASCADE";
 	}
@@ -470,6 +590,84 @@ string AddConstraintInfo::ToString() const {
 	result += " ADD ";
 	result += constraint->ToString();
 	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetPartitionedByInfo
+//===--------------------------------------------------------------------===//
+SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {
+}
+
+SetPartitionedByInfo::SetPartitionedByInfo(AlterEntryData data, vector<unique_ptr<ParsedExpression>> partition_keys_p)
+    : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY, std::move(data)), partition_keys(std::move(partition_keys_p)) {
+}
+
+SetPartitionedByInfo::~SetPartitionedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
+	vector<unique_ptr<ParsedExpression>> copied_partition_keys;
+	for (auto &partition_key : partition_keys) {
+		copied_partition_keys.push_back(partition_key->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetPartitionedByInfo>(GetAlterEntryData(), std::move(copied_partition_keys));
+}
+
+string SetPartitionedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (partition_keys.empty()) {
+		result += " RESET PARTITIONED BY";
+	} else {
+		result += " SET PARTITIONED BY (";
+		for (idx_t i = 0; i < partition_keys.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += partition_keys[i]->ToString();
+		}
+		result += ")";
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetSortedByInfo
+//===--------------------------------------------------------------------===//
+SetSortedByInfo::SetSortedByInfo() : AlterTableInfo(AlterTableType::SET_SORTED_BY) {
+}
+
+SetSortedByInfo::SetSortedByInfo(AlterEntryData data, vector<OrderByNode> orders_p)
+    : AlterTableInfo(AlterTableType::SET_SORTED_BY, std::move(data)), orders(std::move(orders_p)) {
+}
+
+SetSortedByInfo::~SetSortedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
+	vector<OrderByNode> copied_orders;
+	for (auto &order_key : orders) {
+		copied_orders.emplace_back(order_key.type, order_key.null_order, order_key.expression->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetSortedByInfo>(GetAlterEntryData(), std::move(copied_orders));
+}
+
+string SetSortedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (orders.empty()) {
+		result += " RESET SORTED BY";
+	} else {
+		result += " SET SORTED BY (";
+		for (idx_t i = 0; i < orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += orders[i].ToString();
+		}
+		result += ")";
+	}
 	return result;
 }
 

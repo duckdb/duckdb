@@ -60,7 +60,7 @@ select first(amount ORDER BY *COLUMNS('date|priority') ASC) from sales;
 
 # Using a lambda in *COLUMNS
 query I
-select COALESCE(*COLUMNS(c -> c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
+select COALESCE(*COLUMNS(lambda c: c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
 ----
 3
 
@@ -156,12 +156,12 @@ select CONCAT(*COLUMNS(*), *COLUMNS(*)) from data
 
 # *COLUMNS inside COLUMNS lambda
 statement error
-select COLUMNS(col -> *COLUMNS('id')) from data
+select COLUMNS(lambda col: *COLUMNS('id')) from data
 ----
 COLUMNS expression is not allowed inside another COLUMNS expression
 
 statement error
-select *COLUMNS(col -> *COLUMNS(*)) from data
+select *COLUMNS(lambda col: *COLUMNS(*)) from data
 ----
 COLUMNS expression is not allowed inside another COLUMNS expression
 
@@ -188,3 +188,100 @@ select *COLUMNS('a') + 42 from integers
 ----
 84
 127
+
+# Expands to the expression: [a + a, a + b]
+query I
+with integers as (
+	select * FROM (VALUES
+		(21, 42),
+		(1337, 7331)
+	) as t(a, b)
+)
+select [(UNPACK(a + COLUMNS(['a', 'b'])))] from integers
+----
+[42, 63]
+[2674, 8668]
+
+
+# UNPACK operator nested inside another UNPACK operator
+statement error
+select
+	[
+		UNPACK([
+			UNPACK(COLUMNS(*)),
+			a + b
+		])
+	]
+from (
+	select 42 a, 21 b
+)
+----
+UNPACK can only be used in combination with a STAR (*) expression or COLUMNS expression
+
+# Cast every column to VARCHAR before unpacking into the list
+query I
+select
+	[UNPACK(COLUMNS(*)::VARCHAR)]
+from (
+	select
+		21::INTEGER a,
+		True::BOOL b,
+		0.1234::DOUBLE c
+)
+----
+[21, true, 0.1234]
+
+# Two different COLUMNS inside an UNPACK (could be supported in the future)
+statement error
+select
+	[
+		UNPACK(
+			[
+				COLUMNS(['a', 'b']),
+				COLUMNS(['c'])
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+Multiple different STAR/COLUMNS in the same expression are not supported
+
+# An UNPACK without a COLUMNS inside of it
+statement error
+select
+	[
+		UNPACK(
+			[
+				'test'
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+UNPACK can only be used in combination with a STAR (*) expression or COLUMNS expression
+
+statement error
+select
+	[
+		UNPACK(
+			[
+				COLUMNS([]::VARCHAR[])
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+Star expression "COLUMNS(CAST(main.list_value() AS VARCHAR[]))" resulted in an empty set of columns
+
+statement error
+select
+	[
+		UNPACK(
+			[
+				COLUMNS(['d'])
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+Column "d" was selected but was not found in the FROM clause

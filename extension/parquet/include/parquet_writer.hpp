@@ -9,34 +9,37 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
-#endif
 
 #include "parquet_statistics.hpp"
 #include "column_writer.hpp"
 #include "parquet_types.h"
 #include "geo_parquet.hpp"
+#include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
 class FileSystem;
 class FileOpener;
 class ParquetEncryptionConfig;
+class ParquetStatsAccumulator;
 
 class Serializer;
 class Deserializer;
 
+class ColumnWriterStatistics;
+struct CopyFunctionFileStatistics;
+
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
-	vector<shared_ptr<StringHeap>> heaps;
 };
 
 struct FieldID;
@@ -79,8 +82,9 @@ public:
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
-	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
-	              ParquetVersion parquet_version);
+	              idx_t string_dictionary_page_size_limit, double bloom_filter_false_positive_ratio,
+	              int64_t compression_level, bool debug_use_openssl, ParquetVersion parquet_version);
+	~ParquetWriter();
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -110,11 +114,13 @@ public:
 		return *writer;
 	}
 	idx_t FileSize() {
-		lock_guard<mutex> glock(lock);
-		return writer->total_written;
+		return total_written;
 	}
 	idx_t DictionarySizeLimit() const {
 		return dictionary_size_limit;
+	}
+	idx_t StringDictionaryPageSizeLimit() const {
+		return string_dictionary_page_size_limit;
 	}
 	double BloomFilterFalsePositiveRatio() const {
 		return bloom_filter_false_positive_ratio;
@@ -123,8 +129,7 @@ public:
 		return compression_level;
 	}
 	idx_t NumberOfRowGroups() {
-		lock_guard<mutex> glock(lock);
-		return file_meta_data.row_groups.size();
+		return num_row_groups;
 	}
 	ParquetVersion GetParquetVersion() const {
 		return parquet_version;
@@ -139,6 +144,12 @@ public:
 	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr);
 
 	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
+	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
+	void FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &chunk,
+	                      optional_ptr<ColumnWriterStatistics> writer_stats);
+
+private:
+	void GatherWrittenStatistics();
 
 private:
 	ClientContext &context;
@@ -149,13 +160,18 @@ private:
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	idx_t dictionary_size_limit;
+	idx_t string_dictionary_page_size_limit;
 	double bloom_filter_false_positive_ratio;
 	int64_t compression_level;
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
+	vector<ParquetColumnSchema> column_schemas;
 
 	unique_ptr<BufferedFileWriter> writer;
+	//! Atomics to reduce contention when rotating writes to multiple Parquet files
+	atomic<idx_t> total_written;
+	atomic<idx_t> num_row_groups;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;
@@ -164,6 +180,9 @@ private:
 
 	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
 	vector<ParquetBloomFilterEntry> bloom_filters;
+
+	optional_ptr<CopyFunctionFileStatistics> written_stats;
+	unique_ptr<ParquetStatsAccumulator> stats_accumulator;
 };
 
 } // namespace duckdb

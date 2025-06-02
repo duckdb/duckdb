@@ -170,8 +170,17 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	vector<JoinFilterPushdownColumn> pushdown_columns;
 	for (idx_t cond_idx = 0; cond_idx < join.conditions.size(); cond_idx++) {
 		auto &cond = join.conditions[cond_idx];
-		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-			// only equality supported for now
+		switch (cond.comparison) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			break;
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			// TODO: Need OR predicates
+			continue;
+		default:
 			continue;
 		}
 		if (cond.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -215,8 +224,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 
 	// Even if we cannot find any table sources in which we can push down filters,
 	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
+	// TODO: Can ExpressionType::COMPARE_NOT_DISTINCT_FROM be used with perfect hash joins?
 	const auto compute_aggregates_anyway = join.join_type == JoinType::INNER && join.conditions.size() == 1 &&
 	                                       pushdown_info->join_condition.size() == 1 &&
+	                                       join.conditions[0].comparison == ExpressionType::COMPARE_EQUAL &&
 	                                       TypeIsIntegral(join.conditions[0].right->return_type.InternalType());
 	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters

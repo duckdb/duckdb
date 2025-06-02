@@ -16,6 +16,7 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
+enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2 };
 
 class ConflictManager;
 class ARTKey;
@@ -35,6 +36,8 @@ public:
 	static constexpr uint8_t ALLOCATOR_COUNT = 9;
 	//! FixedSizeAllocator count of deprecated ARTs.
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
+	//! Keys must not exceed MAX_KEY_LEN * prefix_count.
+	static constexpr idx_t MAX_KEY_LEN = 8192;
 
 public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
@@ -51,7 +54,7 @@ public:
 	}
 
 	//! Plan index construction.
-	static unique_ptr<PhysicalOperator> CreatePlan(PlanIndexInput &input);
+	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
 
 	//! Root of the tree.
 	Node tree = Node();
@@ -59,6 +62,8 @@ public:
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
 	bool owns_data;
+	//! True, if keys need a key length verification pass.
+	bool verify_max_key_len;
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
@@ -74,9 +79,6 @@ public:
 	//! Appends data to the locked index and verifies constraint violations.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) override;
 
-	//! Internally inserts a chunk.
-	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-	                       optional_ptr<ART> delete_art, const IndexAppendMode append_mode);
 	//! Insert a chunk.
 	ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
 	//! Insert a chunk and verifies constraint violations.
@@ -94,6 +96,7 @@ public:
 	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
+	//! FIXME: Return ARTConflictType instead of a boolean.
 	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
 
 	//! Vacuums the ART storage.
@@ -106,14 +109,16 @@ public:
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-	static void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids,
-	                               unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
+	                        unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes and optionally returns a string of the ART.
-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
+	string VerifyAndToString(IndexLock &l, const bool only_verify) override;
 	//! Verifies that the node allocations match the node counts.
-	void VerifyAllocations(IndexLock &state) override;
+	void VerifyAllocations(IndexLock &l) override;
+	//! Verifies the index buffers.
+	void VerifyBuffers(IndexLock &l) override;
 
 private:
 	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
@@ -121,16 +126,6 @@ private:
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
 	                      unsafe_vector<row_t> &row_ids);
-	const unsafe_optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
-
-	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                     const GateStatus status);
-	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                                  const GateStatus status, optional_ptr<ART> delete_art,
-	                                  const IndexAppendMode append_mode);
-	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                               const GateStatus status, optional_ptr<ART> delete_art,
-	                               const IndexAppendMode append_mode);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
@@ -145,7 +140,8 @@ private:
 	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
 	                       ARTKeySection &section);
 
-	void InitializeMerge(unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

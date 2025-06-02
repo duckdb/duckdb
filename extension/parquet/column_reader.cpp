@@ -3,7 +3,6 @@
 #include "reader/boolean_column_reader.hpp"
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
-#include "reader/cast_column_reader.hpp"
 #include "reader/decimal_column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
@@ -14,12 +13,15 @@
 #include "reader/null_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
+#include "parquet_float16.hpp"
+
 #include "reader/row_number_column_reader.hpp"
 #include "snappy.h"
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "reader/uuid_column_reader.hpp"
+
 #include "zstd.h"
 
 #include "duckdb/storage/table/column_segment.hpp"
@@ -229,13 +231,25 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
-void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
 	block.reset();
 	PageHeader page_hdr;
-	reader.Read(page_hdr, *protocol);
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	if (trans.HasPrefetch()) {
+		// Already has some data prefetched, let's not mess with it
+		reader.Read(page_hdr, *protocol);
+	} else {
+		// No prefetch yet, prefetch the full header in one go (so thrift won't read byte-by-byte from storage)
+		// 256 bytes should cover almost all headers (unless it's a V2 header with really LONG string statistics)
+		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
+		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
+		trans.Prefetch(trans.GetLocation(), prefetch_size);
+		reader.Read(page_hdr, *protocol);
+		trans.ClearPrefetch();
+	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
 		throw std::runtime_error("Page sizes can't be < 0");
@@ -261,7 +275,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
 		if (dictionary_size < 0) {
 			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
 		}
-		dictionary_decoder.InitializeDictionary(dictionary_size, filter, HasDefines());
+		dictionary_decoder.InitializeDictionary(dictionary_size, filter, filter_state, HasDefines());
 		break;
 	}
 	default:
@@ -275,7 +289,6 @@ void ColumnReader::ResetPage() {
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	bool uncompressed = false;
@@ -300,15 +313,18 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
 		                         "repetition_levels_byte_length + definition_levels_byte_length");
 	}
-	trans.read(block->ptr, uncompressed_bytes);
+	reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
-	AllocateCompressed(compressed_bytes);
-	reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
+	if (compressed_bytes > 0) {
+		ResizeableBuffer compressed_buffer;
+		compressed_buffer.resize(GetAllocator(), compressed_bytes);
+		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes, block->ptr + uncompressed_bytes,
-	                   page_hdr.uncompressed_page_size - uncompressed_bytes);
+		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
+		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
+	}
 }
 
 void ColumnReader::AllocateBlock(idx_t size) {
@@ -317,10 +333,6 @@ void ColumnReader::AllocateBlock(idx_t size) {
 	} else {
 		block->resize(GetAllocator(), size);
 	}
-}
-
-void ColumnReader::AllocateCompressed(idx_t size) {
-	compressed_buffer.resize(GetAllocator(), size);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
@@ -333,7 +345,8 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 		return;
 	}
 
-	AllocateCompressed(page_hdr.compressed_page_size + 1);
+	ResizeableBuffer compressed_buffer;
+	compressed_buffer.resize(GetAllocator(), page_hdr.compressed_page_size + 1);
 	reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
@@ -494,14 +507,15 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 	}
 }
 
-idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter) {
+idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
+                                    optional_ptr<TableFilterState> filter_state) {
 	while (page_rows_available == 0) {
-		PrepareRead(filter);
+		PrepareRead(filter, filter_state);
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
 }
 
-void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
+bool ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
 	D_ASSERT(block);
 
 	D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
@@ -514,8 +528,17 @@ void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t
 
 	if (HasDefines()) {
 		D_ASSERT(defined_decoder);
+		const auto max_define = NumericCast<uint8_t>(MaxDefine());
+		if (!HasRepeats() && defined_decoder->HasRepeatedBatch<uint8_t>(read_now, max_define)) {
+			// Fast path: no repeats and all valid
+			defined_decoder->GetRepeatedBatch<uint8_t>(read_now, max_define);
+			return true;
+		}
 		defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
+		return false;
 	}
+
+	return true; // No defines, so everything is valid
 }
 
 void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
@@ -535,9 +558,9 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		return;
 	}
 	// read the defines/repeats
-	PrepareRead(read_now, define_out, repeat_out, result_offset);
+	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
 	// read the data according to the encoder
-	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+	const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 	switch (encoding) {
 	case ColumnEncoding::DICTIONARY:
 		dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
@@ -558,7 +581,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
 		break;
 	default:
-		Plain(block, define_out, read_now, result_offset, result);
+		Plain(block, define_ptr, read_now, result_offset, result);
 		break;
 	}
 	page_rows_available -= read_now;
@@ -613,9 +636,9 @@ void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
-		PrepareRead(read_now, define_out, repeat_out, 0);
-
-		PlainSelect(block, define_out, read_now, result, sel, approved_tuple_count);
+		const auto all_valid = PrepareRead(read_now, define_out, repeat_out, 0);
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
+		PlainSelect(block, define_ptr, read_now, result, sel, approved_tuple_count);
 
 		page_rows_available -= read_now;
 		FinishRead(num_values);
@@ -626,23 +649,24 @@ void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data
 }
 
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                          const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
-                          bool is_first_filter) {
+                          const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+                          idx_t &approved_tuple_count, bool is_first_filter) {
 	if (SupportsDirectFilter() && is_first_filter) {
-		DirectFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
+		DirectFilter(num_values, define_out, repeat_out, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
 	Select(num_values, define_out, repeat_out, result, sel, approved_tuple_count);
-	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
 void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+                                const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+                                idx_t &approved_tuple_count) {
 	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
-	auto read_now = ReadPageHeaders(num_values, &filter);
+	auto read_now = ReadPageHeaders(num_values, &filter, &filter_state);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
@@ -652,9 +676,9 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 		} else {
 			// Push filter into dictionary directly
 			// read the defines/repeats
-			PrepareRead(read_now, define_out, repeat_out, 0);
-			auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
-			dictionary_decoder.Filter(define_ptr, read_now, result, filter, sel, approved_tuple_count);
+			const auto all_valid = PrepareRead(read_now, define_out, repeat_out, 0);
+			const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
+			dictionary_decoder.Filter(define_ptr, read_now, result, sel, approved_tuple_count);
 		}
 		page_rows_available -= read_now;
 		FinishRead(num_values);
@@ -662,14 +686,14 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 	}
 	// fallback to regular read + filter
 	ReadInternal(num_values, define_out, repeat_out, result);
-	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
-void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
-                               idx_t &approved_tuple_count) {
+void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+                               SelectionVector &sel, idx_t &approved_tuple_count) {
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, v, vdata, filter, scan_count, approved_tuple_count);
+	ColumnSegment::FilterSelection(sel, v, vdata, filter, filter_state, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {
@@ -689,9 +713,9 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 
 	while (to_skip > 0) {
 		auto skip_now = ReadPageHeaders(to_skip);
-		PrepareRead(skip_now, define_out, repeat_out, 0);
+		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
 
-		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 		switch (encoding) {
 		case ColumnEncoding::DICTIONARY:
 			dictionary_decoder.Skip(define_ptr, skip_now);
@@ -712,7 +736,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 			byte_stream_split_decoder.Skip(define_ptr, skip_now);
 			break;
 		default:
-			PlainSkip(*block, define_out, skip_now);
+			PlainSkip(*block, define_ptr, skip_now);
 			break;
 		}
 		page_rows_available -= skip_now;
@@ -759,6 +783,9 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::BIGINT:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(reader, schema);
 	case LogicalTypeId::FLOAT:
+		if (schema.type_info == ParquetExtraTypeInfo::FLOAT16) {
+			return make_uniq<CallbackColumnReader<uint16_t, float, Float16ToFloat32>>(reader, schema);
+		}
 		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(reader, schema);
 	case LogicalTypeId::DOUBLE:
 		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {

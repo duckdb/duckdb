@@ -4,13 +4,18 @@
 
 name Roaring Scan Run Container Inverted
 group roaring
-storage persistent
+storage persistent v1.2.0
 
 load
 DROP TABLE IF EXISTS tbl;
 PRAGMA force_compression='Roaring';
 CREATE TABLE tbl AS SELECT case when i%3=0 then 1337 else null end as a FROM range(0, 250_000_000) tbl(i);
 checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('tbl') where segment_type in ('VALIDITY')
+----
+Roaring
 
 run
 select count(*) from tbl WHERE a IS NOT NULL;

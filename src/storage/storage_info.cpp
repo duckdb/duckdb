@@ -7,7 +7,7 @@ namespace duckdb {
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 65;
+const uint64_t VERSION_NUMBER_UPPER = 66;
 
 static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
 static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
@@ -77,13 +77,16 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.1.2", 64},
 	{"v1.1.3", 64},
 	{"v1.2.0", 65},
+	{"v1.2.1", 65},
+	{"v1.2.2", 65},
+	{"v1.3.0", 66},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
 static_assert(DEFAULT_STORAGE_VERSION_INFO == VERSION_NUMBER, "Check on VERSION_INFO");
 
 // START OF SERIALIZATION VERSION INFO
-const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 4;
+const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 5;
 const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
 static const SerializationVersionInfo serialization_version_info[] = {
 	{"v0.10.0", 1},
@@ -96,7 +99,10 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.1.2", 3},
 	{"v1.1.3", 3},
 	{"v1.2.0", 4},
-	{"latest", 4},
+	{"v1.2.1", 4},
+	{"v1.2.2", 4},
+	{"v1.3.0", 5},
+	{"latest", 5},
 	{nullptr, 0}
 };
 // END OF SERIALIZATION VERSION INFO
@@ -108,10 +114,9 @@ static_assert(DEFAULT_SERIALIZATION_VERSION_INFO <= LATEST_SERIALIZATION_VERSION
 string GetStorageVersionName(idx_t serialization_version) {
 	if (serialization_version < 4) {
 		// special handling for lower serialization versions
-		return "v1.0.0 - v1.1.3";
+		return "v1.0.0+";
 	}
 	optional_idx min_idx;
-	optional_idx max_idx;
 	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
 		if (strcmp(serialization_version_info[i].version_name, "latest") == 0) {
 			continue;
@@ -121,8 +126,6 @@ string GetStorageVersionName(idx_t serialization_version) {
 		}
 		if (!min_idx.IsValid()) {
 			min_idx = i;
-		} else {
-			max_idx = i;
 		}
 	}
 	if (!min_idx.IsValid()) {
@@ -130,11 +133,7 @@ string GetStorageVersionName(idx_t serialization_version) {
 		return "--UNKNOWN--";
 	}
 	auto min_name = serialization_version_info[min_idx.GetIndex()].version_name;
-	if (!max_idx.IsValid()) {
-		return min_name;
-	}
-	auto max_name = serialization_version_info[max_idx.GetIndex()].version_name;
-	return string(min_name) + " - " + string(max_name);
+	return string(min_name) + "+";
 }
 
 optional_idx GetStorageVersion(const char *version_string) {
@@ -204,6 +203,23 @@ void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
 		throw InvalidInputException(
 		    "the block size must not be greater than the maximum 32-bit signed integer value of %llu, got %llu",
 		    max_value, block_alloc_size);
+	}
+}
+
+void Storage::VerifyBlockHeaderSize(const idx_t block_header_size) {
+	if ((block_header_size & 7) != 0) {
+		// Alignment to 8 bytes is necessary for computing the checksum
+		throw InvalidInputException("the block size must a multiple of 8, got %llu", block_header_size);
+	}
+	if (block_header_size < DEFAULT_BLOCK_HEADER_SIZE) {
+		throw InvalidInputException(
+		    "the block header size must be greater or equal than the default block header of %llu, got %llu",
+		    DEFAULT_BLOCK_HEADER_SIZE, block_header_size);
+	}
+	if (block_header_size > MAX_BLOCK_HEADER_SIZE) {
+		throw InvalidInputException(
+		    "the block header size must be lesser or equal than the maximum block size of %llu, got %llu",
+		    MAX_BLOCK_ALLOC_SIZE, block_header_size);
 	}
 }
 

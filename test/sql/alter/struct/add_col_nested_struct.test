@@ -1,0 +1,45 @@
+# name: test/sql/alter/struct/add_col_nested_struct.test
+# description: Test ALTER TABLE ADD COLUMN: add column to a struct nested
+# group: [struct]
+
+statement ok
+CREATE TABLE test(s STRUCT(s2 STRUCT(v1 INT, v2 INT)))
+
+statement ok
+INSERT INTO test VALUES (ROW(ROW(1, 1))), (ROW(ROW(2, 2)))
+
+# add a column to a nested struct
+statement ok
+ALTER TABLE test ADD COLUMN s.s2.k INTEGER
+
+query I
+SELECT * FROM test
+----
+{'s2': {'v1': 1, 'v2': 1, 'k': NULL}}
+{'s2': {'v1': 2, 'v2': 2, 'k': NULL}}
+
+# already exists
+statement error
+ALTER TABLE test ADD COLUMN s.s2.v1 VARCHAR
+----
+field already exists in struct s2
+
+# this just gets ignored
+statement ok
+ALTER TABLE test ADD COLUMN IF NOT EXISTS s.s2.v1 VARCHAR
+
+# we can add columns at all levels
+statement ok
+ALTER TABLE test ADD COLUMN s.i INTEGER DEFAULT 100
+
+query I
+SELECT * FROM test
+----
+{'s2': {'v1': 1, 'v2': 1, 'k': NULL}, 'i': 100}
+{'s2': {'v1': 2, 'v2': 2, 'k': NULL}, 'i': 100}
+
+statement error
+ALTER TABLE test ADD COLUMN s.s2.v1.x INTEGER
+----
+Binder Error: Column 'v1' is not a nested type, ADD COLUMN can only be used on nested types
+

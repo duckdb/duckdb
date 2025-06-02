@@ -312,6 +312,23 @@ class TestRelation(object):
         csv_rel = duckdb.from_csv_auto(temp_file_name)
         assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
 
+    def test_table_update_with_schema(self, duckdb_cursor):
+        duckdb_cursor.sql("create schema not_main;")
+        duckdb_cursor.sql("create table not_main.tbl as select * from range(10) t(a)")
+
+        duckdb_cursor.table('not_main.tbl').update({'a': 21}, condition=ColumnExpression('a') == 5)
+        res = duckdb_cursor.table('not_main.tbl').fetchall()
+        assert res == [(0,), (1,), (2,), (3,), (4,), (21,), (6,), (7,), (8,), (9,)]
+
+    def test_table_update_with_catalog(self, duckdb_cursor):
+        duckdb_cursor.sql("attach ':memory:' as pg")
+        duckdb_cursor.sql("create schema pg.not_main;")
+        duckdb_cursor.sql("create table pg.not_main.tbl as select * from range(10) t(a)")
+
+        duckdb_cursor.table('pg.not_main.tbl').update({'a': 21}, condition=ColumnExpression('a') == 5)
+        res = duckdb_cursor.table('pg.not_main.tbl').fetchall()
+        assert res == [(0,), (1,), (2,), (3,), (4,), (21,), (6,), (7,), (8,), (9,)]
+
     def test_get_attr_operator(self):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")

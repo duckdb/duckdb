@@ -48,6 +48,13 @@ public:
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
+	virtual const SelectStatement &GetQuery();
+
+	virtual bool HasTypes() const {
+		// Whether or not the view has types/names defined
+		return true;
+	}
+
 	string ToSQL() const override;
 
 private:

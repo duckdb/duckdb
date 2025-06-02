@@ -49,15 +49,18 @@ class TupleDataCollection {
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
-	TupleDataCollection(BufferManager &buffer_manager, const TupleDataLayout &layout);
-	//! Constructs a TupleDataCollection with the same (shared) allocator
-	explicit TupleDataCollection(shared_ptr<TupleDataAllocator> allocator);
+	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr);
 
 	~TupleDataCollection();
+
+	//! Create a TupleDataCollection with the same layout
+	unique_ptr<TupleDataCollection> CreateUnique() const;
 
 public:
 	//! The layout of the stored rows
 	const TupleDataLayout &GetLayout() const;
+	//! How many tuples fit per block
+	idx_t TuplesPerBlock() const;
 	//! The number of rows stored in the tuple data collection
 	const idx_t &Count() const;
 	//! The number of chunks stored in the tuple data collection
@@ -68,11 +71,20 @@ public:
 	void Unpin();
 	//! Sets the partition index of this tuple data collection
 	void SetPartitionIndex(idx_t index);
+	//! Gets the pointers to the start of every block
+	vector<data_ptr_t> GetRowBlockPointers() const;
+	//! Destroy the blocks corresponding to the chunk indices
+	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 
 	//! Gets the scatter function for the given type
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
 	//! Gets the gather function for the given type
 	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
+
+	//! Gets the scatter function for the given sort key type
+	static TupleDataScatterFunction GetSortKeyScatterFunction(const LogicalType &type, SortKeyType sort_key_type);
+	//! Gets the gather function for the given sort key type
+	static TupleDataGatherFunction GetSortKeyGatherFunction(const LogicalType &type, SortKeyType sort_key_type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
@@ -121,6 +133,10 @@ public:
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
+	//! Computes the heap sizes for a SortKey layout
+	static void SortKeyComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
+	                                    const SelectionVector &append_sel, const idx_t append_count,
+	                                    const SortKeyType sort_key_type);
 
 	//! Builds out the buffer space for the specified Chunk state
 	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const idx_t append_offset,
@@ -134,6 +150,8 @@ public:
 	//! Copy rows from input to the built Chunk state
 	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
 	              const idx_t append_count) const;
+	//! Finds the heap pointers of the rows in the given Chunk state
+	void FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const;
 
 	//! Finalizes the Pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment);
@@ -165,6 +183,8 @@ public:
 	//! Initialize a parallel scan over the tuple data collection over a subset of the columns
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Grab the chunk state for the given segment and chunk index, returns the count of the chunk
+	idx_t FetchChunk(TupleDataScanState &state, idx_t segment_idx, idx_t chunk_idx, bool init_heap);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
@@ -241,7 +261,8 @@ private:
 
 private:
 	//! The layout of the TupleDataCollection
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	//! The TupleDataAllocator
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection

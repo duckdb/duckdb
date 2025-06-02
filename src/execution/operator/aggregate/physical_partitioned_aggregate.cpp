@@ -82,7 +82,7 @@ unique_ptr<GlobalSinkState> PhysicalPartitionedAggregate::GetGlobalSinkState(Cli
 
 unique_ptr<LocalSinkState> PhysicalPartitionedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
-	return make_uniq<PartitionedAggregateLocalSinkState>(*this, children[0]->GetTypes(), context);
+	return make_uniq<PartitionedAggregateLocalSinkState>(*this, children[0].get().GetTypes(), context);
 }
 
 //===--------------------------------------------------------------------===//

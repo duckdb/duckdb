@@ -10,6 +10,10 @@ MergeSorter::MergeSorter(GlobalSortState &state, BufferManager &buffer_manager)
 
 void MergeSorter::PerformInMergeRound() {
 	while (true) {
+		// Check for interrupts after merging a partition
+		if (state.context.interrupted) {
+			throw InterruptException();
+		}
 		{
 			lock_guard<mutex> pair_guard(state.lock);
 			if (state.pair_idx == state.num_pairs) {

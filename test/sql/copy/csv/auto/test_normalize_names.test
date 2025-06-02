@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+query I
+select columns from sniff_csv('data/csv/test_commit_rollback.csv',  normalize_names = true)
+----
+[{'name': _commit, 'type': BIGINT}, {'name': _rollback, 'type': BIGINT}, {'name': _abort, 'type': BIGINT}]
 
 # CSV file with uppercase header
 statement ok
@@ -36,7 +40,7 @@ DROP TABLE test;
 query I
 select columns from sniff_csv('data/csv/auto/normalize_names_2.csv', normalize_names = true)
 ----
-[{'name': _select, 'type': BIGINT}, {'name': insert, 'type': VARCHAR}, {'name': _join, 'type': VARCHAR}]
+[{'name': _select, 'type': BIGINT}, {'name': _insert, 'type': VARCHAR}, {'name': _join, 'type': VARCHAR}]
 
 
 # CSV file with keywords in header
@@ -44,7 +48,7 @@ statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/normalize_names_2.csv', normalize_names=TRUE);
 
 query ITT
-SELECT _select, insert, _join FROM test ORDER BY _select;
+SELECT _select, _insert, _join FROM test ORDER BY _select;
 ----
 123	TEST1	text1
 345	TEST1	text2
@@ -107,4 +111,4 @@ DROP TABLE test;
 query I
 select columns from sniff_csv('data/csv/normalize.csv', normalize_names = true)
 ----
-[{'name': name, 'type': VARCHAR}, {'name': text, 'type': VARCHAR}]
+[{'name': _name, 'type': VARCHAR}, {'name': _text, 'type': VARCHAR}]

@@ -148,6 +148,10 @@ struct WindowBoundariesState {
 	idx_t valid_end = 0;
 
 	FrameBounds prev;
+
+	// Extra range cursor
+	optional_ptr<WindowCursor> range_lo;
+	unique_ptr<WindowCursor> range_hi;
 };
 
 } // namespace duckdb

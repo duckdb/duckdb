@@ -1,9 +1,9 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -60,6 +60,7 @@ static bool IsExcludableWindowFunction(ExpressionType type) {
 	case ExpressionType::WINDOW_CUME_DIST:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
 		return false;
 	default:
 		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
@@ -163,6 +164,7 @@ static bool IsOrderableWindowFunction(ExpressionType type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 		return true;
 	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_FILL:
 		return false;
 	default:
 		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
@@ -365,6 +367,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->case_checks.push_back(std::move(check));
 		expr->else_expr = std::move(children[2]);
 		return std::move(expr);
+	} else if (lowercase_name == "unpack") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(children);
+		return std::move(expr);
 	} else if (lowercase_name == "try") {
 		if (children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to TRY expression");
@@ -416,6 +425,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			children.emplace_back(std::move(sense));
 			children.emplace_back(std::move(nulls));
 		}
+	} else if (lowercase_name == "date") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(children[0])));
 	}
 
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),

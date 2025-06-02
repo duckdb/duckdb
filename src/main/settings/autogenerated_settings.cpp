@@ -178,6 +178,23 @@ Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Asof Loop Join Threshold
+//===----------------------------------------------------------------------===//
+void AsofLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.asof_loop_join_threshold = input.GetValue<idx_t>();
+}
+
+void AsofLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).asof_loop_join_threshold = ClientConfig().asof_loop_join_threshold;
+}
+
+Value AsofLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.asof_loop_join_threshold);
+}
+
+//===----------------------------------------------------------------------===//
 // Autoinstall Extension Repository
 //===----------------------------------------------------------------------===//
 void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -357,6 +374,23 @@ Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verify Vector
+//===----------------------------------------------------------------------===//
+void DebugVerifyVectorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(str_input);
+}
+
+void DebugVerifyVectorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_verify_vector = DBConfig().options.debug_verify_vector;
+}
+
+Value DebugVerifyVectorSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_verify_vector)));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Window Mode
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -390,6 +424,23 @@ Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.default_order_type = DBConfig().options.default_order_type;
+}
+
+//===----------------------------------------------------------------------===//
+// Disable Timestamptz Casts
+//===----------------------------------------------------------------------===//
+void DisableTimestamptzCastsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.disable_timestamptz_casts = input.GetValue<bool>();
+}
+
+void DisableTimestamptzCastsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).disable_timestamptz_casts = ClientConfig().disable_timestamptz_casts;
+}
+
+Value DisableTimestamptzCastsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.disable_timestamptz_casts);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1081,6 +1132,22 @@ void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context
 Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.scalar_subquery_error_on_multiple_rows);
+}
+
+//===----------------------------------------------------------------------===//
+// Scheduler Process Partial
+//===----------------------------------------------------------------------===//
+void SchedulerProcessPartialSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.scheduler_process_partial = input.GetValue<bool>();
+}
+
+void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.scheduler_process_partial = DBConfig().options.scheduler_process_partial;
+}
+
+Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.scheduler_process_partial);
 }
 
 //===----------------------------------------------------------------------===//

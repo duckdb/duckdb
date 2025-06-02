@@ -29,7 +29,6 @@ PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSeg
 }
 
 PartialBlockForCheckpoint::~PartialBlockForCheckpoint() {
-	D_ASSERT(IsFlushed() || Exception::UncaughtException());
 }
 
 bool PartialBlockForCheckpoint::IsFlushed() {
@@ -71,7 +70,6 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 			}
 		}
 	}
-
 	Clear();
 }
 

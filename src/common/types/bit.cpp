@@ -24,7 +24,7 @@ idx_t Bit::ComputeBitstringLen(idx_t len) {
 
 static inline idx_t GetBitPadding(const bitstring_t &bit_string) {
 	auto data = const_data_ptr_cast(bit_string.GetData());
-	D_ASSERT(idx_t(data[0]) <= 8);
+	D_ASSERT(idx_t(data[0]) < 8);
 	return data[0];
 }
 

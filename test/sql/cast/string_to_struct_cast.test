@@ -83,10 +83,10 @@ CREATE TABLE tbl2(col VARCHAR);
 statement ok
 INSERT INTO tbl2 (VALUES ('{a:1, b:"hello, world"}'));
 
-query I
-SELECT col::STRUCT(a INT, b VARCHAR) FROM tbl2;
+query III
+SELECT col::STRUCT(a INT, b VARCHAR) a, a::VARCHAR::STRUCT(a INT, b VARCHAR) b, a == b FROM tbl2;
 ----
-{'a': 1, 'b': hello, world}
+{'a': 1, 'b': 'hello, world'}	{'a': 1, 'b': 'hello, world'}	true
 
 # ---------------------------------------------------
 statement ok
@@ -156,19 +156,19 @@ SELECT '{key_D: "World Hello", key_B: [Hello, World], key_C : 5000, key_A: [[{a:
 #               Quote escaping
 # ---------------------------------------------------
 query I
-SELECT ('{a: "can''t", b: "you''re", c: "i''m"}'::STRUCT(a VARCHAR, b VARCHAR, c VARCHAR));
+SELECT ($${a: "can't", b: "you're", c: "i'm"}$$::STRUCT(a VARCHAR, b VARCHAR, c VARCHAR));
 ----
-{'a': can't, 'b': you're, 'c': i'm}
+{'a': 'can\'t', 'b': 'you\'re', 'c': 'i\'m'}
 
 query I
 SELECT ('{a:"}", b: hello universe}'::STRUCT(a VARCHAR, b VARCHAR));
 ----
-{'a': }, 'b': hello universe}
+{'a': '}', 'b': hello universe}
 
 query I
-SELECT ('{a:''}'', b: "hello world"}'::STRUCT(a VARCHAR, b VARCHAR));
+SELECT ($${a:'}', b: "hello world"}$$::STRUCT(a VARCHAR, b VARCHAR));
 ----
-{'a': }, 'b': hello world}
+{'a': '}', 'b': hello world}
 
 
 
@@ -183,7 +183,7 @@ query I
 SELECT '    {a:        {b:         DuckDB,    c:12  }, b:  900, c          :{a
                     :   "DuckParty  "}       }    '::STRUCT(a STRUCT(b VARCHAR, c INT), b INT, c STRUCT(a VARCHAR));
 ----
-{'a': {'b': DuckDB, 'c': 12}, 'b': 900, 'c': {'a': DuckParty  }}
+{'a': {'b': DuckDB, 'c': 12}, 'b': 900, 'c': {'a': 'DuckParty  '}}
 
 query I
 SELECT '{key_A     : [      [{      a: 5    , b  : 900          }, { a: 3, b:    34}],      [   {a:
@@ -205,7 +205,7 @@ SELECT ' {      }   '::STRUCT(a INT, b DATE);
 statement error
 SELECT '{  key_A:     2, key_B: {key_C: hello world    }     X   }'::STRUCT(key_A INT, key_B STRUCT(key_C VARCHAR));
 ----
-
+can't be cast to the destination type STRUCT(key_C VARCHAR)
 
 
 #               NULL values
@@ -319,50 +319,62 @@ NULL
 statement error
 SELECT CAST('[{a:3}]' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('Hello World' AS STRUCT(a VARCHAR));
 ----
+can't be cast to the destination type STRUCT(a VARCHAR)
 
 statement error
 SELECT CAST('{a: 3}}' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('{a: 3, b:{c: 8}}}' AS STRUCT(a INT, b STRUCT(c INT)));
 ----
+can't be cast to the destination type STRUCT(a INTEGER, b STRUCT(c INTEGER))
 
 statement error
 SELECT CAST('{{a: 3}' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('{a:3}, {b:1}' AS STRUCT(a INT, b INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER, b INTEGER)
 
 statement error
 SELECT CAST('{a:{a:3}, b:{{b:1}}}' AS STRUCT(a STRUCT(a INT), b STRUCT(b INT)));
 ----
+can't be cast to the destination type STRUCT(b INTEGER)
 
 statement error
 SELECT CAST('{a: 3 1}' AS STRUCT(a INT));
 ----
+Could not convert string '3 1' to INT32
 
 statement error
 SELECT CAST('{a:3,, b:1}' AS STRUCT(a INT, b INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER, b INTEGER)
 
 statement error
 SELECT CAST('}{a:5}' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('{a:{b:{d: 800}, {c: "Duck"}}}' AS STRUCT(a STRUCT(b STRUCT(d INT), c STRUCT(c VARCHAR))));
 ----
+can't be cast to the destination type STRUCT(b STRUCT(d INTEGER), c STRUCT(c VARCHAR))
 
 statement error
 SELECT CAST('{[{]}}' AS STRUCT(a VARCHAR[]));
 ----
+can't be cast to the destination type STRUCT(a VARCHAR[])
 
 
 
@@ -394,7 +406,7 @@ COPY assorted_structs FROM '__TEST_DIR__/assorted_structs.csv';
 query I
 SELECT * FROM assorted_structs;
 ----
-{'a': 8, 'b': hello, DuckDB}
+{'a': 8, 'b': 'hello, DuckDB'}
 
 #               JSON format to Struct testing
 # ---------------------------------------------------
@@ -433,10 +445,24 @@ INSERT INTO json_tbl (VALUES ('{
 }'));
 
 query I
-SELECT col1::STRUCT(id VARCHAR, type VARCHAR, name VARCHAR, ppu FLOAT, 
-    batters STRUCT(batter STRUCT(id VARCHAR, type VARCHAR)[]), topping STRUCT(id VARCHAR, type VARCHAR)[]) FROM json_tbl;
+SELECT col1::STRUCT(
+	id VARCHAR,
+	type VARCHAR,
+	name VARCHAR,
+	ppu FLOAT,
+    batters STRUCT(
+		batter STRUCT(
+			id VARCHAR,
+			type VARCHAR
+		)[]
+	),
+	topping STRUCT(
+		id VARCHAR,
+		type VARCHAR
+	)[]
+) FROM json_tbl;
 ----
-{'id': 0001, 'type': donut, 'name': Cake, 'ppu': 0.55, 'batters': {'batter': [{'id': 1001, 'type': Regular}, {'id': 1002, 'type': Chocolate}, {'id': 1003, 'type': Blueberry}, {'id': 1004, 'type': Devil's Food}]}, 'topping': [{'id': 5001, 'type': None}, {'id': 5002, 'type': Glazed}, {'id': 5005, 'type': Sugar}, {'id': 5007, 'type': Powdered Sugar}, {'id': 5006, 'type': Chocolate with Sprinkles}, {'id': 5003, 'type': Chocolate}, {'id': 5004, 'type': Maple}]}
+{'id': 0001, 'type': donut, 'name': Cake, 'ppu': 0.55, 'batters': {'batter': [{'id': 1001, 'type': Regular}, {'id': 1002, 'type': Chocolate}, {'id': 1003, 'type': Blueberry}, {'id': 1004, 'type': 'Devil\'s Food'}]}, 'topping': [{'id': 5001, 'type': None}, {'id': 5002, 'type': Glazed}, {'id': 5005, 'type': Sugar}, {'id': 5007, 'type': Powdered Sugar}, {'id': 5006, 'type': Chocolate with Sprinkles}, {'id': 5003, 'type': Chocolate}, {'id': 5004, 'type': Maple}]}
 
 
 # ---------------------------------------------------
@@ -456,4 +482,4 @@ SELECT col1::VARCHAR::STRUCT(A VARCHAR, B INT[], C STRUCT(A VARCHAR, B FLOAT, C 
 {'A': Ducky, 'B': [3, 50, 8, 43], 'C': {'A': TEST, 'B': 0.9, 'C': [0.0, 9.0, 30.2]}}
 {'A': TESTY, 'B': [4], 'C': {'A': 🦆, 'B': 6.12, 'C': [0.099, 1.6]}}
 {'A': Hello World, 'B': [0, 0, 2, 500, 0, 8], 'C': {'A': DuckieDuck !, 'B': 3000.0, 'C': [0.0]}}
-{'A': , 'B': [], 'C': {'A': , 'B': 0.0, 'C': []}}
+{'A': '', 'B': [], 'C': {'A': '', 'B': 0.0, 'C': []}}

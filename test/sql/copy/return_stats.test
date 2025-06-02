@@ -1,0 +1,229 @@
+# name: test/sql/copy/return_stats.test
+# description: test RETURN_STATS parameter for COPY
+# group: [copy]
+
+require parquet
+
+statement ok
+CREATE TABLE integers AS SELECT range i FROM range(200000);
+
+statement ok
+CREATE TABLE multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(2500);
+
+statement ok
+CREATE TABLE floating_point_test AS SELECT case when i%10=0 then null else i/10.0 end as fp FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE floating_point_nan AS SELECT case when i%10=0 then 'nan'::double when i%4=0 then null else i/10.0 end as fp FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE fp_nan_only AS SELECT 'nan'::float as float_val
+
+statement ok
+CREATE TABLE string_test AS SELECT concat('thisisalongstring_', range) s FROM range(2500);
+
+statement ok
+CREATE TABLE date_test AS
+SELECT (TIMESTAMP '2000-01-01' + interval (range) day)::DATE dt,
+       TIMESTAMP '2000-01-01 12:12:12.123456' + interval (range) day ts,
+       (TIMESTAMP '2000-01-01 12:12:12' + interval (range) day)::TIMESTAMP_S ts_s,
+       (TIMESTAMP '2000-01-01 12:12:12.123' + interval (range) day)::TIMESTAMP_MS ts_ms,
+       concat((TIMESTAMP '2000-01-01 12:12:12.123456' + interval (range) day)::VARCHAR, '789')::TIMESTAMP_NS ts_ns,
+       TIME '00:00:00' + interval (10 * range) second t
+FROM range(2500);
+
+statement ok
+CREATE TABLE empty_test AS FROM range(2500) LIMIT 0;
+
+statement ok
+CREATE TABLE blob_test AS SELECT ''::BLOB AS bl UNION ALL SELECT '\x80\x00\x80'::BLOB
+
+statement ok
+CREATE TABLE decimal_test AS
+SELECT 25.3::DECIMAL(4,1) AS dec_i16,
+       123456.789::DECIMAL(9,3) AS dec_i32,
+       123456789123.456::DECIMAL(18,3) AS dec_i64
+UNION ALL
+SELECT 1.1::DECIMAL(4,1),
+       2.123::DECIMAL(9,3),
+       3.456::DECIMAL(18,3)
+
+statement ok
+CREATE TABLE struct_test AS SELECT case when i%10=0 then null else {'x': i, 'y': case when i%2=0 then 100 + i else null end} end struct_val FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE list_test AS SELECT [i] l1, case when i%10=0 then null else [case when i%2=0 then 100 + i else null end] end l2 FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE nested_struct_test AS SELECT {'s1': {'x': i}, 's2': {'s3': {'y': i}, 'l': [i]}} n FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE funky_names AS SELECT {'quoted ''"field name"': 42} """quoted col name"""
+
+statement ok
+CREATE TABLE map_test AS SELECT MAP {'key'||i: i} AS map_val FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE array_test AS SELECT [i, i + 1, i + 2]::INT[3] AS array_val FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE partitioned_test AS SELECT range%2 as partition_key, range val FROM range(2500)
+
+statement ok
+CREATE TABLE multi_partitioned_test AS SELECT range%2 as partition_key, range % 3 as partition_key2, range val FROM range(2500)
+
+statement ok
+CREATE TABLE large_string AS SELECT repeat('A', 254) || '🦆' AS val UNION ALL SELECT repeat('Z', 254) || '🦆'
+
+statement ok
+CREATE TABLE large_blob AS SELECT repeat('\x81', 4000)::BLOB AS val UNION ALL SELECT repeat('\x80', 4000)::BLOB
+
+statement ok
+CREATE TABLE uuids AS SELECT uuid '47183823-2574-4bfd-b411-99ed177d3e43' uuid_val union all select uuid '00112233-4455-6677-8899-aabbccddeeff';
+
+# test all of these with preserve_insertion_order=true/false to test both the batch copy and the regular copy
+foreach PRESERVE_INSERTION_ORDER true false
+
+statement ok
+SET preserve_insertion_order=${PRESERVE_INSERTION_ORDER};
+
+# single column
+query IIIIII
+COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=199999, min=0, null_count=0}}	NULL
+
+# multi-column
+query IIIIII
+COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
+----
+<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"j"'={column_size_bytes=\d+, max=9, min=0, null_count=0}, '"k"'={column_size_bytes=\d+, max=2499, min=1, null_count=1250}}	NULL
+
+# strings
+query IIIIII
+COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"s"'={column_size_bytes=\d+, max=thisisalongstring_999, min=thisisalongstring_0, null_count=0}}	NULL
+
+# timestamps/dates
+query IIIIII
+COPY date_test TO '__TEST_DIR__/date_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dt"'={column_size_bytes=\d+, max=2006-11-04, min=2000-01-01, null_count=0}, '"t"'={column_size_bytes=\d+, max='06:56:30', min='00:00:00', null_count=0}, '"ts"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456', min='2000-01-01 12:12:12.123456', null_count=0}, '"ts_ms"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123', min='2000-01-01 12:12:12.123', null_count=0}, '"ts_ns"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456789', min='2000-01-01 12:12:12.123456789', null_count=0}, '"ts_s"'={column_size_bytes=\d+, max='2006-11-04 12:12:12', min='2000-01-01 12:12:12', null_count=0}}	NULL
+
+# empty table
+query IIIIII
+COPY empty_test TO '__TEST_DIR__/empty_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*empty_test.parquet	0	<REGEX>:\d+	<REGEX>:\d+	{'"range"'={column_size_bytes=0, null_count=0}}	NULL
+
+# blobs
+query IIIIII
+COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*blob_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"bl"'={column_size_bytes=\d+, max=800080, min='', null_count=0}}	NULL
+
+# decimal
+query IIIIII
+COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i16"'={column_size_bytes=\d+, max=25.3, min=1.1, null_count=0}, '"dec_i32"'={column_size_bytes=\d+, max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={column_size_bytes=\d+, max=123456789123.456, min=3.456, null_count=0}}	NULL
+
+# floating point numbers
+query IIIIII
+COPY floating_point_test TO '__TEST_DIR__/fp.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=false, max=249.9, min=0.1, null_count=250}}	NULL
+
+query IIIIII
+COPY floating_point_nan TO '__TEST_DIR__/fp_nan.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp_nan.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=true, max=249.9, min=0.1, null_count=500}}	NULL
+
+query IIIIII
+COPY fp_nan_only TO '__TEST_DIR__/fp_nan_only.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp_nan_only.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0}}	NULL
+
+# large strings are truncated to the nearest valid UTF8 string
+query IIIIII
+COPY large_string TO '__TEST_DIR__/test_large_string.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_large_string.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max='ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\[', min=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, null_count=0}}	NULL
+
+# large blobs are just truncated to 256 bytes
+query IIIIII
+COPY large_blob TO '__TEST_DIR__/test_large_blob.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_large_blob.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=81818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818182, min=80808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080, null_count=0}}	NULL
+
+# uuid value
+query IIIIII
+COPY uuids TO '__TEST_DIR__/test_uuids.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_uuids.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"uuid_val"'={column_size_bytes=\d+, max=47183823-2574-4bfd-b411-99ed177d3e43, min=00112233-4455-6677-8899-aabbccddeeff, null_count=0}}	NULL
+
+# struct
+query IIIIII
+COPY struct_test TO '__TEST_DIR__/struct_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"struct_val"."x"'={column_size_bytes=\d+, max=2499, min=1, null_count=250}, '"struct_val"."y"'={column_size_bytes=\d+, max=2598, min=102, null_count=1500}}	NULL
+
+# list
+query IIIIII
+COPY list_test TO '__TEST_DIR__/list_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l1"."element"'={column_size_bytes=\d+, max=2499, min=0}, '"l2"."element"'={column_size_bytes=\d+, max=2598, min=102}}	NULL
+
+# nested struct
+query IIIIII
+COPY nested_struct_test TO '__TEST_DIR__/nested_struct_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*nested_struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"n"."s1"."x"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"n"."s2"."l"."element"'={column_size_bytes=\d+, max=2499, min=0}, '"n"."s2"."s3"."y"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}}	NULL
+
+# quoted/funky column names
+query IIIIII
+COPY funky_names TO '__TEST_DIR__/funky_names.parquet' (RETURN_STATS);
+----
+<REGEX>:.*funky_names.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"""quoted col name"""."quoted \\'""field name"""'={column_size_bytes=\d+, max=42, min=42, null_count=0}}	NULL
+
+# map
+query IIIIII
+COPY map_test TO '__TEST_DIR__/map_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*map_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"map_val"."key"'={column_size_bytes=\d+, max=key999, min=key0}, '"map_val"."value"'={column_size_bytes=\d+, max=2499, min=0}}	NULL
+
+# array
+query IIIIII
+COPY array_test TO '__TEST_DIR__/array_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*array_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"array_val"."element"'={column_size_bytes=\d+, max=2501, min=0}}	NULL
+
+endloop
+
+# partition_by
+query IIIIII rowsort
+COPY partitioned_test TO '__TEST_DIR__/partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key), RETURN_STATS, OVERWRITE);
+----
+<REGEX>:.*partitioned_test.*partition_key=0.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2498, min=0, null_count=0}}	{partition_key=0}
+<REGEX>:.*partitioned_test.*partition_key=1.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2499, min=1, null_count=0}}	{partition_key=1}
+
+query IIIIII rowsort
+COPY multi_partitioned_test TO '__TEST_DIR__/multi_partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key, partition_key2), RETURN_STATS, OVERWRITE);
+----
+<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2496, min=0, null_count=0}}	{partition_key=0, partition_key2=0}
+<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=1.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2494, min=4, null_count=0}}	{partition_key=0, partition_key2=1}
+<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=2.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2498, min=2, null_count=0}}	{partition_key=0, partition_key2=2}
+<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2499, min=3, null_count=0}}	{partition_key=1, partition_key2=0}
+<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=1.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2497, min=1, null_count=0}}	{partition_key=1, partition_key2=1}
+<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=2.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2495, min=5, null_count=0}}	{partition_key=1, partition_key2=2}
+
+# test all types
+statement ok
+COPY (FROM test_all_types()) TO '__TEST_DIR__/test_all_types.parquet' (RETURN_STATS);
+
+# unsupported format (CSV)
+statement error
+COPY integers TO '__TEST_DIR__/test_copy_to_file.csv' (RETURN_STATS);
+----
+not supported

@@ -1,0 +1,26 @@
+# name: test/issues/general/test_16257.test_slow
+# description: Issue 16257 - value count mismatch when writing DELTA_BINARY_PACKED
+# group: [general]
+
+require parquet
+
+# Some macros to generate lorem ipsum
+statement ok
+CREATE OR REPLACE MACRO deterministic_random(rand) AS hash(rand) / 18446744073709551615;
+
+statement ok
+CREATE OR REPLACE MACRO lorem_word(rand) AS ['voluptatem', 'quaerat', 'quiquia', 'non', 'dolore', 'dolorem', 'labore', 'consectetur', 'porro', 'sed', 'numquam', 'aliquam', 'sit', 'eius', 'modi', 'est', 'amet', 'magnam', 'dolor', 'etincidunt', 'velit', 'neque', 'ipsum', 'adipisci', 'quisquam', 'ut', 'tempora'][1 + floor(rand * 27 % 27)::BIGINT];
+
+statement ok
+CREATE OR REPLACE MACRO lorem_sentence_util(s) AS upper(s[1]) || s[2:] || '.';
+
+statement ok
+CREATE OR REPLACE MACRO lorem_sentence(rand, words) AS lorem_sentence_util(list_aggr([lorem_word(deterministic_random(rand + i)) for i in range(words)], 'string_agg', ' '));
+
+
+statement ok
+SET preserve_insertion_order=false;
+
+# added NULLs for issue #16306
+statement ok
+COPY (SELECT CASE WHEN random() < 0.01 THEN NULL ELSE lorem_sentence(random(), 20) END FROM range(1_000_000)) TO '__TEST_DIR__/16257.parquet' (PARQUET_VERSION V2, ROW_GROUP_SIZE 2_000_000);

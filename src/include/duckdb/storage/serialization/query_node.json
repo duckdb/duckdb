@@ -143,6 +143,11 @@
         "id": 204,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },

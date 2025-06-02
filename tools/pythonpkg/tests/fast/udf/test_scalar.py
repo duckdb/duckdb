@@ -50,7 +50,7 @@ class TestScalarUDF(object):
             (DATE, datetime.date(2005, 3, 11)),
             (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
             (TIME, datetime.time(14, 1, 12)),
-            (BLOB, b'\xF6\x96\xB0\x85'),
+            (BLOB, b'\xf6\x96\xb0\x85'),
             (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
             (BOOLEAN, True),
             (

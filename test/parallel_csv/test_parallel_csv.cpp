@@ -72,7 +72,7 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 	return true;
 }
 
-bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
+bool RunFull(const std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
              bool set_temp_dir = false) {
 	DuckDB db(nullptr);
 	Connection conn(db);
@@ -119,7 +119,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			all_tests_passed = all_tests_passed && RunFull(csv_file, skip, add_parameters);
+			all_tests_passed = all_tests_passed && RunFull(csv_file.path, skip, add_parameters);
 		}
 	}
 	REQUIRE(all_tests_passed);
@@ -226,9 +226,6 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	// This file requires a temp_dir for offloading
 	skip.insert("data/csv/hebere.csv.gz");
 	skip.insert("data/csv/no_quote.csv");
-	// FIXME: This should be fixed when we get the strict mode working with mixed new line delims
-	skip.insert("data/csv/mixed_new_line.csv");
-
 	RunTestOnFolder("data/csv/", &skip);
 }
 

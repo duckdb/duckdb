@@ -6,6 +6,8 @@
 # Thus, the below insert succeeds, as we no longer see the same row within a chunk.
 require no_vector_verification
 
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification;
 

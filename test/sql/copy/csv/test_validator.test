@@ -52,7 +52,7 @@ statement ok
 FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0)
 
 statement ok
-FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0, buffer_size = 46)
+FROM read_csv('data/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0, buffer_size = 48)
 
 statement ok
 FROM read_csv('data/csv/validator/single_column_quoted_newline.csv', columns = {'Raffaella Carrà': 'varchar'}, quote = '"',  buffer_size = 24)

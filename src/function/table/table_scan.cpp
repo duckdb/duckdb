@@ -42,8 +42,12 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
-	//! Fetch state
+	//! The row fetch state.
 	ColumnFetchState fetch_state;
+	//! The current position in the local storage scan.
+	TableScanState scan_state;
+	//! The column IDs of the local storage scan.
+	vector<StorageIndex> column_ids;
 };
 
 static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
@@ -118,8 +122,6 @@ public:
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
 
-	TableScanState table_scan_state;
-
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                   TableFunctionInitInput &input) override {
@@ -127,6 +129,19 @@ public:
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
+		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+
+		// Initialize the local storage scan.
+		auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		auto &storage = duck_table.GetStorage();
+		auto &local_storage = LocalStorage::Get(context.client, duck_table.catalog);
+
+		for (const auto &col_idx : input.column_indexes) {
+			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
+		}
+		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
+		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
 
@@ -172,10 +187,10 @@ public:
 			auto &local_storage = LocalStorage::Get(tx);
 			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
-				local_storage.Scan(table_scan_state.local_state, column_ids, l_state.all_columns);
+				local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.all_columns);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
-				local_storage.Scan(table_scan_state.local_state, column_ids, output);
+				local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
 			}
 		}
 	}
@@ -217,7 +232,7 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
+		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 		auto &storage = duck_table.GetStorage();
@@ -325,19 +340,28 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 }
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
-                                                             DataTable &storage, const TableScanBindData &bind_data,
+                                                             const TableScanBindData &bind_data,
                                                              unsafe_vector<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
 	if (!row_ids.empty()) {
+		// Duplicate-eliminate row IDs.
+		unordered_set<row_t> row_id_set;
+		auto it = row_ids.begin();
+		while (it != row_ids.end()) {
+			if (row_id_set.find(*it) == row_id_set.end()) {
+				row_id_set.insert(*it++);
+				continue;
+			}
+			// Found a duplicate.
+			it = row_ids.erase(it);
+		}
+
 		std::sort(row_ids.begin(), row_ids.end());
 		g_state->row_ids = std::move(row_ids);
 	}
 	g_state->finished = g_state->row_ids.empty() ? true : false;
 
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
-	g_state->table_scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-
 	if (input.CanRemoveFilterColumns()) {
 		g_state->projection_ids = input.projection_ids;
 	}
@@ -351,9 +375,6 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		}
 		g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 	}
-
-	g_state->table_scan_state.Initialize(g_state->column_ids, input.filters.get());
-	local_storage.InitializeScan(storage, g_state->table_scan_state.local_state, input.filters);
 
 	// Const-cast to indicate an index scan.
 	// We need this information in the bind data so that we can access it during ANALYZE.
@@ -395,14 +416,20 @@ void ExtractConjunctionAnd(ConjunctionAndFilter &filter, BoundColumnRefExpressio
 	vector<reference<InFilter>> in_filters;
 
 	for (idx_t i = 0; i < filter.child_filters.size(); i++) {
-		if (filter.child_filters[i]->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-			auto &comparison = filter.child_filters[i]->Cast<ConstantFilter>();
+		auto &child_filter = *filter.child_filters[i];
+		switch (child_filter.filter_type) {
+		case TableFilterType::CONSTANT_COMPARISON: {
+			auto &comparison = child_filter.Cast<ConstantFilter>();
 			comparisons.push_back(comparison);
-			continue;
+			break;
 		}
-
-		if (filter.child_filters[i]->filter_type == TableFilterType::OPTIONAL_FILTER) {
-			auto &optional_filter = filter.child_filters[i]->Cast<OptionalFilter>();
+		case TableFilterType::CONJUNCTION_AND: {
+			auto &conjunction = child_filter.Cast<ConjunctionAndFilter>();
+			ExtractConjunctionAnd(conjunction, bound_ref, expressions);
+			break;
+		}
+		case TableFilterType::OPTIONAL_FILTER: {
+			auto &optional_filter = child_filter.Cast<OptionalFilter>();
 			if (!optional_filter.child_filter) {
 				return;
 			}
@@ -412,11 +439,13 @@ void ExtractConjunctionAnd(ConjunctionAndFilter &filter, BoundColumnRefExpressio
 			}
 			auto &in_filter = optional_filter.child_filter->Cast<InFilter>();
 			in_filters.push_back(in_filter);
-			continue;
+			break;
 		}
-
-		// No support for other filter types than CONSTANT_COMPARISON and IN_FILTER in CONJUNCTION_AND yet.
-		return;
+		default:
+			// Not yet supported: filter types than CONSTANT_COMPARISON/IN_FILTER/CONJUNCTION_AND in CONJUNCTION_AND.
+			expressions.clear();
+			return;
+		}
 	}
 
 	// No support for other CONJUNCTION_AND cases yet.
@@ -604,7 +633,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!index_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
-	return DuckIndexScanInitGlobal(context, input, storage, bind_data, row_ids);
+	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids);
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
@@ -703,6 +732,21 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
+bool TableScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
+	return true;
+}
+
+virtual_column_map_t TableScanGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	return bind_data.table.GetVirtualColumns();
+}
+
+vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	vector<column_t> result;
+	result.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	return result;
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -720,8 +764,12 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
 	scan_function.sampling_pushdown = true;
+	scan_function.late_materialization = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
+	scan_function.pushdown_expression = TableScanPushdownExpression;
+	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
+	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	return scan_function;
 }
 

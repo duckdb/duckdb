@@ -8,6 +8,7 @@
 #include "duckdb_python/pybind11/dataframe.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,10 @@ static py::object FunctionCall(NumpyResultConversion &conversion, const vector<s
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		in_numpy_dict[names[col_idx].c_str()] = conversion.ToArray(col_idx);
 	}
-	auto in_df = py::module::import("pandas").attr("DataFrame").attr("from_dict")(in_numpy_dict);
+
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto pandas_df = import_cache.pandas.DataFrame();
+	auto in_df = pandas_df(in_numpy_dict);
 	D_ASSERT(in_df.ptr());
 
 	D_ASSERT(function);

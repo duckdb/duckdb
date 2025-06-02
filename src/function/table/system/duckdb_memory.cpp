@@ -31,6 +31,13 @@ unique_ptr<GlobalTableFunctionState> DuckDBMemoryInit(ClientContext &context, Ta
 	return std::move(result);
 }
 
+int64_t ClampReportedMemory(idx_t memory_usage) {
+	if (memory_usage > static_cast<idx_t>(NumericLimits<int64_t>::Maximum())) {
+		return 0;
+	}
+	return UnsafeNumericCast<int64_t>(memory_usage);
+}
+
 void DuckDBMemoryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBMemoryData>();
 	if (data.offset >= data.entries.size()) {
@@ -47,9 +54,9 @@ void DuckDBMemoryFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// tag, VARCHAR
 		output.SetValue(col++, count, EnumUtil::ToString(entry.tag));
 		// memory_usage_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.size)));
+		output.SetValue(col++, count, Value::BIGINT(ClampReportedMemory(entry.size)));
 		// temporary_storage_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.evicted_data)));
+		output.SetValue(col++, count, Value::BIGINT(ClampReportedMemory(entry.evicted_data)));
 		count++;
 	}
 	output.SetCardinality(count);

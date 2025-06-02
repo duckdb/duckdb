@@ -14,6 +14,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/catalog/catalog_entry_map.hpp"
 
 namespace duckdb {
 

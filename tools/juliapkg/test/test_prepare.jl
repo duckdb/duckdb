@@ -25,6 +25,13 @@
     @test isequal(df.i, [1, missing, 2, 1, 2, 3, 4, 5])
     @test isequal(df.j, [3.5, missing, 0.5, 1, 2, 4, 8, -0.5])
 
+    # can bind vectors to parameters
+    stmt = DBInterface.prepare(con, "FROM test_table WHERE i IN ?;")
+    results = DBInterface.execute(stmt, ([1, 2],))
+    df = DataFrame(results)
+
+    @test all(df.i .∈ Ref([1, 2]))
+
     # verify that double-closing does not cause any problems
     DBInterface.close!(stmt)
     DBInterface.close!(stmt)

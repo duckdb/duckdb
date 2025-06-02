@@ -187,6 +187,7 @@ public:
 
 	static bool DetectAndGetEnvironment();
 	static bool IsJupyter();
+	static std::string FormattedPythonVersion();
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static void SetDefaultConnection(shared_ptr<DuckDBPyConnection> conn);
 	static PythonImportCache *ImportCache();
@@ -269,10 +270,13 @@ public:
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
 	                                         bool filename, bool hive_partitioning, bool union_by_name,
 	                                         const py::object &compression = py::none());
-
 	unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
 	                                          bool file_row_number, bool filename, bool hive_partitioning,
 	                                          bool union_by_name, const py::object &compression = py::none());
+
+	unique_ptr<DuckDBPyRelation> FromParquetInternal(Value &&file_param, bool binary_as_string, bool file_row_number,
+	                                                 bool filename, bool hive_partitioning, bool union_by_name,
+	                                                 const py::object &compression = py::none());
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
@@ -291,6 +295,8 @@ public:
 	void Close();
 
 	void Interrupt();
+
+	double QueryProgress();
 
 	ModifiedMemoryFileSystem &GetObjectFileSystem();
 
@@ -353,6 +359,7 @@ private:
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
 
 	static PythonEnvironmentType environment;
+	static std::string formatted_python_version;
 	static void DetectEnvironment();
 };
 

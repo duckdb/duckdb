@@ -4,7 +4,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -413,6 +412,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 
 	// Compute the arguments
 	auto &arg_chunk = aggr_state.arg_chunk;
+	arg_chunk.Reset();
 	executor.Execute(input, arg_chunk);
 	arg_chunk.Flatten();
 
@@ -486,7 +486,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 
 	// Compute window functions
 	const idx_t count = output.size();
-	const column_t input_width = children[0]->GetTypes().size();
+	const column_t input_width = children[0].get().GetTypes().size();
 	for (column_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		column_t col_idx = input_width + expr_idx;
 		auto &expr = *select_list[expr_idx];

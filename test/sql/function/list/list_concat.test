@@ -41,6 +41,36 @@ SELECT list_concat([1, 2], [])
 ----
 [1, 2]
 
+query T
+SELECT list_concat([1, 2], [3, 4], [5, 6])
+----
+[1, 2, 3, 4, 5, 6]
+
+query T
+SELECT list_concat([1, 2], [3, 4], [])
+----
+[1, 2, 3, 4]
+
+query T
+SELECT list_concat([1, 2], [], [5, 6])
+----
+[1, 2, 5, 6]
+
+query T
+SELECT list_concat([], [3, 4], [5, 6])
+----
+[3, 4, 5, 6]
+
+query T
+SELECT list_concat([], [], [5, 6])
+----
+[5, 6]
+
+query T
+SELECT list_concat([1, 2], [3, 4], [5, 6], [7, 8])
+----
+[1, 2, 3, 4, 5, 6, 7, 8]
+
 statement error
 SELECT list_concat([1, 2], 3)
 ----
@@ -97,20 +127,50 @@ SELECT list_concat([NULL], [3, 4])
 [NULL, 3, 4]
 
 query T
+SELECT list_concat([1, 2], [3, 4], [NULL])
+----
+[1, 2, 3, 4, NULL]
+
+query T
+SELECT list_concat([1, 2], [3, 4], NULL)
+----
+[1, 2, 3, 4]
+
+query T
+SELECT list_concat(NULL, [3, 4], [5, 6])
+----
+[3, 4, 5, 6]
+
+# nested types
+query T
 SELECT list_concat([[1, 2]], [[3, 4]])
 ----
 [[1, 2], [3, 4]]
 
-# nested types
+query T
+SELECT list_concat([[1, 2]], [[3, 4]], [[5, 6]])
+----
+[[1, 2], [3, 4], [5, 6]]
+
 query T
 SELECT list_concat([{a: 1}, {a: 2}], [{a: 3}, {a: 4}])
 ----
 [{'a': 1}, {'a': 2}, {'a': 3}, {'a': 4}]
 
 query T
+SELECT list_concat([{a: 1}, {a: 2}], [{a: 3}, {a: 4}], [{a: 5}, {a: 6}])
+----
+[{'a': 1}, {'a': 2}, {'a': 3}, {'a': 4}, {'a': 5}, {'a': 6}]
+
+query T
 SELECT list_concat([[[1], [2]], [[3], [4]]], [[[5], [6]], [[7], [8]]])
 ----
 [[[1], [2]], [[3], [4]], [[5], [6]], [[7], [8]]]
+
+query T
+SELECT list_concat([[[1], [2]], [[3], [4]]], [[[5], [6]], [[7], [8]]], [[[9], [10]], [[11], [12]]])
+----
+[[[1], [2]], [[3], [4]], [[5], [6]], [[7], [8]], [[9], [10]], [[11], [12]]]
 
 statement ok
 CREATE TABLE test AS SELECT range % 4 i, range j, range k FROM range(16)
@@ -125,6 +185,14 @@ SELECT i, list_concat(j, k) FROM lists
 1	[1, 5, 9, 13, 1, 5, 9, 13]
 2	[2, 6, 10, 14, 2, 6, 10, 14]
 3	[3, 7, 11, 15, 3, 7, 11, 15]
+
+query II rowsort
+SELECT i, list_concat(j, k, j, k, j, k) FROM lists
+----
+0	[0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12]
+1	[1, 5, 9, 13, 1, 5, 9, 13, 1, 5, 9, 13, 1, 5, 9, 13, 1, 5, 9, 13, 1, 5, 9, 13]
+2	[2, 6, 10, 14, 2, 6, 10, 14, 2, 6, 10, 14, 2, 6, 10, 14, 2, 6, 10, 14, 2, 6, 10, 14]
+3	[3, 7, 11, 15, 3, 7, 11, 15, 3, 7, 11, 15, 3, 7, 11, 15, 3, 7, 11, 15, 3, 7, 11, 15]
 
 statement error
 SELECT i, list_concat(j, cast(k AS VARCHAR)) FROM lists
@@ -208,3 +276,5 @@ statement error
 SELECT concat([42], [84], 'str')
 ----
 an explicit cast is required
+
+

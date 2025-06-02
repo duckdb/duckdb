@@ -9,6 +9,8 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -109,31 +111,31 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Else(const DuckDBPyExpression
 
 // Binary operators
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("+", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Subtract(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Subtract(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("-", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Multiply(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Multiply(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("*", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Division(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Division(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("/", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FloorDivision(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FloorDivision(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("//", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Modulo(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Modulo(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("%", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Power(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Power(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("**", *this, other);
 }
 
@@ -169,11 +171,11 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Not() {
 	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_NOT, *this);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::And(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::And(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_AND, *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Or(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Or(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_OR, *this, other);
 }
 
@@ -187,9 +189,12 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::IsNotNull() {
 	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_IS_NOT_NULL, *this);
 }
 
-// IN
+// IN / NOT IN
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::In(const py::args &args) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::CreateCompareExpression(ExpressionType compare_type,
+                                                                           const py::args &args) {
+	D_ASSERT(args.size() >= 1);
+
 	vector<unique_ptr<ParsedExpression>> expressions;
 	expressions.reserve(args.size() + 1);
 	expressions.push_back(GetExpression().Copy());
@@ -202,8 +207,22 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::In(const py::args &args) {
 		auto expr = py_expr->GetExpression().Copy();
 		expressions.push_back(std::move(expr));
 	}
-	auto operator_expr = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(expressions));
+	auto operator_expr = make_uniq<OperatorExpression>(compare_type, std::move(expressions));
 	return make_shared_ptr<DuckDBPyExpression>(std::move(operator_expr));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::In(const py::args &args) {
+	if (args.size() == 0) {
+		throw InvalidInputException("Incorrect amount of parameters to 'isin', needs at least 1 parameter");
+	}
+	return CreateCompareExpression(ExpressionType::COMPARE_IN, args);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NotIn(const py::args &args) {
+	if (args.size() == 0) {
+		throw InvalidInputException("Incorrect amount of parameters to 'isnotin', needs at least 1 parameter");
+	}
+	return CreateCompareExpression(ExpressionType::COMPARE_NOT_IN, args);
 }
 
 // COALESCE
@@ -225,11 +244,6 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Coalesce(const py::args &args
 	}
 	auto operator_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(expressions));
 	return make_shared_ptr<DuckDBPyExpression>(std::move(operator_expr));
-}
-
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NotIn(const py::args &args) {
-	auto in_expr = In(args);
-	return in_expr->Not();
 }
 
 // Order modifiers
@@ -393,6 +407,25 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 	}
 	auto lambda_expression = make_uniq<duckdb::LambdaExpression>(std::move(lhs), rhs.GetExpression().Copy());
 	return make_shared_ptr<DuckDBPyExpression>(std::move(lambda_expression));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(string sql) {
+	auto conn = DuckDBPyConnection::DefaultConnection();
+	auto &context = *conn->con.GetConnection().context;
+	vector<unique_ptr<ParsedExpression>> expressions;
+	try {
+		expressions = Parser::ParseExpressionList(sql, context.GetParserOptions());
+	} catch (std::runtime_error &e) {
+		throw;
+	}
+
+	if (expressions.size() != 1) {
+		throw InvalidInputException(
+		    "Please provide only a single expression to SQLExpression, found %d expressions in the parsed string",
+		    expressions.size());
+	}
+
+	return make_shared_ptr<DuckDBPyExpression>(std::move(expressions[0]));
 }
 
 // Private methods
