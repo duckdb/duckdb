@@ -856,8 +856,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 	if (sink.external) {
 		// External Hash Join
-		sink.logger.Log("External hash join: enabled. Size (%llu) greater than reservation (%llu)", sink.total_size,
-		                sink.temporary_memory_state->GetReservation());
+		sink.logger.Log("External hash join: enabled. Size (%llu bytes) greater than reservation (%llu bytes)",
+		                sink.total_size, sink.temporary_memory_state->GetReservation());
 
 		sink.perfect_join_executor.reset();
 
