@@ -97,18 +97,6 @@ DatabaseInstance::~DatabaseInstance() {
 	config.db_cache_entry.reset();
 }
 
-BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return db.GetBufferManager();
-}
-
-const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
-	return db.GetBufferManager();
-}
-
-BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
-	return BufferManager::GetBufferManager(db.GetDatabase());
-}
-
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 	return *context.db;
 }

@@ -11,16 +11,6 @@
 namespace duckdb {
 
 template <>
-hash_t Hash(uint64_t val) {
-	return MurmurHash64(val);
-}
-
-template <>
-hash_t Hash(int64_t val) {
-	return MurmurHash64((uint64_t)val);
-}
-
-template <>
 hash_t Hash(hugeint_t val) {
 	return MurmurHash64(val.lower) ^ MurmurHash64(static_cast<uint64_t>(val.upper));
 }
