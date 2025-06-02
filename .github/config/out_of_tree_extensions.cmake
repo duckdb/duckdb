@@ -44,6 +44,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             )
 endif()
 
+
 ################# AZURE
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
