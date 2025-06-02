@@ -219,6 +219,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	auto &sniffed_column_counts = scanner->ParseChunk();
 	idx_t dirty_notes = 0;
 	idx_t dirty_notes_minus_comments = 0;
+	idx_t empty_lines = 0;
 	if (sniffed_column_counts.error) {
 		if (!scanner->error_handler->HasError(MAXIMUM_LINE_SIZE)) {
 			all_fail_max_line_size = false;
@@ -281,16 +282,18 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
-			dirty_notes = row;
-			dirty_notes_minus_comments = dirty_notes - comment_rows;
+			dirty_notes = row + sniffed_column_counts[row].empty_lines;
+			empty_lines = sniffed_column_counts[row].empty_lines;
+			dirty_notes_minus_comments = dirty_notes  - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
 		} else if (sniffed_column_counts[row].number_of_columns == num_cols || (use_most_frequent_columns)) {
 			if (!first_valid) {
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
-				dirty_notes = row;
-				dirty_notes_minus_comments = dirty_notes - comment_rows;
+				dirty_notes = row + sniffed_column_counts[row].empty_lines;
+				empty_lines = sniffed_column_counts[row].empty_lines;
+				dirty_notes_minus_comments = dirty_notes  - comment_rows;
 				num_cols = sniffed_column_counts[row].number_of_columns;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
@@ -327,7 +330,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
 	const bool rows_consistent =
-	    consistent_rows + (dirty_notes_minus_comments - options.dialect_options.skip_rows.GetValue()) + comment_rows ==
+	    consistent_rows + (dirty_notes_minus_comments - options.dialect_options.skip_rows.GetValue()) + comment_rows - empty_lines ==
 	    sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
 	// If there are more than one consistent row.
 	const bool more_than_one_row = consistent_rows > 1;
@@ -360,7 +363,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
-	// - There are more values and no additional padding is required.
+	// - There are more values, and no additional padding is required.
 	// - There's more than one column and less padding is required.
 	if (columns_match_set && (rows_consistent || (set_columns.IsSet() && ignore_errors)) &&
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
@@ -426,7 +429,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		min_ignored_rows = ignored_rows;
 
 		if (options.dialect_options.skip_rows.IsSetByUser()) {
-			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// If skip rows are set by the user, and we found dirty notes, we only accept it if either null_padding or
 			// ignore_errors is set we have comments
 			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue() && comment_rows == 0) {
 				return;
@@ -593,7 +596,7 @@ void CSVSniffer::DetectDialect() {
 	idx_t best_consistent_rows = 0;
 	// If padding was necessary (i.e., rows are missing some columns, how many)
 	idx_t prev_padding_count = 0;
-	// Min number of ignores rows
+	// Min number of ignored rows
 	idx_t best_ignored_rows = 0;
 	// Vector of CSV State Machines
 	vector<unique_ptr<ColumnCountScanner>> csv_state_machines;
