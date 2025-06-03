@@ -582,6 +582,12 @@ void ParquetMetaDataOperatorData::BindFileMetaData(vector<LogicalType> &return_t
 
 	names.emplace_back("footer_signing_key_metadata");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("file_size_bytes");
+	return_types.emplace_back(LogicalType::UBIGINT);
+
+	names.emplace_back("footer_size");
+	return_types.emplace_back(LogicalType::UBIGINT);
 }
 
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
@@ -610,6 +616,11 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	current_chunk.SetValue(6, 0,
 	                       ParquetElementStringVal(meta_data->footer_signing_key_metadata,
 	                                               meta_data->__isset.footer_signing_key_metadata));
+	//  file_size_bytes
+	current_chunk.SetValue(7, 0, Value::UBIGINT(reader->GetHandle().GetFileSize()));
+	//  footer_size
+	current_chunk.SetValue(8, 0, Value::UBIGINT(reader->metadata->footer_size));
+
 	current_chunk.SetCardinality(1);
 	collection.Append(current_chunk);
 	collection.InitializeScan(scan_state);
