@@ -349,12 +349,14 @@ jobs:
         ls -lah duckdb_path
 
         python scripts/verify_and_test.py \
-          --nightly_build "duckdb-binaries-osx" \
+          --nightly_build "osx" \
           --architecture ${{ matrix.config.duckdb_arch }} \
           --run_id $RUN_ID \
           --runs_on ${{ matrix.config.runner }} \
           --branch v1.3-ossivalis
           # --branch ${{ github.ref_name }}
+
+        ls -lah
 
         # these should be downloaded to test local
         # gh run download "$RUN_ID" --repo "duckdb/duckdb" -n "duckdb-extensions-${{ matrix.config.duckdb_arch }}"
@@ -363,7 +365,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: EXT
+        name: EXT_${{ matrix.config.duckdb_arch }}
         path: |
           v1.3-ossivalis_list_failed_ext_*.csv
           v1.3-ossivalis_non_matching_sha_*.csv
