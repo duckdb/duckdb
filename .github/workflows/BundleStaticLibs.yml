@@ -105,7 +105,7 @@ jobs:
 
   bundle-mingw-static-lib:
     name: Windows MingW static libs
-    runs-on: windows-2019
+    runs-on: windows-latest
     env:
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
