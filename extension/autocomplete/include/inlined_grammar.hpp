@@ -51,7 +51,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?\n"
 	"WindowPartition <- 'PARTITION'i 'BY'i List(Expression)\n"
 	"PrefixExpression <- PrefixOperator Expression\n"
-	"PrefixOperator <- 'NOT'i / '-' / '+'\n"
+	"PrefixOperator <- 'NOT'i / '-' / '+' / '~'\n"
 	"ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'\n"
 	"StructExpression <- '{' List(StructField) '}'\n"
 	"StructField <- Expression ':'i Expression\n"

@@ -37,7 +37,7 @@ WindowFrameDefinition <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 PrefixExpression <- PrefixOperator Expression
-PrefixOperator <- 'NOT'i / '-' / '+'
+PrefixOperator <- 'NOT'i / '-' / '+' / '~'
 ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField) '}'
 StructField <- Expression ':'i Expression
