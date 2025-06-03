@@ -18,3 +18,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$create table tbl as select 	i // 5_000 as
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT a.filter(lambda x: x > 0) FROM arrays$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_transform(array_value(3,2,1), lambda x: x + 1) = list_transform([3,2,1], lambda x: x + 1);$TEST_PEG_PARSER$);
