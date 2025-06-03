@@ -126,7 +126,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CoalesceExpression <- 'COALESCE'i Parens(List(Expression))\n"
 	"ColumnsExpression <- '*'? 'COLUMNS'i Parens(Expression)\n"
 	"ExtractExpression <- 'EXTRACT'i Parens(Expression 'FROM'i Expression)\n"
-	"LambdaExpression <- 'LAMBDA'i Identifier (',' Identifier)? ':' Expression\n"
+	"LambdaExpression <- 'LAMBDA'i Identifier (',' Identifier)* ':' Expression\n"
 	"NullIfExpression <- 'NULLIF'i Parens(Expression ',' Expression)\n"
 	"PositionExpression <- 'POSITION'i Parens(Expression)\n"
 	"RowExpression <- 'ROW'i Parens(List(Expression))\n"
