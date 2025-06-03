@@ -131,7 +131,7 @@ jobs:
  linux-extensions-64:
     # Builds extensions for linux_amd64
     name: Linux Extensions (x64)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         duckdb_arch: [linux_amd64]
@@ -216,7 +216,7 @@ jobs:
  linux-extensions-64-aarch64:
     # Builds extensions for linux_arm64
     name: Linux Extensions (aarch64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     needs: linux-extensions-64
     strategy:
       matrix:
