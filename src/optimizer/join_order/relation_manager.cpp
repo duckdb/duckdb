@@ -391,6 +391,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// optimize the rhs child
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
 		auto table_index = op->Cast<LogicalCTE>().table_index;
+
+		auto child_1_card = lhs_stats.stats_initialized ? lhs_stats.cardinality : 0;
 		rhs_optimizer.AddMaterializedCTEStats(table_index, std::move(lhs_stats));
 		if (op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			rhs_optimizer.recursive_cte_indexes.insert(op->Cast<LogicalCTE>().table_index);
@@ -399,7 +401,6 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), &rhs_stats);
 
 		// create the stats for the CTE
-		auto child_1_card = lhs_stats.stats_initialized ? lhs_stats.cardinality : 0;
 		auto child_2_card = rhs_stats.stats_initialized ? rhs_stats.cardinality : 0;
 
 		if (op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
