@@ -214,7 +214,8 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, cons
 	return valid_comments / detected_comments >= min_majority;
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner, CandidateStats &stats, vector<unique_ptr<ColumnCountScanner>> &successful_candidates) {
+void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner, CandidateStats &stats,
+                                         vector<unique_ptr<ColumnCountScanner>> &successful_candidates) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	auto &sniffed_column_counts = scanner->ParseChunk();
 	idx_t dirty_notes = 0;
@@ -322,7 +323,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	const bool require_less_padding = padding_count < stats.prev_padding_count;
 
 	// If there was only a single column before, and the new number of columns exceeds that.
-	const bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found * successful_candidates.size();
+	const bool single_column_before =
+	    max_columns_found < 2 && num_cols > max_columns_found * successful_candidates.size();
 
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
@@ -336,8 +338,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	const bool more_than_one_column = num_cols > 1;
 
 	// If the start position is valid.
-	const bool start_good = !successful_candidates.empty() &&
-	                        dirty_notes <= successful_candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
+	const bool start_good =
+	    !successful_candidates.empty() &&
+	    dirty_notes <= successful_candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
 
 	// If padding happened but it is not allowed.
 	const bool invalid_padding = !allow_padding && padding_count > 0;
@@ -363,7 +366,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// - There's more than one column and less padding is required.
 	if (columns_match_set && (rows_consistent || (set_columns.IsSet() && ignore_errors)) &&
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
-	     (more_than_one_column && require_less_padding) || quoted) &&
+	     (more_than_one_column && require_less_padding) || (quoted && comment_rows == 0)) &&
 	    !invalid_padding && comments_are_acceptable) {
 		if (!successful_candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
 		    consistent_rows <= stats.best_consistent_rows) {

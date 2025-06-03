@@ -144,7 +144,8 @@ private:
 	                                     const DialectCandidates &dialect_candidates);
 
 	//! 2. Analyzes if a dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, CandidateStats &stats, vector<unique_ptr<ColumnCountScanner>> &successful_candidates);
+	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, CandidateStats &stats,
+	                             vector<unique_ptr<ColumnCountScanner>> &successful_candidates);
 	//! 3. Refine Candidates over remaining chunks
 	void RefineCandidates();
 
