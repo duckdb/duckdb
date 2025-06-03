@@ -113,10 +113,16 @@ index 04bd795..0fe6be8 100644
  
  size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
-index c9bc985..d4b0a7a 100644
+index c9bc985..c800ff2 100644
 --- a/extension/httpfs/httpfs_extension.cpp
 +++ b/extension/httpfs/httpfs_extension.cpp
-@@ -10,7 +10,8 @@
+@@ -1,5 +1,3 @@
+-#define DUCKDB_EXTENSION_MAIN
+-
+ #include "httpfs_extension.hpp"
+ 
+ #include "create_secret_functions.hpp"
+@@ -10,7 +8,8 @@
  
  namespace duckdb {
  
@@ -126,7 +132,7 @@ index c9bc985..d4b0a7a 100644
  	auto &fs = instance.GetFileSystem();
  
  	fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
-@@ -66,14 +67,14 @@ static void LoadInternal(DatabaseInstance &instance) {
+@@ -66,14 +65,14 @@ static void LoadInternal(DatabaseInstance &instance) {
  	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
  	provider->SetAll();
  
@@ -145,17 +151,24 @@ index c9bc985..d4b0a7a 100644
  }
  std::string HttpfsExtension::Name() {
  	return "httpfs";
-@@ -91,8 +92,8 @@ std::string HttpfsExtension::Version() const {
+@@ -91,15 +90,8 @@ std::string HttpfsExtension::Version() const {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void httpfs_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void httpfs_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(httpfs, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *httpfs_version() {
+-DUCKDB_EXTENSION_API const char *httpfs_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
+ }
+-
+-#ifndef DUCKDB_EXTENSION_MAIN
+-#error DUCKDB_EXTENSION_MAIN not defined
+-#endif
 diff --git a/extension/httpfs/include/create_secret_functions.hpp b/extension/httpfs/include/create_secret_functions.hpp
 index 54b7566..bd3bc4a 100644
 --- a/extension/httpfs/include/create_secret_functions.hpp

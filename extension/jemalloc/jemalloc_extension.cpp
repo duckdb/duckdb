@@ -130,11 +130,8 @@ unsigned duckdb_malloc_ncpus() {
 #endif
 }
 
-DUCKDB_EXTENSION_API void jemalloc_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(jemalloc, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *jemalloc_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }

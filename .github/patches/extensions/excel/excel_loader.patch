@@ -1,8 +1,13 @@
 diff --git a/src/excel/excel_extension.cpp b/src/excel/excel_extension.cpp
-index 84a4e4a..c76ab91 100644
+index 84a4e4a..9dce971 100644
 --- a/src/excel/excel_extension.cpp
 +++ b/src/excel/excel_extension.cpp
-@@ -6,7 +6,7 @@
+@@ -1,12 +1,10 @@
+-#define DUCKDB_EXTENSION_MAIN
+-
+ #include "excel_extension.hpp"
+ 
+ #include "duckdb.hpp"
  #include "duckdb/common/exception.hpp"
  #include "duckdb/common/string_util.hpp"
  #include "duckdb/function/scalar_function.hpp"
@@ -11,7 +16,7 @@ index 84a4e4a..c76ab91 100644
  #include "nf_calendar.h"
  #include "nf_localedata.h"
  #include "nf_zformat.h"
-@@ -70,21 +70,24 @@ static void NumberFormatFunction(DataChunk &args, ExpressionState &state, Vector
+@@ -70,21 +68,24 @@ static void NumberFormatFunction(DataChunk &args, ExpressionState &state, Vector
  // Load
  //--------------------------------------------------------------------------------------------------
  
@@ -44,18 +49,25 @@ index 84a4e4a..c76ab91 100644
  }
  
  std::string ExcelExtension::Name() {
-@@ -95,9 +98,8 @@ std::string ExcelExtension::Name() {
+@@ -95,16 +96,8 @@ std::string ExcelExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void excel_init(duckdb::DatabaseInstance &db) {
 -	duckdb::DuckDB db_wrapper(db);
 -	db_wrapper.LoadExtension<duckdb::ExcelExtension>();
-+DUCKDB_EXTENSION_API void excel_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(excel, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *excel_version() {
+-DUCKDB_EXTENSION_API const char *excel_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+ }
+-}
+-
+-#ifndef DUCKDB_EXTENSION_MAIN
+-#error DUCKDB_EXTENSION_MAIN not defined
+-#endif
 diff --git a/src/excel/include/excel_extension.hpp b/src/excel/include/excel_extension.hpp
 index 156bb7e..5b711aa 100644
 --- a/src/excel/include/excel_extension.hpp

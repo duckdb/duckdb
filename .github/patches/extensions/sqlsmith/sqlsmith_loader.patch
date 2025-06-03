@@ -12,7 +12,7 @@ index 4cd16f7..1e43766 100644
  	std::string Version() const override;
  };
 diff --git a/src/sqlsmith_extension.cpp b/src/sqlsmith_extension.cpp
-index f995e73..a7e2bb6 100644
+index f995e73..29b7c37 100644
 --- a/src/sqlsmith_extension.cpp
 +++ b/src/sqlsmith_extension.cpp
 @@ -1,5 +1,3 @@
@@ -73,20 +73,20 @@ index f995e73..a7e2bb6 100644
  }
  
  std::string SqlsmithExtension::Name() {
-@@ -220,16 +220,11 @@ std::string SqlsmithExtension::Version() const {
+@@ -220,16 +220,8 @@ std::string SqlsmithExtension::Version() const {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void sqlsmith_init(duckdb::DatabaseInstance &db) {
 -	duckdb::DuckDB db_wrapper(db);
 -	db_wrapper.LoadExtension<duckdb::SqlsmithExtension>();
-+DUCKDB_EXTENSION_API void sqlsmith_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(sqlsmith, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *sqlsmith_version() {
- 	return duckdb::DuckDB::LibraryVersion();
- }
+-DUCKDB_EXTENSION_API const char *sqlsmith_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
  }
 -
 -#ifndef DUCKDB_EXTENSION_MAIN

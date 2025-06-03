@@ -509,7 +509,7 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
-DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	CreateScalarFunctionInfo hello_alias_info(
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
 
@@ -611,7 +611,4 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::ExtensionLoader &
 	loader.RegisterFunction(ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
 }
 
-DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {
-	return DuckDB::LibraryVersion();
-}
 }

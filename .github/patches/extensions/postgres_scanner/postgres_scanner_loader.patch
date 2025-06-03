@@ -1,8 +1,8 @@
 diff --git a/src/include/postgres_scanner_extension.hpp b/src/include/postgres_scanner_extension.hpp
-index ccf7b84..ddc655e 100644
+index ccf7b84..e0c2687 100644
 --- a/src/include/postgres_scanner_extension.hpp
 +++ b/src/include/postgres_scanner_extension.hpp
-@@ -13,11 +13,11 @@ public:
+@@ -13,11 +13,9 @@ public:
  	std::string Name() override {
  		return "postgres_scanner";
  	}
@@ -12,12 +12,12 @@ index ccf7b84..ddc655e 100644
  
  extern "C" {
 -DUCKDB_EXTENSION_API void postgres_scanner_init(duckdb::DatabaseInstance &db);
-+DUCKDB_EXTENSION_API void postgres_scanner_init(duckdb::ExtensionLoader &db);
- DUCKDB_EXTENSION_API const char *postgres_scanner_version();
- DUCKDB_EXTENSION_API void postgres_scanner_storage_init(DBConfig &config);
+-DUCKDB_EXTENSION_API const char *postgres_scanner_version();
+-DUCKDB_EXTENSION_API void postgres_scanner_storage_init(DBConfig &config);
++DUCKDB_CPP_EXTENSION_ENTRY(postgres_scanner, loader);
  }
 diff --git a/src/postgres_extension.cpp b/src/postgres_extension.cpp
-index d8f46e8..b688466 100644
+index d8f46e8..dd5ca0e 100644
 --- a/src/postgres_extension.cpp
 +++ b/src/postgres_extension.cpp
 @@ -8,7 +8,7 @@
@@ -83,7 +83,7 @@ index d8f46e8..b688466 100644
  	config.storage_extensions["postgres_scanner"] = make_uniq<PostgresStorageExtension>();
  
  	config.AddExtensionOption("pg_use_binary_copy", "Whether or not to use BINARY copy to read data",
-@@ -187,19 +187,19 @@ static void LoadInternal(DatabaseInstance &db) {
+@@ -187,26 +187,19 @@ static void LoadInternal(DatabaseInstance &db) {
  	config.optimizer_extensions.push_back(std::move(postgres_optimizer));
  
  	config.extension_callbacks.push_back(make_uniq<PostgresExtensionCallback>());
@@ -103,11 +103,18 @@ index d8f46e8..b688466 100644
  
 -DUCKDB_EXTENSION_API void postgres_scanner_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void postgres_scanner_init(duckdb::ExtensionLoader &loader) {
+-}
+-
+-DUCKDB_EXTENSION_API const char *postgres_scanner_version() {
+-	return DuckDB::LibraryVersion();
++DUCKDB_CPP_EXTENSION_ENTRY(postgres_scanner, loader) {
 +	LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *postgres_scanner_version() {
+-DUCKDB_EXTENSION_API void postgres_scanner_storage_init(DBConfig &config) {
+-	config.storage_extensions["postgres_scanner"] = make_uniq<PostgresStorageExtension>();
+-}
+ }
 diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
 index 9b2d062..d49d8a3 100644
 --- a/src/postgres_scanner.cpp

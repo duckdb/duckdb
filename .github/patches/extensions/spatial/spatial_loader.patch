@@ -2337,7 +2337,7 @@ index 36b96d0..0e80217 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/spatial_extension.cpp b/src/spatial/spatial_extension.cpp
-index b26c527..4372acf 100644
+index b26c527..b92bd52 100644
 --- a/src/spatial/spatial_extension.cpp
 +++ b/src/spatial/spatial_extension.cpp
 @@ -1,5 +1,3 @@
@@ -2403,19 +2403,19 @@ index b26c527..4372acf 100644
  }
  
  std::string SpatialExtension::Name() {
-@@ -61,8 +59,8 @@ std::string SpatialExtension::Name() {
+@@ -61,15 +59,9 @@ std::string SpatialExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void spatial_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void spatial_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(spatial, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *spatial_version() {
-@@ -70,6 +68,3 @@ DUCKDB_EXTENSION_API const char *spatial_version() {
- }
+-DUCKDB_EXTENSION_API const char *spatial_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
  }
  
 -#ifndef DUCKDB_EXTENSION_MAIN

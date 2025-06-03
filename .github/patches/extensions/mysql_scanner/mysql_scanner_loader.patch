@@ -1,8 +1,8 @@
 diff --git a/src/include/mysql_scanner_extension.hpp b/src/include/mysql_scanner_extension.hpp
-index dc69b08..59e5459 100644
+index dc69b08..ba2c8a7 100644
 --- a/src/include/mysql_scanner_extension.hpp
 +++ b/src/include/mysql_scanner_extension.hpp
-@@ -13,11 +13,11 @@ public:
+@@ -13,11 +13,9 @@ public:
  	std::string Name() override {
  		return "mysql_scanner";
  	}
@@ -12,12 +12,12 @@ index dc69b08..59e5459 100644
  
  extern "C" {
 -DUCKDB_EXTENSION_API void mysql_scanner_init(duckdb::DatabaseInstance &db);
-+DUCKDB_EXTENSION_API void mysql_scanner_init(duckdb::ExtensionLoader &loader);
- DUCKDB_EXTENSION_API const char *mysql_scanner_version();
- DUCKDB_EXTENSION_API void mysql_scanner_storage_init(DBConfig &config);
+-DUCKDB_EXTENSION_API const char *mysql_scanner_version();
+-DUCKDB_EXTENSION_API void mysql_scanner_storage_init(DBConfig &config);
++	DUCKDB_CPP_EXTENSION_ENTRY(mysql_scanner, loader);
  }
 diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
-index 9d51436..c8c019f 100644
+index 9d51436..876ff1d 100644
 --- a/src/mysql_extension.cpp
 +++ b/src/mysql_extension.cpp
 @@ -1,4 +1,3 @@
@@ -70,7 +70,7 @@ index 9d51436..c8c019f 100644
  
  	auto &config = DBConfig::GetConfig(db);
  	config.storage_extensions["mysql_scanner"] = make_uniq<MySQLStorageExtension>();
-@@ -123,14 +124,14 @@ static void LoadInternal(DatabaseInstance &db) {
+@@ -123,22 +124,14 @@ static void LoadInternal(DatabaseInstance &db) {
  	config.optimizer_extensions.push_back(std::move(mysql_optimizer));
  }
  
@@ -84,11 +84,19 @@ index 9d51436..c8c019f 100644
  
 -DUCKDB_EXTENSION_API void mysql_scanner_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void mysql_scanner_init(duckdb::ExtensionLoader &loader) {
+-}
+-
+-DUCKDB_EXTENSION_API const char *mysql_scanner_version() {
+-	return DuckDB::LibraryVersion();
++DUCKDB_CPP_EXTENSION_ENTRY(mysql_scanner, loader) {
 +	LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *mysql_scanner_version() {
+-DUCKDB_EXTENSION_API void mysql_scanner_storage_init(DBConfig &config) {
+-	mysql_library_init(0, NULL, NULL);
+-	config.storage_extensions["mysql_scanner"] = make_uniq<MySQLStorageExtension>();
+-}
+ }
 diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
 index a239dfb..46df8b7 100644
 --- a/src/mysql_scanner.cpp

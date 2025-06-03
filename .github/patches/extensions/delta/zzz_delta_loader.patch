@@ -1,8 +1,14 @@
 diff --git a/src/delta_extension.cpp b/src/delta_extension.cpp
-index 0f8a64a..feddebf 100644
+index 0f8a64a..1c0b190 100644
 --- a/src/delta_extension.cpp
 +++ b/src/delta_extension.cpp
-@@ -11,7 +11,7 @@
+@@ -1,5 +1,3 @@
+-#define DUCKDB_EXTENSION_MAIN
+-
+ #include "delta_extension.hpp"
+ 
+ #include "delta_utils.hpp"
+@@ -11,7 +9,7 @@
  #include "duckdb.hpp"
  #include "duckdb/common/exception.hpp"
  #include "duckdb/function/table_macro_function.hpp"
@@ -11,7 +17,7 @@ index 0f8a64a..feddebf 100644
  #include "duckdb/storage/storage_extension.hpp"
  #include "duckdb/main/config.hpp"
  
-@@ -55,19 +55,19 @@ public:
+@@ -55,19 +53,19 @@ public:
  	}
  };
  
@@ -37,7 +43,7 @@ index 0f8a64a..feddebf 100644
  	config.storage_extensions["delta"] = make_uniq<DeltaStorageExtension>();
  
  	config.AddExtensionOption("delta_scan_explain_files_filtered",
-@@ -81,13 +81,13 @@ static void LoadInternal(DatabaseInstance &instance) {
+@@ -81,13 +79,13 @@ static void LoadInternal(DatabaseInstance &instance) {
  	    "performance even with DuckDB logging disabled.",
  	    LogicalType::BOOLEAN, Value(false), LoggerCallback::DuckDBSettingCallBack);
  
@@ -55,18 +61,25 @@ index 0f8a64a..feddebf 100644
  }
  
  std::string DeltaExtension::Name() {
-@@ -98,9 +98,8 @@ std::string DeltaExtension::Name() {
+@@ -98,16 +96,8 @@ std::string DeltaExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void delta_init(duckdb::DatabaseInstance &db) {
 -	duckdb::DuckDB db_wrapper(db);
 -	db_wrapper.LoadExtension<duckdb::DeltaExtension>();
-+DUCKDB_EXTENSION_API void delta_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(delta, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *delta_version() {
+-DUCKDB_EXTENSION_API const char *delta_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
+ }
+-
+-#ifndef DUCKDB_EXTENSION_MAIN
+-#error DUCKDB_EXTENSION_MAIN not defined
+-#endif
 diff --git a/src/delta_functions.cpp b/src/delta_functions.cpp
 index be24564..7bbcd01 100644
 --- a/src/delta_functions.cpp

@@ -176,7 +176,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
 	                                      TPCDSInit);
 
-	loader.RegisterFunction(tpcds_query_func);
+	loader.RegisterFunction(tpcds_query_answer_func);
 }
 
 void TpcdsExtension::Load(ExtensionLoader &loader) {
@@ -206,11 +206,8 @@ std::string TpcdsExtension::Version() const {
 } // namespace duckdb
 
 extern "C" {
-DUCKDB_EXTENSION_API void tpcds_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(tpcds, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *tpcds_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }

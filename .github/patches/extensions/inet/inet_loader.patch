@@ -31,7 +31,7 @@ index 0be7481..1503440 100644
  #include "utf8proc_wrapper.hpp"
  #include "inet_extension.hpp"
 diff --git a/src/inet_extension.cpp b/src/inet_extension.cpp
-index 4eb3a86..202dd09 100644
+index 4eb3a86..ac0f107 100644
 --- a/src/inet_extension.cpp
 +++ b/src/inet_extension.cpp
 @@ -1,10 +1,8 @@
@@ -136,21 +136,21 @@ index 4eb3a86..202dd09 100644
  std::string InetExtension::Name() { return "inet"; }
  
  std::string InetExtension::Version() const {
-@@ -91,16 +89,11 @@ std::string InetExtension::Version() const {
+@@ -91,16 +89,8 @@ std::string InetExtension::Version() const {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void inet_init(duckdb::DatabaseInstance &db) {
 -  duckdb::DuckDB db_wrapper(db);
 -  db_wrapper.LoadExtension<duckdb::InetExtension>();
-+DUCKDB_EXTENSION_API void inet_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(inet, loader) {
 +  duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *inet_version() {
-   return duckdb::DuckDB::LibraryVersion();
+-DUCKDB_EXTENSION_API const char *inet_version() {
+-  return duckdb::DuckDB::LibraryVersion();
  }
- }
+-}
 -
 -#ifndef DUCKDB_EXTENSION_MAIN
 -#error DUCKDB_EXTENSION_MAIN not defined

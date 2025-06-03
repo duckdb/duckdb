@@ -491,11 +491,8 @@ std::string AutocompleteExtension::Version() const {
 } // namespace duckdb
 extern "C" {
 
-DUCKDB_EXTENSION_API void autocomplete_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(autocomplete, loader) {
 	LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *autocomplete_version() {
-	return duckdb::AutocompleteExtension::DefaultVersion();
-}
 }

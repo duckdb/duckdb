@@ -1,5 +1,5 @@
 diff --git a/src/iceberg_extension.cpp b/src/iceberg_extension.cpp
-index 0b278db..ee4b356 100644
+index 0b278db..e1f721a 100644
 --- a/src/iceberg_extension.cpp
 +++ b/src/iceberg_extension.cpp
 @@ -1,5 +1,3 @@
@@ -69,21 +69,21 @@ index 0b278db..ee4b356 100644
  }
  std::string IcebergExtension::Name() {
  	return "iceberg";
-@@ -283,15 +283,11 @@ std::string IcebergExtension::Name() {
+@@ -283,15 +283,8 @@ std::string IcebergExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void iceberg_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void iceberg_init(duckdb::ExtensionLoader &loader) {
+-}
+-
+-DUCKDB_EXTENSION_API const char *iceberg_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
++DUCKDB_CPP_EXTENSION_ENTRY(iceberg, loader) {
 +	LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *iceberg_version() {
- 	return duckdb::DuckDB::LibraryVersion();
- }
--}
--
 -#ifndef DUCKDB_EXTENSION_MAIN
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif

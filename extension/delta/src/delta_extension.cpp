@@ -26,11 +26,8 @@ std::string DeltaExtension::Name() {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void delta_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(delta, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *delta_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }

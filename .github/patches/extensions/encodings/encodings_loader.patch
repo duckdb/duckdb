@@ -1,5 +1,5 @@
 diff --git a/src/encodings_extension.cpp b/src/encodings_extension.cpp
-index 4549afa..acc9df9 100644
+index 4549afa..ae64a56 100644
 --- a/src/encodings_extension.cpp
 +++ b/src/encodings_extension.cpp
 @@ -1,24 +1,23 @@
@@ -33,20 +33,20 @@ index 4549afa..acc9df9 100644
  }
  std::string EncodingsExtension::Name() {
  	return "encodings";
-@@ -36,16 +35,11 @@ std::string EncodingsExtension::Version() const {
+@@ -36,16 +35,8 @@ std::string EncodingsExtension::Version() const {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void encodings_init(duckdb::DatabaseInstance &db) {
 -	duckdb::DuckDB db_wrapper(db);
 -	db_wrapper.LoadExtension<duckdb::EncodingsExtension>();
-+DUCKDB_EXTENSION_API void encodings_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(encodings, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *encodings_version() {
- 	return duckdb::DuckDB::LibraryVersion();
- }
+-DUCKDB_EXTENSION_API const char *encodings_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
  }
 -
 -#ifndef DUCKDB_EXTENSION_MAIN

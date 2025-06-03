@@ -214,11 +214,8 @@ std::string TpchExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void tpch_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(tpch, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *tpch_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }

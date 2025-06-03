@@ -445,11 +445,8 @@ std::string IcuExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void icu_init(duckdb::ExtensionLoader &loader) { // NOLINT
+DUCKDB_CPP_EXTENSION_ENTRY(icu, loader) { // NOLINT
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
-	return duckdb::DuckDB::LibraryVersion();
-}
 }

@@ -210,10 +210,14 @@ index a941b5e..e34943c 100644
  };
  
 diff --git a/src/vss_extension.cpp b/src/vss_extension.cpp
-index c010292..6c927b1 100644
+index c010292..0a73510 100644
 --- a/src/vss_extension.cpp
 +++ b/src/vss_extension.cpp
-@@ -5,20 +5,20 @@
+@@ -1,24 +1,22 @@
+-#define DUCKDB_EXTENSION_MAIN
+-
+ #include "vss_extension.hpp"
+ #include "duckdb.hpp"
  #include "duckdb/common/exception.hpp"
  #include "duckdb/common/string_util.hpp"
  #include "duckdb/function/scalar_function.hpp"
@@ -239,15 +243,22 @@ index c010292..6c927b1 100644
  }
  
  std::string VssExtension::Name() {
-@@ -29,9 +29,8 @@ std::string VssExtension::Name() {
+@@ -29,16 +27,8 @@ std::string VssExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void vss_init(duckdb::DatabaseInstance &db) {
 -	duckdb::DuckDB db_wrapper(db);
 -	db_wrapper.LoadExtension<duckdb::VssExtension>();
-+DUCKDB_EXTENSION_API void vss_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(vss, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *vss_version() {
+-DUCKDB_EXTENSION_API const char *vss_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
+ }
+-
+-#ifndef DUCKDB_EXTENSION_MAIN
+-#error DUCKDB_EXTENSION_MAIN not defined
+-#endif

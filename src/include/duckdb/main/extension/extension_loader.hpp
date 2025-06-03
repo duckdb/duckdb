@@ -97,3 +97,13 @@ private:
 };
 
 } // namespace duckdb
+
+//! Helper macro to define the entrypoint for a C++ extension
+//! Usage:
+//!
+//!		DUCKDB_CPP_EXTENSION_ENTRY(my_extension, loader) {
+//!			loader.RegisterFunction(...);
+//!		}
+//!
+#define DUCKDB_CPP_EXTENSION_ENTRY(EXTENSION_NAME, LOADER_NAME) \
+DUCKDB_EXTENSION_API void EXTENSION_NAME##_duckdb_cpp_init(duckdb::ExtensionLoader& LOADER_NAME)

@@ -150,7 +150,9 @@ public:
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
-DUCKDB_EXTENSION_API void loadable_extension_optimizer_demo_init(duckdb::DatabaseInstance &db) {
+
+DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_optimizer_demo, loader) {
+	auto &db = loader.GetDatabaseInstance();
 	Connection con(db);
 
 	// add a parser extension
@@ -160,7 +162,4 @@ DUCKDB_EXTENSION_API void loadable_extension_optimizer_demo_init(duckdb::Databas
 	config.AddExtensionOption("waggle_location_port", "port for remote callback", LogicalType::INTEGER);
 }
 
-DUCKDB_EXTENSION_API const char *loadable_extension_optimizer_demo_version() {
-	return DuckDB::LibraryVersion();
-}
 }

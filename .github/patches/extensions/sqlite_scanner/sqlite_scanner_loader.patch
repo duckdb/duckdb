@@ -1,8 +1,8 @@
 diff --git a/src/include/sqlite_scanner_extension.hpp b/src/include/sqlite_scanner_extension.hpp
-index 40dfb9a..beaa12e 100644
+index 40dfb9a..d290788 100644
 --- a/src/include/sqlite_scanner_extension.hpp
 +++ b/src/include/sqlite_scanner_extension.hpp
-@@ -13,11 +13,11 @@ public:
+@@ -13,11 +13,9 @@ public:
  	std::string Name() override {
  		return "sqlite_scanner";
  	}
@@ -12,13 +12,13 @@ index 40dfb9a..beaa12e 100644
  
  extern "C" {
 -DUCKDB_EXTENSION_API void sqlite_scanner_init(duckdb::DatabaseInstance &db);
-+DUCKDB_EXTENSION_API void sqlite_scanner_init(duckdb::ExtensionLoader &loader);
- DUCKDB_EXTENSION_API const char *sqlite_scanner_version();
- DUCKDB_EXTENSION_API void sqlite_scanner_storage_init(DBConfig &config);
+-DUCKDB_EXTENSION_API const char *sqlite_scanner_version();
+-DUCKDB_EXTENSION_API void sqlite_scanner_storage_init(DBConfig &config);
++	DUCKDB_CPP_EXTENSION_ENTRY(sqlite_scanner, loader);
  }
 \ No newline at end of file
 diff --git a/src/sqlite_extension.cpp b/src/sqlite_extension.cpp
-index f85328f..826963d 100644
+index f85328f..c2f7c81 100644
 --- a/src/sqlite_extension.cpp
 +++ b/src/sqlite_extension.cpp
 @@ -9,7 +9,7 @@
@@ -52,7 +52,7 @@ index f85328f..826963d 100644
  	auto &config = DBConfig::GetConfig(db);
  	config.AddExtensionOption("sqlite_all_varchar", "Load all SQLite columns as VARCHAR columns", LogicalType::BOOLEAN);
  
-@@ -39,12 +40,12 @@ static void LoadInternal(DatabaseInstance &db) {
+@@ -39,19 +40,12 @@ static void LoadInternal(DatabaseInstance &db) {
  	config.storage_extensions["sqlite_scanner"] = make_uniq<SQLiteStorageExtension>();
  }
  
@@ -64,8 +64,15 @@ index f85328f..826963d 100644
  
 -DUCKDB_EXTENSION_API void sqlite_scanner_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void sqlite_scanner_init(duckdb::ExtensionLoader &loader) {
++DUCKDB_CPP_EXTENSION_ENTRY(sqlite_scanner, loader) {
 +	LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *sqlite_scanner_version() {
+-DUCKDB_EXTENSION_API const char *sqlite_scanner_version() {
+-	return DuckDB::LibraryVersion();
+-}
+-
+-DUCKDB_EXTENSION_API void sqlite_scanner_storage_init(DBConfig &config) {
+-	config.storage_extensions["sqlite_scanner"] = make_uniq<SQLiteStorageExtension>();
+-}
+ }

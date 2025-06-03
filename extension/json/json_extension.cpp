@@ -106,11 +106,8 @@ std::string JsonExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void json_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(json, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *json_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }

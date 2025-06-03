@@ -1,5 +1,5 @@
 diff --git a/src/aws_extension.cpp b/src/aws_extension.cpp
-index 1130a1b..ef71616 100644
+index 1130a1b..08c2e69 100644
 --- a/src/aws_extension.cpp
 +++ b/src/aws_extension.cpp
 @@ -1,12 +1,10 @@
@@ -48,22 +48,22 @@ index 1130a1b..ef71616 100644
  }
  std::string AwsExtension::Name() {
  	return "aws";
-@@ -152,16 +150,11 @@ std::string AwsExtension::Name() {
+@@ -152,16 +150,8 @@ std::string AwsExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void aws_init(duckdb::DatabaseInstance &db) {
 -	duckdb::DuckDB db_wrapper(db);
 -	db_wrapper.LoadExtension<duckdb::AwsExtension>();
-+DUCKDB_EXTENSION_API void aws_init(duckdb::ExtensionLoader &loader) {
+-}
+-
+-DUCKDB_EXTENSION_API const char *aws_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
++DUCKDB_CPP_EXTENSION_ENTRY(aws, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *aws_version() {
- 	return duckdb::DuckDB::LibraryVersion();
- }
--}
--
 -#ifndef DUCKDB_EXTENSION_MAIN
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif

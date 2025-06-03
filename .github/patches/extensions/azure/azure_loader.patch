@@ -12,7 +12,7 @@ index 6ba3a0e..d8c79a3 100644
  #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
  #include <azure/storage/blobs.hpp>
 diff --git a/src/azure_extension.cpp b/src/azure_extension.cpp
-index 5ce0b8d..6d6aa00 100644
+index 5ce0b8d..d0758e2 100644
 --- a/src/azure_extension.cpp
 +++ b/src/azure_extension.cpp
 @@ -1,5 +1,3 @@
@@ -50,21 +50,21 @@ index 5ce0b8d..6d6aa00 100644
  }
  std::string AzureExtension::Name() {
  	return "azure";
-@@ -88,15 +87,11 @@ std::string AzureExtension::Name() {
+@@ -88,15 +87,8 @@ std::string AzureExtension::Name() {
  
  extern "C" {
  
 -DUCKDB_EXTENSION_API void azure_init(duckdb::DatabaseInstance &db) {
 -	LoadInternal(db);
-+DUCKDB_EXTENSION_API void azure_init(duckdb::ExtensionLoader &loader) {
+-}
+-
+-DUCKDB_EXTENSION_API const char *azure_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
++DUCKDB_CPP_EXTENSION_ENTRY(azure, loader) {
 +	duckdb::LoadInternal(loader);
  }
  
- DUCKDB_EXTENSION_API const char *azure_version() {
- 	return duckdb::DuckDB::LibraryVersion();
- }
--}
--
 -#ifndef DUCKDB_EXTENSION_MAIN
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif

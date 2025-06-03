@@ -28,11 +28,8 @@ std::string CoreFunctionsExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void core_functions_init(duckdb::ExtensionLoader &loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(core_functions, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *core_functions_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }
