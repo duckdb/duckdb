@@ -32,7 +32,7 @@ TypeName <- Identifier
 CatalogName <- Identifier
 SchemaName <- Identifier
 TableName <- Identifier
-ColumnName <- Identifier
+ColumnName <- DottedIdentifier
 IndexName <- Identifier
 FunctionName <- Identifier
 SettingName <- Identifier

@@ -200,7 +200,7 @@ TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
-ColumnDefinition <- Identifier TypeOrGenerated ColumnConstraint*
+ColumnDefinition <- DottedIdentifier TypeOrGenerated ColumnConstraint*
 TypeOrGenerated <- Type? GeneratedColumn?
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
 NotNullConstraint <- 'NOT'i? 'NULL'i
@@ -227,6 +227,7 @@ ColumnIdList <- Parens(List(Identifier))
 
 PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
+DottedIdentifier <- Identifier ('.' Identifier)*
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
@@ -518,10 +519,10 @@ AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / Chan
 
 AddConstraint <- 'ADD'i TopLevelConstraint
 AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
-DropColumn <- 'DROP'i 'COLUMN'i? IfExists? ColumnName DropBehavior?
-AlterColumn <- 'ALTER'i 'COLUMN'i? Identifier AlterColumnEntry
-RenameColumn <- 'RENAME'i 'COLUMN'i? ColumnName 'TO'i Identifier
-RenameAlter <- 'RENAME'i 'TO'i Identifier
+DropColumn <- 'DROP'i 'COLUMN'i? IfExists? DottedIdentifier DropBehavior?
+AlterColumn <- 'ALTER'i 'COLUMN'i? DottedIdentifier AlterColumnEntry
+RenameColumn <- 'RENAME'i 'COLUMN'i? DottedIdentifier 'TO'i DottedIdentifier
+RenameAlter <- 'RENAME'i 'TO'i DottedIdentifier
 SetPartitionedBy <- 'SET'i 'PARTITIONED'i 'BY'i Parens(List(Expression))
 ResetPartitionedBy <- 'RESET'i 'PARTITIONED'i 'BY'i
 SetSortedBy <- 'SET'i 'SORTED'i 'BY'i OrderByExpressions
@@ -603,7 +604,7 @@ TypeName <- Identifier
 CatalogName <- Identifier
 SchemaName <- Identifier
 TableName <- Identifier
-ColumnName <- Identifier
+ColumnName <- DottedIdentifier
 IndexName <- Identifier
 FunctionName <- Identifier
 SettingName <- Identifier
