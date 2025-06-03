@@ -4,7 +4,9 @@
 
 require parquet
 
-# create parquet file and load it into a table with prefetching on (adds to file cache)
+load __TEST_DIR__/external_file_cache_eviction_queue.db
+
+# create parquet file
 statement ok
 set threads=1
 
@@ -12,23 +14,24 @@ statement ok
 set preserve_insertion_order=false
 
 statement ok
-copy (select hash(range) i from range(1_000_000)) to '__TEST_DIR__/efc_eviction_queue.parquet' (row_group_size 2048)
+copy (select hash(range) i from range(10_000_000)) to '__TEST_DIR__/efc_eviction_queue.parquet'
 
+# load it into a table with prefetching on (adds to file cache)
 statement ok
 set prefetch_all_parquet_files=true
 
 statement ok
-set memory_limit='0.5mb'
+set memory_limit='80mb'
 
 statement ok
 create table test as from '__TEST_DIR__/efc_eviction_queue.parquet'
 
-# query the base table, this should evict the file cache entries
+# query the base table, this should evict the file cache entries as they have a later timestamp
 statement ok
 from test
 
 # so this should be 0
-query III
+query I
 select memory_usage_bytes from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE'
 ----
 0
