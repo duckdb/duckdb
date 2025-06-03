@@ -34,9 +34,19 @@ SELECT uuid_extract_timestamp(uuidv4());
 ----
 Given UUID is with version 4, not version 7.
 
-# Test timestamp extraction with UUID v7.
-statement ok
-SELECT uuid_extract_timestamp('81948644-15b2-7170-839a-7a01b9fb5951');
+require icu
 
 statement ok
-SELECT uuid_extract_timestamp(uuidv7());
+SET TimeZone='UTC'
+
+# Test timestamp extraction with UUID v7.
+query I
+SELECT uuid_extract_timestamp('0196f97a-db14-71c3-9132-9f0b1334466f');
+----
+2025-05-22 19:31:40.436+00
+
+# verify the generated timestamp is consistent with NOW()
+query I
+SELECT datediff('month', uuid_extract_timestamp(uuidv7()), now());
+----
+0

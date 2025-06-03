@@ -195,11 +195,12 @@ TEST_CASE("Test Scalar Functions - strings & extra_info", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
-	auto string_data = (char *)malloc(100);
+	auto string_data = reinterpret_cast<char *>(malloc(100));
 	strcpy(string_data, "my_prefix");
+	auto extra_info = reinterpret_cast<duckdb_function_info>(string_data);
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	CAPIRegisterStringInfo(tester.connection, "my_prefix", (duckdb_function_info)string_data, free);
+	CAPIRegisterStringInfo(tester.connection, "my_prefix", extra_info, free);
 
 	// now call it
 	result = tester.Query("SELECT my_prefix('hello_world')");
@@ -411,12 +412,19 @@ struct ConnectionIdStruct {
 };
 
 void GetConnectionIdBind(duckdb_bind_info info) {
+	// Get the extra info.
+	auto extra_info_ptr = duckdb_scalar_function_bind_get_extra_info(info);
+	auto extra_info = string(reinterpret_cast<const char *>(extra_info_ptr));
+	if (extra_info.empty()) {
+		return;
+	}
+
 	duckdb_client_context context;
 	duckdb_scalar_function_get_client_context(info, &context);
-
 	auto connection_id = duckdb_client_context_get_connection_id(context);
 	duckdb_destroy_client_context(&context);
 
+	// Set the connection id.
 	auto bind_data = reinterpret_cast<ConnectionIdStruct *>(malloc(sizeof(ConnectionIdStruct)));
 	bind_data->connection_id = connection_id;
 	duckdb_scalar_function_set_bind_data(info, bind_data, free);
@@ -447,6 +455,12 @@ static void CAPIRegisterGetConnectionId(duckdb_connection connection) {
 	// Set up the bind and function callbacks.
 	duckdb_scalar_function_set_bind(function, GetConnectionIdBind);
 	duckdb_scalar_function_set_function(function, GetConnectionId);
+
+	// Set some extra info to retrieve during binding.
+	auto string_data = reinterpret_cast<char *>(malloc(100));
+	strcpy(string_data, "my_prefix");
+	auto extra_info = reinterpret_cast<duckdb_function_info>(string_data);
+	duckdb_scalar_function_set_extra_info(function, extra_info, free);
 
 	// Register and cleanup.
 	status = duckdb_register_scalar_function(connection, function);

@@ -52,7 +52,7 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
-		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
+		link += "?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
 	}
 
 	return link;
@@ -366,6 +366,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	} else {
 		params = http_util.InitializeParameters(db, url);
 	}
+
+	// Unclear what's peculiar about extension install flow, but those two parameters are needed
+	// to avoid lengthy retry on 304
+	params->follow_location = false;
+	params->keep_alive = false;
 
 	GetRequestInfo get_request(url, headers, *params, nullptr, nullptr);
 	get_request.try_request = true;
