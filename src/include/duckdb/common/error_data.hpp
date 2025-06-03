@@ -29,7 +29,7 @@ public:
 public:
 	//! Throw the error
 	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
-	//! Get the internal exception type of the error
+	//! Get the internal exception type of the error.
 	DUCKDB_API const ExceptionType &Type() const;
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message() const {
@@ -40,6 +40,7 @@ public:
 	}
 	DUCKDB_API bool operator==(const ErrorData &other) const;
 
+	//! Returns true, if this error data contains an exception, else false.
 	inline bool HasError() const {
 		return initialized;
 	}

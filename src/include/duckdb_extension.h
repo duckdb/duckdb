@@ -540,6 +540,16 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+#endif
+
+// New functions for duckdb error data
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
+	void (*duckdb_destroy_error_data)(duckdb_error_data *error_data);
+	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
+	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
 #endif
 
 // New functions around the client context
@@ -1005,7 +1015,15 @@ typedef struct {
 #define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
 
 // Version unstable_new_append_functions
+#define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_error_data_functions
+#define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
+#define duckdb_destroy_error_data    duckdb_ext_api.duckdb_destroy_error_data
+#define duckdb_error_data_error_type duckdb_ext_api.duckdb_error_data_error_type
+#define duckdb_error_data_message    duckdb_ext_api.duckdb_error_data_message
+#define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
