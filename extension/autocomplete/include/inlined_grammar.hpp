@@ -171,7 +171,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ColumnDefinition <- Identifier TypeOrGenerated ColumnConstraint*\n"
 	"TypeOrGenerated <- Type? GeneratedColumn?\n"
 	"ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression\n"
-	"NotNullConstraint <- 'NOT'i 'NULL'i\n"
+	"NotNullConstraint <- 'NOT'i? 'NULL'i\n"
 	"UniqueConstraint <- 'UNIQUE'i\n"
 	"PrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i\n"
 	"DefaultValue <- 'DEFAULT'i Expression\n"

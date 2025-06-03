@@ -203,7 +203,7 @@ CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
 ColumnDefinition <- Identifier TypeOrGenerated ColumnConstraint*
 TypeOrGenerated <- Type? GeneratedColumn?
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
-NotNullConstraint <- 'NOT'i 'NULL'i
+NotNullConstraint <- 'NOT'i? 'NULL'i
 UniqueConstraint <- 'UNIQUE'i
 PrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i
 DefaultValue <- 'DEFAULT'i Expression
