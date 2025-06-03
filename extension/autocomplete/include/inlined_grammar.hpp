@@ -32,7 +32,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RenameList <- 'RENAME'i (Parens(List(RenameEntry)) / RenameEntry)\n"
 	"RenameEntry <- ColumnReference 'AS'i Identifier\n"
 	"SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference\n"
-	"CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 'END'i\n"
+	"CaseExpression <- 'CASE'i Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'i\n"
 	"CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression\n"
 	"CaseElse <- 'ELSE'i Expression\n"
 	"TypeLiteral <- Identifier StringLiteral\n"

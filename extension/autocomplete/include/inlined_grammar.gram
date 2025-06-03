@@ -38,7 +38,7 @@ ReplaceEntry <- Expression 'AS'i ColumnReference
 RenameList <- 'RENAME'i (Parens(List(RenameEntry)) / RenameEntry)
 RenameEntry <- ColumnReference 'AS'i Identifier
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
-CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
+CaseExpression <- 'CASE'i Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
 CaseElse <- 'ELSE'i Expression
 TypeLiteral <- Identifier StringLiteral
