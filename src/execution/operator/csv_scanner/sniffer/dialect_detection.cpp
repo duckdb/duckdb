@@ -432,7 +432,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		if (options.dialect_options.skip_rows.IsSetByUser()) {
 			// If skip rows are set by the user, and we found dirty notes, we only accept it if either null_padding or
 			// ignore_errors is set we have comments
-			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue() && comment_rows == 0) {
+			if (dirty_notes - empty_lines != 0 && !options.null_padding && !options.ignore_errors.GetValue() &&
+			    comment_rows == 0) {
 				return;
 			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
