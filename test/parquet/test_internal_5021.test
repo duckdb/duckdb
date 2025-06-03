@@ -2,6 +2,8 @@
 # description: Internal issue 5021: Assertion failure in DbpEncoder when writing Parquet V2
 # group: [parquet]
 
+require parquet
+
 statement ok
 CREATE TABLE tbl AS SELECT 'hello world' || i str FROM range(11) t(i);
 
