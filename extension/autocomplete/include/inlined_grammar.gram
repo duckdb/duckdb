@@ -242,8 +242,10 @@ IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 Unique <- 'UNIQUE'i
 IndexType <- 'USING'i Identifier
 
-LoadStatement <- 'FORCE'i? 'LOAD'i PlainIdentifier
-InstallStatement <- 'FORCE'i? 'INSTALL'i PlainIdentifier
+LoadStatement <- 'LOAD'i Identifier
+InstallStatement <- 'FORCE'i? 'INSTALL'i Identifier FromSource? VersionNumber?
+FromSource <- 'FROM'i (Identifier / StringLiteral)
+VersionNumber <- Identifier
 DropStatement <- 'DROP'i DropEntries DropBehavior?
 
 DropEntries <-

@@ -5,4 +5,16 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSTALL tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FORCE INSTALL tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FORCE INSTALL tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FORCE INSTALL tpch FROM '${LOCAL_EXTENSION_REPO_UPDATED}'$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD tpch;$TEST_PEG_PARSER$);
