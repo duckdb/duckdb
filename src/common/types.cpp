@@ -1067,7 +1067,7 @@ static bool CombineStructTypes(const LogicalType &left, const LogicalType &right
 
 	// Create a super-set of the STRUCT fields.
 	// First, create a name->index map of the right children.
-	case_insensitive_map_t<idx_t> right_children_map;
+	InsertionOrderPreservingMap<idx_t> right_children_map;
 	for (idx_t i = 0; i < right_children.size(); i++) {
 		auto &name = right_children[i].first;
 		right_children_map[name] = i;
