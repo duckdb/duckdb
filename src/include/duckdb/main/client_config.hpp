@@ -16,6 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
@@ -138,6 +139,9 @@ struct ClientConfig {
 	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda
 	//! functions. Otherwise, DISABLE_SINGLE_ARROW.
 	LambdaSyntax lambda_syntax = LambdaSyntax::DEFAULT;
+	//! The profiling coverage. SELECT is the default behavior, and ALL emits profiling information for all operator
+	//! types.
+	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
 	//! Output error messages as structured JSON instead of as a raw string
 	bool errors_as_json = false;

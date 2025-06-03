@@ -223,6 +223,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
 	serializer.WriteProperty(212, "ordinality_request", ordinality_request);
 	serializer.WriteProperty(213, "ordinality_column_id", ordinality_column_id);
+	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -263,6 +264,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			result->column_ids.emplace_back(col_id);
 		}
 	}
+	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;
 	if (!has_serialize) {

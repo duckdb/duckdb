@@ -236,7 +236,7 @@ BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_by
 	if (it != ranges.begin()) {
 		--it;
 	}
-	for (it = ranges.begin(); it != ranges.end();) {
+	while (it != ranges.end()) {
 		if (it->second->location >= this_end) {
 			// We're past the requested location
 			break;
@@ -285,12 +285,16 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 	auto &ranges = cached_file.Ranges(guard);
 
 	// Start at lower_bound (first range with location not less than location of newly created range)
-	for (auto it = ranges.lower_bound(location); it != ranges.end();) {
+	auto it = ranges.lower_bound(location);
+	if (it != ranges.begin()) {
+		--it;
+	}
+	while (it != ranges.end()) {
 		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
 			// Another thread has read a range that fully contains the requested range in the meantime
-			pin = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
-			if (pin.IsValid()) {
-				return std::move(pin);
+			auto other_pin = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
+			if (other_pin.IsValid()) {
+				return other_pin;
 			}
 			it = ranges.erase(it);
 			continue;
@@ -314,8 +318,10 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 		if (break_loop) {
 			break;
 		}
+
 		++it;
 	}
+	D_ASSERT(pin.IsValid());
 
 	// Finally, insert newly created buffer into the map
 	new_file_range->AddCheckSum();
