@@ -113,6 +113,7 @@
         },
         {
             "name": "duckdb_appender_error",
+            "deprecated": true,
             "return_type": "const char *",
             "params": [
                 {
@@ -121,11 +122,28 @@
                 }
             ],
             "comment": {
-                "description": "Returns the error message associated with the given appender.\nIf the appender has no error message, this returns `nullptr` instead.\n\nThe error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.\n\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\nUse duckdb_appender_error_data instead.\n\nReturns the error message associated with the appender.\nIf the appender has no error message, this returns `nullptr` instead.\n\nThe error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.\n\n",
                 "param_comments": {
                     "appender": "The appender to get the error from."
                 },
                 "return_value": "The error message, or `nullptr` if there is none."
+            }
+        },
+        {
+            "name": "duckdb_appender_error_data",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error data associated with the appender.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
+                "param_comments": {
+                    "appender": "The appender to get the error data from."
+                },
+                "return_value": "The error data."
             }
         },
         {
@@ -138,7 +156,7 @@
                 }
             ],
             "comment": {
-                "description": "Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a\nconstraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nIt is not possible to append more values. Call duckdb_appender_error to obtain the error message followed by\nduckdb_appender_destroy to destroy the invalidated appender.\n\n",
+                "description": "Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a\nconstraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nIt is not possible to append more values. Call duckdb_appender_error_data to obtain the error data followed by\nduckdb_appender_destroy to destroy the invalidated appender.\n\n",
                 "param_comments": {
                     "appender": "The appender to flush."
                 },
@@ -155,7 +173,7 @@
                 }
             ],
             "comment": {
-                "description": "Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data\ntriggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nCall duckdb_appender_error to obtain the error message followed by duckdb_appender_destroy to destroy the invalidated\nappender.\n\n",
+                "description": "Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data\ntriggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nCall duckdb_appender_error_data to obtain the error data followed by duckdb_appender_destroy to destroy the invalidated\nappender.\n\n",
                 "param_comments": {
                     "appender": "The appender to flush and close."
                 },
