@@ -587,7 +587,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CommentStatement <- 'COMMENT'i 'ON'i CommentOnType ColumnReference 'IS'i CommentValue\n"
 	"CommentOnType <- 'TABLE'i / 'SEQUENCE'i / 'FUNCTION'i / ('MACRO'i 'TABLE'i?) / 'VIEW'i / 'DATABASE'i / 'INDEX'i / 'SCHEMA'i / 'TYPE'i / 'COLUMN'i\n"
 	"CommentValue <- 'NULL'i / StringLiteral\n"
-	"AttachStatement <- 'ATTACH'i IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?\n"
+	"AttachStatement <- 'ATTACH'i OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?\n"
 	"Database <- 'DATABASE'i\n"
 	"DatabasePath <- StringLiteral\n"
 	"AttachAlias <- 'AS'i Identifier\n"

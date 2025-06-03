@@ -740,7 +740,7 @@ CommentStatement <- 'COMMENT'i 'ON'i CommentOnType ColumnReference 'IS'i Comment
 CommentOnType <- 'TABLE'i / 'SEQUENCE'i / 'FUNCTION'i / ('MACRO'i 'TABLE'i?) / 'VIEW'i / 'DATABASE'i / 'INDEX'i / 'SCHEMA'i / 'TYPE'i / 'COLUMN'i
 CommentValue <- 'NULL'i / StringLiteral
 
-AttachStatement <- 'ATTACH'i IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
+AttachStatement <- 'ATTACH'i OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'i
 DatabasePath <- StringLiteral

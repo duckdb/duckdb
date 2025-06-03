@@ -1,4 +1,4 @@
-AttachStatement <- 'ATTACH'i IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
+AttachStatement <- 'ATTACH'i OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'i
 DatabasePath <- StringLiteral
