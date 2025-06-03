@@ -109,7 +109,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
 endif()
 
 # mingw CI with all extensions at once is somehow not happy
-if (NOT MINGW)
+if (NOT MINGW AND NOT ${BUILD_COMPLETE_EXTENSION_SET})
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
@@ -169,7 +169,7 @@ duckdb_extension_load(fts
 )
 
 ################# ENCODINGS
-if (NOT ${WASM_ENABLED})
+if (NOT ${WASM_ENABLED} AND NOT ${BUILD_COMPLETE_EXTENSION_SET})
 duckdb_extension_load(encodings
         LOAD_TESTS
         DONT_LINK
