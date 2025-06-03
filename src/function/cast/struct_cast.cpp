@@ -1,6 +1,6 @@
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 
@@ -20,7 +20,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
 
-	case_insensitive_map_t<idx_t> target_children_map;
+	InsertionOrderPreservingMap<idx_t> target_children_map;
 	if (!is_unnamed) {
 		for (idx_t i = 0; i < target_children.size(); i++) {
 			auto &name = target_children[i].first;
@@ -67,9 +67,6 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	for (const auto &target_child : target_children_map) {
 		target_null_indexes.push_back(target_child.second);
 	}
-
-	// Sort this to prevent the order changing each run
-	std::sort(target_null_indexes.begin(), target_null_indexes.end());
 
 	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(source_indexes),
 	                                      std::move(target_indexes), std::move(target_null_indexes));
