@@ -34,7 +34,8 @@ WindowExcludeElement <- ('CURRENT'i 'ROW'i) / 'GROUP'i / 'TIES'i / ('NO'i 'OTHER
 OverClause <- 'OVER'i WindowFrame
 WindowFrame <- WindowFrameDefinition / Identifier / Parens(Identifier)
 WindowFrameDefinition <- Parens(WindowFrameContents)
-WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
+WindowFrameContents <- BaseWindowName? WindowPartition? OrderByClause? FrameClause?
+BaseWindowName <- Identifier
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 PrefixExpression <- PrefixOperator Expression
 PrefixOperator <- 'NOT'i / '-' / '+' / '~'
