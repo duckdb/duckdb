@@ -179,7 +179,7 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, cons
 	}
 	// For a comment to be acceptable, we want 3/5th's the majority of unmatched in the columns
 	constexpr double min_majority = 0.6;
-	// detected comments, are all lines that started with a comment character.
+	// detected comments are all lines that started with a comment character.
 	double detected_comments = 0;
 	// If at least one comment is a full line comment
 	bool has_full_line_comment = false;
@@ -232,7 +232,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	const bool ignore_errors = options.ignore_errors.GetValue();
-	// If we are ignoring errors and not null_padding , we pick the most frequent number of columns as the right one
+	// If we are ignoring errors and not null_padding, we pick the most frequent number of columns as the right one
 	const bool use_most_frequent_columns = ignore_errors && !options.null_padding;
 	if (use_most_frequent_columns) {
 		num_cols = sniffed_column_counts.GetMostFrequentColumnCount();
@@ -279,7 +279,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
 			}
 			padding_count = 0;
-			// we use the maximum amount of num_cols that we find
+			// we use the maximum number of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
 			dirty_notes = row;
 			dirty_notes_minus_comments = dirty_notes - comment_rows;
@@ -359,7 +359,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
-	// - There are more values and no additional padding is required.
+	// - There are more values, and no additional padding is required.
 	// - There's more than one column and less padding is required.
 	if (columns_match_set && (rows_consistent || (set_columns.IsSet() && ignore_errors)) &&
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
@@ -425,7 +425,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		stats.min_ignored_rows = ignored_rows;
 
 		if (options.dialect_options.skip_rows.IsSetByUser()) {
-			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// If skip rows are set by the user, and we found dirty notes, we only accept it if either null_padding or
 			// ignore_errors is set we have comments
 			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue() && comment_rows == 0) {
 				return;
@@ -448,7 +448,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
 		if (options.dialect_options.skip_rows.IsSetByUser()) {
-			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// If skip rows are set by the user, and we found dirty notes, we only accept it if either null_padding or
 			// ignore_errors is set
 			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
 				return;
@@ -480,8 +480,8 @@ bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) const {
 }
 
 void CSVSniffer::RefineCandidates() {
-	// It's very frequent that more than one dialect can parse a csv file, hence here we run one state machine
-	// fully on the whole sample dataset, when/if it fails we go to the next one.
+	// It's very frequent that more than one dialect can parse a csv file; hence here we run one state machine
+	// fully on the whole sample dataset, when/if it fails, we go to the next one.
 	if (candidates.empty()) {
 		// No candidates to refine
 		return;
@@ -494,9 +494,6 @@ void CSVSniffer::RefineCandidates() {
 	for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
 		vector<unique_ptr<ColumnCountScanner>> successful_candidates;
 		bool done = candidates.empty();
-	// 	for (auto &state_machine : csv_state_machines) {
-	//
-	// }
 		for (auto &cur_candidate : candidates) {
 			const bool finished_file = cur_candidate->FinishedFile();
 			if (successful_candidates.empty()) {
