@@ -29,6 +29,7 @@ public:
 
 public:
 	void WriteTableData(Serializer &metadata_serializer);
+	void WriteIndexData(Serializer &metadata_serializer);
 
 	CompressionType GetColumnCompressionType(idx_t i);
 

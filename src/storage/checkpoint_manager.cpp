@@ -537,13 +537,19 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
-	auto table_lock = table.GetStorage().GetCheckpointLock();
-	if (auto writer = GetTableDataWriter(table)) {
-		writer->WriteTableData(serializer);
+	{
+		auto table_lock = table.GetStorage().GetCheckpointLock();
+		if (auto writer = GetTableDataWriter(table)) {
+			writer->WriteTableData(serializer);
+		}
+		// flush any partial blocks BEFORE releasing the table lock
+		// flushing partial blocks updates where data lives and is not thread-safe
+		partial_block_manager.FlushPartialBlocks();
 	}
-	// flush any partial blocks BEFORE releasing the table lock
-	// flushing partial blocks updates where data lives and is not thread-safe
-	partial_block_manager.FlushPartialBlocks();
+	// move index out of lock
+	if (auto writer = GetTableDataWriter(table)) {
+		writer->WriteIndexData(serializer);
+	}
 }
 
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
