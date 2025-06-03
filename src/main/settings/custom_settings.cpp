@@ -283,6 +283,20 @@ Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Arrow Output Format Version
+//===----------------------------------------------------------------------===//
+void ArrowOutputVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_version = input.GetValue<string_t>();
+	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
+}
+
+Value ArrowOutputVersionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
+	return Value::BOOLEAN(export_large_buffers_arrow);
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

@@ -124,7 +124,19 @@ public:
 protected:
 	SerializationCompatibility() = default;
 };
-
+enum ArrowFormatVersion {
+	//! Added 256-bit Decimal type.
+	V1_1,
+	//! Added MonthDayNano interval type.
+	V1_2,
+	//! Added Run-End Encoded Layout.
+	V1_3,
+	//! Added Variable-size Binary View Layout and the associated BinaryView and Utf8View types.
+	//! Added ListView Layout and the associated ListView and LargeListView types. Added Variadic buffers.
+	V1_4,
+	//! Expanded Decimal type bit widths to allow 32-bit and 64-bit types.
+	V1_5
+};
 struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
 	string database_path;
@@ -296,6 +308,7 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
+	ArrowFormatVersion arrow_output_version = ArrowFormatVersion::V1_5;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;
