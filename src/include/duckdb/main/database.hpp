@@ -140,26 +140,6 @@ public:
 		instance->SetExtensionLoaded(extension.Name(), install_info);
 	}
 
-	// DEPRECATED function that some extensions may still use to call their own Load method from the
-	// _init function of their loadable extension. Don't use this. Instead opt for a static LoadInternal function called
-	// from both the _init function and the Extension::Load. (see autocomplete extension)
-	// TODO: when to remove this function?
-	/*
-	template <class T>
-	void LoadExtension() {
-	    T extension;
-
-	    // Instantiate a new loader
-	    ExtensionLoader loader(*instance, extension.Name());
-
-	    // Call the Load method of the extension
-	    extension.Load(loader);
-
-	    // Finalize the loading process
-	    loader.FinalizeLoad();
-	}
-	*/
-
 	DUCKDB_API FileSystem &GetFileSystem();
 
 	DUCKDB_API idx_t NumberOfThreads();
