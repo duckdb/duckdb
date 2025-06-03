@@ -14,7 +14,10 @@
 
 namespace duckdb {
 
-bool TopN::CanOptimize(LogicalOperator &op) {
+TopN::TopN(ClientContext &context_p) : context(context_p) {
+}
+
+bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context) {
 	if (op.type == LogicalOperatorType::LOGICAL_LIMIT) {
 		auto &limit = op.Cast<LogicalLimit>();
 
@@ -28,14 +31,21 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 		}
 
 		auto child_op = op.children[0].get();
+		if (context) {
+			// estimate child cardinality if the context is available
+			child_op->EstimateCardinality(*context);
+		}
 
-		auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
-		auto child_card = static_cast<double>(child_op->estimated_cardinality);
+		if (child_op->has_estimated_cardinality) {
+			// only check if we should switch to full sorting if we have estimated cardinality
+			auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
+			auto child_card = static_cast<double>(child_op->estimated_cardinality);
 
-		// if the child cardinality is not 98 times more than the
-		bool limit_is_large = constant_limit > 5000;
-		if (constant_limit > child_card * 0.007 && limit_is_large) {
-			return false;
+			// if the limit is > 0.7% of the child cardinality, sorting the whole table is faster
+			bool limit_is_large = constant_limit > 5000;
+			if (constant_limit > child_card * 0.007 && limit_is_large) {
+				return false;
+			}
 		}
 
 		while (child_op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -116,7 +126,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 }
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
-	if (CanOptimize(*op)) {
+	if (CanOptimize(*op, &context)) {
 
 		vector<unique_ptr<LogicalOperator>> projections;
 

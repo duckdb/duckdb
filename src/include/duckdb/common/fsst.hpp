@@ -28,7 +28,8 @@ private:
 	// The decode will overflow a bit into "extra_space", but "str" will contain the full string
 	struct StringWithExtraSpace {
 		string_t str;
-		uint64_t extra_space[string_t::INLINE_LENGTH];
+		// INLINE_BYTES instead of INLINE_LENGTH so this isn't 0-length array when building with DUCKDB_DEBUG_NO_INLINE
+		uint64_t extra_space[string_t::INLINE_BYTES];
 	};
 
 public:

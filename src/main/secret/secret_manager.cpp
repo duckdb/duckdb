@@ -647,6 +647,7 @@ DefaultSecretGenerator::DefaultSecretGenerator(Catalog &catalog, SecretManager &
 }
 
 unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(const string &entry_name) {
+	lock_guard<mutex> guard(lock);
 	auto secret_lu = persistent_secrets.find(entry_name);
 	if (secret_lu == persistent_secrets.end()) {
 		return nullptr;
@@ -719,6 +720,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 vector<string> DefaultSecretGenerator::GetDefaultEntries() {
 	vector<string> ret;
 
+	lock_guard<mutex> guard(lock);
 	for (const auto &res : persistent_secrets) {
 		ret.push_back(res);
 	}

@@ -92,6 +92,21 @@ public:
 	}
 };
 
+class ResetLabel : public Command {
+public:
+	ResetLabel(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+
+	bool SupportsConcurrent() const override {
+		return true;
+	}
+
+public:
+	string query_label;
+};
+
 class Query : public Command {
 public:
 	Query(SQLLogicTestRunner &runner);

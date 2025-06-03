@@ -356,6 +356,8 @@ class SQLLogicParser:
         statement = Load(header, self.current_line + 1)
         if len(header.parameters) > 1 and header.parameters[1] == "readonly":
             statement.set_readonly()
+        if len(header.parameters) > 2:
+            statement.set_version(header.parameters[2])
         return statement
 
     def statement_loop(self, header: Token) -> Optional[BaseStatement]:
