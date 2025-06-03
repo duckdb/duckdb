@@ -106,7 +106,7 @@ order by i
 ----
 7	2	NULL
 
-# NULL sort key covreage
+# NULL sort key coverage
 query III
 with source as (
 	select 

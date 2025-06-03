@@ -795,6 +795,20 @@ bool FillValueFunction(idx_t row_idx, WindowCursor &cursor) {
 }
 
 static fill_value_t GetFillValueFunction(const LogicalType &type) {
+	//	Special cases temporal values because they can have infinities
+	switch (type.id()) {
+	case LogicalTypeId::DATE:
+		return FillValueFunction<date_t>;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return FillValueFunction<timestamp_t>;
+	default:
+		break;
+	}
+
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
 		return FillValueFunction<uint8_t>;
