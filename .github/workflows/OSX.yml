@@ -309,7 +309,7 @@ jobs:
     uses: duckdb/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
     strategy:
       matrix:
-        config: [ { runner: macos-latest, duckdb_arch: osx_amd64, duckdb_binary: osx-amd64 }, {runner: macos-14, duckdb_arch: osx_arm64, duckdb_binary: osx-arm64 }]
+        config: [ { runs_on: macos-latest, duckdb_arch: osx_amd64, duckdb_binary: osx-amd64 }, { runs_on: macos-14, duckdb_arch: osx_arm64, duckdb_binary: osx-arm64 }]
     with:
       runs_on: ${{ matrix.config.runs_on }}
       duckdb_arch: ${{ matrix.config.duckdb_arch }}
