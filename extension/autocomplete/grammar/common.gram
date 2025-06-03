@@ -24,7 +24,9 @@ Statement <-
 	ImportStatement /
 	CommentStatement /
 	DeallocateStatement /
-	TruncateStatement
+	TruncateStatement /
+	LoadStatement /
+	InstallStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier

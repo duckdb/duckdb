@@ -1,0 +1,2 @@
+LoadStatement <- 'FORCE'i? 'LOAD'i PlainIdentifier
+InstallStatement <- 'FORCE'i? 'INSTALL'i PlainIdentifier

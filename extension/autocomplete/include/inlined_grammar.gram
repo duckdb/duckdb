@@ -242,6 +242,8 @@ IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 Unique <- 'UNIQUE'i
 IndexType <- 'USING'i Identifier
 
+LoadStatement <- 'FORCE'i? 'LOAD'i PlainIdentifier
+InstallStatement <- 'FORCE'i? 'INSTALL'i PlainIdentifier
 DropStatement <- 'DROP'i DropEntries DropBehavior?
 
 DropEntries <-
@@ -590,7 +592,9 @@ Statement <-
 	ImportStatement /
 	CommentStatement /
 	DeallocateStatement /
-	TruncateStatement
+	TruncateStatement /
+	LoadStatement /
+	InstallStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier
