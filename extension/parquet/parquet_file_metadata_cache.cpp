@@ -6,8 +6,7 @@ namespace duckdb {
 
 ParquetFileMetadataCache::ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata,
                                                    CachingFileHandle &handle,
-                                                   unique_ptr<GeoParquetFileMetadata> geo_metadata,
-                                                   idx_t footer_size)
+                                                   unique_ptr<GeoParquetFileMetadata> geo_metadata, idx_t footer_size)
     : metadata(std::move(file_metadata)), geo_metadata(std::move(geo_metadata)), validate(handle.Validate()),
       last_modified(handle.GetLastModifiedTime()), version_tag(handle.GetVersionTag()), footer_size(footer_size) {
 }
