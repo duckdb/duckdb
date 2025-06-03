@@ -161,5 +161,4 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_optimizer_demo, loader) {
 	config.AddExtensionOption("waggle_location_host", "host for remote callback", LogicalType::VARCHAR);
 	config.AddExtensionOption("waggle_location_port", "port for remote callback", LogicalType::INTEGER);
 }
-
 }

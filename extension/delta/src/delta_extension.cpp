@@ -29,5 +29,4 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(delta, loader) {
 	duckdb::LoadInternal(loader);
 }
-
 }

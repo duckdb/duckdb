@@ -133,5 +133,4 @@ unsigned duckdb_malloc_ncpus() {
 DUCKDB_CPP_EXTENSION_ENTRY(jemalloc, loader) {
 	duckdb::LoadInternal(loader);
 }
-
 }

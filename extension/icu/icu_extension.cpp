@@ -448,5 +448,4 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(icu, loader) { // NOLINT
 	duckdb::LoadInternal(loader);
 }
-
 }

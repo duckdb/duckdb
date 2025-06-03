@@ -31,5 +31,4 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(core_functions, loader) {
 	duckdb::LoadInternal(loader);
 }
-
 }

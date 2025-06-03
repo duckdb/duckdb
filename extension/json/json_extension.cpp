@@ -109,5 +109,4 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(json, loader) {
 	duckdb::LoadInternal(loader);
 }
-
 }

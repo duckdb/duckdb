@@ -947,6 +947,5 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(parquet, loader) { // NOLINT
 	duckdb::LoadInternal(loader);
 }
-
 }
 #endif

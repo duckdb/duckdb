@@ -209,5 +209,4 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(tpcds, loader) {
 	duckdb::LoadInternal(loader);
 }
-
 }

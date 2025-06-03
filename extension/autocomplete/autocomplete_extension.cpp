@@ -494,5 +494,4 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(autocomplete, loader) {
 	LoadInternal(loader);
 }
-
 }
