@@ -214,9 +214,7 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, cons
 	return valid_comments / detected_comments >= min_majority;
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner, idx_t &rows_read,
-                                         idx_t &best_consistent_rows, idx_t &prev_padding_count,
-                                         idx_t &min_ignored_rows) {
+void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner, CandidateStats &stats, vector<unique_ptr<ColumnCountScanner>> &successful_candidates) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	auto &sniffed_column_counts = scanner->ParseChunk();
 	idx_t dirty_notes = 0;
@@ -244,8 +242,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t ignored_rows = 0;
 	const bool allow_padding = options.null_padding;
 	bool first_valid = false;
-	if (sniffed_column_counts.result_position > rows_read) {
-		rows_read = sniffed_column_counts.result_position;
+	if (sniffed_column_counts.result_position > stats.rows_read) {
+		stats.rows_read = sniffed_column_counts.result_position;
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, ignore_errors,
 	                                        sniffed_column_counts[0].last_value_always_empty)) {
@@ -313,18 +311,18 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	consistent_rows += padding_count;
 
 	// Whether there are more values (rows) available that are consistent, exceeding the current best.
-	const bool more_values = consistent_rows > best_consistent_rows && num_cols >= max_columns_found;
+	const bool more_values = consistent_rows > stats.best_consistent_rows && num_cols >= max_columns_found;
 
-	const bool more_columns = consistent_rows == best_consistent_rows && num_cols > max_columns_found;
+	const bool more_columns = consistent_rows == stats.best_consistent_rows && num_cols > max_columns_found;
 
 	// If additional padding is required when compared to the previous padding count.
-	const bool require_more_padding = padding_count > prev_padding_count;
+	const bool require_more_padding = padding_count > stats.prev_padding_count;
 
 	// If less padding is now required when compared to the previous padding count.
-	const bool require_less_padding = padding_count < prev_padding_count;
+	const bool require_less_padding = padding_count < stats.prev_padding_count;
 
 	// If there was only a single column before, and the new number of columns exceeds that.
-	const bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found * candidates.size();
+	const bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found * successful_candidates.size();
 
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
@@ -338,8 +336,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	const bool more_than_one_column = num_cols > 1;
 
 	// If the start position is valid.
-	const bool start_good = !candidates.empty() &&
-	                        dirty_notes <= candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
+	const bool start_good = !successful_candidates.empty() &&
+	                        dirty_notes <= successful_candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
 
 	// If padding happened but it is not allowed.
 	const bool invalid_padding = !allow_padding && padding_count > 0;
@@ -367,38 +365,38 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
-		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
-		    consistent_rows <= best_consistent_rows) {
+		if (!successful_candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
+		    consistent_rows <= stats.best_consistent_rows) {
 			// We have a candidate that fits our requirements better
-			if (candidates.front()->ever_quoted || !scanner->ever_quoted) {
+			if (successful_candidates.front()->ever_quoted || !scanner->ever_quoted) {
 				return;
 			}
 		}
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
-		if (!candidates.empty() && candidates.front()->ever_quoted) {
+		if (!successful_candidates.empty() && successful_candidates.front()->ever_quoted) {
 			// Give preference to quoted boys.
 			if (!scanner->ever_quoted) {
 				return;
 			} else {
 				// Give preference to one that got escaped
-				if (!scanner->ever_escaped && candidates.front()->ever_escaped &&
+				if (!scanner->ever_escaped && successful_candidates.front()->ever_escaped &&
 				    sniffing_state_machine.dialect_options.state_machine_options.strict_mode.GetValue()) {
 					return;
 				}
-				if (best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
+				if (stats.best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
 					// If both have not been escaped, this might get solved later on.
 					sniffing_state_machine.dialect_options.num_cols = num_cols;
-					candidates.emplace_back(std::move(scanner));
+					successful_candidates.emplace_back(std::move(scanner));
 					max_columns_found = num_cols;
 					return;
 				}
 			}
 		}
-		if (max_columns_found == num_cols && (ignored_rows > min_ignored_rows)) {
+		if (max_columns_found == num_cols && (ignored_rows > stats.min_ignored_rows)) {
 			return;
 		}
-		if (max_columns_found > 1 && num_cols > max_columns_found && consistent_rows < best_consistent_rows / 2 &&
+		if (max_columns_found > 1 && num_cols > max_columns_found && consistent_rows < stats.best_consistent_rows / 2 &&
 		    (options.null_padding || ignore_errors)) {
 			// When null_padding is true, we only give preference to a max number of columns if null padding is at least
 			// 50% as consistent as the best case scenario
@@ -407,24 +405,24 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		if (quoted && num_cols < max_columns_found) {
 			if (scanner->ever_escaped &&
 			    sniffing_state_machine.dialect_options.state_machine_options.strict_mode.GetValue()) {
-				for (auto &candidate : candidates) {
+				for (auto &candidate : successful_candidates) {
 					if (candidate->ever_quoted && candidate->ever_escaped) {
 						return;
 					}
 				}
 
 			} else {
-				for (auto &candidate : candidates) {
+				for (auto &candidate : successful_candidates) {
 					if (candidate->ever_quoted) {
 						return;
 					}
 				}
 			}
 		}
-		best_consistent_rows = consistent_rows;
+		stats.best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
-		prev_padding_count = padding_count;
-		min_ignored_rows = ignored_rows;
+		stats.prev_padding_count = padding_count;
+		stats.min_ignored_rows = ignored_rows;
 
 		if (options.dialect_options.skip_rows.IsSetByUser()) {
 			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
@@ -436,10 +434,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		} else if (!options.null_padding) {
 			sniffing_state_machine.dialect_options.skip_rows = dirty_notes_minus_comments;
 		}
-		candidates.clear();
+		successful_candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		lines_sniffed = sniffed_column_counts.result_position;
-		candidates.emplace_back(std::move(scanner));
+		successful_candidates.emplace_back(std::move(scanner));
 		return;
 	}
 	// If there's more than one row and column, the start is good, rows are consistent,
@@ -461,7 +459,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		lines_sniffed = sniffed_column_counts.result_position;
-		candidates.emplace_back(std::move(scanner));
+		successful_candidates.emplace_back(std::move(scanner));
 	}
 }
 
@@ -496,6 +494,9 @@ void CSVSniffer::RefineCandidates() {
 	for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
 		vector<unique_ptr<ColumnCountScanner>> successful_candidates;
 		bool done = candidates.empty();
+	// 	for (auto &state_machine : csv_state_machines) {
+	//
+	// }
 		for (auto &cur_candidate : candidates) {
 			const bool finished_file = cur_candidate->FinishedFile();
 			if (successful_candidates.empty()) {
@@ -588,22 +589,14 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 void CSVSniffer::DetectDialect() {
 	// Variables for Dialect Detection
 	DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
-	// Number of rows read
-	idx_t rows_read = 0;
-	// Best Number of consistent rows (i.e., presenting all columns)
-	idx_t best_consistent_rows = 0;
-	// If padding was necessary (i.e., rows are missing some columns, how many)
-	idx_t prev_padding_count = 0;
-	// Min number of ignores rows
-	idx_t best_ignored_rows = 0;
+	CandidateStats stats;
 	// Vector of CSV State Machines
 	vector<unique_ptr<ColumnCountScanner>> csv_state_machines;
 	// Step 1: Generate state machines
 	GenerateStateMachineSearchSpace(csv_state_machines, dialect_candidates);
 	// Step 2: Analyze all candidates on the first chunk
 	for (auto &state_machine : csv_state_machines) {
-		AnalyzeDialectCandidate(std::move(state_machine), rows_read, best_consistent_rows, prev_padding_count,
-		                        best_ignored_rows);
+		AnalyzeDialectCandidate(std::move(state_machine), stats, candidates);
 	}
 	// Step 3: Loop over candidates and find if they can still produce good results for the remaining chunks
 	RefineCandidates();
