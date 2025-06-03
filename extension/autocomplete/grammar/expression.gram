@@ -44,8 +44,9 @@ StructField <- Expression ':'i Expression
 MapExpression <- 'MAP'i StructExpression
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
 GroupingOrGroupingId <- 'GROUPING'i / 'GROUPING_ID'i
-Parameter <- '?' / NumberedParameter
+Parameter <- '?' / NumberedParameter / IdentifierParameter
 NumberedParameter <- '$' NumberLiteral
+IdentifierParameter <- '$' Identifier
 PositionalExpression <- '#' NumberLiteral
 DefaultExpression <- 'DEFAULT'i
 
