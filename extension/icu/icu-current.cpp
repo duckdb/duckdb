@@ -1,6 +1,6 @@
 #include "include/icu-dateadd.hpp"
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -46,18 +46,18 @@ ScalarFunction GetCurrentDateFun() {
 	return current_date;
 }
 
-void RegisterICUCurrentFunctions(DatabaseInstance &db) {
+void RegisterICUCurrentFunctions(ExtensionLoader &loader) {
 	//	temporal + interval
 	ScalarFunctionSet current_time("get_current_time");
 	current_time.AddFunction(GetCurrentTimeFun());
-	ExtensionUtil::RegisterFunction(db, current_time);
+	loader.RegisterFunction(current_time);
 
 	ScalarFunctionSet current_date("current_date");
 	current_date.AddFunction(GetCurrentDateFun());
-	ExtensionUtil::RegisterFunction(db, current_date);
+	loader.RegisterFunction(current_date);
 
 	current_date.name = "today";
-	ExtensionUtil::RegisterFunction(db, current_date);
+	loader.RegisterFunction(current_date);
 }
 
 } // namespace duckdb
