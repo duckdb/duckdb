@@ -52,6 +52,7 @@ public:
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
 		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
+
 	StorageLock lock;
 	atomic<bool> initialized;
 	atomic<idx_t> rows_copied;
@@ -78,6 +79,9 @@ public:
 		}
 		// initialize writing to the file
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*global_state, op);
+		}
 		auto written_file_info = AddFile(*write_lock, op.file_path, op.return_type);
 		if (written_file_info) {
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
@@ -217,6 +221,9 @@ public:
 			written_file_info->partition_keys = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR,
 			                                               std::move(partition_keys), std::move(partition_values));
 		}
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*info->global_state, op);
+		}
 		auto &result = *info;
 		info->active_writes = 1;
 		// store in active write map
@@ -352,6 +359,9 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	auto result = function.copy_to_initialize_global(context, *bind_data, output_path);
 	if (written_file_info) {
 		function.copy_to_get_written_statistics(context, *bind_data, *result, *written_file_info->file_stats);
+	}
+	if (function.initialize_operator) {
+		function.initialize_operator(*result, *this);
 	}
 	return result;
 }
