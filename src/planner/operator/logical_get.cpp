@@ -11,8 +11,6 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include <assert.h>
-
 namespace duckdb {
 
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
@@ -221,9 +219,9 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
-	serializer.WriteProperty(212, "ordinality_request", ordinality_request);
-	serializer.WriteProperty(213, "ordinality_column_id", ordinality_column_id);
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
+	serializer.WriteProperty(213, "ordinality_request", ordinality_request);
+	serializer.WriteProperty(214, "ordinality_column_id", ordinality_column_id);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -253,8 +251,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(
-	    212, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
-	deserializer.ReadProperty(213, "ordinality_column_id", result->ordinality_column_id);
+	    213, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
+	deserializer.ReadProperty(214, "ordinality_column_id", result->ordinality_column_id);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
