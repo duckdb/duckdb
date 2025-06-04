@@ -1,3 +1,35 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+index e27fb02..d53544a 100644
+--- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+@@ -18,12 +18,12 @@ namespace duckdb {
+ //-------------------------------------------------------------
+ // Physical Create RTree Index
+ //-------------------------------------------------------------
+-PhysicalCreateRTreeIndex::PhysicalCreateRTreeIndex(LogicalOperator &op, TableCatalogEntry &table,
++PhysicalCreateRTreeIndex::PhysicalCreateRTreeIndex(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table,
+                                                    const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+                                                    vector<unique_ptr<Expression>> unbound_expressions,
+                                                    idx_t estimated_cardinality)
+     // Declare this operators as a EXTENSION operator
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, estimated_cardinality),
++    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, estimated_cardinality),
+       table(table.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
+ 
+ 	// convert virtual column ids to storage column ids
+diff --git a/src/spatial/index/rtree/rtree_index_create_physical.hpp b/src/spatial/index/rtree/rtree_index_create_physical.hpp
+index 68a181d..f530aaa 100644
+--- a/src/spatial/index/rtree/rtree_index_create_physical.hpp
++++ b/src/spatial/index/rtree/rtree_index_create_physical.hpp
+@@ -11,7 +11,7 @@ public:
+ 	static constexpr auto TYPE = PhysicalOperatorType::EXTENSION;
+ 
+ public:
+-	PhysicalCreateRTreeIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
++	PhysicalCreateRTreeIndex(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
+ 	                         unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
+ 	                         idx_t estimated_cardinality);
+ 
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 index 4aa428e..523622e 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp

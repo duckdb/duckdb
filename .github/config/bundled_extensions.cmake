@@ -19,6 +19,19 @@ duckdb_extension_load(json)
 duckdb_extension_load(parquet)
 duckdb_extension_load(autocomplete)
 
+duckdb_extension_load(spatial
+        LOAD_TESTS
+        SOURCE_DIR /Users/tania/DuckDB/duckdb-spatial/
+        TEST_DIR /Users/tania/DuckDB/duckdb-spatial/test/
+)
+
+#
+#duckdb_extension_load(postgres_scanner
+#        LOAD_TESTS
+#        SOURCE_DIR /Users/tania/DuckDB/duckdb-postgres/
+#        TEST_DIR /Users/tania/DuckDB/duckdb-postgres/test/
+#)
+
 #
 ## Extensions that are not linked, but we do want to test them as part of the release build
 #
