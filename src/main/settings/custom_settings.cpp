@@ -300,35 +300,35 @@ void ArrowOutputVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	} else if (arrow_version == "1.5") {
 		config.options.arrow_output_version = V1_5;
 	} else {
-		throw NotImplementedException("Unrecognized parameter for option ARROW_OUTPUT_VERSION, expected either \'1.0\', \'1.1\', \'1.2\', \'1.3\', \'1.4\', \'1.5\'");
+		throw NotImplementedException("Unrecognized parameter for option ARROW_OUTPUT_VERSION, expected either "
+		                              "\'1.0\', \'1.1\', \'1.2\', \'1.3\', \'1.4\', \'1.5\'");
 	}
-
 }
 
 Value ArrowOutputVersionSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string arrow_version;
 	switch (config.options.arrow_output_version) {
-		case V1_0:
-			arrow_version = "1.0";
-			break;
-		case V1_1:
-			arrow_version = "1.1";
-			break;
-		case V1_2:
-			arrow_version = "1.2";
-			break;
-		case V1_3:
-			arrow_version = "1.3";
-			break;
-		case V1_4:
-			arrow_version = "1.4";
-			break;
-		case V1_5:
-			arrow_version = "1.5";
-			break;
-		default:
-			throw InternalException("Unrecognized arrow output version");
+	case V1_0:
+		arrow_version = "1.0";
+		break;
+	case V1_1:
+		arrow_version = "1.1";
+		break;
+	case V1_2:
+		arrow_version = "1.2";
+		break;
+	case V1_3:
+		arrow_version = "1.3";
+		break;
+	case V1_4:
+		arrow_version = "1.4";
+		break;
+	case V1_5:
+		arrow_version = "1.5";
+		break;
+	default:
+		throw InternalException("Unrecognized arrow output version");
 	}
 	return Value(arrow_version);
 }
