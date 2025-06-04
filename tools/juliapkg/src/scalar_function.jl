@@ -330,7 +330,7 @@ macro create_scalar_function(func_expr, func_ref = nothing)
 
     id = hash((func_expr, rand(UInt64))) # generate a unique id for the function
 
-    quote
+    return quote
         local wrapper = $(wrapper_expr)
         local fun = ScalarFunction($func_name, $parameter_types_vec, $return_type, $func_esc, wrapper, $id)
 
