@@ -271,7 +271,9 @@ excluded_tests = {
     'test/sql/peg_parser/prepare_statement.test',
     'test/sql/peg_parser/read_csv_function.test',
     'test/sql/peg_parser/struct_identifier.test',
-    'test/sql/peg_parser/support_optional_not_null_constraint.test'
+    'test/sql/peg_parser/support_optional_not_null_constraint.test',
+    'test/sql/peg_parser/support_try.test',
+    'test/sql/peg_parser/window_function.test'
 }
 if args.all_tests:
     # run all tests

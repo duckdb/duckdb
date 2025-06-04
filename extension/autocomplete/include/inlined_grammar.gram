@@ -53,8 +53,8 @@ WindowExcludeClause <- 'EXCLUDE'i WindowExcludeElement
 WindowExcludeElement <- ('CURRENT'i 'ROW'i) / 'GROUP'i / 'TIES'i / ('NO'i 'OTHERS'i)
 OverClause <- 'OVER'i WindowFrame
 WindowFrame <- WindowFrameDefinition / Identifier / Parens(Identifier)
-WindowFrameDefinition <- Parens(WindowFrameContents)
-WindowFrameContents <- BaseWindowName? WindowPartition? OrderByClause? FrameClause?
+WindowFrameDefinition <- Parens(BaseWindowName? WindowFrameContents) / Parens(WindowFrameContents)
+WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 BaseWindowName <- Identifier
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 PrefixExpression <- PrefixOperator Expression

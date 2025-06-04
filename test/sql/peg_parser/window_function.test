@@ -5,8 +5,13 @@
 require autocomplete
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT sum(unique1) over (w range between unbounded preceding and current row exclude current row);$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$select regr_avgx(v, v2) over (partition by k) from aggr;$TEST_PEG_PARSER$);
 
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select regr_avgx(v, v2) over (w partition by k) from aggr;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT sum(unique1) over (w range between unbounded preceding and current row exclude current row);$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT sum(unique1) over (w range between unbounded preceding and current row exclude current row),     unique1, four FROM tenk1d  WINDOW w AS (order by four) ORDER BY four, unique1;$TEST_PEG_PARSER$);
