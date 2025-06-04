@@ -66,7 +66,6 @@ endif()
 
 ################# DUCKLAKE
 duckdb_extension_load(ducklake
-        APPLY_PATCHES
         LOAD_TESTS
         GIT_URL https://github.com/duckdb/ducklake
         GIT_TAG d4e144737bc3f88aef1d8768cb2ef162b0db9f09
