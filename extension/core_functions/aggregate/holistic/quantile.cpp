@@ -6,7 +6,6 @@
 #include "duckdb/common/operator/abs.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
@@ -588,7 +587,7 @@ AggregateFunction GetContinuousQuantileList(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 // Quantile binding
 //===--------------------------------------------------------------------===//
-static const Value &CheckQuantile(const Value &quantile_val) {
+static Value CheckQuantile(const Value &quantile_val) {
 	if (quantile_val.IsNull()) {
 		throw BinderException("QUANTILE parameter cannot be NULL");
 	}
@@ -820,7 +819,7 @@ struct ContinuousQuantileListFunction {
 };
 
 template <class OP>
-AggregateFunction EmptyQuantileFunction(LogicalType input, LogicalType result, const LogicalType &extra_arg) {
+AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalType &result, const LogicalType &extra_arg) {
 	AggregateFunction fun({std::move(input)}, std::move(result), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
