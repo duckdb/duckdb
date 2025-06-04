@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-Node256Leaf &Node256Leaf::New(ART &art, Node &node) {
+NodeHandle<Node256Leaf> Node256Leaf::New(ART &art, Node &node) {
 	node = Node::GetAllocator(art, NODE_256_LEAF).New();
 	node.SetMetadata(static_cast<uint8_t>(NODE_256_LEAF));
 
@@ -16,8 +16,7 @@ Node256Leaf &Node256Leaf::New(ART &art, Node &node) {
 	ValidityMask mask(&n.mask[0], Node256::CAPACITY);
 	mask.SetAllInvalid(CAPACITY);
 
-	// FIXME: Return NodeHandle.
-	return n;
+	return handle;
 }
 
 void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
@@ -79,7 +78,8 @@ void Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf
 	NodeHandle<Node15Leaf> n15_handle(art, node15_leaf);
 	auto &n15 = n15_handle.Get();
 
-	auto &n256 = New(art, node256_leaf);
+	auto n256_handle = New(art, node256_leaf);
+	auto &n256 = n256_handle.Get();
 	node256_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
 	n256.count = n15.count;

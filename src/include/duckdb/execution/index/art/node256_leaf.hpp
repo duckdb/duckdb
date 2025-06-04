@@ -33,8 +33,8 @@ private:
 	validity_t mask[CAPACITY / sizeof(validity_t)];
 
 public:
-	//! Get a new Node256Leaf and initialize it.
-	static Node256Leaf &New(ART &art, Node &node);
+	//! Get a new Node256Leaf handle and initialize the leaf.
+	static NodeHandle<Node256Leaf> New(ART &art, Node &node);
 
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
