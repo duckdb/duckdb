@@ -315,7 +315,7 @@ jobs:
       duckdb_arch: ${{ matrix.config.duckdb_arch }}
       duckdb_binary: 'osx'
       nightly_build: 'osx'
-      branch: 'v1.3-ossivalis'
+      branch: ${{ github.sha }}
 
     # steps:
     # - uses: actions/checkout@v4
