@@ -168,9 +168,10 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
 	// Create a new buffer and a block to hold the buffer.
-	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer),
-	                                     FileBufferType::MANAGED_BUFFER);
-	DestroyBufferUpon destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
+	const auto file_buffer_type =
+	    tag == MemoryTag::EXTERNAL_FILE_CACHE ? FileBufferType::EXTERNAL_FILE : FileBufferType::MANAGED_BUFFER;
+	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer), file_buffer_type);
+	const auto destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
 }
