@@ -265,6 +265,8 @@ jobs:
            msystem: MINGW64
            update: true
            install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+           cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
