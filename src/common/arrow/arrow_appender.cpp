@@ -243,7 +243,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
-		if (append_data.options.produce_arrow_string_view) {
+		if (append_data.options.produce_arrow_string_view && append_data.options.arrow_output_version >= 14) {
 			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
 		} else {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -290,7 +290,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
 		break;
 	case LogicalTypeId::LIST: {
-		if (append_data.options.arrow_use_list_view) {
+		if (append_data.options.arrow_use_list_view && append_data.options.arrow_output_version >= 14) {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				InitializeAppenderForType<ArrowListViewData<>>(append_data);
 			} else {

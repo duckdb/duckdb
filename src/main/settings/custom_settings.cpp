@@ -300,7 +300,7 @@ void ArrowOutputVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	} else if (arrow_version == "1.5") {
 		config.options.arrow_output_version = V1_5;
 	} else {
-		throw NotImplementedException("Unrecognized parameter for option ARROW_OUTPUT_VERSION, expected either "
+		throw NotImplementedException("Unrecognized parameter for option arrow_output_version, expected either "
 		                              "\'1.0\', \'1.1\', \'1.2\', \'1.3\', \'1.4\', \'1.5\'");
 	}
 }
