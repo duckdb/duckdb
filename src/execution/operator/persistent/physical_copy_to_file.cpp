@@ -439,7 +439,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(context);
-		if (!per_thread_output && rotate) {
+		if (!per_thread_output && rotate && write_empty_file) {
 			auto global_lock = state->lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
 		}
@@ -497,6 +497,9 @@ void PhysicalCopyToFile::WriteRotateInternal(ExecutionContext &context, GlobalSi
 	while (true) {
 		// Grab global lock and dereference the current file state (and corresponding lock)
 		auto global_guard = g.lock.GetExclusiveLock();
+		if (!g.global_state) {
+			g.global_state = CreateFileState(context.client, *sink_state, *global_guard);
+		}
 		auto &file_state = *g.global_state;
 		auto &file_lock = *g.file_write_lock_if_rotating;
 		if (rotate && function.rotate_next_file(file_state, *bind_data, file_size_bytes)) {
@@ -530,7 +533,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
-	if (!write_empty_file) {
+	if (!write_empty_file && !rotate) {
 		// if we are only writing the file when there are rows to write we need to initialize here
 		g.Initialize(context.client, *this);
 	}
