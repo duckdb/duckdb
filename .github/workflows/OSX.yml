@@ -293,7 +293,7 @@ jobs:
 
   upload-osx-extensions:
     name: Upload OSX Extensions
-    # needs: xcode-extensions
+    needs: xcode-extensions
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     strategy:
