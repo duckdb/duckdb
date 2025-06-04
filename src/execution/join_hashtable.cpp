@@ -759,8 +759,9 @@ void JoinHashTable::AllocatePointerTable() {
 
 	bitmask = capacity - 1;
 
-	DUCKDB_LOG(context, PhysicalOperatorLogType, op, "Building JoinHashTable (%llu rows, %llu bytes)",
-	           data_collection->Count(), data_collection->SizeInBytes() + hash_map.GetSize());
+	DUCKDB_LOG(context, PhysicalOperatorLogType, op, "JoinHashTable", "Build",
+	           {{"rows", to_string(data_collection->Count())},
+	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {

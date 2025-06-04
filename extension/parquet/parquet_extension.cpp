@@ -249,9 +249,11 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 		if (!op) {
 			return;
 		}
-		DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op,
-		           "Flushing row group (%llu rows, %llu bytes) to file \"%s\" (%s)", buffer.Count(),
-		           buffer.SizeInBytes(), writer->GetFileName(), reason);
+		DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
+		           {{"file", writer->GetFileName()},
+		            {"rows", to_string(buffer.Count())},
+		            {"size", to_string(buffer.SizeInBytes())},
+		            {"reason", reason}});
 	}
 
 	mutex lock;
@@ -456,9 +458,8 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 
 	if (local_state.buffer.Count() >= bind_data.row_group_size ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
-		const string reason = local_state.buffer.Count() >= bind_data.row_group_size
-		                          ? "Sink: ROW_GROUP_SIZE exceeded"
-		                          : "Sink: ROW_GROUP_SIZE_BYTES exceeded";
+		const string reason =
+		    local_state.buffer.Count() >= bind_data.row_group_size ? "ROW_GROUP_SIZE" : "ROW_GROUP_SIZE_BYTES";
 		global_state.LogFlushingRowGroup(local_state.buffer, reason);
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();

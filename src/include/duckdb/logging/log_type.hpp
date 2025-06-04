@@ -101,11 +101,8 @@ public:
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(const PhysicalOperator &op, const string &info);
-	template <typename... ARGS>
-	static string ConstructLogMessage(const PhysicalOperator &op, const string &fmt_str, ARGS... params) {
-		return ConstructLogMessage(op, StringUtil::Format(fmt_str, params...));
-	}
+	static string ConstructLogMessage(const PhysicalOperator &op, const string &class_p, const string &event,
+	                                  const vector<pair<string, string>> &info);
 };
 
 } // namespace duckdb

@@ -32,13 +32,13 @@ pragma disable_logging
 
 # enabling external hash join happens exactly once
 query I
-select count(*) from duckdb_logs_parsed('PhysicalOperator') where info like '%External hash join: enabled%'
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'PhysicalHashJoin' and event = 'Finalize' and info.external
 ----
 1
 
 # 4 radix bits, external hash join, should build exactly 16 times
 query I
-select count(*) from duckdb_logs_parsed('PhysicalOperator') where info like '%Building JoinHashTable%'
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'JoinHashTable' and event = 'Build'
 ----
 16
 
@@ -48,6 +48,6 @@ select count(*) = (
     select count(distinct row_group_id)
     from parquet_metadata('__TEST_DIR__/physical_operator_logging.parquet')
 )
-from duckdb_logs_parsed('PhysicalOperator') where info like '%Flushing row group%'
+from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetWriter' and event = 'FlushRowGroup'
 ----
 1

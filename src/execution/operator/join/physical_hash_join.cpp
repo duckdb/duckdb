@@ -851,12 +851,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.external = false;
 		}
 	}
+	DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Finalize",
+	           {{"external", to_string(sink.external)}});
 	if (sink.external) {
 		// External Hash Join
-		DUCKDB_LOG(context, PhysicalOperatorLogType, *this,
-		           "External hash join: enabled. Size (%llu bytes) greater than reservation (%llu bytes)",
-		           sink.total_size, sink.temporary_memory_state->GetReservation());
-
 		sink.perfect_join_executor.reset();
 
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
@@ -868,10 +866,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			const auto radix_bits_before = ht.GetRadixBits();
 			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
 			                           sink.max_partition_count);
-			DUCKDB_LOG(context, PhysicalOperatorLogType, *this,
-			           "External hash join: repartitioning. Increasing from %llu to %llu partitions",
-			           RadixPartitioning::NumberOfPartitions(radix_bits_before),
-			           RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
+			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
+			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
 			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, *this, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {

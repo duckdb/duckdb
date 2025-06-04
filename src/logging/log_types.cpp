@@ -99,23 +99,32 @@ LogicalType PhysicalOperatorLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"operator_type", LogicalType::VARCHAR},
 	    {"parameters", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
-	    {"info", LogicalType::VARCHAR},
+	    {"class", LogicalType::VARCHAR},
+	    {"event", LogicalType::VARCHAR},
+	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	return LogicalType::STRUCT(child_list);
 }
 
-string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &info) {
+template <class ITERABLE>
+static Value StringPairIterableToMap(const ITERABLE &iterable) {
 	vector<Value> keys;
 	vector<Value> values;
-	for (auto &parameter : physical_operator.ParamsToString()) {
-		keys.emplace_back(parameter.first);
-		values.emplace_back(parameter.second);
+	for (const auto &kv : iterable) {
+		keys.emplace_back(kv.first);
+		values.emplace_back(kv.second);
 	}
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
+}
 
+string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &class_p,
+                                                    const string &event, const vector<pair<string, string>> &info) {
 	child_list_t<Value> child_list = {
 	    {"operator_type", EnumUtil::ToString(physical_operator.type)},
-	    {"parameters", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values))},
-	    {"info", info},
+	    {"parameters", StringPairIterableToMap(physical_operator.ParamsToString())},
+	    {"class", class_p},
+	    {"event", event},
+	    {"info", StringPairIterableToMap(info)},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();
