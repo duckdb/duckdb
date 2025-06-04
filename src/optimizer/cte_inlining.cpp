@@ -105,6 +105,15 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			return;
 		}
 		if (ref_count > 1) {
+			if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
+				// this CTE is referenced multiple times, but we are not allowed to materialize it
+				// we have to inline it if possible
+				bool success = Inline(op->children[1], *op, true);
+				if (success) {
+					op = std::move(op->children[1]);
+				}
+				return;
+			}
 			// check if we can inline this CTE
 			PreventInlining prevent_inlining;
 			prevent_inlining.VisitOperator(*op->children[0]);
