@@ -235,7 +235,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale, bit_width;
-		if (options.arrow_output_version < 14) {
+		if (options.arrow_output_version <= 14) {
 			// Before version 1.4 all decimals were int128
 			bit_width = 128;
 		} else {

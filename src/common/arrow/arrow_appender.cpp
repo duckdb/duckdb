@@ -215,13 +215,25 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			InitializeAppenderForType<ArrowScalarData<int32_t, int16_t>>(append_data);
+			if (append_data.options.arrow_output_version > 14) {
+				InitializeAppenderForType<ArrowScalarData<int32_t, int16_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT32:
-			InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
+			if (append_data.options.arrow_output_version > 14) {
+				InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT64:
-			InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+			if (append_data.options.arrow_output_version > 14) {
+				InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT128:
 			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
