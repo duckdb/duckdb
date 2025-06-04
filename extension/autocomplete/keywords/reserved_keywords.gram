@@ -1,4 +1,5 @@
-ReservedKeyword <- 'ALL'i /
+ReservedKeyword <-
+'ALL'i /
 'ANALYSE'i /
 'ANALYZE'i /
 'AND'i /

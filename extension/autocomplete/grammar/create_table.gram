@@ -45,6 +45,12 @@ QuotedIdentifier <- '"' [^"]* '"'
 DottedIdentifier <- Identifier ('.' Identifier)*
 Identifier <- QuotedIdentifier / PlainIdentifier
 
+ColId <- Identifier / UnreservedKeywords / ColNameKeywords
+FuncName <- Identifier / UnreservedKeywords / FuncNameKeywords
+TypeName <- Identifier / UnreservedKeywords / TypeNameKeywords
+ColLabel <- Identifier / UnreservedKeywords / ColNameKeywords / FuncNameKeywords / TypeNameKeywords / ReservedKeywords
+NonReservedWord <- Identifier / UnreservedKeywords / ColNameKeywords / FuncNameKeywords / TypeNameKeywords
+
 GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED'i AlwaysOrByDefault?

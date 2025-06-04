@@ -16,14 +16,24 @@ args = parser.parse_args()
 
 autocomplete_dir = 'extension/autocomplete'
 grammar_dir = os.path.join(autocomplete_dir, 'grammar')
+keywords_dir = os.path.join(autocomplete_dir, 'keywords')
 target_file = os.path.join(autocomplete_dir, 'include', 'inlined_grammar.hpp')
 
 contents = ""
+
+for file in os.listdir(keywords_dir):
+    if not file.endswith('.gram'):
+        raise Exception(f"File {file} does not end with .gram")
+    with open(os.path.join(keywords_dir, file), 'r') as f:
+        contents += f.read() + "\n"
+
 for file in os.listdir(grammar_dir):
     if not file.endswith('.gram'):
         raise Exception(f"File {file} does not end with .gram")
     with open(os.path.join(grammar_dir, file), 'r') as f:
         contents += f.read() + "\n"
+
+
 
 if args.print:
     print(contents)
