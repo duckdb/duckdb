@@ -80,14 +80,12 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 	vector<unique_ptr<CTENode>> materialized_ctes;
 	for (auto &cte : cte_map.map) {
 		auto &cte_entry = cte.second;
-		if (cte_entry->materialized != CTEMaterialize::CTE_MATERIALIZE_NEVER) {
-			auto mat_cte = make_uniq<CTENode>();
-			mat_cte->ctename = cte.first;
-			mat_cte->query = cte_entry->query->node->Copy();
-			mat_cte->aliases = cte_entry->aliases;
-			mat_cte->materialized = cte_entry->materialized;
-			materialized_ctes.push_back(std::move(mat_cte));
-		}
+		auto mat_cte = make_uniq<CTENode>();
+		mat_cte->ctename = cte.first;
+		mat_cte->query = cte_entry->query->node->Copy();
+		mat_cte->aliases = cte_entry->aliases;
+		mat_cte->materialized = cte_entry->materialized;
+		materialized_ctes.push_back(std::move(mat_cte));
 	}
 
 	if (materialized_ctes.empty()) {
@@ -346,33 +344,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
-	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
-	    !Optimizer::OptimizerDisabled(context, OptimizerType::MATERIALIZED_CTE) && context.config.enable_optimizer &&
-	    OptimizeCTEs(node)) {
-		switch (node.type) {
-		case QueryNodeType::SELECT_NODE:
-			result = BindWithCTE(node.Cast<SelectNode>());
-			break;
-		case QueryNodeType::RECURSIVE_CTE_NODE:
-			result = BindWithCTE(node.Cast<RecursiveCTENode>());
-			break;
-		case QueryNodeType::CTE_NODE:
-			result = BindWithCTE(node.Cast<CTENode>());
-			break;
-		default:
-			D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
-			result = BindWithCTE(node.Cast<SetOperationNode>());
-			break;
-		}
-	} else {
-		auto bound_node = BindNode(node);
+	auto bound_node = BindNode(node);
 
-		result.names = bound_node->names;
-		result.types = bound_node->types;
+	result.names = bound_node->names;
+	result.types = bound_node->types;
 
-		// and plan it
-		result.plan = CreatePlan(*bound_node);
-	}
+	// and plan it
+	result.plan = CreatePlan(*bound_node);
 	return result;
 }
 
