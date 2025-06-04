@@ -342,7 +342,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"LimitClause <- 'LIMIT'i LimitValue\n"
 	"OffsetClause <- 'OFFSET'i LimitValue\n"
 	"LimitValue <- 'ALL'i / (NumberLiteral 'PERCENT'i) / (Expression '%'?)\n"
-	"AliasedExpression <- Expression ('AS'i? Identifier)?\n"
+	"AliasedExpression <- Expression ('AS'i? (Identifier / StringLiteral))?\n"
 	"ValuesClause <- 'VALUES'i List(ValuesExpressions)\n"
 	"ValuesExpressions <- Parens(List(Expression))\n"
 	"TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction\n"

@@ -1,0 +1,26 @@
+# name: test/sql/peg_parser/struct_identifier.test
+# description: Test lambda syntax in peg parser
+# group: [peg_parser]
+
+require autocomplete
+
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT c2 as select;$TEST_PEG_PARSER$);
+#
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT c2 as end;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT c2, c1 FROM ( SELECT * SIMILAR TO 'number(\d+)' AS 'c\1')$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT number1, number2 SIMILAR TO '0' as a;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT number1, number2 SIMILAR TO '0' as 'a';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * SIMILAR TO '0' as 'a';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT c2, c1 FROM ( SELECT * SIMILAR TO 'number(\d+)' AS 'c\1' FROM (SELECT 1 as number1, 2 as number2, 3 as end) );$TEST_PEG_PARSER$);

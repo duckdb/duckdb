@@ -430,7 +430,7 @@ LimitClause <- 'LIMIT'i LimitValue
 OffsetClause <- 'OFFSET'i LimitValue
 LimitValue <- 'ALL'i / (NumberLiteral 'PERCENT'i) / (Expression '%'?)
 
-AliasedExpression <- Expression ('AS'i? Identifier)?
+AliasedExpression <- Expression ('AS'i? (Identifier / StringLiteral))?
 
 ValuesClause <- 'VALUES'i List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
