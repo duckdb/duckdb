@@ -304,8 +304,8 @@ jobs:
       duckdb_arch: ${{ matrix.duckdb_arch }}
       duckdb_sha: ${{ github.sha }}
 
-  test-uploaded-extensions:
-    name: Test uploaded OSX Extensions
+  test-install-load-extensions:
+    name: Test OSX Extensions
     needs: upload-osx-extensions
     uses: duckdb/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
     strategy:
@@ -318,7 +318,7 @@ jobs:
       nightly_build: 'osx'
       branch: ${{ github.sha }}
 
-  test-extensions:
+  test-uploaded-extensions:
     name: Test uploaded OSX Extensions
     needs: upload-osx-extensions
     ### This needs to be reworked, currently some info are missing
