@@ -127,7 +127,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		return;
 	}
 
-	auto &fs = context ? FileSystem::GetFileSystem(*context) : FileSystem::FileSystem::Get(db);
+	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
 
 	StorageManagerOptions options;

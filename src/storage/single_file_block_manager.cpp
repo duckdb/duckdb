@@ -201,7 +201,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
-	auto &fs = context ? FileSystem::GetFileSystem(*context) : FileSystem::FileSystem::Get(db);
+	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
 	header_buffer.Clear();
 

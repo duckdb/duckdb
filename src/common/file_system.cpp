@@ -704,9 +704,8 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 }
 
 void FileHandle::Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location) {
-	// Optionally route this through the ClientFileSystem for profiling.
-	auto &fs = context ? FileSystem::GetFileSystem(*context) : file_system;
-	fs.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+	// FIXME: Add profiling.
+	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Seek(idx_t location) {
