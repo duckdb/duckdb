@@ -404,6 +404,10 @@ struct DatePart {
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			return PropagateDatePartStatistics<T, EpochMillisOperator>(input.child_stats);
 		}
+
+		static void Inverse(DataChunk &input, ExpressionState &state, Vector &result) {
+			throw NotImplementedException("EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.");
+		}
 	};
 
 	struct NanosecondsOperator {
@@ -2112,6 +2116,10 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
+
+	//	Legacy inverse BIGINT => TIMESTAMP
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 
 	return operator_set;
 }

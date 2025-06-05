@@ -758,12 +758,12 @@ infinity	NULL
 statement error
 select epoch_ms(9223372036854775807)
 ----
-Binder Error: No function matches the given name and argument types
+Not implemented Error: EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.
 
 statement error
 select epoch_ms(-9223372036854775808)
 ----
-Binder Error: No function matches the given name and argument types
+Not implemented Error: EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.
 
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;
