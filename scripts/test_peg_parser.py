@@ -268,7 +268,7 @@ excluded_tests = {
     'test/sql/peg_parser/lambda_functions.test',
     'test/sql/peg_parser/load_extension.test',
     'test/sql/peg_parser/on_conflict.test',
-    'test/sql/peg_parser/alias_string_literal.test',
+    'test/sql/peg_parser/support_unreserved_keywords.test',
     'test/sql/peg_parser/prepare_statement.test',
     'test/sql/peg_parser/columns_keyword.test',
     'test/sql/peg_parser/struct_identifier.test',
