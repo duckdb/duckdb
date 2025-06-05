@@ -2,20 +2,20 @@
 
 namespace duckdb {
 
-EncryptionState::EncryptionState(const std::string *key) {
+EncryptionState::EncryptionState(const unsigned char *key, idx_t key_len) {
 	// abstract class, no implementation needed
 }
 
 EncryptionState::~EncryptionState() {
 }
 
-void EncryptionState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key,
-                                           const_data_ptr_t aad, idx_t aad_len) {
+void EncryptionState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const unsigned char *key,
+                                           duckdb::idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-void EncryptionState::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key,
-                                           const_data_ptr_t aad, idx_t aad_len) {
+void EncryptionState::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const unsigned char *key,
+                                           duckdb::idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
