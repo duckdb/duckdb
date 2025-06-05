@@ -644,7 +644,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	}
 
 	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
-	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	ColumnDataCheckpointer checkpointer(states, GetStorageManager(), row_group, checkpoint_info);
 	checkpointer.Checkpoint();
 	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;

@@ -90,6 +90,28 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.size() == 1);
 	REQUIRE(table_names.count("df"));
 
+	// qualified
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA schema1"));
+	auto test_dir = TestDirectoryPath();
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_dir + "/catalog2.db'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA catalog2.schema2"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE schema1.table1(i INT)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE catalog2.schema2.table2(i INT)"));
+	string query = "SELECT * FROM schema1.table1, catalog2.schema2.table2";
+	table_names = con.GetTableNames(query, true);
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("schema1.table1"));
+	REQUIRE(table_names.count("catalog2.schema2.table2"));
+
+	// qualified and escaped
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA catalog2.\"schema.3\""));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE catalog2.\"schema.3\".\"table.3\"(i INT)"));
+	query = "SELECT * FROM schema1.table1, catalog3.\"schema.2\".\"table.2\"";
+	table_names = con.GetTableNames(query, true);
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("schema1.table1"));
+	REQUIRE(table_names.count("catalog3.\"schema.2\".\"table.2\""));
+
 	// generate_series
 	table_names = con.GetTableNames("with series_generator as (select * from generate_series(TIMESTAMP '2001-04-10', "
 	                                "TIMESTAMP '2001-04-11', INTERVAL 1 HOUR)) select * from series_generator");

@@ -21,6 +21,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,30 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 			continue;
 		}
 		info.column_dependency_manager.AddGeneratedColumn(col, base.columns);
+	}
+}
+
+static void VerifyCompressionType(optional_ptr<StorageManager> storage_manager, DBConfig &config,
+                                  BoundCreateTableInfo &info) {
+	auto &base = info.base->Cast<CreateTableInfo>();
+	for (auto &col : base.columns.Logical()) {
+		auto compression_type = col.CompressionType();
+		if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
+			throw BinderException("Can't compress using user-provided compression type '%s', that type is deprecated "
+			                      "and only has decompress support",
+			                      CompressionTypeToString(compression_type));
+		}
+		const auto &logical_type = col.GetType();
+		auto physical_type = logical_type.InternalType();
+		if (compression_type == CompressionType::COMPRESSION_AUTO) {
+			continue;
+		}
+		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
+		if (!compression_method) {
+			throw BinderException(
+			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
+			    logical_type.ToString(), EnumUtil::ToString(physical_type), CompressionTypeToString(compression_type));
+		}
 	}
 }
 
@@ -551,6 +576,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
+	auto &catalog = schema.ParentCatalog();
+	optional_ptr<StorageManager> storage_manager;
+	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
+		storage_manager = StorageManager::Get(catalog);
+	}
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
@@ -603,6 +633,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 			dependencies.AddDependency(entry);
 		});
+
+		auto &config = DBConfig::Get(catalog.GetAttached());
+		VerifyCompressionType(storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);

@@ -2,8 +2,6 @@
 # description: enable_external_access with attached  databases
 # group: [attach]
 
-require skip_reload
-
 # attach multiple different databases
 statement ok
 ATTACH '__TEST_DIR__/attach_access1.db' AS a1

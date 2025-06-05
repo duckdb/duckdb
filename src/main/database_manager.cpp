@@ -39,11 +39,25 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
-                                                               const AttachOptions &options) {
+optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
+                                                               AttachOptions &options) {
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
+	string extension = "";
+	if (FileSystem::IsRemoteFile(info.path, extension)) {
+		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
+			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", info.path,
+			                                extension);
+		}
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
+	}
+
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
@@ -227,6 +241,13 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 	databases->Scan(context, [&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
 	result.push_back(*system);
 	result.push_back(*context.client_data->temporary_objects);
+	return result;
+}
+
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases() {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	result.push_back(*system);
 	return result;
 }
 

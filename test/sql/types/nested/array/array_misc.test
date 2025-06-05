@@ -124,7 +124,7 @@ DESCRIBE SELECT * FROM arrays
 a	INTEGER[3]	YES	NULL	NULL	NULL
 
 query I
-SELECT a.filter(x -> x > 0) FROM arrays
+SELECT a.filter(lambda x: x > 0) FROM arrays
 ----
 [1, 2, 3]
 [1, 2, 4]
@@ -134,7 +134,7 @@ NULL
 [4, 2]
 
 query I
-SELECT a.apply(x -> x + 1)::INTEGER[3] FROM arrays
+SELECT a.apply(lambda x: x + 1)::INTEGER[3] FROM arrays
 ----
 [2, 3, 4]
 [2, 3, 5]

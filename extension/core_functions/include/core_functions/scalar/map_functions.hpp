@@ -85,7 +85,7 @@ struct MapConcatFun {
 	static constexpr const char *Name = "map_concat";
 	static constexpr const char *Parameters = "any,...";
 	static constexpr const char *Description = "Returns a map created from merging the input maps, on key collision the value is taken from the last map with that key";
-	static constexpr const char *Example = "map_concat(map([1,2], ['a', 'b']), map([2,3], ['c', 'd']));";
+	static constexpr const char *Example = "map_concat(map([1, 2], ['a', 'b']), map([2, 3], ['c', 'd']));";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

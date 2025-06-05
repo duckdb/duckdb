@@ -28,11 +28,16 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 string CreateTypeInfo::ToString() const {
 	string result = "";
 	result += "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		result += " OR REPLACE ";
+	}
 	if (temporary) {
-		// These are created by PIVOT
-		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
+		result += " TEMPORARY";
 	}
 	result += " TYPE ";
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		result += " IF NOT EXISTS ";
+	}
 	result += QualifierToString(temporary ? "" : catalog, schema, name);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);

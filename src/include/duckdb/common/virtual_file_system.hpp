@@ -18,6 +18,7 @@ namespace duckdb {
 class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
+	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -47,6 +48,7 @@ public:
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 

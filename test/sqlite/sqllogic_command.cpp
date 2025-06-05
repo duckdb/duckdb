@@ -5,12 +5,15 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
 #include <list>
 #include <thread>
-#include "duckdb/main/stream_query_result.hpp"
 #include <chrono>
 
 namespace duckdb {
@@ -55,6 +58,64 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 	}
 }
 
+bool CanRestart(Connection &conn) {
+	auto &connection_manager = conn.context->db->GetConnectionManager();
+	auto &db_manager = DatabaseManager::Get(*conn.context->db);
+	auto &connection_list = connection_manager.GetConnectionListReference();
+
+	// do we have any databases attached (aside from the main database)?
+	auto databases = db_manager.GetDatabases();
+	idx_t database_count = 0;
+	for (auto &db_ref : databases) {
+		auto &db = db_ref.get();
+		if (db.IsSystem()) {
+			continue;
+		}
+		database_count++;
+	}
+	if (database_count > 1) {
+		return false;
+	}
+	for (auto &conn_ref : connection_list) {
+		auto &conn = conn_ref.first.get();
+		// do we have any prepared statements?
+		if (!conn.client_data->prepared_statements.empty()) {
+			return false;
+		}
+		// we are currently inside a transaction?
+		if (conn.transaction.HasActiveTransaction()) {
+			return false;
+		}
+		// do we have any temporary objects?
+		auto &temp = conn.client_data->temporary_objects;
+		auto &temp_catalog = temp->GetCatalog().Cast<DuckCatalog>();
+		vector<reference<DuckSchemaEntry>> schemas;
+		temp_catalog.ScanSchemas(
+		    [&](SchemaCatalogEntry &schema) { schemas.push_back(schema.Cast<DuckSchemaEntry>()); });
+		if (schemas.size() != 1) {
+			return false;
+		}
+		auto &temp_schema = schemas[0].get();
+		vector<CatalogType> catalog_types {CatalogType::TABLE_ENTRY,     CatalogType::VIEW_ENTRY,
+		                                   CatalogType::INDEX_ENTRY,     CatalogType::SEQUENCE_ENTRY,
+		                                   CatalogType::COLLATION_ENTRY, CatalogType::TYPE_ENTRY,
+		                                   CatalogType::MACRO_ENTRY,     CatalogType::TABLE_MACRO_ENTRY};
+		bool found_temp_object = false;
+		for (auto &catalog_type : catalog_types) {
+			temp_schema.Scan(catalog_type, [&](CatalogEntry &entry) {
+				if (entry.internal) {
+					return;
+				}
+				found_temp_object = true;
+			});
+			if (found_temp_object) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, string sql_query) const {
 	if (context.is_parallel) {
 		// cannot restart in parallel
@@ -67,19 +128,8 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	} catch (...) {
 		query_fail = true;
 	}
-	bool can_restart = true;
-	auto &connection_manager = connection->context->db->GetConnectionManager();
-	auto &connection_list = connection_manager.GetConnectionListReference();
-	for (auto &conn_ref : connection_list) {
-		auto &conn = conn_ref.first.get();
-		if (!conn.client_data->prepared_statements.empty()) {
-			can_restart = false;
-		}
-		if (conn.transaction.HasActiveTransaction()) {
-			can_restart = false;
-		}
-	}
-	if (!query_fail && can_restart && !runner.skip_reload) {
+	bool can_restart = CanRestart(*connection);
+	if (!query_fail && can_restart && !runner.skip_reload && !runner.dbpath.empty()) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_uniq<RestartCommand>(runner, true);
 		runner.ExecuteCommand(std::move(command));
@@ -208,6 +258,20 @@ Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
 Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
+ResetLabel::ResetLabel(SQLLogicTestRunner &runner) : Command(runner) {
+}
+
+void ResetLabel::ExecuteInternal(ExecuteContext &context) const {
+	runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+		auto it = map.find(query_label);
+		//! should we allow this to be missing at all?
+		if (it == map.end()) {
+			FAIL_LINE(file_name, query_line, 0);
+		}
+		map.erase(it);
+	});
+}
+
 RestartCommand::RestartCommand(SQLLogicTestRunner &runner, bool load_extensions_p)
     : Command(runner), load_extensions(load_extensions_p) {
 }
@@ -231,8 +295,8 @@ UnzipCommand::UnzipCommand(SQLLogicTestRunner &runner, string &input, string &ou
     : Command(runner), input_path(input), extraction_path(output) {
 }
 
-LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly)
-    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly) {
+LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly, const string &version)
+    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly), version(version) {
 }
 
 struct ParallelExecuteContext {
@@ -542,8 +606,19 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 		runner.config->options.access_mode = AccessMode::AUTOMATIC;
 	}
 	if (runner.db) {
-		runner.config->options.serialization_compatibility =
-		    runner.db->instance->config.options.serialization_compatibility;
+		if (version.empty()) {
+			//! No version was provided, use the default of the main db.
+			runner.config->options.serialization_compatibility =
+			    runner.db->instance->config.options.serialization_compatibility;
+		} else {
+			try {
+				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+			} catch (std::exception &ex) {
+				ErrorData err(ex);
+				SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+				FAIL();
+			}
+		}
 	}
 	// now create the database file
 	runner.LoadDatabase(resolved_path, true);

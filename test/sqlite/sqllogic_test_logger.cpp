@@ -243,21 +243,29 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	PrintLineSep();
 }
 
-void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result) {
-	if (expected_result) {
-		expected_result->Print();
-	} else {
-		std::cerr << "???" << std::endl;
-	}
+void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result,
+                                         const string &expected_hash, const string &actual_hash) {
 	PrintErrorHeader("Wrong result hash!");
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
 	PrintHeader("Expected result:");
 	PrintLineSep();
+	if (expected_result) {
+		expected_result->Print();
+	} else {
+		std::cerr << "???" << std::endl;
+	}
+	PrintLineSep();
+	PrintHeader("Expected result hash:");
+	std::cerr << expected_hash << std::endl;
+	PrintLineSep();
 	PrintHeader("Actual result:");
 	PrintLineSep();
 	result.Print();
+	PrintLineSep();
+	PrintHeader("Actual result hash");
+	std::cerr << actual_hash << std::endl;
 }
 
 void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result) {

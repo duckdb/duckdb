@@ -1,0 +1,48 @@
+# name: test/sql/error/qualified_column_error.test
+# description: Test errors on qualified columns
+# group: [error]
+
+statement ok
+create schema "dbt_temp"
+
+statement ok
+create or replace table "dbt_temp"."foo_2" as (select 42 as num_2);
+
+statement error
+select "dbt_temp"."foo_2".num_3 FROM  "dbt_temp"."foo_2"
+----
+"num_2"
+
+statement error
+select "dbt_temp"."foo_1".num_2 FROM  "dbt_temp"."foo_2"
+----
+"foo_2"
+
+statement ok
+attach ':memory:' as cat
+
+statement ok
+create schema cat.schema
+
+statement ok
+create table cat.schema.tbl(col struct(v1 int));
+
+statement error
+select cat.schema.tbl.col.v2 from cat.schema.tbl
+----
+"v1"
+
+statement error
+select cat.schema.tbl.cxl.v1 from cat.schema.tbl
+----
+"col"
+
+statement error
+select cat.schema.txl.col.v1 from cat.schema.tbl
+----
+"cat.schema.tbl"
+
+statement error
+select cat.schxma.tbl.col.v1 from cat.schema.tbl
+----
+"cat.schema.tbl"

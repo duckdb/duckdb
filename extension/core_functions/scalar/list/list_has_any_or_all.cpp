@@ -12,29 +12,29 @@ static unique_ptr<FunctionData> ListHasAnyOrAllBind(ClientContext &context, Scal
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 
-	const auto lhs_is_param = arguments[0]->HasParameter();
-	const auto rhs_is_param = arguments[1]->HasParameter();
+	const auto &lhs_type = arguments[0]->return_type;
+	const auto &rhs_type = arguments[1]->return_type;
 
-	if (lhs_is_param && rhs_is_param) {
-		throw ParameterNotResolvedException();
-	}
-
-	const auto &lhs_list = arguments[0]->return_type;
-	const auto &rhs_list = arguments[1]->return_type;
-
-	if (lhs_is_param) {
-		bound_function.arguments[0] = rhs_list;
-		bound_function.arguments[1] = rhs_list;
-		return nullptr;
-	}
-	if (rhs_is_param) {
-		bound_function.arguments[0] = lhs_list;
-		bound_function.arguments[1] = lhs_list;
+	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
+		bound_function.arguments[0] = rhs_type;
+		bound_function.arguments[1] = lhs_type;
+		bound_function.return_type = LogicalType::UNKNOWN;
 		return nullptr;
 	}
 
-	bound_function.arguments[0] = lhs_list;
-	bound_function.arguments[1] = rhs_list;
+	// LHS and RHS must have the same input type.
+	// Thus, we can proceed binding, even if we only know the type of one of the arguments.
+
+	if (lhs_type.IsUnknown() || rhs_type.IsUnknown()) {
+		bound_function.arguments[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
+		bound_function.arguments[1] = rhs_type.IsUnknown() ? lhs_type : rhs_type;
+		return nullptr;
+	}
+
+	// Ensure the lists have the same child type, else throw.
+
+	bound_function.arguments[0] = lhs_type;
+	bound_function.arguments[1] = rhs_type;
 
 	const auto &lhs_child = ListType::GetChildType(bound_function.arguments[0]);
 	const auto &rhs_child = ListType::GetChildType(bound_function.arguments[1]);

@@ -5,7 +5,10 @@
 
 namespace duckdb {
 
-VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
+}
+
+VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_fs(std::move(inner)) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
@@ -115,6 +118,10 @@ bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> 
 
 void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	FindFileSystem(filename).RemoveFile(filename, opener);
+}
+
+bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(filename).TryRemoveFile(filename, opener);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

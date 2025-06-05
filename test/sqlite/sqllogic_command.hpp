@@ -92,6 +92,21 @@ public:
 	}
 };
 
+class ResetLabel : public Command {
+public:
+	ResetLabel(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+
+	bool SupportsConcurrent() const override {
+		return true;
+	}
+
+public:
+	string query_label;
+};
+
 class Query : public Command {
 public:
 	Query(SQLLogicTestRunner &runner);
@@ -183,10 +198,11 @@ private:
 
 class LoadCommand : public Command {
 public:
-	LoadCommand(SQLLogicTestRunner &runner, string dbpath, bool readonly);
+	LoadCommand(SQLLogicTestRunner &runner, string dbpath, bool readonly, const string &version = "");
 
 	string dbpath;
 	bool readonly;
+	string version;
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;

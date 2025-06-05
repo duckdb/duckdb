@@ -147,6 +147,14 @@ public:
 		}
 		return map[map_idx[key]].second;
 	}
+
+	bool operator==(const InsertionOrderPreservingMap &other) const {
+		return map == other.map && map_idx == other.map_idx;
+	}
+
+	bool operator!=(const InsertionOrderPreservingMap &other) const {
+		return !(*this == other);
+	}
 };
 
 } // namespace duckdb

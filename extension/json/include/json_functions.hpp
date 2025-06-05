@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
@@ -27,6 +27,7 @@ public:
 	JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONCommon::JSONPathType path_type);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
+	static JSONCommon::JSONPathType CheckPath(const Value &path_val, string &path, size_t &len);
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
@@ -62,7 +63,7 @@ public:
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
 public:
-	JSONAllocator json_allocator;
+	shared_ptr<JSONAllocator> json_allocator;
 };
 
 class JSONFunctions {
@@ -127,6 +128,9 @@ private:
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+
+	static TableFunctionSet GetJSONEachFunction();
+	static TableFunctionSet GetJSONTreeFunction();
 
 	static TableFunctionSet GetExecuteJsonSerializedSqlFunction();
 };

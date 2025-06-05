@@ -68,11 +68,14 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 }
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
-      indexes(catalog), table_functions(catalog, make_uniq<DefaultTableFunctionGenerator>(catalog, *this)),
+    : SchemaCatalogEntry(catalog, info),
+      tables(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultViewGenerator>(catalog, *this) : nullptr),
+      indexes(catalog),
+      table_functions(catalog,
+                      catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
-      functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
-      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
+      functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
+      sequences(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }
 
 unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {

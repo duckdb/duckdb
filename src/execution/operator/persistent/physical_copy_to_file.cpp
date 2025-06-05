@@ -458,9 +458,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = GetNonTmpFile(context, tmp_file_path);
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
+	fs.TryRemoveFile(file_path);
 	fs.MoveFile(tmp_file_path, file_path);
 }
 
