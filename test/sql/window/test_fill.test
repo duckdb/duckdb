@@ -365,8 +365,10 @@ qualify filled is distinct from i
 #
 # Unusable values
 #
+# If we use an unsuable value, the interpolation will produce strange values
 
 # Infinity/NaN
+
 foreach ordertype float double
 
 foreach unusable 'infinity' '-infinity' 'NaN'
