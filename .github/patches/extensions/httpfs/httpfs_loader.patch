@@ -1,17 +1,3 @@
-diff --git a/duckdb b/duckdb
-index 71c5c07..7b25345 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 71c5c07cdd295e9409c0505885033ae9eb6b5ddd
-+Subproject commit 7b253450b6f91ac3c35d16f994361bffebbdc639
-diff --git a/extension-ci-tools b/extension-ci-tools
-index 555f1c8..cca140d 160000
---- a/extension-ci-tools
-+++ b/extension-ci-tools
-@@ -1 +1 @@
--Subproject commit 555f1c857dbe27f87b3e9c7656354d37c239ffaf
-+Subproject commit cca140d4cc47f3f3e40f29b49c305bd92845771f
 diff --git a/extension/httpfs/create_secret_functions.cpp b/extension/httpfs/create_secret_functions.cpp
 index b3984b3..476bc14 100644
 --- a/extension/httpfs/create_secret_functions.cpp
@@ -86,7 +72,7 @@ index b3984b3..476bc14 100644
  
  unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context,
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index 04bd795..917e567 100644
+index 04bd795..3a3e89e 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
 @@ -42,11 +42,11 @@ AESStateSSL::~AESStateSSL() {
@@ -117,7 +103,7 @@ index 04bd795..917e567 100644
  }
  
 -void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
-+void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const unsigned char *key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
++void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
  	mode = ENCRYPT;
  
 -	if (1 != EVP_EncryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
@@ -134,7 +120,7 @@ index 04bd795..917e567 100644
  }
  
 -void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
-+void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const unsigned char *key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
++void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
  	mode = DECRYPT;
  
 -	if (1 != EVP_DecryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
@@ -245,7 +231,7 @@ index 54b7566..bd3bc4a 100644
  protected:
  	//! Internal function to create bearer token
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index f819356..7d7f1ee 100644
+index f819356..aa6ad70 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
 @@ -29,13 +29,13 @@ public:
@@ -254,8 +240,8 @@ index f819356..7d7f1ee 100644
  public:
 -	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
 -	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
-+	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const unsigned char *key, duckdb::idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
-+	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const unsigned char *key, duckdb::idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
++	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
++	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
  	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
  	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
  	void GenerateRandomData(data_ptr_t data, idx_t len) override;
@@ -281,7 +267,7 @@ index f819356..7d7f1ee 100644
 -	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
 -		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
 -	}
-+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const unsigned char *key = nullptr, duckdb::idx_t key_len = 0) const override {
++		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
 +			return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
 +		}
  

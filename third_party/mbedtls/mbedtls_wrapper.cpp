@@ -236,7 +236,7 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 	}
 }
 
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const unsigned char *key, duckdb::idx_t key_len) : context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::const_data_ptr_t key, duckdb::idx_t key_len) : context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher(key_len);
@@ -286,7 +286,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_
 }
 
 
-void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const unsigned char* key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
 	mode = ENCRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, key_len * 8, MBEDTLS_ENCRYPT) != 0) {
@@ -296,8 +296,8 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_pt
 	InitializeInternal(iv, iv_len, aad, aad_len);
 }
 
-void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const unsigned char* key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
-	mode = ENCRYPT;
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
+	mode = DECRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, key_len * 8, MBEDTLS_DECRYPT) != 0) {
 		runtime_error("Failed to set AES key for encryption");
