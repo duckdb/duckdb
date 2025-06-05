@@ -304,7 +304,9 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::KeywordCategoryType(token_text);
-		if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
+		if (category == KeywordCategory::KEYWORD_RESERVED ||
+			category == KeywordCategory::KEYWORD_UNRESERVED ||
+			category == GetBannedCategory()) {
 			return MatchResultType::FAIL;
 		}
 		if (!IsIdentifier(token_text)) {
@@ -1108,15 +1110,15 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
 	AddRuleOverride("Identifier", Variable());
-	AddRuleOverride("TypeName", TypeName());
-	AddRuleOverride("TableName", TableName());
-	AddRuleOverride("CatalogName", CatalogName());
-	AddRuleOverride("SchemaName", SchemaName());
-	AddRuleOverride("ColumnName", ColumnName());
-	AddRuleOverride("FunctionName", ScalarFunctionName());
-	AddRuleOverride("TableFunctionName", TableFunctionName());
-	AddRuleOverride("PragmaName", PragmaName());
-	AddRuleOverride("SettingName", SettingName());
+	// AddRuleOverride("TypeName", TypeName());
+	// AddRuleOverride("TableName", TableName());
+	// AddRuleOverride("CatalogName", CatalogName());
+	// AddRuleOverride("SchemaName", SchemaName());
+	// AddRuleOverride("ColumnName", ColumnName());
+	// AddRuleOverride("FunctionName", ScalarFunctionName());
+	// AddRuleOverride("TableFunctionName", TableFunctionName());
+	// AddRuleOverride("PragmaName", PragmaName());
+	// AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
