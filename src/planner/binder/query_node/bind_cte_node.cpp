@@ -41,12 +41,15 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	// Rename columns if duplicate names are detected
 	idx_t index = 1;
 	vector<string> names;
+	// Use a case-insensitive set to track names
+	case_insensitive_set_t ci_names;
 	for (auto &n : result->names) {
 		string name = n;
-		while (find(names.begin(), names.end(), name) != names.end()) {
+		while (ci_names.find(name) != ci_names.end()) {
 			name = n + "_" + std::to_string(index++);
 		}
 		names.push_back(name);
+		ci_names.insert(name);
 	}
 
 	// This allows the right side to reference the CTE
