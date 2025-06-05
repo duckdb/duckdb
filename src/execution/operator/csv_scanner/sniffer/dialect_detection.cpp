@@ -1,3 +1,4 @@
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -28,7 +29,7 @@ vector<char> DialectCandidates::GetDefaultComment() {
 }
 
 string DialectCandidates::Print() {
-	std::ostringstream search_space;
+	auto search_space = GetLocalAgnostic<std::ostringstream>();
 
 	search_space << "Delimiter Candidates: ";
 	for (idx_t i = 0; i < delim_candidates.size(); i++) {

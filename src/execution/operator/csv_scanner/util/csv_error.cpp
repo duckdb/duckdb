@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
@@ -34,7 +35,7 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 			}
 		}
 	}
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	if (PrintLineNumber(error_to_throw)) {
 		error << "CSV Error on Line: " << error_to_throw_row << '\n';
 		if (!error_to_throw.csv_row.empty()) {
@@ -279,7 +280,7 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
     : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), csv_row(std::move(csv_row_p)),
       error_info(error_info_p), row_byte_position(row_byte_position), byte_position(byte_position_p) {
 	// What were the options
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
 	}
@@ -320,12 +321,12 @@ void CSVError::RemoveNewLine(string &error) {
 CSVError CSVError::CastError(const CSVReaderOptions &options, const string &column_name, string &cast_error,
                              idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
                              optional_idx byte_position, LogicalTypeId type, const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	// Which column
 	error << "Error when converting column \"" << column_name << "\". ";
 	// What was the cast error
 	error << cast_error << '\n';
-	std::ostringstream how_to_fix_it;
+	auto how_to_fix_it = GetLocalAgnostic<std::ostringstream>();
 	how_to_fix_it << "Column " << column_name << " is being converted as type " << LogicalTypeIdToString(type) << '\n';
 	if (!options.WasTypeManuallySet(column_idx)) {
 		how_to_fix_it << "This type was auto-detected from the CSV file." << '\n';
@@ -351,11 +352,11 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, const string &colu
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
                                  idx_t byte_position, const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	error << "Maximum line size of " << options.maximum_line_size.GetValue() << " bytes exceeded. ";
 	error << "Actual Size:" << csv_row.size() << " bytes." << '\n';
 
-	std::ostringstream how_to_fix_it;
+	auto how_to_fix_it = GetLocalAgnostic<std::ostringstream>();
 	how_to_fix_it << "Possible Solution: Change the maximum length size, e.g., max_line_size=" << csv_row.size() + 2
 	              << "\n";
 
@@ -366,10 +367,10 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBounda
 CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
                                 string &csv_row, idx_t row_byte_position, optional_idx byte_position,
                                 const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	error << "The CSV Parser state machine reached an invalid state.\nThis can happen when is not possible to parse "
 	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
-	std::ostringstream how_to_fix_it;
+	auto how_to_fix_it = GetLocalAgnostic<std::ostringstream>();
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		how_to_fix_it << "Possible fixes:" << '\n';
 		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
@@ -381,7 +382,7 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 }
 CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
                                        const idx_t column_count, const string &delimiter) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
 	// 2. What's the error
@@ -439,7 +440,7 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 
 CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
                                  SetColumns &set_columns) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
 	// 2. What's the error
@@ -517,7 +518,7 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 
 CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
                                    const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
 	         "disable the parallel csv reader with parallel=false"
 	      << '\n';
@@ -529,9 +530,9 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
                                            LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
                                            optional_idx byte_position, const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	error << "Value with unterminated quote found." << '\n';
-	std::ostringstream how_to_fix_it;
+	auto how_to_fix_it = GetLocalAgnostic<std::ostringstream>();
 	how_to_fix_it << "Possible fixes:" << '\n';
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
@@ -547,9 +548,9 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
                                               LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
                                               optional_idx byte_position, const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	// We don't have a fix for this
-	std::ostringstream how_to_fix_it;
+	auto how_to_fix_it = GetLocalAgnostic<std::ostringstream>();
 	how_to_fix_it << "Possible fixes:" << '\n';
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
@@ -577,11 +578,11 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
                                string &csv_row, idx_t row_byte_position, optional_idx byte_position,
                                const string &current_path) {
-	std::ostringstream error;
+	auto error = GetLocalAgnostic<std::ostringstream>();
 	// How many columns were expected and how many were found
 	error << "Invalid unicode (byte sequence mismatch) detected. This file is not " << options.encoding << " encoded."
 	      << '\n';
-	std::ostringstream how_to_fix_it;
+	auto how_to_fix_it = GetLocalAgnostic<std::ostringstream>();
 	how_to_fix_it
 	    << "Possible Solution: Set the correct encoding, if available, to read this CSV File (e.g., encoding='UTF-16')"
 	    << '\n';

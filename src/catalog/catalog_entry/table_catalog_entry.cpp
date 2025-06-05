@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -79,7 +80,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 }
 
 string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {
-	std::stringstream ss;
+	auto ss = GetLocalAgnostic<std::stringstream>();
 
 	ss << "(";
 
@@ -185,7 +186,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 		return "";
 	}
 
-	std::stringstream ss;
+	auto ss = GetLocalAgnostic<std::stringstream>();
 	ss << "(";
 
 	for (auto &column : columns.Logical()) {

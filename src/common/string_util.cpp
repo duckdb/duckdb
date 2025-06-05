@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/stack.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -27,7 +28,7 @@ namespace duckdb {
 
 string StringUtil::GenerateRandomName(idx_t length) {
 	RandomEngine engine;
-	std::stringstream ss;
+	auto ss = GetLocalAgnostic<std::stringstream>();
 	for (idx_t i = 0; i < length; i++) {
 		ss << "0123456789abcdef"[engine.NextRandomInteger(0, 15)];
 	}
@@ -95,7 +96,8 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 }
 
 string StringUtil::Repeat(const string &str, idx_t n) {
-	std::ostringstream os;
+	auto os = GetLocalAgnostic<std::ostringstream>();
+
 	for (idx_t i = 0; i < n; i++) {
 		os << str;
 	}
@@ -342,7 +344,7 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
+	auto ss = GetLocalAgnostic<std::stringstream>(str);
 	vector<string> lines;
 	string temp;
 	while (getline(ss, temp, delimiter)) {
