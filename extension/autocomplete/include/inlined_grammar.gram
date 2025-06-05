@@ -1,22 +1,22 @@
-ColumnNameKeywords <-
+ColumnNameKeyword <-
   'BETWEEN' /
   'BIGINT' /
   'BIT' /
-  'BOOLEAN_P' /
-  'CHAR_P' /
+  'BOOLEAN' /
+  'CHAR' /
   'CHARACTER' /
   'COALESCE' /
   'COLUMNS' /
   'DEC' /
-  'DECIMAL_P' /
+  'DECIMAL' /
   'EXISTS' /
   'EXTRACT' /
-  'FLOAT_P' /
+  'FLOAT' /
   'GENERATED' /
   'GROUPING' /
   'GROUPING_ID' /
   'INOUT' /
-  'INT_P' /
+  'INT' /
   'INTEGER' /
   'INTERVAL' /
   'MAP' /
@@ -25,7 +25,7 @@ ColumnNameKeywords <-
   'NONE' /
   'NULLIF' /
   'NUMERIC' /
-  'OUT_P' /
+  'OUT' /
   'OVERLAY' /
   'POSITION' /
   'PRECISION' /
@@ -54,7 +54,7 @@ ColumnNameKeywords <-
   'XMLSERIALIZE' /
   'XMLTABLE'
 
-TypeNameKeywords <-
+TypeNameKeyword <-
   'ASOF' /
   'AT' /
   'AUTHORIZATION' /
@@ -67,7 +67,7 @@ TypeNameKeywords <-
   'FULL' /
   'GLOB' /
   'ILIKE' /
-  'INNER_P' /
+  'INNER' /
   'IS' /
   'ISNULL' /
   'JOIN' /
@@ -75,7 +75,7 @@ TypeNameKeywords <-
   'LIKE' /
   'NATURAL' /
   'NOTNULL' /
-  'OUTER_P' /
+  'OUTER' /
   'OVERLAPS' /
   'POSITIONAL' /
   'RIGHT' /
@@ -87,50 +87,51 @@ TypeNameKeywords <-
   'SEMI' /
   'ANTI'
 
-ReservedKeyword <- 'ALL'i /
+ReservedKeyword <-
+'ALL'i /
 'ANALYSE'i /
 'ANALYZE'i /
 'AND'i /
 'ANY'i /
 'ARRAY'i /
 'AS'i /
-'ASC_P'i /
+'ASC'i /
 'ASYMMETRIC'i /
 'BOTH'i /
 'CASE'i /
 'CAST'i /
-'CHECK_P'i /
+'CHECK'i /
 'COLLATE'i /
 'COLUMN'i /
 'CONSTRAINT'i /
-'CREATE_P'i /
+'CREATE'i /
 'DEFAULT'i /
 'DEFERRABLE'i /
-'DESC_P'i /
+'DESC'i /
 'DESCRIBE'i /
 'DISTINCT'i /
 'DO'i /
 'ELSE'i /
-'END_P'i /
+'END'i /
 'EXCEPT'i /
-'FALSE_P'i /
+'FALSE'i /
 'FETCH'i /
 'FOR'i /
 'FOREIGN'i /
 'FROM'i /
 'GRANT'i /
-'GROUP_P'i /
+'GROUP'i /
 'HAVING'i /
 'QUALIFY'i /
-'IN_P'i /
+'IN'i /
 'INITIALLY'i /
 'INTERSECT'i /
 'INTO'i /
-'LATERAL_P'i /
+'LATERAL'i /
 'LEADING'i /
 'LIMIT'i /
 'NOT'i /
-'NULL_P'i /
+'NULL'i /
 'OFFSET'i /
 'ON'i /
 'ONLY'i /
@@ -152,7 +153,7 @@ ReservedKeyword <- 'ALL'i /
 'THEN'i /
 'TO'i /
 'TRAILING'i /
-'TRUE_P'i /
+'TRUE'i /
 'UNION'i /
 'UNIQUE'i /
 'UNPIVOT'i /
@@ -163,12 +164,12 @@ ReservedKeyword <- 'ALL'i /
 'WINDOW'i /
 'WITH'i
 
-UnreservedKeywords <-
-  'ABORT_P' /
-  'ABSOLUTE_P' /
+UnreservedKeyword <-
+  'ABORT' /
+  'ABSOLUTE' /
   'ACCESS' /
   'ACTION' /
-  'ADD_P' /
+  'ADD' /
   'ADMIN' /
   'AFTER' /
   'AGGREGATE' /
@@ -181,16 +182,16 @@ UnreservedKeywords <-
   'ATTRIBUTE' /
   'BACKWARD' /
   'BEFORE' /
-  'BEGIN_P' /
+  'BEGIN' /
   'BY' /
   'CACHE' /
-  'CALL_P' /
+  'CALL' /
   'CALLED' /
   'CASCADE' /
   'CASCADED' /
-  'CATALOG_P' /
-  'CENTURY_P' /
-  'CENTURIES_P' /
+  'CATALOG' /
+  'CENTURY' /
+  'CENTURIES' /
   'CHAIN' /
   'CHARACTERISTICS' /
   'CHECKPOINT' /
@@ -206,44 +207,44 @@ UnreservedKeywords <-
   'CONFLICT' /
   'CONNECTION' /
   'CONSTRAINTS' /
-  'CONTENT_P' /
-  'CONTINUE_P' /
-  'CONVERSION_P' /
+  'CONTENT' /
+  'CONTINUE' /
+  'CONVERSION' /
   'COPY' /
   'COST' /
   'CSV' /
   'CUBE' /
-  'CURRENT_P' /
+  'CURRENT' /
   'CURSOR' /
   'CYCLE' /
-  'DATA_P' /
+  'DATA' /
   'DATABASE' /
-  'DAY_P' /
-  'DAYS_P' /
+  'DAY' /
+  'DAYS' /
   'DEALLOCATE' /
-  'DECADE_P' /
-  'DECADES_P' /
+  'DECADE' /
+  'DECADES' /
   'DECLARE' /
   'DEFAULTS' /
   'DEFERRED' /
   'DEFINER' /
-  'DELETE_P' /
+  'DELETE' /
   'DELIMITER' /
   'DELIMITERS' /
   'DEPENDS' /
   'DETACH' /
   'DICTIONARY' /
-  'DISABLE_P' /
+  'DISABLE' /
   'DISCARD' /
-  'DOCUMENT_P' /
-  'DOMAIN_P' /
-  'DOUBLE_P' /
+  'DOCUMENT' /
+  'DOMAIN' /
+  'DOUBLE' /
   'DROP' /
   'EACH' /
-  'ENABLE_P' /
+  'ENABLE' /
   'ENCODING' /
   'ENCRYPTED' /
-  'ENUM_P' /
+  'ENUM' /
   'ESCAPE' /
   'EVENT' /
   'EXCLUDE' /
@@ -251,14 +252,14 @@ UnreservedKeywords <-
   'EXCLUSIVE' /
   'EXECUTE' /
   'EXPLAIN' /
-  'EXPORT_P' /
+  'EXPORT' /
   'EXPORT_STATE' /
   'EXTENSION' /
   'EXTENSIONS' /
   'EXTERNAL' /
   'FAMILY' /
   'FILTER' /
-  'FIRST_P' /
+  'FIRST' /
   'FOLLOWING' /
   'FORCE' /
   'FORWARD' /
@@ -269,26 +270,26 @@ UnreservedKeywords <-
   'GRANTED' /
   'GROUPS' /
   'HANDLER' /
-  'HEADER_P' /
+  'HEADER' /
   'HOLD' /
-  'HOUR_P' /
-  'HOURS_P' /
-  'IDENTITY_P' /
-  'IF_P' /
-  'IGNORE_P' /
+  'HOUR' /
+  'HOURS' /
+  'IDENTITY' /
+  'IF' /
+  'IGNORE' /
   'IMMEDIATE' /
   'IMMUTABLE' /
-  'IMPLICIT_P' /
-  'IMPORT_P' /
-  'INCLUDE_P' /
+  'IMPLICIT' /
+  'IMPORT' /
+  'INCLUDE' /
   'INCLUDING' /
   'INCREMENT' /
   'INDEX' /
   'INDEXES' /
   'INHERIT' /
   'INHERITS' /
-  'INLINE_P' /
-  'INPUT_P' /
+  'INLINE' /
+  'INPUT' /
   'INSENSITIVE' /
   'INSERT' /
   'INSTALL' /
@@ -299,15 +300,15 @@ UnreservedKeywords <-
   'KEY' /
   'LABEL' /
   'LANGUAGE' /
-  'LARGE_P' /
-  'LAST_P' /
+  'LARGE' /
+  'LAST' /
   'LEAKPROOF' /
   'LEVEL' /
   'LISTEN' /
   'LOAD' /
   'LOCAL' /
   'LOCATION' /
-  'LOCK_P' /
+  'LOCK' /
   'LOCKED' /
   'LOGGED' /
   'MACRO' /
@@ -316,20 +317,20 @@ UnreservedKeywords <-
   'MATERIALIZED' /
   'MAXVALUE' /
   'METHOD' /
-  'MICROSECOND_P' /
-  'MICROSECONDS_P' /
-  'MILLENNIUM_P' /
-  'MILLENNIA_P' /
-  'MILLISECOND_P' /
-  'MILLISECONDS_P' /
-  'MINUTE_P' /
-  'MINUTES_P' /
+  'MICROSECOND' /
+  'MICROSECONDS' /
+  'MILLENNIUM' /
+  'MILLENNIA' /
+  'MILLISECOND' /
+  'MILLISECONDS' /
+  'MINUTE' /
+  'MINUTES' /
   'MINVALUE' /
   'MODE' /
-  'MONTH_P' /
-  'MONTHS_P' /
+  'MONTH' /
+  'MONTHS' /
   'MOVE' /
-  'NAME_P' /
+  'NAME' /
   'NAMES' /
   'NEW' /
   'NEXT' /
@@ -337,8 +338,8 @@ UnreservedKeywords <-
   'NOTHING' /
   'NOTIFY' /
   'NOWAIT' /
-  'NULLS_P' /
-  'OBJECT_P' /
+  'NULLS' /
+  'OBJECT' /
   'OF' /
   'OFF' /
   'OIDS' /
@@ -363,7 +364,7 @@ UnreservedKeywords <-
   'PERSISTENT' /
   'PLANS' /
   'POLICY' /
-  'PRAGMA_P' /
+  'PRAGMA' /
   'PRECEDING' /
   'PREPARE' /
   'PREPARED' /
@@ -374,11 +375,11 @@ UnreservedKeywords <-
   'PROCEDURE' /
   'PROGRAM' /
   'PUBLICATION' /
-  'QUARTER_P' /
-  'QUARTERS_P' /
+  'QUARTER' /
+  'QUARTERS' /
   'QUOTE' /
   'RANGE' /
-  'READ_P' /
+  'READ' /
   'REASSIGN' /
   'RECHECK' /
   'RECURSIVE' /
@@ -386,14 +387,14 @@ UnreservedKeywords <-
   'REFERENCING' /
   'REFRESH' /
   'REINDEX' /
-  'RELATIVE_P' /
+  'RELATIVE' /
   'RELEASE' /
   'RENAME' /
   'REPEATABLE' /
   'REPLACE' /
   'REPLICA' /
   'RESET' /
-  'RESPECT_P' /
+  'RESPECT' /
   'RESTART' /
   'RESTRICT' /
   'RETURNS' /
@@ -411,8 +412,8 @@ UnreservedKeywords <-
   'SCROLL' /
   'SEARCH' /
   'SECRET' /
-  'SECOND_P' /
-  'SECONDS_P' /
+  'SECOND' /
+  'SECONDS' /
   'SECURITY' /
   'SEQUENCE' /
   'SEQUENCES' /
@@ -426,9 +427,9 @@ UnreservedKeywords <-
   'SKIP' /
   'SNAPSHOT' /
   'SORTED' /
-  'SQL_P' /
+  'SQL' /
   'STABLE' /
-  'STANDALONE_P' /
+  'STANDALONE' /
   'START' /
   'STATEMENT' /
   'STATISTICS' /
@@ -436,25 +437,25 @@ UnreservedKeywords <-
   'STDOUT' /
   'STORAGE' /
   'STORED' /
-  'STRICT_P' /
-  'STRIP_P' /
+  'STRICT' /
+  'STRIP' /
   'SUBSCRIPTION' /
   'SYSID' /
-  'SYSTEM_P' /
+  'SYSTEM' /
   'TABLES' /
   'TABLESPACE' /
   'TEMP' /
   'TEMPLATE' /
   'TEMPORARY' /
-  'TEXT_P' /
+  'TEXT' /
   'TIES' /
   'TRANSACTION' /
   'TRANSFORM' /
   'TRIGGER' /
   'TRUNCATE' /
   'TRUSTED' /
-  'TYPE_P' /
-  'TYPES_P' /
+  'TYPE' /
+  'TYPES' /
   'UNBOUNDED' /
   'UNCOMMITTED' /
   'UNENCRYPTED' /
@@ -463,35 +464,35 @@ UnreservedKeywords <-
   'UNLOGGED' /
   'UNTIL' /
   'UPDATE' /
-  'USE_P' /
+  'USE' /
   'USER' /
   'VACUUM' /
   'VALID' /
   'VALIDATE' /
   'VALIDATOR' /
-  'VALUE_P' /
-  'VARIABLE_P' /
+  'VALUE' /
+  'VARIABLE' /
   'VARYING' /
-  'VERSION_P' /
+  'VERSION' /
   'VIEW' /
   'VIEWS' /
   'VIRTUAL' /
   'VOLATILE' /
-  'WEEK_P' /
-  'WEEKS_P' /
-  'WHITESPACE_P' /
+  'WEEK' /
+  'WEEKS' /
+  'WHITESPACE' /
   'WITHIN' /
   'WITHOUT' /
   'WORK' /
   'WRAPPER' /
-  'WRITE_P' /
-  'XML_P' /
-  'YEAR_P' /
-  'YEARS_P' /
-  'YES_P' /
+  'WRITE' /
+  'XML' /
+  'YEAR' /
+  'YEARS' /
+  'YES' /
   'ZONE'
 
-FuncNameKeywords <-
+FuncNameKeyword <-
   'ASOF' /
   'AT' /
   'AUTHORIZATION' /
@@ -504,7 +505,7 @@ FuncNameKeywords <-
   'GENERATED' /
   'GLOB' /
   'ILIKE' /
-  'INNER_P' /
+  'INNER' /
   'IS' /
   'ISNULL' /
   'JOIN' /
@@ -513,7 +514,7 @@ FuncNameKeywords <-
   'MAP' /
   'NATURAL' /
   'NOTNULL' /
-  'OUTER_P' /
+  'OUTER' /
   'OVERLAPS' /
   'POSITIONAL' /
   'RIGHT' /
@@ -544,7 +545,7 @@ UnpivotHeader <- Identifier / Parens(List(Identifier))
 
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?) WithinGroupClause? FilterClause? ExportClause? OverClause?
-FunctionIdentifier <- CatalogQualification? SchemaQualification? FunctionName
+FunctionIdentifier <- CatalogQualification? SchemaQualification? FuncName
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 ExportClause <- 'EXPORT_STATE'i
 WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)
@@ -568,7 +569,7 @@ CaseElse <- 'ELSE'i Expression
 TypeLiteral <- Identifier StringLiteral
 IntervalLiteral <- 'INTERVAL'i IntervalParameter IntervalUnit?
 IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
-IntervalUnit <- Identifier
+IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
 FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)
@@ -609,6 +610,7 @@ SingleExpression <-
     StarExpression /
     CastExpression /
     GroupingExpression /
+    MapExpression /
     FunctionExpression /
     ColumnReference /
     LiteralExpression /
@@ -616,7 +618,6 @@ SingleExpression <-
     ListComprehensionExpression /
     ListExpression /
     StructExpression /
-    MapExpression /
     PositionalExpression /
     DefaultExpression
 
@@ -750,11 +751,17 @@ TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
 ColumnIdList <- Parens(List(Identifier))
 
-PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
+PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-DottedIdentifier <- Identifier ('.' Identifier)*
+DottedIdentifier <- ColId ('.' ColLabel)*
 Identifier <- QuotedIdentifier / PlainIdentifier
 
+ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
+ColIdOrString <- ColId / StringLiteral
+FuncName <- UnreservedKeyword / FuncNameKeyword / Identifier
+TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
+ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
+ColLabelOrString <- ColLabel / StringLiteral
 GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED'i AlwaysOrByDefault?
@@ -954,7 +961,7 @@ LimitClause <- 'LIMIT'i LimitValue
 OffsetClause <- 'OFFSET'i LimitValue
 LimitValue <- 'ALL'i / (NumberLiteral 'PERCENT'i) / (Expression '%'?)
 
-AliasedExpression <- Expression ('AS'i? (Identifier / StringLiteral))?
+AliasedExpression <- (ColId ':' Expression) / (Expression 'AS'i ColLabelOrString) / (Expression Identifier?)
 
 ValuesClause <- 'VALUES'i List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
@@ -1125,21 +1132,19 @@ Statement <-
 	LoadStatement /
 	InstallStatement
 
-TypeName <- Identifier
-CatalogName <- Identifier
-SchemaName <- Identifier
-TableName <- Identifier
+CatalogName <- ColIdOrString
+SchemaName <- ColIdOrString
+TableName <- ColIdOrString
 ColumnName <- DottedIdentifier
-IndexName <- Identifier
-FunctionName <- Identifier
-SettingName <- Identifier
-PragmaName <- Identifier
-TableFunctionName <- Identifier
-ConstraintName <- Identifier
+IndexName <- ColId
+SettingName <- ColId
+PragmaName <- ColId
+TableFunctionName <- ColIdOrString
+ConstraintName <- ColIdOrString
 SequenceName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- Identifier
-SecretName <- Identifier
+SecretName <- ColId
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
