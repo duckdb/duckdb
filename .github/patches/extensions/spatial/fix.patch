@@ -2368,6 +2368,36 @@ index 36b96d0..0e80217 100644
  
  } // namespace duckdb
 \ No newline at end of file
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index 3038ed8..2bc6645 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -325,10 +325,10 @@ private:
+ // Physical Spatial Join Operator
+ //======================================================================================================================
+ 
+-PhysicalSpatialJoin::PhysicalSpatialJoin(LogicalOperator &op, PhysicalOperator &left,
++PhysicalSpatialJoin::PhysicalSpatialJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
+                                          PhysicalOperator &right, unique_ptr<Expression> condition_p,
+                                          JoinType join_type, idx_t estimated_cardinality)
+-    : PhysicalJoin(op, PhysicalOperatorType::EXTENSION, join_type, estimated_cardinality),
++    : PhysicalJoin(arena, op, PhysicalOperatorType::EXTENSION, join_type, estimated_cardinality),
+       condition(std::move(condition_p)) {
+ 
+ 	children.emplace_back(left);
+diff --git a/src/spatial/operators/spatial_join_physical.hpp b/src/spatial/operators/spatial_join_physical.hpp
+index ed50670..dce2085 100644
+--- a/src/spatial/operators/spatial_join_physical.hpp
++++ b/src/spatial/operators/spatial_join_physical.hpp
+@@ -10,7 +10,7 @@ public:
+ 	static constexpr auto TYPE = PhysicalOperatorType::EXTENSION;
+ 
+ public:
+-	PhysicalSpatialJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
++	PhysicalSpatialJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+ 	                    unique_ptr<Expression> spatial_predicate, JoinType join_type, idx_t estimated_cardinality);
+ 
+ 	//! The condition of the join
 diff --git a/src/spatial/spatial_extension.cpp b/src/spatial/spatial_extension.cpp
 index b26c527..b92bd52 100644
 --- a/src/spatial/spatial_extension.cpp
