@@ -1,22 +1,22 @@
-ColumnNameKeywords <-
+ColumnNameKeyword <-
   'BETWEEN' /
   'BIGINT' /
   'BIT' /
-  'BOOLEAN_P' /
-  'CHAR_P' /
+  'BOOLEAN' /
+  'CHAR' /
   'CHARACTER' /
   'COALESCE' /
   'COLUMNS' /
   'DEC' /
-  'DECIMAL_P' /
+  'DECIMAL' /
   'EXISTS' /
   'EXTRACT' /
-  'FLOAT_P' /
+  'FLOAT' /
   'GENERATED' /
   'GROUPING' /
   'GROUPING_ID' /
   'INOUT' /
-  'INT_P' /
+  'INT' /
   'INTEGER' /
   'INTERVAL' /
   'MAP' /
@@ -25,7 +25,7 @@ ColumnNameKeywords <-
   'NONE' /
   'NULLIF' /
   'NUMERIC' /
-  'OUT_P' /
+  'OUT' /
   'OVERLAY' /
   'POSITION' /
   'PRECISION' /
