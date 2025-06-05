@@ -4,7 +4,7 @@ inputs:
   # Build config
   run_tests:
     description: 'Run extension tests after build'
-    default: 1
+    default: 'true'
   duckdb_arch:
     description: 'Provide DUCKDB_PLATFORM to build system for cross compilation'
     default: ''
