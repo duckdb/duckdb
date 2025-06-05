@@ -40,17 +40,17 @@ TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
 ColumnIdList <- Parens(List(Identifier))
 
-PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
+PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-DottedIdentifier <- Identifier ('.' Identifier)*
+DottedIdentifier <- ColId ('.' ColLabel)*
 Identifier <- QuotedIdentifier / PlainIdentifier
 
-ColId <- Identifier / UnreservedKeywords / ColNameKeywords
-FuncName <- Identifier / UnreservedKeywords / FuncNameKeywords
-TypeName <- Identifier / UnreservedKeywords / TypeNameKeywords
-ColLabel <- Identifier / UnreservedKeywords / ColNameKeywords / FuncNameKeywords / TypeNameKeywords / ReservedKeywords
-NonReservedWord <- Identifier / UnreservedKeywords / ColNameKeywords / FuncNameKeywords / TypeNameKeywords
-
+ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
+ColIdOrString <- ColId / StringLiteral
+FuncName <- UnreservedKeyword / FuncNameKeyword / Identifier
+TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
+ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
+ColLabelOrString <- ColLabel / StringLiteral
 GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED'i AlwaysOrByDefault?

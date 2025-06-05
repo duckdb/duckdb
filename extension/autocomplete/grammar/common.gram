@@ -28,21 +28,19 @@ Statement <-
 	LoadStatement /
 	InstallStatement
 
-TypeName <- Identifier
-CatalogName <- Identifier
-SchemaName <- Identifier
-TableName <- Identifier
+CatalogName <- ColIdOrString
+SchemaName <- ColIdOrString
+TableName <- ColIdOrString
 ColumnName <- DottedIdentifier
-IndexName <- Identifier
-FunctionName <- Identifier
-SettingName <- Identifier
-PragmaName <- Identifier
-TableFunctionName <- Identifier
-ConstraintName <- Identifier
+IndexName <- ColId
+SettingName <- ColId
+PragmaName <- ColId
+TableFunctionName <- ColIdOrString
+ConstraintName <- ColIdOrString
 SequenceName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- Identifier
-SecretName <- Identifier
+SecretName <- ColId
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''

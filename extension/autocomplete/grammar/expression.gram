@@ -1,6 +1,6 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?) WithinGroupClause? FilterClause? ExportClause? OverClause?
-FunctionIdentifier <- CatalogQualification? SchemaQualification? FunctionName
+FunctionIdentifier <- CatalogQualification? SchemaQualification? FuncName
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 ExportClause <- 'EXPORT_STATE'i
 WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)
@@ -24,7 +24,7 @@ CaseElse <- 'ELSE'i Expression
 TypeLiteral <- Identifier StringLiteral
 IntervalLiteral <- 'INTERVAL'i IntervalParameter IntervalUnit?
 IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
-IntervalUnit <- Identifier
+IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
 FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)
@@ -65,6 +65,7 @@ SingleExpression <-
     StarExpression /
     CastExpression /
     GroupingExpression /
+    MapExpression /
     FunctionExpression /
     ColumnReference /
     LiteralExpression /
@@ -72,7 +73,6 @@ SingleExpression <-
     ListComprehensionExpression /
     ListExpression /
     StructExpression /
-    MapExpression /
     PositionalExpression /
     DefaultExpression
 
