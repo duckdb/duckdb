@@ -49,10 +49,7 @@ EXTENSION_DEPENDENCIES = {
     'iceberg': [
         'avro',
         'parquet',
-    ],
-    'ducklake': [
-        'parquet',
-    ],
+    ]
 }
 
 from enum import Enum
