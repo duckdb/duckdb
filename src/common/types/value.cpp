@@ -168,7 +168,7 @@ Value::Value(const Value &other)
 }
 
 Value::Value(Value &&other) noexcept
-    : type_(std::move(other.type_)), is_null(other.is_null), value_(other.value_),
+    : type_(std::move(other.type_)), is_null(other.is_null), value_(std::move(other.value_)),
       value_info_(std::move(other.value_info_)) {
 }
 
