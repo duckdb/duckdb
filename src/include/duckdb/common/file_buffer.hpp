@@ -19,9 +19,9 @@ class BlockManager;
 class ClientContext;
 struct FileHandle;
 
-enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3 };
+enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3, EXTERNAL_FILE = 4 };
 
-static constexpr idx_t FILE_BUFFER_TYPE_COUNT = 3;
+static constexpr idx_t FILE_BUFFER_TYPE_COUNT = 4;
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
 class FileBuffer {

@@ -298,6 +298,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data, table_lookup);
+		if (bind_data && !bind_data->SupportStatementCache()) {
+			SetAlwaysRequireRebind();
+		}
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
