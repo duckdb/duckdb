@@ -1,4 +1,4 @@
-TypeNameKeywords <-
+TypeNameKeyword <-
   'ASOF' /
   'AT' /
   'AUTHORIZATION' /
@@ -11,7 +11,7 @@ TypeNameKeywords <-
   'FULL' /
   'GLOB' /
   'ILIKE' /
-  'INNER_P' /
+  'INNER' /
   'IS' /
   'ISNULL' /
   'JOIN' /
@@ -19,7 +19,7 @@ TypeNameKeywords <-
   'LIKE' /
   'NATURAL' /
   'NOTNULL' /
-  'OUTER_P' /
+  'OUTER' /
   'OVERLAPS' /
   'POSITIONAL' /
   'RIGHT' /

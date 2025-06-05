@@ -1,4 +1,4 @@
-FuncNameKeywords <-
+FuncNameKeyword <-
   'ASOF' /
   'AT' /
   'AUTHORIZATION' /
@@ -11,7 +11,7 @@ FuncNameKeywords <-
   'GENERATED' /
   'GLOB' /
   'ILIKE' /
-  'INNER_P' /
+  'INNER' /
   'IS' /
   'ISNULL' /
   'JOIN' /
@@ -20,7 +20,7 @@ FuncNameKeywords <-
   'MAP' /
   'NATURAL' /
   'NOTNULL' /
-  'OUTER_P' /
+  'OUTER' /
   'OVERLAPS' /
   'POSITIONAL' /
   'RIGHT' /
