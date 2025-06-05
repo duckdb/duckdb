@@ -17,15 +17,18 @@
 
 ################# HTTPFS
 duckdb_extension_load(httpfs
+    APPLY_PATCHES
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG eb1b04907c419d576f5fa4b34303810e8802e2f8
+    GIT_TAG 217ec8e04f6ed419c866a6d2496aa15aace4382f
     INCLUDE_DIR extension/httpfs/include
+    APPLY_PATCHES
     )
 
 ################# AVRO
 if (NOT MINGW)
     duckdb_extension_load(avro
+            APPLY_PATCHES
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
             GIT_TAG ff766174cc6cc9c4ed93fc4b75871bcdffcc6e65
@@ -35,15 +38,18 @@ endif()
 ################## AWS
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
+            APPLY_PATCHES
             ### TODO: re-enable LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
             GIT_TAG 4f318ebd088e464266c511abe2f70bbdeee2fcd8
             )
 endif()
 
+
 ################# AZURE
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
+            APPLY_PATCHES
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
             GIT_TAG 86a5acb33afe50ea57086ed997472551320c9820
@@ -66,6 +72,7 @@ endif()
 
 ################# EXCEL
 duckdb_extension_load(excel
+    APPLY_PATCHES
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
     GIT_TAG 7e97933214d0c7de2315668ec68589ae85651afb
@@ -82,6 +89,7 @@ endif()
 
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
+            APPLY_PATCHES
 #            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
             GIT_URL https://github.com/duckdb/duckdb-iceberg
             GIT_TAG 24dd874bee165661f6c3c79ee2a823f02941ed94
@@ -95,6 +103,7 @@ duckdb_extension_load(inet
     GIT_TAG eb2455703ca0665e69b9fd20fd1d8816c547cb49
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
@@ -102,6 +111,7 @@ duckdb_extension_load(inet
 #       uses a remote rds server but that's not something we want to run here.
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
+            APPLY_PATCHES
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
             GIT_TAG 9b24967e06a4af0a3cd43f8372114202a400f5f5
@@ -115,8 +125,9 @@ duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
     GIT_TAG 494d94912cc7ebcd8c43c9b6fc173a3e4142740f
-    INCLUDE_DIR spatial/include
+    INCLUDE_DIR src/spatial
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
@@ -132,12 +143,14 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
         GIT_TAG ed38d770e0bbf1d5a6660ec1887cc5abef65be15
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlsmith
         GIT_TAG 06e8da8a95710c996fcd62f385962ccd36a363f6
+        APPLY_PATCHES
         )
 
 ################# VSS
@@ -147,6 +160,7 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb-vss
         GIT_TAG ccfa7c9c1f1f540fa7f433a93d32bed772aa44f4
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL
@@ -156,6 +170,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
             GIT_TAG b79ef7e2dde1f9253f9ad584883b029eba8d29a4
+            APPLY_PATCHES
             )
 endif()
 
@@ -166,6 +181,7 @@ duckdb_extension_load(fts
         GIT_URL https://github.com/duckdb/duckdb-fts
         GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
         TEST_DIR test/sql
+        APPLY_PATCHES
 )
 
 ################# ENCODINGS
@@ -176,5 +192,6 @@ duckdb_extension_load(encodings
         GIT_URL https://github.com/duckdb/duckdb-encodings
         GIT_TAG dc3c206e237b517abcdd95ebe40d02dcd0f71084
         TEST_DIR test/sql
+        APPLY_PATCHES
 )
 endif()

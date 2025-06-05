@@ -224,7 +224,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// transform ORDER BY + LIMIT to TopN
 	RunOptimizer(OptimizerType::TOP_N, [&]() {
-		TopN topn;
+		TopN topn(context);
 		plan = topn.Optimize(std::move(plan));
 	});
 

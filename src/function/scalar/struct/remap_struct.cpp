@@ -401,6 +401,9 @@ struct RemapEntry {
 			auto &child_types = StructType::GetChildTypes(default_type);
 			for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 				auto &child_default = child_types[child_idx];
+				if (!result_entry->second.child_remaps || !entry->second.child_map) {
+					throw BinderException("No child remaps found");
+				}
 				HandleDefault(child_idx, child_default.first, child_default.second, *entry->second.child_map,
 				              *result_entry->second.child_remaps);
 			}
@@ -542,6 +545,10 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
+		if (arg->return_type.id() == LogicalTypeId::SQLNULL && arg_idx == 2) {
+			// remap target can be NULL
+			continue;
+		}
 		if (!arg->return_type.IsNested()) {
 			throw BinderException("Struct remap can only remap nested types, not '%s'", arg->return_type.ToString());
 		} else if (arg->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->return_type)) {
@@ -571,11 +578,11 @@ static unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFu
 	auto target_map = RemapIndex::GetMap(to_type);
 
 	Value remap_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
-	auto &remap_types = StructType::GetChildTypes(arguments[2]->return_type);
 
 	// (recursively) generate the remap entries
 	case_insensitive_map_t<RemapEntry> remap_map;
 	if (!remap_val.IsNull()) {
+		auto &remap_types = StructType::GetChildTypes(arguments[2]->return_type);
 		auto &remap_values = StructValue::GetChildren(remap_val);
 		for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
 			auto &remap_val = remap_values[remap_idx];

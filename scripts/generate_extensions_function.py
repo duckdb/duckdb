@@ -882,6 +882,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",
     "core_functions",
     "delta",
+    "encodings",
     "excel",
     "fts",
     "httpfs",
