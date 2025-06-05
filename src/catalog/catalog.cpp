@@ -921,13 +921,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
 		optional_ptr<Catalog> catalog_entry;
-		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
-		} else {
-			catalog_entry = &Catalog::GetCatalog(retriever, entry.catalog);
-		}
+		catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
 		if (!catalog_entry) {
-			return {nullptr, nullptr, ErrorData()};
+			continue;
 		}
 		D_ASSERT(catalog_entry);
 		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(lookup_info.GetCatalogType());
