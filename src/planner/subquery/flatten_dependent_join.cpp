@@ -238,23 +238,24 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 		auto entry = has_correlated_expressions.find(op);
 
 		if (entry == has_correlated_expressions.end()) {
-			// check if we read a recursive CTE
+			// Try to find a recursive CTE for this operator
 			auto &cteref = op.Cast<LogicalCTERef>();
 			auto cte = binder.recursive_ctes.find(cteref.cte_index);
+
+			has_correlated_expressions[op] = false; // Default: not correlated
+
+			// recursive_ctes may be a misnomer at this point, as it may also contain materialized CTEs
 			if (cte != binder.recursive_ctes.end()) {
-				// we found something in the binder, check if it is a recursive CTE
 				auto cte_node = cte->second;
+
 				if (cte_node->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-					// it is, in this case, we mark the CTE as not correlated, but the subtree as correlated
-					has_correlated_expressions[op] = false;
+					// Found a recursive CTE, subtree is correlated
 					return true;
 				}
-				// it is a materialized CTE, so, we again mark the CTE as not correlated, but the subtree depends on the
-				// correlation status of the materialized CTE
-				has_correlated_expressions[op] = false;
-				return has_correlated_expressions[*cte->second];
+				// Found a materialized CTE, subtree correlation depends on the CTE node
+				return has_correlated_expressions[*cte_node];
 			}
-			has_correlated_expressions[op] = false;
+			// No CTE found: subtree is correlated
 			return true;
 		}
 	}
