@@ -15,6 +15,7 @@
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -123,21 +124,20 @@ public:
 		if (ExtensionIsLoaded(extension.Name())) {
 			return;
 		}
-		extension.Load(*this);
+
+		// Instantiate a new loader
+		ExtensionLoader loader(*instance, extension.Name());
+
+		// Call the Load method of the extension
+		extension.Load(loader);
+
+		// Finalize the loading process
+		loader.FinalizeLoad();
+
 		ExtensionInstallInfo install_info;
 		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
 		install_info.version = extension.Version();
 		instance->SetExtensionLoaded(extension.Name(), install_info);
-	}
-
-	// DEPRECATED function that some extensions may still use to call their own Load method from the
-	// _init function of their loadable extension. Don't use this. Instead opt for a static LoadInternal function called
-	// from both the _init function and the Extension::Load. (see autocomplete extension)
-	// TODO: when to remove this function?
-	template <class T>
-	void LoadExtension() {
-		T extension;
-		extension.Load(*this);
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();

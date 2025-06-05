@@ -35,7 +35,9 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 	group_types_copy.emplace_back(LogicalType::HASH);
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
-	layout->Initialize(std::move(group_types_copy), AggregateObject::CreateAggregateObjects(op.bindings));
+	auto aggregate_objects = AggregateObject::CreateAggregateObjects(op.bindings);
+	const auto align = !aggregate_objects.empty();
+	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), align);
 	layout_ptr = std::move(layout);
 }
 
@@ -330,6 +332,10 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 }
 
 idx_t RadixHTConfig::SinkCapacity() const {
+	if (number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
+		// Grow strategy, start off a bit bigger
+		return 262144;
+	}
 	// Start off tiny, we can adapt with DecideAdaptation later
 	return 32768;
 }

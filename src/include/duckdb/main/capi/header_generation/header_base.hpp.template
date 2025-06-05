@@ -558,6 +558,12 @@ typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
 
+//! Holds error data.
+//! Must be destroyed with `duckdb_destroy_error_data`.
+typedef struct _duckdb_error_data {
+	void *internal_ptr;
+} * duckdb_error_data;
+
 //===--------------------------------------------------------------------===//
 // C API extension information
 //===--------------------------------------------------------------------===//
