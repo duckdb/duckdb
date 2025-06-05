@@ -553,6 +553,7 @@ def version_scheme(version):
     next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
     return prefix_version(next_version)
 
+
 setup(
     name="duckdb",  # Needed to make SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB work
     data_files=data_files,
