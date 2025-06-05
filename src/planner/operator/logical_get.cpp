@@ -250,6 +250,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(
 	    213, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
 	deserializer.ReadProperty(214, "ordinality_column_id", result->ordinality_column_id);
@@ -262,7 +263,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			result->column_ids.emplace_back(col_id);
 		}
 	}
-	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;
 	if (!has_serialize) {
