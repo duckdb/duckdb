@@ -52,6 +52,7 @@ public:
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
 		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
+
 	StorageLock lock;
 	atomic<bool> initialized;
 	atomic<idx_t> rows_copied;
@@ -78,6 +79,9 @@ public:
 		}
 		// initialize writing to the file
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*global_state, op);
+		}
 		auto written_file_info = AddFile(*write_lock, op.file_path, op.return_type);
 		if (written_file_info) {
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
@@ -217,6 +221,9 @@ public:
 			written_file_info->partition_keys = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR,
 			                                               std::move(partition_keys), std::move(partition_values));
 		}
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*info->global_state, op);
+		}
 		auto &result = *info;
 		info->active_writes = 1;
 		// store in active write map
@@ -353,6 +360,9 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	if (written_file_info) {
 		function.copy_to_get_written_statistics(context, *bind_data, *result, *written_file_info->file_stats);
 	}
+	if (function.initialize_operator) {
+		function.initialize_operator(*result, *this);
+	}
 	return result;
 }
 
@@ -408,12 +418,9 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	if (partition_output || per_thread_output || rotate) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		if (fs.FileExists(file_path)) {
-			// the target file exists AND is a file (not a directory)
-			if (fs.IsRemoteFile(file_path)) {
-				// for remote files we cannot do anything - as we cannot delete the file
-				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory!", file_path);
-			} else {
+		if (!fs.IsRemoteFile(file_path)) {
+			if (fs.FileExists(file_path)) {
+				// the target file exists AND is a file (not a directory)
 				// for local files we can remove the file if OVERWRITE_OR_IGNORE is enabled
 				if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
 					fs.RemoveFile(file_path);

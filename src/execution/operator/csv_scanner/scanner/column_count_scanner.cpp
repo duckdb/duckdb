@@ -15,6 +15,7 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
 inline void ColumnCountResult::InternalAddRow() {
 	const idx_t column_count = current_column_count + 1;
 	column_counts[result_position].number_of_columns = column_count;
+	column_counts[result_position].empty_lines = empty_lines;
 	rows_per_column_count[column_count]++;
 	current_column_count = 0;
 }
@@ -102,7 +103,7 @@ void ColumnCountResult::InvalidState(ColumnCountResult &result) {
 }
 
 bool ColumnCountResult::EmptyLine(ColumnCountResult &result, idx_t buffer_pos) {
-	// nop
+	result.empty_lines++;
 	return false;
 }
 
