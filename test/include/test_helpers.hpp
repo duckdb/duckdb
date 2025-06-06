@@ -25,12 +25,18 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "../sqlite/sqllogic_test_logger.hpp"
+#include <sstream>
+#include <iostream>
 namespace duckdb {
 
 bool TestForceStorage();
 bool TestForceReload();
 bool TestMemoryLeaks();
 void RegisterSqllogictests();
+bool SummarizeFailures();
+
+size_t GetSummaryCounter();
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
@@ -38,6 +44,7 @@ void TestCreateDirectory(string path);
 string TestJoinPath(string path1, string path2);
 void TestDeleteFile(string path);
 void TestChangeDirectory(string path);
+
 void SetDeleteTestPath(bool delete_path);
 bool DeleteTestPath();
 void ClearTestDirectory();

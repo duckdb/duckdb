@@ -143,6 +143,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
@@ -529,7 +530,6 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
@@ -545,6 +545,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			return;
 		}
 	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
