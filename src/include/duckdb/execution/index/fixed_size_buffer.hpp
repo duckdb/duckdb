@@ -136,6 +136,8 @@ public:
 			return;
 		}
 		buffer_ptr->readers--;
+		buffer_ptr = nullptr;
+		ptr = nullptr;
 
 		// FIXME: Enable unpinning buffers with zero readers while preventing oscillation.
 		// FIXME: loaded must be set to true.
