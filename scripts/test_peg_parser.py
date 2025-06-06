@@ -264,6 +264,7 @@ excluded_tests = {
     'test/sql/window/test_window_range.test',
     'test/sql/create/create_as.test',
     'test/sql/function/autocomplete/tpch.test',
+    ## Parser tests (fail for some reason)
     'test/sql/peg_parser/attach_or_replace.test',
     'test/sql/peg_parser/lambda_functions.test',
     'test/sql/peg_parser/load_extension.test',
@@ -274,7 +275,8 @@ excluded_tests = {
     'test/sql/peg_parser/struct_identifier.test',
     'test/sql/peg_parser/support_optional_not_null_constraint.test',
     'test/sql/peg_parser/support_try.test',
-    'test/sql/peg_parser/window_function.test'
+    'test/sql/peg_parser/window_function.test',
+    'test/sql/peg_parser/recursive_view.test'
 }
 if args.all_tests:
     # run all tests

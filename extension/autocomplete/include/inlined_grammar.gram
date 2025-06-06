@@ -668,7 +668,7 @@ SpecialFunctionExpression <- CoalesceExpression / ColumnsExpression / ExtractExp
 CoalesceExpression <- 'COALESCE'i Parens(List(Expression))
 ColumnsExpression <- '*'? 'COLUMNS'i Parens(Expression)
 ExtractExpression <- 'EXTRACT'i Parens(Expression 'FROM'i Expression)
-LambdaExpression <- 'LAMBDA'i Identifier (',' Identifier)* ':' Expression
+LambdaExpression <- 'LAMBDA'i List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF'i Parens(Expression ',' Expression)
 PositionExpression <- 'POSITION'i Parens(Expression)
 RowExpression <- 'ROW'i Parens(List(Expression))
