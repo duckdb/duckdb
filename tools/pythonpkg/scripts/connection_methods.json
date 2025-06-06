@@ -380,6 +380,11 @@
 		"docs": "Fetch a result as Polars DataFrame following execute()",
 		"args": [
 			{
+				"name": "lazy",
+				"default": "false",
+				"type": "bool"
+			},
+			{
 				"name": "rows_per_batch",
 				"default": "1000000",
 				"type": "int"

@@ -202,7 +202,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Fetch a chunk of the result as DataFrame following execute()", py::arg("vectors_per_chunk") = 1,
 	      py::kw_only(), py::arg("date_as_object") = false);
 	m.def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
-	      py::arg("rows_per_batch") = 1000000);
+	      py::arg("lazy") = false, py::arg("rows_per_batch") = 1000000);
 	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	      py::arg("rows_per_batch") = 1000000);
 	m.def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
@@ -2022,12 +2022,12 @@ py::dict DuckDBPyConnection::FetchTF() {
 	return result.FetchTF();
 }
 
-PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
+PolarsDataFrame DuckDBPyConnection::FetchPolars(bool lazy, idx_t rows_per_batch) {
 	if (!con.HasResult()) {
 		throw InvalidInputException("No open result set");
 	}
 	auto &result = con.GetResult();
-	return result.ToPolars(rows_per_batch);
+	return result.ToPolars(lazy, rows_per_batch);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {

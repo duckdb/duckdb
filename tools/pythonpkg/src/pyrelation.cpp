@@ -970,9 +970,12 @@ py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) 
 	return res;
 }
 
-PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size) {
-	auto arrow = ToArrowTableInternal(batch_size, true);
-	return py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(arrow));
+PolarsDataFrame DuckDBPyRelation::ToPolars(bool lazy, idx_t batch_size) {
+	if (!lazy) {
+		auto arrow = ToArrowTableInternal(batch_size, true);
+		return py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(arrow));
+	}
+	throw NotImplementedException("bla");
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
