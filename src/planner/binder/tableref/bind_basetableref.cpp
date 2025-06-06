@@ -369,7 +369,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names if the view has type info defined
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
-		if (GetBindingMode() != BindingMode::EXTRACT_NAMES && view_catalog_entry.HasTypes()) {
+		if (GetBindingMode() != BindingMode::EXTRACT_NAMES &&
+		    GetBindingMode() != BindingMode::EXTRACT_QUALIFIED_NAMES && view_catalog_entry.HasTypes()) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing

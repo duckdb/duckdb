@@ -749,6 +749,13 @@
         ]
     },
     {
+        "name": "profiling_coverage",
+        "description": "The profiling coverage (SELECT or ALL)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "profiling_mode",
         "description": "The profiling mode (STANDARD or DETAILED)",
         "type": "VARCHAR",

@@ -1316,6 +1316,25 @@ Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Profiling Coverage Setting
+//===----------------------------------------------------------------------===//
+void ProfilingCoverageSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto setting_type = EnumUtil::FromString<ProfilingCoverage>(input.ToString());
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiling_coverage = setting_type;
+}
+
+void ProfilingCoverageSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiling_coverage = ProfilingCoverage::SELECT;
+}
+
+Value ProfilingCoverageSetting::GetSetting(const ClientContext &context) {
+	const auto &config = ClientConfig::GetConfig(context);
+	return Value(EnumUtil::ToString(config.profiling_coverage));
+}
+
+//===----------------------------------------------------------------------===//
 // Progress Bar Time
 //===----------------------------------------------------------------------===//
 void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {

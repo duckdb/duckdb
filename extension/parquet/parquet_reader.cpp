@@ -103,6 +103,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	bool footer_encrypted;
+	uint32_t footer_len;
 	// footer size is not provided - read it from the back
 	if (!footer_size.IsValid()) {
 		// We have to do two reads here:
@@ -128,7 +129,6 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		transport.SetLocation(file_size - 8);
 		transport.read(buf.ptr, 8);
 
-		uint32_t footer_len;
 		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
 
 		auto metadata_pos = file_size - (footer_len + 8);
@@ -137,7 +137,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			transport.Prefetch(metadata_pos, footer_len);
 		}
 	} else {
-		auto footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
+		footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
 		if (footer_len == 0 || file_size < 12 + footer_len) {
 			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
 		}
@@ -173,7 +173,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata));
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
+	                                                 footer_len);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {

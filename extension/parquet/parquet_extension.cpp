@@ -1,5 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
-
 #include "parquet_extension.hpp"
 
 #include "duckdb.hpp"
@@ -38,7 +36,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -873,36 +871,36 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	return {};
 }
 
-void ParquetExtension::Load(DuckDB &db) {
-	auto &db_instance = *db.instance;
-	auto &fs = db.GetFileSystem();
+static void LoadInternal(ExtensionLoader &loader) {
+	auto &db_instance = loader.GetDatabaseInstance();
+	auto &fs = db_instance.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
 	scan_fun.name = "read_parquet";
-	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
+	loader.RegisterFunction(scan_fun);
 	scan_fun.name = "parquet_scan";
-	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
+	loader.RegisterFunction(scan_fun);
 
 	// parquet_metadata
 	ParquetMetaDataFunction meta_fun;
-	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(meta_fun));
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(meta_fun));
 
 	// parquet_schema
 	ParquetSchemaFunction schema_fun;
-	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(schema_fun));
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(schema_fun));
 
 	// parquet_key_value_metadata
 	ParquetKeyValueMetadataFunction kv_meta_fun;
-	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(kv_meta_fun));
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(kv_meta_fun));
 
 	// parquet_file_metadata
 	ParquetFileMetadataFunction file_meta_fun;
-	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(file_meta_fun));
 
 	// parquet_bloom_probe
 	ParquetBloomProbeFunction bloom_probe_fun;
-	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(bloom_probe_fun));
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(bloom_probe_fun));
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
@@ -926,14 +924,14 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.deserialize = ParquetCopyDeserialize;
 
 	function.extension = "parquet";
-	ExtensionUtil::RegisterFunction(db_instance, function);
+	loader.RegisterFunction(function);
 
 	// parquet_key
 	auto parquet_key_fun = PragmaFunction::PragmaCall("add_parquet_key", ParquetCrypto::AddKey,
 	                                                  {LogicalType::VARCHAR, LogicalType::VARCHAR});
-	ExtensionUtil::RegisterFunction(db_instance, parquet_key_fun);
+	loader.RegisterFunction(parquet_key_fun);
 
-	auto &config = DBConfig::GetConfig(*db.instance);
+	auto &config = DBConfig::GetConfig(db_instance);
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN);
@@ -949,6 +947,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
+}
+
+void ParquetExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string ParquetExtension::Name() {
@@ -968,17 +970,8 @@ std::string ParquetExtension::Version() const {
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 extern "C" {
 
-DUCKDB_EXTENSION_API void parquet_init(duckdb::DatabaseInstance &db) { // NOLINT
-	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::ParquetExtension>();
-}
-
-DUCKDB_EXTENSION_API const char *parquet_version() { // NOLINT
-	return duckdb::DuckDB::LibraryVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(parquet, loader) { // NOLINT
+	duckdb::LoadInternal(loader);
 }
 }
-#endif
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
 #endif

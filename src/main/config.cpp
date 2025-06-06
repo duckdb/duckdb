@@ -162,6 +162,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfileOutputSetting),
     DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
+    DUCKDB_LOCAL(ProfilingCoverageSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(ScalarSubqueryErrorOnMultipleRowsSetting),
