@@ -559,7 +559,6 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
 	for (const auto &col_idx : layout.GetVariableColumns()) {
 		if (not_found_count == 0) {
@@ -579,7 +578,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				D_ASSERT(heap_sizes[idx] != 0);
+				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
 				// We always serialize a NullValue<string_t>, which isn't inlined if this build flag is enabled
 				// So we need to grab the pointer from here even if the string is NULL
@@ -606,7 +605,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				D_ASSERT(heap_sizes[idx] != 0);
+				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
 				ValidityBytes row_mask(row_location, layout.ColumnCount());
 				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {

@@ -5049,11 +5049,14 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			if (i == argc - 1) {
 				break;
 			}
+			auto old_bail = bail_on_error;
+			bail_on_error = true;
 			z = cmdline_option_value(argc, argv, ++i);
 			if (!data.ProcessFile(string(z))) {
 				free(azCmd);
 				return 1;
 			}
+			bail_on_error = old_bail;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;

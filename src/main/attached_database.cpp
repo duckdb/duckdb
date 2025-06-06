@@ -184,7 +184,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOp
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(options);
+		storage->Initialize(context, options);
 	}
 }
 

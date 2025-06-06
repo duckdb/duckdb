@@ -105,11 +105,11 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, const string &path, const StorageManagerOptions &options_p);
+	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr);
+	void CreateNewDatabase(optional_ptr<ClientContext> context, optional_ptr<string> encryption_key = nullptr);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
@@ -143,7 +143,7 @@ public:
 	//! Write the given block to disk
 	void Write(FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(DatabaseHeader header) override;
+	void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) override;
 	//! Sync changes to the underlying file
 	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
@@ -172,7 +172,8 @@ private:
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
-	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
+	void ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &handle, uint64_t location,
+	                      bool skip_block_header = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id) const;
 

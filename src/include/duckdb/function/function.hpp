@@ -61,6 +61,7 @@ struct FunctionData {
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
+	DUCKDB_API virtual bool SupportStatementCache() const;
 
 	template <class TARGET>
 	TARGET &Cast() {

@@ -145,7 +145,7 @@ struct QuantileCompare {
 		const auto lval = accessor_l(lhs);
 		const auto rval = accessor_r(rhs);
 
-		return desc ? (rval < lval) : (lval < rval);
+		return desc ? LessThan::Operation(rval, lval) : LessThan::Operation(lval, rval);
 	}
 };
 

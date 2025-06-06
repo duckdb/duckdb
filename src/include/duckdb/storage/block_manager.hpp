@@ -67,7 +67,7 @@ public:
 		Write(block, block.id);
 	}
 	//! Write the header; should be the final step of a checkpoint
-	virtual void WriteHeader(DatabaseHeader header) = 0;
+	virtual void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) = 0;
 
 	//! Returns the number of total blocks
 	virtual idx_t TotalBlocks() = 0;

@@ -72,18 +72,42 @@ index b3984b3..476bc14 100644
  
  unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context,
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index 04bd795..0fe6be8 100644
+index 04bd795..3a3e89e 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
+@@ -42,11 +42,11 @@ AESStateSSL::~AESStateSSL() {
+ 	EVP_CIPHER_CTX_free(context);
+ }
+ 
+-const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
++const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
+ 
+ 	switch (cipher) {
+ 	case GCM:
+-		switch (key.size()) {
++		switch (key_len) {
+ 		case 16:
+ 			return EVP_aes_128_gcm();
+ 		case 24:
+@@ -57,7 +57,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
+ 			throw InternalException("Invalid AES key length");
+ 		}
+ 	case CTR:
+-		switch (key.size()) {
++		switch (key_len) {
+ 		case 16:
+ 			return EVP_aes_128_ctr();
+ 		case 24:
 @@ -78,20 +78,34 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
  	RAND_bytes(data, len);
  }
  
 -void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
-+void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key, const_data_ptr_t aad, idx_t aad_len) {
++void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
  	mode = ENCRYPT;
  
- 	if (1 != EVP_EncryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
+-	if (1 != EVP_EncryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
++	if (1 != EVP_EncryptInit_ex(context, GetCipher(key_len), NULL, key, iv)) {
  		throw InternalException("EncryptInit failed");
  	}
 +	
@@ -96,10 +120,11 @@ index 04bd795..0fe6be8 100644
  }
  
 -void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
-+void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key, const_data_ptr_t aad, idx_t aad_len) {
++void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
  	mode = DECRYPT;
  
- 	if (1 != EVP_DecryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
+-	if (1 != EVP_DecryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
++	if (1 != EVP_DecryptInit_ex(context, GetCipher(key_len), NULL, key, iv)) {
  		throw InternalException("DecryptInit failed");
  	}
 +
@@ -206,20 +231,55 @@ index 54b7566..bd3bc4a 100644
  protected:
  	//! Internal function to create bearer token
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index f819356..eaa850e 100644
+index f819356..aa6ad70 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
-@@ -29,8 +29,8 @@ public:
+@@ -29,13 +29,13 @@ public:
  	~AESStateSSL() override;
  
  public:
 -	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
 -	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
-+	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key, const_data_ptr_t aad, idx_t aad_len) override;
-+	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key, const_data_ptr_t aad, idx_t aad_len) override;
++	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
++	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
  	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
  	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
  	void GenerateRandomData(data_ptr_t data, idx_t len) override;
+ 
+-	const EVP_CIPHER *GetCipher(const string &key);
++	const EVP_CIPHER *GetCipher(idx_t key_len);
+ 	size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
+ 
+ private:
+@@ -48,16 +48,16 @@ private:
+ 
+ extern "C" {
+ 
+-class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
+-public:
+-	explicit AESStateSSLFactory() {
+-	}
++	class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
++	public:
++		explicit AESStateSSLFactory() {
++		}
+ 
+-	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
+-		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
+-	}
++		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
++			return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
++		}
+ 
+-	~AESStateSSLFactory() override {
+-	}
+-};
+-}
++		~AESStateSSLFactory() override {
++		}
++	};
++}
+\ No newline at end of file
 diff --git a/extension/httpfs/include/httpfs_extension.hpp b/extension/httpfs/include/httpfs_extension.hpp
 index 3c4f3a1..eeca2c9 100644
 --- a/extension/httpfs/include/httpfs_extension.hpp

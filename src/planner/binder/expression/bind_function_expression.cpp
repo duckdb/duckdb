@@ -199,24 +199,32 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// the first child is the list, the second child is the lambda expression
-	const idx_t list_idx = 0;
-	const idx_t lambda_expr_idx = 1;
+	constexpr idx_t list_idx = 0;
+	constexpr idx_t lambda_expr_idx = 1;
 	D_ASSERT(function.children[lambda_expr_idx]->GetExpressionClass() == ExpressionClass::LAMBDA);
+
+	vector<LogicalType> function_child_types;
 
 	// bind the list
 	ErrorData error;
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		if (i != lambda_expr_idx) {
-			if (function.children[i]->GetExpressionClass() == ExpressionClass::LAMBDA) {
-				return BindResult("No function matches the given name and argument types: '" + function.ToString() +
-				                  "'. You might need to add explicit type casts.");
-			}
-
-			BindChild(function.children[i], depth, error);
-			if (error.HasError()) {
-				return BindResult(std::move(error));
-			}
+		if (i == lambda_expr_idx) {
+			function_child_types.push_back(LogicalType::LAMBDA);
+			continue;
 		}
+
+		if (function.children[i]->GetExpressionClass() == ExpressionClass::LAMBDA) {
+			return BindResult("No function matches the given name and argument types: '" + function.ToString() +
+			                  "'. You might need to add explicit type casts.");
+		}
+
+		BindChild(function.children[i], depth, error);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
+		}
+
+		const auto &child = BoundExpression::GetExpression(*function.children[i]);
+		function_child_types.push_back(child->return_type);
 	}
 
 	// get the logical type of the children of the list
@@ -227,20 +235,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		return BindResult("Invalid LIST argument during lambda function binding!");
 	}
 
-	LogicalType list_child_type = list_child->return_type.id();
-	if (list_child->return_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
-
-		if (list_child->return_type.id() == LogicalTypeId::ARRAY) {
-			list_child_type = ArrayType::GetChildType(list_child->return_type);
-		} else {
-			list_child_type = ListType::GetChildType(list_child->return_type);
-		}
-	}
-
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[lambda_expr_idx]->Cast<LambdaExpression>();
-	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, list_child_type, &bind_lambda_function);
+	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function);
 
 	if (bind_lambda_result.HasError()) {
 		return BindResult(bind_lambda_result.error);
@@ -268,7 +265,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
-	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, list_child_type);
+	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, function_child_types);
 
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =

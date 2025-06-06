@@ -183,3 +183,51 @@ SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2) a1 WHERE cond O
 query T
 SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2 GROUP BY 1) a1 WHERE cond ORDER BY 1
 ----
+
+# Disable IN generation with inequalities
+statement ok
+CREATE TABLE cohort (
+  person_id INTEGER,
+  cohort_start_date DATE,
+  cohort_end_date DATE
+);
+
+statement ok
+INSERT INTO cohort (person_id, cohort_start_date, cohort_end_date) VALUES
+  (1, DATE '2021-01-01', DATE '2021-02-15'),
+  (1, DATE '2021-01-01', NULL);
+
+statement ok
+CREATE TABLE obs (
+  person_id INTEGER,
+  observation_period_start_date DATE
+);
+
+statement ok
+INSERT INTO obs (person_id, observation_period_start_date) VALUES
+  (1, DATE '2010-01-01'),
+  (2, DATE '2010-01-01');
+
+query IIII
+SELECT q01.*
+FROM (
+  SELECT LHS.*, observation_period_start_date
+  FROM (
+    SELECT q01.*
+    FROM (
+      SELECT
+        person_id,
+        cohort_start_date,
+        COALESCE(cohort_end_date, cohort_start_date) AS cohort_end_date
+      FROM cohort
+    ) q01
+    WHERE (cohort_start_date <= cohort_end_date)
+  ) LHS
+  INNER JOIN obs
+    ON (LHS.person_id = obs.person_id)
+) q01
+WHERE (cohort_end_date >= observation_period_start_date)
+ORDER BY ALL;
+----
+1	2021-01-01	2021-01-01	2010-01-01
+1	2021-01-01	2021-02-15	2010-01-01

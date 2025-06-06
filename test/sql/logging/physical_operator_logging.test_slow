@@ -1,0 +1,53 @@
+# name: test/sql/logging/physical_operator_logging.test_slow
+# description: Test physical operator logging
+# group: [logging]
+
+require noforcestorage
+
+require parquet
+
+statement ok
+pragma enable_logging
+
+statement ok
+set logging_level='DEBUG'
+
+# force external so we can see the external log message being added
+statement ok
+set debug_force_external=true
+
+statement ok
+set threads=1
+
+statement ok
+copy (
+    select t1.i
+    from range(3_000_000) t1(i)
+    join range(3_000_000) t2(i)
+    using (i)
+) to '__TEST_DIR__/physical_operator_logging.parquet'
+
+statement ok
+pragma disable_logging
+
+# enabling external hash join happens exactly once
+query I
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'PhysicalHashJoin' and event = 'Finalize' and info.external
+----
+1
+
+# 4 radix bits, external hash join, should build exactly 16 times
+query I
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'JoinHashTable' and event = 'Build'
+----
+16
+
+# all flushed row groups should be logged, these should be equal
+query I
+select count(*) = (
+    select count(distinct row_group_id)
+    from parquet_metadata('__TEST_DIR__/physical_operator_logging.parquet')
+)
+from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetWriter' and event = 'FlushRowGroup'
+----
+1

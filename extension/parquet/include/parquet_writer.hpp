@@ -134,6 +134,9 @@ public:
 	ParquetVersion GetParquetVersion() const {
 		return parquet_version;
 	}
+	const string &GetFileName() const {
+		return file_name;
+	}
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);

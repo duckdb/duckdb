@@ -60,6 +60,9 @@ inputs:
   build_out_of_tree_extensions:
     description: 'Build out-of-tree extensions'
     default: 1
+  build_complete_extensions_set:
+    description: 'Whether all extensions needs to be built'
+    default: 1
   bundle_static_lib_mode:
     description: 'Build the default bundled extensions to publish the static libs'
     default: 0
@@ -111,6 +114,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+        echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> docker_env.txt
 
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'

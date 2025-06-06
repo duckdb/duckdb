@@ -240,6 +240,9 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
 	}
+	if (bind_data && !bind_data->SupportStatementCache()) {
+		SetAlwaysRequireRebind();
+	}
 	if (return_types.size() != return_names.size()) {
 		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
 	}

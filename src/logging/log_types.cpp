@@ -4,6 +4,7 @@
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -11,6 +12,7 @@ constexpr LogLevel DefaultLogType::LEVEL;
 constexpr LogLevel FileSystemLogType::LEVEL;
 constexpr LogLevel QueryLogType::LEVEL;
 constexpr LogLevel HTTPLogType::LEVEL;
+constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 
 FileSystemLogType::FileSystemLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
@@ -88,6 +90,44 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	child_list_t<Value> child_list = {{"request", request_value}, {"response", response_value}};
 
 	return Value::STRUCT(child_list).ToString();
+}
+
+PhysicalOperatorLogType::PhysicalOperatorLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType PhysicalOperatorLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"operator_type", LogicalType::VARCHAR},
+	    {"parameters", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	    {"class", LogicalType::VARCHAR},
+	    {"event", LogicalType::VARCHAR},
+	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+template <class ITERABLE>
+static Value StringPairIterableToMap(const ITERABLE &iterable) {
+	vector<Value> keys;
+	vector<Value> values;
+	for (const auto &kv : iterable) {
+		keys.emplace_back(kv.first);
+		values.emplace_back(kv.second);
+	}
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
+}
+
+string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &class_p,
+                                                    const string &event, const vector<pair<string, string>> &info) {
+	child_list_t<Value> child_list = {
+	    {"operator_type", EnumUtil::ToString(physical_operator.type)},
+	    {"parameters", StringPairIterableToMap(physical_operator.ParamsToString())},
+	    {"class", class_p},
+	    {"event", event},
+	    {"info", StringPairIterableToMap(info)},
+	};
+
+	return Value::STRUCT(std::move(child_list)).ToString();
 }
 
 } // namespace duckdb

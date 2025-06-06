@@ -50,8 +50,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		}
 		// no aggregate! we are filtering on a group
 		// we can only push this down if the filter is in all grouping sets
-		if (aggr.grouping_sets.empty()) {
-			// empty grouping set - we cannot pushdown the filter
+		if (aggr.groups.empty()) {
+			// empty group - we cannot pushdown the filter
 			continue;
 		}
 

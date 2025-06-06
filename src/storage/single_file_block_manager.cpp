@@ -243,12 +243,12 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 	return DatabaseHeader::Read(main_header, source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p,
                                                const StorageManagerOptions &options)
-    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
-      path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                                  Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
-                                  options.block_header_size.GetIndex()),
+    : BlockManager(BufferManager::GetBufferManager(db_p), options.block_alloc_size, options.block_header_size),
+      db(db_p), path(path_p), header_buffer(Allocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
+                                            Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
+                                            options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
 }
 
@@ -340,7 +340,7 @@ void SingleFileBlockManager::AddDerivedKeyToCache(string &derived_key) {
 	}
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_key) {
+void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context, optional_ptr<string> encryption_key) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -373,7 +373,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	//! the main database header is written
-	ChecksumAndWrite(header_buffer, 0, true);
+	ChecksumAndWrite(context, header_buffer, 0, true);
 
 	// write the database headers
 	// initialize meta_block and free_list to INVALID_BLOCK because the database file does not contain any actual
@@ -389,7 +389,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	h1.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
+	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
 	// header 2
 	DatabaseHeader h2;
@@ -402,7 +402,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
@@ -616,7 +616,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	CheckChecksum(block, location, delta, skip_block_header);
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_block_header) const {
+void SingleFileBlockManager::ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &block, uint64_t location, bool skip_block_header) const {
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	uint64_t checksum;
 
@@ -642,7 +642,8 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 		EncryptBuffer(block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(*handle, location);
 	} else {
-		block.Write(*handle, location);
+		// now write the buffer
+		block.Write(context, *handle, location);
 	}
 }
 
@@ -954,7 +955,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
+	ChecksumAndWrite(nullptr, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -1024,7 +1025,7 @@ protected:
 	}
 };
 
-void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
+void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
@@ -1087,7 +1088,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 		// now write the header to the file
-		ChecksumAndWrite(header_buffer, 0);
+		ChecksumAndWrite(context, header_buffer, 0);
 		header_buffer.Clear();
 	}
 
@@ -1097,7 +1098,8 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
-	ChecksumAndWrite(header_buffer, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
+	ChecksumAndWrite(context, header_buffer,
+	                 active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
 	// switch active header to the other header
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk

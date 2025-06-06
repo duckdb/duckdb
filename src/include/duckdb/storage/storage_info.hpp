@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
+
 struct FileHandle;
 
 //! The standard row group size

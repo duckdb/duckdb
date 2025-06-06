@@ -250,7 +250,7 @@ unique_ptr<icu::TimeZone> ICUHelpers::TryGetTimeZone(string &tz_str) {
 	return GetTimeZoneInternal(tz_str, candidates);
 }
 
-unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str) {
+unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
 	vector<string> candidates;
 	auto tz = GetTimeZoneInternal(tz_str, candidates);
 	if (tz) {
@@ -258,7 +258,12 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str) {
 	}
 	string candidate_str =
 	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, tz_str), "Candidate time zones");
-
+	if (error_message) {
+		std::stringstream ss;
+		ss << "Unknown TimeZone '" << tz_str << "'!\n" << candidate_str;
+		*error_message = ss.str();
+		return nullptr;
+	}
 	throw NotImplementedException("Unknown TimeZone '%s'!\n%s", tz_str, candidate_str);
 }
 

@@ -280,7 +280,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
-	unordered_set<string> GetTableNames(const string &query);
+	unordered_set<string> GetTableNames(const string &query, bool qualified);
 
 	shared_ptr<DuckDBPyConnection> UnregisterPythonObject(const string &name);
 

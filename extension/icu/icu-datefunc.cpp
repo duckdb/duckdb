@@ -82,10 +82,12 @@ bool ICUDateFunc::TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id)
 	return true;
 }
 
-void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
+void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, string *error_message) {
 	string tz_str = tz_id.GetString();
-	auto tz = ICUHelpers::GetTimeZone(tz_str);
-	calendar->adoptTimeZone(tz.release());
+	auto tz = ICUHelpers::GetTimeZone(tz_str, error_message);
+	if (tz) {
+		calendar->adoptTimeZone(tz.release());
+	}
 }
 
 timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros) {

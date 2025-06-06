@@ -83,21 +83,20 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(StorageOptions options) {
+void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// Create or load the database from disk, if not in-memory mode.
-	LoadDatabase(options);
+	LoadDatabase(context, options);
 
 	if (options.encryption) {
 		ClearUserKey(options.encryption_key);
 	}
 }
 
-///////////////////////////////////////////////////////////////////////////
 class SingleFileTableIOManager : public TableIOManager {
 public:
 	explicit SingleFileTableIOManager(BlockManager &block_manager, idx_t row_group_size)
@@ -126,7 +125,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
+void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context, StorageOptions storage_options) {
 
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
@@ -201,7 +200,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase(&storage_options.encryption_key);
+		sf_block_manager->CreateNewDatabase(context, &storage_options.encryption_key);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -267,8 +266,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 	load_complete = true;
 }
-
-///////////////////////////////////////////////////////////////////////////////
 
 enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
 

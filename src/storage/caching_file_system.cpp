@@ -113,7 +113,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 
 	// If we can't seek, we can't use the cache for these calls,
 	// because we won't be able to seek over any parts we skipped by reading from the cache
-	if (!external_file_cache.IsEnabled() || !GetFileHandle().CanSeek()) {
+	if (!external_file_cache.IsEnabled() || !CanSeek()) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
@@ -285,11 +285,16 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 	auto &ranges = cached_file.Ranges(guard);
 
 	// Start at lower_bound (first range with location not less than location of newly created range)
+	const auto this_end = location + nr_bytes;
 	auto it = ranges.lower_bound(location);
 	if (it != ranges.begin()) {
 		--it;
 	}
 	while (it != ranges.end()) {
+		if (it->second->location >= this_end) {
+			// We're past the requested location
+			break;
+		}
 		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
 			// Another thread has read a range that fully contains the requested range in the meantime
 			auto other_pin = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
@@ -300,11 +305,9 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 			continue;
 		}
 		// Check if the new range overlaps with a cached one
-		bool break_loop = false;
 		switch (new_file_range->GetOverlap(*it->second)) {
 		case CachedFileRangeOverlap::NONE:
-			break_loop = true; // We iterated past potential overlaps
-			break;
+			break; // No overlap, still useful
 		case CachedFileRangeOverlap::PARTIAL:
 			break; // The newly created range does not fully contain this range, so it is still useful
 		case CachedFileRangeOverlap::FULL:
@@ -314,9 +317,6 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 			continue;
 		default:
 			throw InternalException("Unknown CachedFileRangeOverlap");
-		}
-		if (break_loop) {
-			break;
 		}
 
 		++it;
