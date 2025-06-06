@@ -1,4 +1,4 @@
-# name: test/sql/catalog/view/recursive_view.test
+# name: test/sql/catalog/view/recursive.test
 # description: Issue #3017: Querying View of a View Crashes
 # group: [view]
 

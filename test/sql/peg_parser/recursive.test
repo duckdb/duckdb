@@ -6,3 +6,6 @@ require autocomplete
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE RECURSIVE VIEW nums (n) AS VALUES (1) UNION ALL SELECT n+1;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a) SELECT * FROM tbl;$TEST_PEG_PARSER$);

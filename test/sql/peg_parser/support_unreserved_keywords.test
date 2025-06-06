@@ -37,8 +37,9 @@ CALL check_peg_parser($TEST_PEG_PARSER$COPY FROM DATABASE unencrypted TO encrypt
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_reduce(s, lambda curr, next: struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b)) FROM df$TEST_PEG_PARSER$);
 
+u
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM recurring.tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$with integers as (      select * FROM (VALUES           (21, 42),               (1337, 7331)    ) as t(a, b) ) select [(UNPACK(a + COLUMNS(['a', 'b'])))] from integers$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TEMPORARY MACRO my_seq(start, finish, stride:=3) as TABLE SELECT *;$TEST_PEG_PARSER$);
