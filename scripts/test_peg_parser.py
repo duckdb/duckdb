@@ -3,6 +3,8 @@ import os
 import sqllogictest
 from sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
 import subprocess
+import multiprocessing
+import tempfile
 
 parser = argparse.ArgumentParser(description="Test serialization")
 parser.add_argument("--shell", type=str, help="Shell binary to run", default=os.path.join('build', 'debug', 'duckdb'))
@@ -10,7 +12,6 @@ parser.add_argument("--offset", type=int, help="File offset", default=None)
 parser.add_argument("--count", type=int, help="File count", default=None)
 parser.add_argument('--no-exit', action='store_true', help='Do not exit after a test fails', default=False)
 parser.add_argument('--print-failing-only', action='store_true', help='Print failing tests only', default=False)
-parser.add_argument("--write-to-file", type=str, help="Write failing tests to a file", default='')
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
 group.add_argument(
@@ -63,15 +64,49 @@ def parse_test_file(filename):
             continue
         if type(stmt) is sqllogictest.statement.statement.Statement:
             # skip expected errors
+            # TODO Don't skip errors, rather check if ParserExceptin also fails our parser, any other exception should pass
             if stmt.expected_result.type == sqllogictest.ExpectedResult.Type.ERROR:
                 continue
         query = ' '.join(stmt.lines)
         statements.append(query)
     return statements
 
+def run_test_case(args_tuple):
+    i, file, shell, print_failing_only = args_tuple
+    results = []
+    if not print_failing_only:
+        print(f"Run test {i}: {file}")
 
-files = []
-excluded_tests = {
+    statements = parse_test_file(file)
+    for statement in statements:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            peg_sql_path = os.path.join(tmpdir, 'peg_test.sql')
+            with open(peg_sql_path, 'w') as f:
+                f.write(f'CALL check_peg_parser($TEST_PEG_PARSER${statement}$TEST_PEG_PARSER$);\n')
+
+            proc = subprocess.run([shell, '-init', peg_sql_path, '-c', '.exit'], capture_output=True)
+            stderr = proc.stderr.decode('utf8')
+
+            if proc.returncode == 0 and ' Error:' not in stderr:
+                continue
+
+            if print_failing_only:
+                print(f"Failed test {i}: {file}")
+            else:
+                print(f'Failed')
+                print(f'-- STDOUT --')
+                print(proc.stdout.decode('utf8'))
+                print(f'-- STDERR --')
+                print(stderr)
+
+            results.append((file, statement))
+            break
+    return results
+
+if __name__ == "__main__":
+
+    files = []
+    excluded_tests = {
     # reserved keyword mismatches
     'test/sql/attach/attach_nested_types.test',  # table
     'test/sql/binder/test_function_chainging_alias.test',  # trim
@@ -278,56 +313,37 @@ excluded_tests = {
     'test/sql/peg_parser/window_function.test',
     'test/sql/peg_parser/recursive.test'
 }
-if args.all_tests:
-    # run all tests
-    test_dir = os.path.join('test', 'sql')
-    files = find_tests_recursive(test_dir, excluded_tests)
-elif len(args.test_list) > 0:
-    with open(args.test_list, 'r') as f:
-        files = [x.strip() for x in f.readlines() if x.strip() not in excluded_tests]
-else:
-    # run a single test
-    files.append(args.test_file)
-files.sort()
+    if args.all_tests:
+        # run all tests
+        test_dir = os.path.join('test', 'sql')
+        files = find_tests_recursive(test_dir, excluded_tests)
+    elif len(args.test_list) > 0:
+        with open(args.test_list, 'r') as f:
+            files = [x.strip() for x in f.readlines() if x.strip() not in excluded_tests]
+    else:
+        # run a single test
+        files.append(args.test_file)
+    files.sort()
 
-start = args.offset if args.offset is not None else 0
-end = start + args.count if args.count is not None else len(files)
-failed_tests = 0
-failed_test_list = []
-for i in range(start, end):
-    file = files[i]
-    if not args.print_failing_only:
-        print(f"Run test {i}/{end}: {file}")
+    start = args.offset if args.offset is not None else 0
+    end = start + args.count if args.count is not None else len(files)
+    work_items = [(i, files[i], args.shell, args.print_failing_only) for i in range(start, end)]
 
-    statements = parse_test_file(file)
-    for statement in statements:
-        with open('peg_test.sql', 'w+') as f:
-            f.write(f'CALL check_peg_parser($TEST_PEG_PARSER${statement}$TEST_PEG_PARSER$);\n')
-        proc = subprocess.run([args.shell, '-init', 'peg_test.sql', '-c', '.exit'], capture_output=True)
-        stderr = proc.stderr.decode('utf8')
-        if proc.returncode == 0 and ' Error:' not in stderr:
-            continue
-        failed_tests += 1
-        failed_test_list.append((file, statement))
-        if args.print_failing_only:
-            print(f"Failed test {i}/{end}: {file}")
-        else:
-            print(f'Failed')
-            print(f'-- STDOUT --')
-            print(proc.stdout.decode('utf8'))
-            print(f'-- STDERR --')
-            print(stderr)
-            if args.write_to_file != '':
-                with open(args.write_to_file, 'a+') as output_file:
-                    output_file.write(f'{file}\n')
-                    output_file.write(f'--- STDERR ---\n')
-                    output_file.write(stderr)
-                    output_file.write('\n')
-        if not args.no_exit:
-            exit(1)
-        else:
-            break
-print("List of failed tests: ")
-for test, statement in failed_test_list:
-    print(f"{test}\n{statement}\n\n")
-print(f"Total of {failed_tests} out of {len(files)} failed ({round(failed_tests/len(files) * 100,2)}%). ")
+    if not args.no_exit:
+        # Disable multiprocessing for --no-exit behavior
+        failed_test_list = []
+        for item in work_items:
+            res = run_test_case(item)
+            if res:
+                failed_test_list.extend(res)
+                exit(1)
+    else:
+        with multiprocessing.Pool() as pool:
+            results = pool.map(run_test_case, work_items)
+        failed_test_list = [item for sublist in results for item in sublist]
+
+    failed_tests = len(failed_test_list)
+    print("List of failed tests: ")
+    for test, statement in failed_test_list:
+        print(f"{test}\n{statement}\n\n")
+    print(f"Total of {failed_tests} out of {len(files)} failed ({round(failed_tests/len(files) * 100,2)}%). ")
