@@ -719,7 +719,7 @@ CreateTableAs <- IdentifierList? 'AS'i SelectStatement
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- CatalogQualification? SchemaQualification? Identifier
+QualifiedName <- CatalogQualification? SchemaQualification? ColIdOrString
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
 TableQualification <- TableName '.'
@@ -736,7 +736,7 @@ DefaultValue <- 'DEFAULT'i Expression
 CheckConstraint <- 'CHECK'i Parens(Expression)
 ForeignKeyConstraint <- 'REFERENCES'i BaseTableName Parens(ColumnList)? KeyActions?
 ColumnCollation <- 'COLLATE'i Expression
-ColumnCompression <- 'USING'i 'COMPRESSION'i Identifier
+ColumnCompression <- 'USING'i 'COMPRESSION'i ColIdOrString
 
 KeyActions <- UpdateAction? DeleteAction?
 UpdateAction <- 'ON' 'UPDATE' KeyAction
@@ -828,7 +828,7 @@ ByNameOrPosition <- 'BY'i 'NAME'i / 'POSITION'i
 InsertTarget <- BaseTableName InsertAlias?
 InsertAlias <- 'AS'i Identifier
 
-ColumnList <- List(Identifier)
+ColumnList <- List(ColId)
 InsertColumnList <- Parens(ColumnList)
 
 InsertValues <- SelectStatement / DefaultValues
@@ -869,7 +869,7 @@ WithClause <- 'WITH'i Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'i
 SelectClause <- 'SELECT'i DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
-ColumnAliases <- Parens(List(Identifier))
+ColumnAliases <- Parens(List(ColIdOrString))
 
 DistinctClause <- ('DISTINCT'i DistinctOn?) / 'ALL'i
 DistinctOn <- 'ON'i Parens(List(Expression))
@@ -901,10 +901,10 @@ TableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments TableAli
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- Identifier NamedParameterAssignment Expression
+NamedParameter <- TypeName NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'i? Identifier ColumnAliases?
+TableAlias <- 'AS'i? ColIdOrString ColumnAliases?
 
 AtClause <- 'AT'i Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
@@ -1143,7 +1143,7 @@ TableFunctionName <- ColIdOrString
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
 CollationName <- Identifier
-CopyOptionName <- Identifier
+CopyOptionName <- ColLabel
 SecretName <- ColId
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
@@ -1154,10 +1154,10 @@ SimpleType <- QualifiedTypeName TypeModifiers?
 DoubleType <- 'DOUBLE'i 'PRECISION'
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression))
-RowType <- RowOrStruct Parens(List(IdentifierType))
-UnionType <- 'UNION'i Parens(List(IdentifierType))
+RowType <- RowOrStruct Parens(List(ColIdType))
+UnionType <- 'UNION'i Parens(List(ColIdType))
 MapType <- 'MAP'i Parens(List(Type))
-IdentifierType <- Identifier Type
+ColIdType <- ColId Type
 ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- 'TIME'i / 'TIMESTAMP'i
@@ -1197,7 +1197,7 @@ AttachStatement <- 'ATTACH'i OrReplace? IfNotExists? Database? DatabasePath Atta
 
 Database <- 'DATABASE'i
 DatabasePath <- StringLiteral
-AttachAlias <- 'AS'i Identifier
+AttachAlias <- 'AS'i ColId
 AttachOptions <- Parens(GenericCopyOptionList)
 
 DetachStatement <- 'DETACH'i Database? IfExists? CatalogName

@@ -17,7 +17,7 @@ WithClause <- 'WITH'i Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'i
 SelectClause <- 'SELECT'i DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
-ColumnAliases <- Parens(List(Identifier))
+ColumnAliases <- Parens(List(ColIdOrString))
 
 DistinctClause <- ('DISTINCT'i DistinctOn?) / 'ALL'i
 DistinctOn <- 'ON'i Parens(List(Expression))
@@ -49,10 +49,10 @@ TableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments TableAli
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- Identifier NamedParameterAssignment Expression
+NamedParameter <- TypeName NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'i? Identifier ColumnAliases?
+TableAlias <- 'AS'i? ColIdOrString ColumnAliases?
 
 AtClause <- 'AT'i Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression

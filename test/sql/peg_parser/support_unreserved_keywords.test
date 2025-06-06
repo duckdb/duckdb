@@ -4,6 +4,30 @@
 
 require autocomplete
 
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE OR REPLACE TABLE t(      x VARCHAR USING COMPRESSION Dictionary );$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select distinct on (types) types from (select vector_type(a) from test limit 8192) tbl(types)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$create table data(id integer, value integer);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$create table t2 (id int, v_map struct(foo integer[]));$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$insert into data (id, value) select 1$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true)$TEST_PEG_PARSER$);
+
 # Reserved keyword as explicit alias
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT c2 as end;$TEST_PEG_PARSER$);
