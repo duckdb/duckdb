@@ -36,7 +36,8 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
+		auto ret = make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
+		return ret;
 	}
 	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NULL:

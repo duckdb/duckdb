@@ -20,6 +20,13 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		// otherwise the filter can be pruned by the updated statistics
 		auto copy_expr = filter_expr->Copy();
 		auto propagate_result = HandleFilter(filter_expr);
+		if (filter_expr->type == ExpressionType::BOUND_FUNCTION) {
+			auto &func = filter_expr->Cast<BoundFunctionExpression>();
+			if (expr_filter.expr->type == ExpressionType::BOUND_FUNCTION) {
+				auto &dumb = expr_filter.expr->Cast<BoundFunctionExpression>();
+				dumb.function = func.function;
+			}
+		}
 		UpdateFilterStatistics(*copy_expr);
 		return propagate_result;
 	}
