@@ -77,7 +77,9 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	RegisterSqllogictests();
+	if (StringUtil::EndsWith(string(argv[0]), "unittest")) {
+		RegisterSqllogictests();
+	}
 
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
