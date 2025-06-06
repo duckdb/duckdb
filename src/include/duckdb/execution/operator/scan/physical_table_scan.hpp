@@ -24,7 +24,7 @@ public:
 
 public:
 	//! Table scan that immediately projects out filter columns that are unused in the remainder of the query plan
-	PhysicalTableScan(ArenaAllocator &arena, vector<LogicalType> types, TableFunction function,
+	PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function,
 	                  unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types,
 	                  vector<ColumnIndex> column_ids, vector<idx_t> projection_ids, vector<string> names,
 	                  unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,

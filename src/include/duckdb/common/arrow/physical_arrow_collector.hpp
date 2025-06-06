@@ -39,8 +39,8 @@ public:
 
 class PhysicalArrowCollector : public PhysicalResultCollector {
 public:
-	PhysicalArrowCollector(ArenaAllocator &arena, PreparedStatementData &data, bool parallel, idx_t batch_size)
-	    : PhysicalResultCollector(arena, data), record_batch_size(batch_size), parallel(parallel) {
+	PhysicalArrowCollector(PhysicalPlan &physical_plan, PreparedStatementData &data, bool parallel, idx_t batch_size)
+	    : PhysicalResultCollector(physical_plan, data), record_batch_size(batch_size), parallel(parallel) {
 	}
 
 public:

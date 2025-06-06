@@ -20,10 +20,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
 
 public:
-	PhysicalColumnDataScan(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperatorType op_type,
+	PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperatorType op_type,
 	                       idx_t estimated_cardinality, optionally_owned_ptr<ColumnDataCollection> collection);
 
-	PhysicalColumnDataScan(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperatorType op_type,
+	PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperatorType op_type,
 	                       idx_t estimated_cardinality, idx_t cte_index);
 
 	//! (optionally owned) column data collection to scan

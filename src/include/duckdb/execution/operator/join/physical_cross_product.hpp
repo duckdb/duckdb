@@ -19,7 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CROSS_PRODUCT;
 
 public:
-	PhysicalCrossProduct(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
+	PhysicalCrossProduct(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &left,
 	                     PhysicalOperator &right, idx_t estimated_cardinality);
 
 public:

@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LIMIT_PERCENT;
 
 public:
-	PhysicalLimitPercent(ArenaAllocator &arena, vector<LogicalType> types, BoundLimitNode limit_val_p,
+	PhysicalLimitPercent(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundLimitNode limit_val_p,
 	                     BoundLimitNode offset_val_p, idx_t estimated_cardinality);
 
 	BoundLimitNode limit_val;

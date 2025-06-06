@@ -10,10 +10,11 @@
 
 namespace duckdb {
 
-PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
-                                                 PhysicalOperator &right, unique_ptr<Expression> condition,
-                                                 JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalJoin(arena, op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
+PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
+                                                 PhysicalOperator &left, PhysicalOperator &right,
+                                                 unique_ptr<Expression> condition, JoinType join_type,
+                                                 idx_t estimated_cardinality)
+    : PhysicalJoin(physical_plan, op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
       condition(std::move(condition)) {
 	children.push_back(left);
 	children.push_back(right);

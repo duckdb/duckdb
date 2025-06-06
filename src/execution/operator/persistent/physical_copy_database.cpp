@@ -16,9 +16,9 @@
 
 namespace duckdb {
 
-PhysicalCopyDatabase::PhysicalCopyDatabase(ArenaAllocator &arena, vector<LogicalType> types,
+PhysicalCopyDatabase::PhysicalCopyDatabase(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                            idx_t estimated_cardinality, unique_ptr<CopyDatabaseInfo> info_p)
-    : PhysicalOperator(arena, PhysicalOperatorType::COPY_DATABASE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::COPY_DATABASE, std::move(types), estimated_cardinality),
       info(std::move(info_p)) {
 }
 

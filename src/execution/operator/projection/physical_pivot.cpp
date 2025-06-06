@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-PhysicalPivot::PhysicalPivot(ArenaAllocator &arena, vector<LogicalType> types_p, PhysicalOperator &child,
+PhysicalPivot::PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> types_p, PhysicalOperator &child,
                              BoundPivotInfo bound_pivot_p)
-    : PhysicalOperator(arena, PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
       bound_pivot(std::move(bound_pivot_p)) {
 
 	children.push_back(child);
@@ -24,7 +24,7 @@ PhysicalPivot::PhysicalPivot(ArenaAllocator &arena, vector<LogicalType> types_p,
 		aggr.function.initialize(aggr.function, state.get());
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())));
 		Vector result_vector(aggr_expr->return_type);
-		AggregateInputData aggr_input_data(aggr.bind_info.get(), arena);
+		AggregateInputData aggr_input_data(aggr.bind_info.get(), physical_plan.ArenaRef());
 		aggr.function.finalize(state_vector, aggr_input_data, result_vector, 1, 0);
 		empty_aggregates.push_back(result_vector.GetValue(0));
 	}

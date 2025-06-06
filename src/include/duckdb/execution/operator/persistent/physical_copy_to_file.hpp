@@ -33,7 +33,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COPY_TO_FILE;
 
 public:
-	PhysicalCopyToFile(ArenaAllocator &arena, vector<LogicalType> types, CopyFunction function,
+	PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
 	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 
 	CopyFunction function;

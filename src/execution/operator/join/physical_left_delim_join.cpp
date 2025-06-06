@@ -9,12 +9,12 @@
 
 namespace duckdb {
 
-PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(ArenaAllocator &arena, PhysicalPlanGenerator &planner,
+PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, PhysicalPlanGenerator &planner,
                                              vector<LogicalType> types, PhysicalOperator &original_join,
                                              PhysicalOperator &distinct,
                                              const vector<const_reference<PhysicalOperator>> &delim_scans,
                                              idx_t estimated_cardinality, optional_idx delim_idx)
-    : PhysicalDelimJoin(arena, PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), original_join, distinct,
+    : PhysicalDelimJoin(physical_plan, PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), original_join, distinct,
                         delim_scans, estimated_cardinality, delim_idx) {
 	D_ASSERT(join.children.size() == 2);
 	// now for the original join

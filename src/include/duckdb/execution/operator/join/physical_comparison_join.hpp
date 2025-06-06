@@ -20,7 +20,7 @@ class LogicalGet;
 //! PhysicalJoin represents the base class of the join operators
 class PhysicalComparisonJoin : public PhysicalJoin {
 public:
-	PhysicalComparisonJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperatorType type,
+	PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperatorType type,
 	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	vector<JoinCondition> conditions;

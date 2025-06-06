@@ -19,7 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_SAMPLE;
 
 public:
-	PhysicalStreamingSample(ArenaAllocator &arena, vector<LogicalType> types, unique_ptr<SampleOptions> options,
+	PhysicalStreamingSample(PhysicalPlan &physical_plan, vector<LogicalType> types, unique_ptr<SampleOptions> options,
 	                        idx_t estimated_cardinality);
 
 	unique_ptr<SampleOptions> sample_options;

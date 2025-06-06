@@ -18,10 +18,10 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalBatchInsert(ArenaAllocator &arena, vector<LogicalType> types, TableCatalogEntry &table,
+	PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &table,
 	                    vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality);
 	//! CREATE TABLE AS
-	PhysicalBatchInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema,
+	PhysicalBatchInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
 	                    unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality);
 
 	//! The table to insert into

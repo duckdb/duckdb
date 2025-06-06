@@ -22,7 +22,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PIECEWISE_MERGE_JOIN;
 
 public:
-	PhysicalPiecewiseMergeJoin(ArenaAllocator &arena, LogicalComparisonJoin &op, PhysicalOperator &left,
+	PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
 	                           PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
 	                           idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 

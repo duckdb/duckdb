@@ -21,7 +21,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RESULT_COLLECTOR;
 
 public:
-	PhysicalResultCollector(ArenaAllocator &arena, PreparedStatementData &data);
+	PhysicalResultCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 	StatementType statement_type;
 	StatementProperties properties;

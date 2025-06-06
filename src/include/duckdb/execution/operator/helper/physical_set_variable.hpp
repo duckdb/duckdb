@@ -18,7 +18,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::SET_VARIABLE;
 
 public:
-	PhysicalSetVariable(ArenaAllocator &arena, string name, idx_t estimated_cardinality);
+	PhysicalSetVariable(PhysicalPlan &physical_plan, string name, idx_t estimated_cardinality);
 
 public:
 	// Source interface

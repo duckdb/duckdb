@@ -62,10 +62,11 @@ void UnnestOperatorState::Reset() {
 	first_fetch = true;
 }
 
-PhysicalUnnest::PhysicalUnnest(ArenaAllocator &arena, vector<LogicalType> types,
+PhysicalUnnest::PhysicalUnnest(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
                                PhysicalOperatorType type)
-    : PhysicalOperator(arena, type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)) {
 	D_ASSERT(!this->select_list.empty());
 }
 

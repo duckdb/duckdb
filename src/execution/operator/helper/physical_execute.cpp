@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-PhysicalExecute::PhysicalExecute(ArenaAllocator &arena, PhysicalOperator &plan)
-    : PhysicalOperator(arena, PhysicalOperatorType::EXECUTE, plan.types, idx_t(-1)), plan(plan) {
+PhysicalExecute::PhysicalExecute(PhysicalPlan &physical_plan, PhysicalOperator &plan)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXECUTE, plan.types, idx_t(-1)), plan(plan) {
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalExecute::GetChildren() const {

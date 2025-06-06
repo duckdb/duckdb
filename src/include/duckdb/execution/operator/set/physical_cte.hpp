@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CTE;
 
 public:
-	PhysicalCTE(ArenaAllocator &arena, string ctename, idx_t table_index, vector<LogicalType> types,
+	PhysicalCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index, vector<LogicalType> types,
 	            PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 

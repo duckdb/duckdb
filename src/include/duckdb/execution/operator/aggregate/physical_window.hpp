@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::WINDOW;
 
 public:
-	PhysicalWindow(ArenaAllocator &arena, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
 	               idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
 	//! The projection list of the WINDOW statement (may contain aggregates)

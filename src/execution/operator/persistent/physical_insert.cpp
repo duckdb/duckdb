@@ -22,7 +22,7 @@
 
 namespace duckdb {
 
-PhysicalInsert::PhysicalInsert(ArenaAllocator &arena, vector<LogicalType> types_p, TableCatalogEntry &table,
+PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p, TableCatalogEntry &table,
                                vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns,
                                vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk,
@@ -30,7 +30,7 @@ PhysicalInsert::PhysicalInsert(ArenaAllocator &arena, vector<LogicalType> types_
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p, unordered_set<column_t> conflict_target_p,
                                vector<column_t> columns_to_fetch_p, bool update_is_del_and_insert)
-    : PhysicalOperator(arena, PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)),
       return_chunk(return_chunk), parallel(parallel), action_type(action_type),
       set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
@@ -54,9 +54,9 @@ PhysicalInsert::PhysicalInsert(ArenaAllocator &arena, vector<LogicalType> types_
 	}
 }
 
-PhysicalInsert::PhysicalInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema,
+PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
                                unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality, bool parallel)
-    : PhysicalOperator(arena, PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality),
       insert_table(nullptr), return_chunk(false), schema(&schema), info(std::move(info_p)), parallel(parallel),
       action_type(OnConflictAction::THROW), update_is_del_and_insert(false) {
 	GetInsertInfo(*info, insert_types);

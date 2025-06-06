@@ -8,9 +8,9 @@
 
 namespace duckdb {
 
-PhysicalLimit::PhysicalLimit(ArenaAllocator &arena, vector<LogicalType> types, BoundLimitNode limit_val_p,
+PhysicalLimit::PhysicalLimit(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundLimitNode limit_val_p,
                              BoundLimitNode offset_val_p, idx_t estimated_cardinality)
-    : PhysicalOperator(arena, PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality),
       limit_val(std::move(limit_val_p)), offset_val(std::move(offset_val_p)) {
 }
 

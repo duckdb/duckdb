@@ -5,9 +5,10 @@
 
 namespace duckdb {
 
-PhysicalVerifyVector::PhysicalVerifyVector(ArenaAllocator &arena, PhysicalOperator &child,
+PhysicalVerifyVector::PhysicalVerifyVector(PhysicalPlan &physical_plan, PhysicalOperator &child,
                                            DebugVectorVerification verification)
-    : PhysicalOperator(arena, PhysicalOperatorType::VERIFY_VECTOR, child.GetTypes(), child.estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::VERIFY_VECTOR, child.GetTypes(),
+                       child.estimated_cardinality),
       verification(verification) {
 	children.push_back(child);
 }

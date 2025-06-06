@@ -62,12 +62,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_GROUP_BY;
 
 public:
-	PhysicalHashAggregate(ArenaAllocator &arena, ClientContext &context, vector<LogicalType> types,
+	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                      vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality);
-	PhysicalHashAggregate(ArenaAllocator &arena, ClientContext &context, vector<LogicalType> types,
+	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                      vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
 	                      idx_t estimated_cardinality);
-	PhysicalHashAggregate(ArenaAllocator &arena, ClientContext &context, vector<LogicalType> types,
+	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                      vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
 	                      vector<GroupingSet> grouping_sets, vector<unsafe_vector<idx_t>> grouping_functions,
 	                      idx_t estimated_cardinality);

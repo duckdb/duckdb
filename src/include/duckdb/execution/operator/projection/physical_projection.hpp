@@ -18,8 +18,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PROJECTION;
 
 public:
-	PhysicalProjection(ArenaAllocator &arena, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	                   idx_t estimated_cardinality);
+	PhysicalProjection(PhysicalPlan &physical_plan, vector<LogicalType> types,
+	                   vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
 
 	vector<unique_ptr<Expression>> select_list;
 

@@ -4,9 +4,9 @@
 #include "duckdb/parallel/thread_context.hpp"
 namespace duckdb {
 
-PhysicalFilter::PhysicalFilter(ArenaAllocator &arena, vector<LogicalType> types,
+PhysicalFilter::PhysicalFilter(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
-    : CachingPhysicalOperator(arena, PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
+    : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
 
 	D_ASSERT(!select_list.empty());
 	if (select_list.size() == 1) {

@@ -6,6 +6,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -14,6 +15,12 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
+PhysicalOperator::PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
+                                   idx_t estimated_cardinality)
+    : physical_plan(physical_plan), children(physical_plan.ArenaRef()), type(type), types(std::move(types)),
+      estimated_cardinality(estimated_cardinality) {
+}
 
 string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
@@ -291,9 +298,9 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	}
 }
 
-CachingPhysicalOperator::CachingPhysicalOperator(ArenaAllocator &arena, PhysicalOperatorType type,
+CachingPhysicalOperator::CachingPhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type,
                                                  vector<LogicalType> types_p, idx_t estimated_cardinality)
-    : PhysicalOperator(arena, type, std::move(types_p), estimated_cardinality) {
+    : PhysicalOperator(physical_plan, type, std::move(types_p), estimated_cardinality) {
 
 	caching_supported = true;
 	for (auto &col_type : types) {

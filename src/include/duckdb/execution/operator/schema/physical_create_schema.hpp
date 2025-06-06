@@ -19,8 +19,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_SCHEMA;
 
 public:
-	explicit PhysicalCreateSchema(ArenaAllocator &arena, unique_ptr<CreateSchemaInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(arena, PhysicalOperatorType::CREATE_SCHEMA, {LogicalType::BIGINT}, estimated_cardinality),
+	explicit PhysicalCreateSchema(PhysicalPlan &physical_plan, unique_ptr<CreateSchemaInfo> info,
+	                              idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_SCHEMA, {LogicalType::BIGINT},
+	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

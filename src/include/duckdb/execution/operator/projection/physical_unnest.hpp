@@ -19,7 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNNEST;
 
 public:
-	PhysicalUnnest(ArenaAllocator &arena, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+	PhysicalUnnest(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
 	               idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::UNNEST);
 
 	//! The projection list of the UNNEST

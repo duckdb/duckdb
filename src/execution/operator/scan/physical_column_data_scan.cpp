@@ -8,17 +8,17 @@
 
 namespace duckdb {
 
-PhysicalColumnDataScan::PhysicalColumnDataScan(ArenaAllocator &arena, vector<LogicalType> types,
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                PhysicalOperatorType op_type, idx_t estimated_cardinality,
                                                optionally_owned_ptr<ColumnDataCollection> collection_p)
-    : PhysicalOperator(arena, op_type, std::move(types), estimated_cardinality), collection(std::move(collection_p)),
-      cte_index(DConstants::INVALID_INDEX) {
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality),
+      collection(std::move(collection_p)), cte_index(DConstants::INVALID_INDEX) {
 }
 
-PhysicalColumnDataScan::PhysicalColumnDataScan(ArenaAllocator &arena, vector<LogicalType> types,
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                PhysicalOperatorType op_type, idx_t estimated_cardinality,
                                                idx_t cte_index)
-    : PhysicalOperator(arena, op_type, std::move(types), estimated_cardinality), collection(nullptr),
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality), collection(nullptr),
       cte_index(cte_index) {
 }
 

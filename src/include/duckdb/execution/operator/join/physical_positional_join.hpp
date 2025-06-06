@@ -19,7 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::POSITIONAL_JOIN;
 
 public:
-	PhysicalPositionalJoin(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
+	PhysicalPositionalJoin(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &left,
 	                       PhysicalOperator &right, idx_t estimated_cardinality);
 
 public:

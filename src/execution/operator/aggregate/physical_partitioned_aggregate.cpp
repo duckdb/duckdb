@@ -4,12 +4,13 @@
 
 namespace duckdb {
 
-PhysicalPartitionedAggregate::PhysicalPartitionedAggregate(ArenaAllocator &arena, ClientContext &context,
+PhysicalPartitionedAggregate::PhysicalPartitionedAggregate(PhysicalPlan &physical_plan, ClientContext &context,
                                                            vector<LogicalType> types,
                                                            vector<unique_ptr<Expression>> aggregates_p,
                                                            vector<unique_ptr<Expression>> groups_p,
                                                            vector<column_t> partitions_p, idx_t estimated_cardinality)
-    : PhysicalOperator(arena, PhysicalOperatorType::PARTITIONED_AGGREGATE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::PARTITIONED_AGGREGATE, std::move(types),
+                       estimated_cardinality),
       partitions(std::move(partitions_p)), groups(std::move(groups_p)), aggregates(std::move(aggregates_p)) {
 }
 

@@ -13,8 +13,8 @@
 
 namespace duckdb {
 
-PhysicalResultCollector::PhysicalResultCollector(ArenaAllocator &arena, PreparedStatementData &data)
-    : PhysicalOperator(arena, PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
+PhysicalResultCollector::PhysicalResultCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
       statement_type(data.statement_type), properties(data.properties), plan(data.physical_plan->Root()),
       names(data.names) {
 	types = data.types;

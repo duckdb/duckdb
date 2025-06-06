@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ATTACH;
 
 public:
-	explicit PhysicalAttach(ArenaAllocator &arena, unique_ptr<AttachInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(arena, PhysicalOperatorType::ATTACH, {LogicalType::BOOLEAN}, estimated_cardinality),
+	explicit PhysicalAttach(PhysicalPlan &physical_plan, unique_ptr<AttachInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::ATTACH, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

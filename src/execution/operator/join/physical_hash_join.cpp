@@ -29,12 +29,12 @@
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
                                    PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(arena, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
 
@@ -103,10 +103,11 @@ PhysicalHashJoin::PhysicalHashJoin(ArenaAllocator &arena, LogicalOperator &op, P
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
                                    PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality)
-    : PhysicalHashJoin(arena, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
+    : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
+                       nullptr) {
 }
 
 //===--------------------------------------------------------------------===//

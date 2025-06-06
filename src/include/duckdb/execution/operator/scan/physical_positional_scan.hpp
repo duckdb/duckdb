@@ -22,7 +22,7 @@ public:
 
 public:
 	//! Regular Table Scan
-	PhysicalPositionalScan(ArenaAllocator &arena, vector<LogicalType> types, PhysicalOperator &left,
+	PhysicalPositionalScan(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &left,
 	                       PhysicalOperator &right);
 
 	//! The child table functions

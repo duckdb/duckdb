@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-PhysicalAsOfJoin::PhysicalAsOfJoin(ArenaAllocator &arena, LogicalComparisonJoin &op, PhysicalOperator &left,
+PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
                                    PhysicalOperator &right)
-    : PhysicalComparisonJoin(arena, op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID), predicate(std::move(op.predicate)) {
 

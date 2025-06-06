@@ -42,7 +42,7 @@ public:
 	}
 
 	void push_back(const T &value) {
-		auto node = arena->Make<Node>(value);
+		auto node = arena.Make<Node>(value);
 		auto ptr = head ? &tail->next : &head;
 		*ptr = node;
 		tail = node;
@@ -51,7 +51,7 @@ public:
 
 	template <class... ARGS>
 	void emplace_back(ARGS &&... args) {
-		auto node = arena->Make<Node>(std::forward<ARGS>(args)...);
+		auto node = arena.Make<Node>(std::forward<ARGS>(args)...);
 		auto ptr = head ? &tail->next : &head;
 		*ptr = node;
 		tail = node;
@@ -98,7 +98,7 @@ private:
 		T value;
 	};
 
-	optional_ptr<ArenaAllocator> arena;
+	ArenaAllocator &arena;
 	Node *head = nullptr;
 	Node *tail = nullptr;
 	idx_t _size = 0;

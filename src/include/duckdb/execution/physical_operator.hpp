@@ -32,6 +32,7 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
+class PhysicalPlan;
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
@@ -39,11 +40,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
 
 public:
-	PhysicalOperator(ArenaAllocator &arena, PhysicalOperatorType type, vector<LogicalType> types,
-	                 idx_t estimated_cardinality)
-	    : children(arena), type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
-	}
-
+	PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
+	                 idx_t estimated_cardinality);
 	virtual ~PhysicalOperator() {
 	}
 
@@ -51,6 +49,8 @@ public:
 	PhysicalOperator(const PhysicalOperator &other) = delete;
 	PhysicalOperator &operator=(const PhysicalOperator &) = delete;
 
+	//! A reference to the physical plan of this operator.
+	PhysicalPlan &physical_plan;
 	//! The child operators.
 	ArenaLinkedList<reference<PhysicalOperator>> children;
 	//! The physical operator type.
@@ -260,7 +260,7 @@ public:
 class CachingPhysicalOperator : public PhysicalOperator {
 public:
 	static constexpr const idx_t CACHE_THRESHOLD = 64;
-	CachingPhysicalOperator(ArenaAllocator &arena, PhysicalOperatorType type, vector<LogicalType> types,
+	CachingPhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
 	                        idx_t estimated_cardinality);
 
 	bool caching_supported;
