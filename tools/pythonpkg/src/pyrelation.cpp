@@ -1006,7 +1006,9 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 		ExecuteOrThrow(true);
 	}
 	AssertResultOpen();
-	return result->FetchRecordBatchReader(batch_size);
+	auto res = result->FetchRecordBatchReader(batch_size);
+	result = nullptr;
+	return res;
 }
 
 void DuckDBPyRelation::Close() {

@@ -103,8 +103,9 @@ class TestPolars(object):
         ]
 
         assert lazy_df.select('a').collect().to_dicts() == [{'a': 'Pedro'}, {'a': 'Mark'}, {'a': 'Thijs'}]
-
         assert lazy_df.limit(1).collect().to_dicts() == [{'a': 'Pedro', 'b': 32}]
-
-        print(lazy_df.filter(pl.col("b") < 32).collect().to_dicts())
-        assert 0 == 1
+        assert lazy_df.filter(pl.col("b") < 32).collect().to_dicts() == [
+            {'a': 'Mark', 'b': 31},
+            {'a': 'Thijs', 'b': 29},
+        ]
+        assert lazy_df.filter(pl.col("b") < 32).select('a').collect().to_dicts() == [{'a': 'Mark'}, {'a': 'Thijs'}]
