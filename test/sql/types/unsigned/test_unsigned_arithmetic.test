@@ -23,7 +23,7 @@ select * from unsigned;
 statement error
 SELECT (200)::UTINYINT + (200)::UTINYINT;
 ----
-
+<REGEX>:Out of Range Error.*Overflow in addition of UINT8.*
 
 query I
 SELECT (20)::UTINYINT + (200)::USMALLINT;
@@ -38,11 +38,13 @@ SELECT (20)::UBIGINT + (200)::UBIGINT;
 statement error
 SELECT (18446744073709551615)::UBIGINT + (18446744073709551615)::UBIGINT;
 ----
+<REGEX>:Out of Range Error.*Overflow in addition of UINT64.*
 
 # Multiplication
 statement error
 SELECT (200)::UTINYINT * (200)::UTINYINT;
 ----
+<REGEX>:Out of Range Error.*Overflow in multiplication of UINT8.*
 
 query I
 SELECT (200)::UTINYINT * (200)::USMALLINT;
@@ -57,15 +59,18 @@ SELECT (200)::UBIGINT * (200)::UBIGINT;
 statement error
 SELECT (18446744073709551615)::UBIGINT * (3)::UBIGINT;
 ----
+<REGEX>:Out of Range Error.*Overflow in multiplication of UINT64.*
 
 # Subtraction
 statement error
 SELECT (200)::UTINYINT - (201)::UTINYINT;
 ----
+<REGEX>:Out of Range Error.*Overflow in subtraction of UINT8.*
 
 statement error
 SELECT (200)::UTINYINT - (201)::USMALLINT;
 ----
+<REGEX>:Out of Range Error.*Overflow in subtraction of UINT16.*
 
 query I
 SELECT (200)::UTINYINT - (20)::USMALLINT;
