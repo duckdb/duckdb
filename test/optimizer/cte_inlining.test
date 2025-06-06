@@ -15,6 +15,9 @@ insert into a values (42);
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY
 
+# in alternative verify mode, CTEs may not be inlined
+require no_alternative_verify
+
 # single reference to CTE, should be inlined
 query II
 explain with cte1 as (Select i as j from a) select * from cte1;

@@ -80,10 +80,11 @@ More than one row returned by a subquery
 statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
+# the result is non-deterministic, so any of the values can be returned
 query I
-SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte)
+SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte) IN (462, 504, 546)
 ----
-462
+true
 
 # operations on subquery
 query I
