@@ -19,6 +19,7 @@ public:
 	}
 
 	idx_t current_ordinality_idx = 1;
+	mutex ordinality_lock;
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
@@ -73,6 +74,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		if (function.ordinality_data.ordinality_request == Ordinality_request_t::REQUESTED) {
 			const idx_t ordinality = chunk.size();
 			function.ordinality_data.SetOrdinality(chunk, gstate.current_ordinality_idx, ordinality);
+			lock_guard<mutex> guard(gstate.ordinality_lock);
 			gstate.current_ordinality_idx += ordinality;
 		}
 		return result;
@@ -94,6 +96,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
+		lock_guard<mutex> guard(gstate.ordinality_lock);
 		gstate.current_ordinality_idx = 1;
 	}
 	// set up the output data in "chunk"
@@ -109,6 +112,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	if (function.ordinality_data.ordinality_request == Ordinality_request_t::REQUESTED) {
 		const idx_t ordinality = chunk.size();
 		function.ordinality_data.SetOrdinality(chunk, gstate.current_ordinality_idx, ordinality);
+		lock_guard<mutex> guard(gstate.ordinality_lock);
 		gstate.current_ordinality_idx += ordinality;
 	}
 	if (result == OperatorResultType::FINISHED) {
