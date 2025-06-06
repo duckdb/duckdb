@@ -975,7 +975,9 @@ PolarsDataFrame DuckDBPyRelation::ToPolars(bool lazy, idx_t batch_size) {
 		auto arrow = ToArrowTableInternal(batch_size, true);
 		return py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(arrow));
 	}
-	throw NotImplementedException("bla");
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+   	auto lazy_frame_produce = import_cache.duckdb.polars_io.duckdb_source();
+   	return lazy_frame_produce(*this);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {

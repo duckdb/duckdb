@@ -87,3 +87,21 @@ class TestPolars(object):
         my_table = conn.query("select 'x' my_str").pl()
         my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
         assert my_res.fetchall() == [('x',)]
+
+    def test_polars_lazy(self, duckdb_cursor):
+        con = duckdb.connect()
+        con.execute("Create table names (a varchar, b integer)")
+        con.execute("insert into names values ('Pedro',32),  ('Mark',31), ('Thijs', 29)")
+        rel = con.sql("FROM names")
+
+        lazy_df = rel.pl(lazy=True)
+
+        assert isinstance(lazy_df, pl.LazyFrame)
+        assert lazy_df.collect().to_dicts() == [{'a': 'Pedro', 'b': 32}, {'a': 'Mark', 'b': 31}, {'a': 'Thijs', 'b': 29}]
+
+        assert lazy_df.select('a').collect().to_dicts() == [{'a': 'Pedro'}, {'a': 'Mark'}, {'a': 'Thijs'}]
+
+        assert lazy_df.limit(1).collect().to_dicts() == [{'a': 'Pedro', 'b': 32}]
+
+        print(lazy_df.filter(pl.col("b") < 32).collect().to_dicts())
+        assert 0 == 1

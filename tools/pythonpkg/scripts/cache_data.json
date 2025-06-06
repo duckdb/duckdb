@@ -698,7 +698,15 @@
         "type": "module",
         "full_path": "duckdb.polars_io",
         "name": "polars_io",
-        "children": [],
+        "children": [
+            "duckdb.polars_io.duckdb_source"
+        ],
         "required": false
+    },
+    "duckdb.polars_io.duckdb_source": {
+        "type": "attribute",
+        "full_path": "duckdb.polars_io.duckdb_source",
+        "name": "duckdb_source",
+        "children": []
     }
 }
