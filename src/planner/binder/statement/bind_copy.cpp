@@ -266,10 +266,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 		}
 	}
 	if (!write_empty_file) {
-		if (rotate) {
-			throw NotImplementedException(
-			    "Can't combine WRITE_EMPTY_FILE false with file rotation (e.g., ROW_GROUPS_PER_FILE)");
-		}
 		if (per_thread_output) {
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
 		}
