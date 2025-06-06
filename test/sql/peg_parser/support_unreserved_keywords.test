@@ -44,6 +44,9 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select UNPACK(a)$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select sum(salary) over (order by enroll_date range between '1 year' preceding and '1 year' following)$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TEMPORARY MACRO my_seq(start, finish, stride:=3) as TABLE SELECT *;$TEST_PEG_PARSER$);
 
 statement ok

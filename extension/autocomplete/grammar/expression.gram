@@ -28,7 +28,7 @@ IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
 IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
-FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)
+FrameExtent <- ('BETWEEN'i FrameBound 'AND'i FrameBound) / FrameBound
 FrameBound <- ('UNBOUNDED'i 'PRECEDING'i) / ('UNBOUNDED'i 'FOLLOWING'i) / ('CURRENT'i 'ROW'i) / (Expression 'PRECEDING'i) / (Expression 'FOLLOWING'i)
 WindowExcludeClause <- 'EXCLUDE'i WindowExcludeElement
 WindowExcludeElement <- ('CURRENT'i 'ROW'i) / 'GROUP'i / 'TIES'i / ('NO'i 'OTHERS'i)

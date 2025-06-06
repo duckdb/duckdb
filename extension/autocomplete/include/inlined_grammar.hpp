@@ -562,7 +562,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"IntervalUnit <- ColId\n"
 	"FrameClause <- Framing FrameExtent WindowExcludeClause?\n"
 	"Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i\n"
-	"FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)\n"
+	"FrameExtent <- ('BETWEEN'i FrameBound 'AND'i FrameBound) / FrameBound\n"
 	"FrameBound <- ('UNBOUNDED'i 'PRECEDING'i) / ('UNBOUNDED'i 'FOLLOWING'i) / ('CURRENT'i 'ROW'i) / (Expression 'PRECEDING'i) / (Expression 'FOLLOWING'i)\n"
 	"WindowExcludeClause <- 'EXCLUDE'i WindowExcludeElement\n"
 	"WindowExcludeElement <- ('CURRENT'i 'ROW'i) / 'GROUP'i / 'TIES'i / ('NO'i 'OTHERS'i)\n"
