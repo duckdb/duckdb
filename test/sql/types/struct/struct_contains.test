@@ -205,18 +205,18 @@ CREATE TABLE t0 (c0 INT, c1 INT);
 statement ok
 INSERT INTO t0 VALUES (1, 2), (3, 4), (5, 6);
 
-query I
-SELECT c0 IN x FROM (SELECT (c0, c1) AS x FROM t0), t0;
+query II
+SELECT c0, c0 IN x FROM (SELECT [c0, c1] AS x FROM t0) AS y, t0 ORDER BY c0, x;
 ----
-1
-0
-0
-0
-1
-0
-0
-0
-1
+1	true
+1	false
+1	false
+3	false
+3	true
+3	false
+5	false
+5	false
+5	true
 
 # ==========================================================
 # Errors

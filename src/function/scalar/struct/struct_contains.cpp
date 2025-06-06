@@ -20,17 +20,17 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 	target.ToUnifiedFormat(count, target_format);
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
-	vector<const T *> member_data;
-	vector<UnifiedVectorFormat> member_vector;
+	vector<const T *> member_datas;
+	vector<UnifiedVectorFormat> member_vectors;
 	for (const auto &member : members) {
 		if (member->GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
 			member->ToUnifiedFormat(count, member_format);
-			member_data.push_back(UnifiedVectorFormat::GetData<T>(member_format));
-			member_vector.push_back(std::move(member_format));
+			member_datas.push_back(UnifiedVectorFormat::GetData<T>(member_format));
+			member_vectors.push_back(std::move(member_format));
 		} else {
-			member_data.push_back(nullptr);
-			member_vector.push_back(UnifiedVectorFormat());
+			member_datas.push_back(nullptr);
+			member_vectors.push_back(UnifiedVectorFormat());
 		}
 	}
 
@@ -65,15 +65,17 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 		bool found = false;
 
 		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
-			auto &data = member_data[member_idx];
-			if (!data) {
+			auto &member_data = member_datas[member_idx];
+			if (!member_data) {
 				continue; // skip if member data is not compatible with the target type
 			}
+			const auto &member_vector = member_vectors[member_idx];
+			const auto member_data_idx = member_vector.sel->get_index(row);
+			const auto col_valid = member_vector.validity.RowIsValid(member_data_idx);
 
-			auto col_valid = member_vector[member_idx].validity.RowIsValid(member_row_idx);
 			auto is_null = FIND_NULLS && !col_valid && !target_valid;
-			auto both_valid_and_match =
-			    col_valid && target_valid && Equals::Operation<T>(data[member_row_idx], target_data[target_row_idx]);
+			auto both_valid_and_match = col_valid && target_valid &&
+			                            Equals::Operation<T>(member_data[member_data_idx], target_data[target_row_idx]);
 
 			if (is_null || both_valid_and_match) {
 				found = true;
