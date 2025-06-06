@@ -91,6 +91,7 @@ jobs:
           source /opt/rh/gcc-toolset-12/enable
           export CC=gcc
           export CXX=g++
+
           git config --global --add safe.directory $PWD
           make -C $PWD
         "
