@@ -181,7 +181,6 @@ public:
 	NodeHandle &operator=(const NodeHandle &) = delete;
 
 	NodeHandle(NodeHandle &&other) noexcept : handle(std::move(other.handle)), n(handle.GetRef<T>()) {
-		D_ASSERT(1);
 	}
 	NodeHandle &operator=(NodeHandle &&other) noexcept = delete;
 
