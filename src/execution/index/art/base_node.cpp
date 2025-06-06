@@ -30,8 +30,10 @@ void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t by
 }
 
 template <uint8_t CAPACITY, NType TYPE>
-BaseNode<CAPACITY, TYPE> &BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
-	auto &n = Node::Ref<BaseNode>(art, node, TYPE);
+NodeHandle<BaseNode<CAPACITY, TYPE>> BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node,
+                                                                                   const uint8_t byte) {
+	NodeHandle<BaseNode<CAPACITY, TYPE>> handle(art, node);
+	auto &n = handle.Get();
 
 	uint8_t child_pos = 0;
 	for (; child_pos < n.count; child_pos++) {
@@ -49,7 +51,8 @@ BaseNode<CAPACITY, TYPE> &BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art
 		n.key[i] = n.key[i + 1];
 		n.children[i] = n.children[i + 1];
 	}
-	return n;
+
+	return handle;
 }
 
 //===--------------------------------------------------------------------===//
@@ -57,46 +60,61 @@ BaseNode<CAPACITY, TYPE> &BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art
 //===--------------------------------------------------------------------===//
 
 void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
-	// The node is full. Grow to Node16.
-	auto &n = Node::Ref<Node4>(art, node, NODE_4);
-	if (n.count == CAPACITY) {
-		auto node4 = node;
-		Node16::GrowNode4(art, node, node4);
-		Node16::InsertChild(art, node, byte, child);
-		return;
-	}
+	{
+		NodeHandle<Node4> handle(art, node);
+		auto &n = handle.Get();
 
-	InsertChildInternal(n, byte, child);
+		if (n.count != CAPACITY) {
+			InsertChildInternal(n, byte, child);
+			return;
+		}
+	}
+	// The node is full.
+	// Grow to Node16.
+	auto node4 = node;
+	Node16::GrowNode4(art, node, node4);
+	Node16::InsertChild(art, node, byte, child);
 }
 
 void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status) {
-	auto &n = DeleteChildInternal(art, node, byte);
+	Node child;
+	uint8_t remainder;
 
-	// Compress one-way nodes.
-	if (n.count == 1) {
+	{
+		auto handle = DeleteChildInternal(art, node, byte);
+		auto &n = handle.Get();
+
+		if (n.count != 1) {
+			return;
+		}
+
+		// Compress one-way nodes.
 		n.count--;
-
-		auto child = n.children[0];
-		auto remainder = n.key[0];
-		auto old_status = node.GetGateStatus();
-
-		Node::Free(art, node);
-		Prefix::Concat(art, prefix, remainder, old_status, child, status);
+		child = n.children[0];
+		remainder = n.key[0];
 	}
+
+	auto old_status = node.GetGateStatus();
+	Node::Free(art, node);
+	Prefix::Concat(art, prefix, remainder, old_status, child, status);
 }
 
 void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
-	auto &n4 = New(art, node4);
-	auto &n16 = Node::Ref<Node16>(art, node16, NType::NODE_16);
-	node4.SetGateStatus(node16.GetGateStatus());
+	{
+		auto n4_handle = New(art, node4);
+		auto &n4 = n4_handle.Get();
+		node4.SetGateStatus(node16.GetGateStatus());
 
-	n4.count = n16.count;
-	for (uint8_t i = 0; i < n16.count; i++) {
-		n4.key[i] = n16.key[i];
-		n4.children[i] = n16.children[i];
+		NodeHandle<Node16> n16_handle(art, node16);
+		auto &n16 = n16_handle.Get();
+
+		n4.count = n16.count;
+		for (uint8_t i = 0; i < n16.count; i++) {
+			n4.key[i] = n16.key[i];
+			n4.children[i] = n16.children[i];
+		}
+		n16.count = 0;
 	}
-
-	n16.count = 0;
 	Node::Free(art, node16);
 }
 
@@ -104,59 +122,73 @@ void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 // Node16
 //===--------------------------------------------------------------------===//
 
-void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
-	auto &n = DeleteChildInternal(art, node, byte);
-
-	// Shrink node to Node4.
-	if (n.count < Node4::CAPACITY) {
-		auto node16 = node;
-		Node4::ShrinkNode16(art, node, node16);
+void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
+	{
+		NodeHandle<Node16> handle(art, node);
+		auto &n = handle.Get();
+		if (n.count != CAPACITY) {
+			InsertChildInternal(n, byte, child);
+			return;
+		}
 	}
+	// The node is full.
+	// Grow to Node48.
+	auto node16 = node;
+	Node48::GrowNode16(art, node, node16);
+	Node48::InsertChild(art, node, byte, child);
 }
 
-void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
-	// The node is full. Grow to Node48.
-	auto &n16 = Node::Ref<Node16>(art, node, NODE_16);
-	if (n16.count == CAPACITY) {
-		auto node16 = node;
-		Node48::GrowNode16(art, node, node16);
-		Node48::InsertChild(art, node, byte, child);
-		return;
+void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
+	{
+		auto handle = DeleteChildInternal(art, node, byte);
+		auto &n = handle.Get();
+		if (n.count >= Node4::CAPACITY) {
+			return;
+		}
 	}
-
-	InsertChildInternal(n16, byte, child);
+	// Shrink node to Node4.
+	auto node16 = node;
+	Node4::ShrinkNode16(art, node, node16);
 }
 
 void Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
-	auto &n4 = Node::Ref<Node4>(art, node4, NType::NODE_4);
-	auto &n16 = New(art, node16);
-	node16.SetGateStatus(node4.GetGateStatus());
+	{
+		NodeHandle<Node4> n4_handle(art, node4);
+		auto &n4 = n4_handle.Get();
 
-	n16.count = n4.count;
-	for (uint8_t i = 0; i < n4.count; i++) {
-		n16.key[i] = n4.key[i];
-		n16.children[i] = n4.children[i];
+		auto n16_handle = New(art, node16);
+		auto &n16 = n16_handle.Get();
+		node16.SetGateStatus(node4.GetGateStatus());
+
+		n16.count = n4.count;
+		for (uint8_t i = 0; i < n4.count; i++) {
+			n16.key[i] = n4.key[i];
+			n16.children[i] = n4.children[i];
+		}
+		n4.count = 0;
 	}
-
-	n4.count = 0;
 	Node::Free(art, node4);
 }
 
 void Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
-	auto &n16 = New(art, node16);
-	auto &n48 = Node::Ref<Node48>(art, node48, NType::NODE_48);
-	node16.SetGateStatus(node48.GetGateStatus());
+	{
+		auto n16_handle = New(art, node16);
+		auto &n16 = n16_handle.Get();
+		node16.SetGateStatus(node48.GetGateStatus());
 
-	n16.count = 0;
-	for (uint16_t i = 0; i < Node256::CAPACITY; i++) {
-		if (n48.child_index[i] != Node48::EMPTY_MARKER) {
-			n16.key[n16.count] = UnsafeNumericCast<uint8_t>(i);
-			n16.children[n16.count] = n48.children[n48.child_index[i]];
-			n16.count++;
+		NodeHandle<Node48> n48_handle(art, node48);
+		auto &n48 = n48_handle.Get();
+
+		n16.count = 0;
+		for (uint16_t i = 0; i < Node256::CAPACITY; i++) {
+			if (n48.child_index[i] != Node48::EMPTY_MARKER) {
+				n16.key[n16.count] = UnsafeNumericCast<uint8_t>(i);
+				n16.children[n16.count] = n48.children[n48.child_index[i]];
+				n16.count++;
+			}
 		}
+		n48.count = 0;
 	}
-
-	n48.count = 0;
 	Node::Free(art, node48);
 }
 
