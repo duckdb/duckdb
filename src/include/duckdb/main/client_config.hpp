@@ -24,8 +24,7 @@ class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
 
-typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
-    get_result_collector_t;
+typedef std::function<PhysicalOperator &(ClientContext &context, PreparedStatementData &data)> get_result_collector_t;
 
 struct ClientConfig {
 	//! The home directory used by the system (if any)
@@ -152,9 +151,8 @@ struct ClientConfig {
 	//! Variables set by the user
 	case_insensitive_map_t<Value> user_variables;
 
-	//! Function that is used to create the result collector for a materialized result
-	//! Defaults to PhysicalMaterializedCollector
-	get_result_collector_t result_collector = nullptr;
+	//! Function that is used to create the result collector for a materialized result.
+	get_result_collector_t get_result_collector = nullptr;
 
 	//! If HTTP logging is enabled or not.
 	bool enable_http_logging = true;

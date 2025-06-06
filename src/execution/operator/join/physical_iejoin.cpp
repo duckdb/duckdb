@@ -19,10 +19,10 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
-                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
-                               unique_ptr<JoinFilterPushdownInfo> pushdown_info)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                               idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info)
+    : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
                         estimated_cardinality) {
 
 	filter_pushdown = std::move(pushdown_info);
@@ -66,9 +66,10 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left
 	}
 }
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
-                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalIEJoin(op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                               idx_t estimated_cardinality)
+    : PhysicalIEJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
 }
 
 //===--------------------------------------------------------------------===//

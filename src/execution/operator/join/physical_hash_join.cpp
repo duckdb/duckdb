@@ -26,12 +26,13 @@
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type,
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
+                             estimated_cardinality),
       delim_types(std::move(delim_types)) {
 
 	filter_pushdown = std::move(pushdown_info_p);
@@ -99,9 +100,11 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, 
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                                   idx_t estimated_cardinality)
+    : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
+                       nullptr) {
 }
 
 //===--------------------------------------------------------------------===//

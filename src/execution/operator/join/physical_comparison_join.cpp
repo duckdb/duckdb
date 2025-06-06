@@ -4,10 +4,10 @@
 
 namespace duckdb {
 
-PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
-                                               vector<JoinCondition> conditions_p, JoinType join_type,
-                                               idx_t estimated_cardinality)
-    : PhysicalJoin(op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
+PhysicalComparisonJoin::PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
+                                               PhysicalOperatorType type, vector<JoinCondition> conditions_p,
+                                               JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalJoin(physical_plan, op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
 	ReorderConditions(conditions);
 }
 

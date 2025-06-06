@@ -26,9 +26,11 @@ struct ActiveFlushGuard {
 	atomic<bool> &bool_value;
 };
 
-PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function_p,
-                                                 unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types), estimated_cardinality),
+PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 CopyFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                                 idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types),
+                       estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)) {
 	if (!function.flush_batch || !function.prepare_batch) {
 		throw InternalException("PhysicalFixedBatchCopy created for copy function that does not have "

@@ -21,7 +21,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RESULT_COLLECTOR;
 
 public:
-	explicit PhysicalResultCollector(PreparedStatementData &data);
+	PhysicalResultCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 	StatementType statement_type;
 	StatementProperties properties;
@@ -29,7 +29,7 @@ public:
 	vector<string> names;
 
 public:
-	static unique_ptr<PhysicalResultCollector> GetResultCollector(ClientContext &context, PreparedStatementData &data);
+	static PhysicalOperator &GetResultCollector(ClientContext &context, PreparedStatementData &data);
 
 public:
 	//! The final method used to fetch the query result from this operator

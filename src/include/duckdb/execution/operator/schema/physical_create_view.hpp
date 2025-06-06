@@ -19,8 +19,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_VIEW;
 
 public:
-	explicit PhysicalCreateView(unique_ptr<CreateViewInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_VIEW, {LogicalType::BIGINT}, estimated_cardinality),
+	explicit PhysicalCreateView(PhysicalPlan &physical_plan, unique_ptr<CreateViewInfo> info,
+	                            idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_VIEW, {LogicalType::BIGINT},
+	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
-                             idx_t estimated_cardinality, bool is_index_sort_p)
-    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality),
+PhysicalOrder::PhysicalOrder(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders,
+                             vector<idx_t> projections, idx_t estimated_cardinality, bool is_index_sort_p)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality),
       orders(std::move(orders)), projections(std::move(projections)), is_index_sort(is_index_sort_p) {
 }
 

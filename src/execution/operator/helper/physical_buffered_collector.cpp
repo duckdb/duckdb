@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-PhysicalBufferedCollector::PhysicalBufferedCollector(PreparedStatementData &data, bool parallel)
-    : PhysicalResultCollector(data), parallel(parallel) {
+PhysicalBufferedCollector::PhysicalBufferedCollector(PhysicalPlan &physical_plan, PreparedStatementData &data,
+                                                     bool parallel)
+    : PhysicalResultCollector(physical_plan, data), parallel(parallel) {
 }
 
 //===--------------------------------------------------------------------===//

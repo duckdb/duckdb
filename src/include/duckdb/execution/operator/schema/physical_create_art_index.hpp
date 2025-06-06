@@ -25,10 +25,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_INDEX;
 
 public:
-	PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
-	                       unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
-	                       idx_t estimated_cardinality, const bool sorted,
-	                       unique_ptr<AlterTableInfo> alter_table_info = nullptr);
+	PhysicalCreateARTIndex(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
+	                       const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+	                       vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality,
+	                       const bool sorted, unique_ptr<AlterTableInfo> alter_table_info = nullptr);
 
 	//! The table to create the index for.
 	DuckTableEntry &table;

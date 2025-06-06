@@ -21,8 +21,8 @@ public:
 	static bool IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr);
 
 public:
-	PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	                        idx_t estimated_cardinality,
+	PhysicalStreamingWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+	                        vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
 	                        PhysicalOperatorType type = PhysicalOperatorType::STREAMING_WINDOW);
 
 	//! The projection list of the WINDOW statement

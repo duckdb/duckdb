@@ -607,11 +607,12 @@ ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenc
 		return ScopedConfigSetting(
 		    config,
 		    [&benchmark](ClientConfig &config) {
-			    config.result_collector = [&benchmark](ClientContext &context, PreparedStatementData &data) {
+			    config.get_result_collector = [&benchmark](ClientContext &context,
+			                                               PreparedStatementData &data) -> PhysicalOperator & {
 				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
 			    };
 		    },
-		    [](ClientConfig &config) { config.result_collector = nullptr; });
+		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 	}
 	return ScopedConfigSetting(config);
 }
