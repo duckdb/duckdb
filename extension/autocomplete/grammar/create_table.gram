@@ -38,7 +38,7 @@ ConstraintNameClause <- 'CONSTRAINT'i Identifier
 TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
 TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
-ColumnIdList <- Parens(List(Identifier))
+ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
@@ -48,6 +48,7 @@ Identifier <- QuotedIdentifier / PlainIdentifier
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
 ColIdOrString <- ColId / StringLiteral
 FuncName <- UnreservedKeyword / FuncNameKeyword / Identifier
+TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
 ColLabelOrString <- ColLabel / StringLiteral

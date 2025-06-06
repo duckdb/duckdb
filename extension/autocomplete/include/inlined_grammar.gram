@@ -536,7 +536,7 @@ UnpivotKeyword <- 'UNPIVOT'i / 'PIVOT_LONGER'i
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' Identifier ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 
@@ -566,7 +566,7 @@ SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
 CaseExpression <- 'CASE'i Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
 CaseElse <- 'ELSE'i Expression
-TypeLiteral <- Identifier StringLiteral
+TypeLiteral <- ColId StringLiteral
 IntervalLiteral <- 'INTERVAL'i IntervalParameter IntervalUnit?
 IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
 IntervalUnit <- ColId
@@ -630,7 +630,7 @@ InOperator <- 'NOT'i? 'IN'i
 IsOperator <- 'IS'i 'NOT'i? DistinctFrom?
 DistinctFrom <- 'DISTINCT'i 'FROM'i
 ConjunctionOperator <- 'OR'i / 'AND'i
-ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
+ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
 BetweenOperator <- 'NOT'i? 'BETWEEN'i
 CollateOperator <- 'COLLATE'i
 LambdaOperator <- '->'
@@ -749,7 +749,7 @@ ConstraintNameClause <- 'CONSTRAINT'i Identifier
 TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
 TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
-ColumnIdList <- Parens(List(Identifier))
+ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
@@ -759,6 +759,7 @@ Identifier <- QuotedIdentifier / PlainIdentifier
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
 ColIdOrString <- ColId / StringLiteral
 FuncName <- UnreservedKeyword / FuncNameKeyword / Identifier
+TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
 ColLabelOrString <- ColLabel / StringLiteral
@@ -863,7 +864,7 @@ TableStatement <- 'TABLE' BaseTableName
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
-WithStatement <- Identifier InsertColumnList? 'AS'i Materialized? SubqueryReference
+WithStatement <- ColIdOrString InsertColumnList? 'AS'i Materialized? SubqueryReference
 Materialized <- 'NOT'i? 'MATERIALIZED'i
 WithClause <- 'WITH'i Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'i
@@ -1016,7 +1017,7 @@ FromOrTo <- 'FROM'i / 'TO'i
 
 CopySelect <- Parens(SelectStatement) 'TO'i CopyFileName CopyOptions?
 
-CopyFileName <- StringLiteral / Identifier
+CopyFileName <- StringLiteral / Identifier / (Identifier '.' ColId)
 CopyOptions <- 'WITH'i? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
 SpecializedOptions <-
 	'BINARY'i / 'FREEZE'i / 'OIDS'i / 'CSV'i / 'HEADER'i /
@@ -1035,7 +1036,7 @@ GenericCopyOption <- GenericCopyOptionName Expression?
 # FIXME: should not need to hard-code options here
 GenericCopyOptionName <- 'ARRAY'i / 'NULL'i / 'ANALYZE'i / CopyOptionName
 
-CopyFromDatabase <- 'FROM'i 'DATABASE'i Identifier 'TO'i Identifier CopyDatabaseFlag?
+CopyFromDatabase <- 'FROM'i 'DATABASE'i ColId 'TO'i ColId CopyDatabaseFlag?
 
 CopyDatabaseFlag <- Parens(SchemaOrData)
 SchemaOrData <- 'SCHEMA'i / 'DATA'i
@@ -1182,7 +1183,7 @@ MacroOrFunction <- 'MACRO'i / 'FUNCTION'i
 MacroDefinition <- Parens(MacroParameters?) 'AS'i (ScalarMacroDefinition / TableMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / Identifier
+MacroParameter <- NamedParameter / TypeFuncName
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE'i SelectStatement

@@ -11,7 +11,7 @@ UnpivotKeyword <- 'UNPIVOT'i / 'PIVOT_LONGER'i
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' Identifier ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 

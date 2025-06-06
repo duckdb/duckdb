@@ -29,6 +29,24 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE testjson AS SELECT JSON '{ "key" : "value" }';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY FROM DATABASE unencrypted TO encrypted;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TEMPORARY MACRO my_seq(start, finish, stride:=3) as TABLE SELECT *;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE history(id TEXT, type TEXT, PRIMARY KEY(id, type));$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UNPIVOT PivotedCities ON 2000, 2010, 2020 INTO NAME YEAR VALUE Population;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$WITH data AS (     SELECT 1 as a, 2 as b, 3 as c ) SELECT d FROM data d$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$insert into data (id, value) select 1$TEST_PEG_PARSER$);
 
 statement ok
