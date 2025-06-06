@@ -46,13 +46,15 @@ public:
 	static constexpr const char *Name = "duckdb";
 
 public:
-	DuckdbCacheItem() : PythonImportCacheItem("duckdb"), filesystem(), Value("Value", this) {
+	DuckdbCacheItem()
+	    : PythonImportCacheItem("duckdb"), filesystem(), Value("Value", this), polars_io("polars_io", this) {
 	}
 	~DuckdbCacheItem() override {
 	}
 
 	DuckdbFilesystemCacheItem filesystem;
 	PythonImportCacheItem Value;
+	PythonImportCacheItem polars_io;
 };
 
 } // namespace duckdb

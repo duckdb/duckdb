@@ -122,3 +122,5 @@ import collections.abc
 
 collections.abc.Iterable
 collections.abc.Mapping
+
+import duckdb.polars_io
