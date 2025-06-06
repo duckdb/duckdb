@@ -1,0 +1,257 @@
+# name: test/sql/window/test_fill_orderby.test
+# description: Test Fill function with secondary orderings
+# group: [window]
+
+#
+# Error checks
+#
+
+# Only one ordering allowed
+statement error
+select fill(i order by 10-i, i * i) over (order by i) from range(3) tbl(i);
+----
+FILL functions must have only one ORDER BY expression
+
+# Ordering must be numeric
+statement error
+select fill(i order by i::VARCHAR) over (order by i) from range(3) tbl(i);
+----
+FILL orderings must support subtraction
+
+#
+# Simple interpolation coverage tests
+#
+
+loop nulled 0 5
+
+query III
+with source as (
+	select 
+		i, 
+		i * 3 % 5 as permuted,
+		if(permuted = ${nulled}, NULL, permuted) as missing
+	from range(5) tbl(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted) over (order by i) as filled
+from source
+qualify filled <> permuted
+----
+
+endloop
+
+# Single values
+query III
+with source as (
+	select 
+		i, 
+		i * 3 % 5 as permuted,
+		if(permuted > 0, NULL, permuted) as missing
+	from range(5) tbl(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted) over (order by i) as filled
+from source
+qualify filled <> permuted
+----
+1	3	0
+2	1	0
+3	4	0
+4	2	0
+
+# No values in partition
+query III
+with source as (
+	select 
+		i, 
+		i * 5 % 11 as permuted,
+		if(permuted < 6, NULL, permuted) as missing
+	from range(11) tbl(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted) over (partition by permuted // 5 order by i) as filled
+from source
+qualify filled is distinct from permuted
+order by i
+----
+0	0	NULL
+3	4	NULL
+5	3	NULL
+7	2	NULL
+9	1	NULL
+
+# Outside valid sort values
+query III
+with source as (
+	select 
+		i, 
+		i * 5 % 11 as permuted,
+		if(permuted = 2, NULL, permuted) as missing,
+		if(permuted < 4, NULL, permuted) as unsorted,
+	from range(11) tbl(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by unsorted) over (order by i) as filled
+from source
+qualify filled is distinct from permuted
+order by i
+----
+7	2	NULL
+
+# NULL sort key coverage
+query III
+with source as (
+	select 
+		i, 
+		(i + 1) * 3 % 5 as permuted,
+		if(permuted = 0, NULL, permuted) as missing
+	from (
+		from range(5) tbl(i)
+		union all 
+		select NULL::INTEGER as i
+	) t(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls first) over (order by i) as filled
+from source
+qualify filled is distinct from permuted
+----
+
+query III
+with source as (
+	select 
+		i, 
+		(i + 1) * 3 % 5 as permuted,
+		if(permuted = 4, NULL, permuted) as missing
+	from (
+		from range(5) tbl(i)
+		union all 
+		select NULL::INTEGER as i
+	) t(i)
+)
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls last) over (order by i) as filled
+from source
+qualify filled is distinct from permuted
+----
+
+query III
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls last) over (order by i) as filled
+from (values
+	(0, 1, NULL),
+	(1, NULL, 0)
+) source(i, missing, permuted)
+order by i
+----
+0	NULL	1
+1	0	NULL
+
+query III
+select
+	i,
+	permuted,
+	fill(missing order by permuted asc nulls first) over (order by i) as filled
+from (values
+	(0, NULL, 2),
+	(1, 0, NULL),
+	(2, 1, 1),
+) source(i, missing, permuted)
+order by i
+----
+0	2	1
+1	NULL	0
+2	1	1
+
+#
+# Unusable values
+#
+# If we use an unsuable value, the interpolation will produce strange values
+
+# Infinity/NaN
+
+foreach ordertype float double
+
+foreach unusable 'infinity' '-infinity' 'NaN'
+
+loop nullable 0 5
+
+query II
+with source as (
+	select 
+		i, 
+		(i + 1) * 3 % 5 as permuted,
+		if(permuted = ${nullable}, NULL, permuted) as missing
+	from (
+		select range::${ordertype} as i from range(5)
+		union all 
+		select ${unusable}::${ordertype} as i
+	) t(i)
+)
+select 
+	i,
+	fill(missing order by permuted) over (order by i) as filled
+from source
+qualify filled is distinct from permuted
+order by i
+----
+
+endloop
+
+endloop
+
+endloop
+
+# Temporal infinities
+
+foreach ordertype date timestamp
+
+foreach unusable 'infinity' '-infinity'
+
+loop nullable 0 5
+
+query II
+with source as (
+	(
+		select 
+			('2025-01-01'::DATE + INTERVAL (i) DAY)::${ordertype} as t, 
+			('2025-01-01'::DATE + INTERVAL ((i + 1) * 3 % 5) DAY)::${ordertype} as permuted,
+			if(i = ${nullable}, NULL, permuted) as missing
+		from range(5) tbl(i)
+	)
+	union all
+	(
+		select
+			${unusable}::${ordertype} as t,
+			t as permuted,
+			permuted as missing
+	)
+)
+select 
+	t,
+	fill(missing order by permuted) over (order by t) as filled
+from source
+qualify filled is distinct from permuted
+order by t
+----
+
+endloop
+
+endloop
+
+endloop
+

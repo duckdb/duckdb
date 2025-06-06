@@ -161,10 +161,10 @@ static bool IsOrderableWindowFunction(ExpressionType type) {
 	case ExpressionType::WINDOW_CUME_DIST:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
 	case ExpressionType::WINDOW_AGGREGATE:
 		return true;
 	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_FILL:
 		return false;
 	default:
 		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
