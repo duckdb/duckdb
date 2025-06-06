@@ -5,13 +5,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/date_lookup_cache.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -410,13 +406,7 @@ struct DatePart {
 		}
 
 		static void Inverse(DataChunk &input, ExpressionState &state, Vector &result) {
-			D_ASSERT(input.ColumnCount() == 1);
-
-			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(), [&](int64_t input) {
-				// millisecond amounts provided to epoch_ms should never be considered infinite
-				// instead such values will just throw when converted to microseconds
-				return Timestamp::FromEpochMsPossiblyInfinite(input);
-			});
+			throw NotImplementedException("EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.");
 		}
 	};
 
