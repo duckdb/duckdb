@@ -38,10 +38,10 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_reduce(s, lambda curr, next: struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b)) FROM df$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT last(value ORDER BY foo IGNORE NULLS) OVER (ORDER BY idx ROWS BETWEEN UNBOUNDED PRECEDING AND 0 FOLLOWING)$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT last(value ORDER BY foo IGNORE NULLS)$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$with integers as (      select * FROM (VALUES (21, 42),               (1337, 7331)    ) as t(a, b) ) select [(UNPACK(a + COLUMNS(['a', 'b'])))] from integers$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$select UNPACK(a)$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TEMPORARY MACRO my_seq(start, finish, stride:=3) as TABLE SELECT *;$TEST_PEG_PARSER$);

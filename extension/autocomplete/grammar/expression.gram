@@ -120,8 +120,9 @@ RecursiveExpression <- (Operator Expression)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? (':' Expression?)? (':' Expression?)?
 
-SpecialFunctionExpression <- CoalesceExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE'i Parens(List(Expression))
+UnpackExpression <- 'UNPACK'i Parens(Expression)
 ColumnsExpression <- '*'? 'COLUMNS'i Parens(Expression)
 ExtractExpression <- 'EXTRACT'i Parens(Expression 'FROM'i Expression)
 LambdaExpression <- 'LAMBDA'i List(ColIdOrString) ':' Expression
