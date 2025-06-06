@@ -14,3 +14,12 @@ FROM (
 ) t;
 ----
 Cannot ORDER BY ALL in a window expression
+
+# We CAN order by column patterns
+query II
+SELECT
+    rank() OVER (ORDER BY COLUMNS('^(.*)_score$') DESC) AS '\1_rank'
+FROM (
+    SELECT 100 AS math_score, 95 as reading_score);
+----
+1	1
