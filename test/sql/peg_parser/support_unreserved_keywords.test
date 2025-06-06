@@ -35,6 +35,9 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$COPY FROM DATABASE unencrypted TO encrypted;$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO hero (name, secret_name, age) VALUES (1) ON CONFLICT (name) DO UPDATE SET secret_name = EXCLUDED.secret_name, age = EXCLUDED.age;$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_reduce(s, lambda curr, next: struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b)) FROM df$TEST_PEG_PARSER$);
 
 statement ok

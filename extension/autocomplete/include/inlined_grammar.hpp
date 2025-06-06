@@ -779,7 +779,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DefaultValues <- 'DEFAULT'i 'VALUES'i\n"
 	"OnConflictClause <- 'ON'i 'CONFLICT'i OnConflictTarget? OnConflictAction\n"
 	"OnConflictTarget <- OnConflictExpressionTarget / OnConflictIndexTarget\n"
-	"OnConflictExpressionTarget <- Parens(List(Identifier)) WhereClause?\n"
+	"OnConflictExpressionTarget <- Parens(List(ColId)) WhereClause?\n"
 	"OnConflictIndexTarget <- 'ON'i 'CONSTRAINT'i ConstraintName\n"
 	"OnConflictAction <- OnConflictUpdate / OnConflictNothing\n"
 	"OnConflictUpdate <- 'DO'i 'UPDATE'i 'SET'i UpdateSetClause WhereClause?\n"
