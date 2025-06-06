@@ -970,14 +970,32 @@ py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) 
 	return res;
 }
 
-PolarsDataFrame DuckDBPyRelation::ToPolars(bool lazy, idx_t batch_size) {
+PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size, py::kwargs &kwargs) {
+	py::object lazy_object = py::none();
+	bool lazy = false;
+	for (auto &arg : kwargs) {
+		const auto &arg_name = py::str(arg.first).cast<std::string>();
+		if (arg_name == "lazy") {
+			lazy_object = kwargs[arg_name.c_str()];
+		} else {
+			throw InvalidInputException(".pl() only accepts 'lazy' as a kwargs option");
+		}
+	}
+
+	if (!py::none().is(lazy_object)) {
+		if (!py::isinstance<py::bool_>(lazy_object)) {
+			throw InvalidInputException(".pl() only accepts 'lazy' as a boolean");
+		}
+		lazy = py::bool_(lazy_object);
+	}
+
 	if (!lazy) {
 		auto arrow = ToArrowTableInternal(batch_size, true);
 		return py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(arrow));
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-   	auto lazy_frame_produce = import_cache.duckdb.polars_io.duckdb_source();
-   	return lazy_frame_produce(*this);
+	auto lazy_frame_produce = import_cache.duckdb.polars_io.duckdb_source();
+	return lazy_frame_produce(*this);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {

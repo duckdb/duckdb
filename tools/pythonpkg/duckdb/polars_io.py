@@ -7,7 +7,7 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation) -> pl.LazyFrame:
     """
     A polars IO plugin for DuckDB.
     """
-    schema = relation.pl().schema
+    schema = relation.pl(1).schema
     def source_generator(
         with_columns: list[str] | None,
         predicate: pl.Expr | None,

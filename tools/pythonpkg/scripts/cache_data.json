@@ -707,6 +707,7 @@
         "type": "attribute",
         "full_path": "duckdb.polars_io.duckdb_source",
         "name": "duckdb_source",
-        "children": []
+        "children": [],
+        "required": false
     }
 }

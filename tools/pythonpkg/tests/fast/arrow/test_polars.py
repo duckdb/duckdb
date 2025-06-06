@@ -93,11 +93,14 @@ class TestPolars(object):
         con.execute("Create table names (a varchar, b integer)")
         con.execute("insert into names values ('Pedro',32),  ('Mark',31), ('Thijs', 29)")
         rel = con.sql("FROM names")
-
         lazy_df = rel.pl(lazy=True)
 
         assert isinstance(lazy_df, pl.LazyFrame)
-        assert lazy_df.collect().to_dicts() == [{'a': 'Pedro', 'b': 32}, {'a': 'Mark', 'b': 31}, {'a': 'Thijs', 'b': 29}]
+        assert lazy_df.collect().to_dicts() == [
+            {'a': 'Pedro', 'b': 32},
+            {'a': 'Mark', 'b': 31},
+            {'a': 'Thijs', 'b': 29},
+        ]
 
         assert lazy_df.select('a').collect().to_dicts() == [{'a': 'Pedro'}, {'a': 'Mark'}, {'a': 'Thijs'}]
 
