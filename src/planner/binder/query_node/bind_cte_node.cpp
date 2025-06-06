@@ -24,6 +24,7 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	D_ASSERT(statement.query);
 
 	result->ctename = statement.ctename;
+	result->materialized = statement.materialized;
 	result->setop_index = GenerateTableIndex();
 
 	result->query_binder = Binder::CreateBinder(context, this);
@@ -40,12 +41,15 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	// Rename columns if duplicate names are detected
 	idx_t index = 1;
 	vector<string> names;
+	// Use a case-insensitive set to track names
+	case_insensitive_set_t ci_names;
 	for (auto &n : result->names) {
 		string name = n;
-		while (find(names.begin(), names.end(), name) != names.end()) {
+		while (ci_names.find(name) != ci_names.end()) {
 			name = n + "_" + std::to_string(index++);
 		}
 		names.push_back(name);
+		ci_names.insert(name);
 	}
 
 	// This allows the right side to reference the CTE
@@ -54,6 +58,10 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	result->child_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
+	// If there is already a binding for the CTE, we need to remove it first
+	// as we are binding a CTE currently, we take precendence over the existing binding.
+	// This implements the CTE shadowing behavior.
+	result->child_binder->bind_context.RemoveCTEBinding(statement.ctename);
 	result->child_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, names, result->types);
 
 	if (statement.child) {

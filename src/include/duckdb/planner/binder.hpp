@@ -331,8 +331,6 @@ private:
 
 	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
 	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
-	//! Materializes CTEs if this is expected to improve performance
-	bool OptimizeCTEs(QueryNode &node);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);

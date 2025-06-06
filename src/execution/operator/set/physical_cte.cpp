@@ -106,6 +106,7 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
 	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 
