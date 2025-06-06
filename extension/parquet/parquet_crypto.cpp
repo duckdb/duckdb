@@ -153,8 +153,6 @@ private:
 		// Initialize Encryption
 		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
 		                          key.size());
-
-		auto key_sz = key.size();
 	}
 
 private:
@@ -232,7 +230,6 @@ public:
 
 private:
 	void Initialize(const string &key) {
-		auto key_sz = key.size();
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
 		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
