@@ -18,7 +18,7 @@ index 40dfb9a..d290788 100644
  }
 \ No newline at end of file
 diff --git a/src/include/storage/sqlite_delete.hpp b/src/include/storage/sqlite_delete.hpp
-index 3c07df3..d3fd4c9 100644
+index 3c07df3..7315ebe 100644
 --- a/src/include/storage/sqlite_delete.hpp
 +++ b/src/include/storage/sqlite_delete.hpp
 @@ -14,7 +14,7 @@ namespace duckdb {
@@ -26,12 +26,12 @@ index 3c07df3..d3fd4c9 100644
  class SQLiteDelete : public PhysicalOperator {
  public:
 -	SQLiteDelete(LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
-+	SQLiteDelete(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
++	SQLiteDelete(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
  
  	//! The table to delete from
  	TableCatalogEntry &table;
 diff --git a/src/include/storage/sqlite_index.hpp b/src/include/storage/sqlite_index.hpp
-index 4400497..8e35d5e 100644
+index 4400497..f60a33a 100644
 --- a/src/include/storage/sqlite_index.hpp
 +++ b/src/include/storage/sqlite_index.hpp
 @@ -16,7 +16,7 @@ namespace duckdb {
@@ -39,12 +39,12 @@ index 4400497..8e35d5e 100644
  class SQLiteCreateIndex : public PhysicalOperator {
  public:
 -	explicit SQLiteCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
-+	SQLiteCreateIndex(ArenaAllocator &arena, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
++	SQLiteCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
  
  	unique_ptr<CreateIndexInfo> info;
  	TableCatalogEntry &table;
 diff --git a/src/include/storage/sqlite_insert.hpp b/src/include/storage/sqlite_insert.hpp
-index 65ec357..53f4416 100644
+index 65ec357..2a5d181 100644
 --- a/src/include/storage/sqlite_insert.hpp
 +++ b/src/include/storage/sqlite_insert.hpp
 @@ -16,9 +16,9 @@ namespace duckdb {
@@ -52,15 +52,15 @@ index 65ec357..53f4416 100644
  public:
  	//! INSERT INTO
 -	SQLiteInsert(LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
-+	SQLiteInsert(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
++	SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
  	//! CREATE TABLE AS
 -	SQLiteInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
-+	SQLiteInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
++	SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
  
  	//! The table to insert into
  	optional_ptr<TableCatalogEntry> table;
 diff --git a/src/include/storage/sqlite_update.hpp b/src/include/storage/sqlite_update.hpp
-index 0061620..7347e41 100644
+index 0061620..92ed76e 100644
 --- a/src/include/storage/sqlite_update.hpp
 +++ b/src/include/storage/sqlite_update.hpp
 @@ -15,7 +15,7 @@ namespace duckdb {
@@ -68,7 +68,7 @@ index 0061620..7347e41 100644
  class SQLiteUpdate : public PhysicalOperator {
  public:
 -	SQLiteUpdate(LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
-+	SQLiteUpdate(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
++	SQLiteUpdate(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
  
  	//! The table to delete from
  	TableCatalogEntry &table;
@@ -132,7 +132,7 @@ index f85328f..c2f7c81 100644
 -}
  }
 diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
-index c19f45b..2fac22a 100644
+index c19f45b..bde562f 100644
 --- a/src/storage/sqlite_delete.cpp
 +++ b/src/storage/sqlite_delete.cpp
 @@ -9,8 +9,8 @@
@@ -141,13 +141,13 @@ index c19f45b..2fac22a 100644
  
 -SQLiteDelete::SQLiteDelete(LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
-+SQLiteDelete::SQLiteDelete(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
++SQLiteDelete::SQLiteDelete(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
  }
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/sqlite_index.cpp b/src/storage/sqlite_index.cpp
-index 440db80..69ac42c 100644
+index 440db80..e076502 100644
 --- a/src/storage/sqlite_index.cpp
 +++ b/src/storage/sqlite_index.cpp
 @@ -6,8 +6,8 @@
@@ -156,13 +156,13 @@ index 440db80..69ac42c 100644
  
 -SQLiteCreateIndex::SQLiteCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
-+SQLiteCreateIndex::SQLiteCreateIndex(ArenaAllocator &arena, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
++SQLiteCreateIndex::SQLiteCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
  }
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
-index 9cd4786..d28cac3 100644
+index 9cd4786..fbca2ac 100644
 --- a/src/storage/sqlite_insert.cpp
 +++ b/src/storage/sqlite_insert.cpp
 @@ -13,14 +13,14 @@
@@ -170,22 +170,22 @@ index 9cd4786..d28cac3 100644
  namespace duckdb {
  
 -SQLiteInsert::SQLiteInsert(LogicalOperator &op, TableCatalogEntry &table,
-+SQLiteInsert::SQLiteInsert(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table,
++SQLiteInsert::SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
                             physical_index_vector_t<idx_t> column_index_map_p)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
        column_index_map(std::move(column_index_map_p)) {
  }
  
 -SQLiteInsert::SQLiteInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
-+SQLiteInsert::SQLiteInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
++SQLiteInsert::SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
        info(std::move(info)) {
  }
  
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
-index b550549..53f376f 100644
+index b550549..6c071d7 100644
 --- a/src/storage/sqlite_update.cpp
 +++ b/src/storage/sqlite_update.cpp
 @@ -8,8 +8,8 @@
@@ -194,8 +194,8 @@ index b550549..53f376f 100644
  
 -SQLiteUpdate::SQLiteUpdate(LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
-+SQLiteUpdate::SQLiteUpdate(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
++SQLiteUpdate::SQLiteUpdate(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
  }
  
  //===--------------------------------------------------------------------===//

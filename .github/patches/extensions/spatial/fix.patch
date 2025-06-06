@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
-index e27fb02..d53544a 100644
+index e27fb02..dc6f5c2 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
 +++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 @@ -18,12 +18,12 @@ namespace duckdb {
@@ -7,18 +7,18 @@ index e27fb02..d53544a 100644
  // Physical Create RTree Index
  //-------------------------------------------------------------
 -PhysicalCreateRTreeIndex::PhysicalCreateRTreeIndex(LogicalOperator &op, TableCatalogEntry &table,
-+PhysicalCreateRTreeIndex::PhysicalCreateRTreeIndex(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table,
++PhysicalCreateRTreeIndex::PhysicalCreateRTreeIndex(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
                                                     const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
                                                     vector<unique_ptr<Expression>> unbound_expressions,
                                                     idx_t estimated_cardinality)
      // Declare this operators as a EXTENSION operator
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, estimated_cardinality),
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, estimated_cardinality),
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, estimated_cardinality),
        table(table.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
  
  	// convert virtual column ids to storage column ids
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.hpp b/src/spatial/index/rtree/rtree_index_create_physical.hpp
-index 68a181d..f530aaa 100644
+index 68a181d..b7f1368 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.hpp
 +++ b/src/spatial/index/rtree/rtree_index_create_physical.hpp
 @@ -11,7 +11,7 @@ public:
@@ -26,7 +26,7 @@ index 68a181d..f530aaa 100644
  
  public:
 -	PhysicalCreateRTreeIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
-+	PhysicalCreateRTreeIndex(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
++	PhysicalCreateRTreeIndex(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
  	                         unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
  	                         idx_t estimated_cardinality);
  
@@ -2369,7 +2369,7 @@ index 36b96d0..0e80217 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index 3038ed8..2bc6645 100644
+index 3038ed8..fd14eee 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
 @@ -325,10 +325,10 @@ private:
@@ -2377,16 +2377,16 @@ index 3038ed8..2bc6645 100644
  //======================================================================================================================
  
 -PhysicalSpatialJoin::PhysicalSpatialJoin(LogicalOperator &op, PhysicalOperator &left,
-+PhysicalSpatialJoin::PhysicalSpatialJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left,
++PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
                                           PhysicalOperator &right, unique_ptr<Expression> condition_p,
                                           JoinType join_type, idx_t estimated_cardinality)
 -    : PhysicalJoin(op, PhysicalOperatorType::EXTENSION, join_type, estimated_cardinality),
-+    : PhysicalJoin(arena, op, PhysicalOperatorType::EXTENSION, join_type, estimated_cardinality),
++    : PhysicalJoin(physical_plan, op, PhysicalOperatorType::EXTENSION, join_type, estimated_cardinality),
        condition(std::move(condition_p)) {
  
  	children.emplace_back(left);
 diff --git a/src/spatial/operators/spatial_join_physical.hpp b/src/spatial/operators/spatial_join_physical.hpp
-index ed50670..dce2085 100644
+index ed50670..5f51a7b 100644
 --- a/src/spatial/operators/spatial_join_physical.hpp
 +++ b/src/spatial/operators/spatial_join_physical.hpp
 @@ -10,7 +10,7 @@ public:
@@ -2394,7 +2394,7 @@ index ed50670..dce2085 100644
  
  public:
 -	PhysicalSpatialJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-+	PhysicalSpatialJoin(ArenaAllocator &arena, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
++	PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
  	                    unique_ptr<Expression> spatial_predicate, JoinType join_type, idx_t estimated_cardinality);
  
  	//! The condition of the join

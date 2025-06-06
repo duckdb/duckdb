@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/projection/physical_pivot.hpp"
+
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {

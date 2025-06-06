@@ -17,7 +17,7 @@ index dc69b08..ba2c8a7 100644
 +	DUCKDB_CPP_EXTENSION_ENTRY(mysql_scanner, loader);
  }
 diff --git a/src/include/storage/mysql_execute_query.hpp b/src/include/storage/mysql_execute_query.hpp
-index f9e02cd..16a782b 100644
+index f9e02cd..848deb3 100644
 --- a/src/include/storage/mysql_execute_query.hpp
 +++ b/src/include/storage/mysql_execute_query.hpp
 @@ -15,7 +15,7 @@ class TableCatalogEntry;
@@ -25,12 +25,12 @@ index f9e02cd..16a782b 100644
  class MySQLExecuteQuery : public PhysicalOperator {
  public:
 -	MySQLExecuteQuery(LogicalOperator &op, string op_name, TableCatalogEntry &table, string query);
-+	MySQLExecuteQuery(ArenaAllocator &arena, LogicalOperator &op, string op_name, TableCatalogEntry &table, string query);
++	MySQLExecuteQuery(PhysicalPlan &physical_plan, LogicalOperator &op, string op_name, TableCatalogEntry &table, string query);
  
  	//! The table to delete from
  	string op_name;
 diff --git a/src/include/storage/mysql_index.hpp b/src/include/storage/mysql_index.hpp
-index fbc4836..9c5066c 100644
+index fbc4836..a674069 100644
 --- a/src/include/storage/mysql_index.hpp
 +++ b/src/include/storage/mysql_index.hpp
 @@ -16,7 +16,7 @@ namespace duckdb {
@@ -38,12 +38,12 @@ index fbc4836..9c5066c 100644
  class MySQLCreateIndex : public PhysicalOperator {
  public:
 -	explicit MySQLCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
-+	MySQLCreateIndex(ArenaAllocator &arena, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
++	MySQLCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
  
  	unique_ptr<CreateIndexInfo> info;
  	TableCatalogEntry &table;
 diff --git a/src/include/storage/mysql_insert.hpp b/src/include/storage/mysql_insert.hpp
-index 3c3213d..092fbab 100644
+index 3c3213d..45c9ba7 100644
 --- a/src/include/storage/mysql_insert.hpp
 +++ b/src/include/storage/mysql_insert.hpp
 @@ -16,9 +16,9 @@ namespace duckdb {
@@ -51,10 +51,10 @@ index 3c3213d..092fbab 100644
  public:
  	//! INSERT INTO
 -	MySQLInsert(LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
-+	MySQLInsert(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
++	MySQLInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
  	//! CREATE TABLE AS
 -	MySQLInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
-+	MySQLInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
++	MySQLInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
  
  	//! The table to insert into
  	optional_ptr<TableCatalogEntry> table;
@@ -147,7 +147,7 @@ index a239dfb..46df8b7 100644
  #include "mysql_scanner.hpp"
  #include "mysql_result.hpp"
 diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
-index 8bf9426..2b67d9a 100644
+index 8bf9426..aaeb3c7 100644
 --- a/src/storage/mysql_execute_query.cpp
 +++ b/src/storage/mysql_execute_query.cpp
 @@ -12,8 +12,8 @@
@@ -156,13 +156,13 @@ index 8bf9426..2b67d9a 100644
  
 -MySQLExecuteQuery::MySQLExecuteQuery(LogicalOperator &op, string op_name_p, TableCatalogEntry &table, string query_p)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), op_name(std::move(op_name_p)), table(table),
-+MySQLExecuteQuery::MySQLExecuteQuery(ArenaAllocator &arena, LogicalOperator &op, string op_name_p, TableCatalogEntry &table, string query_p)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), op_name(std::move(op_name_p)), table(table),
++MySQLExecuteQuery::MySQLExecuteQuery(PhysicalPlan &physical_plan, LogicalOperator &op, string op_name_p, TableCatalogEntry &table, string query_p)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), op_name(std::move(op_name_p)), table(table),
        query(std::move(query_p)) {
  }
  
 diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
-index 587cdf2..fcb9252 100644
+index 587cdf2..ce95653 100644
 --- a/src/storage/mysql_index.cpp
 +++ b/src/storage/mysql_index.cpp
 @@ -6,8 +6,8 @@
@@ -171,13 +171,13 @@ index 587cdf2..fcb9252 100644
  
 -MySQLCreateIndex::MySQLCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
-+MySQLCreateIndex::MySQLCreateIndex(ArenaAllocator &arena, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
++MySQLCreateIndex::MySQLCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
  }
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
-index 121d85a..f4a87d9 100644
+index 121d85a..0d84183 100644
 --- a/src/storage/mysql_insert.cpp
 +++ b/src/storage/mysql_insert.cpp
 @@ -14,14 +14,14 @@
@@ -185,17 +185,17 @@ index 121d85a..f4a87d9 100644
  namespace duckdb {
  
 -MySQLInsert::MySQLInsert(LogicalOperator &op, TableCatalogEntry &table,
-+MySQLInsert::MySQLInsert(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table,
++MySQLInsert::MySQLInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
                           physical_index_vector_t<idx_t> column_index_map_p)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
        column_index_map(std::move(column_index_map_p)) {
  }
  
 -MySQLInsert::MySQLInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
-+MySQLInsert::MySQLInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
++MySQLInsert::MySQLInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
        info(std::move(info)) {
  }
  

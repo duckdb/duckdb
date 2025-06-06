@@ -17,7 +17,7 @@ index ccf7b84..e0c2687 100644
 +DUCKDB_CPP_EXTENSION_ENTRY(postgres_scanner, loader);
  }
 diff --git a/src/include/storage/postgres_delete.hpp b/src/include/storage/postgres_delete.hpp
-index 28fb86e..8079ee4 100644
+index 28fb86e..e709cee 100644
 --- a/src/include/storage/postgres_delete.hpp
 +++ b/src/include/storage/postgres_delete.hpp
 @@ -14,7 +14,7 @@ namespace duckdb {
@@ -25,12 +25,12 @@ index 28fb86e..8079ee4 100644
  class PostgresDelete : public PhysicalOperator {
  public:
 -	PostgresDelete(LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
-+	PostgresDelete(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
++	PostgresDelete(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
  
  	//! The table to delete from
  	TableCatalogEntry &table;
 diff --git a/src/include/storage/postgres_index.hpp b/src/include/storage/postgres_index.hpp
-index 2096d84..862b576 100644
+index 2096d84..9e55535 100644
 --- a/src/include/storage/postgres_index.hpp
 +++ b/src/include/storage/postgres_index.hpp
 @@ -16,7 +16,7 @@ namespace duckdb {
@@ -38,12 +38,12 @@ index 2096d84..862b576 100644
  class PostgresCreateIndex : public PhysicalOperator {
  public:
 -	explicit PostgresCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
-+	explicit PostgresCreateIndex(ArenaAllocator &arena, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
++	explicit PostgresCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
  
  	unique_ptr<CreateIndexInfo> info;
  	TableCatalogEntry &table;
 diff --git a/src/include/storage/postgres_insert.hpp b/src/include/storage/postgres_insert.hpp
-index 13ea902..45cef2e 100644
+index 13ea902..4499315 100644
 --- a/src/include/storage/postgres_insert.hpp
 +++ b/src/include/storage/postgres_insert.hpp
 @@ -16,9 +16,9 @@ namespace duckdb {
@@ -51,15 +51,15 @@ index 13ea902..45cef2e 100644
  public:
  	//! INSERT INTO
 -	PostgresInsert(LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
-+	PostgresInsert(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
++	PostgresInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
  	//! CREATE TABLE AS
 -	PostgresInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
-+	PostgresInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
++	PostgresInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
  
  	//! The table to insert into
  	optional_ptr<TableCatalogEntry> table;
 diff --git a/src/include/storage/postgres_update.hpp b/src/include/storage/postgres_update.hpp
-index 417657e..3002aa7 100644
+index 417657e..f6b5d88 100644
 --- a/src/include/storage/postgres_update.hpp
 +++ b/src/include/storage/postgres_update.hpp
 @@ -15,7 +15,7 @@ namespace duckdb {
@@ -67,7 +67,7 @@ index 417657e..3002aa7 100644
  class PostgresUpdate : public PhysicalOperator {
  public:
 -	PostgresUpdate(LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
-+	PostgresUpdate(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
++	PostgresUpdate(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
  
  	//! The table to delete from
  	TableCatalogEntry &table;
@@ -184,7 +184,7 @@ index 9b2d062..d49d8a3 100644
  #include "duckdb/common/helper.hpp"
  #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 diff --git a/src/storage/postgres_delete.cpp b/src/storage/postgres_delete.cpp
-index 88dec2c..99f7443 100644
+index 88dec2c..7aa13db 100644
 --- a/src/storage/postgres_delete.cpp
 +++ b/src/storage/postgres_delete.cpp
 @@ -8,8 +8,8 @@
@@ -193,13 +193,13 @@ index 88dec2c..99f7443 100644
  
 -PostgresDelete::PostgresDelete(LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
-+PostgresDelete::PostgresDelete(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
++PostgresDelete::PostgresDelete(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
  }
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
-index 5ce5b36..28f8ad1 100644
+index 5ce5b36..22ed8b4 100644
 --- a/src/storage/postgres_index.cpp
 +++ b/src/storage/postgres_index.cpp
 @@ -11,8 +11,8 @@
@@ -208,13 +208,13 @@ index 5ce5b36..28f8ad1 100644
  
 -PostgresCreateIndex::PostgresCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
-+PostgresCreateIndex::PostgresCreateIndex(ArenaAllocator &arena, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
++PostgresCreateIndex::PostgresCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
  }
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
-index dd616df..d6e24b7 100644
+index dd616df..0ead9b0 100644
 --- a/src/storage/postgres_insert.cpp
 +++ b/src/storage/postgres_insert.cpp
 @@ -14,14 +14,14 @@
@@ -222,22 +222,22 @@ index dd616df..d6e24b7 100644
  namespace duckdb {
  
 -PostgresInsert::PostgresInsert(LogicalOperator &op, TableCatalogEntry &table,
-+PostgresInsert::PostgresInsert(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table,
++PostgresInsert::PostgresInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
                                 physical_index_vector_t<idx_t> column_index_map_p)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
        column_index_map(std::move(column_index_map_p)) {
  }
  
 -PostgresInsert::PostgresInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
-+PostgresInsert::PostgresInsert(ArenaAllocator &arena, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
++PostgresInsert::PostgresInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
        info(std::move(info)) {
  }
  
 diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
-index 8fa4d69..2bbdc7c 100644
+index 8fa4d69..dd24447 100644
 --- a/src/storage/postgres_update.cpp
 +++ b/src/storage/postgres_update.cpp
 @@ -8,8 +8,8 @@
@@ -246,8 +246,8 @@ index 8fa4d69..2bbdc7c 100644
  
 -PostgresUpdate::PostgresUpdate(LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
 -    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
-+PostgresUpdate::PostgresUpdate(ArenaAllocator &arena, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
-+    : PhysicalOperator(arena, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
++PostgresUpdate::PostgresUpdate(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
  }
  
  //===--------------------------------------------------------------------===//
