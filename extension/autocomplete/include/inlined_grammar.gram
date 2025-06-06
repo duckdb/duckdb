@@ -684,7 +684,7 @@ CreateSecretStmt <- 'SECRET'i IfNotExists? SecretName? SecretStorageSpecifier? P
 
 SecretStorageSpecifier <- 'IN'i Identifier
 
-CreateViewStmt <- 'VIEW'i IfNotExists? QualifiedName InsertColumnList? 'AS'i SelectStatement
+CreateViewStmt <- 'RECURSIVE'i? 'VIEW'i IfNotExists? QualifiedName InsertColumnList? 'AS'i SelectStatement
 
 DescribeStatement <- ShowSelect / ShowAllTables / ShowQualifiedName
 
