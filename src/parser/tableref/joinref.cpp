@@ -43,7 +43,7 @@ string JoinRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += using_columns[i];
+			result += KeywordHelper::WriteOptionallyQuoted(using_columns[i]);
 		}
 		result += ")";
 	}
