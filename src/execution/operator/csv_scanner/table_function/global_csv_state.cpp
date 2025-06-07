@@ -1,3 +1,4 @@
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
@@ -133,7 +134,7 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	auto &names = file.GetNames();
 
 	// 10. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
-	std::ostringstream columns;
+	auto columns = GetLocalAgnostic<std::ostringstream>();
 	columns << "{";
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns << "'" << names[i] << "': '" << types[i].ToString() << "'";

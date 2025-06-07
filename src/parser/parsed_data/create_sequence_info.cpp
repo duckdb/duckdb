@@ -1,3 +1,4 @@
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -25,7 +26,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 }
 
 string CreateSequenceInfo::ToString() const {
-	std::stringstream ss;
+	auto ss = GetLocalAgnostic<std::stringstream>();
 	ss << "CREATE";
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		ss << " OR REPLACE";

@@ -1,3 +1,4 @@
+#include "duckdb/common/locale_agnostic.hpp"
 #include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {
@@ -52,7 +53,7 @@ bool SetColumns::IsCandidateUnacceptable(const idx_t num_cols, bool null_padding
 }
 
 string SetColumns::ToString() const {
-	stringstream ss;
+	auto ss = GetLocalAgnostic<std::stringstream>();
 	ss << "columns = { ";
 	for (idx_t i = 0; i < Size(); ++i) {
 		ss << "'" << names->at(i) << "'"
