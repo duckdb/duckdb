@@ -696,7 +696,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 	}
 
 	// RAII wrapper around DIR to automatically free on exceptions in callback
-	std::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
+	duckdb::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
 
 	struct dirent *ent;
 	// loop over all files in the directory

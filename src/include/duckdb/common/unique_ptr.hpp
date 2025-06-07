@@ -54,11 +54,37 @@ public:
 	}
 };
 
-// FIXME: DELETER is defined, but we use std::default_delete???
-template <class DATA_TYPE, class DELETER, bool SAFE>
-class unique_ptr<DATA_TYPE[], DELETER, SAFE> : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
+template <class DATA_TYPE, class DELETER>
+class unique_ptr<DATA_TYPE[], DELETER, true> : public std::unique_ptr<DATA_TYPE[], DELETER> {
 public:
-	using original = std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>>;
+	using original = std::unique_ptr<DATA_TYPE[], DELETER>;
+	using original::original;
+
+private:
+	static inline void AssertNotNull(const bool null) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(null)) {
+			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
+		}
+#endif
+	}
+
+public:
+	typename std::add_lvalue_reference<DATA_TYPE>::type operator[](size_t __i) const { // NOLINT: hiding on purpose
+		const auto ptr = original::get();
+		if (MemorySafety<true>::ENABLED) {
+			AssertNotNull(!ptr);
+		}
+		return ptr[__i];
+	}
+};
+
+template <class DATA_TYPE, class DELETER, bool SAFE>
+class unique_ptr<DATA_TYPE[], DELETER, SAFE> : public std::unique_ptr<DATA_TYPE[], DELETER> {
+public:
+	using original = std::unique_ptr<DATA_TYPE[], DELETER>;
 	using original::original;
 
 private:
@@ -83,10 +109,10 @@ public:
 };
 
 template <typename T>
-using unique_array = unique_ptr<T[], std::default_delete<T>, true>;
+using unique_array = unique_ptr<T[], std::default_delete<T[]>, true>;
 
 template <typename T>
-using unsafe_unique_array = unique_ptr<T[], std::default_delete<T>, false>;
+using unsafe_unique_array = unique_ptr<T[], std::default_delete<T[]>, false>;
 
 template <typename T>
 using unsafe_unique_ptr = unique_ptr<T, std::default_delete<T>, false>;

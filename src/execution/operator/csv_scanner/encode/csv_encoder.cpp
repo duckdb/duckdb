@@ -8,7 +8,7 @@ namespace duckdb {
 
 void CSVEncoderBuffer::Initialize(idx_t encoded_size) {
 	encoded_buffer_size = encoded_size;
-	encoded_buffer = std::unique_ptr<char[]>(new char[encoded_size]);
+	encoded_buffer = duckdb::unique_ptr<char[]>(new char[encoded_size]);
 }
 
 char *CSVEncoderBuffer::Ptr() const {
