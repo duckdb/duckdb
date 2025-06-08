@@ -44,6 +44,14 @@
 #include <memory>
 #include <stdexcept>
 
+#ifndef DUCKDB_WRAP_STD
+namespace duckdb_wrapped {
+namespace std {
+	using ::std::unique_ptr;
+}
+}
+#endif
+
 #ifdef __clang__
 #  define FMT_CLANG_VERSION (__clang_major__ * 100 + __clang_minor__)
 #else
@@ -3052,7 +3060,7 @@ typename Context::iterator vformat_to(
 // Example:
 //   auto s = format("{}", ptr(p));
 template <typename T> inline const void* ptr(const T* p) { return p; }
-template <typename T> inline const void* ptr(const std::unique_ptr<T>& p) {
+template <typename T> inline const void* ptr(const duckdb_wrapped::std::unique_ptr<T>& p) {
   return p.get();
 }
 template <typename T> inline const void* ptr(const std::shared_ptr<T>& p) {
