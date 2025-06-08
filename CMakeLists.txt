@@ -47,6 +47,10 @@ else()
   endif()
 endif()
 
+if (DEFINED ENV{SHADOW_FORBIDDEN_FUNCTIONS})
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include 'duckdb/common/shadow_forbidden_functions.hpp'")
+endif()
+
 # Determine install paths
 # default to gnu standard installation directories (lib, bin, include)
 # https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html
@@ -78,6 +82,7 @@ if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
   endif()
 endif()
+
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 option(USE_WASM_THREADS "Should threads be used" FALSE)
