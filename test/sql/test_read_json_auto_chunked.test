@@ -1,0 +1,10 @@
+statement ok
+CREATE TABLE json_result AS
+SELECT * FROM read_json_auto_chunked('test/sql/large_sample.json');
+
+query I
+SELECT COUNT(*) FROM json_result;
+
+----
+
+3
