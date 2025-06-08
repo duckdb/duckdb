@@ -62,7 +62,7 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	unique_ptr<CachingFileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
-	std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
+	duckdb_wrapped::std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
 	SelectionVector sel;
