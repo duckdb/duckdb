@@ -27,6 +27,14 @@
 #include <memory>
 #include "parser/gramparse.hpp"
 
+#ifndef DUCKDB_WRAP_STD
+namespace duckdb_wrapped {
+namespace std {
+	using ::std::unique_ptr;
+}
+}
+#endif
+
 #include "parser/kwlist.hpp"
 
 namespace duckdb_libpgquery {
@@ -52,7 +60,7 @@ const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *ke
 	const PGScanKeyword *high;
 
 	len = strlen(text);
-	auto data = std::unique_ptr<char[]>(new char[len + 1]);
+	auto data = duckdb_wrapped::std::unique_ptr<char[]>(new char[len + 1]);
 	auto word = data.get();
 	/* We assume all keywords are shorter than NAMEDATALEN. */
 
