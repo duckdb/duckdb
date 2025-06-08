@@ -24,8 +24,16 @@
 #include <memory>
 #include <string>
 #include <vector>
-
 #include "re2/re2.h"
+
+#ifndef DUCKDB_WRAP_STD
+namespace duckdb_wrapped {
+namespace std {
+	using ::std::unique_ptr;
+}
+}
+#endif
+
 
 namespace duckdb_re2 {
 
@@ -106,7 +114,7 @@ class FilteredRE2 {
   bool compiled_;
 
   // An AND-OR tree of string atoms used for filtering regexps.
-  std::unique_ptr<PrefilterTree> prefilter_tree_;
+  duckdb_wrapped::std::unique_ptr<PrefilterTree> prefilter_tree_;
 };
 
 }  // namespace re2
