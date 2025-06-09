@@ -20,6 +20,16 @@ query II
 SELECT
     rank() OVER (ORDER BY COLUMNS('^(.*)_score$') DESC) AS '\1_rank'
 FROM (
-    SELECT 100 AS math_score, 95 as reading_score);
+    SELECT 
+    	range AS math_score, 
+    	100-range as reading_score
+    from range(65, 100, 5)
+);
 ----
-1	1
+7	1
+6	2
+5	3
+4	4
+3	5
+2	6
+1	7
