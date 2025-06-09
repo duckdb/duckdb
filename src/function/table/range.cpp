@@ -429,6 +429,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	ReadBlobFunction::RegisterFunction(*this);
 	ReadTextFunction::RegisterFunction(*this);
 	QueryTableFunction::RegisterFunction(*this);
+	ReadWalFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb
