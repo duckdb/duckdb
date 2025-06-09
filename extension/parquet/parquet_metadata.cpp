@@ -402,6 +402,9 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 
 	names.emplace_back("logical_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("duckdb_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
 Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
@@ -497,6 +500,14 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 
 		// logical_type, LogicalType::VARCHAR
 		current_chunk.SetValue(10, count, ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
+
+		// duckdb_type, LogicalType::VARCHAR
+		ParquetColumnSchema column_schema;
+		Value duckdb_type;
+		if (column.__isset.type) {
+			duckdb_type = reader->DeriveLogicalType(column, column_schema).ToString();
+		}
+		current_chunk.SetValue(11, count, duckdb_type);
 
 		count++;
 		if (count >= STANDARD_VECTOR_SIZE) {
