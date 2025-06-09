@@ -41,6 +41,11 @@ SELECT json_deserialize_sql(json_serialize_sql('SELECT * FROM (SELECT 1 + 2)'));
 ----
 SELECT * FROM (SELECT (1 + 2))
 
+query I
+SELECT json_deserialize_sql(json_serialize_sql('SELECT * FROM t1 JOIN t2 USING("$id")'));
+----
+SELECT * FROM t1 INNER JOIN t2 USING ("$id")
+
 statement error
 SELECT json_deserialize_sql(json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 1 = 1'));
 ----
