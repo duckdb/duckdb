@@ -35,7 +35,9 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 	group_types_copy.emplace_back(LogicalType::HASH);
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
-	layout->Initialize(std::move(group_types_copy), AggregateObject::CreateAggregateObjects(op.bindings));
+	auto aggregate_objects = AggregateObject::CreateAggregateObjects(op.bindings);
+	const auto align = !aggregate_objects.empty();
+	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), align);
 	layout_ptr = std::move(layout);
 }
 
@@ -126,13 +128,6 @@ public:
 	const idx_t sink_capacity;
 
 private:
-	//! Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
-	static constexpr idx_t L1_CACHE_SIZE = 32768 / 2;
-	//! Assume (1 << 20) = 1MB L2 cache per core, divided by two because hyperthreading
-	static constexpr idx_t L2_CACHE_SIZE = 1048576 / 2;
-	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
-	static constexpr idx_t L3_CACHE_SIZE = 1572864 / 2;
-
 	//! Sink radix bits to initialize with
 	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
 	//! Maximum Sink radix bits (independent of threads)
@@ -337,17 +332,12 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 }
 
 idx_t RadixHTConfig::SinkCapacity() const {
-	// Compute cache size per active thread (assuming cache is shared)
-	const auto total_shared_cache_size = number_of_threads * L3_CACHE_SIZE;
-	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / number_of_threads;
-
-	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
-	const auto size_per_entry = LossyNumericCast<idx_t>(sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR) +
-	                            MinValue(row_width, ROW_WIDTH_THRESHOLD_TWO);
-	const auto capacity = NextPowerOfTwo(cache_per_active_thread / size_per_entry);
-
-	// Capacity must be at least the minimum capacity
-	return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
+	if (number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
+		// Grow strategy, start off a bit bigger
+		return 262144;
+	}
+	// Start off tiny, we can adapt with DecideAdaptation later
+	return 32768;
 }
 
 class RadixHTLocalSinkState : public LocalSinkState {
@@ -693,7 +683,7 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing tasks
-	idx_t task_idx;
+	atomic<idx_t> task_idx;
 	atomic<idx_t> task_done;
 };
 
@@ -753,12 +743,11 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
                                                       InterruptState &interrupt_state) {
 	// First, try to get a partition index
-	auto guard = sink.Lock();
-	if (finished || task_idx == sink.partitions.size()) {
+	lstate.task_idx = task_idx++;
+	if (finished || lstate.task_idx >= sink.partitions.size()) {
 		lstate.ht.reset();
 		return SourceResultType::FINISHED;
 	}
-	lstate.task_idx = task_idx++;
 
 	// We got a partition index
 	auto &partition = *sink.partitions[lstate.task_idx];

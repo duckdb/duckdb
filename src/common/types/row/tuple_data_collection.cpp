@@ -75,11 +75,7 @@ idx_t TupleDataCollection::ChunkCount() const {
 }
 
 idx_t TupleDataCollection::SizeInBytes() const {
-	idx_t total_size = 0;
-	for (const auto &segment : segments) {
-		total_size += segment.SizeInBytes();
-	}
-	return total_size;
+	return data_size;
 }
 
 void TupleDataCollection::Unpin() {
@@ -373,9 +369,15 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 
 	// Copy rows
 	const auto row_width = layout.GetRowWidth();
-	for (idx_t i = 0; i < append_count; i++) {
-		auto idx = append_sel.get_index(i);
-		FastMemcpy(target_locations[i], source_locations[idx], row_width);
+	if (append_sel.IsSet()) {
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto idx = append_sel[i];
+			FastMemcpy(target_locations[i], source_locations[idx], row_width);
+		}
+	} else {
+		for (idx_t i = 0; i < append_count; i++) {
+			FastMemcpy(target_locations[i], source_locations[i], row_width);
+		}
 	}
 
 	// Copy heap if we need to

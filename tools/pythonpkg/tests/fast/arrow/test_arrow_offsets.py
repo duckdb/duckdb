@@ -75,13 +75,13 @@ def expected_result(col1_null, col2_null, expected):
     return [(col1, col2)]
 
 
-test_nulls = lambda: mark.parametrize(
+null_test_parameters = lambda: mark.parametrize(
     ['col1_null', 'col2_null'], [(False, True), (True, False), (True, True), (False, False)]
 )
 
 
 class TestArrowOffsets(object):
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_strings(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -105,7 +105,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, '131072')
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_bools(self, duckdb_cursor, col1_null, col2_null):
         tuples = [False for i in range(0, MAGIC_ARRAY_SIZE)]
         tuples[-1] = True
@@ -138,7 +138,7 @@ class TestArrowOffsets(object):
             (pa_date64(), datetime.date(1970, 1, 1)),
         ],
     )
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_dates(self, duckdb_cursor, constructor, expected, col1_null, col2_null):
         tuples = [i for i in range(0, MAGIC_ARRAY_SIZE)]
 
@@ -163,7 +163,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_enum(self, duckdb_cursor, col1_null, col2_null):
         enum_type = pa.dictionary(pa.int64(), pa.utf8())
 
@@ -190,7 +190,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, 'green')
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_blobs(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -214,7 +214,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, b'131072')
 
-    @test_nulls()
+    @null_test_parameters()
     @pytest.mark.parametrize(
         ["constructor", "unit", "expected"],
         [
@@ -252,7 +252,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    @test_nulls()
+    @null_test_parameters()
     # NOTE: there is sadly no way to create a 'interval[months]' (tiM) type from pyarrow
     @pytest.mark.parametrize(
         ["constructor", "expected", "converter"],
@@ -287,7 +287,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    @test_nulls()
+    @null_test_parameters()
     @pytest.mark.parametrize(
         ["constructor", "unit", "expected"],
         [
@@ -322,7 +322,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    @test_nulls()
+    @null_test_parameters()
     @pytest.mark.parametrize(
         ["constructor", "unit", "expected"],
         [
@@ -360,7 +360,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_large_blobs(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -384,7 +384,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, b'131072')
 
-    @test_nulls()
+    @null_test_parameters()
     @pytest.mark.parametrize(
         ["precision_scale", "expected"],
         [
@@ -425,7 +425,7 @@ class TestArrowOffsets(object):
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_small_list(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -455,7 +455,7 @@ class TestArrowOffsets(object):
             res2 = ['131072', '131072', '131072']
         assert res == [(res1, res2)]
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_fixed_size_list(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -485,7 +485,7 @@ class TestArrowOffsets(object):
             res2 = ('131072', '131072', '131072')
         assert res == [(res1, res2)]
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_fixed_size_blob(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -516,7 +516,7 @@ class TestArrowOffsets(object):
             res2 = (b'131072', b'131073', b'131074')
         assert res == [(res1, res2)]
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_list_of_blobs(self, duckdb_cursor, col1_null, col2_null):
         col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:
@@ -547,7 +547,7 @@ class TestArrowOffsets(object):
             res2 = [b'131072', b'131073', b'131074']
         assert res == [(res1, res2)]
 
-    @test_nulls()
+    @null_test_parameters()
     def test_struct_of_list_of_list(self, duckdb_cursor, col1_null, col2_null):
         col1 = [i for i in range(0, MAGIC_ARRAY_SIZE)]
         if col1_null:

@@ -1,0 +1,269 @@
+diff --git a/src/iceberg_extension.cpp b/src/iceberg_extension.cpp
+index 0b278db..e1f721a 100644
+--- a/src/iceberg_extension.cpp
++++ b/src/iceberg_extension.cpp
+@@ -1,5 +1,3 @@
+-#define DUCKDB_EXTENSION_MAIN
+-
+ #include "iceberg_extension.hpp"
+ #include "storage/irc_catalog.hpp"
+ #include "storage/irc_transaction_manager.hpp"
+@@ -9,7 +7,7 @@
+ #include "duckdb/common/exception/http_exception.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/function/scalar_function.hpp"
+-#include "duckdb/main/extension_util.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+ #include "duckdb/catalog/default/default_functions.hpp"
+ #include "duckdb/parser/parsed_data/attach_info.hpp"
+@@ -233,10 +231,12 @@ public:
+ 	}
+ };
+ 
+-static void LoadInternal(DatabaseInstance &instance) {
++static void LoadInternal(ExtensionLoader &loader) {
+ 	Aws::SDKOptions options;
+ 	Aws::InitAPI(options); // Should only be called once.
+ 
++	auto &instance = loader.GetDatabaseInstance();
++
+ 	ExtensionHelper::AutoLoadExtension(instance, "parquet");
+ 	if (!instance.ExtensionIsLoaded("parquet")) {
+ 		throw MissingExtensionException("The iceberg extension requires the parquet extension to be loaded!");
+@@ -250,13 +250,13 @@ static void LoadInternal(DatabaseInstance &instance) {
+ 	                          LogicalType::BOOLEAN, Value::BOOLEAN(false));
+ 
+ 	// Iceberg Table Functions
+-	for (auto &fun : IcebergFunctions::GetTableFunctions(instance)) {
+-		ExtensionUtil::RegisterFunction(instance, fun);
++	for (auto &fun : IcebergFunctions::GetTableFunctions(loader)) {
++		loader.RegisterFunction(fun);
+ 	}
+ 
+ 	// Iceberg Scalar Functions
+ 	for (auto &fun : IcebergFunctions::GetScalarFunctions()) {
+-		ExtensionUtil::RegisterFunction(instance, fun);
++		loader.RegisterFunction(fun);
+ 	}
+ 
+ 	SecretType secret_type;
+@@ -264,16 +264,16 @@ static void LoadInternal(DatabaseInstance &instance) {
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 
+-	ExtensionUtil::RegisterSecretType(instance, secret_type);
++	loader.RegisterSecretType(secret_type);
+ 	CreateSecretFunction secret_function = {"iceberg", "config", OAuth2Authorization::CreateCatalogSecretFunction};
+ 	OAuth2Authorization::SetCatalogSecretParameters(secret_function);
+-	ExtensionUtil::RegisterFunction(instance, secret_function);
++	loader.RegisterFunction(secret_function);
+ 
+ 	config.storage_extensions["iceberg"] = make_uniq<IRCStorageExtension>();
+ }
+ 
+-void IcebergExtension::Load(DuckDB &db) {
+-	LoadInternal(*db.instance);
++void IcebergExtension::Load(ExtensionLoader &loader) {
++	LoadInternal(loader);
+ }
+ std::string IcebergExtension::Name() {
+ 	return "iceberg";
+@@ -283,15 +283,8 @@ std::string IcebergExtension::Name() {
+ 
+ extern "C" {
+ 
+-DUCKDB_EXTENSION_API void iceberg_init(duckdb::DatabaseInstance &db) {
+-	LoadInternal(db);
+-}
+-
+-DUCKDB_EXTENSION_API const char *iceberg_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
++DUCKDB_CPP_EXTENSION_ENTRY(iceberg, loader) {
++	LoadInternal(loader);
+ }
+ 
+-#ifndef DUCKDB_EXTENSION_MAIN
+-#error DUCKDB_EXTENSION_MAIN not defined
+-#endif
++}
+\ No newline at end of file
+diff --git a/src/iceberg_functions.cpp b/src/iceberg_functions.cpp
+index d3ea52f..fda8520 100644
+--- a/src/iceberg_functions.cpp
++++ b/src/iceberg_functions.cpp
+@@ -7,11 +7,13 @@
+ 
+ namespace duckdb {
+ 
+-vector<TableFunctionSet> IcebergFunctions::GetTableFunctions(DatabaseInstance &instance) {
++class ExtensionLoader;
++
++vector<TableFunctionSet> IcebergFunctions::GetTableFunctions(ExtensionLoader &loader) {
+ 	vector<TableFunctionSet> functions;
+ 
+ 	functions.push_back(GetIcebergSnapshotsFunction());
+-	functions.push_back(GetIcebergScanFunction(instance));
++	functions.push_back(GetIcebergScanFunction(loader));
+ 	functions.push_back(GetIcebergMetadataFunction());
+ 
+ 	return functions;
+diff --git a/src/iceberg_functions/iceberg_multi_file_reader.cpp b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+index 1097807..a8b1646 100644
+--- a/src/iceberg_functions/iceberg_multi_file_reader.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+@@ -7,7 +7,6 @@
+ #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/execution/execution_context.hpp"
+-#include "duckdb/main/extension_util.hpp"
+ #include "duckdb/parallel/thread_context.hpp"
+ #include "duckdb/parser/tableref/table_function_ref.hpp"
+ #include "duckdb/parser/expression/constant_expression.hpp"
+@@ -919,7 +918,15 @@ void IcebergMultiFileList::ScanDeleteFile(const IcebergManifestEntry &entry,
+ 	auto &instance = DatabaseInstance::GetDatabase(context);
+ 	//! FIXME: delete files could also be made without row_ids,
+ 	//! in which case we need to rely on the `'schema.column-mapping.default'` property just like data files do.
+-	auto &parquet_scan_entry = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
++
++	auto &system_catalog = Catalog::GetSystemCatalog(instance);
++	auto data = CatalogTransaction::GetSystemTransaction(instance);
++	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "parquet_scan");
++	if (!catalog_entry) {
++		throw InvalidInputException("Function with name \"parquet_scan\" not found!");
++	}
++	auto &parquet_scan_entry = catalog_entry->Cast<TableFunctionCatalogEntry>();
+ 	auto &parquet_scan = parquet_scan_entry.functions.functions[0];
+ 
+ 	// Prepare the inputs for the bind
+diff --git a/src/iceberg_functions/iceberg_scan.cpp b/src/iceberg_functions/iceberg_scan.cpp
+index 223c66f..bdb80d4 100644
+--- a/src/iceberg_functions/iceberg_scan.cpp
++++ b/src/iceberg_functions/iceberg_scan.cpp
+@@ -19,7 +19,7 @@
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+ #include "duckdb/common/file_opener.hpp"
+ #include "duckdb/common/file_system.hpp"
+-#include "duckdb/main/extension_util.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ #include "iceberg_metadata.hpp"
+ #include "iceberg_utils.hpp"
+ #include "iceberg_multi_file_reader.hpp"
+@@ -43,11 +43,11 @@ static void AddNamedParameters(TableFunction &fun) {
+ 	fun.named_parameters["snapshot_from_id"] = LogicalType::UBIGINT;
+ }
+ 
+-TableFunctionSet IcebergFunctions::GetIcebergScanFunction(DatabaseInstance &instance) {
++TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &loader) {
+ 	// The iceberg_scan function is constructed by grabbing the parquet scan from the Catalog, then injecting the
+ 	// IcebergMultiFileReader into it to create a Iceberg-based multi file read
+ 
+-	auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
++	auto &parquet_scan = loader.GetTableFunction("parquet_scan");
+ 	auto parquet_scan_copy = parquet_scan.functions;
+ 
+ 	for (auto &function : parquet_scan_copy.functions) {
+diff --git a/src/iceberg_manifest.cpp b/src/iceberg_manifest.cpp
+index 74fabd7..06d4352 100644
+--- a/src/iceberg_manifest.cpp
++++ b/src/iceberg_manifest.cpp
+@@ -426,9 +426,17 @@ AvroScan::AvroScan(const string &scan_name, ClientContext &context, const string
+ 	auto &instance = DatabaseInstance::GetDatabase(context);
+ 	ExtensionHelper::AutoLoadExtension(instance, "avro");
+ 
+-	auto &avro_scan_entry = ExtensionUtil::GetTableFunction(instance, "read_avro");
++	auto &system_catalog = Catalog::GetSystemCatalog(instance);
++	auto data = CatalogTransaction::GetSystemTransaction(instance);
++	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "read_avro");
++	if (!catalog_entry) {
++		throw InvalidInputException("Function with name \"read_avro\" not found!");
++	}
++	auto &avro_scan_entry = catalog_entry->Cast<TableFunctionCatalogEntry>();
+ 	avro_scan = avro_scan_entry.functions.functions[0];
+ 
++
+ 	// Prepare the inputs for the bind
+ 	vector<Value> children;
+ 	children.reserve(1);
+diff --git a/src/include/iceberg_extension.hpp b/src/include/iceberg_extension.hpp
+index b0f51ce..021aa0e 100644
+--- a/src/include/iceberg_extension.hpp
++++ b/src/include/iceberg_extension.hpp
+@@ -6,7 +6,7 @@ namespace duckdb {
+ 
+ class IcebergExtension : public Extension {
+ public:
+-	void Load(DuckDB &db) override;
++	void Load(ExtensionLoader &db) override;
+ 	std::string Name() override;
+ };
+ 
+diff --git a/src/include/iceberg_functions.hpp b/src/include/iceberg_functions.hpp
+index cd85a8d..4becfa8 100644
+--- a/src/include/iceberg_functions.hpp
++++ b/src/include/iceberg_functions.hpp
+@@ -13,15 +13,16 @@
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+ 
+ namespace duckdb {
++class ExtensionLoader;
+ 
+ class IcebergFunctions {
+ public:
+-	static vector<TableFunctionSet> GetTableFunctions(DatabaseInstance &instance);
++	static vector<TableFunctionSet> GetTableFunctions(ExtensionLoader &loader);
+ 	static vector<ScalarFunction> GetScalarFunctions();
+ 
+ private:
+ 	static TableFunctionSet GetIcebergSnapshotsFunction();
+-	static TableFunctionSet GetIcebergScanFunction(DatabaseInstance &instance);
++	static TableFunctionSet GetIcebergScanFunction(ExtensionLoader &instance);
+ 	static TableFunctionSet GetIcebergMetadataFunction();
+ };
+ 
+diff --git a/src/include/iceberg_manifest.hpp b/src/include/iceberg_manifest.hpp
+index 2f50b6d..20e0da3 100644
+--- a/src/include/iceberg_manifest.hpp
++++ b/src/include/iceberg_manifest.hpp
+@@ -11,7 +11,7 @@
+ #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/execution/execution_context.hpp"
+-#include "duckdb/main/extension_util.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/parallel/thread_context.hpp"
+ #include "duckdb/parser/tableref/table_function_ref.hpp"
+ #include "duckdb/parser/expression/constant_expression.hpp"
+diff --git a/src/storage/irc_table_entry.cpp b/src/storage/irc_table_entry.cpp
+index f3a7816..e6066de 100644
+--- a/src/storage/irc_table_entry.cpp
++++ b/src/storage/irc_table_entry.cpp
+@@ -3,7 +3,7 @@
+ #include "storage/irc_table_entry.hpp"
+ #include "duckdb/storage/statistics/base_statistics.hpp"
+ #include "duckdb/storage/table_storage_info.hpp"
+-#include "duckdb/main/extension_util.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+@@ -123,7 +123,15 @@ string ICTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) {
+ TableFunction ICTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+                                             const EntryLookupInfo &lookup) {
+ 	auto &db = DatabaseInstance::GetDatabase(context);
+-	auto &iceberg_scan_function_set = ExtensionUtil::GetTableFunction(db, "iceberg_scan");
++
++	auto &system_catalog = Catalog::GetSystemCatalog(db);
++	auto data = CatalogTransaction::GetSystemTransaction(db);
++	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "iceberg_scan");
++	if (!catalog_entry) {
++		throw InvalidInputException("Function with name \"iceberg_scan\" not found!");
++	}
++	auto &iceberg_scan_function_set = catalog_entry->Cast<TableFunctionCatalogEntry>();
+ 	auto iceberg_scan_function =
+ 	    iceberg_scan_function_set.functions.GetFunctionByArguments(context, {LogicalType::VARCHAR});
+ 	auto storage_location = PrepareIcebergScanFromEntry(context);

@@ -104,6 +104,49 @@ void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
 	partition_index = index;
 }
 
+bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state,
+                                       TupleDataChunkState &chunk_state, const idx_t append_offset,
+                                       const idx_t append_count) {
+	if (!layout.AllConstant() || layout.HasDestructor()) {
+		return false;
+	}
+
+	auto &chunks = segment.chunks;
+	if (chunks.empty()) {
+		return false;
+	}
+
+	auto &chunk = chunks.back();
+	if (chunk.count + append_count > STANDARD_VECTOR_SIZE) {
+		return false;
+	}
+
+	auto &part = segment.chunk_parts[chunk.part_ids.End() - 1];
+	auto &row_block = row_blocks[part.row_block_index];
+
+	const auto row_width = layout.GetRowWidth();
+	const auto added_size = append_count * row_width;
+	if (row_block.size + added_size > row_block.capacity) {
+		return false;
+	}
+
+	// We can do the fast path append!
+	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
+	for (idx_t i = 0; i < append_count; i++) {
+		row_locations[append_offset + i] = base_row_ptr + i * row_width;
+	}
+
+	// Increment counts and sizes
+	chunk.count += append_count;
+	part.count += append_count;
+	segment.count += append_count;
+	row_block.size += added_size;
+	segment.data_size += added_size;
+
+	return true;
+}
+
 void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                TupleDataChunkState &chunk_state, const idx_t append_offset, const idx_t append_count) {
 	D_ASSERT(this == segment.allocator.get());
@@ -112,53 +155,55 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		ReleaseOrStoreHandles(pin_state, segment, chunks.back(), true);
 	}
 
-	// Build the chunk parts for the incoming data
-	chunk_part_indices.clear();
-	idx_t offset = 0;
-	while (offset != append_count) {
-		if (chunks.empty() || chunks.back().count == STANDARD_VECTOR_SIZE) {
-			chunks.emplace_back();
-		}
-		auto &chunk = chunks.back();
+	if (!BuildFastPath(segment, pin_state, chunk_state, append_offset, append_count)) {
+		// Build the chunk parts for the incoming data
+		chunk_part_indices.clear();
+		idx_t offset = 0;
+		while (offset != append_count) {
+			if (chunks.empty() || chunks.back().count == STANDARD_VECTOR_SIZE) {
+				chunks.emplace_back();
+			}
+			auto &chunk = chunks.back();
 
-		// Build the next part
-		auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-		auto &chunk_part =
-		    chunk.AddPart(segment, BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk));
-		next = chunk_part.count;
+			// Build the next part
+			auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
+			auto &chunk_part =
+			    chunk.AddPart(segment, BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk));
+			next = chunk_part.count;
 
-		segment.count += next;
-		segment.data_size += chunk_part.count * layout.GetRowWidth();
-		if (!layout.AllConstant()) {
-			segment.data_size += chunk_part.total_heap_size;
-		}
+			segment.count += next;
+			segment.data_size += chunk_part.count * layout.GetRowWidth();
+			if (!layout.AllConstant()) {
+				segment.data_size += chunk_part.total_heap_size;
+			}
 
-		if (layout.HasDestructor()) {
-			const auto base_row_ptr = GetRowPointer(pin_state, chunk_part);
-			for (auto &aggr_idx : layout.GetAggregateDestructorIndices()) {
-				const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
-				auto &aggr_fun = layout.GetAggregates()[aggr_idx];
-				for (idx_t i = 0; i < next; i++) {
-					duckdb::FastMemset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0',
-					                   aggr_fun.payload_size);
+			if (layout.HasDestructor()) {
+				const auto base_row_ptr = GetRowPointer(pin_state, chunk_part);
+				for (auto &aggr_idx : layout.GetAggregateDestructorIndices()) {
+					const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
+					auto &aggr_fun = layout.GetAggregates()[aggr_idx];
+					for (idx_t i = 0; i < next; i++) {
+						duckdb::FastMemset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0',
+						                   aggr_fun.payload_size);
+					}
 				}
 			}
+
+			offset += next;
+			chunk_part_indices.emplace_back(chunks.size() - 1, chunk.part_ids.End() - 1);
 		}
 
-		offset += next;
-		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.part_ids.End() - 1);
-	}
+		// Now initialize the pointers to write the data to
+		chunk_parts.clear();
+		for (const auto &indices : chunk_part_indices) {
+			chunk_parts.emplace_back(segment.chunk_parts[indices.second]);
+		}
+		InitializeChunkStateInternal(pin_state, chunk_state, append_offset, false, true, false, chunk_parts);
 
-	// Now initialize the pointers to write the data to
-	chunk_parts.clear();
-	for (const auto &indices : chunk_part_indices) {
-		chunk_parts.emplace_back(segment.chunk_parts[indices.second]);
+		// To reduce metadata, we try to merge chunk parts where possible
+		// Due to the way chunk parts are constructed, only the last part of the first chunk is eligible for merging
+		segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(segment);
 	}
-	InitializeChunkStateInternal(pin_state, chunk_state, append_offset, false, true, false, chunk_parts);
-
-	// To reduce metadata, we try to merge chunk parts where possible
-	// Due to the way chunk parts are constructed, only the last part of the first chunk is eligible for merging
-	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(segment);
 
 	segment.Verify();
 }
@@ -514,7 +559,6 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
 	for (const auto &col_idx : layout.GetVariableColumns()) {
 		if (not_found_count == 0) {
@@ -534,7 +578,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				D_ASSERT(heap_sizes[idx] != 0);
+				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
 				// We always serialize a NullValue<string_t>, which isn't inlined if this build flag is enabled
 				// So we need to grab the pointer from here even if the string is NULL
@@ -561,7 +605,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				D_ASSERT(heap_sizes[idx] != 0);
+				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
 				ValidityBytes row_mask(row_location, layout.ColumnCount());
 				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
