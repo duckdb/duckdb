@@ -68,7 +68,7 @@ bool Expression::PropagatesNullValues() const {
 	if (type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL ||
 	    type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM ||
 	    type == ExpressionType::CONJUNCTION_OR || type == ExpressionType::CONJUNCTION_AND ||
-	    type == ExpressionType::OPERATOR_COALESCE) {
+	    type == ExpressionType::OPERATOR_COALESCE || type == ExpressionType::CASE_EXPR) {
 		return false;
 	}
 	bool propagate_null_values = true;

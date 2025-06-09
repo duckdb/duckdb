@@ -27,6 +27,8 @@ struct ColumnCount {
 	bool is_comment = false;
 	//! If this row is potentially a mid-line comment
 	bool is_mid_comment = false;
+	//! Number of empty lines before this value
+	idx_t empty_lines = 0;
 };
 
 class ColumnCountResult : public ScannerResult {
@@ -48,6 +50,7 @@ public:
 	map<idx_t, idx_t> rows_per_column_count;
 	CSVErrorHandler &error_handler;
 	map<idx_t, shared_ptr<CSVBufferHandle>> buffer_handles;
+	idx_t empty_lines = 0;
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
 	//! Adds a Row to the result
