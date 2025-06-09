@@ -99,6 +99,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
 			continue;
 		}
+		if (StringUtil::CIEquals(entry.first, "encryption_cipher")) {
+			continue;
+		}
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
 			continue;
 		}

@@ -30,6 +30,7 @@
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -527,6 +528,18 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 	}
 	result = global_value->second;
 	return SettingLookupResult(SettingScope::GLOBAL);
+}
+
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+	shared_ptr<EncryptionUtil> encryption_util;
+
+	if (encryption_util) {
+		encryption_util = config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

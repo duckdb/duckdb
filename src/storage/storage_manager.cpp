@@ -12,8 +12,11 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
+
+using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
@@ -88,6 +91,10 @@ void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOpti
 
 	// Create or load the database from disk, if not in-memory mode.
 	LoadDatabase(context, options);
+
+	if (options.encryption) {
+		ClearUserKey(options.encryption_key);
+	}
 }
 
 class SingleFileTableIOManager : public TableIOManager {
@@ -136,6 +143,11 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
+	if (storage_options.encryption) {
+		options.encryption_options.encryption_enabled = true;
+		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
+	}
+
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	if (storage_options.row_group_size.IsValid()) {
 		row_group_size = storage_options.row_group_size.GetIndex();
@@ -175,7 +187,6 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
-			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
 		} else {
 			// No encryption; use the default option.
@@ -188,7 +199,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase(context);
+		sf_block_manager->CreateNewDatabase(context, &storage_options.encryption_key);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -201,8 +212,10 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		if (storage_options.block_header_size.IsValid()) {
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
-			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
+
+			// Set encryption to true and derive encryption key
+			options.encryption_options.encryption_enabled = true;
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;
@@ -212,7 +225,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase();
+		sf_block_manager->LoadExistingDatabase(&storage_options.encryption_key);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
