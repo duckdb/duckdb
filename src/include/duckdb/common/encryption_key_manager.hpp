@@ -37,11 +37,11 @@ public:
 	}
 
 private:
-	uint8_t key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
+	data_t key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 
 private:
-	static void LockEncryptionKey(data_ptr_t key);
-	static void UnlockEncryptionKey(data_ptr_t key);
+	static void LockEncryptionKey(data_ptr_t key, idx_t key_len = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	static void UnlockEncryptionKey(data_ptr_t key, idx_t key_len = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 };
 
 class EncryptionKeyManager : public ObjectCacheEntry {

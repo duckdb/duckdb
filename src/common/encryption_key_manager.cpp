@@ -25,20 +25,20 @@ EncryptionKey::~EncryptionKey() {
 	UnlockEncryptionKey(key);
 }
 
-void EncryptionKey::LockEncryptionKey(data_ptr_t key) {
+void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 #if defined(_WIN32)
-	VirtualLock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	VirtualLock(key, key_len);
 #else
-	mlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	mlock(key, key_len);
 #endif
 }
 
-void EncryptionKey::UnlockEncryptionKey(data_ptr_t key) {
-	memset(key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
+	memset(key, 0, key_len);
 #if defined(_WIN32)
-	VirtualUnlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	VirtualUnlock(static_cast<void *>(&key[0]), key_len);
 #else
-	munlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	munlock(static_cast<void *>(&key[0]), key_len);
 #endif
 }
 

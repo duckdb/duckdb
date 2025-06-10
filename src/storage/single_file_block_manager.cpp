@@ -307,7 +307,7 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 
 	Store<uint8_t>(options.encryption_options.kdf, offset);
 	offset++;
-	Store<uint8_t>(options.encryption_options.aad, offset);
+	Store<uint8_t>(options.encryption_options.additional_authenticated_data, offset);
 	offset++;
 	Store<uint8_t>(options.encryption_options.cipher, offset);
 	offset += 2;
@@ -316,8 +316,7 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	main_header.SetEncryptionMetadata(metadata);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context,
-                                               optional_ptr<string> encryption_key) {
+void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -340,7 +339,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 
 		// Derive the encryption key and add it to cache
 		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(*encryption_key, salt, derived_key);
+		EncryptionKeyManager::DeriveKey(storage_options.encryption_key, salt, derived_key);
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 
 		//! Store all metadata in the main header
@@ -390,7 +389,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryption_key) {
+void SingleFileBlockManager::LoadExistingDatabase(StorageOptions &storage_options) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -431,7 +430,7 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 		//! Check if the correct key is used to decrypt the database
 		// Derive the encryption key and add it to cache
 		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(*encryption_key, salt, derived_key);
+		EncryptionKeyManager::DeriveKey(storage_options.encryption_key, salt, derived_key);
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
 		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 		if (!DecryptCanary(main_header, encryption_state, derived_key)) {

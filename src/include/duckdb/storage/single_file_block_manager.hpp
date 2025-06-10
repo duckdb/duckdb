@@ -28,7 +28,7 @@ struct EncryptionOptions {
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
 	//! Whether Additional Authenticated Data is used
-	bool aad = false;
+	bool additional_authenticated_data = false;
 	//! derived encryption key id
 	string derived_key_id;
 	//! Cipher used for encryption
@@ -61,10 +61,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<ClientContext> context, optional_ptr<string> encryption_key = nullptr);
+	void CreateNewDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
+	void LoadExistingDatabase(StorageOptions &storage_options);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;

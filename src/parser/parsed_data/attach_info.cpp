@@ -16,21 +16,19 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			// even though the corresponding option we expose to the user is called "block_size".
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "encryption_key") {
-			auto user_key = entry.second.GetValue<string>();
-			// do we need to check here whether the string is valid?
-			if (user_key.empty() || user_key == "true") {
-				throw BinderException("\"%s\" is not a valid key. A key must not be empty", entry.second.ToString());
+			// check the type of the key
+			auto type = entry.second.type();
+			if (type != LogicalType::VARCHAR) {
+				throw BinderException("\"%s\" is not a valid key. A key must be of type VARCHAR",
+				                      entry.second.ToString());
+			} else if (entry.second.GetValue<string>().empty() || entry.second.GetValue<string>() == "true") {
+				throw BinderException("Not a valid key. A key cannot be empty");
 			}
-			storage_options.encryption_key = user_key;
 
-			// clear the user key
-			fill(user_key.begin(), user_key.end(), '\0');
-			user_key.clear();
+			storage_options.encryption_key = entry.second.GetValue<string>();
 
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
-			// set storage version to v1.3.0
-			storage_options.storage_version = SerializationCompatibility::FromString("v1.3.0").serialization_version;
 		} else if (entry.first == "encryption_cipher") {
 			throw BinderException("\"%s\" is not a valid cipher. Only AES GCM is supported.", entry.second.ToString());
 		} else if (entry.first == "row_group_size") {
@@ -43,14 +41,14 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 	}
 	if (storage_options.encryption && (!storage_options.storage_version.IsValid() ||
 	                                   storage_options.storage_version.GetIndex() <
-	                                       SerializationCompatibility::FromString("v1.3.0").serialization_version)) {
+	                                       SerializationCompatibility::FromString("v1.4.0").serialization_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException(
-			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.3.0) are not compatible",
+			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
 			    storage_version_user_provided);
 		}
-		// set storage version to v1.3.0
-		storage_options.storage_version = SerializationCompatibility::FromString("v1.3.0").serialization_version;
+		// set storage version to v1.4.0
+		storage_options.storage_version = SerializationCompatibility::FromString("v1.4.0").serialization_version;
 	}
 	return storage_options;
 }
