@@ -1110,15 +1110,6 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
 	AddRuleOverride("Identifier", Variable());
-	// AddRuleOverride("TypeName", TypeName());
-	// AddRuleOverride("TableName", TableName());
-	// AddRuleOverride("CatalogName", CatalogName());
-	// AddRuleOverride("SchemaName", SchemaName());
-	// AddRuleOverride("ColumnName", ColumnName());
-	// AddRuleOverride("FunctionName", ScalarFunctionName());
-	// AddRuleOverride("TableFunctionName", TableFunctionName());
-	// AddRuleOverride("PragmaName", PragmaName());
-	// AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
