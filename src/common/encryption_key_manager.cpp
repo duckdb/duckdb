@@ -1,5 +1,7 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/blob.hpp"
 
 #if defined(_WIN32)
