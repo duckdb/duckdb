@@ -7,7 +7,7 @@ PRAGMA enable_verification
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
 ----
-Binder Error: "" is not a valid key. A key must not be empty
+Binder Error: Not a valid key. A key cannot be empty
 
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'random');
