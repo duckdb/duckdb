@@ -15,9 +15,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-// start Anybase changes
-#include "duckdb/transaction/duck_transaction.hpp"
-// end Anybase changes
 
 namespace duckdb {
 
