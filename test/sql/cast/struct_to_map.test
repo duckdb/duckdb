@@ -151,12 +151,38 @@ AS tab(col);
 
 # Edge cases
 
-# Empty struct (if supported)
-# Note: This might fail depending on how empty structs are handled
-# query I
-# SELECT {}::MAP(VARCHAR, INT);
-# ----
-# {}
+# Constant vector select
+query I
+SELECT {"value": 42}::MAP(VARCHAR, INT)
+FROM range(1, 1001)
+LIMIT 5;
+----
+{value=42}
+{value=42}
+{value=42}
+{value=42}
+{value=42}
+
+# Make sure nothing breaks if we change the vector type
+statement ok
+pragma debug_verify_vector='dictionary_expression'
+
+query I
+SELECT TRY_CAST(col AS MAP(VARCHAR, integer))
+FROM (
+    SELECT CASE WHEN (i % 5 == 0) THEN NULL else {'a': i::varchar} END as col
+    FROM range(1, 1001) t(i)
+)
+LIMIT 5;
+----
+{a=1}
+{a=2}
+{a=3}
+{a=4}
+NULL
+
+statement ok
+pragma debug_verify_vector='none' # revert
 
 # Single field struct
 query I

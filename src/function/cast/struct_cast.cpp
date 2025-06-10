@@ -270,10 +270,12 @@ StructToMapBoundCastData::InitStructToMapCastLocalState(CastLocalStateParameters
 static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// If the source is a constant vector the result may be as well
+		// Optimization: if the source vector is constant, we only have a single physical element, so we can set the
+		// result vectortype to ConstantVector as well and set the (logical) count to 1
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		// No need to do anything with null structs
+		count = 1;
 		if (ConstantVector::IsNull(source)) {
+			// If there's only a null in there we don't need to cast anything
 			ConstantVector::SetNull(result, true);
 			return true;
 		}
@@ -290,7 +292,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	// Allocate result
 	ListVector::Reserve(result, total_count);
 
-	// Create key vector with VARCHAR keys (could make this a dictionary vector...?)
+	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
 	Vector varchar_keys(LogicalType::VARCHAR, total_count);
 	auto key_data = FlatVector::GetData<string_t>(varchar_keys);
 	auto &field_types = StructType::GetChildTypes(source.GetType());
@@ -328,10 +330,15 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 		}
 	}
 
-	// Create list data
+	// Check for nulls in the source rows, and set the list data
+	UnifiedVectorFormat format;
+	source.ToUnifiedFormat(count, format);
+	auto &validity = format.validity;
 	auto list_data = ListVector::GetData(result);
 	for (idx_t i = 0; i < count; i++) {
-		if (source.GetVectorType() == VectorType::FLAT_VECTOR && FlatVector::IsNull(source, i)) {
+		if (!validity.RowIsValid(format.sel->get_index(i))) { // is row null?
+			// Note: this must be a FlatVector because if we set it to be a ConstantVector and that was null then we've
+			// already returned
 			FlatVector::SetNull(result, i, true);
 		} else {
 			list_data[i] = list_entry_t(i * field_count, field_count);
