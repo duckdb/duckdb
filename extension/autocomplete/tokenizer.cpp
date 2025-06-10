@@ -186,7 +186,6 @@ bool BaseTokenizer::TokenizeInput() {
 					idx_t marker_start = quote_pos + 1;
 					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
 					idx_t next_marker_start = i;
-					Printer::Print("Looking for next marker");
 					for (next_marker_start++; next_marker_start < sql.size(); next_marker_start++) {
 						if (sql[next_marker_start] == '$') {
 							break;
@@ -194,10 +193,8 @@ bool BaseTokenizer::TokenizeInput() {
 					}
 					// Check if we can find the end marker. Otherwise, we have hit a potential StringParameter ($foo, $bar)
 					if (sql.compare(next_marker_start, dollar_quote_marker.size(), dollar_quote_marker) != 0) {
-						Printer::Print("Did not find next marker");
 						break;
 					}
-					Printer::Print("Entering Dollar quoted string mode");
 					state = TokenizeState::DOLLAR_QUOTED_STRING;
 					break;
 				}
