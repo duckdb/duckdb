@@ -217,8 +217,9 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	// at least one string must be non-inlined, otherwise this function should not be called
 	D_ASSERT(i < end);
 
-	auto base_ptr = char_ptr_cast(GetDataPointer(state, block_id, offset));
-	if (strings[i].GetData() == base_ptr) {
+	const auto old_base_ptr = strings[i].GetData();
+	const auto new_base_ptr = char_ptr_cast(GetDataPointer(state, block_id, offset));
+	if (old_base_ptr == new_base_ptr) {
 		// pointers are still valid
 		return;
 	}
@@ -228,11 +229,12 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 		if (!validity.RowIsValid(i)) {
 			continue;
 		}
-		if (strings[i].IsInlined()) {
+		auto &str = strings[i];
+		if (str.IsInlined()) {
 			continue;
 		}
-		strings[i].SetPointer(base_ptr);
-		base_ptr += strings[i].GetSize();
+		const auto str_offset = str.GetPointer() - old_base_ptr;
+		str.SetPointer(new_base_ptr + str_offset);
 	}
 }
 
