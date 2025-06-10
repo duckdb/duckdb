@@ -41,6 +41,9 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_reduce(s, lambda curr, next: struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b)) FROM df$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select features[1].name;$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT last(value ORDER BY foo IGNORE NULLS)$TEST_PEG_PARSER$);
 
 statement ok

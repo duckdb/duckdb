@@ -4,10 +4,10 @@ SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
 ByName <- 'BY'i 'NAME'i
 SelectOrParens <- BaseSelect / Parens(SelectStatement)
 
-BaseSelect <- WithClause? (SimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
+BaseSelect <- WithClause? (OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
 ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
-
+OptionalParensSimpleSelect <- Parens(SimpleSelect) / SimpleSelect
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)

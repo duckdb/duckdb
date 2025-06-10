@@ -110,7 +110,7 @@ Operator <-
     OperatorLiteral
 
 CastOperator <- '::' Type
-DotOperator <- '.' (FunctionExpression / Identifier)
+DotOperator <- '.' (FunctionExpression / ColLabel)
 NotNull <- 'NOT'i 'NULL'i
 Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator
 
