@@ -39,6 +39,9 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/logging/logging.hpp"
+// start Anybase changes
+#include "duckdb/function/change_data_capature_function.hpp"
+// end Anybase changes
 
 namespace duckdb {
 
@@ -138,6 +141,13 @@ struct DBConfigOptions {
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	// start Anybase changes
+	bool kafka_redo_log = false;
+	bool kafka_writer = false;
+	string kafka_bootstrap_server_and_port;
+	string kafka_topic_name;
+	string log_extension;
+	// end Anybase changes
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	//! Whether known extensions are allowed to be automatically loaded when a query depends on them
 	bool autoload_known_extensions = DUCKDB_EXTENSION_AUTOLOAD_DEFAULT;
@@ -445,6 +455,11 @@ private:
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
 	bool is_user_config = true;
+
+// start Anybase changes
+public:
+	ChangeDataCapture change_data_capture;
+// end Anybase changes
 };
 
 } // namespace duckdb

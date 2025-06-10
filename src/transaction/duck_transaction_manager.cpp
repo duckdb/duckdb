@@ -509,4 +509,47 @@ void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p, duckdb
 	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);
 }
 
+// start Anybase changes
+string DuckTransactionManager::Snapshot(ClientContext &context) {
+	auto &storage_manager = db.GetStorageManager();
+	if (storage_manager.InMemory()) {
+		return "";
+	}
+	auto current = Transaction::TryGet(context, db);
+	if (current) {
+		throw TransactionException(
+					   "Cannot FORCE CHECKPOINT: the current transaction has been started for this database");
+	}
+	unique_ptr<StorageLockKey> lock;
+	// force checkpoint - wait to get an exclusive lock
+	// grab the start_transaction_lock to prevent new transactions from starting
+	lock_guard<mutex> start_lock(start_transaction_lock);
+	// wait until any active transactions are finished
+	while (!lock) {
+		if (context.interrupted) {
+			throw InterruptException();
+		}
+		lock = checkpoint_lock.TryGetExclusiveLock();
+	}
+
+	CheckpointOptions options;
+	if (GetLastCommit() > LowestActiveStart()) {
+		// we cannot do a full checkpoint if any transaction needs to read old data
+		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+	}
+	storage_manager.CreateCheckpoint(context, options);
+	return storage_manager.Snapshot();
+}
+
+uint64_t DuckTransactionManager::GetSnapshotId(ClientContext &context) {
+	auto &storage_manager = db.GetStorageManager();
+	return storage_manager.GetSnapshotId();
+}
+
+uint64_t DuckTransactionManager::CheckpointAndGetSnapshotId(ClientContext &context) {
+	Checkpoint(context, true);
+	auto &storage_manager = db.GetStorageManager();
+	return storage_manager.GetSnapshotId();
+}
+// end Anybase changes
 } // namespace duckdb

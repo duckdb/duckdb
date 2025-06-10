@@ -44,6 +44,10 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
+// start Anybase changes
+#include "duckdb/main/buffered_data/file_buffered_data.hpp"
+#include "duckdb/execution/operator/persistent/physical_insert.hpp"
+// end Anybase changes
 
 namespace duckdb {
 
@@ -1170,8 +1174,10 @@ void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fu
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
+// start Anybase changes
 unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,
-                                                      const string &table_name) {
+                                                      const string &table_name,
+                                                      const optional_ptr<const vector<string>> column_names) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// Obtain the table from the catalog.
@@ -1184,16 +1190,110 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_nam
 		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
 		auto &catalog = Catalog::GetCatalog(*this, database_name);
 		result->readonly = catalog.GetAttached().IsReadOnly();
-		for (auto &column : table->GetColumns().Logical()) {
-			result->columns.emplace_back(column.Copy());
+		if (column_names && !column_names->empty()) {
+			for (auto &column_name : *column_names) {
+				auto &column = table->GetColumn(column_name);
+				result->columns.emplace_back(column.Copy());
+			}
+		} else {
+			for (auto &column : table->GetColumns().Logical()) {
+				result->columns.emplace_back(column.Copy());
+			}
 		}
 	});
 	return result;
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name,
+													  const optional_ptr<const vector<string>> column_names) {
+	return TableInfo(INVALID_CATALOG, schema_name, table_name, column_names);
 }
+
+static unordered_set<column_t> ExtractConflictTarget(DataTable &data_table) {
+	// The column ids to apply the ON CONFLICT on
+	unordered_set<column_t> conflict_target;
+	data_table.GetDataTableInfo()->GetIndexes().Scan([&](Index &index) {
+		if (index.IsPrimary()) {
+			conflict_target = index.GetColumnIdSet();
+			return true;
+		}
+		return false;
+	});
+
+	return conflict_target;
+}
+
+void ClientContext::Merge(TableDescription &description, DataChunk& chunk) {
+	ColumnDataCollection collection(Allocator::DefaultAllocator());
+	collection.Append(chunk);
+	Merge(description, collection);
+}
+
+void ClientContext::Merge(TableDescription &description, ColumnDataCollection &collection) {
+	RunFunctionInTransaction([&]() {
+		auto &table_entry =
+		    Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
+		// verify that the table columns and types match up
+		if (description.columns.size() != collection.ColumnCount()) {
+			throw InvalidInputException("Failed to append: table entry has different number of columns!");
+		}
+		for (idx_t i = 0; i < description.columns.size(); i++) {
+			if (description.columns[i].Type() != collection.Types()[i]) {
+				throw InvalidInputException("Failed to append: table entry has different number of columns!");
+			}
+		}
+
+		// Copy the column descriptors to ensure we don't steal them from the TableDescription
+		auto column_descriptors = make_uniq<vector<ColumnDefinition>>();
+		for (auto &column_definition : description.columns) {
+			column_descriptors->push_back(column_definition.Copy());
+		}
+
+		auto &storage = table_entry.GetStorage();
+		auto conflict_target = ExtractConflictTarget(storage);
+	  	auto column_list = ColumnList(std::move(*column_descriptors));
+		vector<unique_ptr<Expression>> defaults;
+		auto binder = Binder::CreateBinder(*this);
+	  	binder->BindDefaultValues(table_entry.GetColumns(), defaults);
+	  	auto bound_constraints = binder->BindConstraints(table_entry);
+		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
+
+		vector<PhysicalIndex> set_columns;
+		physical_index_vector_t<idx_t> column_index_map;
+		vector<LogicalType> table_types;
+
+		for (auto &column : table_entry.GetColumns().Physical()) {
+			auto column_name = column.Name();
+			auto idx = column_list.GetColumnIndex(column_name);
+			if (idx.IsValid()) {
+				column_index_map.push_back(idx.index);
+			} else {
+				column_index_map.push_back(DConstants::INVALID_INDEX);
+			}
+			table_types.push_back(column.Type());
+		}
+
+		//In order to maintain proper order we must loop through the column list
+		for (auto &column_definition : column_list.Physical()) {
+			auto physical_index = table_entry.GetColumn(column_definition.Name()).Physical();
+			if (conflict_target.find(physical_index.index) == conflict_target.end()) {
+				set_columns.push_back(physical_index);
+			}
+		}
+
+		ExpressionExecutor default_executor(*this, defaults);
+		ColumnDataCollection reordered_collection(collection.GetAllocator(), table_types);
+		for (auto &c : collection.Chunks()) {
+			DataChunk result_chunk;
+			result_chunk.Initialize(collection.GetAllocator(), table_types);
+			PhysicalInsert::ResolveDefaults(table_entry, c, column_index_map, default_executor, result_chunk);
+			reordered_collection.Append(result_chunk);
+		}
+
+		storage.Merge(table_entry, *this, reordered_collection, bound_constraints, conflict_target, set_columns);
+	});
+}
+// end Anybase changes
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
                            optional_ptr<const vector<LogicalIndex>> column_ids) {
@@ -1391,4 +1491,97 @@ bool ClientContext::ExecutionIsFinished() {
 	return active_query->executor->ExecutionIsFinished();
 }
 
+// start Anybase changes
+uint64_t ClientContext::GetSnapshotId() {
+	uint64_t result;
+	RunFunctionInTransaction([&]() {
+	result = transaction.GetSnapshotId();
+	}, false);
+
+	return result;
+}
+
+uint64_t ClientContext::CheckpointAndGetSnapshotId() {
+	uint64_t result;
+	RunFunctionInTransaction([&]() {
+	result = transaction.CheckpointAndGetSnapshotId();
+	}, false);
+
+	return result;
+}
+
+pair<string, unique_ptr<QueryResult>> ClientContext::CreateSnapshot() {
+	string snapshot_file;
+	RunFunctionInTransaction([&]() {
+	snapshot_file = transaction.Snapshot();
+	});
+
+	if (snapshot_file.length() == 0) {
+	return make_pair(snapshot_file, unique_ptr<QueryResult>(nullptr));
+	}
+
+	StatementType statement_type = StatementType::SELECT_STATEMENT;
+	string query = "SELECT blob_column";
+	auto lock = LockContext();
+	BeginQueryInternal(*lock, query);
+	StatementProperties properties;
+	vector<LogicalType> types{LogicalType::BLOB};
+	vector<string> names{"blob_column"};
+	ClientProperties client_properties;
+	auto ctx = this->shared_from_this();
+	FileSystem &fs = FileSystem::GetFileSystem(*this);
+	auto buffered_data = make_shared_ptr<FileBufferedData>(ctx, fs, snapshot_file);
+	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types,
+					     names, client_properties,
+					     buffered_data);
+	SetActiveResult(*lock, *result);
+	return make_pair(snapshot_file, std::move(result));
+}
+
+void ClientContext::RemoveSnapshot(const char *snapshot_file_name) {
+	FileSystem &fs = FileSystem::GetFileSystem(*this);
+	string file_name(snapshot_file_name);
+	fs.RemoveFile(file_name);
+}
+
+void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
+	if (!active_query) {
+		return;
+	}
+	return active_query->SetOpenResult(result);
+}
+
+idx_t ClientContext::GetTableVersion(const char *schema, const char *table) {
+	idx_t version = 0;
+	RunFunctionInTransaction([&]() {
+		if (schema == nullptr) {
+			schema = INVALID_SCHEMA;
+		}
+
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, schema, table);
+		auto &dataTable = table_entry.GetStorage();
+		version = dataTable.GetVersion();
+	});
+
+	return version;
+}
+
+idx_t ClientContext::GetColumnVersion(const char *schema, const char *table, const char *column) {
+	idx_t version = 0;
+	RunFunctionInTransaction([&]() {
+		if (schema == nullptr) {
+			schema = INVALID_SCHEMA;
+		}
+
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, schema, table);
+		const auto &dataTable = table_entry.GetStorage();
+		if (table_entry.ColumnExists(column)) {
+			const auto cIndex = table_entry.GetColumn(column).Physical();
+			version = dataTable.GetColumnVersion(cIndex.index);
+		}
+	});
+
+	return version;
+}
+// end Anybase changes
 } // namespace duckdb

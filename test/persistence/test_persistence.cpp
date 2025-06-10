@@ -73,3 +73,33 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 		FAIL();
 	}
 }
+
+// start Anybase changes
+TEST_CASE("Test snapshot api on persistent db", "[persistence][.]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	string db_folder_parent = TestCreatePath("llstorage");
+	if (fs->DirectoryExists(db_folder_parent)) {
+		fs->RemoveDirectory(db_folder_parent);
+	}
+	fs->CreateDirectory(db_folder_parent);
+
+	string db_folder = fs->JoinPath(db_folder_parent, "dbfolder");
+	{
+		DuckDB db(db_folder);
+		Connection con(db);
+		con.Query("CREATE TABLE a (i INTEGER)");
+		con.Query("INSERT INTO a VALUES(42)");
+		uint64_t sid = con.CheckpointAndGetSnapshotId();
+		con.Query("INSERT INTO a VALUES(44)");
+		uint64_t sid_next = con.CheckpointAndGetSnapshotId();
+		REQUIRE(sid_next == (sid + 1));
+		auto result = con.CreateSnapshot();
+		REQUIRE(result.second->type == QueryResultType::STREAM_RESULT);
+		std::unique_ptr<DataChunk> chunk = result.second->Fetch();
+		REQUIRE(chunk->ColumnCount() == 1);
+		REQUIRE(chunk->size());
+		string snapshot = chunk->GetValue(0,0).GetValue<string>();
+		REQUIRE(snapshot.length() != 0);
+	}
+}
+// end Anybase changes

@@ -226,4 +226,9 @@ FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path) {
 	return *default_fs;
 }
 
+// start Anybase changes
+void VirtualFileSystem::CopyFile(const string &source, const string &target) {
+	FindFileSystem(source).CopyFile(source, target);
+}
+// end Anybase changes
 } // namespace duckdb

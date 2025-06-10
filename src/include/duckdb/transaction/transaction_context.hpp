@@ -62,6 +62,13 @@ private:
 	unique_ptr<MetaTransaction> current_transaction;
 
 	TransactionContext(const TransactionContext &) = delete;
+
+// start Anybase changes
+public:
+	string Snapshot();
+	uint64_t GetSnapshotId();
+	uint64_t CheckpointAndGetSnapshotId();
+// end Anybase changes
 };
 
 } // namespace duckdb

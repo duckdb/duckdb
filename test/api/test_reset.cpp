@@ -119,7 +119,15 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"http_logging_output", {"my_cool_outputfile"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
-	    {"enable_external_file_cache", {false}}};
+	    {"enable_external_file_cache", {false}},
+		// start Anybase changes
+		{"kafka_writer", {true}},
+		{"kafka_topic_name", {"my_cool_topic"}},
+		{"kafka_redo_log", {true}},
+		{"kafka_bootstrap_server_and_port", {"john:117"}},
+		{"log_extension", {"just_log_me"}},
+		// end Anybase changes
+	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {

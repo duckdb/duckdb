@@ -20,6 +20,10 @@
 
 namespace duckdb {
 
+// start Anybase changes
+class InsertGlobalState;
+// end Anybase changes
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -158,8 +162,14 @@ protected:
 	//! Returns the amount of updated tuples
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
+// start Anybase changes
 	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
 	                         InsertLocalState &lstate, DataChunk &insert_chunk) const;
+public:
+	static void ResolveDefaults(const TableCatalogEntry &table, DataChunk &chunk,
+								const physical_index_vector_t<idx_t> &column_index_map,
+								ExpressionExecutor &defaults_executor, DataChunk &result);
+// end Anybase changes
 };
 
 } // namespace duckdb

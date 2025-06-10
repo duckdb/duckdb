@@ -157,8 +157,22 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// create a new file
 
 		auto wal_path = GetWALPath();
-		// try to remove the WAL file if it exists
-		fs.TryRemoveFile(wal_path);
+		// start Anybase changes
+		if (config.options.kafka_redo_log) {
+			wal_path = "kafka://";
+			wal_path += config.options.kafka_bootstrap_server_and_port;
+			wal_path += "/";
+			wal_path += config.options.kafka_topic_name;
+			wal_path += "/";
+			wal_path += config.options.kafka_writer ? "writer" : "reader";
+		}
+
+		// check if the WAL exists - JO/MV - Revisit
+		if (!config.options.kafka_redo_log) {
+			// try to remove the WAL file if it exists
+			fs.TryRemoveFile(wal_path);
+		}
+		// end Anybase changes
 
 		// Set the block allocation size for the new database file.
 		if (storage_options.block_alloc_size.IsValid()) {
@@ -437,5 +451,24 @@ shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCrea
 BlockManager &SingleFileStorageManager::GetBlockManager() {
 	return *block_manager;
 }
+
+// start Anybase changes
+uint64_t SingleFileStorageManager::GetSnapshotId() {
+	if (InMemory() || read_only) {
+		return 0;
+	}
+	return dynamic_cast<SingleFileBlockManager *>(block_manager.get())->GetSnapshotId();
+}
+
+string SingleFileStorageManager::Snapshot() {
+	uint64_t sid = dynamic_cast<SingleFileBlockManager *>(block_manager.get())->GetSnapshotId();
+	string ret = path;
+	ret += ".";
+	ret += to_string(sid);
+	auto &fs = FileSystem::Get(db);
+	fs.CopyFile(path, ret);
+	return ret;
+}
+// end Anybase changes
 
 } // namespace duckdb

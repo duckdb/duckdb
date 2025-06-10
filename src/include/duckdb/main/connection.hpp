@@ -116,11 +116,22 @@ public:
 	//! Prepare the specified statement, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
+
+	// start Anybase changes
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
-	                                                  const string &table_name);
+													  const string &table_name,
+													  const optional_ptr<const vector<string>> column_names = nullptr);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	//! Get the table info of a specific table with only the columns specified, or nullptr if it cannot be found
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> column_names = nullptr);
+	DUCKDB_API void Merge(TableDescription &description, DataChunk &chunk);
+	DUCKDB_API uint64_t GetSnapshotId();
+	DUCKDB_API uint64_t CheckpointAndGetSnapshotId();
+	DUCKDB_API pair<string, unique_ptr<QueryResult>> CreateSnapshot();
+	DUCKDB_API void RemoveSnapshot(const char *snapshot_file_name);
+	// end Anybase changes
+
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG and
 	//! DEFAULT_SCHEMA.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);

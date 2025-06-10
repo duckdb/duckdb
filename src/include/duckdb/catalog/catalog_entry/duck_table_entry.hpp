@@ -80,5 +80,10 @@ private:
 	shared_ptr<DataTable> storage;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
+
+// start Anybase changes
+public:
+	unique_ptr<CreateInfo> GetInfo() const override;
+// end Anybase changes
 };
 } // namespace duckdb

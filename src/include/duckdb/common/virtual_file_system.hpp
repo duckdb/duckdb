@@ -91,6 +91,11 @@ private:
 	map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
 	const unique_ptr<FileSystem> default_fs;
 	unordered_set<string> disabled_file_systems;
+
+// start Anybase changes
+public:
+	void CopyFile(const string &source, const string &target) override;
+// end Anybase changes
 };
 
 } // namespace duckdb

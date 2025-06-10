@@ -196,6 +196,9 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 PersistentColumnData ColumnCheckpointState::ToPersistentData() {
 	PersistentColumnData data(column_data.type.InternalType());
 	data.pointers = std::move(data_pointers);
+	// start Anybase changes
+	data.commit_version = column_data.commit_version_manager.GetVersion();
+	// end Anybase changes
 	return data;
 }
 

@@ -13,9 +13,15 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/transaction/undo_buffer_allocator.hpp"
 #include "duckdb/common/atomic.hpp"
+// start Anybase changes
+#include "duckdb/storage/table/column_data.hpp"
+// end Anybase changes
 
 namespace duckdb {
 class UpdateSegment;
+// start Anybase changes
+class ColumnData;
+// end Anybase changes
 struct DataTableInfo;
 
 //! UpdateInfo is a class that represents a set of updates applied to a single vector.
@@ -52,30 +58,39 @@ struct UpdateInfo {
 		return reinterpret_cast<T *>(GetValues());
 	}
 
-	bool AppliesToTransaction(transaction_t start_time, transaction_t transaction_id) {
+	// start Anybase changes
+	bool AppliesToTransaction(transaction_t start_time, transaction_t transaction_id, bool fetch_current_update) {
 		// these tuples were either committed AFTER this transaction started or are not committed yet, use
 		// tuples stored in this version
-		return version_number > start_time && version_number != transaction_id;
+		if (version_number > start_time) {
+			if (fetch_current_update && version_number != transaction_id ||
+				(!fetch_current_update && version_number == transaction_id)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that
 	//! transaction in-order of newest to oldest
 	template <class T>
 	static void UpdatesForTransaction(UpdateInfo &current, transaction_t start_time, transaction_t transaction_id,
-	                                  T &&callback) {
-		if (current.AppliesToTransaction(start_time, transaction_id)) {
+	                                  bool fetch_current_update, T &&callback) {
+		if (current.AppliesToTransaction(start_time, transaction_id, fetch_current_update)) {
 			callback(current);
 		}
 		auto update_ptr = current.next;
 		while (update_ptr.IsSet()) {
 			auto pin = update_ptr.Pin();
 			auto &info = Get(pin);
-			if (info.AppliesToTransaction(start_time, transaction_id)) {
+			if (info.AppliesToTransaction(start_time, transaction_id, fetch_current_update)) {
 				callback(info);
 			}
 			update_ptr = info.next;
 		}
 	}
+	// end Anybase changes
 
 	Value GetValue(idx_t index);
 	string ToString();
@@ -88,6 +103,12 @@ struct UpdateInfo {
 	static idx_t GetAllocSize(idx_t type_size);
 	//! Initialize an UpdateInfo struct that has been allocated using GetAllocSize (i.e. has extra space after it)
 	static void Initialize(UpdateInfo &info, transaction_t transaction_id);
+
+// start Anybase changes
+	ColumnData *column;
+	DataTable *table;
+	sel_t *cdc_tuples;
+// end Anybase changes
 };
 
 } // namespace duckdb

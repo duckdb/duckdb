@@ -126,14 +126,19 @@ public:
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 
+	// start Anybase changes
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
-	                                                  const string &table_name);
+	                                                  const string &table_name,
+	                                                  const optional_ptr<const vector<string>> column_names = nullptr);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name,
+												const optional_ptr<const vector<string>> column_names = nullptr);
+
 	//! Appends a DataChunk and its default columns to the specified table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
 	                       optional_ptr<const vector<LogicalIndex>> column_ids = nullptr);
+	// end Anybase changes
 
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
@@ -311,6 +316,21 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+
+// start Anybase changes
+public:
+	//! Merges a DataChunk to the specified table.  This works much like upsert.  Primary key is assumed to be the conflict target
+	DUCKDB_API void Merge(TableDescription &description, DataChunk &chunk);
+	//! Merges a ColumnDataCollection to the specified table.  This works much like upsert.  Primary key is assumed to be the conflict target
+	DUCKDB_API void Merge(TableDescription &description, ColumnDataCollection &collection);
+	DUCKDB_API uint64_t GetSnapshotId();
+	DUCKDB_API uint64_t CheckpointAndGetSnapshotId();
+	DUCKDB_API pair<string, unique_ptr<QueryResult>> CreateSnapshot();
+	DUCKDB_API void RemoveSnapshot(const char *snapshot_file_name);
+	DUCKDB_API void SetActiveResult(ClientContextLock &lock, BaseQueryResult &result);
+	DUCKDB_API idx_t GetTableVersion(const char *schema, const char *table);
+	DUCKDB_API idx_t GetColumnVersion(const char *schema, const char *table, const char *column);
+// end Anybase changes
 };
 
 class ClientContextLock {

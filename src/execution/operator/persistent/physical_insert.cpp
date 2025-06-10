@@ -745,4 +745,39 @@ SourceResultType PhysicalInsert::GetData(ExecutionContext &context, DataChunk &c
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
+// start Anybase changes
+void PhysicalInsert::ResolveDefaults(const TableCatalogEntry &table, DataChunk &chunk,
+										 const physical_index_vector_t<idx_t> &column_index_map,
+										 ExpressionExecutor &default_executor, DataChunk &result) {
+	chunk.Flatten();
+	default_executor.SetChunk(chunk);
+
+	result.Reset();
+	result.SetCardinality(chunk);
+
+	if (!column_index_map.empty()) {
+		// columns specified by the user, use column_index_map
+		for (auto &col : table.GetColumns().Physical()) {
+			auto storage_idx = col.StorageOid();
+			auto mapped_index = column_index_map[col.Physical()];
+			if (mapped_index == DConstants::INVALID_INDEX) {
+				// insert default value
+				default_executor.ExecuteExpression(storage_idx, result.data[storage_idx]);
+			} else {
+				// get value from child chunk
+				D_ASSERT((idx_t)mapped_index < chunk.ColumnCount());
+				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[mapped_index].GetType());
+				result.data[storage_idx].Reference(chunk.data[mapped_index]);
+			}
+		}
+	} else {
+		// no columns specified, just append directly
+		for (idx_t i = 0; i < result.ColumnCount(); i++) {
+			D_ASSERT(result.data[i].GetType() == chunk.data[i].GetType());
+			result.data[i].Reference(chunk.data[i]);
+		}
+	}
+}
+// end Anybase changes
+
 } // namespace duckdb

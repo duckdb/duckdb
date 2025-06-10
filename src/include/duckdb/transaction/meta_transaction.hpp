@@ -75,6 +75,13 @@ private:
 	optional_ptr<AttachedDatabase> modified_database;
 	//! Whether or not the meta transaction is marked as read only
 	bool is_read_only;
+
+	// start Anybase changes
+public:
+	string Snapshot(optional_ptr<AttachedDatabase> db);
+	uint64_t GetSnapshotId(optional_ptr<AttachedDatabase> db);
+	uint64_t CheckpointAndGetSnapshotId(optional_ptr<AttachedDatabase> db);
+	// end Anybase changes
 };
 
 } // namespace duckdb

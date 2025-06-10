@@ -152,5 +152,12 @@ private:
 	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
 	mutex block_lock;
+
+// start Anybase changes
+public:
+	uint64_t GetSnapshotId();
+	unique_ptr<FileHandle>& GetFileHandle();
+	unique_ptr<FileHandle> CloneEmptyDatabase();
+// end Anybase changes
 };
 } // namespace duckdb

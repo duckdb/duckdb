@@ -172,14 +172,38 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	return pending->Execute();
 }
 
+// start Anybase changes
 unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
-                                                   const string &table_name) {
-	return context->TableInfo(database_name, schema_name, table_name);
+                                                   const string &table_name,
+                                                   const optional_ptr<const vector<string>> column_names) {
+	return context->TableInfo(database_name, schema_name, table_name, column_names);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> column_names) {
+	return context->TableInfo(schema_name, table_name, column_names);
 }
+
+void Connection::Merge(TableDescription &description, DataChunk &chunk) {
+	context->Merge(description, chunk);
+}
+
+uint64_t Connection::GetSnapshotId() {
+	return context->GetSnapshotId();
+}
+
+uint64_t Connection::CheckpointAndGetSnapshotId() {
+	return context->CheckpointAndGetSnapshotId();
+}
+
+void Connection::RemoveSnapshot(const char *snapshot_file_name) {
+	context->RemoveSnapshot(snapshot_file_name);
+}
+
+pair<string, unique_ptr<QueryResult>> Connection::CreateSnapshot() {
+	auto result = context->CreateSnapshot();
+	return result;
+}
+// end Anybase changes
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
 	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);

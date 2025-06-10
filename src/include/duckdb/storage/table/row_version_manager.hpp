@@ -57,6 +57,18 @@ private:
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
 	void FillVectorInfo(idx_t vector_idx);
+
+// start Anybase changes
+public:
+	idx_t GetVersion(const vector<column_t> &columnIds) {
+		for (idx_t i = 0; i < columnIds.size(); i++) {
+			auto verInfo = GetVectorInfo(i).insert_id;
+			return verInfo;
+		}
+
+		return 0;
+	}
+// end Anybase changes
 };
 
 } // namespace duckdb

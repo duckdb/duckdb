@@ -135,6 +135,13 @@ private:
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {
 	}
+
+// start Anybase changes
+public:
+	string Snapshot(ClientContext &context) override;
+	uint64_t GetSnapshotId(ClientContext &context) override;
+	uint64_t CheckpointAndGetSnapshotId(ClientContext &context) override;
+// end Anybase changes
 };
 
 } // namespace duckdb

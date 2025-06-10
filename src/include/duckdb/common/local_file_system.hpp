@@ -110,6 +110,11 @@ private:
 	idx_t GetFilePointer(FileHandle &handle);
 
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
+
+// start Anybase changes
+public:
+	void CopyFile(const string &source, const string &target) override;
+// end Anybase changes
 };
 
 } // namespace duckdb

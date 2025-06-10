@@ -29,6 +29,9 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(2)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
+	// start Anybase changes
+	serializer.WriteProperty<idx_t>(110, "commit_version", commit_version);
+	// end Anybase changes
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -42,6 +45,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
 	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(108, "tags", InsertionOrderPreservingMap<string>());
 	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
+	// start Anybase changes
+	auto commit_version = deserializer.ReadPropertyWithDefault<idx_t>(110, "commit_version");
+	// end Anybase changes
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -82,6 +88,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->comment = comment;
 	result->tags = std::move(tags);
 	result->dependencies = dependencies;
+	// start Anybase changes
+	result->commit_version = commit_version;
+	// end Anybase changes
 	return result;
 }
 

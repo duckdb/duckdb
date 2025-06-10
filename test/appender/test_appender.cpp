@@ -777,3 +777,64 @@ TEST_CASE("Test appending rows with an active column list", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {84, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {43, 44}));
 }
+
+// start Anybase changes
+TEST_CASE("insert/replace", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA enable_verification"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (c1 INT PRIMARY KEY);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT OR REPLACE INTO t2 VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM t2"));
+	result = con.Query("SELECT * FROM t2");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE_NO_FAIL(con.Query("INSERT OR REPLACE INTO t2 VALUES (1);"));
+	result = con.Query("SELECT * FROM t2");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("commit", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("begin transaction"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (c1 INT PRIMARY KEY);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT OR REPLACE INTO t2 VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("commit"));
+}
+
+TEST_CASE("big_insert", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA enable_verification"));
+	REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER unique, j INTEGER DEFAULT 0, k INTEGER DEFAULT 0);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers(i) SELECT i from range(5000) tbl(i);"));
+	result = con.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM integers on conflict do nothing;"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM integers on conflict do update set j = 10;"));
+	duckdb::unique_ptr<QueryResult> result1 = con.Query("SELECT COUNT(*) FILTER (WHERE j = 10) FROM integers");
+	REQUIRE(CHECK_COLUMN(result1, 0, {5000}));
+	result = con.Query("INSERT INTO integers(i,j) select i%5,i from range(5000) tbl(i) on conflict do update set j = excluded.j, k = excluded.i;");
+	REQUIRE(result->HasError() == true);
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers(i,j) select i%5,i from range(4995, 5000) tbl(i) on conflict do update set j = excluded.j, k = excluded.i;"));
+	result = con.Query("select j from integers limit 5;");
+	REQUIRE(result->HasError() == false);
+	REQUIRE_NO_FAIL(con.Query("insert into integers(i,j) select CASE WHEN i % 2 = 0 THEN 4999 - (i//2) ELSE i - ((i//2)+1) END, i from range(5000) tbl(i) on conflict do update set j = excluded.j;"));
+	result = con.Query("select j from integers limit 5;");
+	REQUIRE(result->HasError() == false);
+	result = con.Query("select j from integers limit 5 offset 4995;");
+	REQUIRE(result->HasError() == false);
+	REQUIRE_NO_FAIL(con.Query("update integers set j = 0;"));
+	REQUIRE_NO_FAIL(con.Query("insert into integers(i,j) select CASE WHEN i % 2 = 0 THEN 4999 - (i//2) ELSE i - ((i//2)+1) END, i from range(5000) tbl(i) on conflict do update set j = excluded.j where i % 2 = 0 AND excluded.j % 2 = 0;"));
+	result = con.Query("select COUNT(j) filter (where j != 0) from integers;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1250}));
+	// REQUIRE(((MaterializedQueryResult *) result)->RowCount() == 5);
+}
+// end Anybase changes

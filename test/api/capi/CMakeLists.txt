@@ -24,7 +24,8 @@ add_library_unity(
   test_capi_replacement_scan.cpp
   test_capi_streaming.cpp
   test_capi_table_description.cpp
-  test_without_disabled_functions.cpp)
+  test_without_disabled_functions.cpp
+  test_capi_anybase.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_capi>
     PARENT_SCOPE)

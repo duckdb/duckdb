@@ -353,6 +353,13 @@ private:
 		while (LoadNextSegment(l)) {
 		}
 	}
+
+	// start Anybase changes
+	idx_t GetSegmentIndex(idx_t row_number) {
+		auto l = Lock();
+		return GetSegmentIndex(l, row_number);
+	}
+	// end Anybase changes
 };
 
 } // namespace duckdb

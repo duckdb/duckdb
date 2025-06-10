@@ -147,6 +147,11 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	// start Anybase changes
+	virtual uint64_t GetSnapshotId() = 0;
+	virtual string Snapshot() = 0;
+	// end Anybase changes
 };
 
 //! Stores database in a single file.
@@ -172,5 +177,11 @@ public:
 
 protected:
 	void LoadDatabase(StorageOptions options) override;
+
+public:
+	// start Anybase changes
+	uint64_t GetSnapshotId() override;
+	string Snapshot() override;
+	// end Anybase changes
 };
 } // namespace duckdb

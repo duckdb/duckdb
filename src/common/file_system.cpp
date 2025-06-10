@@ -796,4 +796,10 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 	return false;
 }
 
+// start Anybase changes
+void FileSystem::CopyFile(const string &source, const string &target) {
+	throw NotImplementedException("%s: CopyFile is not implemented!", GetName());
+}
+// end Anybase changes
+
 } // namespace duckdb

@@ -90,10 +90,11 @@ public:
 	ErrorData Append(DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info);
 
 	//! Verify that data can be appended to the index without a constraint violation.
-	virtual void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager);
+	// start Anybase changes
+	virtual void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager, bool allow_non_standard_vector_size = false);
 	//! Verifies the constraint for a chunk of data.
-	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
-
+	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager, bool allow_non_standard_vector_size = false);
+	// end Anybase changes
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
 	//! Deletes all data from the index

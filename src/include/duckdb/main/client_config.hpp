@@ -224,6 +224,11 @@ public:
 	ClientConfig &config;
 	config_modify_func_t set;
 	config_modify_func_t unset;
+
+	// start Anybase changes
+	DUCKDB_API uint64_t GetSnapshotId();
+	DUCKDB_API unique_ptr<QueryResult> CreateSnapshot();
+	// end Anybase changes
 };
 
 } // namespace duckdb

@@ -116,4 +116,38 @@ void TransactionContext::SetActiveQuery(transaction_t query_number) {
 	current_transaction->SetActiveQuery(query_number);
 }
 
+// start Anybase changes
+string TransactionContext::Snapshot() {
+	if (!current_transaction) {
+		throw TransactionException("failed to commit: no transaction active");
+	}
+
+	auto &db_manager = DatabaseManager::Get(context);
+	auto db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
+	return current_transaction->Snapshot(db);
+}
+
+uint64_t TransactionContext::GetSnapshotId() {
+	if (!current_transaction) {
+		throw TransactionException("failed to commit: no transaction active");
+	}
+
+	auto &db_manager = DatabaseManager::Get(context);
+	auto db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
+
+	return current_transaction->GetSnapshotId(db);
+}
+
+uint64_t TransactionContext::CheckpointAndGetSnapshotId() {
+	if (!current_transaction) {
+		throw TransactionException("failed to commit: no transaction active");
+	}
+
+	auto &db_manager = DatabaseManager::Get(context);
+	auto db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
+
+	return current_transaction->CheckpointAndGetSnapshotId(db);
+}
+// end Anybase changes
+
 } // namespace duckdb

@@ -60,10 +60,16 @@ InternalAppender::~InternalAppender() {
 	Destructor();
 }
 
-Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
+// start Anybase changes
+Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name,
+	const optional_ptr<const vector<string>> &column_names)
+// end Anybase changes
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
 
-	description = con.TableInfo(database_name, schema_name, table_name);
+	// start Anybase changes
+	description = con.TableInfo(database_name, schema_name, table_name, column_names);
+	// end Anybase changes
+
 	if (!description) {
 		throw CatalogException(
 		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
@@ -118,13 +124,19 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
+// start Anybase changes
+Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
+	: Appender(con, database_name, schema_name, table_name, nullptr) {
+}
+
 Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
-    : Appender(con, INVALID_CATALOG, schema_name, table_name) {
+    : Appender(con, INVALID_CATALOG, schema_name, table_name, nullptr) {
 }
 
 Appender::Appender(Connection &con, const string &table_name)
-    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name) {
+    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, nullptr) {
 }
+// end Anybase changes
 
 Appender::~Appender() {
 	Destructor();
@@ -577,6 +589,30 @@ void BaseAppender::Close() {
 	if (column == 0 || column == GetActiveTypes().size()) {
 		Flush();
 	}
+}
+
+Merger::Merger(Connection &con, const string &schema_name, const string &table_name, const vector<string> &column_names)
+	: Appender(con, INVALID_CATALOG, schema_name, table_name, column_names) {
+}
+
+Merger::Merger(Connection &con, const string &table_name, const vector<string> &column_names)
+	: Merger(con, DEFAULT_SCHEMA, table_name, column_names) {
+}
+
+Merger::Merger(Connection &con, const string &schema_name, const string &table_name)
+	: Appender(con, schema_name, table_name) {
+}
+
+Merger::Merger(Connection &con, const string &table_name)
+	: Merger(con, DEFAULT_SCHEMA, table_name) {
+}
+
+void Merger::FlushInternal(ColumnDataCollection &collection) {
+	context->Merge(*description, collection);
+}
+
+Merger::~Merger() {
+	Destructor();
 }
 
 } // namespace duckdb

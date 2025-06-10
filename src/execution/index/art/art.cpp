@@ -603,14 +603,16 @@ ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	return Insert(l, expr_chunk, row_ids, info);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) {
+// start Anybase changes
+void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager, bool allow_non_standard_vector_size) {
 	if (manager) {
 		D_ASSERT(manager->LookupType() == VerifyExistenceType::APPEND);
-		return VerifyConstraint(chunk, info, *manager);
+		return VerifyConstraint(chunk, info, *manager, allow_non_standard_vector_size);
 	}
 	ConflictManager local_manager(VerifyExistenceType::APPEND, chunk.size());
-	VerifyConstraint(chunk, info, local_manager);
+	VerifyConstraint(chunk, info, local_manager, allow_non_standard_vector_size);
 }
+// end Anybase changes
 
 //===--------------------------------------------------------------------===//
 // Drop and Delete
@@ -985,12 +987,19 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	}
 }
 
-void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
+// start Anybase changes
+void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager, bool allow_non_standard_vector_size) {
+// end Anybase changes
 	// Lock the index during constraint checking.
 	lock_guard<mutex> l(lock);
 
+	// start Anybase changes
+	idx_t capacity = allow_non_standard_vector_size && chunk.size() > STANDARD_VECTOR_SIZE ? chunk.size() : STANDARD_VECTOR_SIZE;
+	// end Anybase changes
 	DataChunk expr_chunk;
-	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
+	// start Anybase changes
+	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types, capacity);
+	// end Anybase changes
 	ExecuteExpressions(chunk, expr_chunk);
 
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));

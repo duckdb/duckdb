@@ -261,23 +261,24 @@ void ListColumnData::RevertAppend(row_t start_row) {
 idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	throw NotImplementedException("List Fetch");
 }
-
-void ListColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+// start Anybase changes
+void ListColumnData::Update(TransactionData transaction, DataTable &table, idx_t column_index, Vector &update_vector, row_t *row_ids,
                             idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
+void ListColumnData::UpdateColumn(TransactionData transaction, DataTable &table, const vector<column_t> &column_path,
                                   Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	throw NotImplementedException("List Update Column is not supported");
 }
-
+// end Anybase changes
 unique_ptr<BaseStatistics> ListColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
-
+// start Anybase changes
 void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                              idx_t result_idx) {
+                              idx_t result_idx, bool fetch_current_update) {
+// end Anybase changes
 	// insert any child states that are required
 	// we need two (validity & list child)
 	// note that we need a scan state for the child vector

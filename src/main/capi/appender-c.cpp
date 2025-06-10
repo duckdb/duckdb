@@ -13,13 +13,14 @@ using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
 
-duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
-                                    duckdb_appender *out_appender) {
-	return duckdb_appender_create_ext(connection, INVALID_CATALOG, schema, table, out_appender);
-}
+// start Anybase changes
+using duckdb::Merger;
+using duckdb::string;
+using duckdb::vector;
 
+template <class TYPE>
 duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
-                                        const char *table, duckdb_appender *out_appender) {
+                                        const char *table, const vector<string>& column_names, duckdb_appender *out_appender) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
 	if (!connection || !table || !out_appender) {
@@ -35,7 +36,11 @@ duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char
 	auto wrapper = new AppenderWrapper();
 	*out_appender = (duckdb_appender)wrapper;
 	try {
-		wrapper->appender = duckdb::make_uniq<Appender>(*conn, catalog, schema, table);
+		if (!column_names.empty()) {
+			wrapper->appender = duckdb::make_uniq<Merger>(*conn, schema, table, column_names);
+		} else {
+			wrapper->appender = duckdb::make_uniq<TYPE>(*conn, schema, table);
+		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		wrapper->error = error.RawMessage();
@@ -46,6 +51,44 @@ duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char
 	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
 }
+
+duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog, const char *schema,
+										const char *table, duckdb_appender *out_appender) {
+	return duckdb_appender_create_ext<Appender>(connection, catalog, schema, table, vector<string>(), out_appender);
+}
+
+duckdb_state duckdb_merger_create(duckdb_connection connection, const char *schema, const char *table,
+									const char *column_names, duckdb_appender *out_appender) {
+	return duckdb_merger_create(connection, INVALID_CATALOG, schema, table, column_names, out_appender);
+}
+
+duckdb_state duckdb_merger_create(duckdb_connection connection, const char *catalog, const char *schema, const char *table,
+									const char *column_names, duckdb_appender *out_appender) {
+
+	if (column_names == nullptr) {
+		return duckdb_appender_create_ext<Merger>(connection, catalog, schema, table, vector<string>(), out_appender);
+	}
+
+	auto split_strings = duckdb::StringUtil::Split(string(column_names), ',');
+
+	for (idx_t i = 0; i < split_strings.size(); i++) {
+		duckdb::StringUtil::Trim(split_strings[i]);
+	}
+
+	return duckdb_appender_create_ext<Merger>(connection, catalog, schema, table, split_strings, out_appender);
+}
+
+duckdb_state duckdb_appender_create(duckdb_connection connection, const char *catalog, const char *schema,
+									const char *table, duckdb_appender *out_appender) {
+	return duckdb_appender_create_ext<Appender>(connection, catalog, schema, table, vector<string>(), out_appender);
+}
+
+duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
+									duckdb_appender *out_appender) {
+	return duckdb_appender_create_ext<Appender>(connection, INVALID_CATALOG, schema, table, vector<string>(), out_appender);
+}
+
+// end Anybase changes
 
 duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	if (!appender || !*appender) {

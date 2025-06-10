@@ -8,6 +8,9 @@
 
 #pragma once
 
+// start Anybase changes
+#include "duckdb/storage/table/commit_version_manager.hpp"
+// end Anybase changes
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
@@ -69,6 +72,11 @@ private:
 	vector<IndexStorageInfo> index_storage_infos;
 	//! Lock held while checkpointing
 	StorageLock checkpoint_lock;
+
+// start Anybase changes
+public:
+	CommitVersionManager commit_version_manager;
+// end Anybase changes
 };
 
 } // namespace duckdb

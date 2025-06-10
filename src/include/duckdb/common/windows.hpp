@@ -14,6 +14,9 @@
 
 #undef CreateDirectory
 #undef MoveFile
+// start Anybase changes
+#undef CopyFile
+// end Anybase changes
 #undef RemoveDirectory
 
 #endif

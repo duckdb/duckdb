@@ -46,6 +46,12 @@ private:
 	idx_t row_count = 0;
 
 	ClientProperties options;
+
+// start Anybase changes
+public:
+	//! Append a single column
+	DUCKDB_API void Append(DataChunk &input, idx_t arrayIndex, idx_t column_index, idx_t from, idx_t to, idx_t input_size);
+// end Anybase changes
 };
 
 } // namespace duckdb

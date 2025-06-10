@@ -35,6 +35,12 @@
 #undef MoveFile
 #endif
 
+// start Anybase changes
+#ifdef CopyFile
+#undef CopyFile
+#endif
+// end Anybase changes
+
 #ifdef RemoveDirectory
 #undef RemoveDirectory
 #endif

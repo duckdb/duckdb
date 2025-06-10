@@ -125,10 +125,6 @@ protected:
 };
 
 class Appender : public BaseAppender {
-	//! A shared pointer to the context of this appender.
-	shared_ptr<ClientContext> context;
-	//! The table description including the column names.
-	unique_ptr<TableDescription> description;
 	//! All table default values.
 	unordered_map<column_t, Value> default_values;
 
@@ -152,7 +148,33 @@ public:
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
 	Value GetDefaultValue(idx_t column);
+
+// start Anybase changes
+protected:
+	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> &column_names);
+	//! A reference to a database connection that created this appender
+	shared_ptr<ClientContext> context;
+	//! The table description (including column names)
+	unique_ptr<TableDescription> description;
+// end Anybase changes
 };
+
+// start Anybase changes
+//! Used to merge and insert content into a table.  This object mirrors the way upsert works for the query engine.
+//! Primary key is assumed to be the conflict target
+class Merger : public Appender {
+public:
+	// Mergers and inserts columns for the given column names.
+	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name, const vector<string> &column_names);
+	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Merger(Connection &con, const string &table_name, const vector<string> &column_names);
+	DUCKDB_API Merger(Connection &con, const string &table_name);
+	DUCKDB_API ~Merger() override;
+
+protected:
+	void FlushInternal(ColumnDataCollection &collection) override;
+};
+// end Anybase changes
 
 class InternalAppender : public BaseAppender {
 	//! The client context

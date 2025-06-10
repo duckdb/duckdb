@@ -84,8 +84,10 @@ public:
 	//! Insert a chunk and verifies constraint violations.
 	ErrorData Insert(IndexLock &l, DataChunk &data, Vector &row_ids, IndexAppendInfo &info) override;
 
+	// start Anybase changes
 	//! Verify that data can be appended to the index without a constraint violation.
-	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) override;
+	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager, bool allow_non_standard_vector_size = false) override;
+	// end Anybase changes
 
 	//! Delete a chunk from the ART.
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
@@ -131,7 +133,9 @@ private:
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
 	void VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
 	                optional_idx &conflict_idx, idx_t i);
-	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
+// start Anybase changes
+	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager, bool allow_non_standard_vector_size = false) override;
+// end Anybase changes
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 

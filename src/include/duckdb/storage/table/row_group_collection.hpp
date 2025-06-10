@@ -73,8 +73,10 @@ public:
 	          const std::function<bool(DataChunk &chunk)> &fun);
 	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
 
+// start Anybase changes
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
-	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
+	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state, bool fetch_current_update = true);
+// end Anybase changes
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
 	void InitializeAppend(TableAppendState &state);
@@ -96,9 +98,11 @@ public:
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
+// start Anybase changes
+	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids, const vector<column_t> &column_path,
 	                  DataChunk &updates);
+// end Anybase changes
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
@@ -165,6 +169,14 @@ private:
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends
 	idx_t allocation_size;
+
+// start Anybase changes
+public:
+	idx_t GetVersion(column_t column_idx) const;
+	void UpdateColumnVersions(transaction_t commit_id) const;
+	//! Get the row-group by the row id
+	RowGroup *GetRowGroupByRowNumber(idx_t row_id);
+// end Anybase changes
 };
 
 } // namespace duckdb

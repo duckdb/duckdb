@@ -223,24 +223,24 @@ void ArrayColumnData::RevertAppend(row_t start_row) {
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	throw NotImplementedException("Array Fetch");
 }
-
-void ArrayColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+// start Anybase changes
+void ArrayColumnData::Update(TransactionData transaction, DataTable &table, idx_t column_index, Vector &update_vector, row_t *row_ids,
                              idx_t update_count) {
 	throw NotImplementedException("Array Update is not supported.");
 }
 
-void ArrayColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
+void ArrayColumnData::UpdateColumn(TransactionData transaction, DataTable &table, const vector<column_t> &column_path,
                                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	throw NotImplementedException("Array Update Column is not supported");
 }
-
+// end Anybase changes
 unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
-
+// start Anybase changes
 void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                               idx_t result_idx) {
-
+                               idx_t result_idx, bool fetch_current_update) {
+// end Anybase changes
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());

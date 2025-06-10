@@ -65,6 +65,11 @@ public:
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
 		                              EnumUtil::ToString(info_type));
 	}
+
+// start Anybase changes
+public:
+	idx_t commit_version = 0;
+// end Anybase changes
 };
 
 } // namespace duckdb

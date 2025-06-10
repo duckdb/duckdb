@@ -19,6 +19,9 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+// start Anybase changes
+#include "duckdb/main/database.hpp"
+// end Anybase changes
 
 namespace duckdb {
 
@@ -249,6 +252,11 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	UndoBuffer::IteratorState iterator_state;
 	try {
 		storage->Commit(commit_state.get());
+		// start Anybase changes
+		if (ShouldPublishCDCEvent()) {
+			PublishCdcMessages();
+		}
+		// end Anybase changes
 		undo_buffer.Commit(iterator_state, commit_id);
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
@@ -313,5 +321,25 @@ shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info)
 	active_table_lock.checkpoint_lock = checkpoint_lock;
 	return checkpoint_lock;
 }
+// start Anybase changes
+bool DuckTransaction::ShouldPublishCDCEvent() {
+	if (context.expired()) {
+		return false;
+	}
+
+	const auto contextHandle = context.lock();
+	if (!contextHandle ||
+		!contextHandle->db ||
+		!contextHandle->db->config.change_data_capture.IsEnabled()) {
+		return false;
+		}
+
+	return true;
+}
+
+void DuckTransaction::PublishCdcMessages() {
+	undo_buffer.PublishCdCEvent();
+}
+// end Anybase changes
 
 } // namespace duckdb

@@ -14,6 +14,17 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
+// start Anybase changes
+#if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
+#include <sys/attr.h>
+#include <sys/clonefile.h>
+#endif
+
+#ifdef LINUX
+#include <linux/fs.h>
+#include <sys/ioctl.h>
+#endif
+// end Anybase changes
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -48,6 +59,9 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #endif
 #include <fcntl.h>
 #include <libgen.h>
+// start Anybase changes
+#include <sys/sendfile.h>
+// end Anybase changes
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
@@ -1555,5 +1569,59 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 unique_ptr<FileSystem> FileSystem::CreateLocal() {
 	return make_uniq<LocalFileSystem>();
 }
+
+// start Anybase changes
+#if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
+void LocalFileSystem::CopyFile(const string &source, const string &target) {
+	int src_fd = open(source.c_str(), O_RDONLY);
+	fclonefileat(src_fd, AT_FDCWD, target.c_str(), 0);
+}
+#elif __linux__
+void LocalFileSystem::CopyFile(const string &source, const string &target) {
+	int dst_fd = open(target.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+	int src_fd = open(source.c_str(), O_RDONLY);
+	off_t len, ret;
+	struct stat stat;
+
+	if (fstat(src_fd, &stat) == -1)
+	{
+		perror("fstat");
+	}
+	len = stat.st_size;
+
+	do
+	{
+		ret = sendfile(dst_fd, src_fd, NULL, len);
+
+		if (ret == -1)
+		{
+			perror("copy_file_range");
+		}
+		len -= ret;
+	}
+	while (len > 0 && ret > 0);
+
+	if (close(src_fd) == -1)
+	{
+		perror("close");
+	}
+
+	if (close(dst_fd) == -1)
+	{
+		perror("close");
+	}
+}
+#else
+#ifndef _WIN32
+void LocalFileSystem::CopyFile(const string &source, const string &target) {
+	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
+	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
+		throw IOException("Could not copy file: %s", GetLastErrorAsString());
+	}
+}
+#endif
+#endif
+// end Anybase changes
 
 } // namespace duckdb
