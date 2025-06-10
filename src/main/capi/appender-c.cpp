@@ -59,10 +59,10 @@ duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char
 
 duckdb_state duckdb_merger_create(duckdb_connection connection, const char *schema, const char *table,
 									const char *column_names, duckdb_appender *out_appender) {
-	return duckdb_merger_create(connection, INVALID_CATALOG, schema, table, column_names, out_appender);
+	return duckdb_merger_create_ext(connection, INVALID_CATALOG, schema, table, column_names, out_appender);
 }
 
-duckdb_state duckdb_merger_create(duckdb_connection connection, const char *catalog, const char *schema, const char *table,
+duckdb_state duckdb_merger_create_ext(duckdb_connection connection, const char *catalog, const char *schema, const char *table,
 									const char *column_names, duckdb_appender *out_appender) {
 
 	if (column_names == nullptr) {
