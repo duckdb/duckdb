@@ -183,7 +183,7 @@ void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-TableBindingReplacer::TableBindingReplacer(std::map<idx_t, idx_t> &table_idx_replacements,
+TableBindingReplacer::TableBindingReplacer(std::unordered_map<idx_t, idx_t> &table_idx_replacements,
                                            optional_ptr<bound_parameter_map_t> parameter_data)
     : table_idx_replacements(table_idx_replacements), parameter_data(parameter_data) {
 }

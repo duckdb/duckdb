@@ -43,14 +43,14 @@ private:
 
 private:
 	Binder &binder;
-	std::map<idx_t, idx_t> table_idx_replacements;
+	std::unordered_map<idx_t, idx_t> table_idx_replacements;
 	optional_ptr<bound_parameter_map_t> parameter_data;
 };
 
 //! The TableBindingReplacer updates table bindings, utility for optimizers
 class TableBindingReplacer : LogicalOperatorVisitor {
 public:
-	TableBindingReplacer(std::map<idx_t, idx_t> &table_idx_replacements,
+	TableBindingReplacer(std::unordered_map<idx_t, idx_t> &table_idx_replacements,
 	                     optional_ptr<bound_parameter_map_t> parameter_data);
 
 public:
@@ -61,7 +61,7 @@ public:
 
 public:
 	//! Contains all bindings that need to be updated
-	const std::map<idx_t, idx_t> &table_idx_replacements;
+	const std::unordered_map<idx_t, idx_t> &table_idx_replacements;
 	optional_ptr<bound_parameter_map_t> parameter_data;
 };
 } // namespace duckdb
