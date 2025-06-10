@@ -20,7 +20,8 @@ enum class TokenizeState {
 	STRING_LITERAL,
 	KEYWORD,
 	NUMERIC,
-	OPERATOR
+	OPERATOR,
+	DOLLAR_QUOTED_STRING
 };
 
 class BaseTokenizer {

@@ -1,0 +1,17 @@
+# name: test/sql/peg_parser/struct_identifier.test
+# description: Test lambda syntax in peg parser
+# group: [peg_parser]
+
+require autocomplete
+
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELEC "[hello, world]"::VARCHAR[];$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT $marker$[hello, world]$marker$::VARCHAR[];$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT $$[hello, world]$$::VARCHAR[];$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);
