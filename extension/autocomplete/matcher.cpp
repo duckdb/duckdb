@@ -306,6 +306,8 @@ public:
 		auto category = KeywordHelper::KeywordCategoryType(token_text);
 		if (category == KeywordCategory::KEYWORD_RESERVED ||
 			category == KeywordCategory::KEYWORD_UNRESERVED ||
+			category == KeywordCategory::KEYWORD_COL_NAME ||
+			category == KeywordCategory::KEYWORD_TYPE_FUNC ||
 			category == GetBannedCategory()) {
 			return MatchResultType::FAIL;
 		}

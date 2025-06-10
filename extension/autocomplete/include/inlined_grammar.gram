@@ -1154,7 +1154,13 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- (TimeType / RowType / MapType / UnionType / DoubleType / SimpleType) ArrayBounds*
-SimpleType <- QualifiedTypeName TypeModifiers?
+SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+CharacterType <- ('CHARACTER'i 'VARYING'i?) /
+                 ('CHAR'i 'VARYING'i?) /
+                 ('NATIONAL'i 'CHARACTER'i 'VARYING'i?) /
+                 ('NATIONAL'i 'CHAR'i 'VARYING'i?) /
+                 ('NCHAR'i 'VARYING'i?) /
+                 'VARCHAR'i
 DoubleType <- 'DOUBLE'i 'PRECISION'
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression))
