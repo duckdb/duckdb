@@ -229,10 +229,10 @@ public:
 
 	virtual string GetName() const;
 
-	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &path);
-	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &path);
+	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &path = "");
+	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &path = "");
 	virtual unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
-	                                                    optional_ptr<FileOpenerInfo> info);
+	                                                    optional_ptr<FileOpenerInfo> info = nullptr);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
 
