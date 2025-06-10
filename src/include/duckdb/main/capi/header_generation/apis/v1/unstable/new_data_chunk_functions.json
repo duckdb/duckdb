@@ -1,0 +1,10 @@
+{
+  "version": "unstable_new_data_chunk_functions",
+  "description": "data_chunk functions to copy, copy with selection, copy with selection and projection and project",
+  "entries": [
+      "duckdb_data_chunk_copy",
+      "duckdb_data_chunk_copy_sel",
+      "duckdb_data_chunk_copy_sel_project",
+      "duckdb_data_chunk_reference_columns"
+  ]
+}

@@ -472,6 +472,16 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	// data_chunk functions to copy, copy with selection, copy with selection and projection and project
+
+	void (*duckdb_data_chunk_copy)(duckdb_data_chunk src, duckdb_data_chunk dst);
+	void (*duckdb_data_chunk_copy_sel)(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+	                                   idx_t source_count, idx_t offset);
+	void (*duckdb_data_chunk_copy_sel_project)(duckdb_data_chunk src, duckdb_data_chunk dst,
+	                                           duckdb_selection_vector sel, idx_t source_count, idx_t offset,
+	                                           const idx_t *col_idx, idx_t column_count);
+	void (*duckdb_data_chunk_reference_columns)(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
+	                                            idx_t column_count);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -928,6 +938,10 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
+	result.duckdb_data_chunk_copy = duckdb_data_chunk_copy;
+	result.duckdb_data_chunk_copy_sel = duckdb_data_chunk_copy_sel;
+	result.duckdb_data_chunk_copy_sel_project = duckdb_data_chunk_copy_sel_project;
+	result.duckdb_data_chunk_reference_columns = duckdb_data_chunk_reference_columns;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;

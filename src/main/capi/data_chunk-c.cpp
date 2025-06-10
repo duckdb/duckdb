@@ -46,6 +46,45 @@ void duckdb_data_chunk_reset(duckdb_data_chunk chunk) {
 	dchunk->Reset();
 }
 
+void duckdb_data_chunk_copy(duckdb_data_chunk src, duckdb_data_chunk dst) {
+	auto dsrc = reinterpret_cast<duckdb::DataChunk *>(src);
+	auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst);
+	dsrc->Copy(*ddst);
+}
+
+void duckdb_data_chunk_copy_sel(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+                                idx_t source_count, idx_t offset) {
+	auto dsrc = reinterpret_cast<duckdb::DataChunk *>(src);
+	auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst);
+	auto dsel = reinterpret_cast<duckdb::SelectionVector *>(sel);
+	dsrc->Copy(*ddst, *dsel, source_count, offset);
+}
+
+void duckdb_data_chunk_copy_sel_project(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+                                        idx_t source_count, idx_t offset, const idx_t *col_idx, idx_t column_count) {
+	auto dsrc = reinterpret_cast<duckdb::DataChunk *>(src);
+	auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst);
+	auto dsel = reinterpret_cast<duckdb::SelectionVector *>(sel);
+
+	duckdb::vector<duckdb::column_t> column_ids;
+	for (idx_t i = 0; i < column_count; i++) {
+		column_ids.push_back(col_idx[i]);
+	}
+	dsrc->Copy(*ddst, *dsel, source_count, offset, column_ids);
+}
+
+void duckdb_data_chunk_reference_columns(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
+                                         idx_t column_count) {
+	auto dsrc = reinterpret_cast<duckdb::DataChunk *>(src);
+	auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst);
+
+	duckdb::vector<duckdb::column_t> column_ids;
+	for (idx_t i = 0; i < column_count; i++) {
+		column_ids.push_back(col_idx[i]);
+	}
+	ddst->ReferenceColumns(*dsrc, column_ids);
+}
+
 duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity) {
 	auto dtype = reinterpret_cast<duckdb::LogicalType *>(type);
 	auto vector = new duckdb::Vector(*dtype, capacity);

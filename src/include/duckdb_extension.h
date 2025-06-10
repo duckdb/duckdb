@@ -543,6 +543,18 @@ typedef struct {
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
 #endif
 
+// data_chunk functions to copy, copy with selection, copy with selection and projection and project
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_data_chunk_copy)(duckdb_data_chunk src, duckdb_data_chunk dst);
+	void (*duckdb_data_chunk_copy_sel)(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+	                                   idx_t source_count, idx_t offset);
+	void (*duckdb_data_chunk_copy_sel_project)(duckdb_data_chunk src, duckdb_data_chunk dst,
+	                                           duckdb_selection_vector sel, idx_t source_count, idx_t offset,
+	                                           const idx_t *col_idx, idx_t column_count);
+	void (*duckdb_data_chunk_reference_columns)(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
+	                                            idx_t column_count);
+#endif
+
 // New functions for duckdb error data
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -1017,6 +1029,12 @@ typedef struct {
 // Version unstable_new_append_functions
 #define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_data_chunk_functions
+#define duckdb_data_chunk_copy              duckdb_ext_api.duckdb_data_chunk_copy
+#define duckdb_data_chunk_copy_sel          duckdb_ext_api.duckdb_data_chunk_copy_sel
+#define duckdb_data_chunk_copy_sel_project  duckdb_ext_api.duckdb_data_chunk_copy_sel_project
+#define duckdb_data_chunk_reference_columns duckdb_ext_api.duckdb_data_chunk_reference_columns
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data

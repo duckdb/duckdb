@@ -3039,6 +3039,54 @@ data and validity pointers
 DUCKDB_C_API void duckdb_data_chunk_reset(duckdb_data_chunk chunk);
 
 /*!
+Makes a copy of the data chunk represented by src to dst
+
+* @param src The data chunk to copy from
+* @param dst The data chunk to copy to
+*/
+DUCKDB_C_API void duckdb_data_chunk_copy(duckdb_data_chunk src, duckdb_data_chunk dst);
+
+/*!
+Copies upto 'count' data in the indices represented in the selection vector starting at 'offset' from the source data
+chunk into the destination
+
+* @param src The data chunk to copy from
+* @param dst The data chunk to copy to
+* @param sel A vector containing the indices from source to copy
+* @param source_count The number of indices from the vector to copy
+* @param offset The offset within the selection vector to start at
+*/
+DUCKDB_C_API void duckdb_data_chunk_copy_sel(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+                                             idx_t source_count, idx_t offset);
+
+/*!
+Copies upto 'count' data in the indices represented in the selection vector starting at 'offset' from the source data
+chunk into the destination. However, it also only copies these for the columns in the col_idx array
+
+* @param src The data chunk to copy from
+* @param dst The data chunk to copy to
+* @param sel A vector containing the indices from source to copy
+* @param source_count The number of indices from the vector to copy
+* @param offset The offset within the selection vector to start at
+* @param col_idx The project indices into the source column set
+* @param column_count The number of columns in the col_idx array
+*/
+DUCKDB_C_API void duckdb_data_chunk_copy_sel_project(duckdb_data_chunk src, duckdb_data_chunk dst,
+                                                     duckdb_selection_vector sel, idx_t source_count, idx_t offset,
+                                                     const idx_t *col_idx, idx_t column_count);
+
+/*!
+Makes the src data chunk reference the specified columns in the dst data chunk
+
+* @param src The data chunk to copy from
+* @param dst The data chunk to copy to
+* @param col_idx The project indices into the source column set
+* @param column_count The number of columns in the col_idx array
+*/
+DUCKDB_C_API void duckdb_data_chunk_reference_columns(duckdb_data_chunk src, duckdb_data_chunk dst,
+                                                      const idx_t *col_idx, idx_t column_count);
+
+/*!
 Retrieves the number of columns in a data chunk.
 
 * @param chunk The data chunk to get the data from

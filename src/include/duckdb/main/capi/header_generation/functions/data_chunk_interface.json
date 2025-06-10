@@ -57,6 +57,140 @@
             }
         },
         {
+            "name": "duckdb_data_chunk_copy",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "dst"
+                }
+            ],
+            "comment": {
+                "description": "Makes a copy of the data chunk represented by src to dst\n\n",
+                "param_comments": {
+                    "src": "The data chunk to copy from",
+                    "dst": "The data chunk to copy to"
+                }
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_copy_sel",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "dst"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "sel"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "source_count"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "offset"
+                }
+            ],
+            "comment": {
+                "description": "Copies upto 'count' data in the indices represented in the selection vector starting at 'offset' from the source data chunk into the destination\n\n",
+                "param_comments": {
+                    "src": "The data chunk to copy from",
+                    "dst": "The data chunk to copy to",
+                    "sel": "A vector containing the indices from source to copy",
+                    "source_count": "The number of indices from the vector to copy",
+                    "offset": "The offset within the selection vector to start at"
+                }
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_copy_sel_project",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "dst"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "sel"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "source_count"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "offset"
+                },
+                {
+                    "type": "const idx_t *",
+                    "name": "col_idx"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                }
+            ],
+            "comment": {
+                "description": "Copies upto 'count' data in the indices represented in the selection vector starting at 'offset' from the source data chunk into the destination. However, it also only copies these for the columns in the col_idx array\n\n",
+                "param_comments": {
+                    "src": "The data chunk to copy from",
+                    "dst": "The data chunk to copy to",
+                    "sel": "A vector containing the indices from source to copy",
+                    "source_count": "The number of indices from the vector to copy",
+                    "offset": "The offset within the selection vector to start at",
+                    "col_idx": "The project indices into the source column set",
+                    "column_count": "The number of columns in the col_idx array"
+                }
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_reference_columns",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "dst"
+                },
+                {
+                    "type": "const idx_t *",
+                    "name": "col_idx"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                }
+            ],
+            "comment": {
+                "description": "Makes the src data chunk reference the specified columns in the dst data chunk\n\n",
+                "param_comments": {
+                    "src": "The data chunk to copy from",
+                    "dst": "The data chunk to copy to",
+                    "col_idx": "The project indices into the source column set",
+                    "column_count": "The number of columns in the col_idx array"
+                }
+            }
+        },
+        {
             "name": "duckdb_data_chunk_get_column_count",
             "return_type": "idx_t",
             "params": [
