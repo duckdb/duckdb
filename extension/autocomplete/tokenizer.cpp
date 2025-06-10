@@ -186,6 +186,7 @@ bool BaseTokenizer::TokenizeInput() {
 					// Found a complete marker, store it.
 					idx_t marker_start = quote_pos + 1;
 					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
+					Printer::PrintF("Found the following marker: %s", dollar_quote_marker.c_str());
 					break;
 				}
 			}
@@ -317,9 +318,11 @@ bool BaseTokenizer::TokenizeInput() {
 			// Skip to the next dollar symbol
 			idx_t start = i + 1;
 			idx_t end = start;
+			Printer::PrintF("Initial %d %d", start, end);
 			while (end < sql.size() && sql[end] != '$') {
 				end++;
 			}
+			Printer::PrintF("Found $ at %d", end);
 			if (end >= sql.size()) {
 				// No final dollar, continue as normal
 				break;
@@ -334,11 +337,14 @@ bool BaseTokenizer::TokenizeInput() {
 			}
 			// Marker found! Revert to standard state
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
-			string quoted = sql.substr(quote_pos, start);
+			Printer::PrintF(
+			"%d %d", start, end);
+			// TODO Clean up this mess
+			string quoted = string(sql.begin() + quote_pos, sql.begin() + start + dollar_quote_marker.size() + 1);
 			Printer::PrintF("Found %s", quoted.c_str());
-			quoted.erase(0, full_marker_len); // remove leading marker
 			quoted.erase(quoted.size() - full_marker_len, full_marker_len); // remove trailing marker
-			quoted = "\"" + quoted + "\"";
+			quoted.erase(0, full_marker_len); // remove leading marker
+			quoted = "\'" + quoted + "\'";
 			Printer::PrintF("Pushed %s as a token", quoted.c_str());
 			tokens.emplace_back(quoted);
 			dollar_quote_marker = string();
