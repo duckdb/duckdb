@@ -182,7 +182,7 @@ LIMIT 5;
 NULL
 
 statement ok
-pragma debug_verify_vector='none' # revert
+pragma debug_verify_vector='none'
 
 # Single field struct
 query I
