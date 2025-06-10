@@ -25,8 +25,7 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 				throw BinderException("Not a valid key. A key cannot be empty");
 			}
 
-			storage_options.encryption_key = entry.second.GetValue<string>();
-
+			storage_options.encryption_key = StringValue::Get(entry.second.DefaultCastAs(LogicalType::BLOB));
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
 		} else if (entry.first == "encryption_cipher") {

@@ -9,6 +9,14 @@ require no_alternative_verify
 statement ok
 PRAGMA enable_verification
 
+# a base64 key as input
+statement ok
+ATTACH '__TEST_DIR__/base64_encrypted.duckdb' AS base64 (ENCRYPTION_KEY 'sYfVG1ZZN1mdtMP7Hd+2KLoU1iqglOMQQmhMm7ZnB8o=');
+
+# a not base64 encoded key
+statement ok
+ATTACH '__TEST_DIR__/nobase64_encrypted.duckdb' AS nobase64 (ENCRYPTION_KEY 'gH8@#v$k1!!9=+=rYZ^32x==0plm*');
+
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
 ----

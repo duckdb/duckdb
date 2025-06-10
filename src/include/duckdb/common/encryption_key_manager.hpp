@@ -62,7 +62,8 @@ public:
 	string GetObjectType() override;
 
 public:
-	static void DeriveKey(const string &user_key, data_ptr_t salt, data_ptr_t derived_key);
+	static string Base64Decode(const string &key);
+	static void DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key);
 	static void KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt, data_ptr_t derived_key);
 	static string GenerateRandomKeyID();
 

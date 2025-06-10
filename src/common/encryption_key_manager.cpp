@@ -1,5 +1,6 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
@@ -94,8 +95,32 @@ void EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key, d
 	state.FinalizeDerivedKey(derived_key);
 }
 
-void EncryptionKeyManager::DeriveKey(const string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
-	KeyDerivationFunctionSHA256(user_key, salt, derived_key);
+string EncryptionKeyManager::Base64Decode(const string &key) {
+	auto result_size = Blob::FromBase64Size(key);
+	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
+	Blob::FromBase64(key, output.get(), result_size);
+	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
+	memset(output.get(), 0, result_size);
+	return decoded_key;
+}
+
+void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
+	string decoded_key;
+	try {
+		//! Key is base64 encoded
+		decoded_key = Base64Decode(user_key);
+	} catch (const ConversionException &e) {
+		//! Todo; check if valid utf-8
+		decoded_key = user_key;
+	}
+
+	KeyDerivationFunctionSHA256(decoded_key, salt, derived_key);
+
+	// wipe the original and decoded key
+	std::fill(user_key.begin(), user_key.end(), 0);
+	std::fill(decoded_key.begin(), decoded_key.end(), 0);
+	user_key.clear();
+	decoded_key.clear();
 }
 
 string EncryptionKeyManager::ObjectType() {
