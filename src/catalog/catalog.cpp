@@ -649,13 +649,27 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
+	set<string> suggestions;
+
+	auto &config = DBConfig::GetConfig(context);
+	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
+
+	// Early-out, if we do not scan any other schemas.
+	if (max_schema_count == 0) {
+		string did_you_mean;
+		for (idx_t i = 0; i < entries.size(); i++) {
+			if (i == 0) {
+				did_you_mean += entries[i].name;
+				continue;
+			}
+			did_you_mean += ", " + entries[i].name;
+		}
+		return CatalogException::MissingEntry(lookup_info, did_you_mean);
+	}
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
-	auto &config = DBConfig::GetConfig(context);
-
-	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
 	for (auto database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
@@ -731,7 +745,6 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entries = SimilarEntriesInSchemas(context, lookup_info, unseen_schemas);
-	set<string> suggestions;
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
