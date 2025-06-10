@@ -311,7 +311,8 @@ if __name__ == "__main__":
     'test/sql/peg_parser/support_optional_not_null_constraint.test',
     'test/sql/peg_parser/support_try.test',
     'test/sql/peg_parser/window_function.test',
-    'test/sql/peg_parser/recursive.test'
+    'test/sql/peg_parser/recursive.test',
+    'test/sql/peg_parser/dollar_quoted.test'
 }
     if args.all_tests:
         # run all tests
