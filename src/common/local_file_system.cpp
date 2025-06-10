@@ -19,11 +19,6 @@
 #include <sys/attr.h>
 #include <sys/clonefile.h>
 #endif
-
-#ifdef LINUX
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#endif
 // end Anybase changes
 
 #ifndef _WIN32
@@ -1260,7 +1255,15 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
-
+// start Anybase changes
+void LocalFileSystem::CopyFile(const string &source, const string &target) {
+	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
+	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
+		throw IOException("Could not copy file: %s", GetLastErrorAsString());
+	}
+}
+// end Anybase changes
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	auto path = handle.Cast<WindowsFileHandle>().path;
 	// pipes in windows are just files in '\\.\pipe\' folder
@@ -1614,11 +1617,7 @@ void LocalFileSystem::CopyFile(const string &source, const string &target) {
 #else
 #ifndef _WIN32
 void LocalFileSystem::CopyFile(const string &source, const string &target) {
-	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
-	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
-	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
-		throw IOException("Could not copy file: %s", GetLastErrorAsString());
-	}
+	throw NotImplementedException("CopyFile Unsupported");
 }
 #endif
 #endif
