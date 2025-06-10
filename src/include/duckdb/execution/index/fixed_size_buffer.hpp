@@ -135,9 +135,9 @@ public:
 		if (!buffer_ptr) {
 			return;
 		}
-
-		lock_guard<mutex> l(buffer_ptr->lock);
 		buffer_ptr->readers--;
+		buffer_ptr = nullptr;
+		ptr = nullptr;
 
 		// FIXME: Enable unpinning buffers with zero readers while preventing oscillation.
 		// FIXME: loaded must be set to true.
