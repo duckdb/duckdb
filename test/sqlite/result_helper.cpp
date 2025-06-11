@@ -258,8 +258,6 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
                                             duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
-	// auto &oss = GetSummary();
-
 	SQLLogicTestLogger logger(context, statement);
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
@@ -530,8 +528,6 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
-	// auto &oss = GetSummary();
-
 	RE2::Options options;
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
