@@ -5,6 +5,12 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT cast(1 as INT)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1::SMALLINT$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)$TEST_PEG_PARSER$);
 
 statement ok

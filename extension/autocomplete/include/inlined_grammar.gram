@@ -1161,17 +1161,19 @@ CharacterType <- ('CHARACTER'i 'VARYING'i?) /
                  ('NATIONAL'i 'CHAR'i 'VARYING'i?) /
                  ('NCHAR'i 'VARYING'i?) /
                  'VARCHAR'i
+
 NumericType <- 'INT'i /
                'INTEGER'i /
                'SMALLINT'i /
                'BIGINT'i /
                'REAL'i /
-               'FLOAT'i Parens(NumberLiteral)? /
-               'DOUBLE'i 'PRECISION'i /
-               'DECIMAL'i TypeModifiers? /
-               'DEC'i TypeModifiers? /
-               'NUMERIC'i TypeModifiers? /
-               'BOOLEAN'i
+               'BOOLEAN'i /
+               ('FLOAT'i Parens(NumberLiteral)?) /
+               ('DOUBLE'i 'PRECISION'i) /
+               ('DECIMAL'i TypeModifiers?) /
+               ('DEC'i TypeModifiers?) /
+               ('NUMERIC'i TypeModifiers?)
+
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression))
 RowType <- RowOrStruct Parens(List(ColIdType))

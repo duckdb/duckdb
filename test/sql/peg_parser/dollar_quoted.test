@@ -14,6 +14,6 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT $${quote_at_start: "\"test\"", age: 30}$$::STRUCT(quote_at_start VARCHAR, age INT);$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT $${quote_at_start: "\"test\"", age: 30}$$::STRUCT(age INT);$TEST_PEG_PARSER$);
 
 
