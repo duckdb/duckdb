@@ -37,11 +37,11 @@ struct PrimitiveType {
 
 	static bool ConstructType(STRUCT_STATE &state, idx_t i, PrimitiveType<INPUT_TYPE> &result) {
 		auto &vdata = state.main_data;
+		auto idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(idx)) {
 			result.is_null = true;
 			return false;
 		}
-		auto idx = vdata.sel->get_index(i);
 		auto ptr = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 		result.val = ptr[idx];
 		return true;
