@@ -45,7 +45,7 @@ SecretName <- ColId
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / IntervalType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
+Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
 SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
 CharacterType <- ('CHARACTER'i 'VARYING'i?) /
                  ('CHAR'i 'VARYING'i?) /
@@ -89,6 +89,8 @@ Interval <- YearKeyword /
     (HourKeyword 'TO'i MinuteKeyword) /
     (HourKeyword 'TO'i SecondKeyword) /
     (MinuteKeyword 'TO'i SecondKeyword)
+
+BitType <- 'BIT'i 'VARYING'i? Parens(List(Expression))?
 
 NumericType <- 'INT'i /
                'INTEGER'i /
