@@ -49,8 +49,6 @@ public:
 	PhysicalOperator(const PhysicalOperator &other) = delete;
 	PhysicalOperator &operator=(const PhysicalOperator &) = delete;
 
-	//! A reference to the physical plan of this operator.
-	PhysicalPlan &physical_plan;
 	//! The child operators.
 	ArenaLinkedList<reference<PhysicalOperator>> children;
 	//! The physical operator type.

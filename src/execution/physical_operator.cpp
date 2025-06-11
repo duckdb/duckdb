@@ -18,7 +18,7 @@ namespace duckdb {
 
 PhysicalOperator::PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
                                    idx_t estimated_cardinality)
-    : physical_plan(physical_plan), children(physical_plan.ArenaRef()), type(type), types(std::move(types)),
+    : children(physical_plan.ArenaRef()), type(type), types(std::move(types)),
       estimated_cardinality(estimated_cardinality) {
 }
 
