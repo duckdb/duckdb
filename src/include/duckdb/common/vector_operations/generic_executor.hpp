@@ -94,7 +94,7 @@ struct StructTypeUnary {
 		auto a_idx = a_data.sel->get_index(i);
 		StructTypeUnary<A_TYPE> result;
 		result.is_null = !a_data.validity.RowIsValid(a_idx);
-		if (!result.is_null) {
+		if (!result.ContainsNull()) {
 			auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
 			result.a_val = a_ptr[a_idx];
 		}
@@ -104,7 +104,7 @@ struct StructTypeUnary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		if (value.is_null) {
+		if (value.ContainsNull()) {
 			FlatVector::SetNull(*entries[0], i, true);
 		}
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
@@ -134,12 +134,10 @@ struct StructTypeBinary {
 		StructTypeBinary<A_TYPE, B_TYPE> result;
 		result.a_is_null = !a_data.validity.RowIsValid(a_idx);
 		result.b_is_null = !b_data.validity.RowIsValid(b_idx);
-		if (!result.a_is_null) {
+		if (!result.ContainsNull()) {
 			auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
-			result.a_val = a_ptr[a_idx];
-		}
-		if (!result.b_is_null) {
 			auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
+			result.a_val = a_ptr[a_idx];
 			result.b_val = b_ptr[b_idx];
 		}
 		return result;
@@ -148,10 +146,8 @@ struct StructTypeBinary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		if (value.a_is_null) {
+		if (value.ContainsNull()) {
 			FlatVector::SetNull(*entries[0], i, true);
-		}
-		if (value.b_is_null) {
 			FlatVector::SetNull(*entries[1], i, true);
 		}
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
@@ -188,16 +184,12 @@ struct StructTypeTernary {
 		result.a_is_null = !a_data.validity.RowIsValid(a_idx);
 		result.b_is_null = !b_data.validity.RowIsValid(b_idx);
 		result.c_is_null = !c_data.validity.RowIsValid(c_idx);
-		if (!result.a_is_null) {
+		if (!result.ContainsNull()) {
 			auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
-			result.a_val = a_ptr[a_idx];
-		}
-		if (!result.b_is_null) {
 			auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
-			result.b_val = b_ptr[b_idx];
-		}
-		if (!result.c_is_null) {
 			auto c_ptr = UnifiedVectorFormat::GetData<C_TYPE>(c_data);
+			result.a_val = a_ptr[a_idx];
+			result.b_val = b_ptr[b_idx];
 			result.c_val = c_ptr[c_idx];
 		}
 		return result;
@@ -206,13 +198,9 @@ struct StructTypeTernary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		if (value.a_is_null) {
+		if (value.ContainsNull()) {
 			FlatVector::SetNull(*entries[0], i, true);
-		}
-		if (value.b_is_null) {
 			FlatVector::SetNull(*entries[1], i, true);
-		}
-		if (value.c_is_null) {
 			FlatVector::SetNull(*entries[2], i, true);
 		}
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
@@ -256,20 +244,14 @@ struct StructTypeQuaternary {
 		result.b_is_null = !b_data.validity.RowIsValid(b_idx);
 		result.c_is_null = !c_data.validity.RowIsValid(c_idx);
 		result.d_is_null = !d_data.validity.RowIsValid(d_idx);
-		if (!result.a_is_null) {
+		if (!result.ContainsNull()) {
 			auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
-			result.a_val = a_ptr[a_idx];
-		}
-		if (!result.b_is_null) {
 			auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
-			result.b_val = b_ptr[b_idx];
-		}
-		if (!result.c_is_null) {
 			auto c_ptr = UnifiedVectorFormat::GetData<C_TYPE>(c_data);
-			result.c_val = c_ptr[c_idx];
-		}
-		if (!result.d_is_null) {
 			auto d_ptr = UnifiedVectorFormat::GetData<D_TYPE>(d_data);
+			result.a_val = a_ptr[a_idx];
+			result.b_val = b_ptr[b_idx];
+			result.c_val = c_ptr[c_idx];
 			result.d_val = d_ptr[d_idx];
 		}
 		return result;
@@ -278,16 +260,10 @@ struct StructTypeQuaternary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		if (value.a_is_null) {
+		if (value.ContainsNull()) {
 			FlatVector::SetNull(*entries[0], i, true);
-		}
-		if (value.b_is_null) {
 			FlatVector::SetNull(*entries[1], i, true);
-		}
-		if (value.c_is_null) {
 			FlatVector::SetNull(*entries[2], i, true);
-		}
-		if (value.d_is_null) {
 			FlatVector::SetNull(*entries[3], i, true);
 		}
 
@@ -326,7 +302,7 @@ struct GenericListType {
 		auto list_size = value.values.size();
 		ListVector::Reserve(result, current_size + list_size);
 
-		if (value.is_null) {
+		if (value.ContainsNull()) {
 			FlatVector::SetNull(result, i, true);
 		}
 		auto list_entries = FlatVector::GetData<list_entry_t>(result);
