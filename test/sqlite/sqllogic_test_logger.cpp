@@ -146,7 +146,7 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_l
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
-	return PrintErrorHeader(file_name, query_line, description);
+	PrintErrorHeader(file_name, query_line, description);
 }
 
 void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
@@ -177,13 +177,13 @@ void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const
 
 void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
 	std::ostringstream oss;
-	PrintLineSep();
-	oss << "Query unexpectedly failed (" << file_name << ":" << to_string(query_line) << ")\n";
+	PrintErrorHeader("Query unexpectedly failed (" + file_name + ":" + to_string(query_line) + ")\n");
 	LogFailure(oss.str());
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
 	PrintHeader("Actual result:");
+	PrintLineSep();
 	PrintResultString(result);
 
 }
