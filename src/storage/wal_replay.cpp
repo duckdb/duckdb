@@ -427,11 +427,10 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, IndexStorageInfo &info,
-                     const bool deserialize_only) {
+void ReplayIndexData(ClientContext &context, StorageManager &storage_manager, BinaryDeserializer &deserializer,
+                     IndexStorageInfo &info, const bool deserialize_only) {
 	D_ASSERT(info.IsValid() && !info.name.empty());
 
-	auto &storage_manager = db.GetStorageManager();
 	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
@@ -452,7 +451,8 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockId();
-				block_manager->ConvertToPersistent(block_id, std::move(block_handle), std::move(buffer_handle));
+				block_manager->ConvertToPersistent(context, block_id, std::move(block_handle),
+				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}
 		}
@@ -467,7 +467,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(db, deserializer, index_storage_info, DeserializeOnly());
+	ReplayIndexData(context, db.GetStorageManager(), deserializer, index_storage_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -684,7 +684,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 
-	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
+	ReplayIndexData(context, db.GetStorageManager(), deserializer, index_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}

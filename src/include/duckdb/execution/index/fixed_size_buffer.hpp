@@ -25,7 +25,7 @@ public:
 	~PartialBlockForIndex() override {};
 
 public:
-	void Flush(const idx_t free_space_left) override;
+	void Flush(optional_ptr<ClientContext> context, const idx_t free_space_left) override;
 	void Clear() override;
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 };
@@ -75,8 +75,8 @@ private:
 	}
 
 	//! Serializes a buffer, if dirty or not on disk.
-	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
-	               const idx_t bitmask_offset);
+	void Serialize(optional_ptr<ClientContext> context, PartialBlockManager &partial_block_manager,
+	               const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();

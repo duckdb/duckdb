@@ -61,7 +61,7 @@ public:
 	//! Add regions that need zero-initialization to avoid leaking memory
 	void AddUninitializedRegion(const idx_t start, const idx_t end);
 	//! Flush the block to disk and zero-initialize any free space and uninitialized regions
-	virtual void Flush(const idx_t free_space_left) = 0;
+	virtual void Flush(optional_ptr<ClientContext> context, const idx_t free_space_left) = 0;
 	void FlushInternal(const idx_t free_space_left);
 	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size) = 0;
 	virtual void Clear() = 0;
@@ -108,7 +108,7 @@ public:
 	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
 	//! Register a partially filled block that is filled with "segment_size" entries
-	void RegisterPartialBlock(PartialBlockAllocation allocation);
+	void RegisterPartialBlock(optional_ptr<ClientContext> context, PartialBlockAllocation allocation);
 
 	//! Clear remaining blocks without writing them to disk
 	void ClearBlocks();

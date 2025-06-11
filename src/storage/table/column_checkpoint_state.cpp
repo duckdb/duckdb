@@ -36,7 +36,7 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 	return segments.empty();
 }
 
-void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
+void PartialBlockForCheckpoint::Flush(optional_ptr<ClientContext> context, const idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
@@ -58,7 +58,7 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 		if (i == 0) {
 			// the first segment is converted to persistent - this writes the data for ALL segments to disk
 			D_ASSERT(segment.offset_in_block == 0);
-			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
+			segment.segment.ConvertToPersistent(context, &block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
 			block_handle = segment.segment.block;
 		} else {
@@ -167,9 +167,9 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			                                                                *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
-		partial_block_manager.RegisterPartialBlock(std::move(allocation));
+		partial_block_manager.RegisterPartialBlock(nullptr, std::move(allocation));
 	} else {
-		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
+		segment->ConvertToPersistent(nullptr, nullptr, INVALID_BLOCK);
 	}
 
 	// construct the data pointer

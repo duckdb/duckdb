@@ -298,9 +298,11 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 	return info;
 }
 
-void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_manager) {
+void FixedSizeAllocator::SerializeBuffers(optional_ptr<ClientContext> context,
+                                          PartialBlockManager &partial_block_manager) {
 	for (auto &buffer : buffers) {
-		buffer.second->Serialize(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+		buffer.second->Serialize(context, partial_block_manager, available_segments_per_buffer, segment_size,
+		                         bitmask_offset);
 	}
 }
 

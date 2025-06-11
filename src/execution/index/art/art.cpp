@@ -1063,7 +1063,13 @@ void ART::TransformToDeprecated() {
 	}
 }
 
-IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
+IndexStorageInfo ART::GetStorageInfo(optional_ptr<ClientContext> context,
+                                     const case_insensitive_map_t<Value> &options) {
+	// Retrieve if we are serializing to the WAL, or to persistent storage.
+	auto to_wal_option = options.find("to_wal");
+	D_ASSERT(to_wal_option != options.end());
+	auto to_wal = to_wal_option->second.GetValue<bool>();
+
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");
@@ -1093,7 +1099,7 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	if (!to_wal) {
 		// Store the data on disk as partial blocks and set the block ids.
-		WritePartialBlocks(v1_0_0_storage);
+		WritePartialBlocks(context, v1_0_0_storage);
 
 	} else {
 		// Set the correct allocation sizes and get the map containing all buffers.
@@ -1108,13 +1114,13 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	return info;
 }
 
-void ART::WritePartialBlocks(const bool v1_0_0_storage) {
+void ART::WritePartialBlocks(optional_ptr<ClientContext> context, const bool v1_0_0_storage) {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 
 	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	for (idx_t i = 0; i < allocator_count; i++) {
-		(*allocators)[i]->SerializeBuffers(partial_block_manager);
+		(*allocators)[i]->SerializeBuffers(context, partial_block_manager);
 	}
 	partial_block_manager.FlushPartialBlocks();
 }

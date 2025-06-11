@@ -14,9 +14,9 @@ PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager
     : PartialBlock(state, block_manager, block_handle) {
 }
 
-void PartialBlockForIndex::Flush(const idx_t free_space_left) {
+void PartialBlockForIndex::Flush(optional_ptr<ClientContext> context, const idx_t free_space_left) {
 	FlushInternal(free_space_left);
-	block_handle = block_manager.ConvertToPersistent(state.block_id, std::move(block_handle));
+	block_handle = block_manager.ConvertToPersistent(context, state.block_id, std::move(block_handle));
 	Clear();
 }
 
@@ -73,8 +73,8 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
-                                const idx_t segment_size, const idx_t bitmask_offset) {
+void FixedSizeBuffer::Serialize(optional_ptr<ClientContext> context, PartialBlockManager &partial_block_manager,
+                                const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
 
 	// Early-out, if the block is already on disk and not in memory.
@@ -130,7 +130,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	buffer_handle.Destroy();
 
 	// Register the partial block and the block handle.
-	partial_block_manager.RegisterPartialBlock(std::move(allocation));
+	partial_block_manager.RegisterPartialBlock(context, std::move(allocation));
 
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);

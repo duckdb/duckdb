@@ -31,8 +31,8 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block,
-                                                          BufferHandle old_handle) {
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(optional_ptr<ClientContext> context, block_id_t block_id,
+                                                          shared_ptr<BlockHandle> old_block, BufferHandle old_handle) {
 	// register a block with the new block id
 	auto new_block = RegisterBlock(block_id);
 	D_ASSERT(new_block->GetState() == BlockState::BLOCK_UNLOADED);
@@ -55,7 +55,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	auto converted_buffer = ConvertBlock(block_id, *old_block->GetBuffer(lock));
 
 	// persist the new block to disk
-	Write(*converted_buffer, block_id);
+	Write(context, *converted_buffer, block_id);
 
 	// now convert the actual block
 	old_block->ConvertToPersistent(lock, *new_block, std::move(converted_buffer));
@@ -73,10 +73,11 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	return new_block;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(optional_ptr<ClientContext> context, block_id_t block_id,
+                                                          shared_ptr<BlockHandle> old_block) {
 	// pin the old block to ensure we have it loaded in memory
 	auto handle = buffer_manager.Pin(old_block);
-	return ConvertToPersistent(block_id, std::move(old_block), std::move(handle));
+	return ConvertToPersistent(context, block_id, std::move(old_block), std::move(handle));
 }
 
 void BlockManager::UnregisterBlock(block_id_t id) {

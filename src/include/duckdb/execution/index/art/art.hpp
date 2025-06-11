@@ -103,7 +103,8 @@ public:
 	void Vacuum(IndexLock &state) override;
 
 	//! Returns ART storage serialization information.
-	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) override;
+	IndexStorageInfo GetStorageInfo(optional_ptr<ClientContext> context,
+	                                const case_insensitive_map_t<Value> &options) override;
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
@@ -149,7 +150,7 @@ private:
 	void InitAllocators(const IndexStorageInfo &info);
 	void TransformToDeprecated();
 	void Deserialize(const BlockPointer &pointer);
-	void WritePartialBlocks(const bool v1_0_0_storage);
+	void WritePartialBlocks(optional_ptr<ClientContext> context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
 	string VerifyAndToStringInternal(const bool only_verify);

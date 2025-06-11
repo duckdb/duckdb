@@ -192,11 +192,14 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::GetStorageInfos(const case_insensitive_map_t<Value> &options) {
+vector<IndexStorageInfo> TableIndexList::GetStorageInfos(optional_ptr<ClientContext> context,
+                                                         case_insensitive_map_t<Value> &options) {
+	options["to_wal"] = false;
+
 	vector<IndexStorageInfo> infos;
 	for (auto &index : indexes) {
 		if (index->IsBound()) {
-			auto info = index->Cast<BoundIndex>().GetStorageInfo(options, false);
+			auto info = index->Cast<BoundIndex>().GetStorageInfo(context, options);
 			D_ASSERT(info.IsValid() && !info.name.empty());
 			infos.push_back(info);
 			continue;
