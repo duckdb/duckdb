@@ -45,7 +45,9 @@ struct PrimitiveType {
 	}
 
 	static void AssignResult(Vector &result, idx_t i, PrimitiveType<INPUT_TYPE> value) {
-		FlatVector::SetNull(result, i, value.is_null);
+		if (value.is_null) {
+			FlatVector::SetNull(result, i, true);
+		}
 		auto result_data = FlatVector::GetData<INPUT_TYPE>(result);
 		result_data[i] = value.val;
 	}
@@ -89,7 +91,9 @@ struct StructTypeUnary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		FlatVector::SetNull(*entries[0], i, value.is_null);
+		if (value.is_null) {
+			FlatVector::SetNull(*entries[0], i, true);
+		}
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		a_data[i] = value.a_val;
 	}
@@ -123,8 +127,10 @@ struct StructTypeBinary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		FlatVector::SetNull(*entries[0], i, value.is_null);
-		FlatVector::SetNull(*entries[1], i, value.is_null);
+		if (value.is_null) {
+			FlatVector::SetNull(*entries[0], i, true);
+			FlatVector::SetNull(*entries[1], i, true);
+		}
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
 		a_data[i] = value.a_val;
@@ -167,9 +173,11 @@ struct StructTypeTernary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		FlatVector::SetNull(*entries[0], i, value.is_null);
-		FlatVector::SetNull(*entries[1], i, value.is_null);
-		FlatVector::SetNull(*entries[2], i, value.is_null);
+		if (value.is_null) {
+			FlatVector::SetNull(*entries[0], i, true);
+			FlatVector::SetNull(*entries[1], i, true);
+			FlatVector::SetNull(*entries[2], i, true);
+		}
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
 		auto c_data = FlatVector::GetData<C_TYPE>(*entries[2]);
@@ -219,10 +227,12 @@ struct StructTypeQuaternary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		FlatVector::SetNull(*entries[0], i, value.is_null);
-		FlatVector::SetNull(*entries[1], i, value.is_null);
-		FlatVector::SetNull(*entries[2], i, value.is_null);
-		FlatVector::SetNull(*entries[3], i, value.is_null);
+		if (value.is_null) {
+			FlatVector::SetNull(*entries[0], i, true);
+			FlatVector::SetNull(*entries[1], i, true);
+			FlatVector::SetNull(*entries[2], i, true);
+			FlatVector::SetNull(*entries[3], i, true);
+		}
 
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
@@ -255,7 +265,9 @@ struct GenericListType {
 		auto list_size = value.values.size();
 		ListVector::Reserve(result, current_size + list_size);
 
-		FlatVector::SetNull(result, i, value.is_null);
+		if (value.is_null) {
+			FlatVector::SetNull(result, i, true);
+		}
 		auto list_entries = FlatVector::GetData<list_entry_t>(result);
 		list_entries[i].offset = current_size;
 		list_entries[i].length = list_size;
