@@ -55,7 +55,7 @@ public:
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
 
-	static void SafeAppend(const string &log_message);
+	static void AppendFailure(const string &log_message);
 	static void LogFailure(const string &log_message);
 	static string GetFailureSummary();
 

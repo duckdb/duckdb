@@ -18,14 +18,14 @@ SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &c
 SQLLogicTestLogger::~SQLLogicTestLogger() {
 }
 
-void SQLLogicTestLogger::SafeAppend(const string &log_message) {
+void SQLLogicTestLogger::AppendFailure(const string &log_message) {
 	lock_guard<mutex> lock(summary_mutex);
 	failures_summary.push_back(log_message);
 }
 
 void SQLLogicTestLogger::LogFailure(const string &log_message) {
 	std::cerr << log_message;
-	SafeAppend(log_message);
+	AppendFailure(log_message);
 }
 
 string SQLLogicTestLogger::GetFailureSummary() {
@@ -39,7 +39,7 @@ string SQLLogicTestLogger::GetFailureSummary() {
 
 void SQLLogicTestLogger::Log(const string &str) {
 	std::cerr << str;
-	SafeAppend(str);
+	AppendFailure(str);
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
