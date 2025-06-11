@@ -501,7 +501,7 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}
-	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
+	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, reader.parquet_options.can_have_nan);
 }
 
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
@@ -1052,7 +1052,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 			} else if (!is_generated_column && has_min_max &&
 			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-			            column_reader.Type().id() == LogicalTypeId::DOUBLE)) {
+			            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+			           parquet_options.can_have_nan) {
 				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 				// based on nan

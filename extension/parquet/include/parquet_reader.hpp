@@ -108,6 +108,7 @@ struct ParquetOptions {
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
+	bool can_have_nan = false; // if floats or doubles can contain NaN values
 };
 
 struct ParquetOptionsSerialization {

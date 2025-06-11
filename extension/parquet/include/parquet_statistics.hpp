@@ -27,7 +27,7 @@ class ResizeableBuffer;
 struct ParquetStatisticsUtils {
 
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
-	                                                            const vector<ColumnChunk> &columns);
+	                                                            const vector<ColumnChunk> &columns, bool can_have_nan);
 
 	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
