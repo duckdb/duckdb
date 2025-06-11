@@ -41,8 +41,7 @@
       {
         "id": 102,
         "name": "materialized",
-        "type": "CTEMaterialize",
-        "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
+        "type": "CTEMaterialize"
       },
       {
         "id": 103,

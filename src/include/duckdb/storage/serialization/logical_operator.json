@@ -352,8 +352,7 @@
       {
         "id": 204,
         "name": "materialized_cte",
-        "type": "CTEMaterialize",
-        "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
+        "type": "CTEMaterialize"
       }, {
         "id": 205,
         "name": "is_recurring",

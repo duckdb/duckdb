@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/tableref/bound_at_clause.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 namespace duckdb {
 
@@ -318,7 +319,35 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
-		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.GetQuery().Copy()));
+
+		// The view may contain CTEs, but maybe only in the cte_map, so we need create CTE nodes for them
+		auto query = view_catalog_entry.GetQuery().Copy();
+		auto &select_stmt = query->Cast<SelectStatement>();
+
+		vector<unique_ptr<CTENode>> materialized_ctes;
+		for (auto &cte : select_stmt.node->cte_map.map) {
+			auto &cte_entry = cte.second;
+			auto mat_cte = make_uniq<CTENode>();
+			mat_cte->ctename = cte.first;
+			mat_cte->query = cte_entry->query->node->Copy();
+			mat_cte->aliases = cte_entry->aliases;
+			mat_cte->materialized = cte_entry->materialized;
+			materialized_ctes.push_back(std::move(mat_cte));
+		}
+
+		auto root = std::move(select_stmt.node);
+		while (!materialized_ctes.empty()) {
+			unique_ptr<CTENode> node_result;
+			node_result = std::move(materialized_ctes.back());
+			node_result->cte_map = root->cte_map.Copy();
+			node_result->child = std::move(root);
+			root = std::move(node_result);
+			materialized_ctes.pop_back();
+		}
+		select_stmt.node = std::move(root);
+
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(query)));
+
 		subquery.alias = ref.alias;
 		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
 		// subquery aliases
