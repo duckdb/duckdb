@@ -31,18 +31,21 @@ struct PrimitiveType {
 	}
 
 	INPUT_TYPE val;
+	bool is_null;
 
 	using STRUCT_STATE = PrimitiveTypeState;
 
-	static bool ConstructType(STRUCT_STATE &state, idx_t i, PrimitiveType<INPUT_TYPE> &result) {
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, bool is_null, PrimitiveType<INPUT_TYPE> &result) {
 		auto &vdata = state.main_data;
 		auto idx = vdata.sel->get_index(i);
 		auto ptr = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 		result.val = ptr[idx];
+		result.is_null = is_null;
 		return true;
 	}
 
 	static void AssignResult(Vector &result, idx_t i, PrimitiveType<INPUT_TYPE> value) {
+		FlatVector::SetNull(result, i, value.is_null);
 		auto result_data = FlatVector::GetData<INPUT_TYPE>(result);
 		result_data[i] = value.val;
 	}
@@ -67,10 +70,11 @@ struct StructTypeState {
 template <class A_TYPE>
 struct StructTypeUnary {
 	A_TYPE a_val;
+	bool is_null;
 
 	using STRUCT_STATE = StructTypeState<1>;
 
-	static bool ConstructType(STRUCT_STATE &state, idx_t i, StructTypeUnary<A_TYPE> &result) {
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, bool is_null, StructTypeUnary<A_TYPE> &result) {
 		auto &a_data = state.child_data[0];
 		auto a_idx = a_data.sel->get_index(i);
 		if (!a_data.validity.RowIsValid(a_idx)) {
@@ -78,12 +82,14 @@ struct StructTypeUnary {
 		}
 		auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
 		result.a_val = a_ptr[a_idx];
+		result.is_null = is_null;
 		return true;
 	}
 
 	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
+		FlatVector::SetNull(*entries[0], i, value.is_null);
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		a_data[i] = value.a_val;
 	}
@@ -93,10 +99,11 @@ template <class A_TYPE, class B_TYPE>
 struct StructTypeBinary {
 	A_TYPE a_val;
 	B_TYPE b_val;
+	bool is_null;
 
 	using STRUCT_STATE = StructTypeState<2>;
 
-	static bool ConstructType(STRUCT_STATE &state, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> &result) {
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, bool is_null, StructTypeBinary<A_TYPE, B_TYPE> &result) {
 		auto &a_data = state.child_data[0];
 		auto &b_data = state.child_data[1];
 
@@ -109,12 +116,15 @@ struct StructTypeBinary {
 		auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
 		result.a_val = a_ptr[a_idx];
 		result.b_val = b_ptr[b_idx];
+		result.is_null = is_null;
 		return true;
 	}
 
 	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
+		FlatVector::SetNull(*entries[0], i, value.is_null);
+		FlatVector::SetNull(*entries[1], i, value.is_null);
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
 		a_data[i] = value.a_val;
@@ -127,10 +137,12 @@ struct StructTypeTernary {
 	A_TYPE a_val;
 	B_TYPE b_val;
 	C_TYPE c_val;
+	bool is_null;
 
 	using STRUCT_STATE = StructTypeState<3>;
 
-	static bool ConstructType(STRUCT_STATE &state, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> &result) {
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, bool is_null,
+	                          StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> &result) {
 		auto &a_data = state.child_data[0];
 		auto &b_data = state.child_data[1];
 		auto &c_data = state.child_data[2];
@@ -148,12 +160,16 @@ struct StructTypeTernary {
 		result.a_val = a_ptr[a_idx];
 		result.b_val = b_ptr[b_idx];
 		result.c_val = c_ptr[c_idx];
+		result.is_null = is_null;
 		return true;
 	}
 
 	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
+		FlatVector::SetNull(*entries[0], i, value.is_null);
+		FlatVector::SetNull(*entries[1], i, value.is_null);
+		FlatVector::SetNull(*entries[2], i, value.is_null);
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
 		auto c_data = FlatVector::GetData<C_TYPE>(*entries[2]);
@@ -169,10 +185,11 @@ struct StructTypeQuaternary {
 	B_TYPE b_val;
 	C_TYPE c_val;
 	D_TYPE d_val;
+	bool is_null;
 
 	using STRUCT_STATE = StructTypeState<4>;
 
-	static bool ConstructType(STRUCT_STATE &state, idx_t i,
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, bool is_null,
 	                          StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> &result) {
 		auto &a_data = state.child_data[0];
 		auto &b_data = state.child_data[1];
@@ -195,11 +212,17 @@ struct StructTypeQuaternary {
 		result.b_val = b_ptr[b_idx];
 		result.c_val = c_ptr[c_idx];
 		result.d_val = d_ptr[d_idx];
+		result.is_null = is_null;
 		return true;
 	}
 
 	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
+
+		FlatVector::SetNull(*entries[0], i, value.is_null);
+		FlatVector::SetNull(*entries[1], i, value.is_null);
+		FlatVector::SetNull(*entries[2], i, value.is_null);
+		FlatVector::SetNull(*entries[3], i, value.is_null);
 
 		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
 		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
@@ -216,10 +239,11 @@ struct StructTypeQuaternary {
 template <class CHILD_TYPE>
 struct GenericListType {
 	vector<CHILD_TYPE> values;
+	bool is_null;
 
 	using STRUCT_STATE = PrimitiveTypeState;
 
-	static bool ConstructType(STRUCT_STATE &state, idx_t i, GenericListType<CHILD_TYPE> &result) {
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, bool is_null, GenericListType<CHILD_TYPE> &result) {
 		throw InternalException("FIXME: implement ConstructType for lists");
 	}
 
@@ -231,6 +255,7 @@ struct GenericListType {
 		auto list_size = value.values.size();
 		ListVector::Reserve(result, current_size + list_size);
 
+		FlatVector::SetNull(result, i, value.is_null);
 		auto list_entries = FlatVector::GetData<list_entry_t>(result);
 		list_entries[i].offset = current_size;
 		list_entries[i].length = list_size;
@@ -259,7 +284,7 @@ private:
 				continue;
 			}
 			A_TYPE input;
-			if (!A_TYPE::ConstructType(state, i, input)) {
+			if (!A_TYPE::ConstructType(state, i, false, input)) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -289,7 +314,7 @@ private:
 			}
 			A_TYPE a_val;
 			B_TYPE b_val;
-			if (!A_TYPE::ConstructType(a_state, i, a_val) || !B_TYPE::ConstructType(b_state, i, b_val)) {
+			if (!A_TYPE::ConstructType(a_state, i, false, a_val) || !B_TYPE::ConstructType(b_state, i, false, b_val)) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -326,8 +351,8 @@ private:
 			A_TYPE a_val;
 			B_TYPE b_val;
 			C_TYPE c_val;
-			if (!A_TYPE::ConstructType(a_state, i, a_val) || !B_TYPE::ConstructType(b_state, i, b_val) ||
-			    !C_TYPE::ConstructType(c_state, i, c_val)) {
+			if (!A_TYPE::ConstructType(a_state, i, false, a_val) || !B_TYPE::ConstructType(b_state, i, false, b_val) ||
+			    !C_TYPE::ConstructType(c_state, i, false, c_val)) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -369,8 +394,8 @@ private:
 			B_TYPE b_val;
 			C_TYPE c_val;
 			D_TYPE d_val;
-			if (!A_TYPE::ConstructType(a_state, i, a_val) || !B_TYPE::ConstructType(b_state, i, b_val) ||
-			    !C_TYPE::ConstructType(c_state, i, c_val) || !D_TYPE::ConstructType(d_state, i, d_val)) {
+			if (!A_TYPE::ConstructType(a_state, i, false, a_val) || !B_TYPE::ConstructType(b_state, i, false, b_val) ||
+			    !C_TYPE::ConstructType(c_state, i, false, c_val) || !D_TYPE::ConstructType(d_state, i, false, d_val)) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
