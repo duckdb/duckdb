@@ -351,11 +351,6 @@ private:
 		state.PrepareVector(input, count);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
-			auto idx = state.main_data.sel->get_index(i);
-			if (!state.main_data.validity.RowIsValid(idx)) {
-				FlatVector::SetNull(result, i, true);
-				continue;
-			}
 			auto input = A_TYPE::ConstructType(state, i);
 			if (input.ContainsNull()) {
 				FlatVector::SetNull(result, i, true);
@@ -379,15 +374,9 @@ private:
 		b_state.PrepareVector(b, count);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
-			auto a_idx = a_state.main_data.sel->get_index(i);
-			auto b_idx = b_state.main_data.sel->get_index(i);
-			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx)) {
-				FlatVector::SetNull(result, i, true);
-				continue;
-			}
 			auto a_val = A_TYPE::ConstructType(a_state, i);
 			auto b_val = B_TYPE::ConstructType(b_state, i);
-			if (a_val.ContaisNull() || b_val.ContainsNull()) {
+			if (a_val.ContainsNull() || b_val.ContainsNull()) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -413,14 +402,6 @@ private:
 		c_state.PrepareVector(c, count);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
-			auto a_idx = a_state.main_data.sel->get_index(i);
-			auto b_idx = b_state.main_data.sel->get_index(i);
-			auto c_idx = c_state.main_data.sel->get_index(i);
-			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx) ||
-			    !c_state.main_data.validity.RowIsValid(c_idx)) {
-				FlatVector::SetNull(result, i, true);
-				continue;
-			}
 			auto a_val = A_TYPE::ConstructType(a_state, i);
 			auto b_val = B_TYPE::ConstructType(b_state, i);
 			auto c_val = C_TYPE::ConstructType(c_state, i);
@@ -453,15 +434,6 @@ private:
 		d_state.PrepareVector(d, count);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
-			auto a_idx = a_state.main_data.sel->get_index(i);
-			auto b_idx = b_state.main_data.sel->get_index(i);
-			auto c_idx = c_state.main_data.sel->get_index(i);
-			auto d_idx = d_state.main_data.sel->get_index(i);
-			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx) ||
-			    !c_state.main_data.validity.RowIsValid(c_idx) || !d_state.main_data.validity.RowIsValid(d_idx)) {
-				FlatVector::SetNull(result, i, true);
-				continue;
-			}
 			auto a_val = A_TYPE::ConstructType(a_state, i);
 			auto b_val = B_TYPE::ConstructType(b_state, i);
 			auto c_val = C_TYPE::ConstructType(c_state, i);
