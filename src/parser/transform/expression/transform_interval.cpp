@@ -32,7 +32,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	if (!node.typmods) {
 		auto result = make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 		SetQueryLocation(*result, node.location);
-		return result;
+		return std::move(result);
 	}
 
 	int32_t mask = NumericCast<int32_t>(
