@@ -4808,6 +4808,7 @@ DUCKDB_C_API duckdb_state duckdb_create_snapshot(duckdb_connection con, duckdb_r
 DUCKDB_C_API void duckdb_remove_snapshot(duckdb_connection con, const char *snapshot_file_name);
 DUCKDB_C_API idx_t duckdb_get_table_version(duckdb_connection connection, const char *schema, const char *table, char **error);
 DUCKDB_C_API idx_t duckdb_get_column_version(duckdb_connection connection, const char *schema, const char *table, const char *column, char **error);
+DUCKDB_C_API idx_t duckdb_estimated_row_count(duckdb_connection connection, const char *catalog, const char *schema, const char *table, char **error);
 
 /*!
 Creates a new DataChunk that copy a given DataChunk

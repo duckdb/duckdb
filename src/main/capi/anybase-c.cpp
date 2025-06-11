@@ -188,6 +188,25 @@ idx_t duckdb_get_column_version(const duckdb_connection connection, const char *
 	} // LCOV_EXCL_STOP
 }
 
+idx_t duckdb_estimated_row_count(const duckdb_connection connection, const char *catalog, const char *schema, const char *table, char **error) {
+	auto *ddbConnection = reinterpret_cast<Connection *>(connection);
+
+	try {
+		return ddbConnection->context->GetTotalRows(catalog, schema, table);
+	} catch (std::exception &ex) {
+		if (error) {
+			ErrorData parsed_error(ex);
+			*error = strdup(parsed_error.Message().c_str());
+		}
+		return 0;
+	} catch (...) { // LCOV_EXCL_START
+		if (error) {
+			*error = strdup("Unknown error");
+		}
+		return 0;
+	} // LCOV_EXCL_STOP
+}
+
 void duckdb_set_cdc_callback(duckdb_database db, duckdb_change_data_capture_callback_t function) {
 	auto wrapper = reinterpret_cast<duckdb::DatabaseWrapper *>(db);
 	auto &config = duckdb::DBConfig::GetConfig(*wrapper->database->instance);

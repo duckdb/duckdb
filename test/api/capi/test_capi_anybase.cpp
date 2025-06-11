@@ -69,6 +69,30 @@ TEST_CASE("Test Insert version isolation", "[capi]") {
 	duckdb_close(&db);
 }
 
+TEST_CASE("Get table row count", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+
+	idx_t row_count = 0;
+
+	REQUIRE(duckdb_open(nullptr, &db) != DuckDBError);
+	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+	REQUIRE(duckdb_query(con, "CREATE TABLE FOO(i INTEGER unique, v INTEGER DEFAULT 5, x INTEGER default 22);", NULL) != DuckDBError);
+	REQUIRE(duckdb_query(con, "Insert INTO FOO VALUES (1, 5, 22), (2, 5, 22);", NULL) != DuckDBError);
+
+	row_count = duckdb_estimated_row_count(con,nullptr, nullptr, "FOO", nullptr);
+	REQUIRE(row_count == 2);
+
+	REQUIRE(duckdb_query(con, "Insert INTO FOO VALUES (3, 5, 22), (4, 5, 22);", NULL) != DuckDBError);
+
+	row_count = duckdb_estimated_row_count(con,nullptr, nullptr, "FOO", nullptr);
+	REQUIRE(row_count == 4);
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}
+
 // TEST_CASE("Test Update version isolation", "[capi]") {
 //
 // 	duckdb_database db;

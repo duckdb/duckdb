@@ -1566,6 +1566,25 @@ idx_t ClientContext::GetTableVersion(const char *schema, const char *table) {
 	return version;
 }
 
+idx_t ClientContext::GetTotalRows(const char *catalog, const char *schema, const char *table) {
+	idx_t rowCount = 0;
+	RunFunctionInTransaction([&]() {
+		if (schema == nullptr) {
+			schema = INVALID_SCHEMA;
+		}
+
+		if (catalog == nullptr) {
+			catalog = INVALID_CATALOG;
+		}
+
+		auto &table_entry = Catalog::GetEntry<DuckTableEntry>(*this, catalog, schema, table);
+		const auto &dataTable = table_entry.GetStorage();
+		rowCount = dataTable.GetTotalRows();
+	});
+
+	return rowCount;
+}
+
 idx_t ClientContext::GetColumnVersion(const char *schema, const char *table, const char *column) {
 	idx_t version = 0;
 	RunFunctionInTransaction([&]() {
