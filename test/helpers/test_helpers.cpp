@@ -405,34 +405,4 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	return true;
 }
 
-// void FailureSummary::SafeAppend(const std::string &line) {
-// 	std::lock_guard<std::mutex> guard(summary_lock);
-// 	summary += line;
-// }
-
-// std::string FailureSummary::ToString() const {
-// 	std::lock_guard<std::mutex> guard(summary_lock);
-// 	return summary;
-// }
-
-// FailureSummary &GetFailureSummary() {
-// 	static FailureSummary instance;
-// 	return instance;
-// }
-
-// void FailureSummary::SafeAppend(const std::function<void(std::ostringstream &)> &callback) {
-// 	std::lock_guard<std::mutex> guard(lock);
-// 	callback(summary);
-// }
-
-// std::string FailureSummary::ToString() const {
-// 	std::lock_guard<std::mutex> guard(lock);
-// 	return summary.str();
-// }
-
-// FailureSummary &GetFailureSummary() {
-// 	static FailureSummary instance;
-// 	return instance;
-// }
-
 } // namespace duckdb

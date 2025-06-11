@@ -93,8 +93,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
 			string log_message;
-			log_message += logger.PrintErrorHeader(csv_error);
-			logger.LogBoth(log_message);
+			logger.PrintErrorHeader(csv_error);
+			
 			return false;
 		}
 	} else {
@@ -510,20 +510,18 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
-		string log_message;
 		std::ostringstream oss;
-		log_message += logger.PrintErrorHeader("Wrong result in query!");
-		log_message += logger.PrintLineSep();
-		log_message += logger.PrintSQL();
-		log_message += logger.PrintLineSep();
+		logger.PrintErrorHeader("Wrong result in query!");
+		logger.PrintLineSep();
+		logger.PrintSQL();
+		logger.PrintLineSep();
 		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		    << termcolor::reset;
 		oss << lvalue_str << " <> " << rvalue_str << std::endl;
-		log_message += oss.str();
-		log_message += logger.PrintLineSep();
-		log_message += logger.PrintResultError(result_values, values, expected_column_count, row_wise);
-		logger.LogBoth(log_message);
+		logger.LogFailure(oss.str());
+		logger.PrintLineSep();
+		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
 		return false;
 	}
 	return true;
@@ -538,15 +536,13 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
-		string log_message;
 		std::ostringstream oss;
-		log_message += logger.PrintErrorHeader("Test error!");
-		log_message += logger.PrintLineSep();
+		logger.PrintErrorHeader("Test error!");
+		logger.PrintLineSep();
 		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		    << std::endl;
-		log_message += oss.str();
-		log_message += logger.PrintLineSep();
-		logger.LogBoth(log_message);
+		logger.LogFailure(oss.str());
+		logger.PrintLineSep();
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);
