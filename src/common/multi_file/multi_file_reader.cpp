@@ -371,13 +371,23 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileOp
 	return nullptr;
 }
 
+ReaderInitializeType
+MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
+                               const vector<MultiFileColumnDefinition> &global_columns,
+                               const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
+                               MultiFileList &multi_file_list, const MultiFileReaderBindData &bind_data,
+                               const virtual_column_map_t &virtual_columns, MultiFileColumnMappingMode mapping_mode) {
+	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
+	                                    multi_file_list, virtual_columns);
+	return column_mapper.CreateMapping(mapping_mode);
+}
+
 ReaderInitializeType MultiFileReader::CreateMapping(
     ClientContext &context, MultiFileReaderData &reader_data, const vector<MultiFileColumnDefinition> &global_columns,
     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
     const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns) {
-	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
-	                                    multi_file_list, bind_data, virtual_columns);
-	return column_mapper.CreateMapping();
+	return CreateMapping(context, reader_data, global_columns, global_column_ids, filters, multi_file_list, bind_data,
+	                     virtual_columns, bind_data.mapping);
 }
 
 string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,

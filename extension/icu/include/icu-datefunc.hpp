@@ -50,7 +50,7 @@ struct ICUDateFunc {
 	//! Tries to set the time zone for the calendar and returns false if it is not valid.
 	static bool TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
 	//! Sets the time zone for the calendar. Throws if it is not valid
-	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
+	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.

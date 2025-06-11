@@ -471,7 +471,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 				rc = sqlite3_finalize(pStmt);
 				pStmt = nullptr;
 				zSql = zLeftover;
-				while (isspace(zSql[0]))
+				while (StringUtil::CharacterIsSpace(zSql[0]))
 					zSql++;
 				break;
 			} else if (rc != SQLITE_ROW) {

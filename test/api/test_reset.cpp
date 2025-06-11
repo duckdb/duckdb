@@ -119,6 +119,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"http_logging_output", {"my_cool_outputfile"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
+	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
