@@ -357,7 +357,7 @@ private:
 				continue;
 			}
 			auto input = A_TYPE::ConstructType(state, i);
-			if (input.is_null) {
+			if (input.ContainsNull()) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -387,7 +387,7 @@ private:
 			}
 			auto a_val = A_TYPE::ConstructType(a_state, i);
 			auto b_val = B_TYPE::ConstructType(b_state, i);
-			if (a_val.is_null || b_val.is_null) {
+			if (a_val.ContaisNull() || b_val.ContainsNull()) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -424,7 +424,7 @@ private:
 			auto a_val = A_TYPE::ConstructType(a_state, i);
 			auto b_val = B_TYPE::ConstructType(b_state, i);
 			auto c_val = C_TYPE::ConstructType(c_state, i);
-			if (a_val.is_null || b_val.is_null || c_val.is_null) {
+			if (a_val.ContainsNull() || b_val.ContainsNull() || c_val.ContainsNull()) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
@@ -466,7 +466,7 @@ private:
 			auto b_val = B_TYPE::ConstructType(b_state, i);
 			auto c_val = C_TYPE::ConstructType(c_state, i);
 			auto d_val = D_TYPE::ConstructType(d_state, i);
-			if (a_val.is_null || b_val.is_null || c_val.is_null || d_val.is_null) {
+			if (a_val.ContainsNull() || b_val.ContainsNull() || c_val.ContainsNull() || d_val.ContainsNull()) {
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
