@@ -4,6 +4,15 @@
 
 require autocomplete
 
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select left(b collate de, 6)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT v.trim('><')$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE bits (b bit);$TEST_PEG_PARSER$);
+
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE issue14384(i INTERVAL);$TEST_PEG_PARSER$);
 

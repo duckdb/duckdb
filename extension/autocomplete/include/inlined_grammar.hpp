@@ -536,7 +536,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"UnpivotHeader <- Identifier / Parens(List(Identifier))\n"
 	"ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName\n"
 	"FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?\n"
-	"FunctionIdentifier <- CatalogQualification? SchemaQualification? FuncName\n"
+	"FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)\n"
 	"DistinctOrAll <- 'DISTINCT'i / 'ALL'i\n"
 	"ExportClause <- 'EXPORT_STATE'i\n"
 	"WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)\n"
