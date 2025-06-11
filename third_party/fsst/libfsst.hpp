@@ -32,14 +32,6 @@
 #include <fcntl.h>
 #include <stddef.h>
 
-#ifndef DUCKDB_WRAP_STD
-namespace duckdb_wrapped {
-namespace std {
-	using ::std::unique_ptr;
-}
-}
-#endif
-
 using namespace std;
 
 #include "fsst.h" // the official FSST API -- also usable by C mortals

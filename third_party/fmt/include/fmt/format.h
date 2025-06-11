@@ -44,11 +44,9 @@
 #include <memory>
 #include <stdexcept>
 
-#ifndef DUCKDB_WRAP_STD
-namespace duckdb_wrapped {
-namespace std {
+#ifndef DUCKDB_BASE_STD
+namespace duckdb_base_std {
 	using ::std::unique_ptr;
-}
 }
 #endif
 
@@ -3060,7 +3058,7 @@ typename Context::iterator vformat_to(
 // Example:
 //   auto s = format("{}", ptr(p));
 template <typename T> inline const void* ptr(const T* p) { return p; }
-template <typename T> inline const void* ptr(const duckdb_wrapped::std::unique_ptr<T>& p) {
+template <typename T> inline const void* ptr(const duckdb_base_std::unique_ptr<T>& p) {
   return p.get();
 }
 template <typename T> inline const void* ptr(const std::shared_ptr<T>& p) {

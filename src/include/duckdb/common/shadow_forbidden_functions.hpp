@@ -1,17 +1,15 @@
 #pragma once
 
-#include "duckdb/wrapped/std/memory.hpp"
-#include "duckdb/wrapped/std/locale.hpp"
-#include "duckdb/wrapped/std/sstream.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/original/std/locale.hpp"
+#include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace std {
 template <class C>
 bool isspace(C c) {
-	static_assert(
-	    sizeof(C) == 0,
-	    "Naked issspace is discontinued, either use StringUtil::CharacterIsSpace or duckdb_wrapped::std::isspace");
+	static_assert(sizeof(C) == 0, "Use StringUtil::CharacterIsSpace instead of isspace!");
 	return false;
 }
 #ifndef DUCKDB_ENABLE_DEPRECATED_API

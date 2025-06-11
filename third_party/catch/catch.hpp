@@ -13,14 +13,12 @@
 // start catch.hpp
 
 #include <memory>
-#ifndef DUCKDB_WRAP_STD
-namespace duckdb_wrapped {
-namespace std {
+#ifndef DUCKDB_BASE_STD
+namespace duckdb_base_std {
 	using ::std::unique_ptr;
 	using ::std::shared_ptr;
 	using ::std::make_shared;
-}
-}
+} // namespace duckdb_base_std
 #endif
 // optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
 #ifdef DUCKDB_DEBUG_STACKTRACE
@@ -3038,7 +3036,7 @@ namespace Catch {
     using exceptionTranslateFunction = std::string(*)();
 
     struct IExceptionTranslator;
-    using ExceptionTranslators = std::vector<duckdb_wrapped::std::unique_ptr<IExceptionTranslator const>>;
+    using ExceptionTranslators = std::vector<duckdb_base_std::unique_ptr<IExceptionTranslator const>>;
 
     struct IExceptionTranslator {
         virtual ~IExceptionTranslator();
@@ -3885,7 +3883,7 @@ namespace Catch {
              // can be retrieved).
             virtual bool next() = 0;
         };
-        using GeneratorBasePtr = duckdb_wrapped::std::unique_ptr<GeneratorUntypedBase>;
+        using GeneratorBasePtr = duckdb_base_std::unique_ptr<GeneratorUntypedBase>;
 
     } // namespace Generators
 
@@ -3965,8 +3963,8 @@ namespace Generators {
     // !TBD move this into its own location?
     namespace pf{
         template<typename T, typename... Args>
-        duckdb_wrapped::std::unique_ptr<T> make_unique( Args&&... args ) {
-            return duckdb_wrapped::std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+        duckdb_base_std::unique_ptr<T> make_unique( Args&&... args ) {
+            return duckdb_base_std::unique_ptr<T>(new T(std::forward<Args>(args)...));
         }
     }
 
@@ -4017,9 +4015,9 @@ namespace Generators {
 
     template <typename T>
     class GeneratorWrapper final {
-        duckdb_wrapped::std::unique_ptr<IGenerator<T>> m_generator;
+        duckdb_base_std::unique_ptr<IGenerator<T>> m_generator;
     public:
-        GeneratorWrapper(duckdb_wrapped::std::unique_ptr<IGenerator<T>> generator):
+        GeneratorWrapper(duckdb_base_std::unique_ptr<IGenerator<T>> generator):
             m_generator(std::move(generator))
         {}
         T const& get() const {
@@ -4221,7 +4219,7 @@ namespace Generators {
 
     template <typename T, typename Predicate>
     GeneratorWrapper<T> filter(Predicate&& pred, GeneratorWrapper<T>&& generator) {
-        return GeneratorWrapper<T>(duckdb_wrapped::std::unique_ptr<IGenerator<T>>(pf::make_unique<FilterGenerator<T, Predicate>>(std::forward<Predicate>(pred), std::move(generator))));
+        return GeneratorWrapper<T>(duckdb_base_std::unique_ptr<IGenerator<T>>(pf::make_unique<FilterGenerator<T, Predicate>>(std::forward<Predicate>(pred), std::move(generator))));
     }
 
     template <typename T>
@@ -5414,7 +5412,7 @@ namespace Catch {
         IStream const* openStream();
         ConfigData m_data;
 
-        duckdb_wrapped::std::unique_ptr<IStream const> m_stream;
+        duckdb_base_std::unique_ptr<IStream const> m_stream;
         TestSpec m_testSpec;
         bool m_hasTestFilters = false;
     };
@@ -5738,7 +5736,7 @@ namespace Catch {
 
         virtual bool isMulti() const;
     };
-    using IStreamingReporterPtr = duckdb_wrapped::std::unique_ptr<IStreamingReporter>;
+    using IStreamingReporterPtr = duckdb_base_std::unique_ptr<IStreamingReporter>;
 
     struct IReporterFactory {
         virtual ~IReporterFactory();
@@ -5927,7 +5925,7 @@ namespace Catch {
             std::shared_ptr<SectionNode> node;
             if( m_sectionStack.empty() ) {
                 if( !m_rootSection )
-                    m_rootSection = duckdb_wrapped::std::make_shared<SectionNode>( incompleteStats );
+                    m_rootSection = duckdb_base_std::make_shared<SectionNode>( incompleteStats );
                 node = m_rootSection;
             }
             else {
@@ -5937,7 +5935,7 @@ namespace Catch {
                                     parentNode.childSections.end(),
                                     BySectionInfo( sectionInfo ) );
                 if( it == parentNode.childSections.end() ) {
-                    node = duckdb_wrapped::std::make_shared<SectionNode>( incompleteStats );
+                    node = duckdb_base_std::make_shared<SectionNode>( incompleteStats );
                     parentNode.childSections.push_back( node );
                 }
                 else
@@ -5968,7 +5966,7 @@ namespace Catch {
             m_sectionStack.pop_back();
         }
         void testCaseEnded(TestCaseStats const& testCaseStats) override {
-            auto node = duckdb_wrapped::std::make_shared<TestCaseNode>(testCaseStats);
+            auto node = duckdb_base_std::make_shared<TestCaseNode>(testCaseStats);
             assert(m_sectionStack.size() == 0);
             node->children.push_back(m_rootSection);
             m_testCases.push_back(node);
@@ -5979,12 +5977,12 @@ namespace Catch {
             m_deepestSection->stdErr = testCaseStats.stdErr;
         }
         void testGroupEnded(TestGroupStats const& testGroupStats) override {
-            auto node = duckdb_wrapped::std::make_shared<TestGroupNode>(testGroupStats);
+            auto node = duckdb_base_std::make_shared<TestGroupNode>(testGroupStats);
             node->children.swap(m_testCases);
             m_testGroups.push_back(node);
         }
         void testRunEnded(TestRunStats const& testRunStats) override {
-            auto node = duckdb_wrapped::std::make_shared<TestRunNode>(testRunStats);
+            auto node = duckdb_base_std::make_shared<TestRunNode>(testRunStats);
             node->children.swap(m_testGroups);
             m_testRuns.push_back(node);
             testRunEndedCumulative();
@@ -6100,7 +6098,7 @@ namespace Catch {
         class ReporterFactory : public IReporterFactory {
 
             IStreamingReporterPtr create( ReporterConfig const& config ) const override {
-                return duckdb_wrapped::std::unique_ptr<T>( new T( config ) );
+                return duckdb_base_std::unique_ptr<T>( new T( config ) );
             }
 
             std::string getDescription() const override {
@@ -6111,7 +6109,7 @@ namespace Catch {
     public:
 
         explicit ReporterRegistrar( std::string const& name ) {
-            getMutableRegistryHub().registerReporter( name, duckdb_wrapped::std::make_shared<ReporterFactory>() );
+            getMutableRegistryHub().registerReporter( name, duckdb_base_std::make_shared<ReporterFactory>() );
         }
     };
 
@@ -6121,7 +6119,7 @@ namespace Catch {
         class ListenerFactory : public IReporterFactory {
 
             IStreamingReporterPtr create( ReporterConfig const& config ) const override {
-                return duckdb_wrapped::std::unique_ptr<T>( new T( config ) );
+                return duckdb_base_std::unique_ptr<T>( new T( config ) );
             }
             std::string getDescription() const override {
                 return std::string();
@@ -6131,7 +6129,7 @@ namespace Catch {
     public:
 
         ListenerRegistrar() {
-            getMutableRegistryHub().registerListener( duckdb_wrapped::std::make_shared<ListenerFactory>() );
+            getMutableRegistryHub().registerListener( duckdb_base_std::make_shared<ListenerFactory>() );
         }
     };
 }
@@ -6200,7 +6198,7 @@ namespace Catch {
     class TablePrinter;
 
     struct ConsoleReporter : StreamingReporterBase<ConsoleReporter> {
-        duckdb_wrapped::std::unique_ptr<TablePrinter> m_tablePrinter;
+        duckdb_base_std::unique_ptr<TablePrinter> m_tablePrinter;
 
         ConsoleReporter(ReporterConfig const& config);
         ~ConsoleReporter() override;
@@ -6812,7 +6810,7 @@ namespace Catch {
                 void operator()(Chronometer meter) const { f->call(meter); }
 
             private:
-                duckdb_wrapped::std::unique_ptr<callable> f;
+                duckdb_base_std::unique_ptr<callable> f;
             };
         } // namespace Detail
     } // namespace Benchmark
@@ -9310,13 +9308,13 @@ namespace detail {
     public:
         template<typename T>
         ParserRefImpl( T &ref, std::string const &hint )
-        :   m_ref( duckdb_wrapped::std::make_shared<BoundValueRef<T>>( ref ) ),
+        :   m_ref( duckdb_base_std::make_shared<BoundValueRef<T>>( ref ) ),
             m_hint( hint )
         {}
 
         template<typename LambdaT>
         ParserRefImpl( LambdaT const &ref, std::string const &hint )
-        :   m_ref( duckdb_wrapped::std::make_shared<BoundLambda<LambdaT>>( ref ) ),
+        :   m_ref( duckdb_base_std::make_shared<BoundLambda<LambdaT>>( ref ) ),
             m_hint(hint)
         {}
 
@@ -9355,19 +9353,19 @@ namespace detail {
 
         template<typename LambdaT>
         static auto makeRef(LambdaT const &lambda) -> std::shared_ptr<BoundValueRefBase> {
-            return duckdb_wrapped::std::make_shared<BoundLambda<LambdaT>>( lambda) ;
+            return duckdb_base_std::make_shared<BoundLambda<LambdaT>>( lambda) ;
         }
 
     public:
-        ExeName() : m_name( duckdb_wrapped::std::make_shared<std::string>( "<executable>" ) ) {}
+        ExeName() : m_name( duckdb_base_std::make_shared<std::string>( "<executable>" ) ) {}
 
         explicit ExeName( std::string &ref ) : ExeName() {
-            m_ref = duckdb_wrapped::std::make_shared<BoundValueRef<std::string>>( ref );
+            m_ref = duckdb_base_std::make_shared<BoundValueRef<std::string>>( ref );
         }
 
         template<typename LambdaT>
         explicit ExeName( LambdaT const& lambda ) : ExeName() {
-            m_ref = duckdb_wrapped::std::make_shared<BoundLambda<LambdaT>>( lambda );
+            m_ref = duckdb_base_std::make_shared<BoundLambda<LambdaT>>( lambda );
         }
 
         // The exe name is not parsed out of the normal tokens, but is handled specially
@@ -9431,9 +9429,9 @@ namespace detail {
 
     public:
         template<typename LambdaT>
-        explicit Opt( LambdaT const &ref ) : ParserRefImpl( duckdb_wrapped::std::make_shared<BoundFlagLambda<LambdaT>>( ref ) ) {}
+        explicit Opt( LambdaT const &ref ) : ParserRefImpl( duckdb_base_std::make_shared<BoundFlagLambda<LambdaT>>( ref ) ) {}
 
-        explicit Opt( bool &ref ) : ParserRefImpl( duckdb_wrapped::std::make_shared<BoundFlagRef>( ref ) ) {}
+        explicit Opt( bool &ref ) : ParserRefImpl( duckdb_base_std::make_shared<BoundFlagRef>( ref ) ) {}
 
         template<typename LambdaT>
         Opt( LambdaT const &ref, std::string const &hint ) : ParserRefImpl( ref, hint ) {}
@@ -10635,11 +10633,11 @@ namespace Catch {
 
     namespace Detail {
 
-        duckdb_wrapped::std::unique_ptr<EnumInfo> makeEnumInfo( StringRef enumName, StringRef allValueNames, std::vector<int> const& values );
+        duckdb_base_std::unique_ptr<EnumInfo> makeEnumInfo( StringRef enumName, StringRef allValueNames, std::vector<int> const& values );
 
         class EnumValuesRegistry : public IMutableEnumValuesRegistry {
 
-            std::vector<duckdb_wrapped::std::unique_ptr<EnumInfo>> m_enumInfos;
+            std::vector<duckdb_base_std::unique_ptr<EnumInfo>> m_enumInfos;
 
             EnumInfo const& registerEnum( StringRef enumName, StringRef allEnums, std::vector<int> const& values) override;
         };
@@ -10694,8 +10692,8 @@ namespace Catch {
             return "{** unexpected enum value **}"_sr;
         }
 
-        duckdb_wrapped::std::unique_ptr<EnumInfo> makeEnumInfo( StringRef enumName, StringRef allValueNames, std::vector<int> const& values ) {
-            duckdb_wrapped::std::unique_ptr<EnumInfo> enumInfo( new EnumInfo );
+        duckdb_base_std::unique_ptr<EnumInfo> makeEnumInfo( StringRef enumName, StringRef allValueNames, std::vector<int> const& values ) {
+            duckdb_base_std::unique_ptr<EnumInfo> enumInfo( new EnumInfo );
             enumInfo->m_name = enumName;
             enumInfo->m_values.reserve( values.size() );
 
@@ -10744,7 +10742,7 @@ namespace Catch {
         std::string tryTranslators() const;
 
     private:
-        std::vector<duckdb_wrapped::std::unique_ptr<IExceptionTranslator const>> m_translators;
+        std::vector<duckdb_base_std::unique_ptr<IExceptionTranslator const>> m_translators;
     };
 }
 
@@ -10759,7 +10757,7 @@ namespace Catch {
     }
 
     void ExceptionTranslatorRegistry::registerTranslator( const IExceptionTranslator* translator ) {
-        m_translators.push_back( duckdb_wrapped::std::unique_ptr<const IExceptionTranslator>( translator ) );
+        m_translators.push_back( duckdb_base_std::unique_ptr<const IExceptionTranslator>( translator ) );
     }
 
 #if !defined(CATCH_CONFIG_DISABLE_EXCEPTIONS)
@@ -12701,7 +12699,7 @@ namespace Catch {
                     assert( childTracker->isGeneratorTracker() );
                     tracker = std::static_pointer_cast<GeneratorTracker>( childTracker );
                 } else {
-                    tracker = duckdb_wrapped::std::make_shared<GeneratorTracker>( nameAndLocation, ctx, &currentTracker );
+                    tracker = duckdb_base_std::make_shared<GeneratorTracker>( nameAndLocation, ctx, &currentTracker );
                     currentTracker.addChild( tracker );
                 }
 
@@ -13428,7 +13426,7 @@ namespace Catch {
             // doesn't compile without a std::move call. However, this causes
             // a warning on newer platforms. Thus, we have to work around
             // it a bit and downcast the pointer manually.
-            auto ret = duckdb_wrapped::std::unique_ptr<IStreamingReporter>(new ListeningReporter);
+            auto ret = duckdb_base_std::unique_ptr<IStreamingReporter>(new ListeningReporter);
             auto& multi = static_cast<ListeningReporter&>(*ret);
             auto const& listeners = Catch::getRegistryHub().getReporterRegistry().getListeners();
             for (auto const& listener : listeners) {
@@ -13673,7 +13671,7 @@ namespace Catch {
     }
     Config& Session::config() {
         if( !m_config )
-            m_config = duckdb_wrapped::std::make_shared<Config>( m_configData );
+            m_config = duckdb_base_std::make_shared<Config>( m_configData );
         return *m_config;
     }
 
@@ -13860,7 +13858,7 @@ namespace Catch {
         ///////////////////////////////////////////////////////////////////////////
 
         class DebugOutStream : public IStream {
-            duckdb_wrapped::std::unique_ptr<StreamBufImpl<OutputDebugWriter>> m_streamBuf;
+            duckdb_base_std::unique_ptr<StreamBufImpl<OutputDebugWriter>> m_streamBuf;
             mutable std::ostream m_os;
         public:
             DebugOutStream()
@@ -13893,13 +13891,13 @@ namespace Catch {
 
     // This class encapsulates the idea of a pool of ostringstreams that can be reused.
     struct StringStreams {
-        std::vector<duckdb_wrapped::std::unique_ptr<std::ostringstream>> m_streams;
+        std::vector<duckdb_base_std::unique_ptr<std::ostringstream>> m_streams;
         std::vector<std::size_t> m_unused;
         std::ostringstream m_referenceStream; // Used for copy state/ flags from
 
         auto add() -> std::size_t {
             if( m_unused.empty() ) {
-                m_streams.push_back( duckdb_wrapped::std::unique_ptr<std::ostringstream>( new std::ostringstream ) );
+                m_streams.push_back( duckdb_base_std::unique_ptr<std::ostringstream>( new std::ostringstream ) );
                 return m_streams.size()-1;
             }
             else {
@@ -14508,7 +14506,7 @@ namespace TestCaseTracking {
     ITracker::~ITracker() = default;
 
     ITracker& TrackerContext::startRun() {
-        m_rootTracker = duckdb_wrapped::std::make_shared<SectionTracker>( NameAndLocation( "{root}", CATCH_INTERNAL_LINEINFO ), *this, nullptr );
+        m_rootTracker = duckdb_base_std::make_shared<SectionTracker>( NameAndLocation( "{root}", CATCH_INTERNAL_LINEINFO ), *this, nullptr );
         m_currentTracker = nullptr;
         m_runState = Executing;
         return *m_rootTracker;
@@ -14679,7 +14677,7 @@ namespace TestCaseTracking {
             section = std::static_pointer_cast<SectionTracker>( childTracker );
         }
         else {
-            section = duckdb_wrapped::std::make_shared<SectionTracker>( nameAndLocation, ctx, &currentTracker );
+            section = duckdb_base_std::make_shared<SectionTracker>( nameAndLocation, ctx, &currentTracker );
             currentTracker.addChild( section );
         }
         if( !ctx.completedCycle() )
@@ -15029,9 +15027,9 @@ namespace Catch {
         auto token = preprocessPattern();
 
         if (!token.empty()) {
-            TestSpec::PatternPtr pattern = duckdb_wrapped::std::make_shared<TestSpec::NamePattern>(token, m_substring);
+            TestSpec::PatternPtr pattern = duckdb_base_std::make_shared<TestSpec::NamePattern>(token, m_substring);
             if (m_exclusion)
-                pattern = duckdb_wrapped::std::make_shared<TestSpec::ExcludedPattern>(pattern);
+                pattern = duckdb_base_std::make_shared<TestSpec::ExcludedPattern>(pattern);
             m_currentFilter.m_patterns.push_back(pattern);
         }
         m_substring.clear();
@@ -15047,17 +15045,17 @@ namespace Catch {
             // we have to create a separate hide tag and shorten the real one
             if (token.size() > 1 && token[0] == '.') {
                 token.erase(token.begin());
-                TestSpec::PatternPtr pattern = duckdb_wrapped::std::make_shared<TestSpec::TagPattern>(".", m_substring);
+                TestSpec::PatternPtr pattern = duckdb_base_std::make_shared<TestSpec::TagPattern>(".", m_substring);
                 if (m_exclusion) {
-                    pattern = duckdb_wrapped::std::make_shared<TestSpec::ExcludedPattern>(pattern);
+                    pattern = duckdb_base_std::make_shared<TestSpec::ExcludedPattern>(pattern);
                 }
                 m_currentFilter.m_patterns.push_back(pattern);
             }
 
-            TestSpec::PatternPtr pattern = duckdb_wrapped::std::make_shared<TestSpec::TagPattern>(token, m_substring);
+            TestSpec::PatternPtr pattern = duckdb_base_std::make_shared<TestSpec::TagPattern>(token, m_substring);
 
             if (m_exclusion) {
-                pattern = duckdb_wrapped::std::make_shared<TestSpec::ExcludedPattern>(pattern);
+                pattern = duckdb_base_std::make_shared<TestSpec::ExcludedPattern>(pattern);
             }
             m_currentFilter.m_patterns.push_back(pattern);
         }

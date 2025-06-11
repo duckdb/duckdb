@@ -1,18 +1,18 @@
 #pragma once
 
-#include "duckdb/wrapped/std/memory.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/memory_safety.hpp"
+#include "duckdb/original/std/memory.hpp"
 
 #include <type_traits>
 
 namespace duckdb {
 
 template <class DATA_TYPE, class DELETER = std::default_delete<DATA_TYPE>, bool SAFE = true>
-class unique_ptr : public duckdb_wrapped::std::unique_ptr<DATA_TYPE, DELETER> { // NOLINT: naming
+class unique_ptr : public duckdb_base_std::unique_ptr<DATA_TYPE, DELETER> { // NOLINT: naming
 public:
-	using original = duckdb_wrapped::std::unique_ptr<DATA_TYPE, DELETER>;
+	using original = duckdb_base_std::unique_ptr<DATA_TYPE, DELETER>;
 	using original::original; // NOLINT
 	using pointer = typename original::pointer;
 
@@ -55,9 +55,9 @@ public:
 };
 
 template <class DATA_TYPE, class DELETER>
-class unique_ptr<DATA_TYPE[], DELETER, true> : public duckdb_wrapped::std::unique_ptr<DATA_TYPE[], DELETER> {
+class unique_ptr<DATA_TYPE[], DELETER, true> : public duckdb_base_std::unique_ptr<DATA_TYPE[], DELETER> {
 public:
-	using original = duckdb_wrapped::std::unique_ptr<DATA_TYPE[], DELETER>;
+	using original = duckdb_base_std::unique_ptr<DATA_TYPE[], DELETER>;
 	using original::original;
 
 private:
@@ -82,9 +82,9 @@ public:
 };
 
 template <class DATA_TYPE, class DELETER, bool SAFE>
-class unique_ptr<DATA_TYPE[], DELETER, SAFE> : public duckdb_wrapped::std::unique_ptr<DATA_TYPE[], DELETER> {
+class unique_ptr<DATA_TYPE[], DELETER, SAFE> : public duckdb_base_std::unique_ptr<DATA_TYPE[], DELETER> {
 public:
-	using original = duckdb_wrapped::std::unique_ptr<DATA_TYPE[], DELETER>;
+	using original = duckdb_base_std::unique_ptr<DATA_TYPE[], DELETER>;
 	using original::original;
 
 private:

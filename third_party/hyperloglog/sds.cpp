@@ -37,7 +37,6 @@
 #include <assert.h>
 #include <limits.h>
 #include "sds.hpp"
-#include <locale>
 
 namespace duckdb_hll {
 

@@ -48,7 +48,7 @@ using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFileProtocol(CachingFileHandle &file_handle,
                                                                                        bool prefetch_mode) {
-	auto transport = duckdb_wrapped::std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 

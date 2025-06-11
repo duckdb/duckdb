@@ -13,21 +13,14 @@
 #include <cstdint>
 #include <memory>
 #include "duckdb/common/string_util.hpp"
-
-#ifndef DUCKDB_WRAP_STD
-namespace duckdb_wrapped {
-namespace std {
-using ::std::unique_ptr;
-}
-} // namespace duckdb_wrapped
-#endif
+#include "duckdb/common/unique_ptr.hpp"
 
 struct sqlite3;
 struct sqlite3_stmt;
 enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
-using duckdb_wrapped::std::unique_ptr;
+using duckdb::unique_ptr;
 using std::string;
 using std::vector;
 struct ColumnarResult;
