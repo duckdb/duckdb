@@ -557,7 +557,7 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 			const auto &dictionary_string = dictionary_strings[i];
 			if (dictionary_validity.RowIsValid(i) && !dictionary_string.IsInlined()) {
 				string_offsets[i] = current_string_offset;
-				memcpy(heap_ptr, dictionary_string.GetPointer(), dictionary_string.GetSize());
+				memcpy(heap_ptr + current_string_offset, dictionary_string.GetPointer(), dictionary_string.GetSize());
 				current_string_offset += dictionary_string.GetSize();
 			}
 		}
