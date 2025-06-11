@@ -24,7 +24,6 @@ class DatabaseInstance;
 struct MetadataHandle;
 
 struct EncryptionOptions {
-
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
 	//! Whether Additional Authenticated Data is used
@@ -37,6 +36,8 @@ struct EncryptionOptions {
 	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
 	//! Key Length
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
+	//! User key pointer (to StorageOptions)
+	string *user_key;
 };
 
 struct StorageManagerOptions {
@@ -61,10 +62,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options);
+	void CreateNewDatabase(optional_ptr<ClientContext> context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(StorageOptions &storage_options);
+	void LoadExistingDatabase();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;

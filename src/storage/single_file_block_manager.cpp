@@ -316,7 +316,7 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	main_header.SetEncryptionMetadata(metadata);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
+void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -339,7 +339,9 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 
 		// Derive the encryption key and add it to cache
 		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(storage_options.encryption_key, salt, derived_key);
+		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
+		options.encryption_options.user_key = nullptr;
+
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 
 		//! Store all metadata in the main header
@@ -389,7 +391,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(StorageOptions &storage_options) {
+void SingleFileBlockManager::LoadExistingDatabase() {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -430,7 +432,9 @@ void SingleFileBlockManager::LoadExistingDatabase(StorageOptions &storage_option
 		//! Check if the correct key is used to decrypt the database
 		// Derive the encryption key and add it to cache
 		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(storage_options.encryption_key, salt, derived_key);
+		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
+		// delete user key
+		options.encryption_options.user_key = nullptr;
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
 		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 		if (!DecryptCanary(main_header, encryption_state, derived_key)) {

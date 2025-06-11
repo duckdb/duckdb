@@ -108,6 +108,7 @@ string EncryptionKeyManager::Base64Decode(const string &key) {
 
 void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
 	string decoded_key;
+
 	try {
 		//! Key is base64 encoded
 		decoded_key = Base64Decode(user_key);

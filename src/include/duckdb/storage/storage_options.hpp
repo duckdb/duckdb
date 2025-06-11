@@ -28,7 +28,7 @@ struct StorageOptions {
 	//! Encryption algorithm (default = GCM)
 	string encryption_cipher = "gcm";
 	//! encryption key
-	string encryption_key;
+	string user_key;
 };
 
 inline void ClearUserKey(string &encryption_key) {

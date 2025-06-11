@@ -83,7 +83,7 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
+void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOptions &options) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
@@ -93,7 +93,7 @@ void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOpti
 	LoadDatabase(context, options);
 
 	if (options.encryption) {
-		ClearUserKey(options.encryption_key);
+		ClearUserKey(options.user_key);
 	}
 }
 
@@ -125,7 +125,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context, StorageOptions storage_options) {
+void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
 
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
@@ -146,6 +146,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 	if (storage_options.encryption) {
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.user_key = &storage_options.user_key;
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -199,7 +200,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase(context, storage_options);
+		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -225,7 +226,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase(storage_options);
+		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
