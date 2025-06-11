@@ -32,10 +32,10 @@ public:
 	void PrintErrorHeader(const string &description);
 	static void PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
 	void PrintResultError(const vector<string> &result_values, const vector<string> &values,
-	                        idx_t expected_column_count, bool row_wise);
+	                      idx_t expected_column_count, bool row_wise);
 	static void PrintSummaryHeader(const std::string &file_name);
 	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
-	                        bool row_wise);
+	                      bool row_wise);
 	void PrintResultString(MaterializedQueryResult &result);
 	void UnexpectedFailure(MaterializedQueryResult &result);
 	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string);

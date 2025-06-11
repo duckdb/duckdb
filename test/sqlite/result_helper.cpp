@@ -94,7 +94,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		if (!csv_error.empty()) {
 			string log_message;
 			logger.PrintErrorHeader(csv_error);
-			
+
 			return false;
 		}
 	} else {

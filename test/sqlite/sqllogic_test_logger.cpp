@@ -150,7 +150,7 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
 }
 
 void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
-                                            idx_t expected_column_count, bool row_wise) {
+                                          idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
 	PrintExpectedResult(values, expected_column_count, row_wise);
@@ -165,7 +165,7 @@ void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
 }
 
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
-                                            idx_t expected_column_count, bool row_wise) {
+                                          idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
 	PrintExpectedResult(values, expected_column_count, row_wise);
@@ -185,7 +185,6 @@ void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
 	PrintHeader("Actual result:");
 	PrintLineSep();
 	PrintResultString(result);
-
 }
 void SQLLogicTestLogger::OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string) {
 	// names
@@ -239,12 +238,11 @@ void SQLLogicTestLogger::ColumnCountMismatch(MaterializedQueryResult &result,
 }
 
 void SQLLogicTestLogger::NotCleanlyDivisible(idx_t expected_column_count, idx_t actual_column_count) {
-	std::ostringstream oss;
+	PrintLineSep();
 	PrintErrorHeader("Error in test!");
 	PrintLineSep();
-	oss << "Expected " << to_string(expected_column_count) << " columns, but " << to_string(actual_column_count)
-	    << " values were supplied\nThis is not cleanly divisible (i.e. the last row does not have enough values)";
-	LogFailure(oss.str());
+	LogFailure("Expected " + to_string(expected_column_count) + " columns, but " + to_string(actual_column_count) +
+	           " values were supplied\nThis is not cleanly divisible (i.e. the last row does not have enough values)");
 }
 
 void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryResult &result,
@@ -259,7 +257,6 @@ void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryRes
 	PrintSQL();
 	PrintLineSep();
 	PrintResultError(result, comparison_values, expected_column_count, row_wise);
-
 }
 
 void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
@@ -284,15 +281,14 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
 	    << std::endl;
 	LogFailure(oss.str());
 	PrintLineSep();
-
 }
 
 void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count) {
 
 	std::ostringstream oss;
 	PrintLineSep();
-	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " +
-	                                to_string(row_number) + "!");
+	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " + to_string(row_number) +
+	                 "!");
 	oss << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
 	    << termcolor::bold << split_count << termcolor::reset << " columns" << std::endl;
 	LogFailure(oss.str());
