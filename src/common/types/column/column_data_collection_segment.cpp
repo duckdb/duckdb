@@ -237,8 +237,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 				auto &current_vdata = GetVectorData(next_index);
 				for (auto &swizzle_segment : current_vdata.swizzle_data) {
 					auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
-					allocator->UnswizzlePointers(state, result, offset + swizzle_segment.offset, swizzle_segment.count,
-					                             string_heap_segment.block_id, string_heap_segment.offset);
+					allocator->UnswizzlePointers(state, result, swizzle_segment, string_heap_segment, offset);
 				}
 				offset += current_vdata.count;
 				next_index = current_vdata.next_data;

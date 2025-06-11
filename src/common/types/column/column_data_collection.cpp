@@ -457,7 +457,7 @@ static void ColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFor
 bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const VectorDataIndex &current_index,
                                      VectorDataIndex &child_index, const UnifiedVectorFormat &source_data,
                                      Vector &source, const idx_t &offset, const idx_t &vector_remaining,
-                                     idx_t &append_count, idx_t &heap_size) {
+                                     idx_t &append_count, idx_t &heap_size, data_ptr_t &base_heap_ptr) {
 	// check if we can do the optimization at all
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
@@ -512,8 +512,8 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
 	auto &child_segment = segment.GetVectorData(child_index);
-	const auto heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, child_segment.block_id,
-	                                                        child_segment.offset);
+	base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, child_segment.block_id,
+	                                                  child_segment.offset);
 
 	auto &current_segment = segment.GetVectorData(current_index);
 	const auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
@@ -534,8 +534,8 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// copy over the constant string
 		auto constant_string = ConstantVector::GetData<string_t>(source)[0];
-		memcpy(heap_ptr, constant_string.GetData(), constant_string.GetSize());
-		constant_string.SetPointer(char_ptr_cast(heap_ptr));
+		memcpy(base_heap_ptr, constant_string.GetData(), constant_string.GetSize());
+		constant_string.SetPointer(char_ptr_cast(base_heap_ptr));
 
 		// duplicate it
 		for (idx_t i = 0; i < vector_remaining; i++) {
@@ -557,7 +557,8 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 			const auto &dictionary_string = dictionary_strings[i];
 			if (dictionary_validity.RowIsValid(i) && !dictionary_string.IsInlined()) {
 				string_offsets[i] = current_string_offset;
-				memcpy(heap_ptr + current_string_offset, dictionary_string.GetPointer(), dictionary_string.GetSize());
+				memcpy(base_heap_ptr + current_string_offset, dictionary_string.GetPointer(),
+				       dictionary_string.GetSize());
 				current_string_offset += dictionary_string.GetSize();
 			}
 		}
@@ -575,7 +576,10 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 			auto &target_entry = target_entries[target_idx];
 			target_entry = source_entry;
 			if (!source_entry.IsInlined()) {
-				target_entry.SetPointer(char_ptr_cast(heap_ptr + string_offsets[source_idx]));
+				target_entry.SetPointer(char_ptr_cast(base_heap_ptr + string_offsets[source_idx]));
+#ifdef D_ASSERT_IS_ENABLED
+				target_entry.VerifyCharacters();
+#endif
 			}
 		}
 	}
@@ -621,8 +625,9 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 		idx_t append_count = 0;
 		idx_t heap_size = 0;
+		data_ptr_t base_heap_ptr = nullptr;
 		if (!ColumnDataCopyCompressedStrings(meta_data, current_index, child_index, source_data, source, offset,
-		                                     vector_remaining, append_count, heap_size)) {
+		                                     vector_remaining, append_count, heap_size, base_heap_ptr)) {
 			// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
 			const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
 			for (; append_count < vector_remaining; append_count++) {
@@ -651,15 +656,14 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			}
 
 			// allocate string heap for the next 'append_count' strings
-			data_ptr_t heap_ptr = nullptr;
 			if (heap_size != 0) {
 				child_index = segment.AllocateStringHeap(heap_size, meta_data.chunk_data, append_state, child_index);
 				if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 					meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 				}
 				auto &child_segment = segment.GetVectorData(child_index);
-				heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, child_segment.block_id,
-				                                             child_segment.offset);
+				base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state,
+				                                                  child_segment.block_id, child_segment.offset);
 			}
 
 			// We get a reference to the "current_segment" only after allocating the string heap above,
@@ -677,6 +681,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			}
 
 			auto target_entries = reinterpret_cast<string_t *>(base_ptr);
+			data_ptr_t heap_ptr = base_heap_ptr;
 			for (idx_t i = 0; i < append_count; i++) {
 				auto source_idx = source_data.sel->get_index(offset + i);
 				auto target_idx = current_segment.count + i;
@@ -689,7 +694,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 				if (source_entry.IsInlined()) {
 					target_entry = source_entry;
 				} else {
-					D_ASSERT(heap_ptr != nullptr);
+					D_ASSERT(base_heap_ptr != nullptr);
 					memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
 					target_entry =
 					    string_t(const_char_ptr_cast(heap_ptr), UnsafeNumericCast<uint32_t>(source_entry.GetSize()));
@@ -700,7 +705,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 		auto &current_segment = segment.GetVectorData(current_index);
 		if (heap_size != 0) {
-			current_segment.swizzle_data.emplace_back(child_index, current_segment.count, append_count);
+			current_segment.swizzle_data.emplace_back(child_index, base_heap_ptr, current_segment.count, append_count);
 		}
 
 		current_segment.count += append_count;
