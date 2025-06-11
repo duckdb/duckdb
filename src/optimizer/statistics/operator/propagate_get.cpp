@@ -9,18 +9,50 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
+#include <duckdb/planner/expression/bound_reference_expression.hpp>
+
 namespace duckdb {
+
+static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column) {
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		expr = column.Copy();
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column); });
+}
+
+static void GetColumnIndex(unique_ptr<Expression> &expr, idx_t &index) {
+	if (expr->type == ExpressionType::BOUND_REF) {
+		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
+		index = bound_ref.index;
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) { GetColumnIndex(child, index); });
+}
 
 FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
                                                                  TableFilter &filter) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
+
+		// get physical storage index of the filter
+		// since it is a table filter, every storage index is the same
+		idx_t physical_index = DConstants::INVALID_INDEX;
+		GetColumnIndex(expr_filter.expr, physical_index);
+		D_ASSERT(physical_index != DConstants::INVALID_INDEX);
+
 		auto column_ref = make_uniq<BoundColumnRefExpression>(stats.GetType(), stats_binding);
 		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		// handle the filter before updating the statistics
 		// otherwise the filter can be pruned by the updated statistics
 		auto propagate_result = HandleFilter(filter_expr);
+		auto colref = make_uniq<BoundReferenceExpression>(stats.GetType(), physical_index);
 		UpdateFilterStatistics(*filter_expr);
+
+		// replace BoundColumnRefs with BoundRefs
+		ReplaceExpressionRecursive(filter_expr, *colref);
+		expr_filter.expr = std::move(filter_expr);
 		return propagate_result;
 	}
 	return filter.CheckStatistics(stats);
