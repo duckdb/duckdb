@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -39,8 +40,8 @@ public:
 
 	template <class FUNC, class CATALOG_ENTRY>
 	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
-	                                const string &schema_name, const string &name, vector<LogicalType> arguments,
-	                                vector<LogicalType> original_arguments) {
+	                                const string &schema_name, const string &name, const vector<LogicalType> &arguments,
+	                                const vector<LogicalType> &original_arguments) {
 		EntryLookupInfo lookup_info(catalog_type, name);
 		auto &func_catalog =
 		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
@@ -52,8 +53,6 @@ public:
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		auto function = functions.functions.GetFunctionByArguments(
 		    context, original_arguments.empty() ? arguments : original_arguments);
-		function.arguments = std::move(arguments);
-		function.original_arguments = std::move(original_arguments);
 		return function;
 	}
 
@@ -72,8 +71,12 @@ public:
 			schema_name = DEFAULT_SCHEMA;
 		}
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
-		                                                         std::move(arguments), std::move(original_arguments));
+		                                                         arguments, original_arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
+		if (has_serialize) {
+			function.arguments = std::move(arguments);
+			function.original_arguments = std::move(original_arguments);
+		}
 		return make_pair(std::move(function), has_serialize);
 	}
 
@@ -139,15 +142,20 @@ public:
 			deserializer.Set<const LogicalType &>(return_type);
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
-		} else if (function.bind) {
-			try {
-				bind_data = function.bind(context, function, children);
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				throw SerializationException("Error during bind of function in deserialization: %s",
-				                             error.RawMessage());
+		} else {
+			if (function.bind) {
+				try {
+					bind_data = function.bind(context, function, children);
+				} catch (std::exception &ex) {
+					ErrorData error(ex);
+					throw SerializationException("Error during bind of function in deserialization: %s",
+					                             error.RawMessage());
+				}
 			}
+			FunctionBinder binder(context);
+			binder.CastToFunctionArguments(function, children);
 		}
+
 		if (TypeRequiresAssignment(function.return_type)) {
 			function.return_type = std::move(return_type);
 		}
