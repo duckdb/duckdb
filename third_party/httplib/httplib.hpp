@@ -14,6 +14,7 @@
 #define CPPHTTPLIB_VERSION "0.14.3"
 
 #include "duckdb/original/std/memory.hpp"
+#include "duckdb/common/string.hpp"
 
 /*
  * Configuration
@@ -4872,7 +4873,7 @@ inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
   EVP_DigestUpdate(context.get(), s.c_str(), s.size());
   EVP_DigestFinal_ex(context.get(), hash, &hash_length);
 
-  std::stringstream ss;
+  duckdb::stringstream ss;
   for (auto i = 0u; i < hash_length; ++i) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<unsigned int>(hash[i]);
@@ -5040,7 +5041,7 @@ inline std::pair<std::string, std::string> make_digest_authentication_header(
     const std::string &password, bool is_proxy = false) {
   std::string nc;
   {
-    std::stringstream ss;
+    duckdb::stringstream ss;
     ss << std::setfill('0') << std::setw(8) << std::hex << cnonce_count;
     nc = ss.str();
   }
@@ -5967,7 +5968,7 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
   if (close_connection || req.get_header_value("Connection") == "close") {
     res.set_header("Connection", "close");
   } else {
-    std::stringstream ss;
+    duckdb::stringstream ss;
     ss << "timeout=" << keep_alive_timeout_sec_
        << ", max=" << keep_alive_max_count_;
     res.set_header("Keep-Alive", ss.str());
