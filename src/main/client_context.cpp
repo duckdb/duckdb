@@ -1382,6 +1382,7 @@ ClientProperties ClientContext::GetClientProperties() {
 	        db->config.options.arrow_use_list_view,
 	        db->config.options.produce_arrow_string_views,
 	        db->config.options.arrow_lossless_conversion,
+	        db->config.options.arrow_output_version,
 	        this};
 }
 

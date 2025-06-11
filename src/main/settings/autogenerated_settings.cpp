@@ -178,6 +178,13 @@ Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Arrow Output Version
+//===----------------------------------------------------------------------===//
+void ArrowOutputVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_output_version = DBConfig().options.arrow_output_version;
+}
+
+//===----------------------------------------------------------------------===//
 // Asof Loop Join Threshold
 //===----------------------------------------------------------------------===//
 void AsofLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
