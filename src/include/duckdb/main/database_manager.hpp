@@ -43,6 +43,8 @@ public:
 
 	//! Initializes the system catalog of the attached SYSTEM_DATABASE.
 	void InitializeSystemCatalog();
+	//! Finalize starting up the system
+	void FinalizeStartup();
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
