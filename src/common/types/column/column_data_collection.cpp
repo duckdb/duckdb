@@ -578,7 +578,9 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 			if (!source_entry.IsInlined()) {
 				target_entry.SetPointer(char_ptr_cast(base_heap_ptr + string_offsets[source_idx]));
 #ifdef D_ASSERT_IS_ENABLED
-				target_entry.VerifyCharacters();
+				if (source.GetType() == LogicalType::VARCHAR) {
+					target_entry.Verify();
+				}
 #endif
 			}
 		}
@@ -661,7 +663,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 				if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 					meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 				}
-				auto &child_segment = segment.GetVectorData(child_index);
+				const auto &child_segment = segment.GetVectorData(child_index);
 				base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state,
 				                                                  child_segment.block_id, child_segment.offset);
 			}
@@ -705,6 +707,11 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 		auto &current_segment = segment.GetVectorData(current_index);
 		if (heap_size != 0) {
+#ifdef D_ASSERT_IS_ENABLED
+			const auto &child_segment = segment.GetVectorData(child_index);
+			D_ASSERT(base_heap_ptr == segment.allocator->GetDataPointer(append_state.current_chunk_state,
+			                                                            child_segment.block_id, child_segment.offset));
+#endif
 			current_segment.swizzle_data.emplace_back(child_index, base_heap_ptr, current_segment.count, append_count);
 		}
 

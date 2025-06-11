@@ -211,17 +211,20 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	const auto strings = FlatVector::GetData<string_t>(result);
 
 	// recompute pointers
-	const auto start = NumericCast<idx_t>(v_offset);
-	const auto end = NumericCast<idx_t>(v_offset + swizzle_segment.count);
+	const auto start = NumericCast<idx_t>(v_offset + swizzle_segment.offset);
+	const auto end = start + NumericCast<idx_t>(swizzle_segment.count);
 	for (idx_t i = start; i < end; i++) {
 		auto &str = strings[i];
-		if (!validity.RowIsValidUnsafe(i) || str.IsInlined()) {
+		if (!validity.RowIsValid(i) || str.IsInlined()) {
 			continue;
 		}
 		const auto str_offset = str.GetPointer() - old_base_ptr;
+		D_ASSERT(str_offset >= 0);
 		str.SetPointer(new_base_ptr + str_offset);
 #ifdef D_ASSERT_IS_ENABLED
-		str.VerifyCharacters();
+		if (result.GetType() == LogicalType::VARCHAR) {
+			str.Verify();
+		}
 #endif
 	}
 
