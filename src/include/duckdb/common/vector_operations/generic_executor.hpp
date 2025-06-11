@@ -242,31 +242,15 @@ struct GenericListType {
 	}
 };
 
-struct GenericLambdaWrapper {
-	template <class FUNC, class RESULT_TYPE, class... ARGS>
-	static inline RESULT_TYPE Operation(FUNC fun, ValidityMask &mask, idx_t idx, ARGS... args) {
-		return fun(args...);
-	}
-};
-
-struct GenericLambdaWrapperWithNulls {
-	template <class FUNC, class RESULT_TYPE, class... ARGS>
-	static inline RESULT_TYPE Operation(FUNC fun, ValidityMask &mask, idx_t idx, ARGS... args) {
-		return fun(args..., mask, idx);
-	}
-};
-
 //! The GenericExecutor can handle struct types in addition to primitive types
 struct GenericExecutor {
 private:
-	template <class A_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUNC>
+	template <class A_TYPE, class RESULT_TYPE, class FUNC>
 	static void ExecuteUnaryInternal(Vector &input, Vector &result, idx_t count, FUNC &fun) {
 		auto constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE state;
 		state.PrepareVector(input, count);
-
-		auto &result_validity = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto idx = state.main_data.sel->get_index(i);
@@ -279,14 +263,14 @@ private:
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
-			RESULT_TYPE::AssignResult(result, i, OPWRAPPER::template Operation<FUNC, RESULT_TYPE>(fun, result_validity, i, input));
+			RESULT_TYPE::AssignResult(result, i, fun(input));
 		}
 		if (constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
 
-	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUNC>
+	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC>
 	static void ExecuteBinaryInternal(Vector &a, Vector &b, Vector &result, idx_t count, FUNC &fun) {
 		auto constant =
 		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR;
@@ -295,8 +279,6 @@ private:
 		typename B_TYPE::STRUCT_STATE b_state;
 		a_state.PrepareVector(a, count);
 		b_state.PrepareVector(b, count);
-
-		auto &result_validity = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -311,14 +293,14 @@ private:
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
-			RESULT_TYPE::AssignResult(result, i, OPWRAPPER::template Operation<FUNC, RESULT_TYPE>(fun, result_validity, i, a_val, b_val));
+			RESULT_TYPE::AssignResult(result, i, fun(a_val, b_val));
 		}
 		if (constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
 
-	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUNC>
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUNC>
 	static void ExecuteTernaryInternal(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC &fun) {
 		auto constant = a.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		                b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
@@ -331,8 +313,6 @@ private:
 		a_state.PrepareVector(a, count);
 		b_state.PrepareVector(b, count);
 		c_state.PrepareVector(c, count);
-
-		auto &result_validity = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -351,14 +331,14 @@ private:
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
-			RESULT_TYPE::AssignResult(result, i, OPWRAPPER::template Operation<FUNC, RESULT_TYPE>(fun, result_validity, i, a_val, b_val, c_val));
+			RESULT_TYPE::AssignResult(result, i, fun(a_val, b_val, c_val));
 		}
 		if (constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
 
-	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUNC>
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE, class FUNC>
 	static void ExecuteQuaternaryInternal(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count,
 	                                      FUNC &fun) {
 		auto constant =
@@ -374,8 +354,6 @@ private:
 		b_state.PrepareVector(b, count);
 		c_state.PrepareVector(c, count);
 		d_state.PrepareVector(d, count);
-
-		auto &result_validity = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -396,51 +374,31 @@ private:
 				FlatVector::SetNull(result, i, true);
 				continue;
 			}
-			RESULT_TYPE::AssignResult(result, i, OPWRAPPER::template Operation<FUNC, RESULT_TYPE>(fun, result_validity, i, a_val, b_val, c_val, d_val));
+			RESULT_TYPE::AssignResult(result, i, fun(a_val, b_val, c_val, d_val));
 		}
 		if (constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
 
-
 public:
 	template <class A_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteUnary(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, GenericLambdaWrapper, FUNC>(input, result, count, fun);
+		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, FUNC>(input, result, count, fun);
 	}
-	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE, B_TYPE)>>
+	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteBinary(Vector &a, Vector &b, Vector &result, idx_t count, FUNC fun) {
-		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, GenericLambdaWrapper, FUNC>(a, b, result, count, fun);
+		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, count, fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
+	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteTernary(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC fun) {
-		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, GenericLambdaWrapper, FUNC>(a, b, c, result, count, fun);
+		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result, count, fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE, D_TYPE)>>
+	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteQuaternary(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count, FUNC fun) {
-		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, GenericLambdaWrapper, FUNC>(a, b, c, d, result, count, fun);
-	}
-
-	template <class A_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteUnaryWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, GenericLambdaWrapperWithNulls, FUNC>(input, result, count, fun);
-	}
-	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE, B_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteBinaryWithNulls(Vector &a, Vector &b, Vector &result, idx_t count, FUNC fun) {
-		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, GenericLambdaWrapperWithNulls, FUNC>(a, b, result, count, fun);
-	}
-	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteTernaryWithNulls(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC fun) {
-		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, GenericLambdaWrapperWithNulls, FUNC>(a, b, c, result, count, fun);
-	}
-	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE, D_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteQuaternaryWithNulls(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count, FUNC fun) {
-		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, GenericLambdaWrapperWithNulls, FUNC>(a, b, c, d, result, count, fun);
+		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(a, b, c, d, result, count, fun);
 	}
 };
 
