@@ -708,7 +708,7 @@ void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEn
 }
 
 void CatalogSet::ScanWithReturn(ClientContext &context, const std::function<bool(CatalogEntry &)> &callback) {
-	Scan(catalog.GetCatalogTransaction(context), callback);
+	ScanWithReturn(catalog.GetCatalogTransaction(context), callback);
 }
 
 void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
