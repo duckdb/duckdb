@@ -19,16 +19,8 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		// handle the filter before updating the statistics
 		// otherwise the filter can be pruned by the updated statistics
-		auto copy_expr = filter_expr->Copy();
 		auto propagate_result = HandleFilter(filter_expr);
-		// Handle filter propagates the statistics, and also chooses what function to run.
-		// We need to copy the function from filter_expr (which is a copy) to the expr_filter (which is the original).
-		if (filter_expr->type == ExpressionType::BOUND_FUNCTION) {
-			auto &func_filter = filter_expr->Cast<BoundFunctionExpression>();
-			auto &original_func_filter = expr_filter.expr->Cast<BoundFunctionExpression>();
-			original_func_filter.function = func_filter.function;
-		}
-		UpdateFilterStatistics(*copy_expr);
+		UpdateFilterStatistics(*filter_expr);
 		return propagate_result;
 	}
 	return filter.CheckStatistics(stats);

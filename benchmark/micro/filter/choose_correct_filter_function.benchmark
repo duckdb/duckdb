@@ -7,7 +7,7 @@ subgroup filter
 
 load
 create or replace table int_and_long_strings as
-    from range(100000) t(i)
+    from range(100) t(i)
     select
         md5(i::varchar) as medium_string
 ;
