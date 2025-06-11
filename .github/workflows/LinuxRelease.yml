@@ -84,7 +84,17 @@ jobs:
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
         quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
-        bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make -C $PWD"
+        bash -c "
+          set -e
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
+        
+          source /opt/rh/gcc-toolset-12/enable
+          export CC=gcc
+          export CXX=g++
+
+          git config --global --add safe.directory $PWD
+          make -C $PWD
+        "
 
     - name: Print platform
       shell: bash
@@ -150,6 +160,9 @@ jobs:
           duckdb_arch: ${{ matrix.duckdb_arch }}
           run_tests: ${{ inputs.skip_tests != 'true' }}
           override_git_describe: ${{ inputs.override_git_describe }}
+          build_complete_extensions_set: 1
+          # Note that build_complete_extensions_set needs to be 1 (that is also the default value) for 'Checks extension entries' to work correctly
+          save_cache: ${{ github.event_name != 'pull_request' && 1 || 0 }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -193,6 +206,8 @@ jobs:
           duckdb_arch: ${{ matrix.duckdb_arch }}
           run_tests: ${{ inputs.skip_tests != 'true' }}
           override_git_describe: ${{ inputs.override_git_describe }}
+          build_complete_extensions_set: ${{ github.event_name != 'pull_request' && 1 || 0 }}
+          save_cache: ${{ github.event_name != 'pull_request' && 1 || 0 }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -235,6 +250,8 @@ jobs:
           duckdb_arch: ${{ matrix.duckdb_arch }}
           run_tests: ${{ inputs.skip_tests != 'true' }}
           override_git_describe: ${{ inputs.override_git_describe }}
+          build_complete_extensions_set: ${{ github.event_name != 'pull_request' && 1 || 0 }}
+          save_cache: ${{ github.event_name != 'pull_request' && 1 || 0 }}
 
       - uses: actions/upload-artifact@v4
         with:

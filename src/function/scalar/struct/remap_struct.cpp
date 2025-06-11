@@ -84,6 +84,7 @@ static void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_
 	auto &result_key_vector = MapVector::GetKeys(result);
 	auto &result_value_vector = MapVector::GetValues(result);
 	auto list_size = ListVector::GetListSize(input);
+	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
 	bool has_top_level_null = false;
@@ -136,6 +137,7 @@ static void RemapList(Vector &input, Vector &default_vector, Vector &result, idx
 	auto &input_vector = ListVector::GetEntry(input);
 	auto &result_vector = ListVector::GetEntry(result);
 	auto list_size = ListVector::GetListSize(input);
+	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
 	bool has_top_level_null = false;

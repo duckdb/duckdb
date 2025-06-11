@@ -46,7 +46,7 @@ double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t siz
 }
 
 unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
-	if (schema.type_length > 0) {
+	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
 		return CreateDecimalReaderInternal<true>(reader, schema);
 	} else {
 		return CreateDecimalReaderInternal<false>(reader, schema);

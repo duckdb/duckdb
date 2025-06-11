@@ -14,6 +14,12 @@ inputs:
   override_git_describe:
     description: 'Override git describe'
     default: ''
+  build_complete_extensions_set:
+    description: 'Whether all extensions needs to be built'
+    default: 1
+  save_cache:
+    description: 'Should cache be saved'
+    default: 1
 
 runs:
   using: "composite"
@@ -62,6 +68,7 @@ runs:
           echo "DUCKDB_PLATFORM=${{ inputs.duckdb_arch }}" >> docker_env.txt
           echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}" >> docker_env.txt
           echo "LINUX_CI_IN_DOCKER=1" >> docker_env.txt
+          echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> docker_env.txt
 
       - name: Generate timestamp for Ccache entry
         shell: bash
@@ -75,7 +82,7 @@ runs:
           mkdir ccache_dir
 
       - name: Load Ccache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ./ccache_dir
           key: ccache-extension-distribution-${{ inputs.duckdb_arch }}-${{ steps.ccache_timestamp.outputs.timestamp }}
@@ -91,6 +98,13 @@ runs:
         shell: bash
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make release
+
+      - name: Save Ccache
+        if: ${{ inputs.save_cache }}
+        uses: actions/cache/save@v4
+        with:
+          path: ./ccache_dir
+          key: ccache-extension-distribution-${{ inputs.duckdb_arch }}-${{ steps.ccache_timestamp.outputs.timestamp }}
 
       - name: Test extension (inside docker)
         shell: bash
