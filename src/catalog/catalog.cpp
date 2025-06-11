@@ -654,22 +654,10 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	auto &config = DBConfig::GetConfig(context);
 	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
 
-	// Early-out, if we do not scan any other schemas.
-	if (max_schema_count == 0) {
-		string did_you_mean;
-		for (idx_t i = 0; i < entries.size(); i++) {
-			if (i == 0) {
-				did_you_mean += entries[i].name;
-				continue;
-			}
-			did_you_mean += ", " + entries[i].name;
-		}
-		return CatalogException::MissingEntry(lookup_info, did_you_mean);
-	}
-
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
-	auto databases = db_manager.GetDatabases(context);
+	auto databases = db_manager.GetDatabases(context, max_schema_count);
+
 	for (auto database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
@@ -683,7 +671,8 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			unseen_schemas.insert(current_schema.get());
 		}
 	}
-	// check if the entry exists in any extension
+
+	// Check if the entry exists in any extension.
 	string extension_name;
 	auto type = lookup_info.GetCatalogType();
 	auto &entry_name = lookup_info.GetEntryName();
