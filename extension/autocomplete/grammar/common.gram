@@ -45,7 +45,7 @@ SecretName <- ColId
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
+Type <- (TimeType / IntervalType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
 SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
 CharacterType <- ('CHARACTER'i 'VARYING'i?) /
                  ('CHAR'i 'VARYING'i?) /
@@ -53,6 +53,42 @@ CharacterType <- ('CHARACTER'i 'VARYING'i?) /
                  ('NATIONAL'i 'CHAR'i 'VARYING'i?) /
                  ('NCHAR'i 'VARYING'i?) /
                  'VARCHAR'i
+IntervalType <- ('INTERVAL'i Interval?) / ('INTERVAL'i Parens(NumberLiteral))
+
+YearKeyword         <- 'YEAR'i / 'YEARS'i
+MonthKeyword        <- 'MONTH'i / 'MONTHS'i
+DayKeyword          <- 'DAY'i / 'DAYS'i
+HourKeyword         <- 'HOUR'i / 'HOURS'i
+MinuteKeyword       <- 'MINUTE'i / 'MINUTES'i
+SecondKeyword       <- 'SECOND'i / 'SECONDS'i
+MillisecondKeyword  <- 'MILLISECOND'i / 'MILLISECONDS'i
+MicrosecondKeyword  <- 'MICROSECOND'i / 'MICROSECONDS'i
+WeekKeyword         <- 'WEEK'i / 'WEEKS'i
+QuarterKeyword      <- 'QUARTER'i / 'QUARTERS'i
+DecadeKeyword       <- 'DECADE'i / 'DECADES'i
+CenturyKeyword      <- 'CENTURY'i / 'CENTURIES'i
+MillenniumKeyword   <- 'MILLENNIUM'i / 'MILLENNIA'i
+
+Interval <- YearKeyword /
+    MonthKeyword /
+    DayKeyword /
+    HourKeyword /
+    MinuteKeyword /
+    SecondKeyword /
+    MillisecondKeyword /
+    MicrosecondKeyword /
+    WeekKeyword /
+    QuarterKeyword /
+    DecadeKeyword /
+    CenturyKeyword /
+    MillenniumKeyword /
+    (YearKeyword 'TO'i MonthKeyword) /
+    (DayKeyword 'TO'i HourKeyword) /
+    (DayKeyword 'TO'i MinuteKeyword) /
+    (DayKeyword 'TO'i SecondKeyword) /
+    (HourKeyword 'TO'i MinuteKeyword) /
+    (HourKeyword 'TO'i SecondKeyword) /
+    (MinuteKeyword 'TO'i SecondKeyword)
 
 NumericType <- 'INT'i /
                'INTEGER'i /

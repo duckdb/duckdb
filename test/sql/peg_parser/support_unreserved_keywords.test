@@ -5,6 +5,9 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE issue14384(i INTERVAL);$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT cast(1 as INT)$TEST_PEG_PARSER$);
 
 statement ok
