@@ -112,12 +112,16 @@ public:
 		}
 		// initialize writing to the file
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*global_state, op);
+		}
 		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
 			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
 			                                           *written_file_info->file_stats);
 		}
+		initialized = true;
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {

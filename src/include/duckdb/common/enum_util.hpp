@@ -78,6 +78,8 @@ enum class BindingMode : uint8_t;
 
 enum class BitpackingMode : uint8_t;
 
+enum class BlockIteratorStateType : int8_t;
+
 enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
@@ -298,6 +300,8 @@ enum class PreserveOrderType : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
+enum class ProfilingCoverage : uint8_t;
+
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -347,6 +351,8 @@ enum class SinkFinalizeType : uint8_t;
 enum class SinkNextBatchType : uint8_t;
 
 enum class SinkResultType : uint8_t;
+
+enum class SortKeyType : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
@@ -483,6 +489,9 @@ const char* EnumUtil::ToChars<BindingMode>(BindingMode value);
 
 template<>
 const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value);
+
+template<>
+const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType value);
 
 template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
@@ -815,6 +824,9 @@ template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
+const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
+
+template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
 
 template<>
@@ -888,6 +900,9 @@ const char* EnumUtil::ToChars<SinkNextBatchType>(SinkNextBatchType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
+
+template<>
+const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
@@ -1057,6 +1072,9 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value);
 
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value);
+
+template<>
+BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *value);
 
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);
@@ -1389,6 +1407,9 @@ template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
+ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
+
+template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
 
 template<>
@@ -1462,6 +1483,9 @@ SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value);
 
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
+
+template<>
+SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);

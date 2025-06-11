@@ -29,7 +29,9 @@ struct ExtractTimestampUuidOperator {
 		}
 
 		// UUID v7 begins with a 48 bit big-endian Unix Epoch timestamp with millisecond granularity.
-		const int64_t upper = input.upper;
+		int64_t upper = input.upper;
+		// flip the top byte
+		upper ^= NumericLimits<int64_t>::Minimum();
 		int64_t unix_ts_milli = upper;
 		unix_ts_milli = unix_ts_milli >> 16;
 

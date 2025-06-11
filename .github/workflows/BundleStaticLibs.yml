@@ -105,7 +105,7 @@ jobs:
 
   bundle-mingw-static-lib:
     name: Windows MingW static libs
-    runs-on: windows-2019
+    runs-on: windows-latest
     env:
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
@@ -189,8 +189,17 @@ jobs:
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
           quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
-          bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make gather-libs -C $PWD"
+          bash -c "
+            set -e
+            yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
+            
+            source /opt/rh/gcc-toolset-12/enable
+            export CC=gcc
+            export CXX=g++
 
+            git config --global --add safe.directory $PWD
+            make gather-libs -C $PWD
+          "
       - name: Print platform
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"

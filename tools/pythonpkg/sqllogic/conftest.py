@@ -5,6 +5,7 @@ import random
 import re
 import typing
 import warnings
+import glob
 from .skipped_tests import SKIPPED_TESTS
 
 SQLLOGIC_TEST_CASE_NAME = "test_sqllogic"
@@ -21,6 +22,13 @@ def pytest_addoption(parser: pytest.Parser):
         default=[],  # We handle default in pytest_generate_tests
         dest="test_dirs",
         help="Path to one or more directories containing SQLLogic test scripts",
+    )
+    parser.addoption(
+        "--path",
+        type=str,
+        default=None,
+        dest="path",
+        help="Path (or glob) of the tests to run",
     )
     parser.addoption(
         "--build-dir",
@@ -96,6 +104,15 @@ def get_test_marks(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Co
     return marks
 
 
+def create_parameters_from_paths(paths, root_dir: pathlib.Path, config: pytest.Config) -> typing.Iterator[typing.Any]:
+    return map(
+        lambda path: pytest.param(
+            path.absolute(), id=get_test_id(path, root_dir, config), marks=get_test_marks(path, root_dir, config)
+        ),
+        paths,
+    )
+
+
 def scan_for_test_scripts(root_dir: pathlib.Path, config: pytest.Config) -> typing.Iterator[typing.Any]:
     """
     Scans for .test files in the given directory and its subdirectories.
@@ -105,30 +122,35 @@ def scan_for_test_scripts(root_dir: pathlib.Path, config: pytest.Config) -> typi
     # TODO: Add tests from extensions
     test_script_extensions = [".test", ".test_slow", ".test_coverage"]
     it = itertools.chain.from_iterable(root_dir.rglob(f"*{ext}") for ext in test_script_extensions)
-    return map(
-        lambda path: pytest.param(
-            path.absolute(), id=get_test_id(path, root_dir, config), marks=get_test_marks(path, root_dir, config)
-        ),
-        it,
-    )
+    return create_parameters_from_paths(it, root_dir, config)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     # test_sqllogic (a.k.a SQLLOGIC_TEST_CASE_NAME) is defined in test_sqllogic.py
-    if metafunc.definition.name == SQLLOGIC_TEST_CASE_NAME:
-        test_dirs: typing.List[pathlib.Path] = metafunc.config.getoption("test_dirs")
+    if metafunc.definition.name != SQLLOGIC_TEST_CASE_NAME:
+        return
+
+    test_dirs: typing.List[pathlib.Path] = metafunc.config.getoption("test_dirs")
+    test_glob: typing.Optional[pathlib.Path] = metafunc.config.getoption("path")
+
+    parameters = []
+
+    if test_glob:
+        test_paths = DUCKDB_ROOT_DIR.rglob(test_glob)
+        parameters.extend(create_parameters_from_paths(test_paths, DUCKDB_ROOT_DIR, metafunc.config))
+
+    for test_dir in test_dirs:
+        # Create absolute & normalized path
+        test_dir = test_dir.resolve()
+        assert test_dir.is_dir()
+        parameters.extend(scan_for_test_scripts(test_dir, metafunc.config))
+
+    if parameters == []:
         if len(test_dirs) == 0:
-            # Use DuckDB's test directory as the default when --test-dir not specified
-            test_dirs = [DUCKDB_ROOT_DIR / "test"]
+            # Use DuckDB's test directory as the default when no paths are provided
+            parameters.extend(scan_for_test_scripts(DUCKDB_ROOT_DIR / "test", metafunc.config))
 
-        parameters = []
-        for test_dir in test_dirs:
-            # Create absolute & normalized path
-            test_dir = test_dir.resolve()
-            assert test_dir.is_dir()
-            parameters.extend(scan_for_test_scripts(test_dir, metafunc.config))
-
-        metafunc.parametrize(SQLLOGIC_TEST_PARAMETER, parameters)
+    metafunc.parametrize(SQLLOGIC_TEST_PARAMETER, parameters)
 
 
 # Execute last, after pytest has already deselected tests based on -k and -m parameters

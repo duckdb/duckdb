@@ -10,6 +10,8 @@
 
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
 namespace duckdb {
 
@@ -20,6 +22,13 @@ public:
 	}
 
 	CSVReaderOptions options;
+};
+
+struct CSVSchemaDiscovery {
+	static CSVSchema SchemaDiscovery(ClientContext &context, shared_ptr<CSVBufferManager> &buffer_manager,
+	                                 CSVReaderOptions &options, const MultiFileOptions &file_options,
+	                                 vector<LogicalType> &return_types, vector<string> &names,
+	                                 MultiFileList &multi_file_list);
 };
 
 struct CSVMultiFileInfo : public MultiFileReaderInterface {

@@ -1,0 +1,70 @@
+# name: test/sql/copy/csv/17744.test
+# description: Test for issue #17744
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (
+    SELECT
+        -- The string must start with a hash to reproduce the issue
+        '#hash start' AS first_column,
+        1 AS second_column
+    UNION ALL
+    SELECT
+        -- Quoted value can go anywhere between rows 1 and 2048 just not 1 or 2048. It must be between the hashes
+        '"my, quoted value"' AS first_column,
+        1 AS second_column
+    UNION ALL
+    -- These rows make the csv 2048 rows long which is required to reproduce
+    SELECT
+        'any value' AS first_column,
+        1 AS second_column
+    FROM range(0, 2045)
+    UNION ALL
+    SELECT
+        -- This hash value must be somewhere in the string just not at the beginning
+        'hash not at start #' AS column_value,
+     1 AS second_column
+) TO '__TEST_DIR__/test.csv' (format csv, header 1);
+
+query II
+SELECT columns, comment FROM sniff_csv('__TEST_DIR__/test.csv', null_padding = true)
+----
+[{'name': first_column, 'type': VARCHAR}, {'name': second_column, 'type': BIGINT}]	(empty)
+
+query II
+SELECT columns, comment FROM sniff_csv('__TEST_DIR__/test.csv', null_padding = true, comment = '#')
+----
+[{'name': first_column, 'type': VARCHAR}, {'name': second_column, 'type': BIGINT}]	#
+
+
+statement ok
+COPY (
+    SELECT
+        -- The string must start with a hash to reproduce the issue
+        '#hash start' AS first_column,
+        1 AS second_column
+    UNION ALL
+    SELECT
+        -- Quoted value can go anywhere between rows 1 and 2048 just not 1 or 2048. It must be between the hashes
+        '"my, quoted value"' AS first_column,
+        1 AS second_column
+    UNION ALL
+    -- These rows make the csv 2048 rows long which is required to reproduce
+    SELECT
+        'any value' AS first_column,
+        1 AS second_column
+    FROM range(0, 2045)
+    UNION ALL
+    SELECT
+        -- This hash value must be somewhere in the string just not at the beginning
+        'hash not at start #' AS column_value,
+     1 AS second_column
+) TO '__TEST_DIR__/test_2.csv' (format csv, header 1, QUOTE '');
+
+query II
+SELECT columns, comment FROM sniff_csv('__TEST_DIR__/test_2.csv')
+----
+[{'name': first_column, 'type': VARCHAR}, {'name': second_column, 'type': BIGINT}]	(empty)

@@ -4,7 +4,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -109,7 +108,7 @@ public:
 
 	struct LeadLagState {
 		//	Fixed size
-		static constexpr idx_t MAX_BUFFER = 2048U;
+		static constexpr int64_t MAX_BUFFER = 2048;
 
 		static bool ComputeOffset(ClientContext &context, BoundWindowExpression &wexpr, int64_t &offset) {
 			offset = 1;
@@ -132,7 +131,7 @@ public:
 			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 				offset = -offset;
 			}
-			return idx_t(std::abs(offset)) < MAX_BUFFER;
+			return std::abs(offset) < MAX_BUFFER;
 		}
 
 		static bool ComputeDefault(ClientContext &context, BoundWindowExpression &wexpr, Value &result) {
@@ -413,6 +412,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 
 	// Compute the arguments
 	auto &arg_chunk = aggr_state.arg_chunk;
+	arg_chunk.Reset();
 	executor.Execute(input, arg_chunk);
 	arg_chunk.Flatten();
 

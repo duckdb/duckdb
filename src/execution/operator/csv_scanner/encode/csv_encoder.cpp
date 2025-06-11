@@ -8,7 +8,7 @@ namespace duckdb {
 
 void CSVEncoderBuffer::Initialize(idx_t encoded_size) {
 	encoded_buffer_size = encoded_size;
-	encoded_buffer = std::unique_ptr<char[]>(new char[encoded_size]);
+	encoded_buffer = duckdb::unique_ptr<char[]>(new char[encoded_size]);
 }
 
 char *CSVEncoderBuffer::Ptr() const {
@@ -43,13 +43,10 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
 	encoding_name = StringUtil::Lower(encoding_name_to_find);
 	auto function = config.GetEncodeFunction(encoding_name_to_find);
 	if (!function) {
-		if (!context.db->ExtensionIsLoaded("encodings")) {
-			// Maybe we can try to auto-load from our encodings extension, if this somehow fails, we just error.
-			auto extension_loaded = ExtensionHelper::TryAutoLoadExtension(context, "encodings");
-			if (extension_loaded) {
-				// If it successfully loaded, we can try to get our function again
-				function = config.GetEncodeFunction(encoding_name_to_find);
-			}
+		// Maybe we can try to auto-load from our encodings extension, if this somehow fails, we just error.
+		if (Catalog::TryAutoLoad(context, "encodings")) {
+			// If it successfully loaded, we can try to get our function again
+			function = config.GetEncodeFunction(encoding_name_to_find);
 		}
 	}
 	if (!function) {

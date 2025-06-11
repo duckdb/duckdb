@@ -88,7 +88,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		auto fname = runner.LoopReplacement(values[0], context.running_loops);
+		auto fname = StringUtil::Replace(values[0], "<FILE>:", "");
+		fname = runner.ReplaceKeywords(fname);
+		fname = runner.LoopReplacement(fname, context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
@@ -219,26 +221,32 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	} else {
 		bool hash_compare_error = false;
 		if (query_has_label) {
-			// the query has a label: check if the hash has already been computed
-			auto entry = runner.hash_label_map.find(query_label);
-			if (entry == runner.hash_label_map.end()) {
-				// not computed yet: add it tot he map
-				runner.hash_label_map[query_label] = hash_value;
-				runner.result_label_map[query_label] = std::move(owned_result);
-			} else {
-				hash_compare_error = entry->second != hash_value;
-			}
+			runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+				// the query has a label: check if the hash has already been computed
+				auto entry = map.find(query_label);
+				if (entry == map.end()) {
+					// not computed yet: add it tot he map
+					map.emplace(query_label, CachedLabelData(hash_value, std::move(owned_result)));
+				} else {
+					hash_compare_error = entry->second.hash != hash_value;
+				}
+			});
 		}
+		string expected_hash;
 		if (result_is_hash) {
+			expected_hash = values[0];
 			D_ASSERT(values.size() == 1);
-			hash_compare_error = values[0] != hash_value;
+			hash_compare_error = expected_hash != hash_value;
 		}
 		if (hash_compare_error) {
 			QueryResult *expected_result = nullptr;
-			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
-				expected_result = runner.result_label_map[query_label].get();
-			}
-			logger.WrongResultHash(expected_result, result);
+			runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+				auto it = map.find(query_label);
+				if (it != map.end()) {
+					expected_result = it->second.result.get();
+				}
+				logger.WrongResultHash(expected_result, result, expected_hash, hash_value);
+			});
 			return false;
 		}
 		REQUIRE(!hash_compare_error);
@@ -316,7 +324,6 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	Connection con(db);
 	auto threads = MaxValue<idx_t>(std::thread::hardware_concurrency(), 1);
 	con.Query("PRAGMA threads=" + to_string(threads));
-	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
 	for (idx_t i = 0; i < names.size(); i++) {

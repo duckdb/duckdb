@@ -105,7 +105,7 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 namespace string_util_internal {
 
 inline void SkipSpaces(const string &str, idx_t &index) {
-	while (index < str.size() && std::isspace(str[index])) {
+	while (index < str.size() && StringUtil::CharacterIsSpace(str[index])) {
 		index++;
 	}
 }
@@ -136,7 +136,9 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 		ConsumeLetter(str, index, quote);
 	} else {
 		TakeWhile(
-		    str, index, [delimiter, quote](char c) { return c != delimiter && c != quote && !std::isspace(c); }, entry);
+		    str, index,
+		    [delimiter, quote](char c) { return c != delimiter && c != quote && !StringUtil::CharacterIsSpace(c); },
+		    entry);
 	}
 
 	return entry;

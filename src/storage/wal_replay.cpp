@@ -816,19 +816,24 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: delete without table");
+		throw SerializationException("delete without a table");
 	}
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	row_t row_ids[1];
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_ids));
-
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
-	// delete the tuples from the current table
+
+	// Delete the row IDs from the current table.
+	auto &storage = state.current_table->GetStorage();
+	auto total_rows = storage.GetTotalRows();
 	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
+		if (source_ids[i] >= UnsafeNumericCast<row_t>(total_rows)) {
+			throw SerializationException("invalid row ID delete in WAL");
+		}
 		row_ids[0] = source_ids[i];
-		state.current_table->GetStorage().Delete(delete_state, context, row_identifiers, 1);
+		storage.Delete(delete_state, context, row_identifiers, 1);
 	}
 }
 
