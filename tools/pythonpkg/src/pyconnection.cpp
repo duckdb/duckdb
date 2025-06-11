@@ -466,12 +466,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	while (!PendingQueryResult::IsResultReady(execution_result = pending_query.ExecuteTask())) {
-		{
-			py::gil_scoped_acquire gil;
-			if (PyErr_CheckSignals() != 0) {
-				throw std::runtime_error("Query interrupted");
-			}
-		}
+		// {
+		// 	py::gil_scoped_acquire gil;
+		// 	if (PyErr_CheckSignals() != 0) {
+		// 		throw std::runtime_error("Query interrupted");
+		// 	}
+		// }
 		if (execution_result == PendingExecutionResult::BLOCKED) {
 			pending_query.WaitForTask();
 		}
