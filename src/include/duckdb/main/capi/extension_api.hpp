@@ -472,14 +472,11 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
-	// data_chunk functions to copy, copy with selection, copy with selection and projection and project
+	// New data chunk functions that are added
 
 	void (*duckdb_data_chunk_copy)(duckdb_data_chunk src, duckdb_data_chunk dst);
 	void (*duckdb_data_chunk_copy_sel)(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
 	                                   idx_t source_count, idx_t offset);
-	void (*duckdb_data_chunk_copy_sel_project)(duckdb_data_chunk src, duckdb_data_chunk dst,
-	                                           duckdb_selection_vector sel, idx_t source_count, idx_t offset,
-	                                           const idx_t *col_idx, idx_t column_count);
 	void (*duckdb_data_chunk_reference_columns)(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
 	                                            idx_t column_count);
 	// New functions for duckdb error data
@@ -512,6 +509,10 @@ typedef struct {
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
+	// New vector functions that are added
+
+	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+	                               idx_t src_offset, idx_t dst_offset);
 	// An API to create new vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
@@ -940,7 +941,6 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
 	result.duckdb_data_chunk_copy = duckdb_data_chunk_copy;
 	result.duckdb_data_chunk_copy_sel = duckdb_data_chunk_copy_sel;
-	result.duckdb_data_chunk_copy_sel_project = duckdb_data_chunk_copy_sel_project;
 	result.duckdb_data_chunk_reference_columns = duckdb_data_chunk_reference_columns;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
@@ -960,6 +960,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;
+	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;

@@ -1,0 +1,7 @@
+{
+  "version": "unstable_new_vector_functions",
+  "description": "New vector functions that are added",
+  "entries": [
+      "duckdb_vector_copy_sel"
+  ]
+}

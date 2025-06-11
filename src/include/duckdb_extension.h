@@ -543,14 +543,11 @@ typedef struct {
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
 #endif
 
-// data_chunk functions to copy, copy with selection, copy with selection and projection and project
+// New data chunk functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_data_chunk_copy)(duckdb_data_chunk src, duckdb_data_chunk dst);
 	void (*duckdb_data_chunk_copy_sel)(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
 	                                   idx_t source_count, idx_t offset);
-	void (*duckdb_data_chunk_copy_sel_project)(duckdb_data_chunk src, duckdb_data_chunk dst,
-	                                           duckdb_selection_vector sel, idx_t source_count, idx_t offset,
-	                                           const idx_t *col_idx, idx_t column_count);
 	void (*duckdb_data_chunk_reference_columns)(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
 	                                            idx_t column_count);
 #endif
@@ -593,6 +590,12 @@ typedef struct {
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
+#endif
+
+// New vector functions that are added
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+	                               idx_t src_offset, idx_t dst_offset);
 #endif
 
 // An API to create new vector types
@@ -1033,7 +1036,6 @@ typedef struct {
 // Version unstable_new_data_chunk_functions
 #define duckdb_data_chunk_copy              duckdb_ext_api.duckdb_data_chunk_copy
 #define duckdb_data_chunk_copy_sel          duckdb_ext_api.duckdb_data_chunk_copy_sel
-#define duckdb_data_chunk_copy_sel_project  duckdb_ext_api.duckdb_data_chunk_copy_sel_project
 #define duckdb_data_chunk_reference_columns duckdb_ext_api.duckdb_data_chunk_reference_columns
 
 // Version unstable_new_error_data_functions
@@ -1063,6 +1065,9 @@ typedef struct {
 // Version unstable_new_value_functions
 #define duckdb_create_map_value   duckdb_ext_api.duckdb_create_map_value
 #define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
+
+// Version unstable_new_vector_functions
+#define duckdb_vector_copy_sel duckdb_ext_api.duckdb_vector_copy_sel
 
 // Version unstable_new_vector_types
 #define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector

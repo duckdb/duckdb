@@ -549,15 +549,9 @@ TEST_CASE("Test DataChunk write VARINT", "[capi]") {
 }
 
 TEST_CASE("Test duckdb_data_chunk_copy", "[capi]") {
-	duckdb_database db = nullptr;
-	duckdb_connection con = nullptr;
-	duckdb_state status;
-
-	// Set up the database and connection
-	status = duckdb_open(nullptr, &db);
-	REQUIRE(status == DuckDBSuccess);
-	status = duckdb_connect(db, &con);
-	REQUIRE(status == DuckDBSuccess);
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
 
 	SECTION("Test basic data chunk copy") {
 		duckdb_data_chunk src_chunk, dst_chunk;
@@ -638,7 +632,6 @@ TEST_CASE("Test duckdb_data_chunk_copy", "[capi]") {
 		duckdb_data_chunk_set_size(src_chunk, 2);
 
 		duckdb_data_chunk_copy(src_chunk, dst_chunk);
-		REQUIRE(status == DuckDBSuccess);
 
 		REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == 2);
 		duckdb_vector dst_vector = duckdb_data_chunk_get_vector(dst_chunk, 0);
@@ -652,10 +645,6 @@ TEST_CASE("Test duckdb_data_chunk_copy", "[capi]") {
 		duckdb_destroy_data_chunk(&dst_chunk);
 		duckdb_destroy_logical_type(&types[0]);
 	}
-
-	// Clean up
-	duckdb_disconnect(&con);
-	duckdb_close(&db);
 }
 
 TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
@@ -664,14 +653,9 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 		return;
 	}
 
-	duckdb_database db = nullptr;
-	duckdb_connection con = nullptr;
-	duckdb_state status;
-
-	status = duckdb_open(nullptr, &db);
-	REQUIRE(status == DuckDBSuccess);
-	status = duckdb_connect(db, &con);
-	REQUIRE(status == DuckDBSuccess);
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// Common setup
 	duckdb_data_chunk src_chunk, dst_chunk;
@@ -746,7 +730,6 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 			CHECK(strcmp(str, expected.c_str()) == 0);
 			free(str);
 		}
-		std::cout << "\n";
 
 		delete sel;
 	}
@@ -774,96 +757,12 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 	for (size_t i = 0; i < 2; i++) {
 		duckdb_destroy_logical_type(&types[i]);
 	}
-
-	duckdb_disconnect(&con);
-	duckdb_close(&db);
-}
-
-TEST_CASE("Test duckdb_data_chunk_copy_sel_project", "[capi]") {
-	if (STANDARD_VECTOR_SIZE < 16) {
-		SKIP_TEST("require " + std::to_string(STANDARD_VECTOR_SIZE) + " >= 16");
-		return;
-	}
-
-	duckdb_database db = nullptr;
-	duckdb_connection con = nullptr;
-	duckdb_state status;
-
-	status = duckdb_open(nullptr, &db);
-	REQUIRE(status == DuckDBSuccess);
-	status = duckdb_connect(db, &con);
-	REQUIRE(status == DuckDBSuccess);
-
-	duckdb_data_chunk src_chunk;
-	duckdb_logical_type src_types[] = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
-	                                   duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE),
-	                                   duckdb_create_logical_type(DUCKDB_TYPE_BIGINT)};
-	src_chunk = duckdb_create_data_chunk(src_types, 3);
-
-	// Populate the source chunk with 5 rows of data
-	auto int_data = (int32_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(src_chunk, 0));
-	auto double_data = (double *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(src_chunk, 1));
-	auto bigint_data = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(src_chunk, 2));
-
-	idx_t row_size = 10;
-	for (idx_t i = 0; i < row_size; ++i) {
-		int_data[i] = i * 10;
-		double_data[i] = i + 0.5;
-		bigint_data[i] = i * 100;
-	}
-	duckdb_data_chunk_set_size(src_chunk, row_size);
-
-	SECTION("Test projection with selection, count and offset") {
-		// Project columns 2 (BIGINT) and 0 (INT) from the source
-		duckdb_data_chunk dst_chunk;
-		duckdb_logical_type dst_types[] = {duckdb_create_logical_type(DUCKDB_TYPE_BIGINT),
-		                                   duckdb_create_logical_type(DUCKDB_TYPE_INTEGER)};
-		dst_chunk = duckdb_create_data_chunk(dst_types, 2);
-
-		idx_t selection_data[] = {0, 2, 4, 6, 8};
-		duckdb_selection_vector sel_vector = duckdb_create_selection_vector(5);
-		auto sel = reinterpret_cast<duckdb::SelectionVector *>(sel_vector);
-		for (idx_t i = 0; i < 5; ++i) {
-			sel->set_index(i, selection_data[i]);
-		}
-		idx_t projection_data[] = {2, 0};
-
-		duckdb_data_chunk_copy_sel_project(src_chunk, dst_chunk, sel_vector, 4, 1, projection_data, 2);
-
-		REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == 3);
-		REQUIRE(duckdb_data_chunk_get_column_count(dst_chunk) == 2);
-
-		auto dst_bigint_data = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(dst_chunk, 0));
-		auto dst_int_data = (int32_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(dst_chunk, 1));
-
-		for (int i = 0; i < 3; ++i) {
-			REQUIRE(dst_bigint_data[i] == bigint_data[selection_data[i + 1]]);
-			REQUIRE(dst_int_data[i] == int_data[selection_data[i + 1]]);
-		}
-
-		duckdb_destroy_data_chunk(&dst_chunk);
-		duckdb_destroy_logical_type(&dst_types[0]);
-		duckdb_destroy_logical_type(&dst_types[1]);
-		delete sel;
-	}
-
-	duckdb_destroy_data_chunk(&src_chunk);
-	for (size_t i = 0; i < 3; i++) {
-		duckdb_destroy_logical_type(&src_types[i]);
-	}
-	duckdb_disconnect(&con);
-	duckdb_close(&db);
 }
 
 TEST_CASE("Test duckdb_data_chunk_reference_columns", "[capi]") {
-	duckdb_database db = nullptr;
-	duckdb_connection con = nullptr;
-	duckdb_state status;
-
-	status = duckdb_open(nullptr, &db);
-	REQUIRE(status == DuckDBSuccess);
-	status = duckdb_connect(db, &con);
-	REQUIRE(status == DuckDBSuccess);
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
 
 	duckdb_data_chunk src_chunk;
 	duckdb_logical_type src_types[] = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
@@ -927,6 +826,4 @@ TEST_CASE("Test duckdb_data_chunk_reference_columns", "[capi]") {
 	for (size_t i = 0; i < 3; i++) {
 		duckdb_destroy_logical_type(&src_types[i]);
 	}
-	duckdb_disconnect(&con);
-	duckdb_close(&db);
 }

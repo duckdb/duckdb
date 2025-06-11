@@ -60,19 +60,6 @@ void duckdb_data_chunk_copy_sel(duckdb_data_chunk src, duckdb_data_chunk dst, du
 	dsrc->Copy(*ddst, *dsel, source_count, offset);
 }
 
-void duckdb_data_chunk_copy_sel_project(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
-                                        idx_t source_count, idx_t offset, const idx_t *col_idx, idx_t column_count) {
-	auto dsrc = reinterpret_cast<duckdb::DataChunk *>(src);
-	auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst);
-	auto dsel = reinterpret_cast<duckdb::SelectionVector *>(sel);
-
-	duckdb::vector<duckdb::column_t> column_ids;
-	for (idx_t i = 0; i < column_count; i++) {
-		column_ids.push_back(col_idx[i]);
-	}
-	dsrc->Copy(*ddst, *dsel, source_count, offset, column_ids);
-}
-
 void duckdb_data_chunk_reference_columns(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
                                          idx_t column_count) {
 	auto dsrc = reinterpret_cast<duckdb::DataChunk *>(src);
@@ -285,6 +272,14 @@ void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector sel, idx_t 
 	auto d_dict = reinterpret_cast<duckdb::Vector *>(dict);
 	auto d_sel = reinterpret_cast<duckdb::SelectionVector *>(sel);
 	d_dict->Slice(*d_sel, len);
+}
+
+void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+                            idx_t src_offset, idx_t dst_offset) {
+	auto d_src = reinterpret_cast<duckdb::Vector *>(src);
+	auto d_dst = reinterpret_cast<duckdb::Vector *>(dst);
+	auto d_sel = reinterpret_cast<duckdb::SelectionVector *>(sel);
+	duckdb::VectorOperations::Copy(*d_src, *d_dst, *d_sel, src_count, src_offset, dst_offset);
 }
 
 void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {
