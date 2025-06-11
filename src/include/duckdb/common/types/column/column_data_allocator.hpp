@@ -77,7 +77,7 @@ public:
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
 	void UnswizzlePointers(ChunkManagementState &state, Vector &result, SwizzleMetaData &swizzle_segment,
-	                       const VectorMetaData &string_heap_segment, const idx_t &v_offset);
+	                       const VectorMetaData &string_heap_segment, const idx_t &v_offset, const bool &copied);
 
 	//! Prevents the block with the given id from being added to the eviction queue
 	void SetDestroyBufferUponUnpin(uint32_t block_id);
