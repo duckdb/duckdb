@@ -62,7 +62,7 @@ struct AggregateFun {
 struct ListDistinctFun {
 	static constexpr const char *Name = "list_distinct";
 	static constexpr const char *Parameters = "list";
-	static constexpr const char *Description = "Removes all duplicates and NULLs from a list. Does not preserve the original order.";
+	static constexpr const char *Description = "Removes all duplicates and `NULL` values from a list. Does not preserve the original order.";
 	static constexpr const char *Example = "list_distinct([1, 1, NULL, -3, 1, 5])";
 	static constexpr const char *Categories = "list";
 
@@ -78,7 +78,7 @@ struct ArrayDistinctFun {
 struct ListUniqueFun {
 	static constexpr const char *Name = "list_unique";
 	static constexpr const char *Parameters = "list";
-	static constexpr const char *Description = "Counts the unique elements of a list.";
+	static constexpr const char *Description = "Counts the unique elements of a `list`.";
 	static constexpr const char *Example = "list_unique([1, 1, NULL, -3, 1, 5])";
 	static constexpr const char *Categories = "list";
 
@@ -142,7 +142,7 @@ struct ArraySortFun {
 struct ListGradeUpFun {
 	static constexpr const char *Name = "list_grade_up";
 	static constexpr const char *Parameters = "list";
-	static constexpr const char *Description = "Returns the index of their sorted position.";
+	static constexpr const char *Description = "Works like list_sort, but the results are the indexes that correspond to the position in the original list instead of the actual values.";
 	static constexpr const char *Example = "list_grade_up([3, 6, 1, 2])";
 	static constexpr const char *Categories = "list";
 
@@ -278,7 +278,7 @@ struct ListRangeFun {
 struct ListCosineDistanceFun {
 	static constexpr const char *Name = "list_cosine_distance";
 	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Computes the cosine distance between two lists.";
+	static constexpr const char *Description = "Computes the cosine distance between two same-sized lists.";
 	static constexpr const char *Example = "list_cosine_distance([1, 2, 3], [1, 2, 3])";
 	static constexpr const char *Categories = "list";
 
@@ -294,7 +294,7 @@ struct ListCosineDistanceFunAlias {
 struct ListCosineSimilarityFun {
 	static constexpr const char *Name = "list_cosine_similarity";
 	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Computes the cosine similarity between two lists.";
+	static constexpr const char *Description = "Computes the cosine similarity between two same-sized lists.";
 	static constexpr const char *Example = "list_cosine_similarity([1, 2, 3], [1, 2, 3])";
 	static constexpr const char *Categories = "list";
 
@@ -304,8 +304,8 @@ struct ListCosineSimilarityFun {
 struct ListDistanceFun {
 	static constexpr const char *Name = "list_distance";
 	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Computes the distance between two lists.";
-	static constexpr const char *Example = "list_distance([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Description = "Calculates the Euclidean distance between two points with coordinates given in two inputs lists of equal length.";
+	static constexpr const char *Example = "list_distance([1, 2, 3], [1, 2, 5])";
 	static constexpr const char *Categories = "list";
 
 	static ScalarFunctionSet GetFunctions();
@@ -320,7 +320,7 @@ struct ListDistanceFunAlias {
 struct ListInnerProductFun {
 	static constexpr const char *Name = "list_inner_product";
 	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Computes the inner product between two lists.";
+	static constexpr const char *Description = "Computes the inner product between two same-sized lists.";
 	static constexpr const char *Example = "list_inner_product([1, 2, 3], [1, 2, 3])";
 	static constexpr const char *Categories = "list";
 
@@ -336,7 +336,7 @@ struct ListDotProductFun {
 struct ListNegativeInnerProductFun {
 	static constexpr const char *Name = "list_negative_inner_product";
 	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Computes the negative inner product between two lists.";
+	static constexpr const char *Description = "Computes the negative inner product between two same-sized lists.";
 	static constexpr const char *Example = "list_negative_inner_product([1, 2, 3], [1, 2, 3])";
 	static constexpr const char *Categories = "list";
 
@@ -384,7 +384,7 @@ struct ListHasAnyFunAlias {
 struct ListHasAllFun {
 	static constexpr const char *Name = "list_has_all";
 	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Returns true if all elements of l2 are in l1. NULLs are ignored.";
+	static constexpr const char *Description = "Returns true if all elements of list2 are in list1. NULLs are ignored.";
 	static constexpr const char *Example = "list_has_all([1, 2, 3], [2, 3])";
 	static constexpr const char *Categories = "list";
 

@@ -69,9 +69,9 @@ struct ConcatFun {
 
 struct ListConcatFun {
 	static constexpr const char *Name = "list_concat";
-	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Concatenates two lists.";
-	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
+	static constexpr const char *Parameters = "list,...";
+	static constexpr const char *Description = "Concatenates lists. `NULL` inputs are skipped. See also operator `||`.";
+	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6], [7])";
 	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();

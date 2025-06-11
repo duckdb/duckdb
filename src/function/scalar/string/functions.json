@@ -37,9 +37,9 @@
     },
     {
         "name": "list_concat",
-        "parameters": "list1,list2",
-        "description": "Concatenates two lists.",
-        "example": "list_concat([2, 3], [4, 5, 6])",
+        "parameters": "list,...",
+        "description": "Concatenates lists. `NULL` inputs are skipped. See also operator `||`.",
+        "example": "list_concat([2, 3], [4, 5, 6], [7])",
         "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["list_cat","array_concat","array_cat"]

@@ -20,7 +20,7 @@
     {
         "name": "list_distinct",
         "parameters": "list",
-        "description": "Removes all duplicates and NULLs from a list. Does not preserve the original order.",
+        "description": "Removes all duplicates and `NULL` values from a list. Does not preserve the original order.",
         "example": "list_distinct([1, 1, NULL, -3, 1, 5])",
         "categories": ["list"],
         "type": "scalar_function",
@@ -29,7 +29,7 @@
     {
         "name": "list_unique",
         "parameters": "list",
-        "description": "Counts the unique elements of a list.",
+        "description": "Counts the unique elements of a `list`.",
         "example": "list_unique([1, 1, NULL, -3, 1, 5])",
         "categories": ["list"],
         "type": "scalar_function",
@@ -84,7 +84,7 @@
     {
         "name": "list_grade_up",
         "parameters": "list",
-        "description": "Returns the index of their sorted position.",
+        "description": "Works like list_sort, but the results are the indexes that correspond to the position in the original list instead of the actual values.",
         "example": "list_grade_up([3, 6, 1, 2])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -146,7 +146,7 @@
     {
         "name": "list_cosine_distance",
         "parameters": "list1,list2",
-        "description": "Computes the cosine distance between two lists.",
+        "description": "Computes the cosine distance between two same-sized lists.",
         "example": "list_cosine_distance([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -155,7 +155,7 @@
     {
         "name": "list_cosine_similarity",
         "parameters": "list1,list2",
-        "description": "Computes the cosine similarity between two lists.",
+        "description": "Computes the cosine similarity between two same-sized lists.",
         "example": "list_cosine_similarity([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set"
@@ -163,8 +163,8 @@
     {
         "name": "list_distance",
         "parameters": "list1,list2",
-        "description": "Computes the distance between two lists.",
-        "example": "list_distance([1, 2, 3], [1, 2, 3])",
+        "description": "Calculates the Euclidean distance between two points with coordinates given in two inputs lists of equal length.",
+        "example": "list_distance([1, 2, 3], [1, 2, 5])",
         "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["<->"]
@@ -172,7 +172,7 @@
     {
         "name": "list_inner_product",
         "parameters": "list1,list2",
-        "description": "Computes the inner product between two lists.",
+        "description": "Computes the inner product between two same-sized lists.",
         "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -181,7 +181,7 @@
     {
         "name": "list_negative_inner_product",
         "parameters": "list1,list2",
-        "description": "Computes the negative inner product between two lists.",
+        "description": "Computes the negative inner product between two same-sized lists.",
         "example": "list_negative_inner_product([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -207,7 +207,7 @@
     {
         "name": "list_has_all",
         "parameters": "list1,list2",
-        "description": "Returns true if all elements of l2 are in l1. NULLs are ignored.",
+        "description": "Returns true if all elements of list2 are in list1. NULLs are ignored.",
         "example": "list_has_all([1, 2, 3], [2, 3])",
         "categories": ["list"],
         "type": "scalar_function",
