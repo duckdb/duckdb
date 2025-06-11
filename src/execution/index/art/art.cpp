@@ -1099,7 +1099,7 @@ IndexStorageInfo ART::GetStorageInfo(optional_ptr<ClientContext> context,
 	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	if (!to_wal) {
 		// Store the data on disk as partial blocks and set the block ids.
-		WritePartialBlocks(context, v1_0_0_storage);
+		WritePartialBlocks(*context, v1_0_0_storage);
 
 	} else {
 		// Set the correct allocation sizes and get the map containing all buffers.
@@ -1114,7 +1114,7 @@ IndexStorageInfo ART::GetStorageInfo(optional_ptr<ClientContext> context,
 	return info;
 }
 
-void ART::WritePartialBlocks(optional_ptr<ClientContext> context, const bool v1_0_0_storage) {
+void ART::WritePartialBlocks(ClientContext &context, const bool v1_0_0_storage) {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 

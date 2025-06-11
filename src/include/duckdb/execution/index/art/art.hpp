@@ -150,7 +150,7 @@ private:
 	void InitAllocators(const IndexStorageInfo &info);
 	void TransformToDeprecated();
 	void Deserialize(const BlockPointer &pointer);
-	void WritePartialBlocks(optional_ptr<ClientContext> context, const bool v1_0_0_storage);
+	void WritePartialBlocks(ClientContext &context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
 	string VerifyAndToStringInternal(const bool only_verify);

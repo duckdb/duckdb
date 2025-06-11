@@ -73,7 +73,7 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-void FixedSizeBuffer::Serialize(optional_ptr<ClientContext> context, PartialBlockManager &partial_block_manager,
+void FixedSizeBuffer::Serialize(ClientContext &context, PartialBlockManager &partial_block_manager,
                                 const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
 
