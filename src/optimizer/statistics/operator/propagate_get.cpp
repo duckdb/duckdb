@@ -13,15 +13,6 @@
 
 namespace duckdb {
 
-static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		expr = column.Copy();
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column); });
-}
-
 static void GetColumnIndex(unique_ptr<Expression> &expr, idx_t &index) {
 	if (expr->type == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
@@ -51,7 +42,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 		UpdateFilterStatistics(*filter_expr);
 
 		// replace BoundColumnRefs with BoundRefs
-		ReplaceExpressionRecursive(filter_expr, *colref);
+		ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);
 		expr_filter.expr = std::move(filter_expr);
 		return propagate_result;
 	}
