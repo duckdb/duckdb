@@ -96,7 +96,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
+	auto index_storage_infos = info->GetIndexes().GetStorageInfos(client_context, options);
 
 #ifdef DUCKDB_BLOCK_VERIFICATION
 	for (auto &entry : index_storage_infos) {

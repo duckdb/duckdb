@@ -103,7 +103,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
-void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
+void PartialBlockManager::RegisterPartialBlock(optional_ptr<ClientContext> context, PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {
@@ -132,7 +132,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 	}
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
-		block_to_free->Flush(free_space);
+		block_to_free->Flush(context, free_space);
 	}
 }
 
@@ -155,7 +155,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 
 			// re-register the partial block
 			allocation.state.offset += used_space;
-			RegisterPartialBlock(std::move(allocation));
+			RegisterPartialBlock(nullptr, std::move(allocation));
 		} else {
 			// we cannot merge this block - append it directly to the current block manager
 			partially_filled_blocks.insert(make_pair(e.first, std::move(e.second)));
@@ -173,7 +173,7 @@ void PartialBlockManager::ClearBlocks() {
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(e.first);
+		e.second->Flush(nullptr, e.first);
 	}
 	partially_filled_blocks.clear();
 }
