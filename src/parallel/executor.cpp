@@ -589,6 +589,11 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
+			if (task && DBConfig::GetConfig(context).options.scheduler_process_partial) {
+				auto &token = *task->token;
+				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
+				task.reset();
+			}
 			return PendingExecutionResult::RESULT_NOT_READY;
 		}
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
