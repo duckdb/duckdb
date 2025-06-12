@@ -36,8 +36,11 @@ public:
 		SHA256State();
 		~SHA256State();
 		void AddString(const std::string &str);
+		void AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len);
+		void AddSalt(unsigned char *salt, size_t salt_len);
 		std::string Finalize();
 		void FinishHex(char *out);
+		void FinalizeDerivedKey(duckdb::data_ptr_t hash);
 
 	private:
 		void *sha_context;
