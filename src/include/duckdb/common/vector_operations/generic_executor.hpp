@@ -86,6 +86,10 @@ template <class A_TYPE>
 struct StructTypeUnary : ExecutorBaseType {
 	A_TYPE a_val;
 
+	StructTypeUnary() = default;
+	StructTypeUnary(A_TYPE a) : a_val(a) {
+	}
+
 	using STRUCT_STATE = StructTypeState<1>;
 
 	bool ContainsNull() {
@@ -120,6 +124,10 @@ template <class A_TYPE, class B_TYPE>
 struct StructTypeBinary : ExecutorBaseType {
 	A_TYPE a_val;
 	B_TYPE b_val;
+
+	StructTypeBinary() = default;
+	StructTypeBinary(A_TYPE a, B_TYPE b) : a_val(a), b_val(b) {
+	}
 
 	using STRUCT_STATE = StructTypeState<2>;
 
@@ -164,6 +172,10 @@ struct StructTypeTernary : ExecutorBaseType {
 	A_TYPE a_val;
 	B_TYPE b_val;
 	C_TYPE c_val;
+
+	StructTypeTernary() = default;
+	StructTypeTernary(A_TYPE a, B_TYPE b, C_TYPE c) : a_val(a), b_val(b), c_val(c) {
+	}
 
 	using STRUCT_STATE = StructTypeState<3>;
 
@@ -217,6 +229,10 @@ struct StructTypeQuaternary : ExecutorBaseType {
 	B_TYPE b_val;
 	C_TYPE c_val;
 	D_TYPE d_val;
+
+	StructTypeQuaternary() = default;
+	StructTypeQuaternary(A_TYPE a, B_TYPE b, C_TYPE c, D_TYPE d) : a_val(a), b_val(b), c_val(c), d_val(d) {
+	}
 
 	using STRUCT_STATE = StructTypeState<4>;
 
@@ -276,6 +292,10 @@ struct StructTypeQuaternary : ExecutorBaseType {
 template <class CHILD_TYPE>
 struct GenericListType : ExecutorBaseType {
 	vector<CHILD_TYPE> values;
+
+	GenericListType() = default;
+	GenericListType(vector<CHILD_TYPE> values) : values(values) {
+	}
 
 	using STRUCT_STATE = PrimitiveTypeState;
 
