@@ -13,6 +13,14 @@
 
 namespace duckdb {
 
+// READ_LOCK means shared read access, multiple threads can read the file at the same time.
+// WRITE_LOCK means exclusive write access, only one thread can write to the file at a time,
+// but multiple threads can read the file simultaneously.
+//
+// Whether the locks are advisory or mandatory, do they work within the same process or across processes
+// depends on the platform and file system.
+//
+// See related static methods that start with Platform*() below.
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
 
 class FileOpenFlags {
@@ -110,6 +118,9 @@ public:
 	inline idx_t GetFlagsInternal() const {
 		return flags;
 	}
+
+	static bool PlatformSupportsMandatoryLocks();
+	static bool PlatformEnforcesLocksWithinProcess();
 
 private:
 	idx_t flags = 0;
