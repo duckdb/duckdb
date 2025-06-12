@@ -2,6 +2,8 @@
 # description: Test that we retain constant/dictionary compression for strings when writing to Parquet (big data)
 # group: [parquet]
 
+require vector_size 2048
+
 require parquet
 
 # low memory limit to test that we don't blow up intermediates
