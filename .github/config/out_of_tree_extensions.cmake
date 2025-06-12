@@ -68,7 +68,7 @@ endif()
 duckdb_extension_load(ducklake
     DONT_LINK
     GIT_URL https://github.com/duckdb/ducklake
-    GIT_TAG d4e144737bc3f88aef1d8768cb2ef162b0db9f09
+    GIT_TAG 2d890446b33fe648c2d2135fe2e2f3b78419b6b7
 )
 
 ################# EXCEL
@@ -111,7 +111,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 9b24967e06a4af0a3cd43f8372114202a400f5f5
+            GIT_TAG c0411b950a0e80d232ba31f30bd484aebccca1b5
             )
 endif()
 
@@ -162,7 +162,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG b79ef7e2dde1f9253f9ad584883b029eba8d29a4
+            GIT_TAG dc470684cc670d1a4185a1a408e5d4c61f5356e8
             )
 endif()
 
