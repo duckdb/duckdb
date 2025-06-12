@@ -30,16 +30,19 @@
     {
         "name": "concat",
         "parameters": "value,...",
-        "description": "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also operator `||`.",
-        "example": "concat('Hello', ' ', 'World')",
-        "categories": ["string", "list", "blob"],
+        "description": "Concatenates multiple strings or lists. `NULL` inputs are skipped. See also operator `||`.",
+        "examples": [
+            "concat('Hello', ' ', 'World')",
+            "concat([1, 2, 3], NULL, [4, 5, 6])"
+        ],
+        "categories": ["string", "list"],
         "type": "scalar_function"
     },
     {
         "name": "list_concat",
-        "parameters": "list1,list2",
-        "description": "Concatenates two lists.",
-        "example": "list_concat([2, 3], [4, 5, 6])",
+        "parameters": "list,...",
+        "description": "Concatenates lists. `NULL` inputs are skipped. See also operator `||`.",
+        "example": "list_concat([2, 3], [4, 5, 6], [7])",
         "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["list_cat","array_concat","array_cat"]
@@ -47,7 +50,7 @@
     {
         "name": "||",
         "parameters": "arg1,arg2",
-        "description": "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2)`.",
+        "description": "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2, ...)`.",
         "examples": [
             "'Duck' || 'DB'",
             "[1, 2, 3] || [4, 5, 6]",
