@@ -318,6 +318,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["schema"] = LogicalTypeId::ANY;
 	table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
+	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.statistics = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStats;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
@@ -365,6 +366,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		options.encryption_config = ParquetEncryptionConfig::Create(context, values[0]);
 		return true;
 	}
+	if (key == "can_have_nan") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet can_have_nan cannot be empty!");
+		}
+		options.can_have_nan = GetBooleanArgument(key, values);
+		return true;
+	}
 	return false;
 }
 
@@ -391,6 +399,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "debug_use_openssl") {
 		options.debug_use_openssl = BooleanValue::Get(val);
+		return true;
+	}
+	if (key == "can_have_nan") {
+		options.can_have_nan = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "schema") {
