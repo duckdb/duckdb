@@ -105,3 +105,9 @@ statement error
 SELECT * FROM json_execute_serialized_sql('{ "statements": [ {"expression_class": "BOUND_COMPARISON"}]}');
 ----
 Parser Error: Error parsing json: no select node found in json
+
+# Test execute json serialized sql with multiple select nodes
+query I
+SELECT json_deserialize_sql(json_serialize_sql('SELECT 1;SELECT 2'));
+----
+SELECT 1; SELECT 2
