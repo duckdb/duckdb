@@ -16,7 +16,7 @@
 namespace duckdb {
 class GraphemeIterator;
 
-enum class UnicodeType { INVALID, ASCII, UNICODE };
+enum class UnicodeType { INVALID, ASCII, UTF8 };
 enum class UnicodeInvalidReason { BYTE_MISMATCH, INVALID_UNICODE };
 
 class Utf8Proc {
