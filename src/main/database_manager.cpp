@@ -246,9 +246,6 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
                                                                   const optional_idx max_db_count) {
 	vector<reference<AttachedDatabase>> result;
-	result.push_back(*system);
-	result.push_back(*context.client_data->temporary_objects);
-
 	idx_t count = 2;
 	databases->ScanWithReturn(context, [&](CatalogEntry &entry) {
 		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
@@ -258,6 +255,9 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 		count++;
 		return true;
 	});
+
+	result.push_back(*system);
+	result.push_back(*context.client_data->temporary_objects);
 	return result;
 }
 
