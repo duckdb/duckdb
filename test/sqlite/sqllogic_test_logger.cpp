@@ -44,8 +44,10 @@ void SQLLogicTestLogger::Log(const string &str) {
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
 	auto failures_count = to_string(GetSummaryCounter());
-	LogFailure("\n" + failures_count + ". " + file_name + "\n");
-	PrintLineSep();
+	if (std::getenv("NO_DUPLICATING_HEADERS") == 0) {
+		LogFailure("\n" + failures_count + ". " + file_name + "\n");
+		PrintLineSep();
+	}
 }
 
 void SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise) {
@@ -263,19 +265,20 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
                                                           MaterializedQueryResult &result) {
 
 	std::ostringstream oss;
-	PrintLineSep();
 	PrintErrorHeader("Wrong column count in query!");
 	oss << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got "
 	    << termcolor::bold << expected_column_count << termcolor::reset << " columns" << std::endl;
 	LogFailure(oss.str());
+	oss.str("");
 	oss.clear();
+	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
 	oss << "The expected result " << termcolor::bold << "matched" << termcolor::reset << " the query result."
 	    << std::endl;
 	LogFailure(oss.str());
+	oss.str("");
 	oss.clear();
-	PrintLineSep();
 	oss << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
 	    << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\"" << termcolor::reset
 	    << std::endl;
