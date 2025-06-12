@@ -998,7 +998,10 @@ TruncateStatement <- 'TRUNCATE'i 'TABLE'i? BaseTableName
 
 DeleteUsingClause <- 'USING'i List(TableRef)
 
-CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS'i Type
+CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS'i CreateType
+CreateType <- ('ENUM'i OptionalParensSimpleSelect) /
+              ('ENUM'i Parens(List(StringLiteral))) /
+              Type
 
 SetStatement <- 'SET'i (StandardAssignment / SetTimeZone)
 

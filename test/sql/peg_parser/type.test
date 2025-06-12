@@ -4,8 +4,14 @@
 
 require autocomplete
 
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE type_int AS ENUM (SELECT 1);$TEST_PEG_PARSER$);
+
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE type_int AS ENUM (SELECT 1);$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE type_int AS ENUM ('a','b');$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE type_int AS BIGINT;$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE decs(i DEC())$TEST_PEG_PARSER$);
