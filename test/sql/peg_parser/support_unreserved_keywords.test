@@ -4,8 +4,11 @@
 
 require autocomplete
 
-# statement ok
-# CALL check_peg_parser($TEST_PEG_PARSER$select left(b collate de, 6)$TEST_PEG_PARSER$);
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$RESET VARIABLE foo$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select left(b collate de, 6)$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT v.trim('><')$TEST_PEG_PARSER$);

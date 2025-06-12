@@ -12,4 +12,4 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-ResetStatement <- 'RESET'i (SetSetting / SetVariable)
+ResetStatement <- 'RESET'i (SetVariable / SetSetting)

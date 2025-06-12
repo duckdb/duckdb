@@ -698,8 +698,18 @@ ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'i
 ShowOrDescribe <- 'SHOW'i / 'DESCRIBE'i / 'DESC'i
 
-VacuumStatement <- 'VACUUM'i 'FULL'i? QualifiedName?
+VacuumStatement <- 'VACUUM'i (VacuumLegacyOptions AnalyzeStatement / VacuumLegacyOptions QualifiedTarget / VacuumLegacyOptions / VacuumParensOptions QualifiedTarget?)?
 
+VacuumLegacyOptions <- OptFull OptFreeze OptVerbose
+VacuumParensOptions <- Parens(List(VacuumOption))
+VacuumOption <- 'ANALYZE'i / 'VERBOSE'i / 'FREEZE'i / 'FULL'i / Identifier
+
+OptFull <- 'FULL'i?
+OptFreeze <- 'FREEZE'i?
+OptVerbose <- 'VERBOSE'i?
+
+QualifiedTarget <- QualifiedName OptNameList
+OptNameList <- Parens(List(Name))?
 PragmaStatement <- 'PRAGMA'i (PragmaAssign / PragmaFunction)
 
 PragmaAssign <- SettingName '=' VariableList
@@ -1004,7 +1014,7 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-ResetStatement <- 'RESET'i (SetSetting / SetVariable)
+ResetStatement <- 'RESET'i (SetVariable / SetSetting)
 
 ExportStatement <- 'EXPORT'i 'DATABASE'i ExportSource? StringLiteral Parens(GenericCopyOptionList)?
 
