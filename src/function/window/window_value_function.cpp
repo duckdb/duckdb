@@ -789,7 +789,7 @@ static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
 	case PhysicalType::DOUBLE:
 		return FillInterpolateFunc<double>;
 	default:
-		throw InternalException("Unsupported FILL interpolationtype.");
+		throw InternalException("Unsupported FILL interpolation type.");
 	}
 }
 
