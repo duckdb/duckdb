@@ -310,6 +310,36 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
+
+			// SELECT DISTINCT UNNEST(a) expands the distinct targets, so we need to reflect that here.
+			vector<unique_ptr<Expression>> expanded_targets;
+			for (auto &expr : distinct.target_distincts) {
+				auto &constant = expr->Cast<BoundConstantExpression>();
+				auto &value = constant.value;
+
+				optional_idx index;
+				if (value.type().id() == LogicalTypeId::UBIGINT) {
+					index = value.GetValue<uint64_t>();
+				} else if (value.type().id() == LogicalTypeId::STRUCT) {
+					auto &children = StructValue::GetChildren(value);
+					D_ASSERT(children.size() == 1);
+					index = children[0].GetValue<uint64_t>();
+				} else {
+					throw InternalException("invalid type in distinct targets");
+				}
+
+				auto start = bind_state.GetFinalIndex(index.GetIndex());
+				auto end = bind_state.GetFinalIndex(index.GetIndex() + 1);
+				for (idx_t i = start; i < end; i++) {
+					child_list_t<Value> values;
+					values.push_back(make_pair("index", Value::UBIGINT(i)));
+					auto new_expr = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
+					new_expr->SetQueryLocation(constant.GetQueryLocation());
+					expanded_targets.push_back(std::move(new_expr));
+				}
+			}
+			distinct.target_distincts = std::move(expanded_targets);
+
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
