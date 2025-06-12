@@ -587,7 +587,7 @@ WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 PrefixExpression <- PrefixOperator Expression
 PrefixOperator <- 'NOT'i / '-' / '+' / '~'
 ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'
-StructExpression <- '{' List(StructField) '}'
+StructExpression <- '{' List(StructField)? '}'
 StructField <- Expression ':'i Expression
 MapExpression <- 'MAP'i StructExpression
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))

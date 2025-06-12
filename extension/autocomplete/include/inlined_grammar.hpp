@@ -575,7 +575,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"PrefixExpression <- PrefixOperator Expression\n"
 	"PrefixOperator <- 'NOT'i / '-' / '+' / '~'\n"
 	"ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'\n"
-	"StructExpression <- '{' List(StructField) '}'\n"
+	"StructExpression <- '{' List(StructField)? '}'\n"
 	"StructField <- Expression ':'i Expression\n"
 	"MapExpression <- 'MAP'i StructExpression\n"
 	"GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))\n"
