@@ -11,6 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("A lot of unions", "[optimizer][.]") {
+
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -20,7 +21,7 @@ TEST_CASE("A lot of unions", "[optimizer][.]") {
 	int max = 0;
 	int curr = 1;
 	while (max < 500) {
-		max = (max *1.1) + 1;
+		max = (max * 1.1) + 1;
 		while (curr < max) {
 			q << " union all select 1 as num";
 			curr++;
@@ -28,4 +29,3 @@ TEST_CASE("A lot of unions", "[optimizer][.]") {
 		REQUIRE_NO_FAIL(con.Query(q.str()));
 	}
 }
-
