@@ -106,7 +106,7 @@ NumericType <- 'INT'i /
                ('NUMERIC'i TypeModifiers?)
 
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
-TypeModifiers <- Parens(List(Expression))
+TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct Parens(List(ColIdType))
 UnionType <- 'UNION'i Parens(List(ColIdType))
 MapType <- 'MAP'i Parens(List(Type))

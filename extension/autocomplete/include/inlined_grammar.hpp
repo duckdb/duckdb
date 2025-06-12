@@ -1075,7 +1075,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"               ('DEC'i TypeModifiers?) /\n"
 	"               ('NUMERIC'i TypeModifiers?)\n"
 	"QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName\n"
-	"TypeModifiers <- Parens(List(Expression))\n"
+	"TypeModifiers <- Parens(List(Expression)?)\n"
 	"RowType <- RowOrStruct Parens(List(ColIdType))\n"
 	"UnionType <- 'UNION'i Parens(List(ColIdType))\n"
 	"MapType <- 'MAP'i Parens(List(Type))\n"
