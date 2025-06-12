@@ -30,7 +30,7 @@ public:
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
 	bool UsesRawKeyNames() override {
-		return true;
+		return false;
 	}
 
 private:
