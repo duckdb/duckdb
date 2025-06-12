@@ -27,9 +27,12 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	default:
 		throw InternalException("Unsupported interval transformation");
 	}
+	SetQueryLocation(*expr, node.location);
 
 	if (!node.typmods) {
-		return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+		auto result = make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+		SetQueryLocation(*result, node.location);
+		return std::move(result);
 	}
 
 	int32_t mask = NumericCast<int32_t>(
@@ -137,6 +140,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	}
 	// first push a cast to the parse type
 	expr = make_uniq<CastExpression>(parse_type, std::move(expr));
+	SetQueryLocation(*expr, node.location);
 
 	// next, truncate it if the target type doesn't match the parse type
 	if (target_type != parse_type) {

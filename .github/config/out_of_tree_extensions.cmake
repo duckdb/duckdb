@@ -20,7 +20,7 @@ duckdb_extension_load(httpfs
     APPLY_PATCHES
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 217ec8e04f6ed419c866a6d2496aa15aace4382f
+    GIT_TAG 7b09112ad257249130375c0841d962eecb85662e 
     INCLUDE_DIR extension/httpfs/include
     APPLY_PATCHES
     )
@@ -69,6 +69,13 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     )
 endif()
 endif()
+
+################ DUCKLAKE
+duckdb_extension_load(ducklake
+    DONT_LINK
+    GIT_URL https://github.com/duckdb/ducklake
+    GIT_TAG d4e144737bc3f88aef1d8768cb2ef162b0db9f09
+)
 
 ################# EXCEL
 duckdb_extension_load(excel
