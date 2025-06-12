@@ -10,15 +10,18 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
+
 class Allocator;
 class BlockManager;
+class ClientContext;
 struct FileHandle;
 
-enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3 };
+enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3, EXTERNAL_FILE = 4 };
 
-static constexpr idx_t FILE_BUFFER_TYPE_COUNT = 3;
+static constexpr idx_t FILE_BUFFER_TYPE_COUNT = 4;
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
 class FileBuffer {
@@ -41,10 +44,10 @@ public:
 	uint64_t size;
 
 public:
-	//! Read into the FileBuffer from the specified location.
+	//! Read into the FileBuffer from the location.
 	void Read(FileHandle &handle, uint64_t location);
-	//! Write the contents of the FileBuffer to the specified location.
-	void Write(FileHandle &handle, uint64_t location);
+	//! Write the FileBuffer to the location.
+	void Write(optional_ptr<ClientContext> context, FileHandle &handle, const uint64_t location);
 
 	void Clear();
 
