@@ -38,6 +38,25 @@ index 774b409..450f75a 100644
  	                   {{"metric", Value("l2sq")}});
  }
  
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index 72225ec..8bd423e 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -14,12 +14,12 @@
+ 
+ namespace duckdb {
+ 
+-PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(const vector<LogicalType> &types_p, TableCatalogEntry &table_p,
++PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, TableCatalogEntry &table_p,
+                                                  const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+                                                  vector<unique_ptr<Expression>> unbound_expressions,
+                                                  idx_t estimated_cardinality)
+     // Declare this operators as a EXTENSION operator
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, types_p, estimated_cardinality),
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, types_p, estimated_cardinality),
+       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
+       sorted(false) {
+ 
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
 index 50b5779..05f19f9 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
@@ -107,6 +126,22 @@ index a05f1a6..573593e 100644
  
  #include "hnsw/hnsw.hpp"
  #include "hnsw/hnsw_index.hpp"
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index 1a8d93b..58917b7 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -34,9 +34,9 @@ class PhysicalHNSWIndexJoin final : public PhysicalOperator {
+ public:
+ 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
+ 
+-	PhysicalHNSWIndexJoin(const vector<LogicalType> &types_p, const idx_t estimated_cardinality,
++	PhysicalHNSWIndexJoin(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, const idx_t estimated_cardinality,
+ 	                      DuckTableEntry &table_p, HNSWIndex &hnsw_index_p, const idx_t limit_p)
+-	    : PhysicalOperator(TYPE, types_p, estimated_cardinality), table(table_p), hnsw_index(hnsw_index_p),
++	    : PhysicalOperator(physical_plan, TYPE, types_p, estimated_cardinality), table(table_p), hnsw_index(hnsw_index_p),
+ 	      limit(limit_p) {
+ 	}
+ 
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
 index d5aded4..73fa183 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp
@@ -183,6 +218,19 @@ index 5f0b55e..c5dd550 100644
  	static void RegisterScanOptimizer(DatabaseInstance &db);
  	static void RegisterJoinOptimizer(DatabaseInstance &db);
  };
+diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
+index 8b3e19d..2b1cc6a 100644
+--- a/src/include/hnsw/hnsw_index_physical_create.hpp
++++ b/src/include/hnsw/hnsw_index_physical_create.hpp
+@@ -12,7 +12,7 @@ public:
+ 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
+ 
+ public:
+-	PhysicalCreateHNSWIndex(const vector<LogicalType> &types_p, TableCatalogEntry &table,
++	PhysicalCreateHNSWIndex(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, TableCatalogEntry &table,
+ 	                        const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+ 	                        vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality);
+ 
 diff --git a/src/include/usearch/index.hpp b/src/include/usearch/index.hpp
 index ef79586..d1e71f3 100644
 --- a/src/include/usearch/index.hpp

@@ -21,8 +21,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TOP_N;
 
 public:
-	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-	             shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality);
+	PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit,
+	             idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality);
 	~PhysicalTopN() override;
 
 	vector<BoundOrderByNode> orders;
