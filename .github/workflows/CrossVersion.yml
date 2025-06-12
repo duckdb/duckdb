@@ -22,9 +22,6 @@ concurrency:
   group: crossversion-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
