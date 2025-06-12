@@ -602,6 +602,7 @@ ListComprehensionExpression <- '['i Expression 'FOR'i List(Expression) ListCompr
 ListComprehensionFilter <- 'IF'i Expression
 
 SingleExpression <-
+	LiteralExpression /
 	Parameter /
     SubqueryExpression /
     SpecialFunctionExpression /
@@ -615,7 +616,6 @@ SingleExpression <-
     MapExpression /
     FunctionExpression /
     ColumnReference /
-    LiteralExpression /
     PrefixExpression /
     ListComprehensionExpression /
     ListExpression /
@@ -664,7 +664,7 @@ BaseExpression <- SingleExpression Indirection*
 Expression <- BaseExpression RecursiveExpression*
 RecursiveExpression <- (Operator Expression)
 SliceExpression <- '[' SliceBound ']'
-SliceBound <- Expression? (':' Expression?)? (':' Expression?)?
+SliceBound <- Expression? (':' (Expression / '-')?)? (':' Expression?)?
 
 SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE'i Parens(List(Expression))

@@ -107,20 +107,7 @@ def run_test_case(args_tuple):
 if __name__ == "__main__":
     files = []
     excluded_tests = {
-    ## Parser tests (fail for some reason)
-    'test/sql/peg_parser/attach_or_replace.test',
-    'test/sql/peg_parser/lambda_functions.test',
-    'test/sql/peg_parser/load_extension.test',
-    'test/sql/peg_parser/on_conflict.test',
-    'test/sql/peg_parser/support_unreserved_keywords.test',
-    'test/sql/peg_parser/prepare_statement.test',
-    'test/sql/peg_parser/columns_keyword.test',
-    'test/sql/peg_parser/struct_identifier.test',
-    'test/sql/peg_parser/support_optional_not_null_constraint.test',
-    'test/sql/peg_parser/support_try.test',
-    'test/sql/peg_parser/window_function.test',
-    'test/sql/peg_parser/recursive.test',
-    'test/sql/peg_parser/dollar_quoted.test'
+    'test/sql/peg_parser'
 }
     if args.all_tests:
         # run all tests
