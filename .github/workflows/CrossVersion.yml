@@ -18,6 +18,10 @@ on:
       - '**'
       - '!.github/workflows/CrossVersion.yml'
 
+concurrency:
+  group: cross-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
+
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -29,6 +33,7 @@ jobs:
     strategy:
       matrix:
         version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -84,6 +89,7 @@ jobs:
     strategy:
       matrix:
         version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -189,6 +195,7 @@ jobs:
     strategy:
       matrix:
         version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -245,6 +252,7 @@ jobs:
     strategy:
       matrix:
         version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
