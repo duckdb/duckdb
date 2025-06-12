@@ -1135,7 +1135,8 @@ Statement <-
 	DeallocateStatement /
 	TruncateStatement /
 	LoadStatement /
-	InstallStatement
+	InstallStatement /
+	AnalyzeStatement
 
 CatalogName <- ColIdOrString
 SchemaName <- ColIdOrString
@@ -1236,6 +1237,9 @@ ExplainStatement <- 'EXPLAIN'i 'ANALYZE'i? ExplainOptions? Statement
 
 ExplainOptions <- Parens(GenericCopyOptionList)
 
+AnalyzeStatement <- 'ANALYZE'i 'VERBOSE'i? AnalyzeTarget?
+AnalyzeTarget <- QualifiedName Parens(List(Name))?
+Name <- ColId ('.' ColLabel)*
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
 MacroOrFunction <- 'MACRO'i / 'FUNCTION'i

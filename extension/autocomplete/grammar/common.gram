@@ -26,7 +26,8 @@ Statement <-
 	DeallocateStatement /
 	TruncateStatement /
 	LoadStatement /
-	InstallStatement
+	InstallStatement /
+	AnalyzeStatement
 
 CatalogName <- ColIdOrString
 SchemaName <- ColIdOrString
