@@ -565,7 +565,7 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 
 	// read the compressed data from the file
 	while (true) {
-		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		duckdb::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
 		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
 		if (bytes_read == 0) {
 			break;

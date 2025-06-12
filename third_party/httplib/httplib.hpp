@@ -13,6 +13,8 @@
 
 #define CPPHTTPLIB_VERSION "0.14.3"
 
+#include "duckdb/original/std/memory.hpp"
+
 /*
  * Configuration
  */
@@ -317,16 +319,16 @@ namespace detail {
  */
 
 template <class T, class... Args>
-typename std::enable_if<!std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<!std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(Args &&...args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  return duckdb::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <class T>
-typename std::enable_if<std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(std::size_t n) {
   typedef typename std::remove_extent<T>::type RT;
-  return std::unique_ptr<T>(new RT[n]);
+  return duckdb::unique_ptr<T>(new RT[n]);
 }
 
 struct ci {
@@ -947,7 +949,7 @@ private:
   using HandlersForContentReader =
       std::vector<std::pair<Regex, HandlerWithContentReader>>;
 
-  static std::unique_ptr<detail::MatcherBase>
+  static duckdb::unique_ptr<detail::MatcherBase>
   make_matcher(const std::string &pattern);
 
   socket_t create_server_socket(const std::string &host, int port,
@@ -1060,7 +1062,7 @@ std::ostream &operator<<(std::ostream &os, const Error &obj);
 class Result {
 public:
   Result() = default;
-  Result(std::unique_ptr<Response> &&res, Error err,
+  Result(duckdb::unique_ptr<Response> &&res, Error err,
          Headers &&request_headers = Headers{})
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)) {}
@@ -1087,7 +1089,7 @@ public:
   size_t get_request_header_value_count(const std::string &key) const;
 
 private:
-  std::unique_ptr<Response> res_;
+  duckdb::unique_ptr<Response> res_;
   Error err_ = Error::Unknown;
   Headers request_headers_;
 };
@@ -1445,7 +1447,7 @@ private:
   bool redirect(Request &req, Response &res, Error &error);
   bool handle_request(Stream &strm, Request &req, Response &res,
                       bool close_connection, Error &error);
-  std::unique_ptr<Response> send_with_content_provider(
+  duckdb::unique_ptr<Response> send_with_content_provider(
       Request &req, const char *body, size_t content_length,
       ContentProvider content_provider,
       ContentProviderWithoutLength content_provider_without_length,
@@ -1710,7 +1712,7 @@ public:
 #endif
 
 private:
-  std::unique_ptr<ClientImpl> cli_;
+  duckdb::unique_ptr<ClientImpl> cli_;
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   bool is_ssl_ = false;
@@ -3953,7 +3955,7 @@ bool prepare_content_receiver(T &x, int &status,
                               bool decompress, U callback) {
   if (decompress) {
     std::string encoding = x.get_header_value("Content-Encoding");
-    std::unique_ptr<decompressor> decompressor;
+    duckdb::unique_ptr<decompressor> decompressor;
 
     if (encoding == "gzip" || encoding == "deflate") {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
@@ -4860,7 +4862,7 @@ inline bool has_crlf(const std::string &s) {
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
-  auto context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
+  auto context = duckdb::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
       EVP_MD_CTX_new(), EVP_MD_CTX_free);
 
   unsigned int hash_length = 0;
@@ -4924,7 +4926,7 @@ inline bool load_system_certs_on_windows(X509_STORE *store) {
 #if TARGET_OS_OSX
 template <typename T>
 using CFObjectPtr =
-    std::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
+    duckdb::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
 
 inline void cf_object_ptr_deleter(CFTypeRef obj) {
   if (obj) { CFRelease(obj); }
@@ -5627,7 +5629,7 @@ inline Server::Server()
 
 inline Server::~Server() = default;
 
-inline std::unique_ptr<detail::MatcherBase>
+inline duckdb::unique_ptr<detail::MatcherBase>
 Server::make_matcher(const std::string &pattern) {
   if (pattern.find("/:") != std::string::npos) {
     return detail::make_unique<detail::PathParamsMatcher>(pattern);
@@ -6053,7 +6055,7 @@ Server::write_content_with_provider(Stream &strm, const Request &req,
     if (res.is_chunked_content_provider_) {
       auto type = detail::encoding_type(req, res);
 
-      std::unique_ptr<detail::compressor> compressor;
+      duckdb::unique_ptr<detail::compressor> compressor;
       if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
         compressor = detail::make_unique<detail::gzip_compressor>();
@@ -6194,7 +6196,7 @@ inline bool Server::handle_file_request(const Request &req, Response &res,
             res.set_header(kv.first, kv.second);
           }
 
-          auto mm = std::make_shared<detail::mmap>(path.c_str());
+          auto mm = duckdb::make_shared_ptr<detail::mmap>(path.c_str());
           if (!mm->is_open()) { return false; }
 
           res.set_content_provider(
@@ -6266,7 +6268,7 @@ inline bool Server::listen_internal() {
   auto se = detail::scope_exit([&]() { is_running_ = false; });
 
   {
-    std::unique_ptr<TaskQueue> task_queue(new_task_queue());
+    duckdb::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
     while (svr_sock_ != INVALID_SOCKET) {
 #ifndef _WIN32
@@ -6510,7 +6512,7 @@ inline void Server::apply_ranges(const Request &req, Response &res,
     }
 
     if (type != detail::EncodingType::None) {
-      std::unique_ptr<detail::compressor> compressor;
+      duckdb::unique_ptr<detail::compressor> compressor;
       std::string content_encoding;
 
       if (type == detail::EncodingType::Gzip) {
@@ -7127,7 +7129,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 
   if (req.is_chunked_content_provider_) {
     // TODO: Brotli support
-    std::unique_ptr<detail::compressor> compressor;
+    duckdb::unique_ptr<detail::compressor> compressor;
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
     if (compress_) {
       compressor = detail::make_unique<detail::gzip_compressor>();
@@ -7263,7 +7265,7 @@ inline bool ClientImpl::write_request(Stream &strm, Request &req,
   return true;
 }
 
-inline std::unique_ptr<Response> ClientImpl::send_with_content_provider(
+inline duckdb::unique_ptr<Response> ClientImpl::send_with_content_provider(
     Request &req, const char *body, size_t content_length,
     ContentProvider content_provider,
     ContentProviderWithoutLength content_provider_without_length,
