@@ -897,7 +897,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TruncateStatement <- 'TRUNCATE'i 'TABLE'i? BaseTableName\n"
 	"DeleteUsingClause <- 'USING'i List(TableRef)\n"
 	"CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS'i CreateType\n"
-	"CreateType <- ('ENUM'i OptionalParensSimpleSelect) /\n"
+	"CreateType <- ('ENUM'i Parens(SelectStatement)) /\n"
 	"              ('ENUM'i Parens(List(StringLiteral))) /\n"
 	"              Type\n"
 	"SetStatement <- 'SET'i (StandardAssignment / SetTimeZone)\n"
