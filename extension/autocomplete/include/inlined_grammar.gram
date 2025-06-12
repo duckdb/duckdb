@@ -830,8 +830,8 @@ DropSecretStorage <- 'FROM'i Identifier
 UpdateStatement <- WithClause? 'UPDATE'i UpdateTarget 'SET'i UpdateSetClause FromClause? WhereClause? ReturningClause?
 
 UpdateTarget <- BaseTableName UpdateAlias?
-UpdateAlias <- 'AS'i Identifier
-UpdateSetClause <- List(UpdateSetElement)
+UpdateAlias <- 'AS'i? Identifier
+UpdateSetClause <- List(UpdateSetElement) / (Parens(List(ColumnName)) '=' Expression)
 UpdateSetElement <- ColumnName '=' Expression
 
 InsertStatement <- WithClause? 'INSERT'i OrAction? 'INTO'i InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
