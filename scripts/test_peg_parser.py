@@ -66,7 +66,6 @@ def parse_test_file(filename):
             # skip expected errors
             if stmt.expected_result.type == sqllogictest.ExpectedResult.Type.ERROR:
                 if any("parser error" in line.lower() or "syntax error" in line.lower() for line in stmt.expected_result.lines):
-                    print(stmt.lines)
                     continue
                 continue
         query = ' '.join(stmt.lines)
