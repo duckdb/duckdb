@@ -22,16 +22,25 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 
 	vector<const T *> member_datas;
 	vector<UnifiedVectorFormat> member_vectors;
+	idx_t total_matches = 0;
 	for (const auto &member : members) {
 		if (member->GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
 			member->ToUnifiedFormat(count, member_format);
 			member_datas.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
+			total_matches++;
 		} else {
 			member_datas.push_back(nullptr);
 			member_vectors.push_back(UnifiedVectorFormat());
 		}
+	}
+
+	if (total_matches == 0 && return_pos) {
+		// if there are no members that match the target type, we cannot return a position
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
 	}
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -54,7 +63,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 		const auto finished = !FIND_NULLS && !target_valid;
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
-			if (return_pos) {
+			if (!target_valid || return_pos) {
 				result_validity.SetInvalid(row);
 			} else {
 				result_data[row] = false;
@@ -179,7 +188,7 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
 
-	if (count == 1) {
+	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
@@ -211,28 +220,22 @@ static unique_ptr<FunctionData> StructContainsBind(ClientContext &context, Scala
 	// the value type must match one of the struct's children
 	LogicalType max_child_type = arguments[1]->return_type;
 	vector<LogicalType> new_child_types;
-	bool has_match = false;
 	for (auto &child : struct_children) {
 		if (!LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type)) {
 			new_child_types.push_back(child.second);
 			continue;
 		}
 
-		has_match = true;
 		new_child_types.push_back(max_child_type);
 		bound_function.arguments[1] = max_child_type;
 	}
 
-	child_list_t<LogicalType> matching_children;
+	child_list_t<LogicalType> cast_children;
 	for (idx_t i = 0; i < new_child_types.size(); i++) {
-		matching_children.push_back(make_pair(struct_children[i].first, new_child_types[i]));
+		cast_children.push_back(make_pair(struct_children[i].first, new_child_types[i]));
 	}
 
-	if (!has_match) {
-		throw BinderException("Value type '%s' does not match any of the struct's children",
-		                      arguments[1]->return_type.ToString());
-	}
-	bound_function.arguments[0] = LogicalType::STRUCT(matching_children);
+	bound_function.arguments[0] = LogicalType::STRUCT(cast_children);
 
 	return nullptr;
 }

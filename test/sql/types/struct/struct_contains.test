@@ -120,6 +120,38 @@ false
 false
 false
 
+query III
+SELECT ROW(c0, c1, c2, c3), c0, struct_contains(ROW(c0, c1, c2, c3), c0) FROM t1;
+----
+(1, 2, 3, a)	1	true
+(4, 5, 6, b)	4	true
+(7, 8, 9, c)	7	true
+(NULL, 10, 11, d)	NULL	NULL
+(12, 13, 14, NULL)	12	true
+
+# ==========================================================
+# Target type does have match in struct type
+# ==========================================================
+
+query I
+SELECT struct_contains(row(1, TRUE, 1.0), '1');
+----
+false
+
+statement ok
+CREATE TABLE mixed_types(c0 INT, c1 BOOL, c2 DECIMAL(10, 2), val VARCHAR);
+
+statement ok
+INSERT INTO mixed_types VALUES (1, TRUE, 1.0, '1'), (2, FALSE, 2.0, '2'), (3, TRUE, 3.0, NULL), (NULL, NULL, NULL, '4');
+
+query III
+SELECT ROW(c0, c1, c2), val, struct_contains(ROW(c0, c1, c2), val) FROM mixed_types;
+----
+(1, true, 1.00)	1	false
+(2, false, 2.00)	2	false
+(3, true, 3.00)	NULL	NULL
+(NULL, NULL, NULL)	4	false
+
 # ==========================================================
 # Nested structs
 # ==========================================================
@@ -222,16 +254,6 @@ SELECT c0, c0 IN x FROM (SELECT [c0, c1] AS x FROM t0) AS y, t0 ORDER BY c0, x;
 # Errors
 # ==========================================================
 statement error
-SELECT struct_contains(row(1, TRUE, 1.0), '1');
-----
-Binder Error: Value type 'VARCHAR' does not match any of the struct's children
-
-statement error
 SELECT struct_contains({'a': 1, 'b': 2}, 2);
 ----
-Binder Error: struct_contains can only be used on unnamed structs
-
-statement error
-SELECT struct_contains(ROW(ROW(1, 2), ROW(3, 4)), 1);
-----
-Binder Error: Value type 'INTEGER' does not match any of the struct's children
+<REGEX>:Binder Error.*struct_contains can only be used on unnamed structs.*

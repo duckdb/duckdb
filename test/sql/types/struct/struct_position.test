@@ -174,6 +174,29 @@ statement ok
 DROP TABLE str_test;
 
 # ==========================================================
+# Target type does have match in struct type
+# ==========================================================
+
+query I
+SELECT struct_position(row(1, TRUE, 1.0), '1');
+----
+NULL
+
+statement ok
+CREATE TABLE mixed_types(c0 INT, c1 BOOL, c2 DECIMAL(10, 2), val VARCHAR);
+
+statement ok
+INSERT INTO mixed_types VALUES (1, TRUE, 1.0, '1'), (2, FALSE, 2.0, '2'), (3, TRUE, 3.0, NULL), (NULL, NULL, NULL, '4');
+
+query III
+SELECT ROW(c0, c1, c2), val, struct_position(ROW(c0, c1, c2), val) FROM mixed_types;
+----
+(1, true, 1.00)	1	NULL
+(2, false, 2.00)	2	NULL
+(3, true, 3.00)	NULL	NULL
+(NULL, NULL, NULL)	4	NULL
+
+# ==========================================================
 # Nested types
 # ==========================================================
 query I
@@ -239,9 +262,5 @@ NULL
 statement error
 SELECT struct_position({'a': 1, 'b': 2}, 2);
 ----
-Binder Error: struct_position can only be used on unnamed structs
+<REGEX>:Binder Error.*struct_position can only be used on unnamed structs.*
 
-statement error
-SELECT struct_position(ROW(ROW(1, 2), ROW(3, 4)), 1);
-----
-Binder Error: Value type 'INTEGER' does not match any of the struct's children
