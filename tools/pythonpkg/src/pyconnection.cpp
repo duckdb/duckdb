@@ -332,9 +332,13 @@ py::list DuckDBPyConnection::ListFilesystems() {
 }
 
 py::list DuckDBPyConnection::ExtractStatements(const string &query) {
+	vector<unique_ptr<SQLStatement>> statements;
+	{
+		py::gil_scoped_release gil;
+		statements = connection.ExtractStatements(query);
+	}
 	py::list result;
 	auto &connection = con.GetConnection();
-	auto statements = connection.ExtractStatements(query);
 	for (auto &statement : statements) {
 		result.append(make_uniq<DuckDBPyStatement>(std::move(statement)));
 	}
@@ -624,6 +628,7 @@ vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::obj
 	}
 	if (py::isinstance<py::str>(query)) {
 		auto sql_query = std::string(py::str(query));
+		py::gil_scoped_release gil;
 		return connection.ExtractStatements(sql_query);
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
