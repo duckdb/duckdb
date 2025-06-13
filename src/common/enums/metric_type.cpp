@@ -36,12 +36,12 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_REORDER_FILTER,
         MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN,
         MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-        MetricsType::OPTIMIZER_JOIN_ELIMINATION,
         MetricsType::OPTIMIZER_EXTENSION,
         MetricsType::OPTIMIZER_MATERIALIZED_CTE,
         MetricsType::OPTIMIZER_SUM_REWRITER,
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
         MetricsType::OPTIMIZER_CTE_INLINING,
+        MetricsType::OPTIMIZER_JOIN_ELIMINATION,
     };
 }
 
@@ -106,8 +106,6 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN;
         case OptimizerType::JOIN_FILTER_PUSHDOWN:
             return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
-        case OptimizerType::JOIN_ELIMINATION:
-            return MetricsType::OPTIMIZER_JOIN_ELIMINATION;
         case OptimizerType::EXTENSION:
             return MetricsType::OPTIMIZER_EXTENSION;
         case OptimizerType::MATERIALIZED_CTE:
@@ -118,6 +116,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
         case OptimizerType::CTE_INLINING:
             return MetricsType::OPTIMIZER_CTE_INLINING;
+        case OptimizerType::JOIN_ELIMINATION:
+            return MetricsType::OPTIMIZER_JOIN_ELIMINATION;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -171,8 +171,6 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::SAMPLING_PUSHDOWN;
         case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
             return OptimizerType::JOIN_FILTER_PUSHDOWN;
-        case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
-            return OptimizerType::JOIN_ELIMINATION;
         case MetricsType::OPTIMIZER_EXTENSION:
             return OptimizerType::EXTENSION;
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
@@ -183,6 +181,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::LATE_MATERIALIZATION;
         case MetricsType::OPTIMIZER_CTE_INLINING:
             return OptimizerType::CTE_INLINING;
+        case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
+            return OptimizerType::JOIN_ELIMINATION;
     default:
             return OptimizerType::INVALID;
     };
@@ -213,12 +213,12 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_REORDER_FILTER:
         case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
         case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
-        case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
         case MetricsType::OPTIMIZER_EXTENSION:
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
         case MetricsType::OPTIMIZER_SUM_REWRITER:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
         case MetricsType::OPTIMIZER_CTE_INLINING:
+        case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
             return true;
         default:
             return false;

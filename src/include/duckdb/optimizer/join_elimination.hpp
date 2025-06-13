@@ -12,6 +12,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -45,7 +46,7 @@ private:
 	idx_t inner_idx = 0;
 	idx_t outer_idx = 0;
 
-	column_binding_set_t column_references;
+	unordered_set<idx_t> ref_table_ids;
 	unordered_map<idx_t, column_binding_set_t> distinct_groups;
 	optional_ptr<LogicalOperator> join_parent;
 	unique_ptr<JoinElimination> left_child = nullptr;

@@ -39,8 +39,6 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 		join_parent = parent;
 		return std::move(op);
 	}
-	case LogicalOperatorType::LOGICAL_EXPLAIN:
-		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = op->Cast<LogicalDistinct>();
 		if (distinct.distinct_type != DistinctType::DISTINCT) {
@@ -81,9 +79,11 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 		idx_t table_idx = aggr.group_index;
 		for (idx_t i = 0; i < aggr.groups.size(); i++) {
 			distinct_group.insert(ColumnBinding(aggr.group_index, i));
-			column_references.insert(ColumnBinding(aggr.group_index, i));
 		}
-		distinct_groups[table_idx] = std::move(distinct_group);
+		if (!distinct_group.empty()) {
+			ref_table_ids.insert(table_idx);
+			distinct_groups[table_idx] = std::move(distinct_group);
+		}
 		VisitOperatorExpressions(*op);
 		break;
 	}
@@ -123,6 +123,13 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op->Cast<LogicalGet>();
+		if (!get.table_filters.filters.empty()) {
+			inner_has_filter = true;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -132,7 +139,6 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 	}
 
 	switch (op->type) {
-
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &projection = op->Cast<LogicalProjection>();
 		// after traversed children, here check whether any distinct group added in children
@@ -160,13 +166,6 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 			}
 		}
 		return std::move(op);
-	}
-	case LogicalOperatorType::LOGICAL_GET: {
-		auto &get = op->Cast<LogicalGet>();
-		if (!get.table_filters.filters.empty()) {
-			inner_has_filter = true;
-		}
-		break;
 	}
 	default:
 		D_ASSERT(op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
@@ -218,7 +217,7 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 	auto inner_bindings = join.children[inner_idx]->GetColumnBindings();
 	// ensure join output columns only contains outer table columns
 	for (auto &binding : inner_bindings) {
-		if (column_references.find(binding) != column_references.end()) {
+		if (ref_table_ids.find(binding.table_index) != ref_table_ids.end()) {
 			return std::move(op);
 		}
 	}
@@ -285,7 +284,7 @@ bool JoinElimination::ContainDistinctGroup(vector<ColumnBinding> &column_binding
 }
 
 unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	column_references.insert(expr.binding);
+	ref_table_ids.insert(expr.binding.table_index);
 	return nullptr;
 }
 
