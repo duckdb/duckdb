@@ -61,7 +61,7 @@ private:
 	//! Stats of Delim Scans of the Delim Join that is currently being optimized
 	optional_ptr<RelationStats> delim_scan_stats;
 	idx_t depth;
-	static constexpr idx_t THRESHOLD_AVOID_IN_DEPTH_VISIT = 25;
+	static constexpr idx_t THRESHOLD_AVOID_IN_DEPTH_VISIT = 100;
 };
 
 } // namespace duckdb
