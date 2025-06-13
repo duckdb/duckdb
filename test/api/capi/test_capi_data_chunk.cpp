@@ -3,6 +3,11 @@
 using namespace duckdb;
 using namespace std;
 
+string get_string_from_duckdb_string_t(duckdb_string_t *input) {
+	const char *ptr = duckdb_string_is_inlined(*input) ? input->value.inlined.inlined : input->value.pointer.ptr;
+	return string(ptr, duckdb_string_t_length(*input));
+}
+
 TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", "[capi]") {
 	duckdb_database db;
 	duckdb_connection con;
@@ -588,10 +593,8 @@ TEST_CASE("Test duckdb_data_chunk_copy", "[capi]") {
 		CHECK(duckdb_validity_row_is_valid(validity, 0));
 		CHECK(duckdb_validity_row_is_valid(validity, 1));
 
-		REQUIRE(string_data[0].value.inlined.length == strlen("hello"));
-		REQUIRE(string_data[1].value.inlined.length == strlen("world"));
-		CHECK(strcmp(string_data[0].value.inlined.inlined, "hello") == 0);
-		CHECK(strcmp(string_data[1].value.inlined.inlined, "world") == 0);
+		CHECK(get_string_from_duckdb_string_t(&string_data[0]).compare("hello") == 0);
+		CHECK(get_string_from_duckdb_string_t(&string_data[1]).compare("world") == 0);
 
 		duckdb_destroy_data_chunk(&src_chunk);
 		duckdb_destroy_data_chunk(&dst_chunk);
@@ -657,7 +660,7 @@ duckdb_data_chunk create_src_for_copy_selection_test(duckdb_logical_type types[]
 	auto varchar_vector = duckdb_data_chunk_get_vector(chunk, 1);
 	for (idx_t i = 0; i < src_size; ++i) {
 		int_data[i] = int32_t(i * 10);
-		string str_val = "value_" + std::to_string(i);
+		string str_val = "value_" + to_string(i);
 		duckdb_vector_assign_string_element(varchar_vector, i, str_val.c_str());
 	}
 	duckdb_data_chunk_set_size(chunk, src_size);
@@ -666,7 +669,7 @@ duckdb_data_chunk create_src_for_copy_selection_test(duckdb_logical_type types[]
 
 TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 	if (STANDARD_VECTOR_SIZE < 16) {
-		SKIP_TEST("require " + std::to_string(STANDARD_VECTOR_SIZE) + " >= 16");
+		SKIP_TEST("require " + to_string(STANDARD_VECTOR_SIZE) + " >= 16");
 		return;
 	}
 
@@ -697,9 +700,8 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 
 		for (idx_t i = 0; i < 3; ++i) {
 			CHECK(dst_int_data[i] == int32_t(selection_data[i] * 10));
-			string expected = "value_" + std::to_string(selection_data[i]);
-			CHECK(string_data[i].value.inlined.length == strlen(expected.c_str()));
-			CHECK(strcmp(string_data[i].value.inlined.inlined, expected.c_str()) == 0);
+			string expected = "value_" + to_string(selection_data[i]);
+			CHECK(get_string_from_duckdb_string_t(&string_data[i]).compare(expected) == 0);
 		}
 
 		duckdb_destroy_selection_vector(sel_vector);
@@ -731,9 +733,8 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 
 		for (idx_t i = 0; i < source_count - offset; ++i) {
 			CHECK(dst_int_data[i] == int32_t(selection_data[i + offset] * 10));
-			string expected = "value_" + std::to_string(selection_data[i + offset]);
-			CHECK(string_data[i].value.inlined.length == strlen(expected.c_str()));
-			CHECK(strcmp(string_data[i].value.inlined.inlined, expected.c_str()) == 0);
+			string expected = "value_" + to_string(selection_data[i + offset]);
+			CHECK(get_string_from_duckdb_string_t(&string_data[i]).compare(expected) == 0);
 		}
 
 		duckdb_destroy_selection_vector(sel_vector);
