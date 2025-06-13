@@ -1,8 +1,9 @@
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -20,9 +21,17 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
 
-	case_insensitive_map_t<idx_t> target_children_map;
+	Printer printer;
+
+	printer.Print("\n\nIN BindStructToStructCast");
+	printer.Print("Creating target_children_map");
+	InsertionOrderPreservingMap<idx_t> target_children_map;
 	if (!is_unnamed) {
 		for (idx_t i = 0; i < target_children.size(); i++) {
+			auto str =
+			    std::to_string(i) + ": " + target_children[i].first + ", " + target_children[i].second.ToString();
+			printer.Print(str);
+
 			auto &name = target_children[i].first;
 			if (target_children_map.find(name) != target_children_map.end()) {
 				throw NotImplementedException("Error while casting - duplicate name \"%s\" in struct", name);
@@ -64,10 +73,16 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 
 	// The remaining target children have no match in the source struct.
 	// Thus, they become NULL.
+	idx_t i = 0;
+	printer.Print("now creating target_null_indexes");
 	for (const auto &target_child : target_children_map) {
+		auto str = std::to_string(i) + ": " + target_child.first;
+		printer.Print(str);
 		target_null_indexes.push_back(target_child.second);
 	}
 
+	printer.Print("END OF BindStructToStructCast");
+	printer.Print("------------------------------------------------------------\n\n\n");
 	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(source_indexes),
 	                                      std::move(target_indexes), std::move(target_null_indexes));
 }
