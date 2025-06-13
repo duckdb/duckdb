@@ -5,20 +5,10 @@
 statement ok
 pragma enable_verification
 
-statement ok
-CREATE TABLE mixed_types(c0 INT, c1 BOOL, c2 DECIMAL(10, 2), val VARCHAR);
-
-statement ok
-INSERT INTO mixed_types VALUES (1, TRUE, 1.0, '1'), (2, FALSE, 2.0, '2'), (3, TRUE, 3.0, NULL), (NULL, NULL, NULL, '4');
-
-query III
-SELECT ROW(c0, c1, c2), val, struct_contains(ROW(c0, c1, c2), val) FROM mixed_types;
+query I
+SELECT list_value({'a': 1, 'b': 'a'}, {'x': 2, 'y': 'b'});
 ----
-(1, true, 1.00)	1	false
-(2, false, 2.00)	2	false
-(3, true, 3.00)	NULL	NULL
-(NULL, NULL, NULL)	4	false
-
+[{'a': 1, 'b': a, 'y': NULL, 'x': NULL}, {'a': NULL, 'b': NULL, 'y': b, 'x': 2}]
 mode skip
 
 query I
