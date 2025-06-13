@@ -96,7 +96,7 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        test/Release/unittest.exe
+        test/Release/unittest.exe test/sql/function/list/list_value_structs.test
 
     - name: Tools Test
       shell: bash
