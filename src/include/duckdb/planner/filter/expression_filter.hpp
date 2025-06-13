@@ -35,6 +35,8 @@ public:
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
+	static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
+	                                       ExpressionType replace_type = ExpressionType::BOUND_REF);
 };
 
 } // namespace duckdb
