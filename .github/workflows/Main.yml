@@ -481,6 +481,35 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
 
+ amalgamation-tests:
+    name: Amalgamation Tests
+    # if: ${{ inputs.skip_tests != 'true' }}
+    # needs: linux-extensions-64
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "14.0"
+
+    - name: Generate Amalgamation
+      shell: bash
+      run:  |
+          python scripts/amalgamation.py --extended
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
 
  linux-httpfs:
     name: Linux HTTPFS
