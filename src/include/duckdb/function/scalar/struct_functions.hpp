@@ -79,8 +79,8 @@ struct StructConcatFun {
 struct StructContainsFun {
 	static constexpr const char *Name = "struct_contains";
 	static constexpr const char *Parameters = "struct,'entry'";
-	static constexpr const char *Description = "Check if the STRUCT contains the value.";
-	static constexpr const char *Example = "struct_contains({'i': 3, 'v2': 3, 'v3': 0}, 3), struct_contains(ROW(3, 3, 0), 3)";
+	static constexpr const char *Description = "Check if an unnamed STRUCT contains the value.";
+	static constexpr const char *Example = "struct_contains(ROW(3, 3, 0), 3)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -95,8 +95,8 @@ struct StructHasFun {
 struct StructPositionFun {
 	static constexpr const char *Name = "struct_position";
 	static constexpr const char *Parameters = "struct,'entry'";
-	static constexpr const char *Description = "Get the position of the entry in the STRUCT, starting at 1.";
-	static constexpr const char *Example = "struct_position({'i': 3, 'v2': 3, 'v3': 0}, 'v2')";
+	static constexpr const char *Description = "Get the position of the entry in an unnamed STRUCT, starting at 1.";
+	static constexpr const char *Example = "struct_position(ROW(3, 3, 0), 3)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
