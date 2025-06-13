@@ -144,9 +144,14 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 	options.storage_version = storage_options.storage_version;
 
 	if (storage_options.encryption) {
+		// key is given upon ATTACH
+		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 		options.encryption_options.user_key = &storage_options.user_key;
+	} else if (config.options.contains_user_key || config.options.use_master_key) {
+		// key is given in the command line
+		storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -183,7 +188,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		}
 		//! set the block header size for the encrypted database files
 		//! set the database to encrypted
-		//! update the storage version to 1.3.0
+		//! update the storage version to 1.4.0
 		if (storage_options.block_header_size.IsValid()) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
@@ -210,13 +215,19 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 
 		// set the block header size for the encrypted database files
 		// (also if they already exist)
+		if (storage_options.encryption) {
+			options.encryption_options.encryption_enabled = true;
+			D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+		if (config.options.contains_user_key || config.options.use_master_key) {
+			// if -key or -master_key is given in the command line
+			// set the block header size here
+			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
+		}
 		if (storage_options.block_header_size.IsValid()) {
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
 			options.storage_version = storage_options.storage_version;
-
-			// Set encryption to true and derive encryption key
-			options.encryption_options.encryption_enabled = true;
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;

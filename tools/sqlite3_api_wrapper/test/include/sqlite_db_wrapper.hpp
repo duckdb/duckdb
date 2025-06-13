@@ -19,7 +19,7 @@ public:
 
 public:
 	int Open(std::string filename) {
-		return sqlite3_open(filename.c_str(), &db) == SQLITE_OK;
+		return sqlite3_open(filename.c_str(), &db, NULL) == SQLITE_OK;
 	}
 
 	std::string GetErrorMessage() {
