@@ -9,13 +9,48 @@
 using namespace duckdb;
 
 namespace duckdb {
+// bool FailureSummary::summarize_failures = false;
+// size_t FailureSummary::failures_summary_counter = 0;
+// vector<string> FailureSummary::failures_summary;
+// mutex FailureSummary::counter_mutex;
+// mutex FailureSummary::summary_mutex;
+
+// FailureSummary::FailureSummary() = default;
+// FailureSummary::~FailureSummary() = default;
+
+FailureSummary& FailureSummary::Instance() {
+	static FailureSummary instance;
+	bool summarize_failures = false;
+	size_t failures_summary_counter = 0;
+	vector<string> failures_summary;
+	mutex counter_mutex;
+	mutex summary_mutex;
+
+	return instance;
+}
+
+auto& summary = FailureSummary::Instance();
+
+string FailureSummary::GetFailureSummary() {
+	lock_guard<mutex> guard(summary.summary_mutex);
+	std::ostringstream oss;
+	for (auto &line : summary.failures_summary) {
+		oss << line;
+	}
+	return oss.str();
+}
+
+size_t FailureSummary::GetSummaryCounter() {
+	{
+		lock_guard<mutex> lock(summary.counter_mutex);
+		++summary.failures_summary_counter;
+	}
+	return summary.failures_summary_counter;
+}
+
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
-static bool summarize_failures = false;
-// this counter is for the order number of the failed test case in Failures Summary
-static size_t failures_summary_counter = 0;
-mutex counter_mutex;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -30,15 +65,7 @@ bool TestMemoryLeaks() {
 }
 
 bool SummarizeFailures() {
-	return summarize_failures;
-}
-
-size_t GetSummaryCounter() {
-	{
-		lock_guard<mutex> lock(counter_mutex);
-		++failures_summary_counter;
-	}
-	return failures_summary_counter;
+	return summary.summarize_failures;
 }
 
 } // namespace duckdb
@@ -49,7 +76,7 @@ int main(int argc, char *argv[]) {
 
 	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
 	if (summarize != nullptr && std::string(summarize) == "1") {
-		summarize_failures = true;
+		summary.summarize_failures = true;
 	}
 
 	int new_argc = 0;
@@ -82,7 +109,7 @@ int main(int argc, char *argv[]) {
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
 		} else if (string(argv[i]) == "--summarize-failures") {
-			summarize_failures = true;
+			summary.summarize_failures = true;
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -104,8 +131,8 @@ int main(int argc, char *argv[]) {
 	RegisterSqllogictests();
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	std::string failures_summary = SQLLogicTestLogger::GetFailureSummary();
-	if (!failures_summary.empty() && summarize_failures) {
+	std::string failures_summary = summary.GetFailureSummary();
+	if (!failures_summary.empty() && summary.summarize_failures) {
 		std::cerr << "\n====================================================" << std::endl;
 		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;
 		std::cerr << "====================================================\n" << std::endl;

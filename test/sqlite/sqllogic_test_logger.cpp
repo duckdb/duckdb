@@ -7,8 +7,11 @@
 
 namespace duckdb {
 
-static mutex summary_mutex;
-static vector<string> failures_summary;
+// static mutex summary_mutex;
+// static vector<string> failures_summary;
+
+auto& summary = FailureSummary::Instance();
+
 
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
     : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
@@ -19,22 +22,13 @@ SQLLogicTestLogger::~SQLLogicTestLogger() {
 }
 
 void SQLLogicTestLogger::AppendFailure(const string &log_message) {
-	lock_guard<mutex> lock(summary_mutex);
-	failures_summary.push_back(log_message);
+	lock_guard<mutex> lock(summary.summary_mutex);
+	summary.failures_summary.push_back(log_message);
 }
 
 void SQLLogicTestLogger::LogFailure(const string &log_message) {
 	std::cerr << log_message;
 	AppendFailure(log_message);
-}
-
-string SQLLogicTestLogger::GetFailureSummary() {
-	lock_guard<mutex> guard(summary_mutex);
-	std::ostringstream oss;
-	for (auto &line : failures_summary) {
-		oss << line;
-	}
-	return oss.str();
 }
 
 void SQLLogicTestLogger::Log(const string &str) {
@@ -43,7 +37,7 @@ void SQLLogicTestLogger::Log(const string &str) {
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
-	auto failures_count = to_string(GetSummaryCounter());
+	auto failures_count = to_string(summary.GetSummaryCounter());
 	if (std::getenv("NO_DUPLICATING_HEADERS") == 0) {
 		LogFailure("\n" + failures_count + ". " + file_name + "\n");
 		PrintLineSep();
