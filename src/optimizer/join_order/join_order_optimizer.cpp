@@ -28,7 +28,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	if (depth > THRESHOLD_AVOID_IN_DEPTH_VISIT) {
 		// Very deep plans will eventually consume quite some stack space
 		// Returning the current plan is always a valid choice
-		return std::move(plan);
+		return plan;
 	}
 
 	// make sure query graph manager has not extracted a relation graph already
