@@ -24,7 +24,7 @@ add_library_unity(
   physical_update_extensions.cpp
   physical_vacuum.cpp
   physical_verify_vector.cpp
-  physical_ussr_insertion.cpp)
+  physical_unified_string_dictionary_insertion.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_helper>
     PARENT_SCOPE)

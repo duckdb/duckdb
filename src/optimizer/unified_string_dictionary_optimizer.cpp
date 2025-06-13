@@ -1,32 +1,36 @@
-#include "duckdb/optimizer/UnifiedStringDictionary_Optimizer.h"
+#include "duckdb/optimizer/unified_string_dictionary_optimizer.h"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/planner/operator/logical_ussr_insertion.h"
+#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.h"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> USSR_optimizer::CheckUnifiedDictionary(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator>
+UnifiedStringDictionaryOptimizer::CheckIfUnifiedStringDictionaryRequired(unique_ptr<LogicalOperator> op) {
 	op = Rewrite(std::move(op));
 	for (auto &ds : chosen_data_sources) {
-		Insert_USSR_Operator(ds);
+		InsertUnifiedStringDictionaryOperator(ds);
+	}
+	if (!chosen_data_sources.empty()) {
+		optimizer->context.UnifiedStringDictionary.reset();
+		optimizer->context.UnifiedStringDictionary = make_uniq<UnifiedStringsDictionary>(1ull);
 	}
 	return op;
 }
 
-void USSR_optimizer::Insert_USSR_Operator(optional_ptr<LogicalOperator> op) {
+void UnifiedStringDictionaryOptimizer::InsertUnifiedStringDictionaryOperator(optional_ptr<LogicalOperator> op) {
 	for (idx_t i = 0; i < op->children.size(); ++i) {
-		vector<bool> ussr_insert_vec;
-		//		D_ASSERT(op->children[i]->type == LogicalOperatorType::LOGICAL_GET);
+		vector<bool> usd_insert_vec;
 		for (auto &type : op->children[i]->types) {
 			if (type == LogicalType::VARCHAR) {
-				ussr_insert_vec.push_back(true);
+				usd_insert_vec.push_back(true);
 			} else {
-				ussr_insert_vec.push_back(false);
+				usd_insert_vec.push_back(false);
 			}
 		}
 
-		auto new_operator = make_uniq<LogicalUSSRInsertion>(std::move(ussr_insert_vec));
+		auto new_operator = make_uniq<LogicalUnifiedStringDictionaryInsertion>(std::move(usd_insert_vec));
 		new_operator->children.push_back(std::move(op->children[i]));
 		op->children[i] = std::move(new_operator);
 
@@ -34,7 +38,7 @@ void USSR_optimizer::Insert_USSR_Operator(optional_ptr<LogicalOperator> op) {
 	}
 }
 
-void USSR_optimizer::choose_operator() {
+void UnifiedStringDictionaryOptimizer::AddMarkedDataSources() {
 	for (auto &ds : candidate_data_sources) {
 		chosen_data_sources.push_back(ds);
 	}
@@ -42,9 +46,8 @@ void USSR_optimizer::choose_operator() {
 	return;
 }
 
-bool USSR_optimizer::useStrings(optional_ptr<LogicalOperator> op) {
+bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOperator> op) {
 	switch (op->type) {
-
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr_op = op->Cast<LogicalAggregate>();
 		for (auto &expr : aggr_op.groups) {
@@ -55,7 +58,6 @@ bool USSR_optimizer::useStrings(optional_ptr<LogicalOperator> op) {
 				}
 			}
 		}
-
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
@@ -68,10 +70,8 @@ bool USSR_optimizer::useStrings(optional_ptr<LogicalOperator> op) {
 				}
 			}
 		}
-
 		break;
 	}
-
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join_op = op->Cast<LogicalComparisonJoin>();
 		// if the join condition contains strings
@@ -90,7 +90,7 @@ bool USSR_optimizer::useStrings(optional_ptr<LogicalOperator> op) {
 			}
 			for (auto &type : join_op.types) {
 				if (type == LogicalType::VARCHAR) {
-						return true;
+					return true;
 				}
 			}
 		}
@@ -98,7 +98,6 @@ bool USSR_optimizer::useStrings(optional_ptr<LogicalOperator> op) {
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		auto &sort_op = op->Cast<LogicalOrder>();
-
 		for (auto &node : sort_op.orders) {
 			if (node.expression->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = node.expression->Cast<BoundColumnRefExpression>();
@@ -115,7 +114,7 @@ bool USSR_optimizer::useStrings(optional_ptr<LogicalOperator> op) {
 	return false;
 }
 
-unique_ptr<LogicalOperator> USSR_optimizer::Rewrite(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> UnifiedStringDictionaryOptimizer::Rewrite(unique_ptr<LogicalOperator> op) {
 	op->ResolveOperatorTypes();
 
 	for (idx_t i = 0; i < op->children.size(); ++i) {
@@ -129,26 +128,14 @@ unique_ptr<LogicalOperator> USSR_optimizer::Rewrite(unique_ptr<LogicalOperator> 
 		}
 	}
 
-	auto string_usage = useStrings(op.get());
+	auto string_usage = IsTargetOperator(op.get());
 	// Depth-first-search post-order
 	for (idx_t i = 0; i < op->children.size(); ++i) {
 		op->children[i] = Rewrite(std::move(op->children[i]));
 		if (string_usage) {
-			choose_operator();
+			AddMarkedDataSources();
 		}
 	}
-
-	// if you don't output VARCHAR columns, clear the candidates vector
-	//	bool clear_candidates = true;
-	//	for (auto &type : op->types) {
-	//		if(type == LogicalType::VARCHAR){
-	//			clear_candidates = false;
-	//			break;
-	//		}
-	//	}
-	//	if(clear_candidates){
-	//		candidate_data_sources.clear();
-	//	}
 	return op;
 }
 

@@ -132,8 +132,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "PIVOT";
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return "UPDATE_EXTENSIONS";
-	case LogicalOperatorType::LOGICAL_USSR_INSERTION:
-		return "USSR_INSERTION";
+	case LogicalOperatorType::LOGICAL_UNIFIED_STRING_DICTIONARY_INSERTION:
+		return "UNIFIED_STRING_DICTIONARY_INSERTION";
 	}
 	return "INVALID";
 }

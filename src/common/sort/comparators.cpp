@@ -492,14 +492,16 @@ int Comparators::TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_t &righ
 
 void Comparators::UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr = reinterpret_cast<data_ptr_t>(reinterpret_cast<uint64_t >(data_ptr + string_t::HEADER_SIZE) & string_t::POINTER_MASK);
+		data_ptr = reinterpret_cast<data_ptr_t>(reinterpret_cast<uint64_t>(data_ptr + string_t::HEADER_SIZE) &
+		                                        string_t::POINTER_MASK);
 	}
 	Store<data_ptr_t>(heap_ptr + Load<idx_t>(data_ptr), data_ptr);
 }
 
 void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr = reinterpret_cast<data_ptr_t>(reinterpret_cast<uint64_t >(data_ptr + string_t::HEADER_SIZE) & string_t::POINTER_MASK);
+		data_ptr = reinterpret_cast<data_ptr_t>(reinterpret_cast<uint64_t>(data_ptr + string_t::HEADER_SIZE) &
+		                                        string_t::POINTER_MASK);
 	}
 	Store<idx_t>(UnsafeNumericCast<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr), data_ptr);
 }

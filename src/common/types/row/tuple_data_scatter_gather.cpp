@@ -32,13 +32,9 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 #ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
-	if (source.IsInlined()) {
+	if (source.IsInlined() || string_t::isInUnifiedStringDictionary(source.GetTaggedPointer())) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
-		if (string_t::isInUnifiedStringDictionary(source.GetTaggedPointer())) {
-			Store<string_t>(source, row_location + offset_in_row);
-			return;
-		}
 		FastMemcpy(heap_location, source.GetData(), source.GetSize());
 		Store<string_t>(string_t(const_char_ptr_cast(heap_location), UnsafeNumericCast<uint32_t>(source.GetSize())),
 		                row_location + offset_in_row);
@@ -118,7 +114,6 @@ static idx_t StringHeapSize(const string_t &val) {
 	if (val.IsInlined() || string_t::isInUnifiedStringDictionary(val.GetTaggedPointer())) {
 		return 0;
 	}
-
 	return val.GetSize();
 }
 

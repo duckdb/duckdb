@@ -79,9 +79,8 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 			ValidityBytes col_mask(row, col_count);
 			col_mask.SetInvalidUnsafe(col_no);
 			Store<string_t>(null, row + col_offset);
-		} else if (string_data[col_idx].IsInlined()) {
-			Store<string_t>(string_data[col_idx], row + col_offset);
-		} else if (string_t::isInUnifiedStringDictionary(string_data[col_idx].GetTaggedPointer())) {
+		} else if (string_data[col_idx].IsInlined() ||
+		           string_t::isInUnifiedStringDictionary(string_data[col_idx].GetTaggedPointer())) {
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];

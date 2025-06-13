@@ -169,6 +169,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		result = LogicalSimple::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_UNIFIED_STRING_DICTIONARY_INSERTION:
+		result = LogicalUnifiedStringDictionaryInsertion::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(deserializer);
 		break;
@@ -183,9 +186,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = LogicalWindow::Deserialize(deserializer);
-		break;
-	case LogicalOperatorType::LOGICAL_USSR_INSERTION:
-		result = LogicalUSSRInsertion::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of LogicalOperator!");
@@ -781,6 +781,17 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer)
 	return std::move(result);
 }
 
+void LogicalUnifiedStringDictionaryInsertion::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<bool>>(200, "insert_to_usd", insert_to_usd);
+}
+
+unique_ptr<LogicalOperator> LogicalUnifiedStringDictionaryInsertion::Deserialize(Deserializer &deserializer) {
+	auto insert_to_usd = deserializer.ReadPropertyWithDefault<vector<bool>>(200, "insert_to_usd");
+	auto result = duckdb::unique_ptr<LogicalUnifiedStringDictionaryInsertion>(new LogicalUnifiedStringDictionaryInsertion(std::move(insert_to_usd)));
+	return std::move(result);
+}
+
 void LogicalUnnest::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "unnest_index", unnest_index);
@@ -827,17 +838,6 @@ unique_ptr<LogicalOperator> LogicalWindow::Deserialize(Deserializer &deserialize
 	auto window_index = deserializer.ReadPropertyWithDefault<idx_t>(200, "window_index");
 	auto result = duckdb::unique_ptr<LogicalWindow>(new LogicalWindow(window_index));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", result->expressions);
-	return std::move(result);
-}
-
-void LogicalUSSRInsertion::Serialize(Serializer &serializer) const {
-	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<bool>>(200, "ussr_insertion_vector", insert_to_ussr);
-}
-
-unique_ptr<LogicalOperator> LogicalUSSRInsertion::Deserialize(Deserializer &deserializer) {
-	auto ussr_vec = deserializer.ReadPropertyWithDefault<vector<bool>>(200, "ussr_insertion_vector");
-	auto result = duckdb::unique_ptr<LogicalUSSRInsertion>(new LogicalUSSRInsertion(ussr_vec));
 	return std::move(result);
 }
 

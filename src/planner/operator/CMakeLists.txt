@@ -46,7 +46,7 @@ add_library_unity(
   logical_update.cpp
   logical_vacuum.cpp
   logical_window.cpp
-  logical_ussr_insertion.cpp)
+  logical_unified_string_dictionary_insertion.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_operator>
     PARENT_SCOPE)

@@ -698,8 +698,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 				const auto &source_entry = source_entries[source_idx];
 				auto &target_entry = target_entries[target_idx];
 				if (source_entry.IsInlined() ||
-				    (!source_entry.IsInlined() &&
-				     (string_t::isInUnifiedStringDictionary(source_entry.GetTaggedPointer())))) {
+				    string_t::isInUnifiedStringDictionary(source_entry.GetTaggedPointer())) {
 					target_entry = source_entry;
 				} else {
 					D_ASSERT(base_heap_ptr != nullptr);

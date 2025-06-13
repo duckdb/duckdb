@@ -119,7 +119,7 @@ enum class PhysicalOperatorType : uint8_t {
 	EXTENSION,
 	VERIFY_VECTOR,
 	UPDATE_EXTENSIONS,
-	UNIFIED_STRINGS,
+	UNIFIED_STRING_DICTIONARY_INSERTION,
 	// -----------------------------
 	// Secret
 	// -----------------------------
