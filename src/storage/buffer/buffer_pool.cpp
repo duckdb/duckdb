@@ -223,11 +223,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		}
 	}
 
-	// order them by sequence number to try somewhat retain LRU behavior, then bulk re-add
-	std::sort(purge_nodes.begin(), purge_nodes.begin() + NumericCast<int64_t>(alive_nodes),
-	          [](const BufferEvictionNode &lhs, const BufferEvictionNode &rhs) {
-		          return lhs.handle_sequence_number < rhs.handle_sequence_number;
-	          });
+	// bulk re-add (TODO order them by timestamp to better retain the LRU behavior)
 	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
 	total_dead_nodes -= actually_dequeued - alive_nodes;
