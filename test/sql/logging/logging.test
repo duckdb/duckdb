@@ -20,18 +20,18 @@ SELECT 1;
 query IIIII
 SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
 ----
-duckdb.ClientContext.BeginQuery	INFO	SELECT 1;	CONNECTION	NULL
+QueryLog	INFO	SELECT 1;	CONNECTION	NULL
 
 statement ok
 set enable_logging=false;
 
 # With logging disabled, the log will persist
 query IIIII
-SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs where type = 'QueryLog'
 ----
-duckdb.ClientContext.BeginQuery	INFO	SELECT 1;	CONNECTION	NULL
-duckdb.ClientContext.BeginQuery	INFO	SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs	CONNECTION	NULL
-duckdb.ClientContext.BeginQuery	INFO	set enable_logging=false;	CONNECTION	NULL
+QueryLog	INFO	SELECT 1;	CONNECTION	NULL
+QueryLog	INFO	SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs	CONNECTION	NULL
+QueryLog	INFO	set enable_logging=false;	CONNECTION	NULL
 
 statement ok
 set logging_storage='stdout';

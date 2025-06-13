@@ -72,6 +72,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (!options.default_table.name.empty()) {
 		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 	}
+	attached_db->FinalizeLoad(context.client);
 	return SourceResultType::FINISHED;
 }
 

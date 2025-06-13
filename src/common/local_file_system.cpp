@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/logging/file_system_logger.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -152,11 +153,15 @@ public:
 
 	int fd;
 
+	// Kept for logging purposes
+	idx_t current_pos = 0;
+
 public:
 	void Close() override {
 		if (fd != -1) {
 			close(fd);
 			fd = -1;
+			DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
 		}
 	};
 };
@@ -301,10 +306,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 
-	if (opener) {
-		DUCKDB_LOG_INFO(*opener, "duckdb.FileSystem.LocalFileSystem.OpenFile", path_p);
-	}
-
 	flags.Verify();
 
 	int open_flags = 0;
@@ -439,7 +440,13 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			}
 		}
 	}
-	return make_uniq<UnixFileHandle>(*this, path, fd, flags);
+
+	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
+	if (opener) {
+		file_handle->TryAddLogger(*opener);
+		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
+	}
+	return std::move(file_handle);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -462,6 +469,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 }
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	auto bytes_to_read = nr_bytes;
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
@@ -480,24 +488,35 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		nr_bytes -= bytes_read;
 		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
+
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_to_read, location - UnsafeNumericCast<idx_t>(bytes_to_read));
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
 	}
+
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, unix_handle.current_pos);
+	unix_handle.current_pos += UnsafeNumericCast<idx_t>(bytes_read);
+
 	return bytes_read;
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto write_buffer = char_ptr_cast(buffer);
-	while (nr_bytes > 0) {
-		int64_t bytes_written =
-		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
+
+	auto bytes_to_write = nr_bytes;
+	auto current_location = location;
+
+	while (bytes_to_write > 0) {
+		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
+		                               UnsafeNumericCast<off_t>(current_location));
 		if (bytes_written < 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -507,26 +526,34 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
 		}
 		write_buffer += bytes_written;
-		nr_bytes -= bytes_written;
-		location += UnsafeNumericCast<idx_t>(bytes_written);
+		bytes_to_write -= bytes_written;
+		current_location += UnsafeNumericCast<idx_t>(bytes_written);
 	}
+
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, nr_bytes, location);
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = 0;
-	while (nr_bytes > 0) {
-		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
-		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	int fd = unix_handle.fd;
+
+	auto bytes_to_write = nr_bytes;
+	while (bytes_to_write > 0) {
+		auto bytes_to_write_this_call =
+		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
 		if (current_bytes_written <= 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
 		}
-		bytes_written += current_bytes_written;
 		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
-		nr_bytes -= current_bytes_written;
+		bytes_to_write -= current_bytes_written;
 	}
-	return bytes_written;
+
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, nr_bytes, unix_handle.current_pos);
+	unix_handle.current_pos += UnsafeNumericCast<idx_t>(nr_bytes);
+
+	return nr_bytes;
 }
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
@@ -672,7 +699,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 	}
 
 	// RAII wrapper around DIR to automatically free on exceptions in callback
-	std::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
+	duckdb::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
 
 	struct dirent *ent;
 	// loop over all files in the directory
@@ -799,6 +826,7 @@ public:
 		}
 		CloseHandle(fd);
 		fd = nullptr;
+		DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
 	};
 };
 
@@ -813,13 +841,13 @@ static string AdditionalLockInfo(const std::wstring path) {
 
 	status = RmStartSession(&session, 0, session_key);
 	if (status != ERROR_SUCCESS) {
-		return "";
+		return string();
 	}
 
 	PCWSTR path_ptr = path.c_str();
 	status = RmRegisterResources(session, 1, &path_ptr, 0, NULL, 0, NULL);
 	if (status != ERROR_SUCCESS) {
-		return "";
+		return string();
 	}
 	UINT process_info_size_needed, process_info_size;
 
@@ -827,7 +855,7 @@ static string AdditionalLockInfo(const std::wstring path) {
 	process_info_size = 0;
 	status = RmGetList(session, &process_info_size_needed, &process_info_size, NULL, &reason);
 	if (status != ERROR_MORE_DATA || process_info_size_needed == 0) {
-		return "";
+		return string();
 	}
 
 	// allocate
@@ -841,8 +869,7 @@ static string AdditionalLockInfo(const std::wstring path) {
 		return "";
 	}
 
-	string conflict_string = "File is already open in ";
-
+	string conflict_string;
 	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
 		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
 		auto pid = process_info[process_idx].Process.dwProcessId;
@@ -861,7 +888,10 @@ static string AdditionalLockInfo(const std::wstring path) {
 	}
 
 	RmEndSession(session);
-	return conflict_string;
+	if (conflict_string.empty()) {
+		return string();
+	}
+	return "File is already open in " + conflict_string;
 }
 
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
@@ -877,10 +907,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 	flags.Verify();
-
-	if (opener) {
-		DUCKDB_LOG_INFO(*opener, "duckdb.FileSystem.LocalFileSystem.OpenFile", path_p);
-	}
 
 	DWORD desired_access;
 	DWORD share_mode;
@@ -929,17 +955,20 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
 
-		auto better_error = AdditionalLockInfo(unicode_path);
-		if (!better_error.empty()) {
-			throw IOException(better_error);
-		} else {
-			throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
+		auto extended_error = AdditionalLockInfo(unicode_path);
+		if (!extended_error.empty()) {
+			extended_error = "\n" + extended_error;
 		}
+		throw IOException("Cannot open file \"%s\": %s%s", path.c_str(), error, extended_error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
+	}
+	if (opener) {
+		handle->TryAddLogger(*opener);
+		DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
 	}
 	return std::move(handle);
 }
@@ -980,6 +1009,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
 		                  bytes_read);
 	}
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, location);
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -988,6 +1018,8 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
 	auto bytes_read = FSInternalRead(handle, hFile, buffer, n, pos);
 	pos += bytes_read;
+
+	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, pos - bytes_read);
 	return bytes_read;
 }
 
@@ -1031,6 +1063,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
 	}
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, bytes_written, location);
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -1038,6 +1071,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
+	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, bytes_written, pos - bytes_written);
 	return bytes_written;
 }
 

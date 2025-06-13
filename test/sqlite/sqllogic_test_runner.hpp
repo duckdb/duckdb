@@ -20,6 +20,28 @@ class SQLLogicParser;
 
 enum class RequireResult { PRESENT, MISSING };
 
+struct CachedLabelData {
+public:
+	CachedLabelData(const string &hash, unique_ptr<QueryResult> result) : hash(hash), result(std::move(result)) {
+	}
+
+public:
+	string hash;
+	unique_ptr<QueryResult> result;
+};
+
+struct HashLabelMap {
+public:
+	void WithLock(std::function<void(unordered_map<string, CachedLabelData> &map)> cb) {
+		std::lock_guard<std::mutex> guard(lock);
+		cb(map);
+	}
+
+public:
+	std::mutex lock;
+	unordered_map<string, CachedLabelData> map;
+};
+
 class SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath);
@@ -52,8 +74,7 @@ public:
 	unordered_set<string> always_fail_error_messages = {"differs from original result!", "INTERNAL"};
 
 	//! The map converting the labels to the hash values
-	unordered_map<string, string> hash_label_map;
-	unordered_map<string, duckdb::unique_ptr<QueryResult>> result_label_map;
+	HashLabelMap hash_label_map;
 	mutex log_lock;
 
 public:

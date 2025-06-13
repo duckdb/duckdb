@@ -15,9 +15,10 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
-                                           PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index,
+                                           vector<LogicalType> types, bool union_all, PhysicalOperator &top,
+                                           PhysicalOperator &bottom, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
       ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
 	children.push_back(top);
 	children.push_back(bottom);
@@ -319,6 +320,7 @@ InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
 	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

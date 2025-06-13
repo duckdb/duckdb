@@ -40,7 +40,7 @@ struct CSVEncoderBuffer {
 
 private:
 	//! The encoded buffer, we only have one per file, so we cache it and make sure to pass over unused bytes.
-	std::unique_ptr<char[]> encoded_buffer;
+	duckdb::unique_ptr<char[]> encoded_buffer;
 	//! The encoded buffer size is defined as buffer_size/GetRatio()
 	idx_t encoded_buffer_size;
 };
@@ -48,7 +48,7 @@ private:
 class CSVEncoder {
 public:
 	//! Constructor, basically takes an encoding and the output buffer size
-	CSVEncoder(const DBConfig &config, const string &encoding_name, idx_t buffer_size);
+	CSVEncoder(ClientContext &context, const string &encoding_name, idx_t buffer_size);
 	//! Main encode function, it reads the file into an encoded buffer and converts it to the output buffer
 	idx_t Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size);
 	string encoding_name;

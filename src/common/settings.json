@@ -115,6 +115,17 @@
         "scope": "global"
     },
     {
+        "name": "arrow_output_version",
+        "description": "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "type": "VARCHAR",
+        "scope": "global",
+        "internal_setting": "arrow_output_version",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
+    },
+    {
         "name": "asof_loop_join_threshold",
         "description": "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join",
         "type": "UBIGINT",
@@ -736,6 +747,13 @@
         "aliases": [
             "profiling_output"
         ]
+    },
+    {
+        "name": "profiling_coverage",
+        "description": "The profiling coverage (SELECT or ALL)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "profiling_mode",

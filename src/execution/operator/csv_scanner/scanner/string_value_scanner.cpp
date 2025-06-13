@@ -26,7 +26,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-      extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
+      extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
+                                ? 0
+                                : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
       error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
       csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(scan_id, state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
@@ -565,6 +567,22 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				result.cur_col_id++;
 				result.chunk_col_id++;
 			} else {
+				if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+					// We cant have escapes on non varchar columns
+					result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
+					                             result.last_position);
+					if (!result.state_machine.options.IgnoreErrors()) {
+						// We have to write the cast error message.
+						std::ostringstream error;
+						// Casting Error Message
+						error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
+						      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
+						auto error_string = error.str();
+						FullLinePosition::SanitizeError(error_string);
+						result.current_errors.ModifyErrorMessageOfLastError(error_string);
+					}
+					return;
+				}
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
 				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
@@ -1446,6 +1464,23 @@ void StringValueScanner::ProcessOverBufferValue() {
 			if (result.escaped) {
 				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
+					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+						// We cant have escapes on non varchar columns
+						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
+						                             result.last_position);
+						if (!result.state_machine.options.IgnoreErrors()) {
+							// We have to write the cast error message.
+							std::ostringstream error;
+							// Casting Error Message
+							error << "Could not convert string \""
+							      << std::string(over_buffer_string.c_str(), over_buffer_string.size()) << "\" to \'"
+							      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
+							auto error_string = error.str();
+							FullLinePosition::SanitizeError(error_string);
+							result.current_errors.ModifyErrorMessageOfLastError(error_string);
+						}
+						return;
+					}
 					value =
 					    RemoveEscape(str_ptr, over_buffer_string.size() - 2,
 					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
@@ -1457,6 +1492,23 @@ void StringValueScanner::ProcessOverBufferValue() {
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
+				if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+					// We cant have escapes on non varchar columns
+					result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
+					                             result.last_position);
+					if (!result.state_machine.options.IgnoreErrors()) {
+						// We have to write the cast error message.
+						std::ostringstream error;
+						// Casting Error Message
+						error << "Could not convert string \""
+						      << std::string(over_buffer_string.c_str(), over_buffer_string.size()) << "\" to \'"
+						      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
+						auto error_string = error.str();
+						FullLinePosition::SanitizeError(error_string);
+						result.current_errors.ModifyErrorMessageOfLastError(error_string);
+					}
+					return;
+				}
 				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					value =
 					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),

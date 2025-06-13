@@ -5,6 +5,12 @@
 statement ok
 PRAGMA enable_verification
 
+# remap without targets
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v2 INT), NULL, {'v2': NULL::INTEGER});
+----
+{'v2': NULL}
+
 # basic binding error
 statement error
 select remap_struct(42, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})
@@ -194,4 +200,22 @@ SELECT remap_struct(
  {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
  {'v2': NULL, 'v3': NULL::VARCHAR});
 ----
-Target value is a struct - default value should also be a struct
+Binder Error: Default key v2 does not match target type STRUCT(x INTEGER, y INTEGER) - add a cast
+
+statement error
+SELECT remap_struct(
+      [
+          {
+              'i': 1,
+              'j': 42
+          }
+      ],
+      NULL::STRUCT(k INT)[],
+      {'list': 'list'},
+      {
+          'list': {
+              'k': NULL
+          }
+      }
+  );
+----

@@ -22,9 +22,7 @@ public:
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
-
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	int64_t GetFileSize(FileHandle &handle) override;
@@ -48,6 +46,7 @@ public:
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 

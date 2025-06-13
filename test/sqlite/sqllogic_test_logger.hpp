@@ -46,7 +46,8 @@ public:
 	void ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
 	                                      MaterializedQueryResult &result);
 	void SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count);
-	void WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
+	void WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result, const string &expected_hash,
+	                     const string &actual_hash);
 	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);

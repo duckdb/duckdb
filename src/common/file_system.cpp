@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/logging/log_type.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
@@ -16,6 +17,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -404,11 +406,6 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
-bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
-	// This is not a required method. Derived FileSystems may optionally override/implement.
-	return false;
-}
-
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Write (with location) is not implemented!", GetName());
 }
@@ -419,6 +416,11 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
+}
+
+bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// This is not a required method. Derived FileSystems may optionally override/implement.
+	return false;
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
@@ -549,6 +551,14 @@ bool FileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener)
 
 void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
+}
+
+bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	if (FileExists(filename, opener)) {
+		RemoveFile(filename, opener);
+		return true;
+	}
+	return false;
 }
 
 void FileSystem::FileSync(FileHandle &handle) {
@@ -693,7 +703,8 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location) {
+	// FIXME: Add profiling.
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
@@ -753,6 +764,18 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+void FileHandle::TryAddLogger(FileOpener &opener) {
+	auto context = opener.TryGetClientContext();
+	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = context->logger;
+		return;
+	}
+	auto database = opener.TryGetDatabase();
+	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = database->GetLogManager().GlobalLoggerReference();
+	}
 }
 
 idx_t FileHandle::GetProgress() {

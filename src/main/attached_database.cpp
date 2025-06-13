@@ -119,14 +119,14 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
                                    ClientContext &context, string name_p, AttachInfo &info, AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
       storage_extension(&storage_extension_p) {
-	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
-	catalog = storage_extension->attach(storage_info, context, *this, name, info, options.access_mode);
-
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+
+	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
+	catalog = storage_extension->attach(storage_info, context, *this, name, info, options.access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
@@ -181,8 +181,12 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOp
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(options);
+		storage->Initialize(context, options);
 	}
+}
+
+void AttachedDatabase::FinalizeLoad(optional_ptr<ClientContext> context) {
+	catalog->FinalizeLoad(context);
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {

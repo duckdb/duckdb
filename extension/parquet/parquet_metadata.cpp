@@ -402,6 +402,9 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 
 	names.emplace_back("logical_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("duckdb_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
 Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
@@ -498,6 +501,14 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 		// logical_type, LogicalType::VARCHAR
 		current_chunk.SetValue(10, count, ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
 
+		// duckdb_type, LogicalType::VARCHAR
+		ParquetColumnSchema column_schema;
+		Value duckdb_type;
+		if (column.__isset.type) {
+			duckdb_type = reader->DeriveLogicalType(column, column_schema).ToString();
+		}
+		current_chunk.SetValue(11, count, duckdb_type);
+
 		count++;
 		if (count >= STANDARD_VECTOR_SIZE) {
 			current_chunk.SetCardinality(count);
@@ -582,6 +593,12 @@ void ParquetMetaDataOperatorData::BindFileMetaData(vector<LogicalType> &return_t
 
 	names.emplace_back("footer_signing_key_metadata");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("file_size_bytes");
+	return_types.emplace_back(LogicalType::UBIGINT);
+
+	names.emplace_back("footer_size");
+	return_types.emplace_back(LogicalType::UBIGINT);
 }
 
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
@@ -610,6 +627,11 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	current_chunk.SetValue(6, 0,
 	                       ParquetElementStringVal(meta_data->footer_signing_key_metadata,
 	                                               meta_data->__isset.footer_signing_key_metadata));
+	//  file_size_bytes
+	current_chunk.SetValue(7, 0, Value::UBIGINT(reader->GetHandle().GetFileSize()));
+	//  footer_size
+	current_chunk.SetValue(8, 0, Value::UBIGINT(reader->metadata->footer_size));
+
 	current_chunk.SetCardinality(1);
 	collection.Append(current_chunk);
 	collection.InitializeScan(scan_state);
@@ -652,7 +674,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 	}
 
 	auto &allocator = Allocator::DefaultAllocator();
-	auto transport = std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 

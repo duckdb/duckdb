@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -9,9 +8,8 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -32,6 +30,7 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
 		param_count = 1;
 		break;
 	case ExpressionType::WINDOW_NTH_VALUE:
@@ -58,6 +57,7 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
 		return child_types[0];
 	default:
 		throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
@@ -105,6 +105,10 @@ static bool IsRangeType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+static bool IsFillType(const LogicalType &type) {
+	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
@@ -171,6 +175,9 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	     window.end == WindowBoundary::EXPR_PRECEDING_RANGE || window.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 	if (is_range && window.orders.size() != 1) {
 		throw BinderException(error_context, "RANGE frames must have only one ORDER BY expression");
+	} else if (window.GetExpressionType() == ExpressionType::WINDOW_FILL &&
+	           (window.arg_orders.size() > 1 || (window.arg_orders.empty() && window.orders.size() != 1))) {
+		throw BinderException(error_context, "FILL functions must have only one ORDER BY expression");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
@@ -372,6 +379,24 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto null_order = config.ResolveNullOrder(type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->arg_orders.emplace_back(type, null_order, std::move(expression));
+	}
+
+	//	Check FILL arguments support subtraction
+	if (window.GetExpressionType() == ExpressionType::WINDOW_FILL) {
+		D_ASSERT(!result->children.empty());
+		if (!IsFillType(result->children[0]->return_type)) {
+			throw BinderException(error_context, "FILL argument must support subtraction");
+		}
+		LogicalType order_type;
+		if (window.arg_orders.empty()) {
+			D_ASSERT(!result->orders.empty());
+			order_type = result->orders[0].expression->return_type;
+		} else {
+			order_type = result->arg_orders[0].expression->return_type;
+		}
+		if (!IsFillType(order_type)) {
+			throw BinderException(error_context, "FILL ordering must support subtraction");
+		}
 	}
 
 	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);

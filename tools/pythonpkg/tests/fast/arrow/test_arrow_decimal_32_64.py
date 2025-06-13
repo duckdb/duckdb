@@ -8,6 +8,7 @@ pa = pytest.importorskip("pyarrow")
 class TestArrowDecimalTypes(object):
     def test_decimal_32(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute('SET arrow_output_version = 1.5')
         decimal_32 = pa.Table.from_pylist(
             [
                 {"data": Decimal("100.20")},
@@ -36,6 +37,7 @@ class TestArrowDecimalTypes(object):
 
     def test_decimal_64(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute('SET arrow_output_version = 1.5')
         decimal_64 = pa.Table.from_pylist(
             [
                 {"data": Decimal("1000.231")},

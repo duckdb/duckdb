@@ -1,12 +1,14 @@
 #include "duckdb/common/http_util.hpp"
-#include "duckdb/main/database.hpp"
+
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/logging/http_logger.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
+
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
@@ -131,15 +133,12 @@ public:
 		auto sec = static_cast<time_t>(http_params.timeout);
 		auto usec = static_cast<time_t>(http_params.timeout_usec);
 		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
-		client->set_follow_location(true);
+		client->set_follow_location(http_params.follow_location);
 		client->set_keep_alive(http_params.keep_alive);
 		client->set_write_timeout(sec, usec);
 		client->set_read_timeout(sec, usec);
 		client->set_connection_timeout(sec, usec);
 		client->set_decompress(false);
-		if (http_params.logger) {
-			SetLogger(*http_params.logger);
-		}
 
 		if (!http_params.http_proxy.empty()) {
 			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
@@ -148,10 +147,6 @@ public:
 				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
 			}
 		}
-	}
-
-	void SetLogger(HTTPLogger &logger) {
-		client->set_logger(logger.GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
 	}
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		auto headers = TransformHeaders(info.headers, info.params);
@@ -231,11 +226,24 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		client = InitializeClient(request.params, request.proto_host_port);
 	}
 
-	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() { return client->Request(request); });
+	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
+		auto response = client->Request(request);
+		LogRequest(request, response ? response.get() : nullptr);
+		return response;
+	});
+
 	// Refresh the client on retries
 	std::function<void(void)> on_retry([&]() { client = InitializeClient(request.params, request.proto_host_port); });
 
-	return RunRequestWithRetry(on_request, request);
+	return RunRequestWithRetry(on_request, request, on_retry);
+}
+
+void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response) {
+	if (!request.params.logger || !request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
+		return;
+	}
+	auto log_string = HTTPLogType::ConstructLogMessage(request, response);
+	request.params.logger->WriteLog(HTTPLogType::NAME, HTTPLogType::LEVEL, log_string);
 }
 
 void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
@@ -259,10 +267,73 @@ void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx
 	}
 }
 
-void HTTPUtil::DecomposeURL(const string &url, string &path_out, string &proto_host_port_out) {
-	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
-		throw IOException("URL needs to start with http:// or https://");
+namespace {
+
+enum class URISchemeType { HTTP, HTTPS, NONE, OTHER };
+
+struct URISchemeDetectionResult {
+	string lower_scheme;
+	URISchemeType scheme_type = URISchemeType::NONE;
+};
+
+bool IsValidSchemeChar(char c) {
+	return std::isalnum(c) || c == '+' || c == '.' || c == '-';
+}
+
+//! See https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
+URISchemeDetectionResult DetectURIScheme(const string &uri) {
+	URISchemeDetectionResult result;
+	auto colon_pos = uri.find(':');
+
+	// No colon or it's before any non-scheme content
+	if (colon_pos == string::npos || colon_pos == 0) {
+		result.lower_scheme = "";
+		result.scheme_type = URISchemeType::NONE;
+		return result;
 	}
+
+	if (!std::isalpha(uri[0])) {
+		//! Scheme names consist of a sequence of characters beginning with a letter
+		result.lower_scheme = "";
+		result.scheme_type = URISchemeType::NONE;
+		return result;
+	}
+
+	// Validate scheme characters
+	for (size_t i = 1; i < colon_pos; ++i) {
+		if (!IsValidSchemeChar(uri[i])) {
+			//! Scheme can't contain this character, assume the URI has no scheme
+			result.lower_scheme = "";
+			result.scheme_type = URISchemeType::NONE;
+			return result;
+		}
+	}
+
+	string scheme = uri.substr(0, colon_pos);
+	result.lower_scheme = StringUtil::Lower(scheme);
+
+	if (result.lower_scheme == "http") {
+		result.scheme_type = URISchemeType::HTTP;
+		return result;
+	}
+	if (result.lower_scheme == "https") {
+		result.scheme_type = URISchemeType::HTTPS;
+		return result;
+	}
+	result.scheme_type = URISchemeType::OTHER;
+	return result;
+}
+
+} // namespace
+
+void HTTPUtil::DecomposeURL(const string &input, string &path_out, string &proto_host_port_out) {
+	auto detection_result = DetectURIScheme(input);
+	auto url = input;
+	if (detection_result.scheme_type == URISchemeType::NONE) {
+		//! Assume it's HTTP
+		url = "http://" + url;
+	}
+
 	auto slash_pos = url.find('/', 8);
 	if (slash_pos == string::npos) {
 		throw IOException("URL needs to contain a '/' after the host");
@@ -369,11 +440,12 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 		http_proxy_username = config.options.http_proxy_username;
 		http_proxy_password = config.options.http_proxy_password;
 	}
+
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
 		auto &client_config = ClientConfig::GetConfig(*client_context);
 		if (client_config.enable_http_logging) {
-			logger = client_context->client_data->http_logger.get();
+			logger = client_context->logger;
 		}
 	}
 }

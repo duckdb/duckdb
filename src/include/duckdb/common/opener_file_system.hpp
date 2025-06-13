@@ -24,10 +24,10 @@ public:
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
-	};
+	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		GetFileSystem().Write(handle, buffer, nr_bytes, location);
+		throw InternalException("writing on the OpenerFileSystem is undefined");
 	}
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
@@ -105,6 +105,12 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
 		GetFileSystem().RemoveFile(filename, GetOpener());
+	}
+
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
+		return GetFileSystem().TryRemoveFile(filename, GetOpener());
 	}
 
 	string PathSeparator(const string &path) override {

@@ -333,7 +333,7 @@ ORDER BY 1;
 query II
 SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow','doy', 'julian'], ts) AS parts
 FROM timestamps
-ORDER BY 1;
+ORDER BY ts;
 ----
 NULL	NULL
 -infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
@@ -758,12 +758,12 @@ infinity	NULL
 statement error
 select epoch_ms(9223372036854775807)
 ----
-Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
+Not implemented Error: EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.
 
 statement error
 select epoch_ms(-9223372036854775808)
 ----
-Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
+Not implemented Error: EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.
 
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;

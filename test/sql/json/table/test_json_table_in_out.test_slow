@@ -724,3 +724,18 @@ SELECT * FROM t
                WHERE j.value = '"meep"'));
 ----
 {"foo":"meep","other":12345}
+
+# internal issue 5080
+statement ok
+create table json_table as
+    select '{"my_array":[{"my_key":42},{"my_key":9001}]}' as my_json;
+
+query II
+select fullkey, path from json_table, json_tree(json_table.my_json);
+----
+$	$
+$.my_array	$
+$.my_array[0]	$.my_array
+$.my_array[0].my_key	$.my_array[0]
+$.my_array[1]	$.my_array
+$.my_array[1].my_key	$.my_array[1]

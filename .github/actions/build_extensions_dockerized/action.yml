@@ -14,6 +14,12 @@ inputs:
   override_git_describe:
     description: 'Override git describe'
     default: ''
+  build_complete_extensions_set:
+    description: 'Whether all extensions needs to be built'
+    default: 1
+  save_cache:
+    description: 'Should cache be saved'
+    default: 1
 
 runs:
   using: "composite"
@@ -44,7 +50,7 @@ runs:
         run: |
           docker build \
             --build-arg 'vcpkg_url=https://github.com/microsoft/vcpkg.git' \
-            --build-arg 'vcpkg_commit=5e5d0e1cd7785623065e77eff011afdeec1a3574' \
+            --build-arg 'vcpkg_commit=ce613c41372b23b1f51333815feb3edd87ef8a8b' \
             --build-arg 'extra_toolchains=;python3;' \
             -t duckdb/${{ inputs.duckdb_arch }} \
             ./extension-ci-tools/docker/${{ inputs.duckdb_arch }}
@@ -62,17 +68,13 @@ runs:
           echo "DUCKDB_PLATFORM=${{ inputs.duckdb_arch }}" >> docker_env.txt
           echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}" >> docker_env.txt
           echo "LINUX_CI_IN_DOCKER=1" >> docker_env.txt
-          # TODO: no more cross compilation for extension builds
-          echo "TOOLCHAIN_FLAGS=${{ inputs.duckdb_arch == 'linux_arm64' && '-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DCMAKE_Fortran_COMPILER=aarch64-linux-gnu-gfortran' || '' }}" >> docker_env.txt
-          echo "CC=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-gcc' || '' }}" >> docker_env.txt
-          echo "CXX=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}" >> docker_env.txt 
+          echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> docker_env.txt
 
       - name: Generate timestamp for Ccache entry
-        shell: cmake -P {0}
+        shell: bash
         id: ccache_timestamp
         run: |
-          string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-          message("::set-output name=timestamp::${current_date}")
+          date --utc +'timestamp=%Y-%m-%d-%H;%M;%S' >> "$GITHUB_OUTPUT"
 
       - name: Create Ccache directory
         shell: bash
@@ -80,7 +82,7 @@ runs:
           mkdir ccache_dir
 
       - name: Load Ccache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ./ccache_dir
           key: ccache-extension-distribution-${{ inputs.duckdb_arch }}-${{ steps.ccache_timestamp.outputs.timestamp }}
@@ -97,8 +99,15 @@ runs:
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make release
 
+      - name: Save Ccache
+        if: ${{ inputs.save_cache }}
+        uses: actions/cache/save@v4
+        with:
+          path: ./ccache_dir
+          key: ccache-extension-distribution-${{ inputs.duckdb_arch }}-${{ steps.ccache_timestamp.outputs.timestamp }}
+
       - name: Test extension (inside docker)
         shell: bash
-        if: ${{ inputs.run_tests == 1 && inputs.duckdb_arch != 'linux_arm64'}}
+        if: ${{ inputs.run_tests == 1 }}
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make test_release
