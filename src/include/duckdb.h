@@ -3062,8 +3062,8 @@ DUCKDB_C_API void duckdb_data_chunk_copy_sel(duckdb_data_chunk src, duckdb_data_
 /*!
 Makes the src data chunk reference the specified columns in the dst data chunk
 
-* @param src The data chunk to copy from
-* @param dst The data chunk to copy to
+* @param src The data chunk whose vectors will be referenced by dst
+* @param dst The data chunk whose vectors will reference src vectors
 * @param col_idx The project indices into the source column set
 * @param column_count The number of columns in the col_idx array
 */

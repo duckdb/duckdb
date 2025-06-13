@@ -581,15 +581,17 @@ TEST_CASE("Test duckdb_data_chunk_copy", "[capi]") {
 		CHECK(dst_int_data[0] == 42);
 		CHECK(dst_int_data[1] == 99);
 
-		auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst_chunk);
-		auto val1 = ddst->GetValue(1, 0);
-		auto val2 = ddst->GetValue(1, 1);
-		char *str1 = duckdb_get_varchar(reinterpret_cast<duckdb_value>(&val1));
-		char *str2 = duckdb_get_varchar(reinterpret_cast<duckdb_value>(&val2));
-		CHECK(strcmp(str1, "hello") == 0);
-		CHECK(strcmp(str2, "world") == 0);
-		free(str1);
-		free(str2);
+		duckdb_vector dst_vector = duckdb_data_chunk_get_vector(dst_chunk, 1);
+		auto validity = duckdb_vector_get_validity(dst_vector);
+		auto string_data = (duckdb_string_t *)duckdb_vector_get_data(dst_vector);
+
+		CHECK(duckdb_validity_row_is_valid(validity, 0));
+		CHECK(duckdb_validity_row_is_valid(validity, 1));
+
+		REQUIRE(string_data[0].value.inlined.length == strlen("hello"));
+		REQUIRE(string_data[1].value.inlined.length == strlen("world"));
+		CHECK(strcmp(string_data[0].value.inlined.inlined, "hello") == 0);
+		CHECK(strcmp(string_data[1].value.inlined.inlined, "world") == 0);
 
 		duckdb_destroy_data_chunk(&src_chunk);
 		duckdb_destroy_data_chunk(&dst_chunk);
@@ -647,6 +649,21 @@ TEST_CASE("Test duckdb_data_chunk_copy", "[capi]") {
 	}
 }
 
+duckdb_data_chunk create_src_for_copy_selection_test(duckdb_logical_type types[], idx_t src_size) {
+	duckdb_data_chunk chunk = duckdb_create_data_chunk(types, 2);
+
+	// Populate the source chunk
+	auto int_data = (int32_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(chunk, 0));
+	auto varchar_vector = duckdb_data_chunk_get_vector(chunk, 1);
+	for (idx_t i = 0; i < src_size; ++i) {
+		int_data[i] = int32_t(i * 10);
+		string str_val = "value_" + std::to_string(i);
+		duckdb_vector_assign_string_element(varchar_vector, i, str_val.c_str());
+	}
+	duckdb_data_chunk_set_size(chunk, src_size);
+	return chunk;
+}
+
 TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 	if (STANDARD_VECTOR_SIZE < 16) {
 		SKIP_TEST("require " + std::to_string(STANDARD_VECTOR_SIZE) + " >= 16");
@@ -657,58 +674,48 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	// Common setup
-	duckdb_data_chunk src_chunk, dst_chunk;
 	duckdb_logical_type types[] = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
 	                               duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR)};
 
-	src_chunk = duckdb_create_data_chunk(types, 2);
-	dst_chunk = duckdb_create_data_chunk(types, 2);
-
-	// Populate the source chunk
-	idx_t src_size = 10;
-	auto int_data = (int32_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(src_chunk, 0));
-	auto varchar_vector = duckdb_data_chunk_get_vector(src_chunk, 1);
-	for (idx_t i = 0; i < src_size; ++i) {
-		int_data[i] = i * 10;
-		string str_val = "value_" + std::to_string(i);
-		duckdb_vector_assign_string_element(varchar_vector, i, str_val.c_str());
-	}
-	duckdb_data_chunk_set_size(src_chunk, src_size);
-
 	SECTION("Test basic selection copy") {
+		duckdb_data_chunk src_chunk = create_src_for_copy_selection_test(types, 10);
+		duckdb_data_chunk dst_chunk = duckdb_create_data_chunk(types, 2);
+
 		// Select rows 1, 3, 4 from the source chunk
 		idx_t selection_data[] = {1, 3, 4};
 		duckdb_selection_vector sel_vector = duckdb_create_selection_vector(3);
-		auto sel = reinterpret_cast<duckdb::SelectionVector *>(sel_vector);
-		sel->set_index(0, 1);
-		sel->set_index(1, 3);
-		sel->set_index(2, 4);
+		sel_t *sel_data = duckdb_selection_vector_get_data_ptr(sel_vector);
+		for (idx_t i = 0; i < 3; ++i) {
+			sel_data[i] = selection_data[i];
+		}
 
 		duckdb_data_chunk_copy_sel(src_chunk, dst_chunk, sel_vector, 3, 0);
 
 		REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == 3);
 		auto dst_int_data = (int32_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(dst_chunk, 0));
+		auto string_data = (duckdb_string_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(dst_chunk, 1));
 
-		auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst_chunk);
 		for (idx_t i = 0; i < 3; ++i) {
 			CHECK(dst_int_data[i] == int32_t(selection_data[i] * 10));
-			auto val = ddst->GetValue(1, i);
-			char *str = duckdb_get_varchar(reinterpret_cast<duckdb_value>(&val));
 			string expected = "value_" + std::to_string(selection_data[i]);
-			CHECK(strcmp(str, expected.c_str()) == 0);
-			free(str);
+			CHECK(string_data[i].value.inlined.length == strlen(expected.c_str()));
+			CHECK(strcmp(string_data[i].value.inlined.inlined, expected.c_str()) == 0);
 		}
 
-		delete sel;
+		duckdb_destroy_selection_vector(sel_vector);
+		duckdb_destroy_data_chunk(&src_chunk);
+		duckdb_destroy_data_chunk(&dst_chunk);
 	}
 
 	SECTION("Test selection copy with an offset and count") {
+		duckdb_data_chunk src_chunk = create_src_for_copy_selection_test(types, 10);
+		duckdb_data_chunk dst_chunk = duckdb_create_data_chunk(types, 2);
+
 		idx_t selection_data[] = {0, 2, 4, 6, 8};
 		duckdb_selection_vector sel_vector = duckdb_create_selection_vector(5);
-		auto sel = reinterpret_cast<duckdb::SelectionVector *>(sel_vector);
+		sel_t *sel_data = duckdb_selection_vector_get_data_ptr(sel_vector);
 		for (idx_t i = 0; i < 5; ++i) {
-			sel->set_index(i, selection_data[i]);
+			sel_data[i] = selection_data[i];
 		}
 
 		// Copy the first 4 items from the selection vector, but start at the second offset.
@@ -720,26 +727,29 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 
 		REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == source_count - offset);
 		auto dst_int_data = (int32_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(dst_chunk, 0));
+		auto string_data = (duckdb_string_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(dst_chunk, 1));
 
-		auto ddst = reinterpret_cast<duckdb::DataChunk *>(dst_chunk);
 		for (idx_t i = 0; i < source_count - offset; ++i) {
 			CHECK(dst_int_data[i] == int32_t(selection_data[i + offset] * 10));
-			auto val = ddst->GetValue(1, i);
-			char *str = duckdb_get_varchar(reinterpret_cast<duckdb_value>(&val));
 			string expected = "value_" + std::to_string(selection_data[i + offset]);
-			CHECK(strcmp(str, expected.c_str()) == 0);
-			free(str);
+			CHECK(string_data[i].value.inlined.length == strlen(expected.c_str()));
+			CHECK(strcmp(string_data[i].value.inlined.inlined, expected.c_str()) == 0);
 		}
 
-		delete sel;
+		duckdb_destroy_selection_vector(sel_vector);
+		duckdb_destroy_data_chunk(&src_chunk);
+		duckdb_destroy_data_chunk(&dst_chunk);
 	}
 
 	SECTION("Test selection copy with zero count") {
+		duckdb_data_chunk src_chunk = create_src_for_copy_selection_test(types, 10);
+		duckdb_data_chunk dst_chunk = duckdb_create_data_chunk(types, 2);
+
 		idx_t selection_data[] = {0, 2, 3, 4};
 		duckdb_selection_vector sel_vector = duckdb_create_selection_vector(4);
-		auto sel = reinterpret_cast<duckdb::SelectionVector *>(sel_vector);
+		sel_t *sel_data = duckdb_selection_vector_get_data_ptr(sel_vector);
 		for (idx_t i = 0; i < 4; ++i) {
-			sel->set_index(i, selection_data[i]);
+			sel_data[i] = selection_data[i];
 		}
 
 		// Attempt to copy 0 rows
@@ -748,12 +758,11 @@ TEST_CASE("Test duckdb_data_chunk_copy_sel", "[capi]") {
 		// Verify the destination chunk is empty
 		REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == 0);
 
-		delete sel;
+		duckdb_destroy_selection_vector(sel_vector);
+		duckdb_destroy_data_chunk(&src_chunk);
+		duckdb_destroy_data_chunk(&dst_chunk);
 	}
 
-	// Clean up common resources
-	duckdb_destroy_data_chunk(&src_chunk);
-	duckdb_destroy_data_chunk(&dst_chunk);
 	for (size_t i = 0; i < 2; i++) {
 		duckdb_destroy_logical_type(&types[i]);
 	}
@@ -786,40 +795,38 @@ TEST_CASE("Test duckdb_data_chunk_reference_columns", "[capi]") {
 	src_bigint_data[1] = 2000;
 	duckdb_data_chunk_set_size(src_chunk, 2);
 
-	SECTION("Test basic column reference") {
-		duckdb_data_chunk dst_chunk;
-		duckdb_logical_type dst_types[] = {duckdb_create_logical_type(DUCKDB_TYPE_BIGINT),
-		                                   duckdb_create_logical_type(DUCKDB_TYPE_INTEGER)};
-		dst_chunk = duckdb_create_data_chunk(dst_types, 2);
+	duckdb_data_chunk dst_chunk;
+	duckdb_logical_type dst_types[] = {duckdb_create_logical_type(DUCKDB_TYPE_BIGINT),
+	                                   duckdb_create_logical_type(DUCKDB_TYPE_INTEGER)};
+	dst_chunk = duckdb_create_data_chunk(dst_types, 2);
 
-		idx_t ref_indices[] = {2, 0};
+	idx_t ref_indices[] = {2, 0};
 
-		duckdb_data_chunk_reference_columns(src_chunk, dst_chunk, ref_indices, 2);
+	duckdb_data_chunk_reference_columns(src_chunk, dst_chunk, ref_indices, 2);
 
-		REQUIRE(duckdb_data_chunk_get_column_count(dst_chunk) == 2);
-		REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == 2);
+	REQUIRE(duckdb_data_chunk_get_column_count(dst_chunk) == 2);
+	REQUIRE(duckdb_data_chunk_get_size(dst_chunk) == 2);
 
-		auto dst_type_0 = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(dst_chunk, 0));
-		auto dst_type_1 = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(dst_chunk, 1));
-		REQUIRE(duckdb_get_type_id(dst_type_0) == DUCKDB_TYPE_BIGINT);
-		REQUIRE(duckdb_get_type_id(dst_type_1) == DUCKDB_TYPE_INTEGER);
-		duckdb_destroy_logical_type(&dst_type_0);
-		duckdb_destroy_logical_type(&dst_type_1);
+	auto dst_type_0 = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(dst_chunk, 0));
+	auto dst_type_1 = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(dst_chunk, 1));
+	REQUIRE(duckdb_get_type_id(dst_type_0) == DUCKDB_TYPE_BIGINT);
+	REQUIRE(duckdb_get_type_id(dst_type_1) == DUCKDB_TYPE_INTEGER);
+	duckdb_destroy_logical_type(&dst_type_0);
+	duckdb_destroy_logical_type(&dst_type_1);
 
-		// Verify that the data pointers are the same
-		auto dst_bigint_vector = duckdb_data_chunk_get_vector(dst_chunk, 0);
-		auto dst_int_vector = duckdb_data_chunk_get_vector(dst_chunk, 1);
-		REQUIRE(duckdb_vector_get_data(dst_bigint_vector) == duckdb_vector_get_data(src_bigint_vector));
-		REQUIRE(duckdb_vector_get_data(dst_int_vector) == duckdb_vector_get_data(src_int_vector));
+	// Verify that the data pointers are the same
+	auto dst_bigint_vector = duckdb_data_chunk_get_vector(dst_chunk, 0);
+	auto dst_int_vector = duckdb_data_chunk_get_vector(dst_chunk, 1);
+	REQUIRE(duckdb_vector_get_data(dst_bigint_vector) == duckdb_vector_get_data(src_bigint_vector));
+	REQUIRE(duckdb_vector_get_data(dst_int_vector) == duckdb_vector_get_data(src_int_vector));
 
-		src_bigint_data[0] = 9999;
-		auto dst_bigint_data = (int64_t *)duckdb_vector_get_data(dst_bigint_vector);
-		REQUIRE(dst_bigint_data[0] == 9999);
+	src_bigint_data[0] = 9999;
+	auto dst_bigint_data = (int64_t *)duckdb_vector_get_data(dst_bigint_vector);
+	REQUIRE(dst_bigint_data[0] == 9999);
 
-		duckdb_destroy_data_chunk(&dst_chunk);
-		for (size_t i = 0; i < 2; i++) {
-			duckdb_destroy_logical_type(&dst_types[i]);
-		}
+	duckdb_destroy_data_chunk(&dst_chunk);
+	for (size_t i = 0; i < 2; i++) {
+		duckdb_destroy_logical_type(&dst_types[i]);
 	}
 
 	duckdb_destroy_data_chunk(&src_chunk);

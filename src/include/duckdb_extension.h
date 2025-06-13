@@ -592,13 +592,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 #endif
 
-// New vector functions that are added
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
-	                               idx_t src_offset, idx_t dst_offset);
-#endif
-
-// An API to create new vector types
+// API to create and manipulate vector types
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
@@ -608,6 +602,8 @@ typedef struct {
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector sel);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
+	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+	                               idx_t src_offset, idx_t dst_offset);
 #endif
 
 } duckdb_ext_api_v1;
@@ -1067,12 +1063,10 @@ typedef struct {
 #define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
 
 // Version unstable_new_vector_functions
-#define duckdb_vector_copy_sel duckdb_ext_api.duckdb_vector_copy_sel
-
-// Version unstable_new_vector_types
 #define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector
 #define duckdb_destroy_vector                duckdb_ext_api.duckdb_destroy_vector
 #define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_vector_copy_sel               duckdb_ext_api.duckdb_vector_copy_sel
 #define duckdb_vector_reference_value        duckdb_ext_api.duckdb_vector_reference_value
 #define duckdb_vector_reference_vector       duckdb_ext_api.duckdb_vector_reference_vector
 #define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector

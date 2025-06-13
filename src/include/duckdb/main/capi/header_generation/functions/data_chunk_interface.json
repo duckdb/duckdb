@@ -137,8 +137,8 @@
             "comment": {
                 "description": "Makes the src data chunk reference the specified columns in the dst data chunk\n\n",
                 "param_comments": {
-                    "src": "The data chunk to copy from",
-                    "dst": "The data chunk to copy to",
+                    "src": "The data chunk whose vectors will be referenced by dst",
+                    "dst": "The data chunk whose vectors will reference src vectors",
                     "col_idx": "The project indices into the source column set",
                     "column_count": "The number of columns in the col_idx array"
                 }
