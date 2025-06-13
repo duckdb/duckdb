@@ -14,16 +14,17 @@
 
 namespace duckdb {
 
-PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types_p, TableCatalogEntry &table,
+PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p,
+                                         TableCatalogEntry &table,
                                          vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                          idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
       insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)) {
 }
 
-PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema,
+PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
       insert_table(nullptr), schema(&schema), info(std::move(info_p)) {
 	PhysicalInsert::GetInsertInfo(*info, insert_types);
 }

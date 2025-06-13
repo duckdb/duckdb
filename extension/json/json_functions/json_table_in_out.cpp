@@ -124,10 +124,14 @@ struct JSONTableInOutLocalState : LocalTableFunctionState {
 		return result;
 	}
 
-	void AddRecursionNode(yyjson_val *val, optional_ptr<yyjson_val> vkey) {
-		const auto vkey_str =
-		    vkey ? "." + string(unsafe_yyjson_get_str(vkey.get()), unsafe_yyjson_get_len(vkey.get())) : "";
-		recursion_nodes.emplace_back(vkey_str, val);
+	void AddRecursionNode(yyjson_val *val, optional_ptr<yyjson_val> vkey, const optional_idx arr_index) {
+		string str;
+		if (vkey) {
+			str = "." + string(unsafe_yyjson_get_str(vkey.get()), unsafe_yyjson_get_len(vkey.get()));
+		} else if (arr_index.IsValid()) {
+			str = "[" + to_string(arr_index.GetIndex()) + "]";
+		}
+		recursion_nodes.emplace_back(str, val);
 	}
 
 	JSONAllocator json_allocator;
@@ -269,7 +273,7 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 		result.AddRow<TYPE>(lstate, nullptr, root);
 	}
 	if (is_container) {
-		lstate.AddRecursionNode(root, nullptr);
+		lstate.AddRecursionNode(root, nullptr, optional_idx());
 	}
 }
 
@@ -283,7 +287,7 @@ static bool JSONTableInOutHandleValue(JSONTableInOutLocalState &lstate, JSONTabl
 	result.AddRow<TYPE>(lstate, child_key, child_val);
 	child_index++; // We finished processing the array element
 	if (TYPE == JSONTableInOutType::TREE && (unsafe_yyjson_is_arr(child_val) || unsafe_yyjson_is_obj(child_val))) {
-		lstate.AddRecursionNode(child_val, child_key);
+		lstate.AddRecursionNode(child_val, child_key, idx);
 		return true; // Break: We added a recursion node, go depth-first
 	}
 	if (result.count == STANDARD_VECTOR_SIZE) {

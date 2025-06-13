@@ -29,6 +29,13 @@ void DatabaseManager::InitializeSystemCatalog() {
 	system->Initialize();
 }
 
+void DatabaseManager::FinalizeStartup() {
+	auto databases = GetDatabases();
+	for (auto &db : databases) {
+		db.get().FinalizeLoad(nullptr);
+	}
+}
+
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();

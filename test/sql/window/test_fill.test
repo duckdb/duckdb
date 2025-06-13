@@ -18,11 +18,17 @@ select fill(i) over () from range(3) tbl(i);
 ----
 FILL functions must have only one ORDER BY expression
 
+# Argument must be numeric
+statement error
+select fill(i::VARCHAR) over (order by i) from range(3) tbl(i);
+----
+FILL argument must support subtraction
+
 # Ordering must be numeric
 statement error
 select fill(i) over (order by i::VARCHAR) from range(3) tbl(i);
 ----
-FILL orderings must support subtraction
+FILL ordering must support subtraction
 
 #
 # Simple interpolation coverage tests
@@ -81,6 +87,17 @@ qualify i is distinct from f
 order by i
 ----
 2	NULL
+
+# Non-deterministic sort
+query III
+SELECT 
+    t::${ordertype},
+    y::${filltype},
+    fill(y::${filltype}) OVER (ORDER BY t::${ordertype}) f
+FROM (VALUES (1, 1), (1, NULL), (1, 2))_(t, y)
+QUALIFY f is distinct from y
+----
+1	NULL	1
 
 foreach sense asc desc
 

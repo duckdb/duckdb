@@ -5,12 +5,9 @@ from pytest import mark, fixture, importorskip
 
 read_csv = importorskip('pyarrow.csv').read_csv
 requests = importorskip('requests')
+requests_adapters = importorskip('requests.adapters')
+urllib3_util = importorskip('urllib3.util')
 np = importorskip('numpy')
-
-
-def download_file(url, name):
-    r = requests.get(url, allow_redirects=True)
-    open(name, 'wb').write(r.content)
 
 
 def group_by_q1(con):
@@ -173,19 +170,10 @@ class TestH2OAIArrow(object):
         ],
     )
     @mark.parametrize('threads', [1, 4])
-    def test_group_by(self, threads, function):
-        con = duckdb.connect()
-        download_file(
-            'https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz',
-            'G1_1e7_1e2_5_0.csv.gz',
-        )
-        arrow_table = read_csv('G1_1e7_1e2_5_0.csv.gz')
-        con.register("x", arrow_table)
-        os.remove('G1_1e7_1e2_5_0.csv.gz')
-
-        con.execute(f"PRAGMA threads={threads}")
-
-        function(con)
+    @mark.usefixtures('group_by_data')
+    def test_group_by(self, threads, function, group_by_data):
+        group_by_data.execute(f"PRAGMA threads={threads}")
+        function(group_by_data)
 
     @mark.parametrize('threads', [1, 4])
     @mark.parametrize(
@@ -206,36 +194,79 @@ class TestH2OAIArrow(object):
 
 
 @fixture(scope="module")
-def large_data():
-    download_file(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz', 'J1_1e7_NA_0_0.csv.gz'
+def arrow_dataset_register():
+    """Single fixture to download files and register them on the given connection"""
+    session = requests.Session()
+    retries = urllib3_util.Retry(
+        allowed_methods={'GET'},  # only retry on GETs (all we do)
+        total=None,  # disable to make the below take effect
+        redirect=10,  # Don't follow more than 10 redirects in a row
+        connect=3,  # try 3 times before giving up on connection errors
+        read=3,  # try 3 times before giving up on read errors
+        status=3,  # try 3 times before giving up on status errors (see forcelist below)
+        status_forcelist=[429] + [status for status in range(500, 512)],
+        other=0,  # whatever else may cause an error should break
+        backoff_factor=0.1,  # [0.0s, 0.2s, 0.4s]
+        raise_on_redirect=True,  # raise exception when redirect error retries are exhausted
+        raise_on_status=True,  # raise exception when status error retries are exhausted
+        respect_retry_after_header=True,  # respect Retry-After headers
     )
-    download_file(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz', 'J1_1e7_1e1_0_0.csv.gz'
-    )
-    download_file(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz', 'J1_1e7_1e4_0_0.csv.gz'
-    )
-    download_file(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz', 'J1_1e7_1e7_0_0.csv.gz'
-    )
+    session.mount('https://', requests_adapters.HTTPAdapter(max_retries=retries))
+    saved_filenames = set()
 
+    def _register(url, filename, con, tablename):
+        r = session.get(url)
+        with open(filename, 'wb') as f:
+            f.write(r.content)
+        con.register(tablename, read_csv(filename))
+        saved_filenames.add(filename)
+
+    yield _register
+
+    for filename in saved_filenames:
+        os.remove(filename)
+    session.close()
+
+
+@fixture(scope="module")
+def large_data(arrow_dataset_register):
     con = duckdb.connect()
-    arrow_table = read_csv('J1_1e7_NA_0_0.csv.gz')
-    con.register("x", arrow_table)
-
-    arrow_table = read_csv('J1_1e7_1e1_0_0.csv.gz')
-    con.register("small", arrow_table)
-
-    arrow_table = read_csv('J1_1e7_1e4_0_0.csv.gz')
-    con.register("medium", arrow_table)
-
-    arrow_table = read_csv('J1_1e7_1e7_0_0.csv.gz')
-    con.register("big", arrow_table)
-
+    arrow_dataset_register(
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz',
+        'J1_1e7_NA_0_0.csv.gz',
+        con,
+        "x",
+    )
+    arrow_dataset_register(
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz',
+        'J1_1e7_1e1_0_0.csv.gz',
+        con,
+        "small",
+    )
+    arrow_dataset_register(
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz',
+        'J1_1e7_1e4_0_0.csv.gz',
+        con,
+        "medium",
+    )
+    arrow_dataset_register(
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz',
+        'J1_1e7_1e7_0_0.csv.gz',
+        con,
+        "big",
+    )
     yield con
+    con.close()
 
-    os.remove('J1_1e7_NA_0_0.csv.gz')
-    os.remove('J1_1e7_1e1_0_0.csv.gz')
-    os.remove('J1_1e7_1e4_0_0.csv.gz')
-    os.remove('J1_1e7_1e7_0_0.csv.gz')
+
+@fixture(scope="module")
+def group_by_data(arrow_dataset_register):
+    con = duckdb.connect()
+    arrow_dataset_register(
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz',
+        'G1_1e7_1e2_5_0.csv.gz',
+        con,
+        "x",
+    )
+    yield con
+    con.close()

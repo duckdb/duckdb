@@ -60,18 +60,18 @@ struct ConcatWsFun {
 struct ConcatFun {
 	static constexpr const char *Name = "concat";
 	static constexpr const char *Parameters = "value,...";
-	static constexpr const char *Description = "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also operator `||`.";
-	static constexpr const char *Example = "concat('Hello', ' ', 'World')";
-	static constexpr const char *Categories = "string,list,blob";
+	static constexpr const char *Description = "Concatenates multiple strings or lists. `NULL` inputs are skipped. See also operator `||`.";
+	static constexpr const char *Example = "concat('Hello', ' ', 'World')\002concat([1, 2, 3], NULL, [4, 5, 6])";
+	static constexpr const char *Categories = "string,list";
 
 	static ScalarFunction GetFunction();
 };
 
 struct ListConcatFun {
 	static constexpr const char *Name = "list_concat";
-	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Concatenates two lists.";
-	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
+	static constexpr const char *Parameters = "list,...";
+	static constexpr const char *Description = "Concatenates lists. `NULL` inputs are skipped. See also operator `||`.";
+	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6], [7])";
 	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
@@ -98,7 +98,7 @@ struct ArrayCatFun {
 struct ConcatOperatorFun {
 	static constexpr const char *Name = "||";
 	static constexpr const char *Parameters = "arg1,arg2";
-	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2)`.";
+	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2, ...)`.";
 	static constexpr const char *Example = "'Duck' || 'DB'\002[1, 2, 3] || [4, 5, 6]\002'\\xAA'::BLOB || '\\xBB'::BLOB";
 	static constexpr const char *Categories = "string,list,blob";
 
