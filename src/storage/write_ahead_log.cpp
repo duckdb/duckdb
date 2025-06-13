@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -146,9 +147,8 @@ public:
 
 		auto &db = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
-		auto derived_key = keys.GetKey(db.GetEncryptionKeyId());
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    keys.GetKey(db.GetEncryptionKeyId()), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
@@ -170,7 +170,7 @@ public:
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
 		//! encrypt the temp buf
-		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, derived_key,
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, keys.GetKey(db.GetEncryptionKeyId()),
 		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
