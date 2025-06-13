@@ -114,6 +114,10 @@ public:
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;
 
+	//! Copies the data from this chunk to another chunk but only for the columns specified
+	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset,
+	                     const vector<column_t> &column_ids) const;
+
 	//! Splits the DataChunk in two
 	DUCKDB_API void Split(DataChunk &other, idx_t split_idx);
 

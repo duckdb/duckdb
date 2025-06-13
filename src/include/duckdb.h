@@ -3039,6 +3039,38 @@ data and validity pointers
 DUCKDB_C_API void duckdb_data_chunk_reset(duckdb_data_chunk chunk);
 
 /*!
+Makes a copy of the data chunk represented by src to dst
+
+* @param src The data chunk to copy from
+* @param dst The data chunk to copy to
+*/
+DUCKDB_C_API void duckdb_data_chunk_copy(duckdb_data_chunk src, duckdb_data_chunk dst);
+
+/*!
+Copies upto 'count' data in the indices represented in the selection vector starting at 'offset' from the source data
+chunk into the destination
+
+* @param src The data chunk to copy from
+* @param dst The data chunk to copy to
+* @param sel A vector containing the indices from source to copy
+* @param source_count The number of indices from the vector to copy
+* @param offset The offset within the selection vector to start at
+*/
+DUCKDB_C_API void duckdb_data_chunk_copy_sel(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+                                             idx_t source_count, idx_t offset);
+
+/*!
+Makes the src data chunk reference the specified columns in the dst data chunk
+
+* @param src The data chunk whose vectors will be referenced by dst
+* @param dst The data chunk whose vectors will reference src vectors
+* @param col_idx The project indices into the source column set
+* @param column_count The number of columns in the col_idx array
+*/
+DUCKDB_C_API void duckdb_data_chunk_reference_columns(duckdb_data_chunk src, duckdb_data_chunk dst,
+                                                      const idx_t *col_idx, idx_t column_count);
+
+/*!
 Retrieves the number of columns in a data chunk.
 
 * @param chunk The data chunk to get the data from
@@ -3235,6 +3267,22 @@ Turns the vector into a dictionary vector.
 * @param len The length of the selection vector.
 */
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
+
+/*!
+Copy the src vector to the dst with a selection vector that identifies which indices to copy.
+
+* @param src The vector to copy from.
+* @param dst The vector to copy to.
+* @param sel The selection vector. The length of the selection vector should not be more than the length of the src
+vector
+* @param src_count The number of entries from selection vector to copy. Think of this as the effective length of the
+selection vector starting from index 0
+* @param src_offset The offset in the selection vector to copy from (important: actual number of items copied =
+src_count - src_offset).
+* @param dst_offset The offset in the dst vector to start copying to.
+*/
+DUCKDB_C_API void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel,
+                                         idx_t src_count, idx_t src_offset, idx_t dst_offset);
 
 /*!
 Copies the value from `value` to `vector`.

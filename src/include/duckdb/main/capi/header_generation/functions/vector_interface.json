@@ -308,6 +308,47 @@
             }
         },
         {
+            "name": "duckdb_vector_copy_sel",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "dst"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "sel"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "src_count"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "src_offset"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "dst_offset"
+                }
+            ],
+            "comment": {
+                "description": "Copy the src vector to the dst with a selection vector that identifies which indices to copy.\n\n",
+                "param_comments": {
+                    "src": "The vector to copy from.",
+                    "dst": "The vector to copy to.",
+                    "sel": "The selection vector. The length of the selection vector should not be more than the length of the src vector",
+                    "src_count": "The number of entries from selection vector to copy. Think of this as the effective length of the selection vector starting from index 0",
+                    "src_offset": "The offset in the selection vector to copy from (important: actual number of items copied = src_count - src_offset).",
+                    "dst_offset": "The offset in the dst vector to start copying to."
+                }
+            }
+        },
+        {
             "name": "duckdb_vector_reference_value",
             "return_type": "void",
             "params": [

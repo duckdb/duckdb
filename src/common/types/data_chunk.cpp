@@ -155,6 +155,19 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	other.SetCardinality(source_count - offset);
 }
 
+void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset,
+                     const vector<column_t> &column_ids) const {
+	D_ASSERT(column_ids.size() == other.ColumnCount());
+	D_ASSERT(other.size() == 0);
+	D_ASSERT(source_count <= size());
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(data[column_ids[i]], other.data[i], sel, source_count, offset, 0);
+	}
+	other.SetCardinality(source_count - offset);
+}
+
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 	D_ASSERT(other.size() == 0);
 	D_ASSERT(other.data.empty());
