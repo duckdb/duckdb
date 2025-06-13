@@ -24,6 +24,7 @@
 namespace duckdb {
 
 constexpr uint64_t WAL_VERSION_NUMBER = 2;
+constexpr uint64_t WAL_ENCRYPTED_VERSION_NUMBER = 3;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)
@@ -115,6 +116,14 @@ public:
 		if (!stream) {
 			stream = wal.Initialize();
 		}
+
+		// if the config.encrypt WAL is true
+		// and if the attached database is encrypted
+		// then encrypt WAL before flushing
+		if (wal.IsEncrypted() && wal.GetDatabase().GetIsEncrypted()) {
+			return FlushEncrypted();
+		}
+
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
@@ -124,6 +133,58 @@ public:
 		stream->Write<uint64_t>(checksum);
 		// write data to the underlying stream
 		stream->WriteData(memory_stream.GetData(), memory_stream.GetPosition());
+		// rewind the buffer
+		memory_stream.Rewind();
+	}
+
+	void FlushEncrypted() {
+		auto data = memory_stream.GetData();
+		auto size = memory_stream.GetPosition();
+
+		// compute the checksum over the entry
+		auto checksum = Checksum(data, size);
+
+		auto &db = wal.GetDatabase();
+		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
+		auto derived_key = keys.GetKey(db.GetEncryptionKeyId());
+		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+
+		// temp buffer
+		const idx_t ciphertext_size = size + sizeof(uint64_t);
+		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[ciphertext_size]);
+
+		// generate nonce
+		uint8_t nonce[MainHeader::AES_IV_LEN];
+		memset(nonce, 0, MainHeader::AES_IV_LEN);
+
+		// get the key temporarily in a rather unsafe way (for now)
+		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
+
+		stream->Write<uint64_t>(size);
+		stream->WriteData(nonce, MainHeader::AES_NONCE_LEN);
+
+		//! store the checksum in the temp buffer
+		memcpy(temp_buf.get(), &checksum, sizeof(checksum));
+		//! checksum + entry in the temp buf
+		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
+
+		//! encrypt the temp buf
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
+
+		//! calculate the tag (for GCM)
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		memset(tag, 0, MainHeader::AES_TAG_LEN);
+		encryption_state->Finalize(temp_buf.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
+
+		// write data to the underlying stream
+		stream->WriteData(temp_buf.get(), ciphertext_size);
+
+		// Write the tag to the stream
+		stream->WriteData(tag, MainHeader::AES_TAG_LEN);
+
 		// rewind the buffer
 		memory_stream.Rewind();
 	}
@@ -182,7 +243,11 @@ void WriteAheadLog::WriteVersion() {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+	if (IsEncrypted() && GetDatabase().GetIsEncrypted()) {
+		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
+	} else {
+		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+	}
 	serializer.End();
 }
 
@@ -190,6 +255,11 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	WriteAheadLogSerializer serializer(*this, WALType::CHECKPOINT);
 	serializer.WriteProperty(101, "meta_block", meta_block);
 	serializer.End();
+}
+
+bool WriteAheadLog::IsEncrypted() const {
+	const auto &config = DBConfig::GetConfig(database.GetDatabase());
+	return config.options.encrypt_wal;
 }
 
 //===--------------------------------------------------------------------===//

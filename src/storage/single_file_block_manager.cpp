@@ -335,6 +335,8 @@ void SingleFileBlockManager::CheckAndAddDerivedMasterKey(MainHeader &main_header
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+	db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+	db.SetIsEncrypted();
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
@@ -355,6 +357,8 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+	db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+	db.SetIsEncrypted();
 
 	std::fill(user_key.begin(), user_key.end(), 0);
 	user_key.clear();
@@ -425,6 +429,8 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+		db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+		db.SetIsEncrypted();
 
 		//! Store all metadata in the main header
 		StoreEncryptionMetadata(main_header);
@@ -556,7 +562,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			}
 		}
 
-		// the underlying needs to be put down (if no user key nor master key)
 		if (!options.encryption_options.encryption_enabled) {
 			// if encrypted, but no encryption
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);

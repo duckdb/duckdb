@@ -115,6 +115,14 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
+static void PragmaEnableWalEncryption(ClientContext &context, const FunctionParameters &parameters) {
+	DBConfig::GetConfig(context).options.encrypt_wal = true;
+}
+
+static void PragmaDisableWalEncryption(ClientContext &context, const FunctionParameters &parameters) {
+	DBConfig::GetConfig(context).options.encrypt_wal = false;
+}
+
 static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
 	if (parameters.values.empty()) {
 		context.db->GetLogManager().SetEnableLogging(true);
@@ -195,6 +203,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_wal_encryption", PragmaEnableWalEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_wal_encryption", PragmaDisableWalEncryption));
 }
 
 } // namespace duckdb
