@@ -941,15 +941,17 @@ WhereClause <- 'WHERE'i Expression
 GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
 HavingClause <- 'HAVING'i Expression
 QualifyClause <- 'QUALIFY'i Expression
-SampleClause <- 'USING'i 'SAMPLE'i SampleEntry
+SampleClause <- (UsingSample / TableSample) SampleEntry
+UsingSample <- 'USING'i 'SAMPLE'i
+TableSample <- 'TABLESAMPLE'i
 WindowClause <- 'WINDOW'i List(WindowDefinition)
 WindowDefinition <- Identifier 'AS'i WindowFrameDefinition
 
-SampleEntry <- SampleEntryCount / SampleEntryFunction RepeatableSample?
+SampleEntry <- SampleEntryFunction / SampleEntryCount
 SampleEntryCount <- SampleCount Parens(SampleProperties)?
-SampleEntryFunction <- SampleFunction? Parens(SampleCount)
-SampleFunction <- Identifier
-SampleProperties <- Identifier (',' NumberLiteral)
+SampleEntryFunction <- SampleFunction? Parens(SampleCount) RepeatableSample?
+SampleFunction <- ColId
+SampleProperties <- ColId (',' NumberLiteral)?
 RepeatableSample <- 'REPEATABLE' Parens(NumberLiteral)
 
 SampleCount <- Expression SampleUnit?
