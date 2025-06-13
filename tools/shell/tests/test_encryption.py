@@ -172,7 +172,7 @@ def test_wrong_master_key_correct_attach(shell):
     result = test.run()
     result.check_stdout('1')
 
-
+@pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_explicit_key_and_master_key(shell):
     """
     Encrypted database created with key
