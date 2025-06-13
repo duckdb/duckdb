@@ -1,5 +1,5 @@
 # name: test/optimizer/join_elimination.test
-# description: test join elimination 
+# description: test join elimination
 # group: [optimizer]
 
 statement ok
@@ -45,6 +45,21 @@ physical_plan	<!REGEX>:.*JOIN.*
 
 query II
 explain select  b.* from b left join (select * from a group by all) as a1 on b.idb=a1.ida;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select a.ida from a group by ida) as a1 on b.idb=a1.ida;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select b.idb,sum(b.valueb) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.idb,sum(a.valuea) from b left join a on b.idb=a.ida group by b.idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
@@ -126,3 +141,5 @@ query II
 explain select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
 ----
 physical_plan	<REGEX>:.*JOIN.*
+
+# union intersect unnest, pivot
