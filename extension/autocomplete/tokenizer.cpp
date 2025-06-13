@@ -191,8 +191,12 @@ bool BaseTokenizer::TokenizeInput() {
 							break;
 						}
 					}
+					// Bound check
+					if (next_marker_start + dollar_quote_marker.size() >= sql.size()) {
+						break;
+					}
 					// Check if we can find the end marker. Otherwise, we have hit a potential StringParameter ($foo, $bar)
-					if (sql.compare(next_marker_start, dollar_quote_marker.size(), dollar_quote_marker) != 0) {
+					if (sql.compare(next_marker_start + 1, dollar_quote_marker.size(), dollar_quote_marker) != 0) {
 						break;
 					}
 					state = TokenizeState::DOLLAR_QUOTED_STRING;
