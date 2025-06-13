@@ -3,6 +3,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
