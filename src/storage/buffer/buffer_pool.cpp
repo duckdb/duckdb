@@ -211,7 +211,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	}
 
 	// bulk purge
-	idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
+	const idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
 
 	// retrieve all alive nodes that have been wrongly dequeued
 	idx_t alive_nodes = 0;
@@ -219,10 +219,16 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		auto &node = purge_nodes[i];
 		auto handle = node.TryGetBlockHandle();
 		if (handle) {
-			q.enqueue(std::move(node));
-			alive_nodes++;
+			purge_nodes[alive_nodes++] = std::move(node);
 		}
 	}
+
+	// order them by sequence number to try somewhat retain LRU behavior, then bulk re-add
+	std::sort(purge_nodes.begin(), purge_nodes.begin() + NumericCast<int64_t>(alive_nodes),
+	          [](const BufferEvictionNode &lhs, const BufferEvictionNode &rhs) {
+		          return lhs.handle_sequence_number < rhs.handle_sequence_number;
+	          });
+	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
