@@ -92,8 +92,6 @@ void SQLLogicTestRunner::EndLoop() {
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
-	// auto &oss = GetSummary();
-
 	// restart the database with the specified db path
 	db.reset();
 	con.reset();
