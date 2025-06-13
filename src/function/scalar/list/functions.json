@@ -2,7 +2,7 @@
     {
         "name": "list_select",
         "parameters": "value_list,index_list",
-        "description": "Returns a list based on the elements selected by the index_list.",
+        "description": "Returns a list based on the elements selected by the `index_list`.",
         "example": "list_select([10, 20, 30, 40], [1, 4])",
         "categories": ["list"],
         "type": "scalar_function",
@@ -11,7 +11,7 @@
     {
         "name": "list_where",
         "parameters": "value_list,mask_list",
-        "description": "Returns a list with the BOOLEANs in mask_list applied as a mask to the value_list.",
+        "description": "Returns a list with the `BOOLEAN`s in `mask_list` applied as a mask to the `value_list`.",
         "example": "list_where([10, 20, 30, 40], [true, false, false, true])",
         "categories": ["list"],
         "type": "scalar_function",
@@ -29,7 +29,7 @@
     {
         "name": "list_position",
         "parameters": "list,element",
-        "description": "Returns the index of the element if the list contains the element. If the element is not found, it returns NULL.",
+        "description": "Returns the index of the `element` if the `list` contains the `element`. If the `element` is not found, it returns `NULL`.",
         "example": "list_position([1, 2, NULL], 2)",
         "categories": ["list"],
         "type": "scalar_function",
@@ -37,9 +37,9 @@
     },
     {
         "name": "list_zip",
-        "parameters": "list1,list2,...",
-        "description": "Zips k LISTs to a new LIST whose length will be that of the longest list. Its elements are structs of k elements from each list list_1, …, list_k, missing elements are replaced with NULL. If truncate is set, all lists are truncated to the smallest list length.",
-        "example": "list_zip([1, 2], [3, 4], [5, 6])",
+        "parameters": "list_1,...,truncate",
+        "description": "Zips n `LIST`s to a new `LIST` whose length will be that of the longest list. Its elements are structs of n elements from each list `list_1`, …, `list_n`, missing elements are replaced with `NULL`. If `truncate` is set, all lists are truncated to the smallest list length.",
+        "examples": ["list_zip([1, 2], [3, 4], [5, 6])", "list_zip([1, 2], [3, 4], [5, 6, 7])", "list_zip([1, 2], [3, 4], [5, 6, 7], true)"],
         "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_zip"]
@@ -47,7 +47,7 @@
     {
         "name": "list_extract",
         "parameters": "list,index",
-        "description": "Extract the indexth (1-based) value from the list.",
+        "description": "Extract the `index`th (1-based) value from the list.",
         "example": "list_extract([4, 5, 6], 3)",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -56,7 +56,7 @@
     {
         "name": "list_resize",
         "parameters": "list,size[,value]",
-        "description": "Resizes the list to contain size elements. Initializes new elements with value or NULL if value is not set.",
+        "description": "Resizes the `list` to contain `size` elements. Initializes new elements with `value` or `NULL` if `value` is not set.",
         "example": "list_resize([1, 2, 3], 5, 0)",
         "categories": ["list"],
         "type": "scalar_function_set",

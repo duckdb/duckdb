@@ -34,6 +34,7 @@ unique_ptr<QueryNode> CTENode::Copy() const {
 	result->query = query->Copy();
 	result->child = child->Copy();
 	result->aliases = aliases;
+	result->materialized = materialized;
 	this->CopyProperties(*result);
 	return std::move(result);
 }

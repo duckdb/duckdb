@@ -62,7 +62,7 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	unique_ptr<CachingFileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
-	std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
+	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
 	SelectionVector sel;
@@ -108,6 +108,7 @@ struct ParquetOptions {
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
+	bool can_have_nan = false; // if floats or doubles can contain NaN values
 };
 
 struct ParquetOptionsSerialization {
