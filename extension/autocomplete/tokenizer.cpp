@@ -137,6 +137,22 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end) {
 	tokens.emplace_back(std::move(last_token));
 }
 
+bool BaseTokenizer::IsValidDollarTag(const string &tag) {
+	char first_tag_char = tag[0];
+	if (!((first_tag_char >= 'A' && first_tag_char <= 'Z') || (first_tag_char >= 'a' && first_tag_char <= 'z') ||
+	      first_tag_char == '_')) {
+		// Not a valid dollar-quoted tag start (likely a parameter like $1)
+		return false;
+	}
+	for (char c : tag) {
+		if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
+			Printer::Print("Found illegal character");
+			return false; // found illegal character
+		}
+	}
+	return true; // all characters are valid
+}
+
 bool BaseTokenizer::TokenizeInput() {
 	auto state = TokenizeState::STANDARD;
 
@@ -185,12 +201,17 @@ bool BaseTokenizer::TokenizeInput() {
 					// Found a complete marker, store it.
 					idx_t marker_start = quote_pos + 1;
 					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
+					if (!IsValidDollarTag(dollar_quote_marker)) {
+						dollar_quote_marker = string();
+						break;
+					}
 					idx_t next_marker_start = i;
 					bool end_marker_found = false;
 					for (next_marker_start++; next_marker_start < sql.size(); next_marker_start++) {
 						if (sql[next_marker_start] == '$') {
 							// Bound check
 							if (next_marker_start + dollar_quote_marker.size() >= sql.size()) {
+								dollar_quote_marker = string();
 								break;
 							}
 							// Check if we can find the end marker. Otherwise, we have hit a potential StringParameter ($foo, $bar)
@@ -205,7 +226,6 @@ bool BaseTokenizer::TokenizeInput() {
 						break;
 					}
 				}
-
 			}
 			if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
 				i++;

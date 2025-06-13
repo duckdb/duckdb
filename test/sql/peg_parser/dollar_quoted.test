@@ -5,6 +5,9 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$prepare q123 as select $param, $other_name, $param;$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select $tag$ $duck$ $tag$ = $tag$　$duck$　$tag$;$TEST_PEG_PARSER$);
 
 statement ok
