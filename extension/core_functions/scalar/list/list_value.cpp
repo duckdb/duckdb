@@ -11,6 +11,7 @@
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/tableref/at_clause.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -266,8 +267,22 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
+	Printer printer;
+	printer.Print("\n\n=================================================================");
+	auto str = "IN ListValueBind: child_type = " + child_type.ToString();
+	printer.Print(str);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
+		auto ttttype = arguments[i]->return_type;
+		if (ttttype == LogicalTypeId::STRUCT) {
+			if (!StructType::IsUnnamed(ttttype)) {
+				auto &struct_child = StructType::GetChildTypes(arg_type);
+				for (auto &child : struct_child) {
+					str = StringUtil::Lower(child.first);
+					printer.Print(str);
+				}
+			}
+		}
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
 			if (IS_UNPIVOT) {
 				string list_arguments = "Full list: ";
