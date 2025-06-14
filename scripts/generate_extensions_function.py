@@ -788,7 +788,8 @@ struct ExtensionFunctionOverloadEntry {
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
-    {"json", "json"}
+    {"json", "json"},
+    {"avro", "avro"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -844,6 +845,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".gpkg", "spatial"},
     {".fgb", "spatial"},
     {".xlsx", "excel"},
+    {".avro", "avro"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
