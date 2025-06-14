@@ -3,7 +3,6 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/function/table_macro_function.hpp"
 
 #include "duckdb/function/scalar_macro_function.hpp"
 
@@ -163,6 +162,7 @@ static const DefaultMacro internal_macros[] = {
 
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, {{nullptr, nullptr}}, "date + interval"},
+	{DEFAULT_SCHEMA, "make_timestamp_ms", {"milliseconds", nullptr, nullptr}, {{nullptr, nullptr}}, "make_timestamp(milliseconds * 1000::BIGINT)"},
 
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, {{nullptr, nullptr}}, "unnest(string_split_regex(text, pattern))"},
