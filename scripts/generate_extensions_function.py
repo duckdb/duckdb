@@ -844,6 +844,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".gpkg", "spatial"},
     {".fgb", "spatial"},
     {".xlsx", "excel"},
+    {".avro", "avro"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
