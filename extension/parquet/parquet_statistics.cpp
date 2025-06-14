@@ -214,6 +214,25 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			return Value::TIME(dtime_t(val));
 		}
 	}
+	case LogicalTypeId::TIME_NS: {
+		int64_t val;
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
+			val = Load<int64_t>(stats_data);
+		} else {
+			throw InvalidInputException("Incorrect stats size for type TIME");
+		}
+		switch (schema_ele.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return Value::TIME_NS(ParquetMsIntToTimeNs(val));
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return Value::TIME_NS(ParquetIntToTimeNs(val));
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+		default:
+			return Value::TIME_NS(dtime_ns_t(val));
+		}
+	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
 		if (stats.size() == sizeof(int32_t)) {
