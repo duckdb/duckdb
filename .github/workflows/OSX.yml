@@ -13,12 +13,16 @@ on:
   workflow_dispatch:
     inputs:
       override_git_describe:
+        description: ''
         type: string
       git_ref:
+        description: ''
         type: string
       skip_tests:
+        description: ''
         type: string
       run_all:
+        description: ''
         type: string
   push:
     branches-ignore:
@@ -209,7 +213,7 @@ jobs:
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+            run_autoload_tests: ${{ inputs.skip_tests != 'true' && '1' || '0' }}
 
     env:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
@@ -299,6 +303,20 @@ jobs:
       extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
       duckdb_arch: ${{ matrix.duckdb_arch }}
       duckdb_sha: ${{ github.sha }}
+
+  test-install-load-extensions:
+    name: Test OSX Extensions
+    needs: upload-osx-extensions
+    uses: duckdb/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
+    strategy:
+      matrix:
+        config: [ { runs_on: macos-latest, duckdb_arch: osx_amd64, duckdb_binary: osx }, { runs_on: macos-14, duckdb_arch: osx_arm64, duckdb_binary: osx }]
+    with:
+      runs_on: ${{ matrix.config.runs_on }}
+      duckdb_arch: ${{ matrix.config.duckdb_arch }}
+      duckdb_binary: ${{ matrix.config.duckb_binary }}
+      nightly_build: 'osx'
+      branch: ${{ github.sha }}
 
   test-uploaded-extensions:
     name: Test uploaded OSX Extensions
