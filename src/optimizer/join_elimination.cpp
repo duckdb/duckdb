@@ -150,14 +150,18 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 				auto distinct_group = it->second;
 				// lets's check whether the projection columns contains a whole distinct group carefully
 				if (columns_idx.size() != distinct_group.size()) {
-					#ifdef DEBUG
-					for (auto &col : columns_idx) {
-						D_ASSERT(distinct_group.find(col) != distinct_group.end());
-					}
-					#endif
 					continue;
 				}
-				distinct_groups[projection.table_index] = columns_idx;
+				bool can_add = true;
+				for (auto &col : columns_idx) {
+					if (distinct_group.find(col) == distinct_group.end()) {
+						can_add = false;
+						break;
+					}
+				}
+				if (can_add) {
+					distinct_groups[projection.table_index] = columns_idx;
+				}
 			}
 		}
 		return std::move(op);
