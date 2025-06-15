@@ -144,7 +144,8 @@ public:
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
 	//! Returns index storage serialization information.
-	virtual IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal);
+	virtual IndexStorageInfo GetStorageInfo(optional_ptr<ClientContext> context,
+	                                        const case_insensitive_map_t<Value> &options);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
