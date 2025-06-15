@@ -406,7 +406,13 @@ struct DatePart {
 		}
 
 		static void Inverse(DataChunk &input, ExpressionState &state, Vector &result) {
-			throw NotImplementedException("EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.");
+			D_ASSERT(input.ColumnCount() == 1);
+
+			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(), [&](int64_t input) {
+				// millisecond amounts provided to epoch_ms should never be considered infinite
+				// instead such values will just throw when converted to microseconds
+				return Timestamp::FromEpochMsPossiblyInfinite(input);
+			});
 		}
 	};
 
