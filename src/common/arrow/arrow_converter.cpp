@@ -170,20 +170,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID: {
-		if (options.arrow_lossless_conversion) {
-			SetArrowExtension(root_holder, child, type, context);
-		} else {
-			if (options.produce_arrow_string_view && options.arrow_output_version >= 14) {
-				// List views are only introduced in arrow format v1.4
-				child.format = "vu";
-			} else {
-				if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-					child.format = "U";
-				} else {
-					child.format = "u";
-				}
-			}
-		}
+		auto &config = DBConfig::GetConfig(context);
+		ArrowTypeExtension uuid_extension = config.GetArrowExtension(LogicalType::UUID);
+		ArrowTypeExtension::PopulateArrowSchema(root_holder, child, type, context, uuid_extension);
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
