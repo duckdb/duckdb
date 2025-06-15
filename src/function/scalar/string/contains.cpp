@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/map_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -124,10 +125,12 @@ ScalarFunctionSet ContainsFun::GetFunctions() {
 	auto string_fun = GetStringContains();
 	auto list_fun = ListContainsFun::GetFunction();
 	auto map_fun = MapContainsFun::GetFunction();
+	auto struct_fun = StructContainsFun::GetFunction();
 	ScalarFunctionSet set("contains");
 	set.AddFunction(string_fun);
 	set.AddFunction(list_fun);
 	set.AddFunction(map_fun);
+	set.AddFunction(struct_fun);
 	return set;
 }
 

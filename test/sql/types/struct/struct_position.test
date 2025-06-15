@@ -1,0 +1,266 @@
+# name: test/sql/types/struct/struct_position.test
+# description: Test struct_position function
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# ==========================================================
+# Basic functionality tests
+# ==========================================================
+query I
+SELECT struct_position(ROW(7, 2, 5), 7)
+----
+1
+
+query I
+SELECT struct_position(ROW(7, 2, 5), 2)
+----
+2
+
+query I
+SELECT struct_position(ROW(7, 2, 5), 5)
+----
+3
+
+# Mixed data types
+query I
+SELECT struct_position(ROW(1, 2, 3), 1.0)
+----
+1
+
+query I
+SELECT struct_position(ROW(1.0, 2.0, 3.0, 4.0), 1)
+----
+1
+
+query I
+SELECT struct_position(ROW(1, 2, 3), 4.0)
+----
+NULL
+
+query I
+SELECT struct_position(ROW(1.0, 2.0, 3.0), 4)
+----
+NULL
+
+query I
+SELECT struct_position(ROW(7), 5)
+----
+NULL
+
+query I
+SELECT struct_position(ROW(1, 2, 3, 4), 4)
+----
+4
+
+# Boolean types
+query I
+SELECT struct_position(ROW(true, false), true)
+----
+1
+
+query I
+SELECT struct_position(ROW(true, true), false)
+----
+NULL
+
+# String types
+query I
+SELECT struct_position(ROW('test', 'notest'), 'notest')
+----
+2
+
+query I
+SELECT struct_position(ROW('test', 'notest'), 'a')
+----
+NULL
+
+# NULL handling
+query I
+SELECT struct_position(NULL, 1)
+----
+NULL
+
+query I
+SELECT struct_position(ROW(1), NULL)
+----
+NULL
+
+query I
+SELECT struct_position(ROW(NULL), NULL)
+----
+1
+
+query I
+SELECT struct_position(ROW(NULL, 1), NULL)
+----
+1
+
+query I
+SELECT struct_position(ROW(NULL, 1), 1)
+----
+2
+
+query I
+SELECT struct_position(ROW(NULL, 0), 1)
+----
+NULL
+
+query I
+SELECT struct_position(ROW(NULL, 7), 7)
+----
+2
+
+query I
+SELECT struct_position(NULL, NULL)
+----
+NULL
+
+# ==========================================================
+# Test with nulls and non-const element
+# ==========================================================
+statement ok
+CREATE TABLE test (col1 INTEGER, col2 INTEGER, col3 INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO test VALUES (2, 1, 3, 2), (2, 3, 4, 5), (1, 0, 0, NULL), (1, NULL, 2, NULL);
+
+query III
+SELECT ROW(col1, col2, col3), val, struct_position(ROW(col1, col2, col3), val) FROM test;
+----
+(2, 1, 3)	2	1
+(2, 3, 4)	5	NULL
+(1, 0, 0)	NULL	NULL
+(1, NULL, 2)	NULL	2
+
+query III
+SELECT ROW(col1, col2, col3), val, struct_position(ROW(col1, col2, col3), 1) FROM test;
+----
+(2, 1, 3)	2	2
+(2, 3, 4)	5	NULL
+(1, 0, 0)	NULL	1
+(1, NULL, 2)	NULL	1
+
+statement ok
+DROP TABLE test;
+
+# ==========================================================
+# String tests with nulls and non-const element
+# ==========================================================
+statement ok
+CREATE TABLE str_test (col1 VARCHAR, col2 VARCHAR, col3 VARCHAR, val VARCHAR);
+
+statement ok
+INSERT INTO str_test VALUES ('a', 'b', 'c', 'a'), ('d', 'a', 'e', 'b'), ('b', 'x', 'y', NULL), ('aa', NULL, 'bb', NULL);
+
+query III
+SELECT ROW(col1, col2, col3), val, struct_position(ROW(col1, col2, col3), val) FROM str_test;
+----
+(a, b, c)	a	1
+(d, a, e)	b	NULL
+(b, x, y)	NULL	NULL
+(aa, NULL, bb)	NULL	2
+
+query III
+SELECT ROW(col1, col2, col3), val, struct_position(ROW(col1, col2, col3), 'a') FROM str_test;
+----
+(a, b, c)	a	1
+(d, a, e)	b	2
+(b, x, y)	NULL	NULL
+(aa, NULL, bb)	NULL	NULL
+
+statement ok
+DROP TABLE str_test;
+
+# ==========================================================
+# Target type does have match in struct type
+# ==========================================================
+
+query I
+SELECT struct_position(row(1, TRUE, 1.0), '1');
+----
+NULL
+
+statement ok
+CREATE TABLE mixed_types(c0 INT, c1 BOOL, c2 DECIMAL(10, 2), val VARCHAR);
+
+statement ok
+INSERT INTO mixed_types VALUES (1, TRUE, 1.0, '1'), (2, FALSE, 2.0, '2'), (3, TRUE, 3.0, NULL), (NULL, NULL, NULL, '4');
+
+query III
+SELECT ROW(c0, c1, c2), val, struct_position(ROW(c0, c1, c2), val) FROM mixed_types;
+----
+(1, true, 1.00)	1	NULL
+(2, false, 2.00)	2	NULL
+(3, true, 3.00)	NULL	NULL
+(NULL, NULL, NULL)	4	NULL
+
+# ==========================================================
+# Nested types
+# ==========================================================
+query I
+SELECT struct_position(ROW(ROW(1, 2), ROW(3, 4)), ROW(1, 2))
+----
+1
+
+query I
+SELECT struct_position(ROW(ROW(1, 2), ROW(3, 4)), ROW(5, 6))
+----
+NULL
+
+query I
+SELECT struct_position(ROW([1, 2, 3], [1]), [2])
+----
+NULL
+
+query I
+SELECT struct_position(ROW([1, 2, 3], [1]), [1, 2, 3])
+----
+1
+
+query I
+SELECT struct_position(ROW([NULL], [1], [1, 2, 3]), NULL)
+----
+NULL
+
+query I
+SELECT struct_position(ROW([1, NULL], [1], [1, 2, 3]), [1, NULL])
+----
+1
+
+# Struct nested types
+query I
+SELECT struct_position(ROW({'a': 1}, {'a': 2}), {'a': 2})
+----
+2
+
+query I
+SELECT struct_position(ROW({'a': 1}, {'a': 2}), {'a': 3})
+----
+NULL
+
+query I
+SELECT struct_position(ROW({'a': 1, 'b': 3}, {'a': 2, 'b': 2}), {'a': 2, 'b': 2})
+----
+2
+
+# Map types
+query I
+SELECT struct_position(ROW(MAP([1], [2])), MAP([1], [2]))
+----
+1
+
+query I
+SELECT struct_position(ROW(MAP([1], [2])), MAP([1], [3]))
+----
+NULL
+
+# ==========================================================
+# Errors
+# ==========================================================
+statement error
+SELECT struct_position({'a': 1, 'b': 2}, 2);
+----
+<REGEX>:Binder Error.*struct_position can only be used on unnamed structs.*
+

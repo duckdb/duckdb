@@ -408,6 +408,21 @@ SELECT list_position([MAP([1], [2])], MAP([1], [3]))
 ----
 NULL
 
+query T
+SELECT list_position([MAP([1], [2]), NULL], NULL)
+----
+2
+
+query T
+SELECT list_position([MAP([1], [2]), NULL], MAP([1], [2]))
+----
+1
+
+query T
+SELECT list_position([[1,2,3],NULL],NULL)
+----
+2
+
 # test nested lists in tables
 statement ok
 CREATE TABLE test0 (i int[][], j int[]);
