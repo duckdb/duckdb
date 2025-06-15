@@ -10,8 +10,7 @@ namespace duckdb {
 // static mutex summary_mutex;
 // static vector<string> failures_summary;
 
-auto& summary = FailureSummary::Instance();
-
+auto &summary = FailureSummary::Instance();
 
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
     : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),

@@ -18,23 +18,21 @@ namespace duckdb {
 // FailureSummary::FailureSummary() = default;
 // FailureSummary::~FailureSummary() = default;
 
-FailureSummary& FailureSummary::Instance() {
-	static FailureSummary instance;
-	bool summarize_failures = false;
-	size_t failures_summary_counter = 0;
-	vector<string> failures_summary;
-	mutex counter_mutex;
-	mutex summary_mutex;
+// FailureSummary::FailureSummary() {
+// }
 
+// FailureSummary::~FailureSummary() {
+// }
+
+FailureSummary &FailureSummary::Instance() {
+	static FailureSummary instance;
 	return instance;
 }
 
-auto& summary = FailureSummary::Instance();
-
 string FailureSummary::GetFailureSummary() {
-	lock_guard<mutex> guard(summary.summary_mutex);
+	lock_guard<mutex> guard(summary_mutex);
 	std::ostringstream oss;
-	for (auto &line : summary.failures_summary) {
+	for (auto &line : failures_summary) {
 		oss << line;
 	}
 	return oss.str();
@@ -42,10 +40,18 @@ string FailureSummary::GetFailureSummary() {
 
 size_t FailureSummary::GetSummaryCounter() {
 	{
-		lock_guard<mutex> lock(summary.counter_mutex);
-		++summary.failures_summary_counter;
+		lock_guard<mutex> lock(counter_mutex);
+		++failures_summary_counter;
 	}
-	return summary.failures_summary_counter;
+	return failures_summary_counter;
+}
+
+bool FailureSummary::SummarizeFailures() {
+	return summarize_failures;
+}
+
+void FailureSummary::SetSummarizeFailures(bool state) {
+	summarize_failures = state;
 }
 
 static bool test_force_storage = false;
@@ -64,19 +70,20 @@ bool TestMemoryLeaks() {
 	return test_memory_leaks;
 }
 
-bool SummarizeFailures() {
-	return summary.summarize_failures;
-}
+// bool SummarizeFailures() {
+// 	return summary.summarize_failures;
+// }
 
 } // namespace duckdb
 
 int main(int argc, char *argv[]) {
+	auto &summary = FailureSummary::Instance();
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
 	if (summarize != nullptr && std::string(summarize) == "1") {
-		summary.summarize_failures = true;
+		summary.SetSummarizeFailures(true);
 	}
 
 	int new_argc = 0;
@@ -109,7 +116,7 @@ int main(int argc, char *argv[]) {
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
 		} else if (string(argv[i]) == "--summarize-failures") {
-			summary.summarize_failures = true;
+			summary.SetSummarizeFailures(true);
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
