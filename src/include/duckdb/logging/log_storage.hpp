@@ -21,6 +21,8 @@ namespace duckdb {
 struct RegisteredLoggingContext;
 class ColumnDataCollection;
 struct ColumnDataScanState;
+class MemoryStream;
+struct LogStorageConfig;
 
 class LogStorageScanState {
 public:
@@ -63,20 +65,113 @@ public:
 	DUCKDB_API virtual void InitializeScanContexts(LogStorageScanState &state) const;
 
 	DUCKDB_API virtual void Truncate();
+
+	DUCKDB_API virtual void UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
+
+	DUCKDB_API virtual unique_ptr<TableRef> BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input);
+	DUCKDB_API virtual unique_ptr<TableRef> BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input);
 };
 
-class StdOutLogStorage : public LogStorage {
+struct LogStorageCsvConfig {
+	LogStorageCsvConfig() {
+		requires_quotes = make_unsafe_uniq_array<bool>(256);
+		memset(requires_quotes.get(), 0, sizeof(bool) * 256);
+		requires_quotes['\n'] = true;
+		requires_quotes['\r'] = true;
+		requires_quotes[NumericCast<idx_t>('\n')] = true;
+		requires_quotes[NumericCast<idx_t>(',')] = true;
+	}
+
+	string delim = "\t";
+	string newline = "\r\n";
+	char quote = '\"';
+	char escape = '\"';
+	vector<string> null_strings = {""};
+
+	unsafe_unique_array<bool> requires_quotes;
+};
+
+// Base class for loggers that write out log entries as CSV-parsable strings
+class CSVLogStorage : public LogStorage {
 public:
-	explicit StdOutLogStorage();
-	~StdOutLogStorage() override;
+	explicit CSVLogStorage(DatabaseInstance &db);
+	~CSVLogStorage() override;
 
 	//! LogStorage API: WRITING
 	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
 	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
+
+	void UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
 	void Flush() override;
 
+protected:
+	virtual void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
+	virtual void FlushInternal() = 0;
+
+	mutable mutex lock;
+
+	// Configuration for csv logger
+	idx_t buffer_limit = 0;
+	bool normalize_contexts = true;
+
+	LogStorageCsvConfig csv_config;
+	unique_ptr<MemoryStream> log_entries_stream;
+	unique_ptr<MemoryStream> log_contexts_stream;
+
+	// Used when normalizing the log into a log.csv and log_contexts.csv
+	unordered_set<idx_t> registered_contexts;
+};
+
+class StdOutLogStorage : public CSVLogStorage {
+public:
+	explicit StdOutLogStorage(DatabaseInstance &db);
+	~StdOutLogStorage() override;
+
+protected:
 	void Truncate() override;
+	void FlushInternal() override;
+};
+
+class FileLogStorage : public CSVLogStorage {
+public:
+	explicit FileLogStorage(DatabaseInstance &db);
+	~FileLogStorage() override;
+
+	void Truncate() override;
+
+	unique_ptr<TableRef> BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input) override;
+	unique_ptr<TableRef> BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) override;
+
+protected:
+	static string GetDefaultLogEntriesFilePath(DatabaseInstance &db);
+	static string GetDefaultLogContextsFilePath(DatabaseInstance &db);
+
+	void InitializeLogEntriesFile(DatabaseInstance &db, const string &path = "");
+	void InitializeLogContextsFile(DatabaseInstance &db, const string &path = "");
+	void InitializeFile(DatabaseInstance &db, const string &path, unique_ptr<FileHandle> &handle,
+	                    bool &should_write_header);
+
+	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
+	void FlushInternal() override;
+
+	void WriteLogEntriesHeader();
+	void WriteLogContextsHeader();
+
+	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input, const string &path,
+	                                         const string &select_clause);
+
+	DatabaseInstance &db;
+
+	unique_ptr<FileHandle> log_entries_file_handle;
+	unique_ptr<FileHandle> log_contexts_file_handle;
+
+	//! Used for lazily opening the `log_entries_file_handle` and `log_contexts_file_handle` on first Flush
+	bool initialized = false;
+
+	//! Used to lazily write the csv header of the log files on first Flush
+	bool log_entries_should_write_header = false;
+	bool log_contexts_should_write_header = false;
 };
 
 class InMemoryLogStorageScanState : public LogStorageScanState {

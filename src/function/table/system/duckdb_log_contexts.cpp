@@ -60,9 +60,18 @@ void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p
 	}
 }
 
+static unique_ptr<TableRef> DuckDBLogContextsBindReplace(ClientContext &context, TableFunctionBindInput &input) {
+	auto log_storage = LogManager::Get(context).GetLogStorage();
+
+	// Attempt to let the storage BindReplace the scan function
+	return log_storage->BindReplaceContexts(context, input);
+}
+
 void DuckDBLogContextFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_log_contexts", {}, DuckDBLogContextFunction, DuckDBLogContextBind, DuckDBLogContextInit));
+	auto fun =
+	    TableFunction("duckdb_log_contexts", {}, DuckDBLogContextFunction, DuckDBLogContextBind, DuckDBLogContextInit);
+	fun.bind_replace = DuckDBLogContextsBindReplace;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

@@ -56,6 +56,8 @@ public:
 	DUCKDB_API void SetDisabledLogTypes(unordered_set<string> &disabled_log_types);
 	DUCKDB_API void SetLogStorage(DatabaseInstance &db, const string &storage_name);
 
+	DUCKDB_API void UpdateLogStorageConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config_value);
+
 	DUCKDB_API void SetEnableStructuredLoggers(vector<string> &enabled_logger_types);
 
 	DUCKDB_API void TruncateLogStorage();
