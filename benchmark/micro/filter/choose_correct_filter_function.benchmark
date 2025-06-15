@@ -1,0 +1,21 @@
+# name: benchmark/micro/filter/choose_correct_filter_function.benchmark
+# description: Make sure we use like with the ASCII selector and not the generate character iterator
+# group: [filter]
+
+group micro
+subgroup filter
+
+load
+create or replace table int_and_long_strings as
+    from range(100) t(i)
+    select
+        md5(i::varchar) as medium_string
+;
+insert into int_and_long_strings from int_and_long_strings;
+insert into int_and_long_strings from int_and_long_strings;
+
+run
+from int_and_long_strings
+where
+  medium_string ilike '%888%'
+;
