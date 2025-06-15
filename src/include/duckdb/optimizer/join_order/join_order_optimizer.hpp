@@ -60,6 +60,7 @@ private:
 	unordered_map<idx_t, RelationStats> materialized_cte_stats;
 	//! Stats of Delim Scans of the Delim Join that is currently being optimized
 	optional_ptr<RelationStats> delim_scan_stats;
+	idx_t depth;
 };
 
 } // namespace duckdb
