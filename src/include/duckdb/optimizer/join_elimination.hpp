@@ -18,7 +18,6 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
