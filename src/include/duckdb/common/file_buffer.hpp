@@ -57,7 +57,6 @@ public:
 
 	// Same rules as the constructor. We add room for a header, in addition to
 	// the requested user bytes. We then sector-align the result.
-	void ResizeInternal(uint64_t user_size, uint64_t block_header_size);
 	void Resize(uint64_t user_size, BlockManager &block_manager);
 	void Resize(BlockManager &block_manager);
 
@@ -91,6 +90,9 @@ protected:
 
 	void ReallocBuffer(idx_t new_size);
 	void Init();
+
+private:
+	void ResizeInternal(uint64_t user_size, uint64_t block_header_size);
 };
 
 } // namespace duckdb

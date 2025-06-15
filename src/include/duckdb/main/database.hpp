@@ -76,6 +76,8 @@ public:
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
+	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil() const;
+
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
 	                                                    AttachOptions &options);
 
