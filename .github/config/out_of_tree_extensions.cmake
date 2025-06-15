@@ -28,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG ff766174cc6cc9c4ed93fc4b75871bcdffcc6e65
+            GIT_TAG 1b53c8af9973b0267406ca5a24d7e0b52f22cec3
     )
 endif()
 
@@ -91,7 +91,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 24dd874bee165661f6c3c79ee2a823f02941ed94
+            GIT_TAG 76fd8b092f9986f994ece37bb396dc89adf7b2cc
             )
 endif()
 
