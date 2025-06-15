@@ -472,6 +472,13 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	// New data chunk functions that are added
+
+	void (*duckdb_data_chunk_copy)(duckdb_data_chunk src, duckdb_data_chunk dst);
+	void (*duckdb_data_chunk_copy_sel)(duckdb_data_chunk src, duckdb_data_chunk dst, duckdb_selection_vector sel,
+	                                   idx_t source_count, idx_t offset);
+	void (*duckdb_data_chunk_reference_columns)(duckdb_data_chunk src, duckdb_data_chunk dst, const idx_t *col_idx,
+	                                            idx_t column_count);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -502,7 +509,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
-	// An API to create new vector types
+	// API to create and manipulate vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
@@ -512,6 +519,8 @@ typedef struct {
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector sel);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
+	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+	                               idx_t src_offset, idx_t dst_offset);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -928,6 +937,9 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
+	result.duckdb_data_chunk_copy = duckdb_data_chunk_copy;
+	result.duckdb_data_chunk_copy_sel = duckdb_data_chunk_copy_sel;
+	result.duckdb_data_chunk_reference_columns = duckdb_data_chunk_reference_columns;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;
@@ -954,6 +966,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_create_selection_vector = duckdb_create_selection_vector;
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
+	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
 	return result;
 }
 

@@ -32,7 +32,7 @@ run the generation script `scripts/generate_c_api.py` or use the makefile `make 
 
 ## Adding the function to both the C API and Extension C API
 To add a function to the C API and to the struct-of-function-pointers, again create an entry in one of the `src/include/duckdb/main/capi/header_generation/functions/*.json` files.
-Then, the function should be added to `src/include/duckdb/main/capi/header_generation/apis/v0/*/*.json`. Again, run the script `scripts/generate_c_api.py` or the makefile target `make generate-files` to generate.
+Then, the function should be added to `src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json`. Again, run the script `scripts/generate_c_api.py` or the makefile target `make generate-files` to generate.
 
 ### Adding a function to the `dev` version
 The first way a function will be added to the Extension C API is likely in the `dev` version. This will allow testing the function from extensions, for example in CI, while not yet promising eternal stability of the function.
