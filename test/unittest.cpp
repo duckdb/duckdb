@@ -3,11 +3,57 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "sqlite/sqllogic_test_logger.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 
 namespace duckdb {
+// bool FailureSummary::summarize_failures = false;
+// size_t FailureSummary::failures_summary_counter = 0;
+// vector<string> FailureSummary::failures_summary;
+// mutex FailureSummary::counter_mutex;
+// mutex FailureSummary::summary_mutex;
+
+// FailureSummary::FailureSummary() = default;
+// FailureSummary::~FailureSummary() = default;
+
+// FailureSummary::FailureSummary() {
+// }
+
+// FailureSummary::~FailureSummary() {
+// }
+
+FailureSummary &FailureSummary::Instance() {
+	static FailureSummary instance;
+	return instance;
+}
+
+string FailureSummary::GetFailureSummary() {
+	lock_guard<mutex> guard(summary_mutex);
+	std::ostringstream oss;
+	for (auto &line : failures_summary) {
+		oss << line;
+	}
+	return oss.str();
+}
+
+size_t FailureSummary::GetSummaryCounter() {
+	{
+		lock_guard<mutex> lock(counter_mutex);
+		++failures_summary_counter;
+	}
+	return failures_summary_counter;
+}
+
+bool FailureSummary::SummarizeFailures() {
+	return summarize_failures;
+}
+
+void FailureSummary::SetSummarizeFailures(bool state) {
+	summarize_failures = state;
+}
+
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
@@ -24,11 +70,21 @@ bool TestMemoryLeaks() {
 	return test_memory_leaks;
 }
 
+// bool SummarizeFailures() {
+// 	return summary.summarize_failures;
+// }
+
 } // namespace duckdb
 
 int main(int argc, char *argv[]) {
+	auto &summary = FailureSummary::Instance();
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
+
+	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
+	if (summarize != nullptr && std::string(summarize) == "1") {
+		summary.SetSummarizeFailures(true);
+	}
 
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
@@ -59,6 +115,8 @@ int main(int argc, char *argv[]) {
 			SetDebugInitialize(0xFF);
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
+		} else if (string(argv[i]) == "--summarize-failures") {
+			summary.SetSummarizeFailures(true);
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -78,8 +136,15 @@ int main(int argc, char *argv[]) {
 	}
 
 	RegisterSqllogictests();
-
 	int result = Catch::Session().run(new_argc, new_argv.get());
+
+	std::string failures_summary = summary.GetFailureSummary();
+	if (!failures_summary.empty() && summary.summarize_failures) {
+		std::cerr << "\n====================================================" << std::endl;
+		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;
+		std::cerr << "====================================================\n" << std::endl;
+		std::cerr << failures_summary;
+	}
 
 	if (DeleteTestPath()) {
 		TestDeleteDirectory(dir);

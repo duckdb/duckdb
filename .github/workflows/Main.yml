@@ -156,7 +156,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest --force-storage
+      run: SUMMARIZE_FAILURES=1 build/reldebug/test/unittest --force-storage
 
  force-restart:
     name: Force Restart
@@ -193,6 +193,8 @@ jobs:
 
     - name: Test
       shell: bash
+      env:
+        SUMMARIZE_FAILURES: 1
       run: build/reldebug/test/unittest --force-reload --force-storage
 
  no-string-inline:
@@ -229,6 +231,8 @@ jobs:
 
       - name: Test
         shell: bash
+        env:
+         SUMMARIZE_FAILURES: 1
         run: build/relassert/test/unittest
 
  prefetch-all-parquet-files:
@@ -262,6 +266,8 @@ jobs:
 
      - name: Test
        shell: bash
+       env:
+        SUMMARIZE_FAILURES: 1
        run: build/relassert/test/unittest
 
  vector-sizes:
@@ -342,6 +348,8 @@ jobs:
 
     - name: Test
       shell: bash
+      env:
+        SUMMARIZE_FAILURES: 1
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  vector-verification:

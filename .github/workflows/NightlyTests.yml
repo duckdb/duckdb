@@ -206,6 +206,8 @@ jobs:
 
     - name: Test
       shell: bash
+      env:
+        SUMMARIZE_FAILURES: 1
       run: |
           build/release/test/unittest "*"
 
@@ -276,6 +278,8 @@ jobs:
 
       - name: Test
         shell: bash
+        env:
+         SUMMARIZE_FAILURES: 1
         run: build/release/test/unittest
 
   linux-tarball:
@@ -692,8 +696,6 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-22.04
     needs: linux-memory-leaks
-    strategy:
-      fail-fast: false
     env:
       GEN: ninja
     steps:
