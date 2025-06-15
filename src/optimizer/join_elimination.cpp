@@ -49,7 +49,7 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 		idx_t table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().binding.table_index;
 		bool can_add = true;
 		for (auto &target : distinct.distinct_targets) {
-			if (distinct.distinct_targets[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (target->type != ExpressionType::BOUND_COLUMN_REF) {
 				can_add = false;
 				break;
 			}
@@ -87,15 +87,14 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 
 		// before traverse children, first check whether any distinct group ref this projection
 		auto it = distinct_groups.find(projection.table_index);
-		bool could_add = true;
 		if (it != distinct_groups.end()) {
 			column_binding_set_t new_distinct_group;
 			auto &expression = projection.expressions.get(it->second.begin()->column_index);
 			if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				// if the expression is not a column ref, we cannot eliminate the join
-				could_add = false;
 				break;
 			}
+			bool could_add = true;
 			idx_t ref_id = expression->Cast<BoundColumnRefExpression>().binding.table_index;
 			for (auto &col : it->second) {
 				auto &expression = projection.expressions.get(col.column_index);
@@ -192,12 +191,14 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 		inner_idx = 1;
 		outer_idx = 0;
 		break;
-	case JoinType::SINGLE:
+	}
+	case JoinType::SINGLE: {
 		inner_idx = 1;
 		outer_idx = 0;
 		is_output_unique = true;
 		break;
-	case JoinType::RIGHT:
+	}
+	case JoinType::RIGHT: {
 		inner_idx = 0;
 		outer_idx = 1;
 		break;
