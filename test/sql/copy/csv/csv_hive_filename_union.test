@@ -57,7 +57,7 @@ xxx	42
 # This can either throw a cast error or a schema mismatch error depending on what is executed first because of
 # parallelism
 statement error
-select * from read_csv_auto(['data/csv/hive-partitioning/mismatching_contents/part=1/test.csv', 'data/csv/hive-partitioning/mismatching_contents/part=2/test.csv'])  order by 1
+select * from read_csv_auto(['data/csv/hive-partitioning/mismatching_contents/part=1/test.csv', 'data/csv/hive-partitioning/mismatching_contents/part=2/test.csv'], hive_partitioning=1)  order by 1
 ----
 If you are trying to read files with different schemas, try setting union_by_name=True
 
