@@ -406,20 +406,16 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 		EncryptionKeyManager::DeriveKey(config.options.user_key, salt, derived_key);
 		options.encryption_options.encryption_enabled = true;
 		config.options.contains_user_key = false;
-	} else if (config.options.use_master_key && !config.options.master_key.empty()) {
-		//! master key used to encrypt/decrypt all files (in command line with -master_key)
-		//! master key is not yet in cache
-		GenerateSalt(db, salt, options);
-		EncryptionEngine::AddMasterKey(db.GetDatabase());
+	} else if (config.options.use_master_key) {
+		if (!config.options.master_key.empty()) {
+			//! master key used to encrypt/decrypt all files (in command line with -master_key)
+			//! master key is not yet in cache
+			EncryptionEngine::AddMasterKey(db.GetDatabase());
+		}
+		D_ASSERT(EncryptionEngine::HasMasterKey(db.GetDatabase()));
 		auto master_key_ptr = EncryptionEngine::GetMasterKey(db.GetDatabase());
 		auto master_key_size = EncryptionEngine::GetMasterKeySize(db.GetDatabase());
-		EncryptionKeyManager::DeriveMasterKey(master_key_ptr, master_key_size, salt, derived_key);
-		options.encryption_options.encryption_enabled = true;
-	} else if (config.options.use_master_key && EncryptionEngine::HasMasterKey(db.GetDatabase())) {
-		// there is a master key found in cache
 		GenerateSalt(db, salt, options);
-		auto master_key_ptr = EncryptionEngine::GetMasterKey(db.GetDatabase());
-		auto master_key_size = EncryptionEngine::GetMasterKeySize(db.GetDatabase());
 		EncryptionKeyManager::DeriveMasterKey(master_key_ptr, master_key_size, salt, derived_key);
 		options.encryption_options.encryption_enabled = true;
 	}

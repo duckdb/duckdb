@@ -129,13 +129,11 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			return SQLITE_ERROR;
 		}
 		if (flags & DUCKDB_ENCRYPTION_KEY) {
-			//! todo, make sure that pwd is valid utf-8 or base64
 			config.options.contains_user_key = true;
 			config.options.user_key = password;
 		}
 		if (flags & DUCKDB_MASTER_KEY) {
 			config.options.use_master_key = true;
-			//! todo, make sure that pwd is valid utf-8 or base64
 			config.options.master_key = password;
 		}
 		config.error_manager->AddCustomError(
