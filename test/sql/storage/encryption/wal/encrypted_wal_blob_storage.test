@@ -1,0 +1,65 @@
+# name: test/sql/storage/encryption/wal/encrypted_wal_blob_storage.test
+# description: Test BLOB with persistent storage with an encrypted WAL
+# group: [wal]
+
+load __TEST_DIR__/any_file.db
+
+# # load the DB from disk
+statement ok
+ATTACH '__TEST_DIR__/encrypted_blob_storage.db' AS enc (ENCRYPTION_KEY 'asdf');
+
+# DETACH specific files, and re-attach
+
+# statement ok
+# ATTACH 'encrypted_blob_storage.db' AS enc (ENCRYPTION_KEY 'asdf');
+
+# statement ok
+# USE enc;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# create a table with hugeints
+statement ok
+CREATE TABLE enc.blobs (b BLOB);
+
+statement ok
+INSERT INTO blobs VALUES('a'), ('\xAA'), ('\xAA\xFF\xAA'),  (''), (NULL), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01'), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01')
+
+# reload the database from disk a few times, and check that the data is still there
+loop i 0 2
+
+restart
+
+endloop
+
+mode skip
+
+statement ok
+ATTACH 'encrypted_blob_storage.db' as enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE enc;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT * FROM blobs
+----
+a
+\xAA
+\xAA\xFF\xAA
+(empty)
+NULL
+U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
+U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
+
+# endloop
+
