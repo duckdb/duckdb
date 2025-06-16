@@ -3,11 +3,10 @@ import polars as pl
 from typing import Iterator
 from polars.io.plugins import register_io_source
 
-def duckdb_source(relation: duckdb.DuckDBPyRelation) -> pl.LazyFrame:
+def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
 	"""
 	A polars IO plugin for DuckDB.
 	"""
-	schema = relation.pl(1).schema
 	def source_generator(
 		with_columns: list[str] | None,
 		predicate: pl.Expr | None,

@@ -21,6 +21,7 @@
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb_python/arrow/arrow_export_utils.hpp"
 
 namespace duckdb {
 
@@ -995,7 +996,22 @@ PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size, py::kwargs &kwargs)
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto lazy_frame_produce = import_cache.duckdb.polars_io.duckdb_source();
-	return lazy_frame_produce(*this);
+	//  We also have to get a polars schema here, for this we can get at empty arrow table
+	// We start by extracting the arrow schema
+	ArrowSchema arrow_schema;
+	auto result_names = names;
+	QueryResult::DeduplicateColumns(result_names);
+	auto client_properties = rel->context->GetContext()->GetClientProperties();
+	ArrowConverter::ToArrowSchema(&arrow_schema, types, result_names, client_properties);
+	py::list batches;
+	// Now we create an empty arrow table
+	auto empty_table = pyarrow::ToArrowTable(types, result_names, std::move(batches), client_properties);
+
+	// And we extract the polars schema from the arrow table
+	auto polars_df = py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(empty_table));
+	auto polars_schema = polars_df.attr("schema");
+
+	return lazy_frame_produce(*this, polars_schema);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
