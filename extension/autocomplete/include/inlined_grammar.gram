@@ -543,7 +543,7 @@ ValueOrValues <- 'VALUE' / 'VALUES'
 IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
 UnpivotHeader <- Identifier / Parens(List(Identifier))
 
-ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
+ColumnReference <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableQualification? ColumnName)
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)
 
@@ -732,7 +732,7 @@ CreateTableAs <- IdentifierList? 'AS'i SelectStatement
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- CatalogQualification? SchemaQualification? ColIdOrString
+QualifiedName <- DottedIdentifier / (CatalogQualification? SchemaQualification? ColIdOrString)
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
 TableQualification <- TableName '.'
@@ -911,7 +911,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- CatalogQualification? SchemaQualification? TableName
+BaseTableName <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableName)
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?

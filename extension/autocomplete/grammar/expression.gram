@@ -1,4 +1,4 @@
-ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
+ColumnReference <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableQualification? ColumnName)
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)
 
