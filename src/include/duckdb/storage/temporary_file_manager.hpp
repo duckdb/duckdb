@@ -46,6 +46,7 @@ struct TemporaryFileIdentifier {
 public:
 	TemporaryFileIdentifier();
 	TemporaryFileIdentifier(TemporaryBufferSize size, idx_t file_index);
+	TemporaryFileIdentifier(DatabaseInstance &db, TemporaryBufferSize size, idx_t file_index, bool encrypted);
 
 public:
 	//! Whether this temporary file identifier is valid (fields have been set)
@@ -56,6 +57,8 @@ public:
 	TemporaryBufferSize size;
 	//! The index of the temp file
 	optional_idx file_index;
+	// Indicates whether the file is encrypted
+	bool encrypted = false;
 };
 
 struct TemporaryFileIndex {
@@ -138,6 +141,7 @@ public:
 
 	//! Deletes the file if there are no more blocks
 	bool DeleteIfEmpty();
+	bool IsEncrypted() const;
 	//! Get information about this temporary file
 	TemporaryFileInformation GetTemporaryFile();
 
@@ -275,6 +279,7 @@ public:
 	bool HasTemporaryBuffer(block_id_t block_id);
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer);
 	void DeleteTemporaryBuffer(block_id_t id);
+	bool IsEncrypted() const;
 
 	//! Get the list of temporary files and their sizes
 	vector<TemporaryFileInformation> GetTemporaryFiles();

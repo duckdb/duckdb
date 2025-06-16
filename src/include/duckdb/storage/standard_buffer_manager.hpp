@@ -42,7 +42,12 @@ public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
 	                                                          idx_t position, idx_t size,
-	                                                          unique_ptr<FileBuffer> reusable_buffer);
+	                                                          unique_ptr<FileBuffer> reusable_buffer,
+	                                                          bool encrypted = false);
+	static unique_ptr<FileBuffer> ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager,
+	                                                                   FileHandle &handle, idx_t position, idx_t size,
+	                                                                   unique_ptr<FileBuffer> reusable_buffer,
+	                                                                   bool encrypted = true);
 
 	//! Registers a transient memory buffer.
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) final;

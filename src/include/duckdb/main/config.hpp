@@ -280,6 +280,8 @@ struct DBConfigOptions {
 	bool use_master_key = false;
 	//!  By default, WAL is encrypted for encrypted databases
 	bool encrypt_wal = true;
+	//! Encrypt the temp files
+	bool encrypt_temp_files = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.

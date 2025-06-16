@@ -423,6 +423,10 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
+		// automatically encrypt the WAL and temp files
+		config.options.encrypt_wal = true;
+		config.options.encrypt_temp_files = true;
+
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 		db.SetEncryptionKeyId(options.encryption_options.derived_key_id);

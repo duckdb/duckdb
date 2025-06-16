@@ -31,11 +31,27 @@ public:
 	static const_data_ptr_t GetMasterKey(DatabaseInstance &db);
 	static idx_t GetMasterKeySize(DatabaseInstance &db);
 
-	//! Encryption Fucntions
+	//! Encrypt Blocks
 	static void EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
 	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
 	                         uint64_t block_size, uint64_t delta);
+
+	// Encrypt Buffers (temp files)
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
+	                                   uint8_t *metadata);
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata);
+
+	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes);
+	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes, uint8_t *metadata);
+
+	static void DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata);
+	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes);
+	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
+	                                          uint8_t *metadata);
 };
 
 class EncryptionTypes {

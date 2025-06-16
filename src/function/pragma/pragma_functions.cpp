@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 #include <cctype>
 
@@ -123,6 +124,16 @@ static void PragmaDisableWalEncryption(ClientContext &context, const FunctionPar
 	DBConfig::GetConfig(context).options.encrypt_wal = false;
 }
 
+static void PragmaEnableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
+	DBConfig::GetConfig(context).options.encrypt_temp_files = true;
+	//! A randomly generated key for encrypting temporary files gets added
+	EncryptionEngine::AddTempKeyToCache(*context.db);
+}
+
+static void PragmaDisableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
+	DBConfig::GetConfig(context).options.encrypt_temp_files = false;
+}
+
 static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
 	if (parameters.values.empty()) {
 		context.db->GetLogManager().SetEnableLogging(true);
@@ -206,6 +217,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_wal_encryption", PragmaEnableWalEncryption));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_wal_encryption", PragmaDisableWalEncryption));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_temp_files_encryption", PragmaEnableTempFilesEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_temp_files_encryption", PragmaDisableTempFilesEncryption));
 }
 
 } // namespace duckdb
