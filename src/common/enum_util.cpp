@@ -2990,7 +2990,7 @@ OrderType EnumUtil::FromString<OrderType>(const char *value) {
 	return static_cast<OrderType>(StringUtil::StringToEnum(GetOrderTypeValues(), 7, "OrderType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetOrdinality_request_tValues() {
+const StringUtil::EnumStringLiteral *GetOrdinalityTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(OrdinalityType::WITHOUT_ORDINALITY), "WITHOUT_ORDINALITY" },
 		{ static_cast<uint32_t>(OrdinalityType::WITH_ORDINALITY), "WITH_ORDINALITY" }
@@ -3000,12 +3000,12 @@ const StringUtil::EnumStringLiteral *GetOrdinality_request_tValues() {
 
 template<>
 const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value) {
-	return StringUtil::EnumToString(GetOrdinality_request_tValues(), 2, "OrdinalityType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOrdinalityTypeValues(), 2, "OrdinalityType", static_cast<uint32_t>(value));
 }
 
 template<>
 OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value) {
-	return static_cast<OrdinalityType>(StringUtil::StringToEnum(GetOrdinality_request_tValues(), 2, "OrdinalityType", value));
+	return static_cast<OrdinalityType>(StringUtil::StringToEnum(GetOrdinalityTypeValues(), 2, "OrdinalityType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOutputStreamValues() {
