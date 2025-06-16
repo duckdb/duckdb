@@ -121,7 +121,7 @@ public:
 		// if the config.encrypt WAL is true
 		// and if the attached database is encrypted
 		// then encrypt WAL before flushing
-		if (wal.IsEncrypted() && wal.GetDatabase().GetIsEncrypted()) {
+		if (wal.IsEncrypted()) {
 			return FlushEncrypted();
 		}
 
@@ -243,7 +243,7 @@ void WriteAheadLog::WriteVersion() {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	if (IsEncrypted() && GetDatabase().GetIsEncrypted()) {
+	if (IsEncrypted()) {
 		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
 	} else {
 		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
@@ -259,7 +259,7 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 
 bool WriteAheadLog::IsEncrypted() const {
 	const auto &config = DBConfig::GetConfig(database.GetDatabase());
-	return config.options.encrypt_wal;
+	return config.options.encrypt_wal && config.options.full_encryption && database.GetIsEncrypted();
 }
 
 //===--------------------------------------------------------------------===//

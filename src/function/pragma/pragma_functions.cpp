@@ -134,6 +134,17 @@ static void PragmaDisableTempFilesEncryption(ClientContext &context, const Funct
 	DBConfig::GetConfig(context).options.encrypt_temp_files = false;
 }
 
+static void PragmaEnableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
+	DBConfig::GetConfig(context).options.full_encryption = true;
+	//! A randomly generated key for encrypting temporary files gets added
+	EncryptionEngine::AddTempKeyToCache(*context.db);
+}
+
+// If full encryption is disabled, WAL and temp files are not encrypted.
+static void PragmaDisableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
+	DBConfig::GetConfig(context).options.full_encryption = false;
+}
+
 static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
 	if (parameters.values.empty()) {
 		context.db->GetLogManager().SetEnableLogging(true);
@@ -215,11 +226,16 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_wal_encryption", PragmaEnableWalEncryption));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_wal_encryption", PragmaDisableWalEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_temp_files_encryption", PragmaEnableTempFilesEncryption));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_temp_files_encryption", PragmaDisableTempFilesEncryption));
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("debug_enable_temp_file_encryption", PragmaEnableTempFilesEncryption));
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("debug_disable_temp_file_encryption", PragmaDisableTempFilesEncryption));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_full_encryption", PragmaEnableFullEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_full_encryption", PragmaDisableFullEncryption));
 }
 
 } // namespace duckdb

@@ -566,6 +566,10 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			// if encrypted, but no encryption
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
+
+		// automatically encrypt the WAL and temp files if we deal with an encrypted database
+		config.options.encrypt_wal = true;
+		config.options.encrypt_temp_files = true;
 	}
 
 	options.version_number = main_header.version_number;
