@@ -1000,9 +1000,9 @@ ReadOrWrite <- 'READ'i ('ONLY'i / 'WRITE'i)
 AbortOrRollback <- 'ABORT'i / 'ROLLBACK'i
 CommitOrEnd <- 'COMMIT'i / 'END'i
 
-DeleteStatement <- WithClause? 'DELETE'i 'FROM'i InsertTarget DeleteUsingClause? WhereClause? ReturningClause?
+DeleteStatement <- WithClause? 'DELETE'i 'FROM'i TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
 TruncateStatement <- 'TRUNCATE'i 'TABLE'i? BaseTableName
-
+TargetOptAlias <- BaseTableName 'AS'i? ColId?
 DeleteUsingClause <- 'USING'i List(TableRef)
 
 CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS'i CreateType
