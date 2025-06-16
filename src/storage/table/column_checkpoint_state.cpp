@@ -167,7 +167,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			                                                                *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
-		partial_block_manager.RegisterPartialBlock(nullptr, std::move(allocation));
+		partial_block_manager.RegisterPartialBlock(std::move(allocation));
 	} else {
 		segment->ConvertToPersistent(nullptr, nullptr, INVALID_BLOCK);
 	}

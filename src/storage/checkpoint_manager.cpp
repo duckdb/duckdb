@@ -40,7 +40,8 @@ SingleFileCheckpointWriter::SingleFileCheckpointWriter(optional_ptr<ClientContex
                                                        AttachedDatabase &db, BlockManager &block_manager,
                                                        CheckpointType checkpoint_type)
     : CheckpointWriter(db), client_context(client_context_p),
-      partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT), checkpoint_type(checkpoint_type) {
+      partial_block_manager(client_context_p, block_manager, PartialBlockType::FULL_CHECKPOINT),
+      checkpoint_type(checkpoint_type) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {

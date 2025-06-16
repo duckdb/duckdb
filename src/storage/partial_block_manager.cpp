@@ -34,9 +34,11 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-                                         optional_idx max_partial_block_size_p, uint32_t max_use_count)
-    : block_manager(block_manager), partial_block_type(partial_block_type), max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(optional_ptr<ClientContext> context, BlockManager &block_manager,
+                                         PartialBlockType partial_block_type, optional_idx max_partial_block_size_p,
+                                         uint32_t max_use_count)
+    : context(context), block_manager(block_manager), partial_block_type(partial_block_type),
+      max_use_count(max_use_count) {
 
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
@@ -103,7 +105,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
-void PartialBlockManager::RegisterPartialBlock(optional_ptr<ClientContext> context, PartialBlockAllocation allocation) {
+void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {
@@ -155,7 +157,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 
 			// re-register the partial block
 			allocation.state.offset += used_space;
-			RegisterPartialBlock(nullptr, std::move(allocation));
+			RegisterPartialBlock(std::move(allocation));
 		} else {
 			// we cannot merge this block - append it directly to the current block manager
 			partially_filled_blocks.insert(make_pair(e.first, std::move(e.second)));

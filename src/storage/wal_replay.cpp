@@ -163,6 +163,9 @@ protected:
 	void ReplayCheckpoint();
 
 private:
+	void ReplayIndexData(IndexStorageInfo &info);
+
+private:
 	ReplayState &state;
 	AttachedDatabase &db;
 	ClientContext &context;
@@ -427,11 +430,10 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void ReplayIndexData(ClientContext &context, StorageManager &storage_manager, BinaryDeserializer &deserializer,
-                     IndexStorageInfo &info, const bool deserialize_only) {
+void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	D_ASSERT(info.IsValid() && !info.name.empty());
 
-	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
@@ -467,7 +469,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(context, db.GetStorageManager(), deserializer, index_storage_info, DeserializeOnly());
+	ReplayIndexData(index_storage_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -684,7 +686,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 
-	ReplayIndexData(context, db.GetStorageManager(), deserializer, index_info, DeserializeOnly());
+	ReplayIndexData(index_info);
 	if (DeserializeOnly()) {
 		return;
 	}

@@ -73,8 +73,8 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-void FixedSizeBuffer::Serialize(ClientContext &context, PartialBlockManager &partial_block_manager,
-                                const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset) {
+void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
+                                const idx_t segment_size, const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
 
 	// Early-out, if the block is already on disk and not in memory.
@@ -130,7 +130,7 @@ void FixedSizeBuffer::Serialize(ClientContext &context, PartialBlockManager &par
 	buffer_handle.Destroy();
 
 	// Register the partial block and the block handle.
-	partial_block_manager.RegisterPartialBlock(context, std::move(allocation));
+	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);

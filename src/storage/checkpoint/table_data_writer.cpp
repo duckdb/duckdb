@@ -23,10 +23,6 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
-CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.GetColumn(LogicalIndex(i)).CompressionType();
-}
-
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
 }
@@ -96,7 +92,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos(client_context, options);
+	auto index_storage_infos = info->GetIndexes().SerializeToDisk(*client_context, options);
 
 #ifdef DUCKDB_BLOCK_VERIFICATION
 	for (auto &entry : index_storage_infos) {

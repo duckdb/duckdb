@@ -99,8 +99,8 @@ public:
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
-	PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-	                    optional_idx max_partial_block_size = optional_idx(),
+	PartialBlockManager(optional_ptr<ClientContext> client, BlockManager &block_manager,
+	                    PartialBlockType partial_block_type, optional_idx max_partial_block_size = optional_idx(),
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
 
@@ -108,7 +108,7 @@ public:
 	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
 	//! Register a partially filled block that is filled with "segment_size" entries
-	void RegisterPartialBlock(optional_ptr<ClientContext> context, PartialBlockAllocation allocation);
+	void RegisterPartialBlock(PartialBlockAllocation allocation);
 
 	//! Clear remaining blocks without writing them to disk
 	void ClearBlocks();
@@ -130,6 +130,7 @@ public:
 	BlockManager &GetBlockManager() const;
 
 protected:
+	optional_ptr<ClientContext> context;
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;
 	mutex partial_block_lock;

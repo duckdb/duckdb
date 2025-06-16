@@ -75,8 +75,8 @@ private:
 	}
 
 	//! Serializes a buffer, if dirty or not on disk.
-	void Serialize(ClientContext &context, PartialBlockManager &partial_block_manager, const idx_t available_segments,
-	               const idx_t segment_size, const idx_t bitmask_offset);
+	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
+	               const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();
