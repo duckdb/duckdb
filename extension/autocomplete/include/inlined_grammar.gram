@@ -558,8 +558,9 @@ LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'
 CastExpression <- CastOrTryCast Parens(Expression 'AS'i Type)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 
-StarExpression <- (Identifier '.')* '*'i ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE'i (Parens(List(ColumnReference)) / ColumnReference)
+StarExpression <- (ColId '.')* '*'i ExcludeList? ReplaceList? RenameList?
+ExcludeList <- 'EXCLUDE'i (Parens(List(ExcludeName)) / ExcludeName)
+ExcludeName <- DottedIdentifier / ColIdOrString
 ReplaceList <- 'REPLACE'i (Parens(List(ReplaceEntry)) / ReplaceEntry)
 ReplaceEntry <- Expression 'AS'i ColumnReference
 RenameList <- 'RENAME'i (Parens(List(RenameEntry)) / RenameEntry)
