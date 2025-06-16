@@ -630,6 +630,8 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! Cleanup any open results and reset the interrupted flag
 	CleanupInternal(lock);
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.Reset(false);
 	interrupted = false;
 }
 
