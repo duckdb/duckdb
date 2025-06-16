@@ -45,7 +45,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- CatalogQualification? SchemaQualification? TableName
+BaseTableName <- DottedIdentifier
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?

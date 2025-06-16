@@ -8,7 +8,7 @@ CreateTableAs <- IdentifierList? 'AS'i SelectStatement
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- CatalogQualification? SchemaQualification? ColIdOrString
+QualifiedName <- DottedIdentifier
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
 TableQualification <- TableName '.'

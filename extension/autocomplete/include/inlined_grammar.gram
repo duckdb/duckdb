@@ -543,7 +543,6 @@ ValueOrValues <- 'VALUE' / 'VALUES'
 IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
 UnpivotHeader <- Identifier / Parens(List(Identifier))
 
-ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)
 
@@ -559,11 +558,11 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS'i Type)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 
 StarExpression <- (Identifier '.')* '*'i ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE'i (Parens(List(ColumnReference)) / ColumnReference)
+ExcludeList <- 'EXCLUDE'i (Parens(List(ColumnName)) / ColumnName)
 ReplaceList <- 'REPLACE'i (Parens(List(ReplaceEntry)) / ReplaceEntry)
-ReplaceEntry <- Expression 'AS'i ColumnReference
+ReplaceEntry <- Expression 'AS'i ColumnName
 RenameList <- 'RENAME'i (Parens(List(RenameEntry)) / RenameEntry)
-RenameEntry <- ColumnReference 'AS'i Identifier
+RenameEntry <- ColumnName'AS'i Identifier
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
 CaseExpression <- 'CASE'i Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
@@ -615,7 +614,7 @@ SingleExpression <-
     GroupingExpression /
     MapExpression /
     FunctionExpression /
-    ColumnReference /
+    ColumnName/
     PrefixExpression /
     ListComprehensionExpression /
     ListExpression /
@@ -732,7 +731,7 @@ CreateTableAs <- IdentifierList? 'AS'i SelectStatement
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- CatalogQualification? SchemaQualification? ColIdOrString
+QualifiedName <- DottedIdentifier
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
 TableQualification <- TableName '.'
@@ -911,7 +910,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- CatalogQualification? SchemaQualification? TableName
+BaseTableName <- DottedIdentifier
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
@@ -1270,7 +1269,7 @@ MacroParameter <- NamedParameter / TypeFuncName
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE'i SelectStatement
 
-CommentStatement <- 'COMMENT'i 'ON'i CommentOnType ColumnReference 'IS'i CommentValue
+CommentStatement <- 'COMMENT'i 'ON'i CommentOnType ColumnName'IS'i CommentValue
 
 
 CommentOnType <- 'TABLE'i / 'SEQUENCE'i / 'FUNCTION'i / ('MACRO'i 'TABLE'i?) / 'VIEW'i / 'DATABASE'i / 'INDEX'i / 'SCHEMA'i / 'TYPE'i / 'COLUMN'i

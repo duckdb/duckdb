@@ -1,4 +1,3 @@
-ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)
 
@@ -14,11 +13,11 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS'i Type)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 
 StarExpression <- (Identifier '.')* '*'i ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE'i (Parens(List(ColumnReference)) / ColumnReference)
+ExcludeList <- 'EXCLUDE'i (Parens(List(ColumnName)) / ColumnName)
 ReplaceList <- 'REPLACE'i (Parens(List(ReplaceEntry)) / ReplaceEntry)
-ReplaceEntry <- Expression 'AS'i ColumnReference
+ReplaceEntry <- Expression 'AS'i ColumnName
 RenameList <- 'RENAME'i (Parens(List(RenameEntry)) / RenameEntry)
-RenameEntry <- ColumnReference 'AS'i Identifier
+RenameEntry <- ColumnName'AS'i Identifier
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
 CaseExpression <- 'CASE'i Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
@@ -70,7 +69,7 @@ SingleExpression <-
     GroupingExpression /
     MapExpression /
     FunctionExpression /
-    ColumnReference /
+    ColumnName/
     PrefixExpression /
     ListComprehensionExpression /
     ListExpression /
