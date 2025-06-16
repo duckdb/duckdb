@@ -13,7 +13,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
-#include <type_traits>
 
 namespace duckdb {
 
@@ -29,6 +28,40 @@ struct ExecutorBaseType {
 	ExecutorBaseType() : is_null(false) {};
 
 	bool is_null;
+};
+
+// Forward declaration
+template <class INPUT_TYPE>
+struct PrimitiveType;
+
+template <typename T>
+struct EnsureExecutorType {
+	using type = T;
+};
+
+template <>
+struct EnsureExecutorType<bool> {
+	using type = PrimitiveType<bool>;
+};
+template <>
+struct EnsureExecutorType<string_t> {
+	using type = PrimitiveType<string_t>;
+};
+template <>
+struct EnsureExecutorType<int32_t> {
+	using type = PrimitiveType<int32_t>;
+};
+template <>
+struct EnsureExecutorType<int64_t> {
+	using type = PrimitiveType<int64_t>;
+};
+template <>
+struct EnsureExecutorType<float> {
+	using type = PrimitiveType<float>;
+};
+template <>
+struct EnsureExecutorType<double> {
+	using type = PrimitiveType<double>;
 };
 
 template <class INPUT_TYPE>
@@ -83,14 +116,13 @@ struct StructTypeState {
 	}
 };
 
-template <class A_TYPE>
+template <class A>
 struct StructTypeUnary : ExecutorBaseType {
-	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
-
+	using A_TYPE = typename EnsureExecutorType<A>::type;
 	A_TYPE a_val;
 
 	StructTypeUnary() = default;
-	StructTypeUnary(A_TYPE a) : a_val(a) {
+	StructTypeUnary(A a) : a_val(a) {
 	}
 
 	using STRUCT_STATE = StructTypeState<1>;
@@ -99,40 +131,40 @@ struct StructTypeUnary : ExecutorBaseType {
 		return is_null || a_val.is_null;
 	}
 
-	static StructTypeUnary<A_TYPE> ConstructType(STRUCT_STATE &state, idx_t i) {
+	static StructTypeUnary<A> ConstructType(STRUCT_STATE &state, idx_t i) {
 		auto &a_data = state.child_data[0];
 		auto a_idx = a_data.sel->get_index(i);
-		StructTypeUnary<A_TYPE> result;
+		StructTypeUnary<A> result;
 		if (!a_data.validity.RowIsValid(a_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
+		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
 		result.a_val = a_ptr[a_idx];
 		return result;
 	}
 
-	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A_TYPE> value) {
+	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A> value) {
 		auto &entries = StructVector::GetEntries(result);
 
 		if (value.ContainsNull()) {
 			FlatVector::SetNull(*entries[0], i, true);
 		}
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
+		auto a_data = FlatVector::GetData<A>(*entries[0]);
 		a_data[i] = value.a_val;
 	}
 };
 
-template <class A_TYPE, class B_TYPE>
+template <class A, class B>
 struct StructTypeBinary : ExecutorBaseType {
-	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
-	static_assert(std::is_base_of<ExecutorBaseType, B_TYPE>::value, "B_TYPE must inherit from ExecutorBaseType");
+	using A_TYPE = typename EnsureExecutorType<A>::type;
+	using B_TYPE = typename EnsureExecutorType<B>::type;
 
 	A_TYPE a_val;
 	B_TYPE b_val;
 
 	StructTypeBinary() = default;
-	StructTypeBinary(A_TYPE a, B_TYPE b) : a_val(a), b_val(b) {
+	StructTypeBinary(A a, B b) : a_val(a), b_val(b) {
 	}
 
 	using STRUCT_STATE = StructTypeState<2>;
@@ -141,50 +173,50 @@ struct StructTypeBinary : ExecutorBaseType {
 		return is_null || a_val.is_null || b_val.is_null;
 	}
 
-	static StructTypeBinary<A_TYPE, B_TYPE> ConstructType(STRUCT_STATE &state, idx_t i) {
+	static StructTypeBinary<A, B> ConstructType(STRUCT_STATE &state, idx_t i) {
 		auto &a_data = state.child_data[0];
 		auto &b_data = state.child_data[1];
 
 		auto a_idx = a_data.sel->get_index(i);
 		auto b_idx = b_data.sel->get_index(i);
-		StructTypeBinary<A_TYPE, B_TYPE> result;
+		StructTypeBinary<A, B> result;
 		if (!a_data.validity.RowIsValid(a_idx) || !b_data.validity.RowIsValid(b_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
-		auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
+		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
+		auto b_ptr = UnifiedVectorFormat::GetData<B>(b_data);
 		result.a_val = a_ptr[a_idx];
 		result.b_val = b_ptr[b_idx];
 		return result;
 	}
 
-	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> value) {
+	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A, B> value) {
 		auto &entries = StructVector::GetEntries(result);
 
 		if (value.ContainsNull()) {
 			FlatVector::SetNull(*entries[0], i, true);
 			FlatVector::SetNull(*entries[1], i, true);
 		}
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
+		auto a_data = FlatVector::GetData<A>(*entries[0]);
+		auto b_data = FlatVector::GetData<B>(*entries[1]);
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
 	}
 };
 
-template <class A_TYPE, class B_TYPE, class C_TYPE>
+template <class A, class B, class C>
 struct StructTypeTernary : ExecutorBaseType {
-	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
-	static_assert(std::is_base_of<ExecutorBaseType, B_TYPE>::value, "B_TYPE must inherit from ExecutorBaseType");
-	static_assert(std::is_base_of<ExecutorBaseType, C_TYPE>::value, "C_TYPE must inherit from ExecutorBaseType");
+	using A_TYPE = typename EnsureExecutorType<A>::type;
+	using B_TYPE = typename EnsureExecutorType<B>::type;
+	using C_TYPE = typename EnsureExecutorType<C>::type;
 
 	A_TYPE a_val;
 	B_TYPE b_val;
 	C_TYPE c_val;
 
 	StructTypeTernary() = default;
-	StructTypeTernary(A_TYPE a, B_TYPE b, C_TYPE c) : a_val(a), b_val(b), c_val(c) {
+	StructTypeTernary(A a, B b, C c) : a_val(a), b_val(b), c_val(c) {
 	}
 
 	using STRUCT_STATE = StructTypeState<3>;
@@ -193,7 +225,7 @@ struct StructTypeTernary : ExecutorBaseType {
 		return is_null || a_val.is_null || b_val.is_null || c_val.is_null;
 	}
 
-	static StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> ConstructType(STRUCT_STATE &state, idx_t i) {
+	static StructTypeTernary<A, B, C> ConstructType(STRUCT_STATE &state, idx_t i) {
 		auto &a_data = state.child_data[0];
 		auto &b_data = state.child_data[1];
 		auto &c_data = state.child_data[2];
@@ -201,22 +233,22 @@ struct StructTypeTernary : ExecutorBaseType {
 		auto a_idx = a_data.sel->get_index(i);
 		auto b_idx = b_data.sel->get_index(i);
 		auto c_idx = c_data.sel->get_index(i);
-		StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> result;
+		StructTypeTernary<A, B, C> result;
 		if (!a_data.validity.RowIsValid(a_idx) || !b_data.validity.RowIsValid(b_idx) ||
 		    !c_data.validity.RowIsValid(c_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
-		auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
-		auto c_ptr = UnifiedVectorFormat::GetData<C_TYPE>(c_data);
+		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
+		auto b_ptr = UnifiedVectorFormat::GetData<B>(b_data);
+		auto c_ptr = UnifiedVectorFormat::GetData<C>(c_data);
 		result.a_val = a_ptr[a_idx];
 		result.b_val = b_ptr[b_idx];
 		result.c_val = c_ptr[c_idx];
 		return result;
 	}
 
-	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> value) {
+	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A, B, C> value) {
 		auto &entries = StructVector::GetEntries(result);
 
 		if (value.ContainsNull()) {
@@ -224,21 +256,21 @@ struct StructTypeTernary : ExecutorBaseType {
 			FlatVector::SetNull(*entries[1], i, true);
 			FlatVector::SetNull(*entries[2], i, true);
 		}
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
-		auto c_data = FlatVector::GetData<C_TYPE>(*entries[2]);
+		auto a_data = FlatVector::GetData<A>(*entries[0]);
+		auto b_data = FlatVector::GetData<B>(*entries[1]);
+		auto c_data = FlatVector::GetData<C>(*entries[2]);
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
 		c_data[i] = value.c_val;
 	}
 };
 
-template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE>
+template <class A, class B, class C, class D>
 struct StructTypeQuaternary : ExecutorBaseType {
-	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
-	static_assert(std::is_base_of<ExecutorBaseType, B_TYPE>::value, "B_TYPE must inherit from ExecutorBaseType");
-	static_assert(std::is_base_of<ExecutorBaseType, C_TYPE>::value, "C_TYPE must inherit from ExecutorBaseType");
-	static_assert(std::is_base_of<ExecutorBaseType, D_TYPE>::value, "D_TYPE must inherit from ExecutorBaseType");
+	using A_TYPE = typename EnsureExecutorType<A>::type;
+	using B_TYPE = typename EnsureExecutorType<B>::type;
+	using C_TYPE = typename EnsureExecutorType<C>::type;
+	using D_TYPE = typename EnsureExecutorType<D>::type;
 
 	A_TYPE a_val;
 	B_TYPE b_val;
@@ -246,7 +278,7 @@ struct StructTypeQuaternary : ExecutorBaseType {
 	D_TYPE d_val;
 
 	StructTypeQuaternary() = default;
-	StructTypeQuaternary(A_TYPE a, B_TYPE b, C_TYPE c, D_TYPE d) : a_val(a), b_val(b), c_val(c), d_val(d) {
+	StructTypeQuaternary(A a, B b, C c, D d) : a_val(a), b_val(b), c_val(c), d_val(d) {
 	}
 
 	using STRUCT_STATE = StructTypeState<4>;
@@ -255,7 +287,7 @@ struct StructTypeQuaternary : ExecutorBaseType {
 		return is_null || a_val.is_null || b_val.is_null || c_val.is_null || d_val.is_null;
 	}
 
-	static StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> ConstructType(STRUCT_STATE &state, idx_t i) {
+	static StructTypeQuaternary<A, B, C, D> ConstructType(STRUCT_STATE &state, idx_t i) {
 		auto &a_data = state.child_data[0];
 		auto &b_data = state.child_data[1];
 		auto &c_data = state.child_data[2];
@@ -265,16 +297,16 @@ struct StructTypeQuaternary : ExecutorBaseType {
 		auto b_idx = b_data.sel->get_index(i);
 		auto c_idx = c_data.sel->get_index(i);
 		auto d_idx = d_data.sel->get_index(i);
-		StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> result;
+		StructTypeQuaternary<A, B, C, D> result;
 		if (!a_data.validity.RowIsValid(a_idx) || !b_data.validity.RowIsValid(b_idx) ||
 		    !c_data.validity.RowIsValid(c_idx) || !d_data.validity.RowIsValid(d_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A_TYPE>(a_data);
-		auto b_ptr = UnifiedVectorFormat::GetData<B_TYPE>(b_data);
-		auto c_ptr = UnifiedVectorFormat::GetData<C_TYPE>(c_data);
-		auto d_ptr = UnifiedVectorFormat::GetData<D_TYPE>(d_data);
+		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
+		auto b_ptr = UnifiedVectorFormat::GetData<B>(b_data);
+		auto c_ptr = UnifiedVectorFormat::GetData<C>(c_data);
+		auto d_ptr = UnifiedVectorFormat::GetData<D>(d_data);
 		result.a_val = a_ptr[a_idx];
 		result.b_val = b_ptr[b_idx];
 		result.c_val = c_ptr[c_idx];
@@ -282,7 +314,7 @@ struct StructTypeQuaternary : ExecutorBaseType {
 		return result;
 	}
 
-	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> value) {
+	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A, B, C, D> value) {
 		auto &entries = StructVector::GetEntries(result);
 
 		if (value.ContainsNull()) {
@@ -292,10 +324,10 @@ struct StructTypeQuaternary : ExecutorBaseType {
 			FlatVector::SetNull(*entries[3], i, true);
 		}
 
-		auto a_data = FlatVector::GetData<A_TYPE>(*entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(*entries[1]);
-		auto c_data = FlatVector::GetData<C_TYPE>(*entries[2]);
-		auto d_data = FlatVector::GetData<D_TYPE>(*entries[3]);
+		auto a_data = FlatVector::GetData<A>(*entries[0]);
+		auto b_data = FlatVector::GetData<B>(*entries[1]);
+		auto c_data = FlatVector::GetData<C>(*entries[2]);
+		auto d_data = FlatVector::GetData<D>(*entries[3]);
 
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
@@ -306,9 +338,6 @@ struct StructTypeQuaternary : ExecutorBaseType {
 
 template <class CHILD_TYPE>
 struct GenericListType : ExecutorBaseType {
-	static_assert(std::is_base_of<ExecutorBaseType, CHILD_TYPE>::value,
-	              "CHILD_TYPE must inherit from ExecutorBaseType");
-
 	vector<CHILD_TYPE> values;
 
 	GenericListType() = default;
