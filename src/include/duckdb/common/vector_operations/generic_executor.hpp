@@ -73,6 +73,13 @@ struct PrimitiveType : ExecutorBaseType {
 	INPUT_TYPE val;
 
 	using STRUCT_STATE = PrimitiveTypeState;
+	
+	// Implicit conversion to INPUT_TYPE for transparent access
+	operator INPUT_TYPE() const { return val; }
+	
+	// Pointer accessor for when addresses are needed
+	INPUT_TYPE* ptr() { return &val; }
+	const INPUT_TYPE* ptr() const { return &val; }
 
 	bool ContainsNull() {
 		return is_null;
