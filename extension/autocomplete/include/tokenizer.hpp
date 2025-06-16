@@ -44,7 +44,7 @@ public:
 	static bool CharacterIsControlFlow(char c);
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);
-	bool IsValidDollarTag(const string &tag);
+	bool IsValidDollarTagCharacter(char c);
 
 protected:
 	const string &sql;
