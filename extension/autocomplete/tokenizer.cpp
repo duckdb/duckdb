@@ -191,7 +191,6 @@ bool BaseTokenizer::TokenizeInput() {
 					}
 					if (!IsValidDollarTagCharacter(sql[i])) {
 						valid_dollar_tag = false;
-						Printer::PrintF("Illegal character found at pos: %d, resetting to %d", i, last_pos);
 						i = last_pos;
 						break;
 					}
@@ -200,7 +199,6 @@ bool BaseTokenizer::TokenizeInput() {
 					// Found a complete marker, store it.
 					idx_t marker_start = last_pos + 1;
 					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
-					Printer::Print(dollar_quote_marker);
 					state = TokenizeState::DOLLAR_QUOTED_STRING;
 					break;
 				}
