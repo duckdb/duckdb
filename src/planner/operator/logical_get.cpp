@@ -220,8 +220,6 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
-	serializer.WriteProperty(213, "ordinality_request", ordinality_request);
-	serializer.WriteProperty(214, "ordinality_column_id", ordinality_column_id);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -251,9 +249,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
-	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
-	    213, "ordinality_request", result->ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
-	deserializer.ReadProperty(214, "ordinality_column_id", result->ordinality_column_id);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -277,13 +272,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
-		if (result->ordinality_request == OrdinalityType::WITH_ORDINALITY && function.in_out_function) {
-			bind_return_types.emplace(bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_column_id),
-			                          LogicalType::BIGINT);
-			bind_names.emplace(bind_names.begin() + NumericCast<int64_t>(result->ordinality_column_id), "ordinality");
-			function.ordinality_data.ordinality_request = result->ordinality_request;
-			function.ordinality_data.column_id = result->ordinality_column_id;
-		}
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}

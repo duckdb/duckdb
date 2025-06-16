@@ -32,7 +32,7 @@ public:
 	                                        OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
-		return !(function.ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY);
+		return true;
 	}
 
 	bool RequiresFinalExecute() const override {
@@ -40,6 +40,9 @@ public:
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+	//! Information for WITH ORDINALITY
+	OrdinalityData ordinality_data;
 
 private:
 	//! The table function

@@ -197,6 +197,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	auto &column_name_alias = ref.column_name_alias;
 
 	auto bind_index = GenerateTableIndex();
+	idx_t ordinality_column_id;
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
@@ -240,12 +241,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			                      table_function.name);
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-		if (table_function.ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY &&
-		    table_function.in_out_function) {
+		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY &&
+			table_function.in_out_function) {
 			return_types.emplace_back(LogicalType::BIGINT);
 			return_names.emplace_back("ordinality");
 			D_ASSERT(return_names.size() == return_types.size());
-			table_function.ordinality_data.column_id = return_types.size() - 1;
+			ordinality_column_id = return_types.size() - 1;
 		}
 
 	} else {
@@ -282,15 +283,15 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
-	get->ordinality_request = table_function.ordinality_data.ordinality_request;
+	get->ordinality_data.ordinality_request = ref.with_ordinality;
+	get->ordinality_data.column_id = ordinality_column_id;
 	if (table_function.in_out_function) {
-		get->ordinality_column_id = table_function.ordinality_data.column_id;
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
 	}
 
-	if (table_function.ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY &&
+	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY &&
 	    !table_function.in_out_function) {
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
@@ -415,7 +416,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		error.Throw();
 	}
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-	table_function.ordinality_data.ordinality_request = ref.with_ordinality;
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

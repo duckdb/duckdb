@@ -58,10 +58,8 @@ public:
 	ExtraOperatorInfo extra_info;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
-	//! Whether WITH ORDINALITY has been requested (for Deserialization)
-	OrdinalityType ordinality_request = OrdinalityType::WITHOUT_ORDINALITY;
-	//! The ordinality column index (for Deserialization)
-	idx_t ordinality_column_id;
+	//! Information for WITH ORDINALITY
+	OrdinalityData ordinality_data;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
