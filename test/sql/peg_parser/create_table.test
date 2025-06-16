@@ -1,0 +1,18 @@
+# name: test/sql/peg_parser/struct_identifier.test
+# description: Test lambda syntax in peg parser
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE database.schema.table(col INTEGER);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT flags.desc;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO database.schema.table VALUES ({'field': 42});$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE tbl4(col1, col2) AS SELECT 1, 'hello';$TEST_PEG_PARSER$);
+
