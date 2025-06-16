@@ -80,7 +80,6 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 			distinct_group.insert(ColumnBinding(aggr.group_index, i));
 		}
 		if (!distinct_group.empty()) {
-			ref_table_ids.insert(table_idx);
 			distinct_groups[table_idx] = std::move(distinct_group);
 		}
 		break;
@@ -110,7 +109,10 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 					break;
 				}
 				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
-				D_ASSERT(ref_id == col_ref.binding.table_index);
+				if (ref_id != col_ref.binding.table_index) {
+					could_add = false;
+					break;
+				}
 				new_distinct_group.insert(col_ref.binding);
 			}
 			if (could_add) {
