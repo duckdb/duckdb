@@ -40,7 +40,7 @@ BaseWindowName <- Identifier
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 PrefixExpression <- PrefixOperator Expression
 PrefixOperator <- 'NOT'i / '-' / '+' / '~'
-ListExpression <- 'ARRAY'i? (('[' List(Expression)? ']') / SelectStatement)
+ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField)? '}'
 StructField <- Expression ':'i Expression
 MapExpression <- 'MAP'i StructExpression
