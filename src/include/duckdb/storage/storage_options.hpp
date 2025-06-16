@@ -32,7 +32,7 @@ struct StorageOptions {
 	shared_ptr<string> user_key;
 };
 
-inline void ClearUserKey(shared_ptr<string> const encryption_key) {
+inline void ClearUserKey(shared_ptr<string> const &encryption_key) {
 	if (encryption_key && !encryption_key->empty()) {
 		memset(const_cast<char *>(encryption_key->data()), 0, encryption_key->size());
 		encryption_key->clear();
