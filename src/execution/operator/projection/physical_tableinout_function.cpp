@@ -11,6 +11,7 @@ public:
 	idx_t row_index;
 	bool new_row;
 	DataChunk input_chunk;
+	idx_t current_ordinality_idx = 1;
 };
 
 class TableInOutGlobalState : public GlobalOperatorState {
@@ -18,8 +19,6 @@ public:
 	TableInOutGlobalState() {
 	}
 
-	idx_t current_ordinality_idx = 1;
-	mutex ordinality_lock;
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
@@ -73,9 +72,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		auto result = function.in_out_function(context, data, input, chunk);
 		if (function.ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY) {
 			const idx_t ordinality = chunk.size();
-			function.ordinality_data.SetOrdinality(chunk, gstate.current_ordinality_idx, ordinality);
-			lock_guard<mutex> guard(gstate.ordinality_lock);
-			gstate.current_ordinality_idx += ordinality;
+			function.ordinality_data.SetOrdinality(chunk, state.current_ordinality_idx, ordinality);
+			state.current_ordinality_idx += ordinality;
 		}
 		return result;
 	}
@@ -96,8 +94,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
-		lock_guard<mutex> guard(gstate.ordinality_lock);
-		gstate.current_ordinality_idx = 1;
+		state.current_ordinality_idx = 1;
 	}
 	// set up the output data in "chunk"
 	D_ASSERT(chunk.ColumnCount() > projected_input.size());
@@ -111,9 +108,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
 	if (function.ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY) {
 		const idx_t ordinality = chunk.size();
-		function.ordinality_data.SetOrdinality(chunk, gstate.current_ordinality_idx, ordinality);
-		lock_guard<mutex> guard(gstate.ordinality_lock);
-		gstate.current_ordinality_idx += ordinality;
+		function.ordinality_data.SetOrdinality(chunk, state.current_ordinality_idx, ordinality);
+		state.current_ordinality_idx += ordinality;
 	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;
