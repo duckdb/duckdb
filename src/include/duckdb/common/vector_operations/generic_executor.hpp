@@ -111,14 +111,18 @@ template <idx_t CHILD_COUNT>
 struct StructTypeState {
 	UnifiedVectorFormat main_data;
 	UnifiedVectorFormat child_data[CHILD_COUNT];
+	Vector* child_vectors[CHILD_COUNT];
+	idx_t count;
 
-	void PrepareVector(Vector &input, idx_t count) {
+	void PrepareVector(Vector &input, idx_t input_count) {
 		auto &entries = StructVector::GetEntries(input);
+		count = input_count;
 
-		input.ToUnifiedFormat(count, main_data);
+		input.ToUnifiedFormat(input_count, main_data);
 
 		for (idx_t i = 0; i < CHILD_COUNT; i++) {
-			entries[i]->ToUnifiedFormat(count, child_data[i]);
+			child_vectors[i] = entries[i].get();
+			entries[i]->ToUnifiedFormat(input_count, child_data[i]);
 		}
 	}
 };
@@ -139,15 +143,20 @@ struct StructTypeUnary : ExecutorBaseType {
 	}
 
 	static StructTypeUnary<A> ConstructType(STRUCT_STATE &state, idx_t i) {
-		auto &a_data = state.child_data[0];
-		auto a_idx = a_data.sel->get_index(i);
 		StructTypeUnary<A> result;
-		if (!a_data.validity.RowIsValid(a_idx)) {
+		
+		// Check main struct validity
+		auto main_idx = state.main_data.sel->get_index(i);
+		if (!state.main_data.validity.RowIsValid(main_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
-		result.a_val = a_ptr[a_idx];
+		
+		// Recursively construct child types using their ConstructType methods
+		typename A_TYPE::STRUCT_STATE a_state;
+		a_state.PrepareVector(*state.child_vectors[0], state.count);
+		result.a_val = A_TYPE::ConstructType(a_state, i);
+		
 		return result;
 	}
 
@@ -181,20 +190,24 @@ struct StructTypeBinary : ExecutorBaseType {
 	}
 
 	static StructTypeBinary<A, B> ConstructType(STRUCT_STATE &state, idx_t i) {
-		auto &a_data = state.child_data[0];
-		auto &b_data = state.child_data[1];
-
-		auto a_idx = a_data.sel->get_index(i);
-		auto b_idx = b_data.sel->get_index(i);
 		StructTypeBinary<A, B> result;
-		if (!a_data.validity.RowIsValid(a_idx) || !b_data.validity.RowIsValid(b_idx)) {
+		
+		// Check main struct validity
+		auto main_idx = state.main_data.sel->get_index(i);
+		if (!state.main_data.validity.RowIsValid(main_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
-		auto b_ptr = UnifiedVectorFormat::GetData<B>(b_data);
-		result.a_val = a_ptr[a_idx];
-		result.b_val = b_ptr[b_idx];
+		
+		// Recursively construct child types using their ConstructType methods
+		typename A_TYPE::STRUCT_STATE a_state;
+		a_state.PrepareVector(*state.child_vectors[0], state.count);
+		result.a_val = A_TYPE::ConstructType(a_state, i);
+		
+		typename B_TYPE::STRUCT_STATE b_state;
+		b_state.PrepareVector(*state.child_vectors[1], state.count);
+		result.b_val = B_TYPE::ConstructType(b_state, i);
+		
 		return result;
 	}
 
@@ -233,25 +246,28 @@ struct StructTypeTernary : ExecutorBaseType {
 	}
 
 	static StructTypeTernary<A, B, C> ConstructType(STRUCT_STATE &state, idx_t i) {
-		auto &a_data = state.child_data[0];
-		auto &b_data = state.child_data[1];
-		auto &c_data = state.child_data[2];
-
-		auto a_idx = a_data.sel->get_index(i);
-		auto b_idx = b_data.sel->get_index(i);
-		auto c_idx = c_data.sel->get_index(i);
 		StructTypeTernary<A, B, C> result;
-		if (!a_data.validity.RowIsValid(a_idx) || !b_data.validity.RowIsValid(b_idx) ||
-		    !c_data.validity.RowIsValid(c_idx)) {
+		
+		// Check main struct validity
+		auto main_idx = state.main_data.sel->get_index(i);
+		if (!state.main_data.validity.RowIsValid(main_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
-		auto b_ptr = UnifiedVectorFormat::GetData<B>(b_data);
-		auto c_ptr = UnifiedVectorFormat::GetData<C>(c_data);
-		result.a_val = a_ptr[a_idx];
-		result.b_val = b_ptr[b_idx];
-		result.c_val = c_ptr[c_idx];
+		
+		// Recursively construct child types using their ConstructType methods
+		typename A_TYPE::STRUCT_STATE a_state;
+		a_state.PrepareVector(*state.child_vectors[0], state.count);
+		result.a_val = A_TYPE::ConstructType(a_state, i);
+		
+		typename B_TYPE::STRUCT_STATE b_state;
+		b_state.PrepareVector(*state.child_vectors[1], state.count);
+		result.b_val = B_TYPE::ConstructType(b_state, i);
+		
+		typename C_TYPE::STRUCT_STATE c_state;
+		c_state.PrepareVector(*state.child_vectors[2], state.count);
+		result.c_val = C_TYPE::ConstructType(c_state, i);
+		
 		return result;
 	}
 
@@ -295,29 +311,32 @@ struct StructTypeQuaternary : ExecutorBaseType {
 	}
 
 	static StructTypeQuaternary<A, B, C, D> ConstructType(STRUCT_STATE &state, idx_t i) {
-		auto &a_data = state.child_data[0];
-		auto &b_data = state.child_data[1];
-		auto &c_data = state.child_data[2];
-		auto &d_data = state.child_data[3];
-
-		auto a_idx = a_data.sel->get_index(i);
-		auto b_idx = b_data.sel->get_index(i);
-		auto c_idx = c_data.sel->get_index(i);
-		auto d_idx = d_data.sel->get_index(i);
 		StructTypeQuaternary<A, B, C, D> result;
-		if (!a_data.validity.RowIsValid(a_idx) || !b_data.validity.RowIsValid(b_idx) ||
-		    !c_data.validity.RowIsValid(c_idx) || !d_data.validity.RowIsValid(d_idx)) {
+		
+		// Check main struct validity
+		auto main_idx = state.main_data.sel->get_index(i);
+		if (!state.main_data.validity.RowIsValid(main_idx)) {
 			result.is_null = true;
 			return result;
 		}
-		auto a_ptr = UnifiedVectorFormat::GetData<A>(a_data);
-		auto b_ptr = UnifiedVectorFormat::GetData<B>(b_data);
-		auto c_ptr = UnifiedVectorFormat::GetData<C>(c_data);
-		auto d_ptr = UnifiedVectorFormat::GetData<D>(d_data);
-		result.a_val = a_ptr[a_idx];
-		result.b_val = b_ptr[b_idx];
-		result.c_val = c_ptr[c_idx];
-		result.d_val = d_ptr[d_idx];
+		
+		// Recursively construct child types using their ConstructType methods
+		typename A_TYPE::STRUCT_STATE a_state;
+		a_state.PrepareVector(*state.child_vectors[0], state.count);
+		result.a_val = A_TYPE::ConstructType(a_state, i);
+		
+		typename B_TYPE::STRUCT_STATE b_state;
+		b_state.PrepareVector(*state.child_vectors[1], state.count);
+		result.b_val = B_TYPE::ConstructType(b_state, i);
+		
+		typename C_TYPE::STRUCT_STATE c_state;
+		c_state.PrepareVector(*state.child_vectors[2], state.count);
+		result.c_val = C_TYPE::ConstructType(c_state, i);
+		
+		typename D_TYPE::STRUCT_STATE d_state;
+		d_state.PrepareVector(*state.child_vectors[3], state.count);
+		result.d_val = D_TYPE::ConstructType(d_state, i);
+		
 		return result;
 	}
 
