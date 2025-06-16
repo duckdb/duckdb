@@ -23,15 +23,12 @@ public:
 	DUCKDB_API static ValidChecker &Get(DatabaseInstance &db);
 	DUCKDB_API static ValidChecker &Get(MetaTransaction &transaction);
 
+	DUCKDB_API static bool IsInvalidated(DatabaseInstance &db);
+	DUCKDB_API static bool IsInvalidated(MetaTransaction &transaction);
+
 	DUCKDB_API void Invalidate(string error);
-	DUCKDB_API bool IsInvalidated(DatabaseInstance &db);
 	DUCKDB_API string InvalidatedMessage();
 
-	template <class T>
-	static bool IsInvalidated(T &o) {
-		auto &db = GetDb(o);
-		return Get(o).IsInvalidated(db);
-	}
 	template <class T>
 	static void Invalidate(T &o, string error) {
 		Get(o).Invalidate(std::move(error));
@@ -41,10 +38,6 @@ public:
 	static string InvalidatedMessage(T &o) {
 		return Get(o).InvalidatedMessage();
 	}
-
-private:
-	static DatabaseInstance &GetDb(DatabaseInstance &db);
-	static DatabaseInstance &GetDb(MetaTransaction &transaction);
 
 private:
 	mutex invalidate_lock;
