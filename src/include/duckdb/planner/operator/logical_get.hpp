@@ -59,7 +59,7 @@ public:
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Whether WITH ORDINALITY has been requested (for Deserialization)
-	Ordinality_request_t ordinality_request = Ordinality_request_t::NOT_REQUESTED;
+	OrdinalityType ordinality_request = OrdinalityType::WITHOUT_ORDINALITY;
 	//! The ordinality column index (for Deserialization)
 	idx_t ordinality_column_id;
 

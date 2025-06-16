@@ -251,8 +251,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
-	deserializer.ReadPropertyWithExplicitDefault<Ordinality_request_t>(
-	    213, "ordinality_request", result->ordinality_request, Ordinality_request_t::NOT_REQUESTED);
+	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
+	    213, "ordinality_request", result->ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
 	deserializer.ReadProperty(214, "ordinality_column_id", result->ordinality_column_id);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
@@ -277,7 +277,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
-		if (result->ordinality_request == Ordinality_request_t::REQUESTED && function.in_out_function) {
+		if (result->ordinality_request == OrdinalityType::WITH_ORDINALITY && function.in_out_function) {
 			bind_return_types.emplace(bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_column_id),
 			                          LogicalType::BIGINT);
 			bind_names.emplace(bind_names.begin() + NumericCast<int64_t>(result->ordinality_column_id), "ordinality");

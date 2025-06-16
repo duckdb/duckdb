@@ -15,11 +15,11 @@
 
 namespace duckdb {
 
-enum class Ordinality_request_t : uint8_t { NOT_REQUESTED = 0, REQUESTED = 1 };
+enum class OrdinalityType : uint8_t { WITHOUT_ORDINALITY = 0, WITH_ORDINALITY = 1 };
 
-struct ordinality_data_t {
+struct OrdinalityData {
 
-	Ordinality_request_t ordinality_request = Ordinality_request_t::NOT_REQUESTED;
+	OrdinalityType ordinality_request = OrdinalityType::WITHOUT_ORDINALITY;
 	idx_t column_id;
 
 	void SetOrdinality(DataChunk &chunk, const idx_t &ordinality_idx, const idx_t &ordinality) const {
@@ -29,11 +29,11 @@ struct ordinality_data_t {
 		}
 	}
 
-	bool operator==(const ordinality_data_t &rhs) const {
+	bool operator==(const OrdinalityData &rhs) const {
 		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id);
 	}
 
-	bool operator!=(const ordinality_data_t &rhs) const {
+	bool operator!=(const OrdinalityData &rhs) const {
 		return !(this == &rhs);
 	}
 };

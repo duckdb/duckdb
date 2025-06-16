@@ -29,7 +29,7 @@ public:
 	unique_ptr<SelectStatement> subquery;
 
 	//! Whether or not WITH ORDINALITY has been invoked
-	Ordinality_request_t with_ordinality = Ordinality_request_t::NOT_REQUESTED;
+	OrdinalityType with_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 
 public:
 	string ToString() const override;

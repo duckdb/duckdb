@@ -422,7 +422,7 @@ public:
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
 	//! Data for WITH ORDINALITY
-	ordinality_data_t ordinality_data;
+	OrdinalityData ordinality_data;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 
