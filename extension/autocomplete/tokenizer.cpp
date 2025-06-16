@@ -138,9 +138,13 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end) {
 }
 
 bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
-	if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-	      c == '_') {
-		// Not a valid dollar-quoted tag start (likely a parameter like $1)
+	if (c >= 'A' && c <= 'Z') {
+		return true;
+	}
+	if (c >= 'a' && c <= 'z') {
+		return true;
+	}
+	if (c >= '\200' && c <= '\377') {
 		return true;
 	}
 	return false;
@@ -184,24 +188,28 @@ bool BaseTokenizer::TokenizeInput() {
 				// Dollar-quoted string
 				last_pos = i;
 				// Scan until next $
-				bool valid_dollar_tag = true;
-				for (i++; i < sql.size(); i++) {
-					if (sql[i] == '$') {
+				idx_t next_dollar = 0;
+				for (idx_t idx = i + 1; idx < sql.size(); idx++) {
+					if (sql[idx] == '$') {
+						next_dollar = idx;
 						break;
 					}
-					if (!IsValidDollarTagCharacter(sql[i])) {
-						valid_dollar_tag = false;
-						i = last_pos;
+					if (!IsValidDollarTagCharacter(sql[idx])) {
 						break;
 					}
 				}
-				if (i < sql.size() && valid_dollar_tag) {
+				if (next_dollar == 0) {
+					break;
+				}
+				state = TokenizeState::DOLLAR_QUOTED_STRING;
+				last_pos = i;
+				i = next_dollar;
+				if (i < sql.size()) {
 					// Found a complete marker, store it.
 					idx_t marker_start = last_pos + 1;
 					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
-					state = TokenizeState::DOLLAR_QUOTED_STRING;
-					break;
 				}
+				break;
 			}
 			if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
 				i++;

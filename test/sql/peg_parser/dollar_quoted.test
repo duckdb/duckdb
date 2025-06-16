@@ -4,6 +4,13 @@
 
 require autocomplete
 
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select $🦆$du ck$🦆$ = $🦆$du　ck$🦆$;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);
+
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$prepare q123 as select $param, $other_name, $param;$TEST_PEG_PARSER$);
 
@@ -18,9 +25,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$SELECT $marker$[hello, world]$marker$::VA
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT $$[hello, world]$$::VARCHAR[];$TEST_PEG_PARSER$);
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT $${quote_at_start: "\"test\"", age: 30}$$::STRUCT(age INT);$TEST_PEG_PARSER$);
