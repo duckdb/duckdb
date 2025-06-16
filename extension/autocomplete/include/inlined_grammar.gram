@@ -726,9 +726,10 @@ CreateStatement <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacr
 OrReplace <- 'OR'i 'REPLACE'i
 Temporary <- 'TEMP'i / 'TEMPORARY'i / 'PERSISTENT'i
 
-CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedName (CreateColumnList / CreateTableAs) CommitAction?
+CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? 'AS'i SelectStatement
+CreateTableAs <- IdentifierList? 'AS'i SelectStatement WithData?
+WithData <- 'WITH'i 'NO'i? 'DATA'i
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
