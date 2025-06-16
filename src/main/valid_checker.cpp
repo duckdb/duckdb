@@ -7,16 +7,28 @@ ValidChecker::ValidChecker() : is_invalidated(false) {
 
 void ValidChecker::Invalidate(string error) {
 	lock_guard<mutex> l(invalidate_lock);
-	this->is_invalidated = true;
-	this->invalidated_msg = std::move(error);
+	is_invalidated = true;
+	invalidated_msg = std::move(error);
 }
 
-bool ValidChecker::IsInvalidated() {
-	return this->is_invalidated;
+bool ValidChecker::IsInvalidated(DatabaseInstance &db) {
+	if (db.config.options.disable_database_invalidation) {
+		return false;
+	}
+	return is_invalidated;
 }
 
 string ValidChecker::InvalidatedMessage() {
 	lock_guard<mutex> l(invalidate_lock);
 	return invalidated_msg;
 }
+
+DatabaseInstance &ValidChecker::GetDb(DatabaseInstance &db) {
+	return db;
+}
+
+DatabaseInstance &ValidChecker::GetDb(MetaTransaction &transaction) {
+	return *transaction.context.db;
+}
+
 } // namespace duckdb

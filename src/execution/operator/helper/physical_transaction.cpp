@@ -59,8 +59,9 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 		} else {
 			// Explicitly rollback the current transaction
 			// If it is because of an invalidated transaction, we need to rollback with an error
-			auto &valid_checker = ValidChecker::Get(client.transaction.ActiveTransaction());
-			if (valid_checker.IsInvalidated()) {
+			auto &transaction = client.transaction.ActiveTransaction();
+			auto &valid_checker = ValidChecker::Get(transaction);
+			if (valid_checker.IsInvalidated(transaction)) {
 				ErrorData error(ExceptionType::TRANSACTION, valid_checker.InvalidatedMessage());
 				client.transaction.Rollback(error);
 			} else {

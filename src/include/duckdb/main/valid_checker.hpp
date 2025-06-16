@@ -24,12 +24,13 @@ public:
 	DUCKDB_API static ValidChecker &Get(MetaTransaction &transaction);
 
 	DUCKDB_API void Invalidate(string error);
-	DUCKDB_API bool IsInvalidated();
+	DUCKDB_API bool IsInvalidated(DatabaseInstance &db);
 	DUCKDB_API string InvalidatedMessage();
 
 	template <class T>
 	static bool IsInvalidated(T &o) {
-		return Get(o).IsInvalidated();
+		auto &db = GetDb(o);
+		return Get(o).IsInvalidated(db);
 	}
 	template <class T>
 	static void Invalidate(T &o, string error) {
@@ -42,9 +43,14 @@ public:
 	}
 
 private:
-	//! Set to true if a fatal exception has occurred
+	static DatabaseInstance &GetDb(DatabaseInstance &db);
+	static DatabaseInstance &GetDb(MetaTransaction &transaction);
+
+private:
 	mutex invalidate_lock;
+	//! Set to true when encountering a fatal exception.
 	atomic<bool> is_invalidated;
+	//! The message invalidating the database instance.
 	string invalidated_msg;
 };
 

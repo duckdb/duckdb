@@ -434,6 +434,22 @@ void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
+// Disable Database Invalidation
+//===----------------------------------------------------------------------===//
+void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.disable_database_invalidation = input.GetValue<bool>();
+}
+
+void DisableDatabaseInvalidationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.disable_database_invalidation = DBConfig().options.disable_database_invalidation;
+}
+
+Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.disable_database_invalidation);
+}
+
+//===----------------------------------------------------------------------===//
 // Disable Timestamptz Casts
 //===----------------------------------------------------------------------===//
 void DisableTimestamptzCastsSetting::SetLocal(ClientContext &context, const Value &input) {
