@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -84,6 +85,8 @@ struct StructTypeState {
 
 template <class A_TYPE>
 struct StructTypeUnary : ExecutorBaseType {
+	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
+
 	A_TYPE a_val;
 
 	StructTypeUnary() = default;
@@ -122,6 +125,9 @@ struct StructTypeUnary : ExecutorBaseType {
 
 template <class A_TYPE, class B_TYPE>
 struct StructTypeBinary : ExecutorBaseType {
+	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
+	static_assert(std::is_base_of<ExecutorBaseType, B_TYPE>::value, "B_TYPE must inherit from ExecutorBaseType");
+
 	A_TYPE a_val;
 	B_TYPE b_val;
 
@@ -169,6 +175,10 @@ struct StructTypeBinary : ExecutorBaseType {
 
 template <class A_TYPE, class B_TYPE, class C_TYPE>
 struct StructTypeTernary : ExecutorBaseType {
+	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
+	static_assert(std::is_base_of<ExecutorBaseType, B_TYPE>::value, "B_TYPE must inherit from ExecutorBaseType");
+	static_assert(std::is_base_of<ExecutorBaseType, C_TYPE>::value, "C_TYPE must inherit from ExecutorBaseType");
+
 	A_TYPE a_val;
 	B_TYPE b_val;
 	C_TYPE c_val;
@@ -225,6 +235,11 @@ struct StructTypeTernary : ExecutorBaseType {
 
 template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE>
 struct StructTypeQuaternary : ExecutorBaseType {
+	static_assert(std::is_base_of<ExecutorBaseType, A_TYPE>::value, "A_TYPE must inherit from ExecutorBaseType");
+	static_assert(std::is_base_of<ExecutorBaseType, B_TYPE>::value, "B_TYPE must inherit from ExecutorBaseType");
+	static_assert(std::is_base_of<ExecutorBaseType, C_TYPE>::value, "C_TYPE must inherit from ExecutorBaseType");
+	static_assert(std::is_base_of<ExecutorBaseType, D_TYPE>::value, "D_TYPE must inherit from ExecutorBaseType");
+
 	A_TYPE a_val;
 	B_TYPE b_val;
 	C_TYPE c_val;
@@ -291,6 +306,9 @@ struct StructTypeQuaternary : ExecutorBaseType {
 
 template <class CHILD_TYPE>
 struct GenericListType : ExecutorBaseType {
+	static_assert(std::is_base_of<ExecutorBaseType, CHILD_TYPE>::value,
+	              "CHILD_TYPE must inherit from ExecutorBaseType");
+
 	vector<CHILD_TYPE> values;
 
 	GenericListType() = default;
