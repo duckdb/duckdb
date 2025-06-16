@@ -109,3 +109,79 @@ class TestPolars(object):
             {'a': 'Thijs', 'b': 29},
         ]
         assert lazy_df.filter(pl.col("b") < 32).select('a').collect().to_dicts() == [{'a': 'Mark'}, {'a': 'Thijs'}]
+
+    @pytest.mark.parametrize(
+        'data_type',
+        [
+            'TINYINT',
+            'SMALLINT',
+            'INTEGER',
+            'BIGINT',
+            'UTINYINT',
+            'USMALLINT',
+            'UINTEGER',
+            'UBIGINT',
+            'FLOAT',
+            'DOUBLE',
+            'HUGEINT',
+            'DECIMAL(4,1)',
+            'DECIMAL(9,1)',
+            'DECIMAL(18,4)',
+            'DECIMAL(30,12)',
+        ],
+    )
+    def test_polars_lazy_pushdown_numeric(self, data_type, duckdb_cursor):
+        con = duckdb.connect()
+        tbl_name = "test"
+        con.execute(
+            f"""
+        CREATE TABLE {tbl_name} (
+            a {data_type},
+            b {data_type},
+            c {data_type}
+        )
+        """
+        )
+        con.execute(
+            f"""
+            INSERT INTO {tbl_name} VALUES
+                (1,1,1),
+                (10,10,10),
+                (100,10,100),
+                (NULL,NULL,NULL)
+        """
+        )
+        rel = con.sql(f"FROM {tbl_name}")
+        lazy_df = rel.pl(lazy=True)
+
+        # Equality
+        assert lazy_df.filter(pl.col("a") == 1).select("a").collect().to_dicts() == [{"a": 1}]
+        # Greater than
+        assert lazy_df.filter(pl.col("a") > 1).select("a").collect().to_dicts() == [{"a": 10}, {"a": 100}]
+        # Greater than or equal
+        assert lazy_df.filter(pl.col("a") >= 10).select("a").collect().to_dicts() == [{"a": 10}, {"a": 100}]
+        # Less than
+        assert lazy_df.filter(pl.col("a") < 10).select("a").collect().to_dicts() == [{"a": 1}]
+        # Less than or equal
+        assert lazy_df.filter(pl.col("a") <= 10).select("a").collect().to_dicts() == [{"a": 1}, {"a": 10}]
+
+        # IS NULL
+        assert lazy_df.filter(pl.col("a").is_null()).select("a").collect().to_dicts() == [{"a": None}]
+        # IS NOT NULL
+        assert lazy_df.filter(pl.col("a").is_not_null()).select("a").collect().to_dicts() == [
+            {"a": 1},
+            {"a": 10},
+            {"a": 100},
+        ]
+
+        # AND
+        assert lazy_df.filter((pl.col("a") == 10) & (pl.col("b") == 1)).collect().to_dicts() == []
+        assert lazy_df.filter(
+            (pl.col("a") == 100) & (pl.col("b") == 10) & (pl.col("c") == 100)
+        ).collect().to_dicts() == [{"a": 100, "b": 10, "c": 100}]
+
+        # OR
+        assert lazy_df.filter((pl.col("a") == 100) | (pl.col("b") == 1)).select("a", "b").collect().to_dicts() == [
+            {"a": 1, "b": 1},
+            {"a": 100, "b": 10},
+        ]

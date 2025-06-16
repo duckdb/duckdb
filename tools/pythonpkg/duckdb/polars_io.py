@@ -4,17 +4,18 @@ from typing import Iterator
 from polars.io.plugins import register_io_source
 from duckdb import SQLExpression
 import json
+from decimal import Decimal
 
 # Code to convert a Polars to a DuckDB 
 def _predicate_to_expression(predicate: pl.Expr):
     """Convert a polars predicate to a DuckDB expression"""
     # Polars does not seem to have an API to properly consume their expression tree yet
     tree = json.loads(predicate.meta.serialize(format="json"))
-    try:
-        sql_filter =  _pl_tree_to_sql(tree)
-        return SQLExpression(sql_filter)
-    except:
-        return None
+    # try:
+    sql_filter =  _pl_tree_to_sql(tree)
+    return SQLExpression(sql_filter)
+    # except:
+    #     return None
 
 def _pl_operation_to_sql(op: str) -> str:
     """Translate a polars operation string to SQL"""
@@ -33,6 +34,8 @@ def _pl_operation_to_sql(op: str) -> str:
             return "%"
         case "And":
             return "AND"
+        case "Or":
+            return "OR"
         case _:
             raise NotImplementedError(op)
 
@@ -47,18 +50,40 @@ def _pl_tree_to_sql(tree: dict):
              + ")")
         case "Column":
             return subtree
-        case "Literal":
-            return _pl_tree_to_sql(subtree)
-        case "Dyn":
+        case "Literal" | "Dyn":
             return _pl_tree_to_sql(subtree)
         case "Int":
             return str(subtree)
+        case "Function":
+            inputs = subtree["input"]
+            func_dict = subtree["function"]
+            if "Boolean" in func_dict:
+                func = func_dict["Boolean"]
+                arg_sql = _pl_tree_to_sql(inputs[0])
+                match func:
+                    case "IsNull":
+                        return f"({arg_sql} IS NULL)"
+                    case "IsNotNull":
+                        return f"({arg_sql} IS NOT NULL)"
+                    case _:
+                        raise NotImplementedError(f"Boolean function not supported: {func}")
+            else:
+                raise NotImplementedError(f"Unsupported function type: {func_dict}")
+                     
         case "Scalar":
-            match subtree['dtype']:
-               case "Int32":
-                   return str(subtree['value']['Int32'])
-               case "String":
-                   return "'{}'".format(subtree['value']['StringOwned'])
+            dtype = subtree["dtype"]
+            value = subtree["value"]
+            if str(dtype).startswith("{'Decimal'"):
+                decimal_value = value['Decimal']
+                decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
+                return str(decimal_value)
+            match dtype:
+                case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64"|"Float32"|"Float64":
+                    return str(value[str(dtype)])
+                case "String":
+                    return "'{}'".format(value['StringOwned'])
+                case _:
+                    raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
         case _:
             raise NotImplementedError(node_type)
 
@@ -80,6 +105,7 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         if n_rows is not None:
             relation_final = relation_final.limit(n_rows)
         if predicate is not None:
+            print(predicate)
             # We have a predicate, if possible, we push it down to DuckDB
             duck_predicate = _predicate_to_expression(predicate)
         # Try to pushdown filter, if one exists
