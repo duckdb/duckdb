@@ -23,14 +23,20 @@ namespace duckdb {
 unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<LogicalOperator> op,
                                                               optional_ptr<LogicalOperator> parent) {
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		D_ASSERT(parent);
+		if (!parent) {
+			return std::move(op);
+		}
 		auto &join = op->Cast<LogicalComparisonJoin>();
-		left_child = make_uniq<JoinElimination>();
-		right_child = make_uniq<JoinElimination>();
+		auto stat = JoinEliminationStat();
+
+		auto left_child = make_uniq<JoinElimination>();
+		auto right_child = make_uniq<JoinElimination>();
 		join.children[0] = left_child->Optimize(std::move(join.children[0]));
 		join.children[1] = right_child->Optimize(std::move(join.children[1]));
-		D_ASSERT(!join_parent || join_parent == parent);
-		join_parent = parent;
+		stat.join_parent = parent;
+		stat.left_child = std::move(left_child);
+		stat.right_child = std::move(right_child);
+		stats.emplace_back(std::move(stat));
 		return std::move(op);
 	}
 
@@ -132,36 +138,30 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &projection = op->Cast<LogicalProjection>();
 		// after traversed children, here check whether any distinct group added in children
-		unordered_map<idx_t, column_binding_set_t> ref_table_columns;
+		unordered_map<idx_t, DistinctGroupRef> ref_table_columns;
 		for (idx_t idx = 0; idx < projection.expressions.size(); idx++) {
 			auto &expression = projection.expressions.get(idx);
 			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
-				if (ref_table_columns.find(col_ref.binding.table_index) == ref_table_columns.end()) {
-					ref_table_columns[col_ref.binding.table_index] = column_binding_set_t();
+				auto disinct_group_it = distinct_groups.find(col_ref.binding.table_index);
+				if (disinct_group_it == distinct_groups.end()) {
+					continue;
 				}
-				ref_table_columns[col_ref.binding.table_index].insert(ColumnBinding(projection.table_index, idx));
+				if (ref_table_columns.find(col_ref.binding.table_index) == ref_table_columns.end()) {
+					auto ref = DistinctGroupRef();
+					for (auto &col : disinct_group_it->second) {
+						ref.ref_column_ids.insert(col.column_index);
+					}
+					ref_table_columns[col_ref.binding.table_index] = ref;
+				}
+				ref_table_columns[col_ref.binding.table_index].distinct_group.insert(
+				    ColumnBinding(projection.table_index, idx));
+				ref_table_columns[col_ref.binding.table_index].ref_column_ids.erase(col_ref.binding.column_index);
 			}
 		}
 		for (auto &refs : ref_table_columns) {
-			auto it = distinct_groups.find(refs.first);
-			if (it != distinct_groups.end()) {
-				auto columns_idx = refs.second;
-				auto distinct_group = it->second;
-				// lets's check whether the projection columns contains a whole distinct group carefully
-				if (columns_idx.size() != distinct_group.size()) {
-					continue;
-				}
-				bool can_add = true;
-				for (auto &col : columns_idx) {
-					if (distinct_group.find(col) == distinct_group.end()) {
-						can_add = false;
-						break;
-					}
-				}
-				if (can_add) {
-					distinct_groups[projection.table_index] = columns_idx;
-				}
+			if (refs.second.ref_column_ids.empty()) {
+				distinct_groups[projection.table_index] = std::move(refs.second.distinct_group);
 			}
 		}
 		return std::move(op);
@@ -175,19 +175,22 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 
 unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator> op) {
 	auto result = OptimizeChildren(std::move(op), nullptr);
-	if (!join_parent) {
+	if (stats.empty()) {
 		return result;
 	}
-	for (auto &child : join_parent->children) {
-		if (child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			child = TryEliminateJoin(std::move(child));
+	for (auto &stat : stats) {
+		for (auto &child : stat.join_parent->children) {
+			if (child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+				child = TryEliminateJoin(std::move(child), stat);
+			}
 		}
 	}
 	return result;
 }
 
-unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(left_child != nullptr && right_child != nullptr);
+unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<LogicalOperator> op,
+                                                              JoinEliminationStat &stat) {
+	D_ASSERT(stat.left_child != nullptr && stat.right_child != nullptr);
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	bool is_output_unique = false;
 	switch (join.join_type) {
@@ -210,7 +213,7 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 	default:
 		return std::move(op);
 	}
-	auto &inner_child = inner_idx == 0 ? left_child : right_child;
+	auto &inner_child = inner_idx == 0 ? stat.left_child : stat.right_child;
 	if (inner_child->inner_has_filter) {
 		return std::move(op);
 	}
@@ -225,10 +228,10 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin(unique_ptr<Logical
 		}
 	}
 
-	for (auto &distinct : left_child->distinct_groups) {
+	for (auto &distinct : stat.left_child->distinct_groups) {
 		distinct_groups[distinct.first] = distinct.second;
 	}
-	for (auto &distinct : right_child->distinct_groups) {
+	for (auto &distinct : stat.right_child->distinct_groups) {
 		distinct_groups[distinct.first] = distinct.second;
 	}
 	if (distinct_groups.empty()) {

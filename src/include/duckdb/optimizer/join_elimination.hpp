@@ -21,6 +21,19 @@
 
 namespace duckdb {
 
+class JoinElimination;
+
+struct JoinEliminationStat {
+	optional_ptr<LogicalOperator> join_parent;
+	unique_ptr<JoinElimination> left_child = nullptr;
+	unique_ptr<JoinElimination> right_child = nullptr;
+};
+
+struct DistinctGroupRef {
+	column_binding_set_t distinct_group;
+	unordered_set<idx_t> ref_column_ids;
+};
+
 class JoinElimination : public LogicalOperatorVisitor {
 public:
 	explicit JoinElimination() {
@@ -38,7 +51,7 @@ public:
 
 private:
 	unique_ptr<LogicalOperator> OptimizeChildren(unique_ptr<LogicalOperator> op, optional_ptr<LogicalOperator> parent);
-	unique_ptr<LogicalOperator> TryEliminateJoin(unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> TryEliminateJoin(unique_ptr<LogicalOperator> op, JoinEliminationStat &stat);
 	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
 	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
 
@@ -47,9 +60,8 @@ private:
 
 	unordered_set<idx_t> ref_table_ids;
 	unordered_map<idx_t, column_binding_set_t> distinct_groups;
-	optional_ptr<LogicalOperator> join_parent;
-	unique_ptr<JoinElimination> left_child = nullptr;
-	unique_ptr<JoinElimination> right_child = nullptr;
+
+	vector<JoinEliminationStat> stats;
 
 	// pushdown filter condition(ex in table scan operator),
 	// if have outer table columns then cannot elimination
