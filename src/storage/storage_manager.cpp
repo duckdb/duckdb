@@ -146,7 +146,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 	if (storage_options.encryption) {
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
-		options.encryption_options.user_key = &storage_options.user_key;
+		options.encryption_options.user_key = std::move(storage_options.user_key);
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
