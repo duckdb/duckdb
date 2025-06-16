@@ -29,6 +29,8 @@ struct StorageOptions {
 	string encryption_cipher = "gcm";
 	//! encryption key
 	string user_key;
+	//! attach a plaintext db in an encrypted env
+	bool plaintext = false;
 };
 
 inline void ClearUserKey(string &encryption_key) {

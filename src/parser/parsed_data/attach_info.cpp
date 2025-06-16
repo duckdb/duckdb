@@ -36,6 +36,7 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			storage_options.storage_version =
 			    SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
 		}
+		else if (entry.first == "plaintext") {}
 	}
 	if (storage_options.encryption && (!storage_options.storage_version.IsValid() ||
 	                                   storage_options.storage_version.GetIndex() <
