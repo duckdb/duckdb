@@ -893,9 +893,10 @@ InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / Pare
 
 TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
-BaseTableRef <- BaseTableName TableAlias? AtClause?
+BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause?
+TableAliasColon <- ColIdOrString ':'
 ValuesRef <- ValuesClause TableAlias?
-ParensTableRef <- Parens(TableRef)
+ParensTableRef <- TableAliasColon? Parens(TableRef)
 
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
@@ -912,7 +913,9 @@ Lateral <- 'LATERAL'i
 
 BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
-TableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
+TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
+TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
