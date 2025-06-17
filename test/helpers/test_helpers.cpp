@@ -10,7 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-
+#include "test_config.hpp"
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include <cmath>
@@ -23,7 +23,6 @@ using namespace std;
 namespace duckdb {
 static string custom_test_directory;
 static int debug_initialize_value = -1;
-static bool single_threaded = false;
 static case_insensitive_set_t required_requires;
 static bool delete_test_path = true;
 
@@ -89,10 +88,6 @@ void SetTestDirectory(string path) {
 
 void SetDebugInitialize(int value) {
 	debug_initialize_value = value;
-}
-
-void SetSingleThreaded() {
-	single_threaded = true;
 }
 
 void AddRequire(string require) {
@@ -173,6 +168,8 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 }
 
 unique_ptr<DBConfig> GetTestConfig() {
+	auto &test_config = TestConfiguration::Get();
+
 	auto result = make_uniq<DBConfig>();
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
 	result->options.checkpoint_wal_size = 0;
@@ -186,8 +183,10 @@ unique_ptr<DBConfig> GetTestConfig() {
 	result->options.trim_free_blocks = true;
 #endif
 	result->options.allow_unsigned_extensions = true;
-	if (single_threaded) {
-		result->options.maximum_threads = 1;
+
+	auto max_threads = test_config.GetMaxThreads();
+	if (max_threads.IsValid()) {
+		result->options.maximum_threads = max_threads.GetIndex();
 	}
 	switch (debug_initialize_value) {
 	case -1:

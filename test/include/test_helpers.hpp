@@ -49,7 +49,6 @@ unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
 void SetTestDirectory(string path);
 void SetDebugInitialize(int value);
-void SetSingleThreaded();
 void AddRequire(string require);
 bool IsRequired(string require);
 

@@ -5,7 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
 #include "test_helpers.hpp"
-#include "sqlite/test_config.hpp"
+#include "test_config.hpp"
 
 using namespace duckdb;
 
@@ -38,8 +38,6 @@ int main(int argc_in, char *argv[]) {
 			SetDebugInitialize(0);
 		} else if (argument == "--one-initialize") {
 			SetDebugInitialize(0xFF);
-		} else if (argument == "--single-threaded") {
-			SetSingleThreaded();
 		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
