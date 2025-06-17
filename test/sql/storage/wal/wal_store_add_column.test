@@ -13,9 +13,6 @@ PRAGMA disable_checkpoint_on_shutdown
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
-statement ok
-ATTACH 'TEMP_dir__/my_new.db' (asdf);
-
 # create a table and add a column to it
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
