@@ -68,6 +68,12 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 		ParseOption("force_restart", Value(true));
 		return true;
 	}
+	if (StringUtil::StartsWith(arg, "--memory-leak") ||
+		StringUtil::StartsWith(arg, "--test-memory-leak")) {
+		ParseOption("test_memory_leaks", Value(true));
+		return true;
+	}
+
 	if (!StringUtil::Contains(arg, "=")) {
 		return false;
 	}
@@ -166,6 +172,21 @@ bool TestConfiguration::GetTestMemoryLeaks() {
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));
+}
+
+bool TestConfiguration::TestForceStorage() {
+	auto &test_config = TestConfiguration::Get();
+	return !test_config.GetInitialDBPath().empty();
+}
+
+bool TestConfiguration::TestForceReload() {
+	auto &test_config = TestConfiguration::Get();
+	return test_config.GetForceRestart();
+}
+
+bool TestConfiguration::TestMemoryLeaks() {
+	auto &test_config = TestConfiguration::Get();
+	return test_config.GetTestMemoryLeaks();
 }
 
 } // namespace duckdb

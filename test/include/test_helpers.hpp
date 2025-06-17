@@ -29,9 +29,6 @@
 #include <iostream>
 namespace duckdb {
 
-bool TestForceStorage();
-bool TestForceReload();
-bool TestMemoryLeaks();
 void RegisterSqllogictests();
 bool SummarizeFailures();
 

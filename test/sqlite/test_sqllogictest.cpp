@@ -57,14 +57,6 @@ static void testRunner() {
 			TestCreateDirectory(total_path);
 		}
 	}
-	if (TestForceStorage()) {
-		auto storage_name = StringUtil::Replace(name, "/", "_");
-		storage_name = StringUtil::Replace(storage_name, ".", "_");
-		storage_name = StringUtil::Replace(storage_name, "\\", "_");
-		auto db_directory = TestCreatePath(storage_name);
-		TestCreateDirectory(db_directory);
-		initial_dbpath = TestJoinPath(db_directory, "memory.db");
-	}
 	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;

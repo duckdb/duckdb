@@ -41,22 +41,6 @@ void FailureSummary::SetSummarizeFailures(bool state) {
 	summarize_failures = state;
 }
 
-static bool test_memory_leaks = false;
-
-bool TestForceStorage() {
-	auto &test_config = TestConfiguration::Get();
-	return !test_config.GetInitialDBPath().empty();
-}
-
-bool TestForceReload() {
-	auto &test_config = TestConfiguration::Get();
-	return test_config.GetForceRestart();
-}
-
-bool TestMemoryLeaks() {
-	return test_memory_leaks;
-}
-
 // bool SummarizeFailures() {
 // 	return summary.summarize_failures;
 // }
@@ -81,10 +65,7 @@ int main(int argc_in, char *argv[]) {
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (idx_t i = 0; i < argc; i++) {
 		string argument(argv[i]);
-		if (StringUtil::StartsWith(argument, "--memory-leak") ||
-		    StringUtil::StartsWith(argument, "--test-memory-leak")) {
-			test_memory_leaks = true;
-		} else if (argument == "--test-dir") {
+		if (argument == "--test-dir") {
 			test_directory = string(argv[++i]);
 		} else if (argument == "--test-temp-dir") {
 			SetDeleteTestPath(false);

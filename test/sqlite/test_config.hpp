@@ -37,6 +37,10 @@ public:
 	bool GetTestMemoryLeaks();
 	DebugVectorVerification GetVectorVerification();
 
+	static bool TestForceStorage();
+	static bool TestForceReload();
+	static bool TestMemoryLeaks();
+
 private:
 	case_insensitive_map_t<Value> options;
 
