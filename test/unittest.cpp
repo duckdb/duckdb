@@ -57,6 +57,13 @@ int main(int argc_in, char *argv[]) {
 
 	std::string failures_summary = FailureSummary::GetFailureSummary();
 	if (!failures_summary.empty()) {
+		auto description = test_config.GetDescription();
+		if (!description.empty()) {
+			std::cerr << "\n====================================================" << std::endl;
+			std::cerr << "====================  TEST INFO  ===================" << std::endl;
+			std::cerr << "====================================================\n" << std::endl;
+			std::cerr << description << std::endl;
+		}
 		std::cerr << "\n====================================================" << std::endl;
 		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;
 		std::cerr << "====================================================\n" << std::endl;
