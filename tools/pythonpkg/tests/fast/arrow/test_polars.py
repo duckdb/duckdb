@@ -186,7 +186,7 @@ class TestPolars(object):
             {"a": 1, "b": 1},
             {"a": 100, "b": 10},
         ]
-    
+
     def test_polars_lazy_pushdown_bool(self, duckdb_cursor):
         duckdb_cursor.execute(
             """
@@ -206,7 +206,7 @@ class TestPolars(object):
         """
         )
         duck_tbl = duckdb_cursor.table("test_bool")
-        
+
         lazy_df = duck_tbl.pl(lazy=True)
         # == True
         assert lazy_df.filter(pl.col("a") == True).select(pl.len()).collect().item() == 2
@@ -222,8 +222,6 @@ class TestPolars(object):
 
         # OR
         assert lazy_df.filter((pl.col("a") == True) | (pl.col("b") == True)).select(pl.len()).collect().item() == 3
-
-
 
     def test_polars_lazy_pushdown_time(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -270,9 +268,13 @@ class TestPolars(object):
 
         # AND conditions
         assert lazy_df.filter((pl.col("a") == t_010) & (pl.col("b") == t_001)).select(pl.len()).collect().item() == 0
-        assert lazy_df.filter(
-            (pl.col("a") == t_100) & (pl.col("b") == t_010) & (pl.col("c") == t_100)
-        ).select(pl.len()).collect().item() == 1
+        assert (
+            lazy_df.filter((pl.col("a") == t_100) & (pl.col("b") == t_010) & (pl.col("c") == t_100))
+            .select(pl.len())
+            .collect()
+            .item()
+            == 1
+        )
 
         # OR condition
         assert lazy_df.filter((pl.col("a") == t_100) | (pl.col("b") == t_001)).select(pl.len()).collect().item() == 2
@@ -304,9 +306,9 @@ class TestPolars(object):
         ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
         ts_2020 = datetime.datetime(2020, 3, 1, 10, 0, 1)
 
-        # == 
+        # ==
         assert lazy_df.filter(pl.col("a") == ts_2008).select(pl.len()).collect().item() == 1
-        # > 
+        # >
         assert lazy_df.filter(pl.col("a") > ts_2008).select(pl.len()).collect().item() == 2
         # >=
         assert lazy_df.filter(pl.col("a") >= ts_2010).select(pl.len()).collect().item() == 2
@@ -321,14 +323,21 @@ class TestPolars(object):
         assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
 
         # AND
-        assert lazy_df.filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 0
-        assert lazy_df.filter(
-            (pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020)
-        ).select(pl.len()).collect().item() == 1
+        assert (
+            lazy_df.filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 0
+        )
+        assert (
+            lazy_df.filter((pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020))
+            .select(pl.len())
+            .collect()
+            .item()
+            == 1
+        )
 
         # OR
-        assert lazy_df.filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 2
-
+        assert (
+            lazy_df.filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 2
+        )
 
     def test_polars_lazy_pushdown_date(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -357,9 +366,9 @@ class TestPolars(object):
         d_2000_10_01 = datetime.date(2000, 10, 1)
         d_2010_01_01 = datetime.date(2010, 1, 1)
 
-        # == 
+        # ==
         assert lazy_df.filter(pl.col("a") == d_2000_01_01).select(pl.len()).collect().item() == 1
-        # > 
+        # >
         assert lazy_df.filter(pl.col("a") > d_2000_01_01).select(pl.len()).collect().item() == 2
         # >=
         assert lazy_df.filter(pl.col("a") >= d_2000_10_01).select(pl.len()).collect().item() == 2
@@ -374,15 +383,31 @@ class TestPolars(object):
         assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
 
         # AND
-        assert lazy_df.filter((pl.col("a") == d_2000_10_01) & (pl.col("b") == d_2000_01_01)).select(pl.len()).collect().item() == 0
-        assert lazy_df.filter(
-            (pl.col("a") == d_2010_01_01) & (pl.col("b") == d_2000_10_01) & (pl.col("c") == d_2010_01_01)
-        ).select(pl.len()).collect().item() == 1
+        assert (
+            lazy_df.filter((pl.col("a") == d_2000_10_01) & (pl.col("b") == d_2000_01_01))
+            .select(pl.len())
+            .collect()
+            .item()
+            == 0
+        )
+        assert (
+            lazy_df.filter(
+                (pl.col("a") == d_2010_01_01) & (pl.col("b") == d_2000_10_01) & (pl.col("c") == d_2010_01_01)
+            )
+            .select(pl.len())
+            .collect()
+            .item()
+            == 1
+        )
 
         # OR
-        assert lazy_df.filter(
-            (pl.col("a") == d_2010_01_01) | (pl.col("b") == d_2000_01_01)
-        ).select(pl.len()).collect().item() == 2
+        assert (
+            lazy_df.filter((pl.col("a") == d_2010_01_01) | (pl.col("b") == d_2000_01_01))
+            .select(pl.len())
+            .collect()
+            .item()
+            == 2
+        )
 
     def test_polars_lazy_pushdown_blob(self, duckdb_cursor):
         import pandas
@@ -419,9 +444,13 @@ class TestPolars(object):
 
         # AND
         assert lazy_df.filter((pl.col("a") == b2) & (pl.col("b") == b1)).select(pl.len()).collect().item() == 0
-        assert lazy_df.filter(
-            (pl.col("a") == b2) & (pl.col("b") == b2) & (pl.col("c") == b2)
-        ).select(pl.len()).collect().item() == 1
+        assert (
+            lazy_df.filter((pl.col("a") == b2) & (pl.col("b") == b2) & (pl.col("c") == b2))
+            .select(pl.len())
+            .collect()
+            .item()
+            == 1
+        )
 
         # OR
         assert lazy_df.filter((pl.col("a") == b1) | (pl.col("b") == b2)).select(pl.len()).collect().item() == 2

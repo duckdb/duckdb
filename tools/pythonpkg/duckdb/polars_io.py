@@ -7,16 +7,15 @@ import json
 from decimal import Decimal
 import datetime
 
-# Code to convert a Polars to a DuckDB 
 def _predicate_to_expression(predicate: pl.Expr):
     """Convert a polars predicate to a DuckDB expression"""
     # Polars does not seem to have an API to properly consume their expression tree yet
     tree = json.loads(predicate.meta.serialize(format="json"))
-    # try:
-    sql_filter =  _pl_tree_to_sql(tree)
-    return SQLExpression(sql_filter)
-    # except:
-    #     return None
+    try:
+        sql_filter =  _pl_tree_to_sql(tree)
+        return SQLExpression(sql_filter)
+    except:
+        return None
 
 def _pl_operation_to_sql(op: str) -> str:
     """Translate a polars operation string to SQL"""
