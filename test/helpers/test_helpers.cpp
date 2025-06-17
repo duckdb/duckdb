@@ -205,28 +205,6 @@ unique_ptr<DBConfig> GetTestConfig() {
 	return result;
 }
 
-string GetCSVPath() {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	string csv_path = TestCreatePath("csv_files");
-	if (fs->DirectoryExists(csv_path)) {
-		fs->RemoveDirectory(csv_path);
-	}
-	fs->CreateDirectory(csv_path);
-	return csv_path;
-}
-
-void WriteCSV(string path, const char *csv) {
-	ofstream csv_writer(path);
-	csv_writer << csv;
-	csv_writer.close();
-}
-
-void WriteBinary(string path, const uint8_t *data, uint64_t length) {
-	ofstream binary_writer(path, ios::binary);
-	binary_writer.write((const char *)data, length);
-	binary_writer.close();
-}
-
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
 	if (result_.type == QueryResultType::STREAM_RESULT) {
 		fprintf(stderr, "Unexpected stream query result in CHECK_COLUMN\n");

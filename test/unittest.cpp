@@ -40,11 +40,6 @@ bool FailureSummary::SummarizeFailures() {
 void FailureSummary::SetSummarizeFailures(bool state) {
 	summarize_failures = state;
 }
-
-// bool SummarizeFailures() {
-// 	return summary.summarize_failures;
-// }
-
 } // namespace duckdb
 
 int main(int argc_in, char *argv[]) {

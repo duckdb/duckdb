@@ -7,11 +7,6 @@
 
 namespace duckdb {
 
-// static mutex summary_mutex;
-// static vector<string> failures_summary;
-
-auto &summary = FailureSummary::Instance();
-
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
     : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
       sql_query(context.sql_query) {
@@ -21,6 +16,7 @@ SQLLogicTestLogger::~SQLLogicTestLogger() {
 }
 
 void SQLLogicTestLogger::AppendFailure(const string &log_message) {
+	auto &summary = FailureSummary::Instance();
 	lock_guard<mutex> lock(summary.summary_mutex);
 	summary.failures_summary.push_back(log_message);
 }
@@ -36,6 +32,7 @@ void SQLLogicTestLogger::Log(const string &str) {
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
+	auto &summary = FailureSummary::Instance();
 	auto failures_count = to_string(summary.GetSummaryCounter());
 	if (std::getenv("NO_DUPLICATING_HEADERS") == 0) {
 		LogFailure("\n" + failures_count + ". " + file_name + "\n");

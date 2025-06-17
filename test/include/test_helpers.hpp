@@ -52,9 +52,6 @@ void SetDebugInitialize(int value);
 void SetSingleThreaded();
 void AddRequire(string require);
 bool IsRequired(string require);
-string GetCSVPath();
-void WriteCSV(string path, const char *csv);
-void WriteBinary(string path, const uint8_t *data, uint64_t length);
 
 bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
