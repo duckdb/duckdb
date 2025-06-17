@@ -68,8 +68,7 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 		ParseOption("force_restart", Value(true));
 		return true;
 	}
-	if (StringUtil::StartsWith(arg, "--memory-leak") ||
-		StringUtil::StartsWith(arg, "--test-memory-leak")) {
+	if (StringUtil::StartsWith(arg, "--memory-leak") || StringUtil::StartsWith(arg, "--test-memory-leak")) {
 		ParseOption("test_memory_leaks", Value(true));
 		return true;
 	}

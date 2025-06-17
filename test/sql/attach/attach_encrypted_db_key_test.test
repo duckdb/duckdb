@@ -1,8 +1,6 @@
 # name: test/sql/attach/attach_encrypted_db_key_test.test
 # group: [attach]
 
-require noforcestorage
-
 # workaround - alternative verify always forces the latest storage
 require no_alternative_verify
 

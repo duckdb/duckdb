@@ -2,8 +2,6 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
-require noforcestorage
-
 # Set the temporary directory to an empty directory.
 statement ok
 PRAGMA temp_directory=''
