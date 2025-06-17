@@ -5,6 +5,9 @@ from sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
 import subprocess
 import multiprocessing
 import tempfile
+import re
+
+
 
 parser = argparse.ArgumentParser(description="Test serialization")
 parser.add_argument("--shell", type=str, help="Shell binary to run", default=os.path.join('build', 'debug', 'duckdb'))
@@ -12,6 +15,7 @@ parser.add_argument("--offset", type=int, help="File offset", default=None)
 parser.add_argument("--count", type=int, help="File count", default=None)
 parser.add_argument('--no-exit', action='store_true', help='Do not exit after a test fails', default=False)
 parser.add_argument('--print-failing-only', action='store_true', help='Print failing tests only', default=False)
+parser.add_argument('--include-extensions', action='store_true', help='Include test files of out-of-tree extensions', default=False)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
 group.add_argument(
@@ -19,6 +23,73 @@ group.add_argument(
 )
 group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
 args = parser.parse_args()
+
+def extract_git_urls(script: str):
+    pattern = r'GIT_URL\s+(https?://\S+)'
+    return re.findall(pattern, script)
+
+import os
+import requests
+from urllib.parse import urlparse
+
+def download_directory_contents(api_url, local_path, headers):
+    response = requests.get(api_url, headers=headers)
+    if response.status_code != 200:
+        print(f"⚠️  Could not access {api_url}: {response.status_code}")
+        return
+
+    os.makedirs(local_path, exist_ok=True)
+
+    for item in response.json():
+        item_type = item.get("type")
+        item_name = item.get("name")
+        if item_type == "file":
+            download_url = item.get("download_url")
+            if not download_url:
+                continue
+            file_path = os.path.join(local_path, item_name)
+            file_resp = requests.get(download_url)
+            if file_resp.status_code == 200:
+                with open(file_path, "wb") as f:
+                    f.write(file_resp.content)
+                print(f"  - Downloaded {file_path}")
+            else:
+                print(f"  - Failed to download {file_path}")
+        elif item_type == "dir":
+            subdir_api_url = item.get("url")
+            subdir_local_path = os.path.join(local_path, item_name)
+            download_directory_contents(subdir_api_url, subdir_local_path, headers)
+
+def download_test_sql_folder(repo_url, base_folder="extension-test-files"):
+    repo_name = urlparse(repo_url).path.strip("/").split("/")[-1]
+    target_folder = os.path.join(base_folder, repo_name)
+
+    if os.path.exists(target_folder):
+        print(f"✓ Skipping {repo_name}, already exists.")
+        return
+
+    print(f"⬇️ Downloading test/sql from {repo_name}...")
+
+    api_url = f"https://api.github.com/repos/duckdb/{repo_name}/contents/test/sql?ref=main"
+    GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"Bearer {GITHUB_TOKEN}"
+    }
+
+    download_directory_contents(api_url, target_folder, headers)
+
+def batch_download_all_test_sql():
+    filename = ".github/config/out_of_tree_extensions.cmake"
+    if not os.path.isfile(filename):
+        raise Exception(f"File {filename} not found")
+    with open(filename, "r") as f:
+        content = f.read()
+    urls = extract_git_urls(content)
+    if urls == []:
+        print("No URLs found.")
+    for url in urls:
+        download_test_sql_folder(url)
 
 
 def find_tests_recursive(dir, excluded_paths):
@@ -115,6 +186,10 @@ if __name__ == "__main__":
         # run all tests
         test_dir = os.path.join('test', 'sql')
         files = find_tests_recursive(test_dir, excluded_tests)
+    if args.include_extensions:
+        batch_download_all_test_sql()
+        extension_files = find_tests_recursive('extension-test-files', {})
+        files = files + extension_files
     elif len(args.test_list) > 0:
         with open(args.test_list, 'r') as f:
             files = [x.strip() for x in f.readlines() if x.strip() not in excluded_tests]
