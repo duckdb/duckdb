@@ -95,6 +95,8 @@ jobs:
     - name: Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
+      env:
+         SUMMARIZE_FAILURES: 1
       run: |
         test/Release/unittest.exe
 
@@ -177,6 +179,8 @@ jobs:
 
     - name: Test
       shell: bash
+      env:
+         SUMMARIZE_FAILURES: 1
       run: test/Release/unittest.exe
 
     - name: Tools Test
