@@ -97,7 +97,10 @@ def _pl_tree_to_sql(tree: dict):
                     return f"'{str(date)}'::DATE"                  
                 case "Boolean":
                     return str(value['Bool'])
-
+                case "Binary":
+                    binary_data = bytes(value['BinaryOwned'])
+                    escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
+                    return f"'{escaped}'::BLOB" 
                 case "String":
                     return "'{}'".format(value['StringOwned'])
                 case _:

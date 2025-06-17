@@ -384,4 +384,44 @@ class TestPolars(object):
             (pl.col("a") == d_2010_01_01) | (pl.col("b") == d_2000_01_01)
         ).select(pl.len()).collect().item() == 2
 
+    def test_polars_lazy_pushdown_blob(self, duckdb_cursor):
+        import pandas
 
+        df = pandas.DataFrame(
+            {
+                'a': [bytes([1]), bytes([2]), bytes([3]), None],
+                'b': [bytes([1]), bytes([2]), bytes([3]), None],
+                'c': [bytes([1]), bytes([2]), bytes([3]), None],
+            }
+        )
+        duck_tbl = duckdb.from_df(df)
+        lazy_df = duck_tbl.pl(lazy=True)
+
+        # Reference bytes
+        b1 = b"\x01"
+        b2 = b"\x02"
+
+        # ==
+        assert lazy_df.filter(pl.col("a") == b1).select(pl.len()).collect().item() == 1
+        # >
+        assert lazy_df.filter(pl.col("a") > b1).select(pl.len()).collect().item() == 2
+        # >=
+        assert lazy_df.filter(pl.col("a") >= b2).select(pl.len()).collect().item() == 2
+        # <
+        assert lazy_df.filter(pl.col("a") < b2).select(pl.len()).collect().item() == 1
+        # <=
+        assert lazy_df.filter(pl.col("a") <= b2).select(pl.len()).collect().item() == 2
+
+        # IS NULL
+        assert lazy_df.filter(pl.col("a").is_null()).select(pl.len()).collect().item() == 1
+        # IS NOT NULL
+        assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
+
+        # AND
+        assert lazy_df.filter((pl.col("a") == b2) & (pl.col("b") == b1)).select(pl.len()).collect().item() == 0
+        assert lazy_df.filter(
+            (pl.col("a") == b2) & (pl.col("b") == b2) & (pl.col("c") == b2)
+        ).select(pl.len()).collect().item() == 1
+
+        # OR
+        assert lazy_df.filter((pl.col("a") == b1) | (pl.col("b") == b2)).select(pl.len()).collect().item() == 2
