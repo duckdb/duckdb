@@ -237,10 +237,6 @@ TEST_CASE("Test invalid use of profiling API", "[capi]") {
 
 TEST_CASE("Test profiling after throwing an error", "[capi]") {
 	CAPITester tester;
-	CAPIPrepared prepared;
-	CAPIPending pending;
-	duckdb::unique_ptr<CAPIResult> result;
-
 	auto main_db = TestCreatePath("profiling_error.db");
 	REQUIRE(tester.OpenDatabase(main_db.c_str()));
 
@@ -251,16 +247,19 @@ TEST_CASE("Test profiling after throwing an error", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("SET enable_profiling = 'no_output'"));
 	REQUIRE_NO_FAIL(tester.Query("SET profiling_mode = 'standard'"));
 
-	REQUIRE(prepared.Prepare(tester, "SELECT * FROM profiling_error.tbl"));
-	REQUIRE(pending.Pending(prepared));
-	result = pending.Execute();
+	CAPIPrepared prepared_q1;
+	CAPIPending pending_q1;
+	REQUIRE(prepared_q1.Prepare(tester, "SELECT * FROM profiling_error.tbl"));
+	REQUIRE(pending_q1.Pending(prepared_q1));
+	auto result = pending_q1.Execute();
 	REQUIRE(result);
 	REQUIRE(!result->HasError());
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info != nullptr);
 
-	REQUIRE(!prepared.Prepare(tester, "SELECT * FROM profiling_error.does_not_exist"));
+	CAPIPrepared prepared_q2;
+	REQUIRE(!prepared_q2.Prepare(tester, "SELECT * FROM profiling_error.does_not_exist"));
 	info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info == nullptr);
 
