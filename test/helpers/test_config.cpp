@@ -49,7 +49,7 @@ void TestConfiguration::Initialize() {
 		if (!env_arg) {
 			continue;
 		}
-		ParseOption(env_name, Value(env_arg));
+		ParseOption(config.name, Value(env_arg));
 	}
 
 	// load summarize failures

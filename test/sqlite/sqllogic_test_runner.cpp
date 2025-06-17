@@ -30,10 +30,6 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
 	}
-	auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
-	if (verify_vector) {
-		config->options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(verify_vector);
-	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -516,8 +512,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_vector_verification") {
-		auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
-		if (verify_vector) {
+		auto &test_config = TestConfiguration::Get();
+		if (test_config.GetVectorVerification() != DebugVectorVerification::NONE) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
