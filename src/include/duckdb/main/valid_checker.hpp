@@ -18,17 +18,19 @@ class MetaTransaction;
 
 class ValidChecker {
 public:
-	ValidChecker();
+	explicit ValidChecker(DBConfigOptions &options);
 
 	DUCKDB_API static ValidChecker &Get(DatabaseInstance &db);
 	DUCKDB_API static ValidChecker &Get(MetaTransaction &transaction);
 
-	DUCKDB_API static bool IsInvalidated(DatabaseInstance &db);
-	DUCKDB_API static bool IsInvalidated(MetaTransaction &transaction);
-
 	DUCKDB_API void Invalidate(string error);
+	DUCKDB_API bool IsInvalidated();
 	DUCKDB_API string InvalidatedMessage();
 
+	template <class T>
+	static bool IsInvalidated(T &o) {
+		return Get(o).IsInvalidated();
+	}
 	template <class T>
 	static void Invalidate(T &o, string error) {
 		Get(o).Invalidate(std::move(error));
@@ -45,6 +47,8 @@ private:
 	atomic<bool> is_invalidated;
 	//! The message invalidating the database instance.
 	string invalidated_msg;
+	//! The DB config options to disable database invalidation.
+	DBConfigOptions &options;
 };
 
 } // namespace duckdb
