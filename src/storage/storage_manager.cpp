@@ -149,9 +149,8 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 		options.encryption_options.user_key = std::move(storage_options.user_key);
-		options.encryption_options.user_key = &storage_options.user_key;
-	} else if (config.options.contains_user_key || config.options.use_master_key) {
-		// key is given in the command line
+	} else if (config.options.contains_user_key) {
+		// key is given in the command line (-key)
 		storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 	}
 
@@ -220,8 +219,8 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 			options.encryption_options.encryption_enabled = true;
 			D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		}
-		if (config.options.contains_user_key || config.options.use_master_key) {
-			// if -key or -master_key is given in the command line
+		if (config.options.contains_user_key) {
+			// if -key is given in the command line
 			// set the block header size here
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 		}

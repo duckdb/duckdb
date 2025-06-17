@@ -290,6 +290,13 @@
         "custom_implementation": true
     },
     {
+        "name": "default_user_key",
+        "description": "User key for new (not-yet existing) encrypted database files.",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "disable_timestamptz_casts",
         "description": "Disable casting from timestamp to timestamptz ",
         "type": "BOOLEAN",

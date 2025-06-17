@@ -27,7 +27,7 @@ TEST_CASE("Test basic wal encryption", "[encryption]") {
 	auto encryption_config = GetTestConfig();
 
 	encryption_config->options.encrypt_wal = true;
-	encryption_config->options.user_key = "asdf";
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	encryption_config->options.contains_user_key = true;
 
 	// set checkpoint wal size on 1TB
@@ -75,7 +75,7 @@ TEST_CASE("Test wrong key WAL encryption", "[encryption]") {
 	auto encryption_config_wrong = GetTestConfig();
 
 	encryption_config->options.encrypt_wal = true;
-	encryption_config->options.user_key = "asdf";
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	encryption_config->options.contains_user_key = true;
 
 	// set checkpoint wal size on 1TB
@@ -84,7 +84,7 @@ TEST_CASE("Test wrong key WAL encryption", "[encryption]") {
 	encryption_config->options.abort_on_wal_failure = false;
 
 	//! Give the wrong encryption key
-	encryption_config_wrong->options.user_key = "xxxx";
+	encryption_config_wrong->options.user_key = make_shared_ptr<string>("xxxx");
 	LocalFileSystem lfs;
 
 	DeleteDatabase(encrypted_database);
@@ -128,7 +128,7 @@ TEST_CASE("Test pragma debug_disable_wal_encryption") {
 	auto encryption_config = GetTestConfig();
 
 	encryption_config->options.encrypt_wal = true;
-	encryption_config->options.user_key = "asdf";
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	encryption_config->options.contains_user_key = true;
 
 	// set checkpoint wal size on 1TB

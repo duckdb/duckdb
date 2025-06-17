@@ -2369,10 +2369,8 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 void ShellState::OpenDB(int flags) {
 
 	const char *password = nullptr;
-	if (use_master_key && !master_key.empty()) {
-		password = master_key.c_str();
-	} else if (contains_user_key && !user_key.empty()) {
-		password = user_key.c_str();
+	if (contains_user_key && !user_key->empty()) {
+		password = user_key->c_str();
 	}
 
 	if (db == 0) {
@@ -4697,11 +4695,10 @@ static const char zOptions[] =
     "   -html                set output mode to HTML\n"
     "   -interactive         force interactive I/O\n"
     "   -json                set output mode to 'json'\n"
-    "   -key DATABASE        add an encryption key to encrypt a single database\n"
+    "   -key PASSWORD        add an encryption key to encrypt a single database\n"
     "   -line                set output mode to 'line'\n"
     "   -list                set output mode to 'list'\n"
     "   -markdown            set output mode to 'markdown'\n"
-    "   -master_key          add a key to en/decrypt all databases with a master key\n"
     "   -newline SEP         set output row separator. Default: '\\n'\n"
     "   -no-stdin            exit after processing options instead of reading stdin\n"
     "   -nullvalue TEXT      set text string for NULL values. Default 'NULL'\n"
@@ -4933,14 +4930,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-key") == 0) {
 			// only possible if there is a database file as input
-			data.user_key = string(cmdline_option_value(argc, argv, ++i));
+			data.user_key = duckdb::make_shared_ptr<string>(cmdline_option_value(argc, argv, ++i));
 			data.contains_user_key = true;
 			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
-		} else if (strcmp(z, "-master_key") == 0) {
-			// add a master key and set the database to full encryption
-			data.master_key = string(cmdline_option_value(argc, argv, ++i));
-			data.openFlags |= DUCKDB_MASTER_KEY;
-			data.use_master_key = true;
 		}
 	}
 	verify_uninitialized();
@@ -5056,21 +5048,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
-		} else if (strcmp(z, "-master_key") == 0) {
-			if (data.contains_user_key) {
-				utf8_printf(stderr, "Cannot specify both -key and -master_key.\n");
-				return SQLITE_ERROR;
-			}
-			data.openFlags |= DUCKDB_MASTER_KEY;
-			data.master_key = cmdline_option_value(argc, argv, ++i);
-			data.use_master_key = true;
 		} else if (strcmp(z, "-key") == 0) {
-			if (data.use_master_key) {
-				utf8_printf(stderr, "Cannot specify both -key and -master_key.\n");
-				return SQLITE_ERROR;
-			}
 			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
-			data.user_key = cmdline_option_value(argc, argv, ++i);
+			data.user_key = duckdb::make_shared_ptr<string>(cmdline_option_value(argc, argv, ++i));
 			data.contains_user_key = true;
 		} else if (strcmp(z, "-version") == 0) {
 			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),

@@ -25,12 +25,6 @@ public:
 	static string AddKeyToCache(DatabaseInstance &db, data_ptr_t key);
 	static void AddTempKeyToCache(DatabaseInstance &db);
 
-	//! Master key management wrapper functions
-	static void AddMasterKey(DatabaseInstance &db);
-	static bool HasMasterKey(DatabaseInstance &db);
-	static const_data_ptr_t GetMasterKey(DatabaseInstance &db);
-	static idx_t GetMasterKeySize(DatabaseInstance &db);
-
 	//! Encryption Fucntions
 	static void EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
