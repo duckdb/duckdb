@@ -125,7 +125,6 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         if n_rows is not None:
             relation_final = relation_final.limit(n_rows)
         if predicate is not None:
-            print(predicate)
             # We have a predicate, if possible, we push it down to DuckDB
             duck_predicate = _predicate_to_expression(predicate)
         # Try to pushdown filter, if one exists
