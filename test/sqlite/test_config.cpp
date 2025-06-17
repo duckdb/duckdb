@@ -110,15 +110,7 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 			return true;
 		}
 	}
-
-	if (!StringUtil::Contains(arg, "=")) {
-		return false;
-	}
-	auto splits = StringUtil::Split(arg, "=");
-	if (splits.size() != 2) {
-		return false;
-	}
-	return TryParseOption(splits[0], Value(splits[1]));
+	return false;
 }
 
 bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
