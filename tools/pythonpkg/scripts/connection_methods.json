@@ -380,14 +380,18 @@
 		"docs": "Fetch a result as Polars DataFrame following execute()",
 		"args": [
 			{
-				"name": "lazy",
-				"default": "false",
-				"type": "bool"
-			},
-			{
 				"name": "rows_per_batch",
 				"default": "1000000",
 				"type": "int"
+			}
+		],
+
+		"kwargs_as_dict": true,
+		"kwargs": [
+			{
+				"name": "lazy",
+				"default": "False",
+				"type": "Optional[bool]"
 			}
 		],
 		"return": "polars.DataFrame"

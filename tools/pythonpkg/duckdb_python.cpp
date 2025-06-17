@@ -408,14 +408,16 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("date_as_object") = false, py::arg("connection") = py::none());
 	m.def(
 	    "pl",
-	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn, py::kwargs &kwargs) {
+	    [](idx_t rows_per_batch, py::kwargs &kwargs) {
+		    auto connection_arg = kwargs.contains("conn") ? kwargs["conn"] : py::none();
+		    auto conn = py::cast<shared_ptr<DuckDBPyConnection>>(connection_arg);
+
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->FetchPolars(rows_per_batch, kwargs);
 	    },
-	    "Fetch a result as Polars DataFrame following execute()", py::arg("rows_per_batch") = 1000000,
-	    py::arg("connection") = py::none(), py::kw_only());
+	    "Fetch a result as Polars DataFrame following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only());
 	m.def(
 	    "fetch_arrow_table",
 	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
