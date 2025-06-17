@@ -242,6 +242,7 @@ void WriteAheadLog::WriteVersion() {
 	// note that we explicitly do not checksum the version entry
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
+	//! first, the wal_type (1 byte) is written ??
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
 	if (IsEncrypted() && GetDatabase().GetIsEncrypted()) {
 		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
@@ -259,7 +260,7 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 
 bool WriteAheadLog::IsEncrypted() const {
 	const auto &config = DBConfig::GetConfig(database.GetDatabase());
-	return config.options.encrypt_wal;
+	return config.options.encrypt_wal && database.GetIsEncrypted();
 }
 
 //===--------------------------------------------------------------------===//

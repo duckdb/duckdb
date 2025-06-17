@@ -204,8 +204,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_wal_encryption", PragmaEnableWalEncryption));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_wal_encryption", PragmaDisableWalEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
 }
 
 } // namespace duckdb
