@@ -5,6 +5,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 
 #include <functional>
 #include <string>
@@ -37,8 +38,25 @@ static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
-	// fprintf(stderr, "%s\n", name.c_str());
-	string initial_dbpath;
+
+	auto &test_config = TestConfiguration::Get();
+
+	string initial_dbpath = test_config.GetInitialDBPath();
+	test_config.ProcessPath(initial_dbpath, name);
+	if (!initial_dbpath.empty()) {
+		auto test_path = StringUtil::Replace(initial_dbpath, TestDirectoryPath(), string());
+		test_path = StringUtil::Replace(test_path, "\\", "/");
+		auto components = StringUtil::Split(test_path, "/");
+		components.pop_back();
+		string total_path = TestDirectoryPath();
+		for (auto &component : components) {
+			if (component.empty()) {
+				continue;
+			}
+			total_path = TestJoinPath(total_path, component);
+			TestCreateDirectory(total_path);
+		}
+	}
 	if (TestForceStorage()) {
 		auto storage_name = StringUtil::Replace(name, "/", "_");
 		storage_name = StringUtil::Replace(storage_name, ".", "_");

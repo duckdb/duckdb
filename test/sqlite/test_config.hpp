@@ -1,0 +1,48 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// test_config.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/common/types/value.hpp"
+
+namespace duckdb {
+
+class TestConfiguration {
+public:
+	static TestConfiguration &Get();
+
+	void Initialize();
+	bool ParseArgument(const string &arg, idx_t argc, char **argv, idx_t &i);
+	bool TryParseOption(const string &name, const Value &value);
+	void ParseOption(const string &name, const Value &value);
+	void LoadConfig(const string &config_path);
+
+	void ProcessPath(string &path, const string &test_name);
+
+	string GetDescription();
+	string GetInitialDBPath();
+	optional_idx GetMaxThreads();
+	optional_idx GetCheckpointWALSize();
+	bool GetForceRestart();
+	bool GetCheckpointOnShutdown();
+	bool GetTestMemoryLeaks();
+	DebugVectorVerification GetVectorVerification();
+
+private:
+	case_insensitive_map_t<Value> options;
+
+private:
+	template <class T, class VAL_T = T>
+	T GetOptionOrDefault(const string &name, T default_val);
+};
+
+} // namespace duckdb

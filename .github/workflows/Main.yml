@@ -156,7 +156,9 @@ jobs:
 
     - name: Test
       shell: bash
-      run: SUMMARIZE_FAILURES=1 build/reldebug/test/unittest --force-storage
+      env:
+        SUMMARIZE_FAILURES: 1
+      run: build/reldebug/test/unittest --force-storage
 
  force-restart:
     name: Force Restart
