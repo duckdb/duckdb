@@ -454,3 +454,31 @@ class TestPolars(object):
 
         # OR
         assert lazy_df.filter((pl.col("a") == b1) | (pl.col("b") == b2)).select(pl.len()).collect().item() == 2
+
+    def test_polars_lazy_many_batches(self, duckdb_cursor):
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
+        duck_tbl = duckdb_cursor.table("t")
+
+        lazy_df = duck_tbl.pl(1024, lazy=True)
+
+        streamed_result = lazy_df.collect(engine="streaming")
+
+        batches = streamed_result.iter_slices(1024)
+
+        chunk1 = next(batches)
+        assert len(chunk1) == 1024
+
+        chunk2 = next(batches)
+        assert len(chunk2) == 1024
+
+        chunk3 = next(batches)
+        assert len(chunk3) == 952
+
+        with pytest.raises(StopIteration):
+            next(batches)
+
+        res = duckdb_cursor.execute("FROM streamed_result").fetchall()
+        correct = duckdb_cursor.execute("FROM t").fetchall()
+
+        assert res == correct
