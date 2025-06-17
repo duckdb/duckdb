@@ -8,17 +8,40 @@ from decimal import Decimal
 import datetime
 
 def _predicate_to_expression(predicate: pl.Expr):
-    """Convert a polars predicate to a DuckDB expression"""
-    # Polars does not seem to have an API to properly consume their expression tree yet
+    """
+    Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
+    
+    Parameters:
+        predicate (pl.Expr): A Polars expression (e.g., col("foo") > 5)
+    
+    Returns:
+        SQLExpression: A DuckDB SQL expression string equivalent.
+        None: If conversion fails.
+
+    Example:
+        >>> _predicate_to_expression(pl.col("foo") > 5)
+        SQLExpression("(foo > 5)")
+    """
+    # Serialize the Polars expression tree to JSON
     tree = json.loads(predicate.meta.serialize(format="json"))
+    
     try:
-        sql_filter =  _pl_tree_to_sql(tree)
+        # Convert the tree to SQL
+        sql_filter = _pl_tree_to_sql(tree)
         return SQLExpression(sql_filter)
     except:
+        # If the conversion fails, we return None
         return None
 
+
 def _pl_operation_to_sql(op: str) -> str:
-    """Translate a polars operation string to SQL"""
+    """
+    Map Polars binary operation strings to SQL equivalents.
+    
+    Example:
+        >>> _pl_operation_to_sql("Eq")
+        '='
+    """
     match op:
         case "Lt":
             return "<"
@@ -39,27 +62,66 @@ def _pl_operation_to_sql(op: str) -> str:
         case _:
             raise NotImplementedError(op)
 
-def _pl_tree_to_sql(tree: dict):
-    """Convert a polars expression tree to a SQL statement"""
+
+def _pl_tree_to_sql(tree: dict) -> str:
+    """
+    Recursively convert a Polars expression tree (as JSON) to a SQL string.
+    
+    Parameters:
+        tree (dict): JSON-deserialized expression tree from Polars
+    
+    Returns:
+        str: SQL expression string
+    
+    Example:
+        Input tree:
+        {
+            "BinaryExpr": {
+                "left": { "Column": "foo" },
+                "op": "Gt",
+                "right": { "Literal": { "Int": 5 } }
+            }
+        }
+        Output: "(foo > 5)"
+    """
     [node_type] = tree.keys()
     subtree = tree[node_type]
+
     match node_type:
+
         case "BinaryExpr":
-            return ("("
-             + " ".join((_pl_tree_to_sql(subtree['left']), _pl_operation_to_sql(subtree['op']), _pl_tree_to_sql(subtree['right'])))
-             + ")")
+            # Binary expressions: left OP right
+            return (
+                "(" +
+                " ".join((
+                    _pl_tree_to_sql(subtree['left']),
+                    _pl_operation_to_sql(subtree['op']),
+                    _pl_tree_to_sql(subtree['right'])
+                )) +
+                ")"
+            )
+
         case "Column":
+            # A reference to a column name
             return subtree
+
         case "Literal" | "Dyn":
+            # Recursively process dynamic or literal values
             return _pl_tree_to_sql(subtree)
+
         case "Int":
+            # Direct integer literals
             return str(subtree)
+
         case "Function":
+            # Handle boolean functions like IsNull, IsNotNull
             inputs = subtree["input"]
             func_dict = subtree["function"]
+
             if "Boolean" in func_dict:
                 func = func_dict["Boolean"]
                 arg_sql = _pl_tree_to_sql(inputs[0])
+
                 match func:
                     case "IsNull":
                         return f"({arg_sql} IS NULL)"
@@ -69,41 +131,58 @@ def _pl_tree_to_sql(tree: dict):
                         raise NotImplementedError(f"Boolean function not supported: {func}")
             else:
                 raise NotImplementedError(f"Unsupported function type: {func_dict}")
-                     
+
         case "Scalar":
+            # Handle scalar values with typed representations
             dtype = subtree["dtype"]
             value = subtree["value"]
+
+            # Decimal support
             if str(dtype).startswith("{'Decimal'"):
                 decimal_value = value['Decimal']
                 decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
                 return str(decimal_value)
+
+            # Datetime with microseconds since epoch
             if str(dtype).startswith("{'Datetime'"):
                 micros = value['DatetimeOwned'][0]
                 dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
                 return f"'{str(dt_timestamp)}'::TIMESTAMP"
+
+            # Match simple types
             match dtype:
-                case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64"|"Float32"|"Float64":
+                case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64" | "Float32" | "Float64":
                     return str(value[str(dtype)])
+                
                 case "Time":
+                    # Convert nanoseconds to TIME
                     nanoseconds = value["Time"]
                     seconds = nanoseconds // 1_000_000_000
                     microseconds = (nanoseconds % 1_000_000_000) // 1_000
                     dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
-                    return f"'{str(dt_time)}'::TIME" 
+                    return f"'{str(dt_time)}'::TIME"
+
                 case "Date":
+                    # Convert days since Unix epoch to SQL DATE
                     days_since_epoch = value["Date"]
-                    date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)  
-                    return f"'{str(date)}'::DATE"                  
+                    date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)
+                    return f"'{str(date)}'::DATE"
+
                 case "Boolean":
-                    return str(value['Bool'])
+                    return str(value["Bool"])
+
                 case "Binary":
-                    binary_data = bytes(value['BinaryOwned'])
+                    # Convert binary data to hex string for BLOB
+                    binary_data = bytes(value["BinaryOwned"])
                     escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
-                    return f"'{escaped}'::BLOB" 
+                    return f"'{escaped}'::BLOB"
+
                 case "String":
-                    return "'{}'".format(value['StringOwned'])
+                    return f"'{value['StringOwned']}'"
+
                 case _:
                     raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
+
         case _:
             raise NotImplementedError(node_type)
 
