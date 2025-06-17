@@ -493,8 +493,6 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    # if: ${{ inputs.skip_tests != 'true' }}
-    # needs: linux-extensions-64
     runs-on: ubuntu-22.04
     env:
       CC: clang
@@ -504,7 +502,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+        ref: ${{ github.ref }}
 
     - uses: actions/setup-python@v5
       with:
