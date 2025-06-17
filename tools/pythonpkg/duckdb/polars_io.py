@@ -78,6 +78,10 @@ def _pl_tree_to_sql(tree: dict):
                 decimal_value = value['Decimal']
                 decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
                 return str(decimal_value)
+            if str(dtype).startswith("{'Datetime'"):
+                micros = value['DatetimeOwned'][0]
+                dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
+                return f"'{str(dt_timestamp)}'::TIMESTAMP"
             match dtype:
                 case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64"|"Float32"|"Float64":
                     return str(value[str(dtype)])
@@ -86,7 +90,7 @@ def _pl_tree_to_sql(tree: dict):
                     seconds = nanoseconds // 1_000_000_000
                     microseconds = (nanoseconds % 1_000_000_000) // 1_000
                     dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
-                    return f"'{str(dt_time)}'::TIME"
+                    return f"'{str(dt_time)}'::TIME"                    
                 case "Boolean":
                     return str(value['Bool'])
                 case "String":
