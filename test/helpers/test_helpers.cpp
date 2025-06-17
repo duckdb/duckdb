@@ -22,7 +22,6 @@ using namespace std;
 
 namespace duckdb {
 static string custom_test_directory;
-static int debug_initialize_value = -1;
 static case_insensitive_set_t required_requires;
 static bool delete_test_path = true;
 
@@ -84,10 +83,6 @@ string TestJoinPath(string path1, string path2) {
 
 void SetTestDirectory(string path) {
 	custom_test_directory = path;
-}
-
-void SetDebugInitialize(int value) {
-	debug_initialize_value = value;
 }
 
 void AddRequire(string require) {
@@ -188,19 +183,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	if (max_threads.IsValid()) {
 		result->options.maximum_threads = max_threads.GetIndex();
 	}
-	switch (debug_initialize_value) {
-	case -1:
-		break;
-	case 0:
-		result->options.debug_initialize = DebugInitialize::DEBUG_ZERO_INITIALIZE;
-		break;
-	case 0xFF:
-		result->options.debug_initialize = DebugInitialize::DEBUG_ONE_INITIALIZE;
-		break;
-	default:
-		fprintf(stderr, "Invalid value for debug_initialize_value\n");
-		exit(1);
-	}
+	result->options.debug_initialize = test_config.GetDebugInitialize();
 	return result;
 }
 

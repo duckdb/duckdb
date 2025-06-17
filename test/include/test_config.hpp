@@ -15,6 +15,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/debug_initialize.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,7 @@ public:
 	bool GetTestMemoryLeaks();
 	bool GetSummarizeFailures();
 	DebugVectorVerification GetVectorVerification();
+	DebugInitialize GetDebugInitialize();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();

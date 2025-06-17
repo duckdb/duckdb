@@ -25,6 +25,7 @@ static const TestConfigOption test_config_options[] = {
     {"summarize_failures", "Print a summary of all test failures after running", LogicalTypeId::BOOLEAN},
     {"test_memory_leaks", "Run memory leak tests", LogicalTypeId::BOOLEAN},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR},
+    {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR},
     {nullptr, nullptr, LogicalTypeId::INVALID},
 };
 
@@ -85,6 +86,14 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 	}
 	if (arg == "--single-threaded") {
 		ParseOption("max_threads", Value::BIGINT(1));
+		return true;
+	}
+	if (arg == "--zero-initialize") {
+		ParseOption("debug_initialize", Value("DEBUG_ZERO_INITIALIZE"));
+		return true;
+	}
+	if (arg == "--one-initialize") {
+		ParseOption("debug_initialize", Value("DEBUG_ONE_INITIALIZE"));
 		return true;
 	}
 	if (StringUtil::StartsWith(arg, "--memory-leak") || StringUtil::StartsWith(arg, "--test-memory-leak")) {
@@ -209,6 +218,10 @@ bool TestConfiguration::GetSummarizeFailures() {
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));
+}
+
+DebugInitialize TestConfiguration::GetDebugInitialize() {
+	return EnumUtil::FromString<DebugInitialize>(GetOptionOrDefault<string>("debug_initialize", "NO_INITIALIZE"));
 }
 
 bool TestConfiguration::TestForceStorage() {
