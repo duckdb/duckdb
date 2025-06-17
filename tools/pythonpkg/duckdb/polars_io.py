@@ -5,6 +5,7 @@ from polars.io.plugins import register_io_source
 from duckdb import SQLExpression
 import json
 from decimal import Decimal
+import datetime
 
 # Code to convert a Polars to a DuckDB 
 def _predicate_to_expression(predicate: pl.Expr):
@@ -80,6 +81,12 @@ def _pl_tree_to_sql(tree: dict):
             match dtype:
                 case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64"|"Float32"|"Float64":
                     return str(value[str(dtype)])
+                case "Time":
+                    nanoseconds = value["Time"]
+                    seconds = nanoseconds // 1_000_000_000
+                    microseconds = (nanoseconds % 1_000_000_000) // 1_000
+                    dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
+                    return f"'{str(dt_time)}'::TIME"
                 case "Boolean":
                     return str(value['Bool'])
                 case "String":

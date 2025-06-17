@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 import sys
+import datetime
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
@@ -221,3 +222,57 @@ class TestPolars(object):
 
         # OR
         assert lazy_df.filter((pl.col("a") == True) | (pl.col("b") == True)).select(pl.len()).collect().item() == 3
+
+
+
+    def test_polars_lazy_pushdown_time(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            """
+            CREATE TABLE test_time (
+                a TIME,
+                b TIME,
+                c TIME
+            )
+        """
+        )
+        duckdb_cursor.execute(
+            """
+            INSERT INTO test_time VALUES
+                ('00:01:00','00:01:00','00:01:00'),
+                ('00:10:00','00:10:00','00:10:00'),
+                ('01:00:00','00:10:00','01:00:00'),
+                (NULL,NULL,NULL)
+        """
+        )
+        duck_tbl = duckdb_cursor.table("test_time")
+        lazy_df = duck_tbl.pl(lazy=True)
+
+        # Comparison time values
+        t_001 = datetime.time(0, 1)
+        t_010 = datetime.time(0, 10)
+        t_100 = datetime.time(1, 0)
+
+        # ==
+        assert lazy_df.filter(pl.col("a") == t_001).select(pl.len()).collect().item() == 1
+        # >
+        assert lazy_df.filter(pl.col("a") > t_001).select(pl.len()).collect().item() == 2
+        # >=
+        assert lazy_df.filter(pl.col("a") >= t_010).select(pl.len()).collect().item() == 2
+        # <
+        assert lazy_df.filter(pl.col("a") < t_010).select(pl.len()).collect().item() == 1
+        # <=
+        assert lazy_df.filter(pl.col("a") <= t_010).select(pl.len()).collect().item() == 2
+
+        # IS NULL
+        assert lazy_df.filter(pl.col("a").is_null()).select(pl.len()).collect().item() == 1
+        # IS NOT NULL
+        assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
+
+        # AND conditions
+        assert lazy_df.filter((pl.col("a") == t_010) & (pl.col("b") == t_001)).select(pl.len()).collect().item() == 0
+        assert lazy_df.filter(
+            (pl.col("a") == t_100) & (pl.col("b") == t_010) & (pl.col("c") == t_100)
+        ).select(pl.len()).collect().item() == 1
+
+        # OR condition
+        assert lazy_df.filter((pl.col("a") == t_100) | (pl.col("b") == t_001)).select(pl.len()).collect().item() == 2
