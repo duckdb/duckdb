@@ -24,7 +24,8 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			} else if (entry.second.GetValue<string>().empty()) {
 				throw BinderException("Not a valid key. A key cannot be empty");
 			}
-			storage_options.user_key = StringValue::Get(entry.second.DefaultCastAs(LogicalType::BLOB));
+			storage_options.user_key =
+			    make_shared_ptr<string>(StringValue::Get(entry.second.DefaultCastAs(LogicalType::BLOB)));
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
 		} else if (entry.first == "encryption_cipher") {
@@ -35,8 +36,8 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			storage_version_user_provided = entry.second.ToString();
 			storage_options.storage_version =
 			    SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
+		} else if (entry.first == "plaintext") {
 		}
-		else if (entry.first == "plaintext") {}
 	}
 	if (storage_options.encryption && (!storage_options.storage_version.IsValid() ||
 	                                   storage_options.storage_version.GetIndex() <

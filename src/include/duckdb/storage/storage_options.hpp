@@ -28,15 +28,14 @@ struct StorageOptions {
 	//! Encryption algorithm (default = GCM)
 	string encryption_cipher = "gcm";
 	//! encryption key
-	string user_key;
-	//! attach a plaintext db in an encrypted env
-	bool plaintext = false;
+	//! FIXME: change to a unique_ptr in the future
+	shared_ptr<string> user_key;
 };
 
-inline void ClearUserKey(string &encryption_key) {
-	if (!encryption_key.empty()) {
-		memset(&encryption_key[0], 0, encryption_key.size());
-		encryption_key.clear();
+inline void ClearUserKey(shared_ptr<string> const &encryption_key) {
+	if (encryption_key && !encryption_key->empty()) {
+		memset(&(*encryption_key)[0], 0, encryption_key->size());
+		encryption_key->clear();
 	}
 }
 

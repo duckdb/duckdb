@@ -25,12 +25,15 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
+#include <sstream>
+#include <iostream>
 namespace duckdb {
 
 bool TestForceStorage();
 bool TestForceReload();
 bool TestMemoryLeaks();
 void RegisterSqllogictests();
+bool SummarizeFailures();
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
@@ -38,6 +41,7 @@ void TestCreateDirectory(string path);
 string TestJoinPath(string path1, string path2);
 void TestDeleteFile(string path);
 void TestChangeDirectory(string path);
+
 void SetDeleteTestPath(bool delete_path);
 bool DeleteTestPath();
 void ClearTestDirectory();
@@ -74,5 +78,22 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 		if (!res.empty())                                                                                              \
 			FAIL(res);                                                                                                 \
 	}
+
+class FailureSummary {
+public:
+	FailureSummary() = default;
+	~FailureSummary() = default;
+	static FailureSummary &Instance();
+	bool summarize_failures;
+	// this counter is for the order number of the failed test case in Failures Summary
+	size_t failures_summary_counter;
+	vector<string> failures_summary;
+	mutex counter_mutex;
+	mutex summary_mutex;
+	string GetFailureSummary();
+	size_t GetSummaryCounter();
+	bool SummarizeFailures();
+	void SetSummarizeFailures(bool state);
+};
 
 } // namespace duckdb
