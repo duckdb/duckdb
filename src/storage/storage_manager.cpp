@@ -12,8 +12,11 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
+
+using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
@@ -80,17 +83,20 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(StorageOptions options) {
+void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOptions &options) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// Create or load the database from disk, if not in-memory mode.
-	LoadDatabase(options);
+	LoadDatabase(context, options);
+
+	if (options.encryption) {
+		ClearUserKey(options.user_key);
+	}
 }
 
-///////////////////////////////////////////////////////////////////////////
 class SingleFileTableIOManager : public TableIOManager {
 public:
 	explicit SingleFileTableIOManager(BlockManager &block_manager, idx_t row_group_size)
@@ -119,7 +125,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
+void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
 
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
@@ -136,6 +142,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
+
+	if (storage_options.encryption) {
+		options.encryption_options.encryption_enabled = true;
+		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.user_key = std::move(storage_options.user_key);
+	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	if (storage_options.row_group_size.IsValid()) {
@@ -176,7 +188,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
-			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
 		} else {
 			// No encryption; use the default option.
@@ -189,7 +200,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase();
+		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -202,8 +213,10 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		if (storage_options.block_header_size.IsValid()) {
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
-			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
+
+			// Set encryption to true and derive encryption key
+			options.encryption_options.encryption_enabled = true;
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;

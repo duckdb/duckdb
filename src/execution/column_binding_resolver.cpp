@@ -26,13 +26,6 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
 		}
-		// resolve any single-side predicates
-		// for now, only ASOF supports this, and we are guaranteed that all right side predicates
-		// have been pushed into a filter.
-		if (comp_join.predicate) {
-			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-			VisitExpression(&comp_join.predicate);
-		}
 		// visit the duplicate eliminated columns on the LHS, if any
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
@@ -45,6 +38,12 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
 		types = op.types;
+		// resolve any mixed predicates
+		// for now, only ASOF supports this.
+		if (comp_join.predicate) {
+			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			VisitExpression(&comp_join.predicate);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {

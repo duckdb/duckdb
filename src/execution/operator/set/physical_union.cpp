@@ -6,9 +6,9 @@
 
 namespace duckdb {
 
-PhysicalUnion::PhysicalUnion(vector<LogicalType> types, PhysicalOperator &top, PhysicalOperator &bottom,
-                             idx_t estimated_cardinality, bool allow_out_of_order)
-    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
+PhysicalUnion::PhysicalUnion(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &top,
+                             PhysicalOperator &bottom, idx_t estimated_cardinality, bool allow_out_of_order)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
       allow_out_of_order(allow_out_of_order) {
 	children.push_back(top);
 	children.push_back(bottom);

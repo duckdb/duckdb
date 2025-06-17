@@ -99,6 +99,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
 			continue;
 		}
+		if (StringUtil::CIEquals(entry.first, "encryption_cipher")) {
+			continue;
+		}
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
 			continue;
 		}
@@ -181,8 +184,12 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOp
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(options);
+		storage->Initialize(context, options);
 	}
+}
+
+void AttachedDatabase::FinalizeLoad(optional_ptr<ClientContext> context) {
+	catalog->FinalizeLoad(context);
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {

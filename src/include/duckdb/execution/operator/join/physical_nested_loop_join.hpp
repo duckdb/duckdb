@@ -18,11 +18,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::NESTED_LOOP_JOIN;
 
 public:
-	PhysicalNestedLoopJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
-	                       unique_ptr<JoinFilterPushdownInfo> pushdown_info);
-	PhysicalNestedLoopJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+	                       idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+	                       idx_t estimated_cardinality);
 
 public:
 	// Operator Interface

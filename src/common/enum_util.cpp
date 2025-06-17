@@ -1741,19 +1741,20 @@ const StringUtil::EnumStringLiteral *GetFileBufferTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FileBufferType::BLOCK), "BLOCK" },
 		{ static_cast<uint32_t>(FileBufferType::MANAGED_BUFFER), "MANAGED_BUFFER" },
-		{ static_cast<uint32_t>(FileBufferType::TINY_BUFFER), "TINY_BUFFER" }
+		{ static_cast<uint32_t>(FileBufferType::TINY_BUFFER), "TINY_BUFFER" },
+		{ static_cast<uint32_t>(FileBufferType::EXTERNAL_FILE), "EXTERNAL_FILE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value) {
-	return StringUtil::EnumToString(GetFileBufferTypeValues(), 3, "FileBufferType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetFileBufferTypeValues(), 4, "FileBufferType", static_cast<uint32_t>(value));
 }
 
 template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value) {
-	return static_cast<FileBufferType>(StringUtil::StringToEnum(GetFileBufferTypeValues(), 3, "FileBufferType", value));
+	return static_cast<FileBufferType>(StringUtil::StringToEnum(GetFileBufferTypeValues(), 4, "FileBufferType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileCompressionTypeValues() {
@@ -2665,19 +2666,20 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EXTENSION), "OPTIMIZER_EXTENSION" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_SUM_REWRITER), "OPTIMIZER_SUM_REWRITER" },
-		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LATE_MATERIALIZATION), "OPTIMIZER_LATE_MATERIALIZATION" }
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LATE_MATERIALIZATION), "OPTIMIZER_LATE_MATERIALIZATION" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 51, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 52, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 51, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 52, "MetricsType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -2908,19 +2910,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::EXTENSION), "EXTENSION" },
 		{ static_cast<uint32_t>(OptimizerType::MATERIALIZED_CTE), "MATERIALIZED_CTE" },
 		{ static_cast<uint32_t>(OptimizerType::SUM_REWRITER), "SUM_REWRITER" },
-		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" }
+		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" },
+		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 28, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 29, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 28, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 29, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {

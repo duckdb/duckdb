@@ -404,4 +404,5 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	}
 	return true;
 }
+
 } // namespace duckdb

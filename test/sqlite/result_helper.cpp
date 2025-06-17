@@ -88,11 +88,15 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		auto fname = runner.LoopReplacement(values[0], context.running_loops);
+		auto fname = StringUtil::Replace(values[0], "<FILE>:", "");
+		fname = runner.ReplaceKeywords(fname);
+		fname = runner.LoopReplacement(fname, context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
+			string log_message;
 			logger.PrintErrorHeader(csv_error);
+
 			return false;
 		}
 	} else {
@@ -256,7 +260,6 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
                                             duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
-
 	SQLLogicTestLogger logger(context, statement);
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
@@ -322,7 +325,6 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	Connection con(db);
 	auto threads = MaxValue<idx_t>(std::thread::hardware_concurrency(), 1);
 	con.Query("PRAGMA threads=" + to_string(threads));
-	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
 	for (idx_t i = 0; i < names.size(); i++) {
@@ -507,15 +509,16 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
+		std::ostringstream oss;
 		logger.PrintErrorHeader("Wrong result in query!");
 		logger.PrintLineSep();
 		logger.PrintSQL();
 		logger.PrintLineSep();
-
-		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-		          << termcolor::reset;
-		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
+		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
+		    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
+		    << termcolor::reset;
+		oss << lvalue_str << " <> " << rvalue_str << std::endl;
+		logger.LogFailure(oss.str());
 		logger.PrintLineSep();
 		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
 		return false;
@@ -526,15 +529,16 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
-
 	RE2::Options options;
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
+		std::ostringstream oss;
 		logger.PrintErrorHeader("Test error!");
 		logger.PrintLineSep();
-		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
-		          << std::endl;
+		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
+		    << std::endl;
+		logger.LogFailure(oss.str());
 		logger.PrintLineSep();
 		return false;
 	}

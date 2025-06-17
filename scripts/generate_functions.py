@@ -159,7 +159,7 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
             example_line = get_example_line(entry['variants'])
             category_line = get_category_line(entry['variants'])
         else:
-            parameter_line = entry['parameters'] if 'parameters' in entry else ''
+            parameter_line = entry['parameters'].replace(' ', '') if 'parameters' in entry else ''
             description_line = sanitize_string(entry['description'])
             example_line = example_from_json(entry)
             category_line = categories_from_json(entry)

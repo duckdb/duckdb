@@ -112,3 +112,11 @@ statement error
 select try(CAST((select 'ABC') as INTEGER))
 ----
 TRY can not be used in combination with a scalar subquery
+
+# The values below are literals, which do not have a PhysicalType, caused a crash before fixing duckdb-internal/issues/5047
+
+statement ok
+select TRY('hello');
+
+statement ok
+select TRY(123);

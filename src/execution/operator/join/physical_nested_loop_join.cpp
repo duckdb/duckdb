@@ -9,23 +9,23 @@
 
 namespace duckdb {
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> cond, JoinType join_type,
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
                              estimated_cardinality) {
 
 	filter_pushdown = std::move(pushdown_info_p);
-
 	children.push_back(left);
 	children.push_back(right);
 }
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> cond, JoinType join_type,
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                                idx_t estimated_cardinality)
-    : PhysicalNestedLoopJoin(op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
+    : PhysicalNestedLoopJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality,
+                             nullptr) {
 }
 
 bool PhysicalJoin::HasNullValues(DataChunk &chunk) {

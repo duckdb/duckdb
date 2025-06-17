@@ -143,6 +143,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
@@ -529,7 +530,6 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
@@ -545,6 +545,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			return;
 		}
 	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
@@ -579,7 +580,7 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 
 	// read the compressed data from the file
 	while (true) {
-		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		duckdb::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
 		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
 		if (bytes_read == 0) {
 			break;

@@ -197,9 +197,9 @@ struct VectorCastHelpers {
 
 		if (STRUCT_KEY) {
 			needs_quotes = true;
-		} else if (isspace(string_data[0])) {
+		} else if (StringUtil::CharacterIsSpace(string_data[0])) {
 			needs_quotes = true;
-		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+		} else if (base_length >= 2 && StringUtil::CharacterIsSpace(string_data[base_length - 1])) {
 			needs_quotes = true;
 		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
 			needs_quotes = true;

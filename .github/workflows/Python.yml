@@ -399,7 +399,7 @@ jobs:
 
      - name: Install Packages
        shell: bash
-       run: python3 -m pip install pyotp requests
+       run: python3 -m pip install pyotp requests urllib3
 
      - name: Cleanup Releases
        shell: bash

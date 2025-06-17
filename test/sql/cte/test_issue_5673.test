@@ -30,20 +30,3 @@ some_more_logic as (
 select * from some_more_logic;
 ----
 1
-
-require no_alternative_verify
-
-# this one needs 'no_alternative_verify' otherwise the error message is different
-statement error
-with
-orders as (
-    select * from stg_orders
-    where ordered_at >= (select max(ordered_at) from orders)
-),
-some_more_logic as (
-    select *
-    from orders
-)
-select * from some_more_logic;
-----
-Binder Error: Circular reference to CTE "orders", There are two possible solutions.

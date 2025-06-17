@@ -70,7 +70,7 @@ inline
 shared_ptr<DATA_TYPE>
 make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
 {
-	return shared_ptr<DATA_TYPE>(std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
+	return shared_ptr<DATA_TYPE>(duckdb_base_std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
 }
 
 template<class DATA_TYPE, class... ARGS>
@@ -82,31 +82,31 @@ make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>
 make_uniq_array(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>(new DATA_TYPE[n]());
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>
 make_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]);
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>(new DATA_TYPE[n]);
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>
 make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>(new DATA_TYPE[n]());
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>
 make_unsafe_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]);
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>(new DATA_TYPE[n]);
 }
 
 template<class DATA_TYPE, class... ARGS>

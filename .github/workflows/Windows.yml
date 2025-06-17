@@ -95,6 +95,8 @@ jobs:
     - name: Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
+      env:
+         SUMMARIZE_FAILURES: 1
       run: |
         test/Release/unittest.exe
 
@@ -177,6 +179,8 @@ jobs:
 
     - name: Test
       shell: bash
+      env:
+         SUMMARIZE_FAILURES: 1
       run: test/Release/unittest.exe
 
     - name: Tools Test
@@ -265,6 +269,8 @@ jobs:
            msystem: MINGW64
            update: true
            install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+           cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
@@ -325,6 +331,7 @@ jobs:
          run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+         build_complete_extensions_set: ${{ github.event_name != 'pull_request' && 1 || 0 }}
 
      - uses: actions/upload-artifact@v4
        with:
