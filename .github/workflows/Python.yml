@@ -15,14 +15,19 @@ on:
   workflow_dispatch:
     inputs:
       override_git_describe:
+        description: 'Version tag to override git describe'
         type: string
       git_ref:
+        description: 'Git ref'
         type: string
       skip_tests:
+        description: 'Pass "true" to skip tests'
         type: string
       run_all:
+        description: 'Pass "true" to run all jobs'
         type: string
       override_twine_upload:
+        description: 'Pass "true" to trigger TwineUpload.yml when not on tag or in "main"'
         type: string
   push:
     branches-ignore:

@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       base_hash:
+        description: 'Base hash'
         type: string
   repository_dispatch:
   push:

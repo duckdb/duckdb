@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       explicit_checks:
+        description: 'Pass which checks to run or remain empty for default checks'
         type: string
   repository_dispatch:
   push:

@@ -11,10 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       override_git_describe:
+        description: 'Version tag to override git describe'
         type: string
       git_ref:
+        description: 'Git ref'
         type: string
       skip_tests:
+        description: 'Pass "true" to skip tests'
         type: string
   push:
     branches-ignore:
