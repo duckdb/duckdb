@@ -523,7 +523,6 @@ FuncNameKeyword <-
   'TABLESAMPLE' /
   'VERBOSE'
 
-
 PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? GroupByClause?
 
 PivotOn <- 'ON' PivotColumnList
@@ -900,7 +899,6 @@ TableAliasColon <- ColIdOrString ':'
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- TableAliasColon? Parens(TableRef)
 
-
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
 TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueLists GroupByClause?) TableAlias?
@@ -931,8 +929,8 @@ AtSpecifier <- AtUnit '=>' Expression
 AtUnit <- 'VERSION'i / 'TIMESTAMP'i
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- 'ASOF'i? JoinType? 'JOIN'i InnerTableRef JoinQualifier
-JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
+RegularJoinClause <- 'ASOF'i? JoinType? 'JOIN'i TableRef JoinQualifier
+JoinWithoutOnClause <- JoinPrefix 'JOIN'i TableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON'i Expression
 UsingClause <- 'USING'i Parens(List(ColumnName))
