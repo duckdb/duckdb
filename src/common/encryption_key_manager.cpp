@@ -132,13 +132,6 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 	decoded_key.clear();
 }
 
-void EncryptionKeyManager::DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
-                                           data_ptr_t derived_key) {
-	//! If the master key is base64, it is already decoded
-	//! A master key is also NOT wiped, but reused
-	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
-}
-
 string EncryptionKeyManager::ObjectType() {
 	return "encryption_keys";
 }

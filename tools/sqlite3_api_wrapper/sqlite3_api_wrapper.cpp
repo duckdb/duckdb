@@ -124,17 +124,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_LATEST_STORAGE_VERSION) {
 			config.options.serialization_compatibility = SerializationCompatibility::FromString("latest");
 		}
-		if ((flags & DUCKDB_ENCRYPTION_KEY) && (flags & DUCKDB_MASTER_KEY)) {
-			fprintf(stderr, "Cannot specify both -key and -master_key.\n");
-			return SQLITE_ERROR;
-		}
 		if (flags & DUCKDB_ENCRYPTION_KEY) {
 			config.options.contains_user_key = true;
 			config.options.user_key = password;
-		}
-		if (flags & DUCKDB_MASTER_KEY) {
-			config.options.use_master_key = true;
-			config.options.master_key = password;
 		}
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,

@@ -19,51 +19,6 @@ bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name)
 	return keys.HasKey(key_name);
 }
 
-bool EncryptionEngine::HasMasterKey(DatabaseInstance &db) {
-	auto &keys = EncryptionKeyManager::Get(db);
-	return keys.HasMasterKey();
-}
-
-const_data_ptr_t EncryptionEngine::GetMasterKey(DatabaseInstance &db) {
-	auto &keys = EncryptionKeyManager::Get(db);
-	return keys.GetMasterKey();
-}
-
-idx_t EncryptionEngine::GetMasterKeySize(DatabaseInstance &db) {
-	auto &keys = EncryptionKeyManager::Get(db);
-	return keys.GetMasterKeySize();
-}
-
-void EncryptionEngine::AddMasterKey(DatabaseInstance &db) {
-	auto &keys = EncryptionKeyManager::Get(db);
-	auto config_options = db.config.options;
-
-	if (config_options.master_key.empty()) {
-		throw InvalidInputException("Cannot add master key: no master key found.");
-	}
-
-	//! TODO change base64 function to not cast back to string
-	if (!keys.HasMasterKey()) {
-		string decoded_key;
-
-		try {
-			//! Key is base64 encoded
-			decoded_key = EncryptionKeyManager::Base64Decode(config_options.master_key);
-		} catch (const ConversionException &e) {
-			//! Todo; check if valid utf-8
-			decoded_key = config_options.master_key;
-		}
-
-		keys.SetMasterKey(data_ptr_t(decoded_key.data()), decoded_key.size());
-		std::fill(decoded_key.begin(), decoded_key.end(), 0);
-		decoded_key.clear();
-	}
-
-	// wipe out the master key from unsecure memory
-	std::fill(config_options.master_key.begin(), config_options.master_key.end(), 0);
-	config_options.master_key.clear();
-}
-
 void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	if (!keys.HasKey(key_name)) {

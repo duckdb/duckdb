@@ -44,45 +44,6 @@ private:
 	data_t key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 };
 
-class MasterKey {
-
-public:
-	explicit MasterKey(data_ptr_t input_key, idx_t input_size) {
-		// A master key can be of variable size
-		master_key = new data_t[input_size];
-		memcpy(master_key, input_key, input_size);
-		key_size = input_size;
-
-		EncryptionKey::LockEncryptionKey(master_key, key_size);
-	}
-
-	~MasterKey() {
-		EncryptionKey::UnlockEncryptionKey(master_key, key_size);
-		delete[] master_key;
-		master_key = nullptr;
-		key_size = 0;
-	};
-
-	MasterKey(const MasterKey &) = delete;
-	MasterKey &operator=(const MasterKey &) = delete;
-
-	MasterKey(MasterKey &&) noexcept = default;
-	MasterKey &operator=(MasterKey &&) noexcept = default;
-
-public:
-	const_data_ptr_t GetPtr() const {
-		return master_key;
-	}
-
-	idx_t GetSize() const {
-		return key_size;
-	}
-
-private:
-	data_ptr_t master_key;
-	idx_t key_size;
-};
-
 class EncryptionKeyManager : public ObjectCacheEntry {
 
 public:
@@ -101,28 +62,6 @@ public:
 	string GetObjectType() override;
 
 public:
-	void SetMasterKey(data_ptr_t input_key, idx_t input_size) {
-		master_key_initialized = true;
-		master_key = make_uniq<MasterKey>(input_key, input_size);
-	}
-
-	void ClearMasterKey() {
-		master_key = nullptr;
-		master_key_initialized = false;
-	}
-
-	bool HasMasterKey() const {
-		return master_key_initialized;
-	}
-
-	const_data_ptr_t GetMasterKey() const {
-		return master_key->GetPtr();
-	}
-
-	idx_t GetMasterKeySize() const {
-		return master_key->GetSize();
-	}
-
 public:
 	static void DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key);
 	static void DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt, data_ptr_t derived_key);
@@ -140,9 +79,6 @@ public:
 
 private:
 	std::unordered_map<std::string, EncryptionKey> derived_keys;
-
-	shared_ptr<MasterKey> master_key;
-	bool master_key_initialized = false;
 };
 
 } // namespace duckdb
