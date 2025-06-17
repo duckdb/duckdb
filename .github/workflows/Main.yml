@@ -132,6 +132,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
       RUN_SLOW_VERIFIERS: 1
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage'
 
     steps:
     - uses: actions/checkout@v4
@@ -169,6 +170,7 @@ jobs:
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage --force-restart'
 
     steps:
     - uses: actions/checkout@v4
@@ -207,6 +209,7 @@ jobs:
       ALTERNATIVE_VERIFY: 1
       DISABLE_POINTER_SALT: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
       - uses: actions/checkout@v3
@@ -272,6 +275,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
       - name: Clean up the disc space
@@ -373,6 +377,7 @@ jobs:
         shell: bash
         env:
           DISABLE_CPP_UNITTESTS: 1
+          DUCKDB_TEST_DESCRIPTION: 'Tests run with --verify_vector=[VECTOR]. Use require no_vector_verification to skip tests.'
         run: make reldebug
 
       - name: Test dictionary_expression
@@ -450,6 +455,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
     - uses: actions/checkout@v3
