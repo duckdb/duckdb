@@ -92,10 +92,10 @@ void QueryProfiler::Reset(const bool running_p, string query) {
 	root = nullptr;
 	phase_timings.clear();
 	phase_stack.clear();
+	query_info.query_name = std::move(query);
+	running = running_p;
 
 	if (running_p) {
-		query_info.query_name = std::move(query);
-		running = true;
 		main_query.Start();
 	}
 }
