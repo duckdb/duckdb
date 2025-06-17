@@ -23,9 +23,6 @@ namespace duckdb {
 unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<LogicalOperator> op,
                                                               optional_ptr<LogicalOperator> parent) {
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		if (!parent) {
-			return std::move(op);
-		}
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		auto stat = JoinEliminationStat();
 
@@ -33,11 +30,15 @@ unique_ptr<LogicalOperator> JoinElimination::OptimizeChildren(unique_ptr<Logical
 		auto right_child = make_uniq<JoinElimination>();
 		join.children[0] = left_child->Optimize(std::move(join.children[0]));
 		join.children[1] = right_child->Optimize(std::move(join.children[1]));
-		stat.join_parent = parent;
 		stat.left_child = std::move(left_child);
 		stat.right_child = std::move(right_child);
-		stats.emplace_back(std::move(stat));
-		return std::move(op);
+		if (!parent)  {
+			return TryEliminateJoin(std::move(op), stat);
+		}else {
+			stat.join_parent = parent;
+			stats.emplace_back(std::move(stat));
+			return std::move(op);
+		}
 	}
 
 	VisitOperatorExpressions(*op);

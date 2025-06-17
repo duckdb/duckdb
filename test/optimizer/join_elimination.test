@@ -219,3 +219,23 @@ statement ok
 select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
 
 # union intersect unnest, pivot
+
+query II
+explain 
+with queryb as (select distinct idb from b) 
+  select a.* from a left join queryb on a.ida=queryb.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain 
+  select b.* from b left join (select distinct a.ida from a ) as a on a.ida=b.idb union all select b.*  from b left join (select distinct a.ida from a ) as a on a.ida=b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+statement ok
+with queryb as (select distinct idb from b) 
+  select a.* from a left join queryb on a.ida=queryb.idb;
+
+statement ok
+select b.* from b left join (select distinct a.ida from a ) as a on a.ida=b.idb union all select b.*  from b left join (select distinct a.ida from a ) as a on a.ida=b.idb;
