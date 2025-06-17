@@ -10,13 +10,14 @@ using namespace std;
 
 static idx_t GetWALFileVersion(FileSystem &fs, const string &path) {
 	// A WAL file contains an 8-byte overall header
-	//! The first 5 bytes are structured as followed:
+	//! The first 5 bytes are structuxred as followed:
 	//! 100 - 000 - 98 - 101 - 000
 	// (field_id - sep - wal_type - field_id - sep)
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	uint8_t wal_version;
 	fs.Read(*handle, &wal_version, 1, 5);
 	//! the 6th byte is the version number of the WAL
+	handle->Close();
 	return wal_version;
 }
 
