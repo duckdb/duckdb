@@ -48,8 +48,16 @@ int main(int argc_in, char *argv[]) {
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
-	if (summarize != nullptr && std::string(summarize) == "1") {
-		summary.SetSummarizeFailures(true);
+	if (summarize) {
+		if (std::string(summarize) == "1") {
+			summary.SetSummarizeFailures(true);
+		}
+	} else {
+		// SUMMARIZE_FAILURES not passed in explicitly - enable by default on CI
+		const char *ci = std::getenv("CI");
+		if (ci) {
+			summary.SetSummarizeFailures(true);
+		}
 	}
 
 	auto &test_config = TestConfiguration::Get();

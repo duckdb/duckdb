@@ -64,8 +64,6 @@ jobs:
 
       - name: Unit Test
         shell: bash
-        env:
-         SUMMARIZE_FAILURES: 1
         run: |
           ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
           rm -rf my_local_folder/hive
@@ -219,8 +217,6 @@ jobs:
 
       - name: Unit Test
         shell: bash
-        env:
-         SUMMARIZE_FAILURES: 1
         run: |
           ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
           rm -rf my_local_folder/hive
