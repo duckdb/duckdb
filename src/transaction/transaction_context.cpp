@@ -3,12 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_context_state.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
