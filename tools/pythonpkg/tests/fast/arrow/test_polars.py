@@ -185,3 +185,39 @@ class TestPolars(object):
             {"a": 1, "b": 1},
             {"a": 100, "b": 10},
         ]
+    
+    def test_polars_lazy_pushdown_bool(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            """
+            CREATE TABLE test_bool (
+                a BOOL,
+                b BOOL
+            )
+        """
+        )
+        duckdb_cursor.execute(
+            """
+            INSERT INTO test_bool VALUES
+                (TRUE,TRUE),
+                (TRUE,FALSE),
+                (FALSE,TRUE),
+                (NULL,NULL)
+        """
+        )
+        duck_tbl = duckdb_cursor.table("test_bool")
+        
+        lazy_df = duck_tbl.pl(lazy=True)
+        # == True
+        assert lazy_df.filter(pl.col("a") == True).select(pl.len()).collect().item() == 2
+
+        # IS NULL
+        assert lazy_df.filter(pl.col("a").is_null()).select(pl.len()).collect().item() == 1
+
+        # IS NOT NULL
+        assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
+
+        # AND
+        assert lazy_df.filter((pl.col("a") == True) & (pl.col("b") == True)).select(pl.len()).collect().item() == 1
+
+        # OR
+        assert lazy_df.filter((pl.col("a") == True) | (pl.col("b") == True)).select(pl.len()).collect().item() == 3

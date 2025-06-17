@@ -80,6 +80,8 @@ def _pl_tree_to_sql(tree: dict):
             match dtype:
                 case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64"|"Float32"|"Float64":
                     return str(value[str(dtype)])
+                case "Boolean":
+                    return str(value['Bool'])
                 case "String":
                     return "'{}'".format(value['StringOwned'])
                 case _:
