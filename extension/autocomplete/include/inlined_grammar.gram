@@ -893,7 +893,7 @@ DistinctOn <- 'ON'i Parens(List(Expression))
 
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
-TableRef <- InnerTableRef JoinOrPivot*
+TableRef <- InnerTableRef JoinOrPivot* TableAlias?
 TableSubquery <- Lateral? SubqueryReference TableAlias?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause?
 TableAliasColon <- ColIdOrString ':'

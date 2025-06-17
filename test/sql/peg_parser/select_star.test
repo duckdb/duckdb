@@ -13,3 +13,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$SELECT * EXCLUDE (db1.s1.t.c) FROM db1.s1
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT struct.*$TEST_PEG_PARSER$);
 
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select t.* from ((select 1) cross join (select 1)) as t$TEST_PEG_PARSER$);
+

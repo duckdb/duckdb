@@ -817,7 +817,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DistinctClause <- ('DISTINCT'i DistinctOn?) / 'ALL'i\n"
 	"DistinctOn <- 'ON'i Parens(List(Expression))\n"
 	"InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef\n"
-	"TableRef <- InnerTableRef JoinOrPivot*\n"
+	"TableRef <- InnerTableRef JoinOrPivot* TableAlias?\n"
 	"TableSubquery <- Lateral? SubqueryReference TableAlias?\n"
 	"BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause?\n"
 	"TableAliasColon <- ColIdOrString ':'\n"
