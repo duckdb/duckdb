@@ -138,8 +138,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		partial_block_lock = partial_block_manager.GetLock();
 
 		// non-constant block
-		PartialBlockAllocation allocation =
-		    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
+		auto allocation = partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 
@@ -169,7 +168,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
 	} else {
-		segment->ConvertToPersistent(nullptr, nullptr, INVALID_BLOCK);
+		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
 	}
 
 	// construct the data pointer

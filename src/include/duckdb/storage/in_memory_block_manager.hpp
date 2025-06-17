@@ -56,8 +56,11 @@ public:
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override {
 		throw InternalException("Cannot perform IO in in-memory database - ReadBlocks!");
 	}
-	void Write(optional_ptr<ClientContext> context, FileBuffer &block, block_id_t block_id) override {
+	void Write(FileBuffer &block, block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - Write!");
+	}
+	void Write(optional_ptr<ClientContext> context, FileBuffer &block, block_id_t block_id) override {
+		throw InternalException("Cannot perform IO in in-memory database - Write with client context!");
 	}
 	void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");

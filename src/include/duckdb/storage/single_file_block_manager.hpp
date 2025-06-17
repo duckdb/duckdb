@@ -77,7 +77,9 @@ public:
 	void Read(Block &block) override;
 	//! Read the content of a range of blocks into a buffer
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
-	//! Write the given block to disk
+	//! Write the block to disk. Use Write with client context instead.
+	void Write(FileBuffer &buffer, block_id_t block_id) override;
+	//! Write the block to disk.
 	void Write(optional_ptr<ClientContext> context, FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) override;

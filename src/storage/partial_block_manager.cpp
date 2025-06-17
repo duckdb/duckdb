@@ -175,13 +175,17 @@ void PartialBlockManager::ClearBlocks() {
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(nullptr, e.first);
+		e.second->Flush(context, e.first);
 	}
 	partially_filled_blocks.clear();
 }
 
 BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
+}
+
+optional_ptr<ClientContext> PartialBlockManager::GetClientContext() {
+	return context;
 }
 
 void PartialBlockManager::Rollback() {

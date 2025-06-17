@@ -136,7 +136,7 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-IndexStorageInfo BoundIndex::SerializeToDisk(ClientContext &context, const case_insensitive_map_t<Value> &options) {
+IndexStorageInfo BoundIndex::SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) {
 	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
 }
 

@@ -103,7 +103,7 @@ public:
 	void Vacuum(IndexLock &state) override;
 
 	//! Serializes ART memory to disk and returns the ART storage information.
-	IndexStorageInfo SerializeToDisk(ClientContext &context, const case_insensitive_map_t<Value> &options) override;
+	IndexStorageInfo SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) override;
 	//! Serializes ART memory to the WAL and returns the ART storage information.
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 
@@ -153,7 +153,7 @@ private:
 	void TransformToDeprecated();
 	IndexStorageInfo PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage);
 	void Deserialize(const BlockPointer &pointer);
-	void WritePartialBlocks(ClientContext &context, const bool v1_0_0_storage);
+	void WritePartialBlocks(optional_ptr<ClientContext> context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
 	string VerifyAndToStringInternal(const bool only_verify);

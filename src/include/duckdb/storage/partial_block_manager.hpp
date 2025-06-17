@@ -99,7 +99,7 @@ public:
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
-	PartialBlockManager(optional_ptr<ClientContext> client, BlockManager &block_manager,
+	PartialBlockManager(optional_ptr<ClientContext> context, BlockManager &block_manager,
 	                    PartialBlockType partial_block_type, optional_idx max_partial_block_size = optional_idx(),
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
@@ -128,8 +128,14 @@ public:
 
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
+	//! Returns an optional pointer to the context.
+	optional_ptr<ClientContext> GetClientContext();
 
 protected:
+	//! The optional client context in which we use the partial block manager.
+	//! The SingleFileCheckpointWriter contains a partial block manager, and the destructor of
+	//! AttachedDatabase invokes CreateCheckpoint with that checkpoint writer.
+	//! Thus, the context is optional, instead of a reference.
 	optional_ptr<ClientContext> context;
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;

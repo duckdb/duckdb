@@ -649,6 +649,10 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 	}
 }
 
+void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
+	Write(nullptr, buffer, block_id);
+}
+
 void SingleFileBlockManager::Write(optional_ptr<ClientContext> context, FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
 	ChecksumAndWrite(context, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());

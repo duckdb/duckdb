@@ -15,8 +15,7 @@ namespace duckdb {
 class DuckTableEntry;
 class TableStatistics;
 
-//! The table data writer is responsible for writing the data of a table to
-//! storage.
+//! The table data writer is responsible for writing the data of a table to storage.
 //
 //! This is meant to encapsulate and abstract:
 //!  - Storage/encoding of table metadata (block pointers)
