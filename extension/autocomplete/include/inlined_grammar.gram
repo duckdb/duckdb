@@ -791,7 +791,7 @@ IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 Unique <- 'UNIQUE'i
 IndexType <- 'USING'i Identifier
 
-LoadStatement <- 'LOAD'i Identifier
+LoadStatement <- 'LOAD'i ColIdOrString
 InstallStatement <- 'FORCE'i? 'INSTALL'i Identifier FromSource? VersionNumber?
 FromSource <- 'FROM'i (Identifier / StringLiteral)
 VersionNumber <- Identifier
@@ -1160,7 +1160,7 @@ CatalogName <- ColIdOrString
 SchemaName <- ColIdOrString
 TableName <- ColIdOrString
 ColumnName <- DottedIdentifier
-IndexName <- ColId
+IndexName <- ColId ('.' ColId)*
 SettingName <- ColId
 PragmaName <- ColId
 TableFunctionName <- ColIdOrString / FuncName
@@ -1285,7 +1285,7 @@ AttachOptions <- Parens(GenericCopyOptionList)
 
 DetachStatement <- 'DETACH'i Database? IfExists? CatalogName
 
-UseStatement <- 'USE'i UseTarget
+UseStatement <- 'USE'i DottedIdentifier
 
 UseTarget <- (CatalogName '.' SchemaName) / SchemaName / CatalogName
 

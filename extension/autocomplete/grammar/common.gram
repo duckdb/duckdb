@@ -33,7 +33,7 @@ CatalogName <- ColIdOrString
 SchemaName <- ColIdOrString
 TableName <- ColIdOrString
 ColumnName <- DottedIdentifier
-IndexName <- ColId
+IndexName <- ColId ('.' ColId)*
 SettingName <- ColId
 PragmaName <- ColId
 TableFunctionName <- ColIdOrString / FuncName

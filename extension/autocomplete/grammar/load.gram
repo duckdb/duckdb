@@ -1,4 +1,4 @@
-LoadStatement <- 'LOAD'i Identifier
+LoadStatement <- 'LOAD'i ColIdOrString
 InstallStatement <- 'FORCE'i? 'INSTALL'i Identifier FromSource? VersionNumber?
 FromSource <- 'FROM'i (Identifier / StringLiteral)
 VersionNumber <- Identifier
