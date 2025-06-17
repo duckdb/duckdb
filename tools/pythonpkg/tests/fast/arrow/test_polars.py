@@ -328,3 +328,60 @@ class TestPolars(object):
 
         # OR
         assert lazy_df.filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 2
+
+
+    def test_polars_lazy_pushdown_date(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            """
+            CREATE TABLE test_date (
+                a DATE,
+                b DATE,
+                c DATE
+            )
+        """
+        )
+        duckdb_cursor.execute(
+            """
+            INSERT INTO test_date VALUES
+                ('2000-01-01','2000-01-01','2000-01-01'),
+                ('2000-10-01','2000-10-01','2000-10-01'),
+                ('2010-01-01','2000-10-01','2010-01-01'),
+                (NULL,NULL,NULL)
+        """
+        )
+        duck_tbl = duckdb_cursor.table("test_date")
+        lazy_df = duck_tbl.pl(lazy=True)
+
+        # Reference dates
+        d_2000_01_01 = datetime.date(2000, 1, 1)
+        d_2000_10_01 = datetime.date(2000, 10, 1)
+        d_2010_01_01 = datetime.date(2010, 1, 1)
+
+        # == 
+        assert lazy_df.filter(pl.col("a") == d_2000_01_01).select(pl.len()).collect().item() == 1
+        # > 
+        assert lazy_df.filter(pl.col("a") > d_2000_01_01).select(pl.len()).collect().item() == 2
+        # >=
+        assert lazy_df.filter(pl.col("a") >= d_2000_10_01).select(pl.len()).collect().item() == 2
+        # <
+        assert lazy_df.filter(pl.col("a") < d_2000_10_01).select(pl.len()).collect().item() == 1
+        # <=
+        assert lazy_df.filter(pl.col("a") <= d_2000_10_01).select(pl.len()).collect().item() == 2
+
+        # IS NULL
+        assert lazy_df.filter(pl.col("a").is_null()).select(pl.len()).collect().item() == 1
+        # IS NOT NULL
+        assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
+
+        # AND
+        assert lazy_df.filter((pl.col("a") == d_2000_10_01) & (pl.col("b") == d_2000_01_01)).select(pl.len()).collect().item() == 0
+        assert lazy_df.filter(
+            (pl.col("a") == d_2010_01_01) & (pl.col("b") == d_2000_10_01) & (pl.col("c") == d_2010_01_01)
+        ).select(pl.len()).collect().item() == 1
+
+        # OR
+        assert lazy_df.filter(
+            (pl.col("a") == d_2010_01_01) | (pl.col("b") == d_2000_01_01)
+        ).select(pl.len()).collect().item() == 2
+
+

@@ -90,9 +90,14 @@ def _pl_tree_to_sql(tree: dict):
                     seconds = nanoseconds // 1_000_000_000
                     microseconds = (nanoseconds % 1_000_000_000) // 1_000
                     dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
-                    return f"'{str(dt_time)}'::TIME"                    
+                    return f"'{str(dt_time)}'::TIME" 
+                case "Date":
+                    days_since_epoch = value["Date"]
+                    date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)  
+                    return f"'{str(date)}'::DATE"                  
                 case "Boolean":
                     return str(value['Bool'])
+
                 case "String":
                     return "'{}'".format(value['StringOwned'])
                 case _:
