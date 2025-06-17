@@ -342,7 +342,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options) {
-	return CheckAndAddEncryptionKey(main_header, config_options.user_key);
+	return CheckAndAddEncryptionKey(main_header, *config_options.user_key);
 }
 
 void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context) {
@@ -372,11 +372,11 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 		GenerateSalt(db, salt, options);
 		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
 		options.encryption_options.user_key = nullptr;
-	} else if (config.options.contains_user_key && !config.options.user_key.empty()) {
+	} else if (config.options.contains_user_key) {
 		//! user key given in cli (with -key '')
 		//! we generate a random salt for each password
 		GenerateSalt(db, salt, options);
-		EncryptionKeyManager::DeriveKey(config.options.user_key, salt, derived_key);
+		EncryptionKeyManager::DeriveKey(*config.options.user_key, salt, derived_key);
 		options.encryption_options.encryption_enabled = true;
 		config.options.contains_user_key = false;
 	}
@@ -479,14 +479,17 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			CheckAndAddEncryptionKey(main_header);
 			// delete user key ptr
 			options.encryption_options.user_key = nullptr;
-		} else if (!config.options.user_key.empty()) {
+		} else if (config.options.contains_user_key) {
 			//! A new (encrypted) database is added through the Command Line
 			//! If a user key is given, let's try this key
 			//! If it succeeds, we put the key in cache
 			//! input key is with -key in the command line
-			CheckAndAddEncryptionKey(main_header, config.options.user_key);
+			CheckAndAddEncryptionKey(main_header, *config.options.user_key);
 			options.encryption_options.encryption_enabled = true;
 			options.encryption_options.user_key = nullptr;
+
+			//! Set to false once key is used
+			config.options.contains_user_key = false;
 		}
 
 		// the underlying needs to be put down (if no user key nor master key)

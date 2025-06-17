@@ -268,7 +268,7 @@ struct DBConfigOptions {
 	bool old_implicit_casting = false;
 	//! Database encryption key (plaintext)
 	//! This key corresponds to one database
-	string user_key;
+	shared_ptr<string> user_key;
 	bool contains_user_key = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
