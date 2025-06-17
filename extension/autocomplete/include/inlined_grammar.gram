@@ -541,7 +541,7 @@ IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 ValueOrValues <- 'VALUE' / 'VALUES'
 
 IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
-UnpivotHeader <- Identifier / Parens(List(Identifier))
+UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))
 
 ColumnReference <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableQualification? ColumnName)
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?

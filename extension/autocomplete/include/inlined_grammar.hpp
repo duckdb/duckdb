@@ -533,7 +533,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)\n"
 	"ValueOrValues <- 'VALUE' / 'VALUES'\n"
 	"IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'\n"
-	"UnpivotHeader <- Identifier / Parens(List(Identifier))\n"
+	"UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))\n"
 	"ColumnReference <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableQualification? ColumnName)\n"
 	"FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?\n"
 	"FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)\n"

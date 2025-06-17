@@ -1,4 +1,3 @@
-
 PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? GroupByClause?
 
 PivotOn <- 'ON' PivotColumnList
@@ -16,4 +15,4 @@ IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 ValueOrValues <- 'VALUE' / 'VALUES'
 
 IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
-UnpivotHeader <- Identifier / Parens(List(Identifier))
+UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))
