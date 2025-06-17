@@ -9,56 +9,9 @@
 
 using namespace duckdb;
 
-namespace duckdb {
-
-FailureSummary &FailureSummary::Instance() {
-	static FailureSummary instance;
-	return instance;
-}
-
-string FailureSummary::GetFailureSummary() {
-	lock_guard<mutex> guard(summary_mutex);
-	std::ostringstream oss;
-	for (auto &line : failures_summary) {
-		oss << line;
-	}
-	return oss.str();
-}
-
-size_t FailureSummary::GetSummaryCounter() {
-	{
-		lock_guard<mutex> lock(counter_mutex);
-		++failures_summary_counter;
-	}
-	return failures_summary_counter;
-}
-
-bool FailureSummary::SummarizeFailures() {
-	return summarize_failures;
-}
-
-void FailureSummary::SetSummarizeFailures(bool state) {
-	summarize_failures = state;
-}
-} // namespace duckdb
-
 int main(int argc_in, char *argv[]) {
-	auto &summary = FailureSummary::Instance();
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
-
-	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
-	if (summarize) {
-		if (std::string(summarize) == "1") {
-			summary.SetSummarizeFailures(true);
-		}
-	} else {
-		// SUMMARIZE_FAILURES not passed in explicitly - enable by default on CI
-		const char *ci = std::getenv("CI");
-		if (ci) {
-			summary.SetSummarizeFailures(true);
-		}
-	}
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
@@ -87,10 +40,7 @@ int main(int argc_in, char *argv[]) {
 			SetDebugInitialize(0xFF);
 		} else if (argument == "--single-threaded") {
 			SetSingleThreaded();
-		} else if (argument == "--summarize-failures") {
-			summary.SetSummarizeFailures(true);
-		} else if (test_config.ParseArgument(argument, argc, argv, i)) {
-		} else {
+		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
 		}
@@ -111,8 +61,8 @@ int main(int argc_in, char *argv[]) {
 	RegisterSqllogictests();
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	std::string failures_summary = summary.GetFailureSummary();
-	if (!failures_summary.empty() && summary.summarize_failures) {
+	std::string failures_summary = FailureSummary::GetFailureSummary();
+	if (!failures_summary.empty()) {
 		std::cerr << "\n====================================================" << std::endl;
 		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;
 		std::cerr << "====================================================\n" << std::endl;

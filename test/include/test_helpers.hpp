@@ -73,21 +73,4 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 			FAIL(res);                                                                                                 \
 	}
 
-class FailureSummary {
-public:
-	FailureSummary() = default;
-	~FailureSummary() = default;
-	static FailureSummary &Instance();
-	bool summarize_failures;
-	// this counter is for the order number of the failed test case in Failures Summary
-	size_t failures_summary_counter;
-	vector<string> failures_summary;
-	mutex counter_mutex;
-	mutex summary_mutex;
-	string GetFailureSummary();
-	size_t GetSummaryCounter();
-	bool SummarizeFailures();
-	void SetSummarizeFailures(bool state);
-};
-
 } // namespace duckdb

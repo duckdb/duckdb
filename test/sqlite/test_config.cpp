@@ -22,6 +22,7 @@ static const TestConfigOption test_config_options[] = {
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalTypeId::BIGINT},
     {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalTypeId::BOOLEAN},
     {"force_restart", "Force restart the database between runs", LogicalTypeId::BOOLEAN},
+    {"summarize_failures", "Print a summary of all test failures after running", LogicalTypeId::BOOLEAN},
     {"test_memory_leaks", "Run memory leak tests", LogicalTypeId::BOOLEAN},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR},
     {nullptr, nullptr, LogicalTypeId::INVALID},
@@ -49,6 +50,20 @@ void TestConfiguration::Initialize() {
 		}
 		ParseOption(env_name, Value(env_arg));
 	}
+
+	// load summarize failures
+	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
+	if (summarize) {
+		if (std::string(summarize) == "1") {
+			ParseOption("summarize_failures", Value(true));
+		}
+	} else {
+		// SUMMARIZE_FAILURES not passed in explicitly - enable by default on CI
+		const char *ci = std::getenv("CI");
+		if (ci) {
+			ParseOption("summarize_failures", Value(true));
+		}
+	}
 }
 
 bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv, idx_t &i) {
@@ -64,13 +79,36 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}/memory.db"));
 		return true;
 	}
-	if (arg == "--force-reload" || arg == "--force-restart") {
+	if (arg == "--force-reload") {
 		ParseOption("force_restart", Value(true));
 		return true;
 	}
 	if (StringUtil::StartsWith(arg, "--memory-leak") || StringUtil::StartsWith(arg, "--test-memory-leak")) {
 		ParseOption("test_memory_leaks", Value(true));
 		return true;
+	}
+
+	for (idx_t index = 0; test_config_options[index].name != nullptr; index++) {
+		auto &config_option = test_config_options[index];
+		string option_name = "--" + StringUtil::Replace(config_option.name, "_", "-");
+		if (config_option.type == LogicalTypeId::BOOLEAN) {
+			// for booleans we allow "--[option]" and "--no-[option]"
+			string no_option_name = "--no-" + StringUtil::Replace(config_option.name, "_", "-");
+			if (arg == option_name) {
+				ParseOption(config_option.name, Value(true));
+				return true;
+			} else if (arg == no_option_name) {
+				ParseOption(config_option.name, Value(false));
+				return true;
+			}
+		} else if (arg == option_name) {
+			if (i >= argc) {
+				throw std::runtime_error(option_name + " expected an argument");
+			}
+			auto option_value = string(argv[++i]);
+			ParseOption(config_option.name, option_value);
+			return true;
+		}
 	}
 
 	if (!StringUtil::Contains(arg, "=")) {
@@ -169,6 +207,10 @@ bool TestConfiguration::GetTestMemoryLeaks() {
 	return GetOptionOrDefault("test_memory_leaks", false);
 }
 
+bool TestConfiguration::GetSummarizeFailures() {
+	return GetOptionOrDefault("summarize_failures", false);
+}
+
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));
 }
@@ -186,6 +228,39 @@ bool TestConfiguration::TestForceReload() {
 bool TestConfiguration::TestMemoryLeaks() {
 	auto &test_config = TestConfiguration::Get();
 	return test_config.GetTestMemoryLeaks();
+}
+
+FailureSummary::FailureSummary() : failures_summary_counter(0) {
+}
+
+FailureSummary &FailureSummary::Instance() {
+	static FailureSummary instance;
+	return instance;
+}
+
+string FailureSummary::GetFailureSummary() {
+	auto &test_config = TestConfiguration::Get();
+	if (!test_config.GetSummarizeFailures()) {
+		return string();
+	}
+	auto &summary = FailureSummary::Instance();
+	lock_guard<mutex> guard(summary.failures_lock);
+	std::ostringstream oss;
+	for (auto &line : summary.failures_summary) {
+		oss << line;
+	}
+	return oss.str();
+}
+
+void FailureSummary::Log(string log_message) {
+	auto &summary = FailureSummary::Instance();
+	lock_guard<mutex> lock(summary.failures_lock);
+	summary.failures_summary.push_back(std::move(log_message));
+}
+
+idx_t FailureSummary::GetSummaryCounter() {
+	auto &summary = FailureSummary::Instance();
+	return ++summary.failures_summary_counter;
 }
 
 } // namespace duckdb

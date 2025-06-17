@@ -13,6 +13,8 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
@@ -35,6 +37,7 @@ public:
 	bool GetForceRestart();
 	bool GetCheckpointOnShutdown();
 	bool GetTestMemoryLeaks();
+	bool GetSummarizeFailures();
 	DebugVectorVerification GetVectorVerification();
 
 	static bool TestForceStorage();
@@ -47,6 +50,23 @@ private:
 private:
 	template <class T, class VAL_T = T>
 	T GetOptionOrDefault(const string &name, T default_val);
+};
+
+class FailureSummary {
+public:
+	FailureSummary();
+
+	static void Log(string message);
+	static string GetFailureSummary();
+	static idx_t GetSummaryCounter();
+
+private:
+	static FailureSummary &Instance();
+
+private:
+	mutex failures_lock;
+	atomic<idx_t> failures_summary_counter;
+	vector<string> failures_summary;
 };
 
 } // namespace duckdb
