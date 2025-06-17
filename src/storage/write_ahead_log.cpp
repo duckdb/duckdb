@@ -157,8 +157,6 @@ public:
 		// generate nonce
 		uint8_t nonce[MainHeader::AES_IV_LEN];
 		memset(nonce, 0, MainHeader::AES_IV_LEN);
-
-		// get the key temporarily in a rather unsafe way (for now)
 		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
 
 		stream->Write<uint64_t>(size);
@@ -242,7 +240,6 @@ void WriteAheadLog::WriteVersion() {
 	// note that we explicitly do not checksum the version entry
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
-	//! first, the wal_type (1 byte) is written ??
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
 	if (IsEncrypted() && GetDatabase().GetIsEncrypted()) {
 		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));

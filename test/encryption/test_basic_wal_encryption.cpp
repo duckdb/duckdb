@@ -20,11 +20,6 @@ static idx_t GetWALFileVersion(FileSystem &fs, const string &path) {
 	return wal_version;
 }
 
-static idx_t GetWALFileSize(FileSystem &fs, const string &path) {
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-	return fs.GetFileSize(*handle);
-}
-
 TEST_CASE("Test basic wal encryption", "[encryption]") {
 	auto encrypted_database = TestCreatePath("encrypted_wal_test");
 	auto encrypted_wal = encrypted_database + ".wal";
