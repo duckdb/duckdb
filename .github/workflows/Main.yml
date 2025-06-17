@@ -14,6 +14,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -24,6 +25,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
 
 
 concurrency:
