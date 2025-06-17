@@ -1089,7 +1089,8 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	return info;
 }
 
-IndexStorageInfo ART::SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) {
+IndexStorageInfo ART::SerializeToDisk(optional_ptr<ClientContext> context,
+                                      const case_insensitive_map_t<Value> &options) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");

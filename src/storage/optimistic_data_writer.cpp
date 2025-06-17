@@ -5,8 +5,7 @@
 
 namespace duckdb {
 
-OptimisticDataWriter::OptimisticDataWriter(ClientContext &context, DataTable &table)
-    : context(context), table(table) {
+OptimisticDataWriter::OptimisticDataWriter(ClientContext &context, DataTable &table) : context(context), table(table) {
 }
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
