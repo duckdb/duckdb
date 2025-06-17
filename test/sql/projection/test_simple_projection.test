@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # create table
 statement ok
-CREATE TABLE a (i integer, j integer);
+CREATE TABLE a (i integer, j integer);zxcv
 
 # scan empty table
 query II
