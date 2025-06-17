@@ -460,6 +460,8 @@ struct DisableDatabaseInvalidationSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 

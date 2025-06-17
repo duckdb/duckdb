@@ -11,7 +11,7 @@ namespace duckdb {
 MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p,
                                  transaction_t transaction_id_p)
     : context(context_p), start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p),
-      transaction_validity(context_p.db->config.options), active_query(MAXIMUM_QUERY_ID), modified_database(nullptr),
+      transaction_validity(*context_p.db), active_query(MAXIMUM_QUERY_ID), modified_database(nullptr),
       is_read_only(false) {
 }
 

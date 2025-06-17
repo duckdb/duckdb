@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-ValidChecker::ValidChecker(DBConfigOptions &options) : is_invalidated(false), options(options) {
+ValidChecker::ValidChecker(DatabaseInstance &db) : is_invalidated(false), db(db) {
 }
 
 void ValidChecker::Invalidate(string error) {
@@ -14,7 +14,7 @@ void ValidChecker::Invalidate(string error) {
 }
 
 bool ValidChecker::IsInvalidated() {
-	if (options.disable_database_invalidation) {
+	if (db.config.options.disable_database_invalidation) {
 		return false;
 	}
 	return is_invalidated;

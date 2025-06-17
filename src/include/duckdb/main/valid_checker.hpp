@@ -18,7 +18,7 @@ class MetaTransaction;
 
 class ValidChecker {
 public:
-	explicit ValidChecker(DBConfigOptions &options);
+	explicit ValidChecker(DatabaseInstance &db);
 
 	DUCKDB_API static ValidChecker &Get(DatabaseInstance &db);
 	DUCKDB_API static ValidChecker &Get(MetaTransaction &transaction);
@@ -47,8 +47,8 @@ private:
 	atomic<bool> is_invalidated;
 	//! The message invalidating the database instance.
 	string invalidated_msg;
-	//! The DB config options to disable database invalidation.
-	DBConfigOptions &options;
+	//! The database instance.
+	DatabaseInstance &db;
 };
 
 } // namespace duckdb

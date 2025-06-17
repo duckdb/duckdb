@@ -437,10 +437,16 @@ void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 // Disable Database Invalidation
 //===----------------------------------------------------------------------===//
 void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!OnGlobalSet(db, config, input)) {
+		return;
+	}
 	config.options.disable_database_invalidation = input.GetValue<bool>();
 }
 
 void DisableDatabaseInvalidationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!OnGlobalReset(db, config)) {
+		return;
+	}
 	config.options.disable_database_invalidation = DBConfig().options.disable_database_invalidation;
 }
 
