@@ -167,7 +167,8 @@ unique_ptr<DBConfig> GetTestConfig() {
 
 	auto result = make_uniq<DBConfig>();
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
-	result->options.checkpoint_wal_size = 0;
+	result->options.checkpoint_wal_size = test_config.GetCheckpointWALSize();
+	result->options.checkpoint_on_shutdown = test_config.GetCheckpointOnShutdown();
 #else
 	result->options.checkpoint_on_shutdown = false;
 #endif

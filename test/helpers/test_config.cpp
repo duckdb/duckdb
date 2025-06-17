@@ -196,8 +196,8 @@ optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
 }
 
-optional_idx TestConfiguration::GetCheckpointWALSize() {
-	return GetOptionOrDefault<optional_idx, idx_t>("checkpoint_wal_size", optional_idx());
+idx_t TestConfiguration::GetCheckpointWALSize() {
+	return GetOptionOrDefault<idx_t>("checkpoint_wal_size", 0);
 }
 
 bool TestConfiguration::GetForceRestart() {
