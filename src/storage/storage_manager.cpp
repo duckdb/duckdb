@@ -148,6 +148,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.user_key = std::move(storage_options.user_key);
 		options.encryption_options.user_key = &storage_options.user_key;
 	} else if (config.options.contains_user_key || config.options.use_master_key) {
 		// key is given in the command line

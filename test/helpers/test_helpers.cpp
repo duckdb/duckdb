@@ -73,17 +73,6 @@ void DeleteDatabase(string path) {
 	TestDeleteFile(path + ".wal");
 }
 
-bool CheckIfWalExist(string path) {
-
-	if (!custom_test_directory.empty()) {
-		return false;
-	}
-
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	const string file_path = path + ".wal";
-	return fs->FileExists(file_path);
-}
-
 void TestCreateDirectory(string path) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	fs->CreateDirectory(path);
@@ -415,4 +404,5 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	}
 	return true;
 }
+
 } // namespace duckdb
