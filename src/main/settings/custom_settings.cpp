@@ -479,7 +479,7 @@ Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
 // Default User Key
 //===----------------------------------------------------------------------===//
 void DefaultUserKeySetting::SetLocal(ClientContext &context, const Value &input) {
-	auto const type = input.type();
+	auto const &type = input.type();
 	if (type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("\"%s\" is not a valid key. A key must be of type VARCHAR", input.ToString());
 	} else if (input.GetValue<string>().empty()) {
@@ -492,7 +492,8 @@ void DefaultUserKeySetting::SetLocal(ClientContext &context, const Value &input)
 
 void DefaultUserKeySetting::ResetLocal(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	memset(config.options.user_key.get(), 0, config.options.user_key->size());
+	// zero out the memory
+	std::fill(config.options.user_key->begin(), config.options.user_key->end(), '\0');
 	config.options.user_key = nullptr;
 	config.options.contains_user_key = false;
 }

@@ -2369,8 +2369,8 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 void ShellState::OpenDB(int flags) {
 
 	const char *password = nullptr;
-	if (contains_user_key && !user_key.empty()) {
-		password = user_key.c_str();
+	if (contains_user_key && !user_key->empty()) {
+		password = user_key->c_str();
 	}
 
 	if (db == 0) {
@@ -4930,7 +4930,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-key") == 0) {
 			// only possible if there is a database file as input
-			data.user_key = string(cmdline_option_value(argc, argv, ++i));
+			data.user_key = duckdb::make_shared_ptr<string>(cmdline_option_value(argc, argv, ++i));
 			data.contains_user_key = true;
 			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
 		}
@@ -5050,7 +5050,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-key") == 0) {
 			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
-			data.user_key = cmdline_option_value(argc, argv, ++i);
+			data.user_key = duckdb::make_shared_ptr<string>(cmdline_option_value(argc, argv, ++i));
 			data.contains_user_key = true;
 		} else if (strcmp(z, "-version") == 0) {
 			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
