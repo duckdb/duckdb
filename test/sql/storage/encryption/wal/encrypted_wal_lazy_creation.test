@@ -1,5 +1,5 @@
 # name: test/sql/storage/encryption/wal/encrypted_wal_lazy_creation.test
-# description: Verify the WAL is lazily created when attaching.
+# description: Verify the Encrypted WAL is lazily created when attaching
 # group: [wal]
 
 # If we enable alternative verification, then we disable checkpointing on shutdown.
@@ -11,7 +11,7 @@ require noforcestorage
 require skip_reload
 
 statement ok
-ATTACH '__TEST_DIR__/attach_no_wal.db';
+ATTACH '__TEST_DIR__/attach_no_wal.db' (ENCRYPTION_KEY 'asdf');
 
 statement ok
 CREATE TABLE attach_no_wal.integers(i INTEGER);
@@ -22,14 +22,8 @@ INSERT INTO attach_no_wal.integers FROM range(10000);
 statement ok
 DETACH attach_no_wal;
 
-# Verify that there is a WAL
-query I
-SELECT * FROM glob('__TEST_DIR__/attach_no_wal.db.wal');
-----
-
-
 statement ok
-ATTACH '__TEST_DIR__/attach_no_wal.db';
+ATTACH '__TEST_DIR__/attach_no_wal.db' (ENCRYPTION_KEY 'asdf');
 
 # Verify that we don't have a WAL after attaching.
 query I

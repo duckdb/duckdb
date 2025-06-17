@@ -271,7 +271,7 @@ struct DBConfigOptions {
 	shared_ptr<string> user_key;
 	bool contains_user_key = false;
 	//!  By default, WAL is encrypted for encrypted databases
-	bool encrypt_wal = true;
+	bool enable_wal_encryption = true;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.

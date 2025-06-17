@@ -26,7 +26,7 @@ TEST_CASE("Test basic wal encryption", "[encryption]") {
 
 	auto encryption_config = GetTestConfig();
 
-	encryption_config->options.encrypt_wal = true;
+	encryption_config->options.enable_wal_encryption = true;
 	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	encryption_config->options.contains_user_key = true;
 
@@ -57,6 +57,9 @@ TEST_CASE("Test basic wal encryption", "[encryption]") {
 		throw std::runtime_error("Encrypted wal version: " + to_string(encrypted_wal_version));
 	}
 
+	// reset encryption key
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
+
 	{
 		// Reload and read encrypted WAL
 		DuckDB db(encrypted_database, encryption_config.get());
@@ -74,7 +77,7 @@ TEST_CASE("Test wrong key WAL encryption", "[encryption]") {
 	auto encryption_config = GetTestConfig();
 	auto encryption_config_wrong = GetTestConfig();
 
-	encryption_config->options.encrypt_wal = true;
+	encryption_config->options.enable_wal_encryption = true;
 	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	encryption_config->options.contains_user_key = true;
 
@@ -127,7 +130,7 @@ TEST_CASE("Test pragma debug_disable_wal_encryption") {
 
 	auto encryption_config = GetTestConfig();
 
-	encryption_config->options.encrypt_wal = true;
+	encryption_config->options.enable_wal_encryption = true;
 	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	encryption_config->options.contains_user_key = true;
 
@@ -150,6 +153,9 @@ TEST_CASE("Test pragma debug_disable_wal_encryption") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE B (a INTEGER);"));
 	}
 
+	// reset the encryption key
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
+
 	{
 		// reload the database
 		DuckDB db(encrypted_database, encryption_config.get());
@@ -161,6 +167,8 @@ TEST_CASE("Test pragma debug_disable_wal_encryption") {
 	}
 
 	DeleteDatabase(encrypted_database);
+	// reset the encryption key
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
 	{
 		// reload the database
 		DuckDB db(encrypted_database, encryption_config.get());
@@ -183,6 +191,9 @@ TEST_CASE("Test pragma debug_disable_wal_encryption") {
 		throw std::runtime_error("Encrypted wal version: " + to_string(encrypted_wal_version));
 	}
 
+	// reset the encryption key
+	encryption_config->options.user_key = make_shared_ptr<string>("asdf");
+
 	{
 		// reload the database
 		DuckDB db(encrypted_database, encryption_config.get());
@@ -197,7 +208,7 @@ TEST_CASE("Test WAL version", "[encryption]") {
 	auto plaintext_wal = plaintext_database + ".wal";
 
 	auto config = GetTestConfig();
-	config->options.encrypt_wal = false;
+	config->options.enable_wal_encryption = false;
 
 	// make sure the database does not exist
 	DeleteDatabase(plaintext_database);

@@ -257,7 +257,7 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 
 bool WriteAheadLog::IsEncrypted() const {
 	const auto &config = DBConfig::GetConfig(database.GetDatabase());
-	return config.options.encrypt_wal && database.GetIsEncrypted();
+	return config.options.enable_wal_encryption && database.GetIsEncrypted();
 }
 
 //===--------------------------------------------------------------------===//

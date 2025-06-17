@@ -116,11 +116,11 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 }
 
 static void PragmaEnableWalEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.encrypt_wal = true;
+	DBConfig::GetConfig(context).options.enable_wal_encryption = true;
 }
 
 static void PragmaDisableWalEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.encrypt_wal = false;
+	DBConfig::GetConfig(context).options.enable_wal_encryption = false;
 }
 
 static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
