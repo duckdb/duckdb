@@ -162,7 +162,6 @@ static const DefaultMacro internal_macros[] = {
 
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, {{nullptr, nullptr}}, "date + interval"},
-	{DEFAULT_SCHEMA, "make_timestamp_ms", {"milliseconds", nullptr, nullptr}, {{nullptr, nullptr}}, "make_timestamp(milliseconds * 1000::BIGINT)"},
 
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, {{nullptr, nullptr}}, "unnest(string_split_regex(text, pattern))"},

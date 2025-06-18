@@ -2123,10 +2123,17 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
 
-	//	Legacy inverse BIGINT => TIMESTAMP
+	//	Deprecated inverse BIGINT => TIMESTAMP
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 
+	return operator_set;
+}
+
+ScalarFunctionSet MakeTimestampMsFun::GetFunctions() {
+	ScalarFunctionSet operator_set("make_timestamp_ms");
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 	return operator_set;
 }
 
