@@ -30,9 +30,8 @@ static const TestConfigOption test_config_options[] = {
     {"test_memory_leaks", "Run memory leak tests", LogicalTypeId::BOOLEAN, nullptr},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR, nullptr},
-    {"on_connect_script", "Script to execute on connect", LogicalTypeId::VARCHAR,
-     TestConfiguration::ParseConnectScript},
-    {"on_connect", "Script to execute on connect", LogicalTypeId::VARCHAR, nullptr},
+    {"init_script", "Script to execute on init", LogicalTypeId::VARCHAR, TestConfiguration::ParseConnectScript},
+    {"on_init", "Script to execute on init", LogicalTypeId::VARCHAR, nullptr},
     {nullptr, nullptr, LogicalTypeId::INVALID, nullptr},
 };
 
@@ -161,14 +160,14 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 }
 
 string TestConfiguration::OnConnectCommand() {
-	return GetOptionOrDefault("on_connect", string());
+	return GetOptionOrDefault("on_init", string());
 }
 
 void TestConfiguration::ParseConnectScript(const Value &input) {
-	auto on_connect_cmd = ReadFileToString(input.ToString());
+	auto init_cmd = ReadFileToString(input.ToString());
 
 	auto &test_config = TestConfiguration::Get();
-	test_config.ParseOption("on_connect", Value(on_connect_cmd));
+	test_config.ParseOption("on_init", Value(init_cmd));
 }
 
 string TestConfiguration::ReadFileToString(const string &path) {

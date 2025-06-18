@@ -134,10 +134,10 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 
 	auto &test_config = TestConfiguration::Get();
-	auto on_connect_cmd = test_config.OnConnectCommand();
-	if (!on_connect_cmd.empty()) {
-		test_config.ProcessPath(on_connect_cmd, file_name);
-		auto res = con->Query(ReplaceKeywords(on_connect_cmd));
+	auto init_cmd = test_config.OnConnectCommand();
+	if (!init_cmd.empty()) {
+		test_config.ProcessPath(init_cmd, file_name);
+		auto res = con->Query(ReplaceKeywords(init_cmd));
 		if (res->HasError()) {
 			FAIL("Startup queries provided via on_connect failed: " + res->GetError());
 		}
