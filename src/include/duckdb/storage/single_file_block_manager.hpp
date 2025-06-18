@@ -37,7 +37,7 @@ struct EncryptionOptions {
 	//! Key Length
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 	//! User key pointer (to StorageOptions)
-	string *user_key;
+	shared_ptr<string> user_key;
 };
 
 struct StorageManagerOptions {
