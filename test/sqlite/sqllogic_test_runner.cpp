@@ -100,7 +100,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 		ExtensionHelper::LoadExtension(*db, "core_functions");
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
-		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		SQLLogicTestLogger::LoadDatabaseFail(file_name, dbpath, err.Message());
 		FAIL();
 	}
 	Reconnect();
@@ -624,6 +624,7 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 

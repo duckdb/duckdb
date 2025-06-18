@@ -334,8 +334,8 @@ void SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
 	PrintResultString(result);
 }
 
-void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &message) {
-	PrintErrorHeader(string(), 0, "Failed to load database " + dbpath);
+void SQLLogicTestLogger::LoadDatabaseFail(const string &file_name, const string &dbpath, const string &message) {
+	PrintErrorHeader(file_name, 0, "Failed to load database " + dbpath);
 	PrintLineSep();
 	LogFailure("Error message: " + message + "\n");
 	PrintLineSep();

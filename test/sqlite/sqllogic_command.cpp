@@ -617,7 +617,7 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
-				SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());
 				FAIL();
 			}
 		}
