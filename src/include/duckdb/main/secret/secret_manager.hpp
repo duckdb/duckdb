@@ -222,6 +222,7 @@ protected:
 	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
 
 	SecretManager &secret_manager;
+	mutex lock;
 	case_insensitive_set_t persistent_secrets;
 };
 

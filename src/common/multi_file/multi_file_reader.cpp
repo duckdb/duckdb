@@ -56,7 +56,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	if (bind_data) {
 		result->bind_data = unique_ptr_cast<FunctionData, TableFunctionData>(bind_data->Copy());
 	}
-	result->file_list = make_uniq<SimpleMultiFileList>(file_list->GetAllFiles());
+	result->file_list = file_list->Copy();
 	result->multi_file_reader = multi_file_reader->Copy();
 	result->interface = interface->Copy();
 	result->columns = columns;
@@ -371,16 +371,23 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileOp
 	return nullptr;
 }
 
-ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
-                                                    const vector<MultiFileColumnDefinition> &global_columns,
-                                                    const vector<ColumnIndex> &global_column_ids,
-                                                    optional_ptr<TableFilterSet> filters,
-                                                    const OpenFileInfo &initial_file,
-                                                    const MultiFileReaderBindData &bind_data,
-                                                    const virtual_column_map_t &virtual_columns) {
+ReaderInitializeType
+MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
+                               const vector<MultiFileColumnDefinition> &global_columns,
+                               const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
+                               MultiFileList &multi_file_list, const MultiFileReaderBindData &bind_data,
+                               const virtual_column_map_t &virtual_columns, MultiFileColumnMappingMode mapping_mode) {
 	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
-	                                    initial_file, bind_data, virtual_columns);
-	return column_mapper.CreateMapping();
+	                                    multi_file_list, virtual_columns);
+	return column_mapper.CreateMapping(mapping_mode);
+}
+
+ReaderInitializeType MultiFileReader::CreateMapping(
+    ClientContext &context, MultiFileReaderData &reader_data, const vector<MultiFileColumnDefinition> &global_columns,
+    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
+    const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns) {
+	return CreateMapping(context, reader_data, global_columns, global_column_ids, filters, multi_file_list, bind_data,
+	                     virtual_columns, bind_data.mapping);
 }
 
 string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,
@@ -577,12 +584,11 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
                                                        const vector<MultiFileColumnDefinition> &global_columns,
                                                        const vector<ColumnIndex> &global_column_ids,
                                                        optional_ptr<TableFilterSet> table_filters,
-                                                       ClientContext &context,
-                                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
+                                                       ClientContext &context, MultiFileGlobalState &gstate) {
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids, context,
-	             global_state);
-	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
-	                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
+	             gstate.multi_file_reader_state.get());
+	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, gstate.file_list,
+	                     bind_data.reader_bind, bind_data.virtual_columns);
 }
 
 shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

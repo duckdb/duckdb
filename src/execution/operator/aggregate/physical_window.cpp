@@ -218,10 +218,11 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
-                               idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)),
-      order_idx(0), is_order_dependent(false) {
+PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                               vector<unique_ptr<Expression>> select_list_p, idx_t estimated_cardinality,
+                               PhysicalOperatorType type)
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false) {
 
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
@@ -259,6 +260,8 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 		return make_uniq<WindowLeadLagExecutor>(wexpr, context, shared);
+	case ExpressionType::WINDOW_FILL:
+		return make_uniq<WindowFillExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
 		return make_uniq<WindowFirstValueExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:

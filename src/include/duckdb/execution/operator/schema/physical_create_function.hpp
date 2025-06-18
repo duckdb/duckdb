@@ -19,8 +19,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_MACRO;
 
 public:
-	explicit PhysicalCreateFunction(unique_ptr<CreateMacroInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_MACRO, {LogicalType::BIGINT}, estimated_cardinality),
+	explicit PhysicalCreateFunction(PhysicalPlan &physical_plan, unique_ptr<CreateMacroInfo> info,
+	                                idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_MACRO, {LogicalType::BIGINT},
+	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

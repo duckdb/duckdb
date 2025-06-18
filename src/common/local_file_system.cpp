@@ -488,6 +488,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		nr_bytes -= bytes_read;
 		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
+
 	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_to_read, location - UnsafeNumericCast<idx_t>(bytes_to_read));
 }
 
@@ -499,8 +500,10 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
 	}
+
 	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, unix_handle.current_pos);
 	unix_handle.current_pos += UnsafeNumericCast<idx_t>(bytes_read);
+
 	return bytes_read;
 }
 
@@ -696,7 +699,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 	}
 
 	// RAII wrapper around DIR to automatically free on exceptions in callback
-	std::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
+	duckdb::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
 
 	struct dirent *ent;
 	// loop over all files in the directory
@@ -838,13 +841,13 @@ static string AdditionalLockInfo(const std::wstring path) {
 
 	status = RmStartSession(&session, 0, session_key);
 	if (status != ERROR_SUCCESS) {
-		return "";
+		return string();
 	}
 
 	PCWSTR path_ptr = path.c_str();
 	status = RmRegisterResources(session, 1, &path_ptr, 0, NULL, 0, NULL);
 	if (status != ERROR_SUCCESS) {
-		return "";
+		return string();
 	}
 	UINT process_info_size_needed, process_info_size;
 
@@ -852,7 +855,7 @@ static string AdditionalLockInfo(const std::wstring path) {
 	process_info_size = 0;
 	status = RmGetList(session, &process_info_size_needed, &process_info_size, NULL, &reason);
 	if (status != ERROR_MORE_DATA || process_info_size_needed == 0) {
-		return "";
+		return string();
 	}
 
 	// allocate
@@ -866,8 +869,7 @@ static string AdditionalLockInfo(const std::wstring path) {
 		return "";
 	}
 
-	string conflict_string = "File is already open in ";
-
+	string conflict_string;
 	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
 		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
 		auto pid = process_info[process_idx].Process.dwProcessId;
@@ -886,7 +888,10 @@ static string AdditionalLockInfo(const std::wstring path) {
 	}
 
 	RmEndSession(session);
-	return conflict_string;
+	if (conflict_string.empty()) {
+		return string();
+	}
+	return "File is already open in " + conflict_string;
 }
 
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
@@ -950,12 +955,11 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
 
-		auto better_error = AdditionalLockInfo(unicode_path);
-		if (!better_error.empty()) {
-			throw IOException(better_error);
-		} else {
-			throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
+		auto extended_error = AdditionalLockInfo(unicode_path);
+		if (!extended_error.empty()) {
+			extended_error = "\n" + extended_error;
 		}
+		throw IOException("Cannot open file \"%s\": %s%s", path.c_str(), error, extended_error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
 	if (flags.OpenForAppending()) {

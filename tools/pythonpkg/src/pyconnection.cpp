@@ -57,7 +57,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 
@@ -280,7 +279,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
 	      py::arg("compression") = py::none());
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
-	      py::arg("query"));
+	      py::arg("query"), py::kw_only(), py::arg("qualified") = false);
 	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
 	      "Install an extension by name, with an optional version and/or repository to get the extension from",
 	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
@@ -938,6 +937,7 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	                                                "comment"
 	                                                "sep",
 	                                                "delimiter",
+	                                                "files_to_sniff",
 	                                                "dtype",
 	                                                "na_values",
 	                                                "skiprows",
@@ -1010,6 +1010,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object compression = py::none();
 	py::object sep = py::none();
 	py::object delimiter = py::none();
+	py::object files_to_sniff = py::none();
 	py::object dtype = py::none();
 	py::object na_values = py::none();
 	py::object skiprows = py::none();
@@ -1055,6 +1056,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			sep = kwargs[arg_name.c_str()];
 		} else if (arg_name == "delimiter") {
 			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "files_to_sniff") {
+			files_to_sniff = kwargs[arg_name.c_str()];
 		} else if (arg_name == "comment") {
 			comment = kwargs[arg_name.c_str()];
 		} else if (arg_name == "thousands") {
@@ -1193,6 +1196,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		bind_parameters["delim"] = Value(py::str(sep));
 	} else if (has_delimiter) {
 		bind_parameters["delim"] = Value(py::str(delimiter));
+	}
+
+	if (!py::none().is(files_to_sniff)) {
+		if (!py::isinstance<py::int_>(files_to_sniff)) {
+			throw InvalidInputException("read_csv only accepts 'files_to_sniff' as an integer");
+		}
+		bind_parameters["files_to_sniff"] = Value::INTEGER(py::int_(files_to_sniff));
 	}
 
 	if (!py::none().is(names_p)) {
@@ -1750,9 +1760,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
-unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
+unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query, bool qualified) {
 	auto &connection = con.GetConnection();
-	return connection.GetTableNames(query);
+	return connection.GetTableNames(query, qualified);
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
@@ -2074,8 +2084,22 @@ void InstantiateNewInstance(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	PandasScanFunction scan_fun;
 	MapFunction map_fun;
-	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
-	ExtensionUtil::RegisterFunction(db_instance, map_fun);
+
+	TableFunctionSet map_set(map_fun.name);
+	map_set.AddFunction(std::move(map_fun));
+	CreateTableFunctionInfo map_info(std::move(map_set));
+	map_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+
+	TableFunctionSet scan_set(scan_fun.name);
+	scan_set.AddFunction(std::move(scan_fun));
+	CreateTableFunctionInfo scan_info(std::move(scan_set));
+	scan_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+
+	auto &system_catalog = Catalog::GetSystemCatalog(db_instance);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db_instance);
+
+	system_catalog.CreateFunction(transaction, map_info);
+	system_catalog.CreateFunction(transaction, scan_info);
 }
 
 static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {

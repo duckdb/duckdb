@@ -1,0 +1,61 @@
+# name: test/sql/index/art/scan/test_art_scan_duplicate_filters.test
+# description: Test index scans with duplicate filters.
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t_1 (fIdx VARCHAR, sIdx UUID,);
+
+statement ok
+CREATE TABLE t_3 (fIdx VARCHAR, sIdx UUID);
+
+statement ok
+CREATE TABLE t_4 (sIdx UUID);
+
+statement ok
+CREATE TABLE t_5 (sIdx UUID);
+
+statement ok
+CREATE UNIQUE INDEX _pk_idx_t_5 ON t_5 (sIdx);
+
+statement ok
+INSERT INTO t_4 (sIdx) VALUES
+('1381e0ce-6b3e-43f5-9536-5e7af3a512a5'::UUID),
+('6880cdba-09f5-3c4f-8eb8-391aefdd8052'::UUID),
+('a3e876dd-5e50-3af7-9649-689fd938daeb'::UUID),
+('e0abc0d3-63be-41d8-99ca-b1269ed153a8'::UUID);
+
+statement ok
+INSERT INTO t_5 (sIdx) VALUES
+('a3e876dd-5e50-3af7-9649-689fd938daeb'::UUID),
+('e0abc0d3-63be-41d8-99ca-b1269ed153a8'::UUID),
+('91c79790-5828-45f2-ad88-50e9b541cc05'::UUID),
+('1381e0ce-6b3e-43f5-9536-5e7af3a512a5'::UUID),
+('d9f29fa5-2051-3ea4-9d9e-15c3698b4bb8'::UUID),
+('6880cdba-09f5-3c4f-8eb8-391aefdd8052'::UUID),
+('3239280c-2204-3e60-b3a1-3ad3acc8fd59'::UUID),
+('2fced822-342d-344a-aa34-2707e593be52'::UUID);
+
+query I
+WITH
+	cte_5 AS (
+		SELECT sIdx FROM t_4 ANTI JOIN t_3 USING (sIdx)
+	),
+	cte_6 AS MATERIALIZED (
+		SELECT
+			COALESCE(cte_5.sIdx, t_1.sIdx) AS sIdx,
+			COALESCE(t_1.fIdx, cte_5.sIdx::VARCHAR) AS fIdx,
+		FROM cte_5 FULL JOIN t_1 USING (sIdx)
+	),
+	cte_7 AS (
+		SELECT t_5.sIdx, FROM t_5
+		WHERE sIdx IN (SELECT sIdx FROM cte_6)
+	)
+SELECT fIdx, FROM cte_6 JOIN cte_7 USING (sIdx) ORDER BY fIdx;
+----
+1381e0ce-6b3e-43f5-9536-5e7af3a512a5
+6880cdba-09f5-3c4f-8eb8-391aefdd8052
+a3e876dd-5e50-3af7-9649-689fd938daeb
+e0abc0d3-63be-41d8-99ca-b1269ed153a8

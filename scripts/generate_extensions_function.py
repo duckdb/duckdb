@@ -762,7 +762,7 @@ def write_header(data: ExtensionData):
 
 // Check out the check-load-install-extensions  job in .github/workflows/LinuxRelease.yml for more details
 
-namespace duckdb { 
+namespace duckdb {
 
 struct ExtensionEntry {
     char name[48];
@@ -882,6 +882,8 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",
     "core_functions",
     "delta",
+    "ducklake",
+    "encodings",
     "excel",
     "fts",
     "httpfs",

@@ -18,7 +18,8 @@ namespace duckdb {
 //! PhysicalPivot implements the physical PIVOT operation
 class PhysicalPivot : public PhysicalOperator {
 public:
-	PhysicalPivot(vector<LogicalType> types, PhysicalOperator &child, BoundPivotInfo bound_pivot);
+	PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &child,
+	              BoundPivotInfo bound_pivot);
 
 	BoundPivotInfo bound_pivot;
 	//! The map for pivot value -> column index

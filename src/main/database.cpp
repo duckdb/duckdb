@@ -30,6 +30,7 @@
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -95,18 +96,6 @@ DatabaseInstance::~DatabaseInstance() {
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
-}
-
-BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return db.GetBufferManager();
-}
-
-const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
-	return db.GetBufferManager();
-}
-
-BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
-	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
@@ -345,6 +334,7 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_pt
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}
+	instance->db_manager->FinalizeStartup();
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
@@ -539,6 +529,14 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 	}
 	result = global_value->second;
 	return SettingLookupResult(SettingScope::GLOBAL);
+}
+
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+	if (config.encryption_util) {
+		return config.encryption_util;
+	}
+
+	return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

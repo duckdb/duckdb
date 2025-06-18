@@ -367,6 +367,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		params = http_util.InitializeParameters(db, url);
 	}
 
+	// Unclear what's peculiar about extension install flow, but those two parameters are needed
+	// to avoid lengthy retry on 304
+	params->follow_location = false;
+	params->keep_alive = false;
+
 	GetRequestInfo get_request(url, headers, *params, nullptr, nullptr);
 	get_request.try_request = true;
 

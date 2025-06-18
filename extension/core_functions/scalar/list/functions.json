@@ -10,8 +10,8 @@
     },
     {
         "name": "list_aggregate",
-        "parameters": "list,name",
-        "description": "Executes the aggregate function name on the elements of list.",
+        "parameters": "list,function_name",
+        "description": "Executes the aggregate function `function_name` on the elements of `list`.",
         "example": "list_aggregate([1, 2, NULL], 'min')",
         "categories": ["list"],
         "type": "scalar_function",
@@ -20,7 +20,7 @@
     {
         "name": "list_distinct",
         "parameters": "list",
-        "description": "Removes all duplicates and NULLs from a list. Does not preserve the original order.",
+        "description": "Removes all duplicates and `NULL` values from a list. Does not preserve the original order.",
         "example": "list_distinct([1, 1, NULL, -3, 1, 5])",
         "categories": ["list"],
         "type": "scalar_function",
@@ -29,7 +29,7 @@
     {
         "name": "list_unique",
         "parameters": "list",
-        "description": "Counts the unique elements of a list.",
+        "description": "Counts the unique elements of a `list`.",
         "example": "list_unique([1, 1, NULL, -3, 1, 5])",
         "categories": ["list"],
         "type": "scalar_function",
@@ -84,7 +84,7 @@
     {
         "name": "list_grade_up",
         "parameters": "list",
-        "description": "Returns the index of their sorted position.",
+        "description": "Works like list_sort, but the results are the indexes that correspond to the position in the original list instead of the actual values.",
         "example": "list_grade_up([3, 6, 1, 2])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -101,28 +101,28 @@
     },
     {
         "name": "list_transform",
-        "parameters": "list,lambda",
-        "description": "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.",
-        "example": "list_transform([1, 2, 3], x -> x + 1)",
-        "categories": ["list"],
+        "parameters": "list,lambda(x)",
+        "description": "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. The return type is defined by the return type of the `lambda` function.",
+        "example": "list_transform([1, 2, 3], lambda x : x + 1)",
+        "categories": ["list", "lambda"],
         "type": "scalar_function",
         "aliases": ["array_transform", "list_apply", "array_apply", "apply"]
     },
     {
         "name": "list_filter",
-        "parameters": "list,lambda",
-        "description": "Constructs a list from those elements of the input `list` for which the `lambda` function returns true. See the Lambda Functions page for more details.",
-        "example": "list_filter([3, 4, 5], x -> x > 4)",
-        "categories": ["list"],
+        "parameters": "list,lambda(x)",
+        "description": "Constructs a list from those elements of the input `list` for which the `lambda` function returns `true`. DuckDB must be able to cast the `lambda` function's return type to `BOOL`. The return type of `list_filter` is the same as the input list's.",
+        "example": "list_filter([3, 4, 5], lambda x : x > 4)",
+        "categories": ["list", "lambda"],
         "type": "scalar_function",
         "aliases": ["array_filter", "filter"]
     },
     {
         "name": "list_reduce",
-        "parameters": "list,lambda[,initial]",
-        "description": "Returns a single value that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.",
-        "example": "list_reduce([1, 2, 3], (x, y) -> x + y)",
-        "categories": ["list"],
+        "parameters": "list,lambda(x, y),initial_value",
+        "description": "Reduces all elements of the input `list` into a single scalar value by executing the `lambda` function on a running result and the next list element. The `lambda` function has an optional `initial_value` argument.",
+        "example": "list_reduce([1, 2, 3], lambda x, y : x + y)",
+        "categories": ["list", "lambda"],
         "type": "scalar_function_set",
         "aliases": ["array_reduce", "reduce"]
     },
@@ -146,7 +146,7 @@
     {
         "name": "list_cosine_distance",
         "parameters": "list1,list2",
-        "description": "Computes the cosine distance between two lists.",
+        "description": "Computes the cosine distance between two same-sized lists.",
         "example": "list_cosine_distance([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -155,7 +155,7 @@
     {
         "name": "list_cosine_similarity",
         "parameters": "list1,list2",
-        "description": "Computes the cosine similarity between two lists.",
+        "description": "Computes the cosine similarity between two same-sized lists.",
         "example": "list_cosine_similarity([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set"
@@ -163,8 +163,8 @@
     {
         "name": "list_distance",
         "parameters": "list1,list2",
-        "description": "Computes the distance between two lists.",
-        "example": "list_distance([1, 2, 3], [1, 2, 3])",
+        "description": "Calculates the Euclidean distance between two points with coordinates given in two inputs lists of equal length.",
+        "example": "list_distance([1, 2, 3], [1, 2, 5])",
         "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["<->"]
@@ -172,7 +172,7 @@
     {
         "name": "list_inner_product",
         "parameters": "list1,list2",
-        "description": "Computes the inner product between two lists.",
+        "description": "Computes the inner product between two same-sized lists.",
         "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -181,7 +181,7 @@
     {
         "name": "list_negative_inner_product",
         "parameters": "list1,list2",
-        "description": "Computes the negative inner product between two lists.",
+        "description": "Computes the negative inner product between two same-sized lists.",
         "example": "list_negative_inner_product([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
         "type": "scalar_function_set",
@@ -197,7 +197,7 @@
     },
     {
         "name": "list_has_any",
-        "parameters": "l1, l2",
+        "parameters": "list1,list2",
         "description": "Returns true if the lists have any element in common. NULLs are ignored.",
         "example": "list_has_any([1, 2, 3], [2, 3, 4])",
         "categories": ["list"],
@@ -206,8 +206,8 @@
     },
     {
         "name": "list_has_all",
-        "parameters": "l1, l2",
-        "description": "Returns true if all elements of l2 are in l1. NULLs are ignored.",
+        "parameters": "list1,list2",
+        "description": "Returns true if all elements of list2 are in list1. NULLs are ignored.",
         "example": "list_has_all([1, 2, 3], [2, 3])",
         "categories": ["list"],
         "type": "scalar_function",

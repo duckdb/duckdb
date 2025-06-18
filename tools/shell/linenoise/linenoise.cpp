@@ -1016,7 +1016,7 @@ char Linenoise::Search(char c) {
 
 bool Linenoise::AllWhitespace(const char *z) {
 	for (; *z; z++) {
-		if (isspace((unsigned char)z[0]))
+		if (StringUtil::CharacterIsSpace((unsigned char)z[0]))
 			continue;
 		if (*z == '/' && z[1] == '*') {
 			z += 2;

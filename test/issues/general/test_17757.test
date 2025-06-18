@@ -1,0 +1,44 @@
+# name: test/issues/general/test_17757.test
+# description: Issue 17757 - Aggregation filter not working all the time on Linux, but working on MacOS
+# group: [general]
+
+statement ok
+CREATE TABLE id_mapping (
+  id HUGEINT NOT NULL,
+  child_id HUGEINT NOT NULL
+) ;
+
+statement ok
+INSERT INTO id_mapping (id, child_id)
+SELECT id, UNNEST(child_ids)
+FROM (
+  SELECT
+    i AS id,
+    [10000 + i, 20000 + i, 30000 + i] AS child_ids
+  FROM generate_series(1000) t(i)
+) ;
+
+statement ok
+INSERT INTO id_mapping (id, child_id)
+SELECT id, id FROM id_mapping ;
+
+query II
+SELECT
+  id,
+  ARRAY_AGG(child_id) FILTER ( child_id != id )
+   AS child_ids
+FROM id_mapping
+GROUP BY id
+HAVING LENGTH(child_ids) != 3;
+----
+
+
+query II
+SELECT
+  id,
+  ARRAY_AGG(child_id) FILTER ( child_id != id )
+   AS child_ids
+FROM id_mapping
+GROUP BY id
+HAVING LENGTH(child_ids) != 3;
+----

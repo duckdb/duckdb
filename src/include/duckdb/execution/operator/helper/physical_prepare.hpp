@@ -19,8 +19,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PREPARE;
 
 public:
-	PhysicalPrepare(string name_p, shared_ptr<PreparedStatementData> prepared, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}, estimated_cardinality),
+	PhysicalPrepare(PhysicalPlan &physical_plan, string name_p, shared_ptr<PreparedStatementData> prepared,
+	                idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      name(std::move(name_p)), prepared(std::move(prepared)) {
 	}
 

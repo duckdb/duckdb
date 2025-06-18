@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/tableref/bound_at_clause.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 namespace duckdb {
 
@@ -133,20 +134,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		for (auto found_cte : found_ctes) {
 			auto &cte = found_cte.get();
 			auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
-			if (ctebinding && (cte.query->node->type == QueryNodeType::RECURSIVE_CTE_NODE ||
-			                   cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS)) {
+			if (ctebinding) {
 				// There is a CTE binding in the BindContext.
 				// This can only be the case if there is a recursive CTE,
 				// or a materialized CTE present.
 				auto index = GenerateTableIndex();
 				auto materialized = cte.materialized;
-				if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-					materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-#else
-					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-#endif
-				}
 
 				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
 					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
@@ -196,19 +189,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					                      "referenced from this part of the query.",
 					                      ref.table_name);
 				}
-
-				// Move CTE to subquery and bind recursively
-				SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
-				subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				subquery.column_name_alias = cte.aliases;
-				for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
-					if (i < subquery.column_name_alias.size()) {
-						subquery.column_name_alias[i] = ref.column_name_alias[i];
-					} else {
-						subquery.column_name_alias.push_back(ref.column_name_alias[i]);
-					}
-				}
-				return Bind(subquery, &found_cte.get());
 			}
 		}
 		if (circular_cte) {
@@ -298,6 +278,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data, table_lookup);
+		if (bind_data && !bind_data->SupportStatementCache()) {
+			SetAlwaysRequireRebind();
+		}
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
@@ -339,7 +322,35 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
-		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.GetQuery().Copy()));
+
+		// The view may contain CTEs, but maybe only in the cte_map, so we need create CTE nodes for them
+		auto query = view_catalog_entry.GetQuery().Copy();
+		auto &select_stmt = query->Cast<SelectStatement>();
+
+		vector<unique_ptr<CTENode>> materialized_ctes;
+		for (auto &cte : select_stmt.node->cte_map.map) {
+			auto &cte_entry = cte.second;
+			auto mat_cte = make_uniq<CTENode>();
+			mat_cte->ctename = cte.first;
+			mat_cte->query = cte_entry->query->node->Copy();
+			mat_cte->aliases = cte_entry->aliases;
+			mat_cte->materialized = cte_entry->materialized;
+			materialized_ctes.push_back(std::move(mat_cte));
+		}
+
+		auto root = std::move(select_stmt.node);
+		while (!materialized_ctes.empty()) {
+			unique_ptr<CTENode> node_result;
+			node_result = std::move(materialized_ctes.back());
+			node_result->cte_map = root->cte_map.Copy();
+			node_result->child = std::move(root);
+			root = std::move(node_result);
+			materialized_ctes.pop_back();
+		}
+		select_stmt.node = std::move(root);
+
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(query)));
+
 		subquery.alias = ref.alias;
 		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
 		// subquery aliases
@@ -366,7 +377,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names if the view has type info defined
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
-		if (GetBindingMode() != BindingMode::EXTRACT_NAMES && view_catalog_entry.HasTypes()) {
+		if (GetBindingMode() != BindingMode::EXTRACT_NAMES &&
+		    GetBindingMode() != BindingMode::EXTRACT_QUALIFIED_NAMES && view_catalog_entry.HasTypes()) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing

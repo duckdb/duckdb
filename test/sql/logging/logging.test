@@ -27,7 +27,7 @@ set enable_logging=false;
 
 # With logging disabled, the log will persist
 query IIIII
-SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs where type = 'QueryLog'
 ----
 QueryLog	INFO	SELECT 1;	CONNECTION	NULL
 QueryLog	INFO	SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs	CONNECTION	NULL

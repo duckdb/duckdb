@@ -349,6 +349,9 @@ struct LogicalType {
 
 	DUCKDB_API void Verify() const;
 
+	DUCKDB_API bool IsSigned() const;
+	DUCKDB_API bool IsUnsigned() const;
+
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
 
