@@ -228,9 +228,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
-	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
-	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
-
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("debug_enable_temp_file_encryption", PragmaEnableTempFilesEncryption));
 	set.AddFunction(
