@@ -132,6 +132,15 @@ void SQLLogicTestRunner::Reconnect() {
 	if (!local_extension_repo.empty()) {
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
 	}
+
+	auto &test_config = TestConfiguration::Get();
+	auto on_connect_cmd = test_config.OnConnectCommand();
+	if (!on_connect_cmd.empty()) {
+		auto res = con->Query(ReplaceKeywords(on_connect_cmd));
+		if (res->HasError()) {
+			FAIL("Startup queries provided via on_connect failed: " + res->GetError());
+		}
+	}
 }
 
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {

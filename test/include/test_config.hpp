@@ -41,10 +41,13 @@ public:
 	bool GetSummarizeFailures();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
+	string OnConnectCommand();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
 	static bool TestMemoryLeaks();
+
+	static void ParseConnectScript(const Value &input);
 
 private:
 	case_insensitive_map_t<Value> options;
@@ -52,6 +55,8 @@ private:
 private:
 	template <class T, class VAL_T = T>
 	T GetOptionOrDefault(const string &name, T default_val);
+
+	static string ReadFileToString(const string &path);
 };
 
 class FailureSummary {

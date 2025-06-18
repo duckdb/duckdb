@@ -9,24 +9,31 @@
 
 namespace duckdb {
 
+typedef void (*on_set_option_t)(const Value &input);
+
 struct TestConfigOption {
 	const char *name;
 	const char *description;
 	LogicalTypeId type;
+	on_set_option_t on_set_option;
 };
 
 static const TestConfigOption test_config_options[] = {
-    {"description", "Config description", LogicalTypeId::VARCHAR},
-    {"initial_db", "Initial database path", LogicalTypeId::VARCHAR},
-    {"max_threads", "Max threads to use during tests", LogicalTypeId::BIGINT},
-    {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalTypeId::BIGINT},
-    {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalTypeId::BOOLEAN},
-    {"force_restart", "Force restart the database between runs", LogicalTypeId::BOOLEAN},
-    {"summarize_failures", "Print a summary of all test failures after running", LogicalTypeId::BOOLEAN},
-    {"test_memory_leaks", "Run memory leak tests", LogicalTypeId::BOOLEAN},
-    {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR},
-    {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR},
-    {nullptr, nullptr, LogicalTypeId::INVALID},
+    {"description", "Config description", LogicalTypeId::VARCHAR, nullptr},
+    {"initial_db", "Initial database path", LogicalTypeId::VARCHAR, nullptr},
+    {"max_threads", "Max threads to use during tests", LogicalTypeId::BIGINT, nullptr},
+    {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalTypeId::BIGINT,
+     nullptr},
+    {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalTypeId::BOOLEAN, nullptr},
+    {"force_restart", "Force restart the database between runs", LogicalTypeId::BOOLEAN, nullptr},
+    {"summarize_failures", "Print a summary of all test failures after running", LogicalTypeId::BOOLEAN, nullptr},
+    {"test_memory_leaks", "Run memory leak tests", LogicalTypeId::BOOLEAN, nullptr},
+    {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR, nullptr},
+    {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR, nullptr},
+    {"on_connect_script", "Script to execute on connect", LogicalTypeId::VARCHAR,
+     TestConfiguration::ParseConnectScript},
+    {"on_connect", "Script to execute on connect", LogicalTypeId::VARCHAR, nullptr},
+    {nullptr, nullptr, LogicalTypeId::INVALID, nullptr},
 };
 
 TestConfiguration &TestConfiguration::Get() {
@@ -150,16 +157,32 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	}
 }
 
-void TestConfiguration::LoadConfig(const string &config_path) {
-	// read the config file
-	std::ifstream infile(config_path);
+string TestConfiguration::OnConnectCommand() {
+	return GetOptionOrDefault("on_connect", string());
+}
+
+void TestConfiguration::ParseConnectScript(const Value &input) {
+	auto on_connect_cmd = ReadFileToString(input.ToString());
+
+	auto &test_config = TestConfiguration::Get();
+	test_config.ParseOption("on_connect", Value(on_connect_cmd));
+}
+
+string TestConfiguration::ReadFileToString(const string &path) {
+	std::ifstream infile(path);
 	if (infile.bad() || infile.fail()) {
-		throw std::runtime_error("Failed to open configuration file " + config_path);
+		throw std::runtime_error("Failed to open configuration file " + path);
 	}
 	std::stringstream buffer;
 	buffer << infile.rdbuf();
+	return buffer.str();
+}
+
+void TestConfiguration::LoadConfig(const string &config_path) {
+	// read the config file
+	auto buffer = ReadFileToString(config_path);
 	// parse json
-	auto json = StringUtil::ParseJSONMap(buffer.str());
+	auto json = StringUtil::ParseJSONMap(buffer);
 	auto json_values = json->Flatten();
 	for (auto &entry : json_values) {
 		ParseOption(entry.first, Value(entry.second));
