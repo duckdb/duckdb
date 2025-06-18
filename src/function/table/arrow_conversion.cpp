@@ -370,7 +370,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, const ArrowScan
 			auto blob_len = offsets[row_idx + 1] - offsets[row_idx];
 			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
 		}
-	} else {
+	}  else {
 		//! Check if last offset is higher than max uint32
 		if (ArrowBufferData<uint64_t>(array, 1)[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
 			throw ConversionException("DuckDB does not support Blobs over 4GB");
@@ -912,6 +912,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::UUID:
 		UUIDConversion(vector, array, scan_state, nested_offset, NumericCast<int64_t>(parent_offset), size);
 		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::VARCHAR: {
 		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
 		auto size_type = string_info.GetSizeType();
@@ -924,7 +927,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			break;
 		}
 		case ArrowVariableSizeType::NORMAL:
-		case ArrowVariableSizeType::FIXED_SIZE: {
+		{
 			auto cdata = ArrowBufferData<char>(array, 2);
 			auto offsets = ArrowBufferData<uint32_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
@@ -936,6 +939,23 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			    vector, size, array,
 			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset));
 			break;
+		}
+		case ArrowVariableSizeType::FIXED_SIZE: {
+			SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
+			auto fixed_size = string_info.FixedSize();
+			//! Have to check validity mask before setting this up
+			idx_t offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset) * fixed_size;
+				auto cdata = ArrowBufferData<char>(array, 1);
+				for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+					if (FlatVector::IsNull(vector, row_idx)) {
+						continue;
+					}
+					auto bptr = cdata + offset;
+					auto blob_len = fixed_size;
+					FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+					offset += blob_len;
+				}
+
 		}
 		}
 		break;
@@ -1104,13 +1124,6 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		default:
 			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
 		}
-		break;
-	}
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT: {
-		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset,
-		                  NumericCast<int64_t>(parent_offset));
 		break;
 	}
 	case LogicalTypeId::LIST: {
