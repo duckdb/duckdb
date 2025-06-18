@@ -971,25 +971,7 @@ py::object DuckDBPyRelation::ToArrowCapsule(const py::object &requested_schema) 
 	return res;
 }
 
-PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size, py::kwargs &kwargs) {
-	py::object lazy_object = py::none();
-	bool lazy = false;
-	for (auto &arg : kwargs) {
-		const auto &arg_name = py::str(arg.first).cast<std::string>();
-		if (arg_name == "lazy") {
-			lazy_object = kwargs[arg_name.c_str()];
-		} else {
-			throw InvalidInputException(".pl() only accepts 'lazy' as a kwargs option");
-		}
-	}
-
-	if (!py::none().is(lazy_object)) {
-		if (!py::isinstance<py::bool_>(lazy_object)) {
-			throw InvalidInputException(".pl() only accepts 'lazy' as a boolean");
-		}
-		lazy = py::bool_(lazy_object);
-	}
-
+PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size, bool lazy) {
 	if (!lazy) {
 		auto arrow = ToArrowTableInternal(batch_size, true);
 		return py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(arrow));

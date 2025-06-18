@@ -385,8 +385,6 @@
 				"type": "int"
 			}
 		],
-
-		"kwargs_as_dict": true,
 		"kwargs": [
 			{
 				"name": "lazy",
