@@ -3,6 +3,8 @@
 
 require parquet
 
+require noforcestorage
+
 require no_alternative_verify
 
 statement ok

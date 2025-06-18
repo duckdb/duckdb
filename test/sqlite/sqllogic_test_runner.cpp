@@ -122,7 +122,6 @@ void SQLLogicTestRunner::Reconnect() {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif
-	auto &test_config = TestConfiguration::Get();
 	auto &client_config = ClientConfig::GetConfig(*con->context);
 	client_config.enable_progress_bar = true;
 	client_config.print_progress_bar = false;

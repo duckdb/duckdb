@@ -1,6 +1,8 @@
 # name: test/sql/catalog/sequence/test_duckdb_sequences.test
 # group: [sequence]
 
+require noforcestorage
+
 statement ok
 create sequence my_seq;
 

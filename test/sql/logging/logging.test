@@ -2,6 +2,8 @@
 # description: Test logging functionality
 # group: [logging]
 
+require noforcestorage
+
 query IIIIIIIII
 from duckdb_logs
 ----
