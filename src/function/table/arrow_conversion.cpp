@@ -947,18 +947,20 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		case ArrowVariableSizeType::FIXED_SIZE: {
 			SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
 			auto fixed_size = string_info.FixedSize();
-			//! Have to check validity mask before setting this up
+			// Have to check validity mask before setting this up
 			idx_t offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset) * fixed_size;
-				auto cdata = ArrowBufferData<char>(array, 1);
-				for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-					if (FlatVector::IsNull(vector, row_idx)) {
-						continue;
-					}
-					auto bptr = cdata + offset;
-					auto blob_len = fixed_size;
-					FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+			auto cdata = ArrowBufferData<char>(array, 1);
+			auto blob_len = fixed_size;
+			auto result = FlatVector::GetData<string_t>(vector);
+			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+				if (FlatVector::IsNull(vector, row_idx)) {
 					offset += blob_len;
+					continue;
 				}
+				auto bptr = cdata + offset;
+				result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+				offset += blob_len;
+			}
 
 		}
 		}
