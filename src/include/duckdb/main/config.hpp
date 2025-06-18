@@ -268,20 +268,12 @@ struct DBConfigOptions {
 	bool old_implicit_casting = false;
 	//! Database encryption key (plaintext)
 	//! This key corresponds to one database
-	string user_key;
+	shared_ptr<string> user_key;
 	bool contains_user_key = false;
-	//! Database encryption master key
-	//! If this key is added by the user
-	//! All database files will be [en/de]crypted with the master key
-	//! Unless specified otherwise
-	string master_key;
-	//! If a master key is given
-	//! All db files are encrypted
-	bool use_master_key = false;
 	//!  By default, WAL is encrypted for encrypted databases
-	bool encrypt_wal = true;
+	bool enable_wal_encryption = true;
 	//! Encrypt the temp files
-	bool encrypt_temp_files = false;
+	bool enable_temp_file_encryption = false;
 	//! Full encryption mode (by default on)
 	bool full_encryption = true;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).

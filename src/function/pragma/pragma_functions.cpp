@@ -117,21 +117,21 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 }
 
 static void PragmaEnableWalEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.encrypt_wal = true;
+	DBConfig::GetConfig(context).options.enable_wal_encryption = true;
 }
 
 static void PragmaDisableWalEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.encrypt_wal = false;
+	DBConfig::GetConfig(context).options.enable_wal_encryption = false;
 }
 
 static void PragmaEnableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.encrypt_temp_files = true;
+	DBConfig::GetConfig(context).options.enable_temp_file_encryption = true;
 	//! A randomly generated key for encrypting temporary files gets added
 	EncryptionEngine::AddTempKeyToCache(*context.db);
 }
 
 static void PragmaDisableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.encrypt_temp_files = false;
+	DBConfig::GetConfig(context).options.enable_temp_file_encryption = false;
 }
 
 static void PragmaEnableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
@@ -226,6 +226,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
 
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
 

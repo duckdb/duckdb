@@ -137,7 +137,6 @@ private:
 	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);
 	void CheckAndAddEncryptionKey(MainHeader &main_header);
 	void CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options);
-	void CheckAndAddDerivedMasterKey(MainHeader &main_header, const_data_ptr_t master_key, idx_t key_size);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();

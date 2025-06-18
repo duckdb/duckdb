@@ -317,7 +317,7 @@ bool TemporaryFileHandle::DeleteIfEmpty() {
 }
 
 bool TemporaryFileHandle::IsEncrypted() const {
-	{ return (db.config.options.encrypt_temp_files && db.config.options.full_encryption); }
+	{ return (db.config.options.enable_temp_file_encryption && db.config.options.full_encryption); }
 }
 
 TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
@@ -644,7 +644,7 @@ void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
 }
 
 bool TemporaryFileManager::IsEncrypted() const {
-	return (db.config.options.encrypt_temp_files && db.config.options.full_encryption);
+	return (db.config.options.enable_temp_file_encryption && db.config.options.full_encryption);
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,

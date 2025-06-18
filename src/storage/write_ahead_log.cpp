@@ -157,8 +157,6 @@ public:
 		// generate nonce
 		uint8_t nonce[MainHeader::AES_IV_LEN];
 		memset(nonce, 0, MainHeader::AES_IV_LEN);
-
-		// get the key temporarily in a rather unsafe way (for now)
 		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
 
 		stream->Write<uint64_t>(size);
@@ -259,7 +257,7 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 
 bool WriteAheadLog::IsEncrypted() const {
 	const auto &config = DBConfig::GetConfig(database.GetDatabase());
-	return config.options.encrypt_wal && config.options.full_encryption && database.GetIsEncrypted();
+	return config.options.enable_wal_encryption && database.GetIsEncrypted() && config.options.full_encryption;
 }
 
 //===--------------------------------------------------------------------===//
