@@ -7,7 +7,7 @@ namespace duckdb {
 // ArrowTypeInfo
 //===--------------------------------------------------------------------===//
 
-ArrowTypeInfo::ArrowTypeInfo(ArrowTypeInfoType type) : type(type) {
+ArrowTypeInfo::ArrowTypeInfo(ArrowTypeInfoType type) : InteropInfo(InteropInfoType::ARROW), type(type) {
 }
 
 ArrowTypeInfo::~ArrowTypeInfo() {

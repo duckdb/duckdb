@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
@@ -234,8 +235,12 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
 		return true;
+	case LogicalTypeId::BLOB:
+		return static_cast<ArrowTypeInfo *>(type.AuxInfo()->interop_info.get())
+		           ->Cast<ArrowTypeInfo>()
+		           .Cast<ArrowStringInfo>()
+		           .GetSizeType() != ArrowVariableSizeType::VIEW;
 	case LogicalTypeId::DECIMAL: {
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:

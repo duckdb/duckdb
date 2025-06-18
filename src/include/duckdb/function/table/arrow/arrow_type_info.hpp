@@ -21,9 +21,17 @@ namespace duckdb {
 
 class ArrowType;
 
-struct ArrowTypeInfo {
+enum InteropInfoType { ARROW };
+
+struct InteropInfo {
+	explicit InteropInfo(const InteropInfoType type) : type(type) {};
+
+	InteropInfoType type;
+};
+
+struct ArrowTypeInfo : public InteropInfo {
 public:
-	explicit ArrowTypeInfo() : type() {
+	explicit ArrowTypeInfo() : InteropInfo(InteropInfoType::ARROW), type() {
 	}
 
 	explicit ArrowTypeInfo(ArrowTypeInfoType type);

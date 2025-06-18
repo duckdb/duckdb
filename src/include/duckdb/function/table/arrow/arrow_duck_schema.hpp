@@ -60,7 +60,7 @@ private:
 class ArrowType {
 public:
 	//! From a DuckDB type
-	explicit ArrowType(LogicalType type_p, unique_ptr<ArrowTypeInfo> type_info = nullptr)
+	explicit ArrowType(LogicalType type_p, shared_ptr<ArrowTypeInfo> type_info = nullptr)
 	    : type(std::move(type_p)), type_info(std::move(type_info)) {
 	}
 	explicit ArrowType(string error_message_p, bool not_implemented_p = false)
@@ -105,7 +105,7 @@ protected:
 	unique_ptr<ArrowType> dictionary_type;
 	//! Is run-end-encoded
 	bool run_end_encoded = false;
-	unique_ptr<ArrowTypeInfo> type_info;
+	shared_ptr<ArrowTypeInfo> type_info;
 	//! Error message in case of an invalid type (i.e., from an unsupported extension)
 	string error_message;
 	//! In case of an error do we throw not implemented?
