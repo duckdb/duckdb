@@ -365,6 +365,7 @@ bool BaseTokenizer::TokenizeInput() {
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
+			last_pos = i + 1;
 			break;
 		}
 		default:

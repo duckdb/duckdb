@@ -4,6 +4,8 @@
 
 require autocomplete
 
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$set variable time_travel_snapshot_id = $$foo$$$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select $🦆$du ck$🦆$ = $🦆$du　ck$🦆$;$TEST_PEG_PARSER$);
