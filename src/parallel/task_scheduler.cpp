@@ -74,12 +74,13 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 }
 
 void ConcurrentQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
+	typedef std::make_signed<std::size_t>::type ssize_t;
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	for (auto &task : tasks) {
 		task->token = token;
 	}
 	if (q.enqueue_bulk(token.token->queue_token, std::make_move_iterator(tasks.begin()), tasks.size())) {
-		semaphore.signal(tasks.size());
+		semaphore.signal(NumericCast<ssize_t>(tasks.size()));
 	} else {
 		throw InternalException("Could not schedule tasks!");
 	}
