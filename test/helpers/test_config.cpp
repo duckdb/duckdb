@@ -205,7 +205,7 @@ bool TestConfiguration::GetForceRestart() {
 }
 
 bool TestConfiguration::GetCheckpointOnShutdown() {
-	return GetOptionOrDefault("checkpoint_on_shutdown", false);
+	return GetOptionOrDefault("checkpoint_on_shutdown", true);
 }
 
 bool TestConfiguration::GetTestMemoryLeaks() {
