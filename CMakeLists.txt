@@ -430,6 +430,7 @@ option(EXTENSION_STATIC_BUILD
 
 if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
 
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
