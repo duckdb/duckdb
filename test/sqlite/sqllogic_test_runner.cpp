@@ -139,7 +139,7 @@ void SQLLogicTestRunner::Reconnect() {
 		test_config.ProcessPath(init_cmd, file_name);
 		auto res = con->Query(ReplaceKeywords(init_cmd));
 		if (res->HasError()) {
-			FAIL("Startup queries provided via on_connect failed: " + res->GetError());
+			FAIL("Startup queries provided via on_init failed: " + res->GetError());
 		}
 	}
 }
