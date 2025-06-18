@@ -228,8 +228,6 @@ TEST_CASE("Test WAL version", "[encryption]") {
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO test VALUES (11, 22), (NULL, 22), (12, 21);"));
 	REQUIRE_NO_FAIL(conn->Query("UPDATE test SET b=b+1 WHERE a=11;"));
 
-	auto handle = lfs.OpenFile(plaintext_wal, FileFlags::FILE_FLAGS_WRITE);
-
 	// Test if WAL file exists
 	if (!lfs.FileExists(plaintext_wal)) {
 		throw std::runtime_error("WAL file does not exist");
