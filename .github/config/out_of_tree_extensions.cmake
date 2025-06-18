@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 7b09112ad257249130375c0841d962eecb85662e 
+    GIT_TAG 39779f89b16d0a35f04d3cfaf868e6366a2102f0
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -28,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG ff766174cc6cc9c4ed93fc4b75871bcdffcc6e65
+            GIT_TAG 1b53c8af9973b0267406ca5a24d7e0b52f22cec3
     )
 endif()
 
@@ -36,8 +36,9 @@ endif()
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             ### TODO: re-enable LOAD_TESTS
+            LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG 4f318ebd088e464266c511abe2f70bbdeee2fcd8
+            GIT_TAG ce6a0965f4f67e82a7dc82ea0378b8b839a2a9aa
             )
 endif()
 
@@ -46,7 +47,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
-            GIT_TAG 86a5acb33afe50ea57086ed997472551320c9820
+            GIT_TAG 8a68c313e7dbd22962db0de1bec466f8d1f8b0ca
             )
 endif()
 
@@ -90,8 +91,9 @@ endif()
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
+           ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 24dd874bee165661f6c3c79ee2a823f02941ed94
+            GIT_TAG 76fd8b092f9986f994ece37bb396dc89adf7b2cc
             )
 endif()
 
@@ -116,12 +118,12 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
 endif()
 
 # mingw CI with all extensions at once is somehow not happy
-if (NOT MINGW AND NOT ${BUILD_COMPLETE_EXTENSION_SET})
+if (NOT MINGW AND ${BUILD_COMPLETE_EXTENSION_SET})
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
-    GIT_TAG 494d94912cc7ebcd8c43c9b6fc173a3e4142740f
+    GIT_TAG 95ed129e22bf9b14f64c8d0bd8fd55f9ca0a9e61
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
@@ -176,7 +178,7 @@ duckdb_extension_load(fts
 )
 
 ################# ENCODINGS
-if (NOT ${WASM_ENABLED} AND NOT ${BUILD_COMPLETE_EXTENSION_SET})
+if (NOT ${WASM_ENABLED} AND ${BUILD_COMPLETE_EXTENSION_SET})
 duckdb_extension_load(encodings
         LOAD_TESTS
         DONT_LINK
