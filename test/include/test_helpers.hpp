@@ -25,8 +25,10 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "test_config.hpp"
 #include <sstream>
 #include <iostream>
+
 namespace duckdb {
 
 void RegisterSqllogictests();

@@ -203,6 +203,10 @@ def launch_test(test, list_of_tests=False):
             print("[TIMED OUT]", flush=True)
         else:
             print(" (TIMED OUT)", flush=True)
+        test_name = test[0] if not list_of_tests else str(test)
+        error_msg = f'TIMEOUT - exceeded specified timeout of {timeout} seconds'
+        new_data = {"test": test_name, "return_code": 1, "stdout": '', "stderr": error_msg}
+        error_container.append(new_data)
         fail()
         return
 
@@ -211,9 +215,9 @@ def launch_test(test, list_of_tests=False):
 
     if len(stderr) > 0:
         # when list_of_tests test name gets transformed, but we can get it from stderr
-        test = test[0] if not list_of_tests else get_test_name_from(stderr)
+        test_name = test[0] if not list_of_tests else get_test_name_from(stderr)
         error_message = get_clean_error_message_from(stderr)
-        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": error_message}
+        new_data = {"test": test_name, "return_code": res.returncode, "stdout": stdout, "stderr": error_message}
         error_container.append(new_data)
 
     end = time.time()
