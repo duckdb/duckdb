@@ -24,7 +24,6 @@
 #endif
 
 namespace duckdb {
-
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
 	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
@@ -35,7 +34,17 @@ struct SchedulerThread {
 };
 
 #ifndef DUCKDB_NO_THREADS
-typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
+struct TaskQueueTraits : duckdb_moodycamel::ConcurrentQueueDefaultTraits {
+	// Use the defaults with our own allocator
+	static inline void *malloc(size_t size) {
+		return Allocator::DefaultAllocate(nullptr, size);
+	}
+	static inline void free(void *ptr) {
+		return Allocator::DefaultFree(nullptr, data_ptr_cast(ptr), 0);
+	}
+};
+
+typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>, TaskQueueTraits> concurrent_queue_t;
 typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
@@ -43,6 +52,7 @@ struct ConcurrentQueue {
 	lightweight_semaphore_t semaphore;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
+	void EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 };
 
@@ -63,6 +73,18 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	}
 }
 
+void ConcurrentQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	for (auto &task : tasks) {
+		task->token = token;
+	}
+	if (q.enqueue_bulk(token.token->queue_token, std::make_move_iterator(tasks.begin()), tasks.size())) {
+		semaphore.signal(tasks.size());
+	} else {
+		throw InternalException("Could not schedule tasks!");
+	}
+}
+
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	return q.try_dequeue_from_producer(token.token->queue_token, task);
@@ -74,6 +96,7 @@ struct ConcurrentQueue {
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
+	void EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 };
 
@@ -81,6 +104,14 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
 	task->token = token;
 	q[std::ref(*token.token)].push(std::move(task));
+}
+
+void ConcurrentQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
+	lock_guard<mutex> lock(qlock);
+	for (auto &task : tasks) {
+		task->token = token;
+		q[std::ref(*token.token)].push(std::move(task));
+	}
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
@@ -153,6 +184,10 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
 	queue->Enqueue(token, std::move(task));
+}
+
+void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) {
+	queue->EnqueueBulk(producer, tasks);
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
