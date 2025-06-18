@@ -538,7 +538,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto path = GetTemporaryPath(block_id);
 
 	idx_t delta = 0;
-	if (db.config.options.enable_temp_file_encryption && db.config.options.full_encryption) {
+	if (db.config.options.full_encryption) {
 		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
@@ -551,7 +551,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
 
-	if (db.config.options.enable_temp_file_encryption && db.config.options.full_encryption) {
+	if (db.config.options.full_encryption) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
 		//! Write the nonce (and tag for GCM).
@@ -581,7 +581,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	unique_ptr<FileBuffer> buffer;
 
-	if (db.config.options.enable_temp_file_encryption && db.config.options.full_encryption) {
+	if (db.config.options.full_encryption) {
 		buffer =
 		    ReadTemporaryBufferInternalEncrypted(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
 	} else {
@@ -608,6 +608,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 			return;
 		}
 	}
+
 	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockAllocSize();

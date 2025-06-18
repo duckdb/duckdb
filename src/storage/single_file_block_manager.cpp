@@ -389,6 +389,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 		// automatically encrypt the WAL and temp files
 		config.options.enable_wal_encryption = true;
 		config.options.enable_temp_file_encryption = true;
+		config.options.full_encryption = true;
 
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -508,6 +509,8 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		// automatically encrypt the WAL and temp files if we deal with an encrypted database
 		config.options.enable_wal_encryption = true;
 		config.options.enable_temp_file_encryption = true;
+		config.options.full_encryption = true;
+
 	}
 
 	options.version_number = main_header.version_number;

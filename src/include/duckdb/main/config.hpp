@@ -275,7 +275,7 @@ struct DBConfigOptions {
 	//! Encrypt the temp files
 	bool enable_temp_file_encryption = false;
 	//! Full encryption mode (by default on)
-	bool full_encryption = true;
+	bool full_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.
