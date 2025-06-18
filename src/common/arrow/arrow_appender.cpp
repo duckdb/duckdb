@@ -246,7 +246,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::VARINT:
-		if (append_data.options.produce_arrow_string_view && append_data.options.arrow_output_version >= 14) {
+		if ((append_data.options.produce_arrow_string_view || type.id() != LogicalTypeId::VARCHAR) &&
+		    append_data.options.arrow_output_version >= 14) {
 			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
 		} else {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
