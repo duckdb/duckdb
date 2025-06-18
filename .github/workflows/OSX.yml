@@ -316,7 +316,7 @@ jobs:
       duckdb_arch: ${{ matrix.config.duckdb_arch }}
       duckdb_binary: ${{ matrix.config.duckb_binary }}
       nightly_build: 'osx'
-      branch: ${{ github.sha }}
+      branch: ${{ github.ref_name }}
 
   test-uploaded-extensions:
     name: Test uploaded OSX Extensions

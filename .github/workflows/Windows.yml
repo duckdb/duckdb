@@ -349,6 +349,21 @@ jobs:
       duckdb_arch: windows_amd64
       duckdb_sha: ${{ github.sha }}
 
+ test-install-load-extensions:
+  name: Test Windows Extensions
+  needs: 
+    - upload-windows_amd64-extensions
+  uses: duckdb/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
+  strategy:
+    matrix:
+      config: [ { runs_on: windows-latest, duckdb_arch: amd64, duckdb_binary: windows-amd64 }, { runs_on: ubuntu-24.04-arm, duckdb_arch: arm64, duckdb_binary: linux-arm64 } ]
+  with:
+    runs_on: ${{ matrix.config.runs_on }}
+    duckdb_arch: ${{ matrix.config.duckdb_arch }}
+    duckdb_binary: ${{ matrix.config.duckb_binary }}
+    nightly_build: 'windows'
+    branch: ${{ github.ref_name }}
+
  win-packaged-upload:
    runs-on: windows-latest
    needs:
