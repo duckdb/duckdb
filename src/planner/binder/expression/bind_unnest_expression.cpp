@@ -132,6 +132,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		ExtractCorrelatedExpressions(binder, *bound_expr);
 	}
 	auto &child = BoundExpression::GetExpression(*function.children[0]);
+	child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 	auto &child_type = child->return_type;
 	unnest_level--;
 
