@@ -740,7 +740,7 @@ LabelExpressionOptional:
 IsOrColon:
 		IS
 	|
-		':'
+	    SINGLE_COLON
         ;
 
 VariableOptional:
