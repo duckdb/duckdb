@@ -71,7 +71,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(optional_ptr<ClientContext> context, StorageOptions options);
+	void Initialize(optional_ptr<ClientContext> context, StorageOptions &options);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -118,7 +118,7 @@ public:
 	}
 
 protected:
-	virtual void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions options) = 0;
+	virtual void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &options) = 0;
 
 protected:
 	//! The attached database managed by this storage manager.
@@ -170,6 +170,6 @@ public:
 	BlockManager &GetBlockManager() override;
 
 protected:
-	void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions options) override;
+	void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &options) override;
 };
 } // namespace duckdb

@@ -1,10 +1,7 @@
-# name: test/sql/copy/encryption/simple_encryption.test
+# name: test/sql/copy/encryption/encryption_storage_versions.test
 # group: [encryption]
 
 require noforcestorage
-
-# workaround - alternative verify always forces the latest storage
-require no_alternative_verify
 
 statement ok
 PRAGMA enable_verification
