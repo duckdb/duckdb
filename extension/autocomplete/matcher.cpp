@@ -6,7 +6,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "tokenizer.hpp"
@@ -303,7 +303,7 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		auto category = KeywordHelper::KeywordCategoryType(token_text);
+		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
 		if (category == KeywordCategory::KEYWORD_RESERVED ||
 			category == KeywordCategory::KEYWORD_UNRESERVED ||
 			category == KeywordCategory::KEYWORD_COL_NAME ||

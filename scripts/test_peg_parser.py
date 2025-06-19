@@ -7,8 +7,6 @@ import multiprocessing
 import tempfile
 import re
 
-
-
 parser = argparse.ArgumentParser(description="Test serialization")
 parser.add_argument("--shell", type=str, help="Shell binary to run", default=os.path.join('build', 'debug', 'duckdb'))
 parser.add_argument("--offset", type=int, help="File offset", default=None)
@@ -186,10 +184,10 @@ if __name__ == "__main__":
         # run all tests
         test_dir = os.path.join('test', 'sql')
         files = find_tests_recursive(test_dir, excluded_tests)
-    if args.include_extensions:
-        batch_download_all_test_sql()
-        extension_files = find_tests_recursive('extension-test-files', {})
-        files = files + extension_files
+        if args.include_extensions:
+            batch_download_all_test_sql()
+            extension_files = find_tests_recursive('extension-test-files', {})
+            files = files + extension_files
     elif len(args.test_list) > 0:
         with open(args.test_list, 'r') as f:
             files = [x.strip() for x in f.readlines() if x.strip() not in excluded_tests]
