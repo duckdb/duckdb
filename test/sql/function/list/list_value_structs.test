@@ -1,0 +1,110 @@
+# name: test/sql/function/list/list_value_structs.test
+# description: Test the list_value function
+# group: [list]
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT list_value({'a': 1, 'b': 'a'}, {'a': 2, 'b': 'b'});
+----
+[{'a': 1, 'b': a}, {'a': 2, 'b': b}]
+
+query I
+SELECT list_value(NULL, {'a': 1, 'b': 'a'}, {'a': 2, 'b': 'b'});
+----
+[NULL, {'a': 1, 'b': a}, {'a': 2, 'b': b}]
+
+query I
+SELECT list_value(NULL, {'a': 1, 'b': 'a'}, {'a': 2, 'b': 'b'}, NULL, {'a': 3, 'b': 'c'});
+----
+[NULL, {'a': 1, 'b': a}, {'a': 2, 'b': b}, NULL, {'a': 3, 'b': c}]
+
+query I
+SELECT list_value({'a': 1, 'b': 'a'}, {'a': 2, 'b': 'b'}, {'a': NULL, 'b': 'c'});
+----
+[{'a': 1, 'b': a}, {'a': 2, 'b': b}, {'a': NULL, 'b': c}]
+
+statement ok
+CREATE TABLE tbl (s struct(a int, b varchar));
+
+statement ok
+INSERT INTO tbl VALUES ({'a': 1, 'b': 'hello'}), ({'a': 42, 'b': 'world'});
+
+query I
+SELECT list_value(s, s, s) AS res FROM tbl;
+----
+[{'a': 1, 'b': hello}, {'a': 1, 'b': hello}, {'a': 1, 'b': hello}]
+[{'a': 42, 'b': world}, {'a': 42, 'b': world}, {'a': 42, 'b': world}]
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+CREATE TABLE tbl (s1 struct(a int, b varchar), s2 struct(a int, b varchar), s3 struct(a int, b varchar));
+
+statement ok
+INSERT INTO tbl VALUES ({'a': 1, 'b': 'a'}, {'a': 2, 'b': 'b'}, {'a': 3, 'b': 'c'});
+
+statement ok
+INSERT INTO tbl VALUES ({'a': 4, 'b': 'd'}, NULL, {'a': 6, 'b': 'f'});
+
+statement ok
+INSERT INTO tbl VALUES ({'a': 7, 'b': 'g'}, {'a': 8, 'b': NULL}, {'a': 9, 'b': 'i'});
+
+statement ok
+INSERT INTO tbl VALUES (NULL, NULL, NULL);
+
+statement ok
+INSERT INTO tbl VALUES (NULL, {'a': 10, 'b': 'j'}, NULL);
+
+query I
+SELECT list_value(s1, s2, s3) AS res FROM tbl;
+----
+[{'a': 1, 'b': a}, {'a': 2, 'b': b}, {'a': 3, 'b': c}]
+[{'a': 4, 'b': d}, NULL, {'a': 6, 'b': f}]
+[{'a': 7, 'b': g}, {'a': 8, 'b': NULL}, {'a': 9, 'b': i}]
+[NULL, NULL, NULL]
+[NULL, {'a': 10, 'b': j}, NULL]
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+CREATE TABLE mixed_structs (s struct(a int[], b varchar, c int, d varchar[], e struct(a int, b varchar)));
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW([1, 2, 3], 'a', 1, ['a', 'b'], ROW(1, 'a')))
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW([4, 5], NULL, 2, ['c', 'd'], ROW(2, NULL)))
+
+statement ok
+INSERT INTO mixed_structs VALUES (NULL)
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW(NULL, 'e', 3, ['e', 'f'], ROW(3, 'c')))
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW([7, 8], 'g', 4, ['g', 'h'], ROW(4, 'd')))
+
+statement ok
+INSERT INTO mixed_structs VALUES (ROW(NULL, NULL, 5, ['i', 'j'], ROW(5, 'e')))
+
+query I
+SELECT list_value(s, s, s, s) AS res FROM mixed_structs;
+----
+[{'a': [1, 2, 3], 'b': a, 'c': 1, 'd': [a, b], 'e': {'a': 1, 'b': a}}, {'a': [1, 2, 3], 'b': a, 'c': 1, 'd': [a, b], 'e': {'a': 1, 'b': a}}, {'a': [1, 2, 3], 'b': a, 'c': 1, 'd': [a, b], 'e': {'a': 1, 'b': a}}, {'a': [1, 2, 3], 'b': a, 'c': 1, 'd': [a, b], 'e': {'a': 1, 'b': a}}]
+[{'a': [4, 5], 'b': NULL, 'c': 2, 'd': [c, d], 'e': {'a': 2, 'b': NULL}}, {'a': [4, 5], 'b': NULL, 'c': 2, 'd': [c, d], 'e': {'a': 2, 'b': NULL}}, {'a': [4, 5], 'b': NULL, 'c': 2, 'd': [c, d], 'e': {'a': 2, 'b': NULL}}, {'a': [4, 5], 'b': NULL, 'c': 2, 'd': [c, d], 'e': {'a': 2, 'b': NULL}}]
+[NULL, NULL, NULL, NULL]
+[{'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}, {'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}, {'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}, {'a': NULL, 'b': e, 'c': 3, 'd': [e, f], 'e': {'a': 3, 'b': c}}]
+[{'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}, {'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}, {'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}, {'a': [7, 8], 'b': g, 'c': 4, 'd': [g, h], 'e': {'a': 4, 'b': d}}]
+[{'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}, {'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}, {'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}, {'a': NULL, 'b': NULL, 'c': 5, 'd': [i, j], 'e': {'a': 5, 'b': e}}]
+
+# struct with array
+query I
+SELECT list_value(ROW(ARRAY_VALUE(1,2,3), ARRAY_VALUE('a','b','c')), 
+				  ROW(ARRAY_VALUE(4,5,6), ARRAY_VALUE('d','e','f')), 
+				  ROW(ARRAY_VALUE(7,8,9), ARRAY_VALUE('g','h','i')));
+----
+[([1, 2, 3], [a, b, c]), ([4, 5, 6], [d, e, f]), ([7, 8, 9], [g, h, i])]
