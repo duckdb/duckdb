@@ -48,9 +48,7 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
-parser.add_argument('--summarize-failures', ac
-                    
-                    tion='store_true', help='Summarize failures', default=None)
+parser.add_argument('--summarize-failures', action='store_true', help='Summarize failures', default=None)
 parser.add_argument(
     '--tests-per-invocation', type=int, help='The amount of tests to run per invocation of the runner', default=1
 )
