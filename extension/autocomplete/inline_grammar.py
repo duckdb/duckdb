@@ -22,11 +22,11 @@ target_file = os.path.join(autocomplete_dir, 'include', 'inlined_grammar.hpp')
 contents = ""
 
 CATEGORY_MAP = {
-    "reserved_keywords.list": "RESERVED_KEYWORD",
-    "unreserved_keywords.list": "UNRESERVED_KEYWORD",
-    "colname_keywords.list": "COL_NAME_KEYWORD",
-    "func_name_keywords.list": "TYPE_FUNC_NAME_KEYWORD",
-    "type_name_keywords.list": "TYPE_FUNC_NAME_KEYWORD",  # merged in C++
+    "reserved_keyword.list": "RESERVED_KEYWORD",
+    "unreserved_keyword.list": "UNRESERVED_KEYWORD",
+    "colname_keyword.list": "COL_NAME_KEYWORD",
+    "func_name_keyword.list": "TYPE_FUNC_NAME_KEYWORD",
+    "type_name_keyword.list": "TYPE_FUNC_NAME_KEYWORD",  # merged in C++
 }
 
 # For validation
@@ -102,6 +102,21 @@ with open(os.path.join(autocomplete_dir, "keyword_map.cpp"), "w") as f:
 
     f.write("}\n")
     f.write("}\n")
+
+def filename_to_upper_camel(file):
+    name, _ = os.path.splitext(file)          # column_name_keywords
+    parts = name.split('_')                   # ['column', 'name', 'keywords']
+    return ''.join(p.capitalize() for p in parts)
+
+for file in os.listdir(keywords_dir):
+    if not file.endswith('.list'):
+        continue
+    rule_name = filename_to_upper_camel(file)
+    rule = f"{rule_name} <- "
+    with open(os.path.join(keywords_dir, file), 'r') as f:
+        lines = [f"'{line.strip()}'i" for line in f if line.strip()]
+        rule += " /\n".join(lines) + "\n"
+    contents += rule
 
 for file in os.listdir(statements_dir):
     if not file.endswith('.gram'):

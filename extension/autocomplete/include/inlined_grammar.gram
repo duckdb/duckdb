@@ -1,94 +1,330 @@
-ColumnNameKeyword <-
-  'BETWEEN' /
-  'BIGINT' /
-  'BIT' /
-  'BOOLEAN' /
-  'CHAR' /
-  'CHARACTER' /
-  'COALESCE' /
-  'COLUMNS' /
-  'DEC' /
-  'DECIMAL' /
-  'EXISTS' /
-  'EXTRACT' /
-  'FLOAT' /
-  'GENERATED' /
-  'GROUPING' /
-  'GROUPING_ID' /
-  'INOUT' /
-  'INT' /
-  'INTEGER' /
-  'INTERVAL' /
-  'MAP' /
-  'NATIONAL' /
-  'NCHAR' /
-  'NONE' /
-  'NULLIF' /
-  'NUMERIC' /
-  'OUT' /
-  'OVERLAY' /
-  'POSITION' /
-  'PRECISION' /
-  'REAL' /
-  'ROW' /
-  'SETOF' /
-  'SMALLINT' /
-  'SUBSTRING' /
-  'STRUCT' /
-  'TIME' /
-  'TIMESTAMP' /
-  'TREAT' /
-  'TRIM' /
-  'TRY_CAST' /
-  'VALUES' /
-  'VARCHAR' /
-  'XMLATTRIBUTES' /
-  'XMLCONCAT' /
-  'XMLELEMENT' /
-  'XMLEXISTS' /
-  'XMLFOREST' /
-  'XMLNAMESPACES' /
-  'XMLPARSE' /
-  'XMLPI' /
-  'XMLROOT' /
-  'XMLSERIALIZE' /
-  'XMLTABLE'
-
-TypeNameKeyword <-
-  'ASOF' /
-  'AT' /
-  'AUTHORIZATION' /
-  'BINARY' /
-  'COLLATION' /
-  'COLUMNS' /
-  'CONCURRENTLY' /
-  'CROSS' /
-  'FREEZE' /
-  'FULL' /
-  'GLOB' /
-  'ILIKE' /
-  'INNER' /
-  'IS' /
-  'ISNULL' /
-  'JOIN' /
-  'LEFT' /
-  'LIKE' /
-  'NATURAL' /
-  'NOTNULL' /
-  'OUTER' /
-  'OVERLAPS' /
-  'POSITIONAL' /
-  'RIGHT' /
-  'UNPACK' /
-  'SIMILAR' /
-  'TABLESAMPLE' /
-  'TRY_CAST' /
-  'VERBOSE' /
-  'SEMI' /
-  'ANTI'
-
-ReservedKeyword <-
-'ALL'i /
+UnreservedKeyword <- 'ABORT'i /
+'ABSOLUTE'i /
+'ACCESS'i /
+'ACTION'i /
+'ADD'i /
+'ADMIN'i /
+'AFTER'i /
+'AGGREGATE'i /
+'ALSO'i /
+'ALTER'i /
+'ALWAYS'i /
+'ASSERTION'i /
+'ASSIGNMENT'i /
+'ATTACH'i /
+'ATTRIBUTE'i /
+'BACKWARD'i /
+'BEFORE'i /
+'BEGIN'i /
+'BY'i /
+'CACHE'i /
+'CALL'i /
+'CALLED'i /
+'CASCADE'i /
+'CASCADED'i /
+'CATALOG'i /
+'CENTURY'i /
+'CENTURIES'i /
+'CHAIN'i /
+'CHARACTERISTICS'i /
+'CHECKPOINT'i /
+'CLASS'i /
+'CLOSE'i /
+'CLUSTER'i /
+'COMMENT'i /
+'COMMENTS'i /
+'COMMIT'i /
+'COMMITTED'i /
+'COMPRESSION'i /
+'CONFIGURATION'i /
+'CONFLICT'i /
+'CONNECTION'i /
+'CONSTRAINTS'i /
+'CONTENT'i /
+'CONTINUE'i /
+'CONVERSION'i /
+'COPY'i /
+'COST'i /
+'CSV'i /
+'CUBE'i /
+'CURRENT'i /
+'CURSOR'i /
+'CYCLE'i /
+'DATA'i /
+'DATABASE'i /
+'DAY'i /
+'DAYS'i /
+'DEALLOCATE'i /
+'DECADE'i /
+'DECADES'i /
+'DECLARE'i /
+'DEFAULTS'i /
+'DEFERRED'i /
+'DEFINER'i /
+'DELETE'i /
+'DELIMITER'i /
+'DELIMITERS'i /
+'DEPENDS'i /
+'DETACH'i /
+'DICTIONARY'i /
+'DISABLE'i /
+'DISCARD'i /
+'DOCUMENT'i /
+'DOMAIN'i /
+'DOUBLE'i /
+'DROP'i /
+'EACH'i /
+'ENABLE'i /
+'ENCODING'i /
+'ENCRYPTED'i /
+'ENUM'i /
+'ESCAPE'i /
+'EVENT'i /
+'EXCLUDE'i /
+'EXCLUDING'i /
+'EXCLUSIVE'i /
+'EXECUTE'i /
+'EXPLAIN'i /
+'EXPORT'i /
+'EXPORT_STATE'i /
+'EXTENSION'i /
+'EXTENSIONS'i /
+'EXTERNAL'i /
+'FAMILY'i /
+'FILTER'i /
+'FIRST'i /
+'FOLLOWING'i /
+'FORCE'i /
+'FORWARD'i /
+'FUNCTION'i /
+'FUNCTIONS'i /
+'GLOBAL'i /
+'GRANT'i /
+'GRANTED'i /
+'GROUPS'i /
+'HANDLER'i /
+'HEADER'i /
+'HOLD'i /
+'HOUR'i /
+'HOURS'i /
+'IDENTITY'i /
+'IF'i /
+'IGNORE'i /
+'IMMEDIATE'i /
+'IMMUTABLE'i /
+'IMPLICIT'i /
+'IMPORT'i /
+'INCLUDE'i /
+'INCLUDING'i /
+'INCREMENT'i /
+'INDEX'i /
+'INDEXES'i /
+'INHERIT'i /
+'INHERITS'i /
+'INLINE'i /
+'INPUT'i /
+'INSENSITIVE'i /
+'INSERT'i /
+'INSTALL'i /
+'INSTEAD'i /
+'INVOKER'i /
+'JSON'i /
+'ISOLATION'i /
+'KEY'i /
+'LABEL'i /
+'LANGUAGE'i /
+'LARGE'i /
+'LAST'i /
+'LEAKPROOF'i /
+'LEVEL'i /
+'LISTEN'i /
+'LOAD'i /
+'LOCAL'i /
+'LOCATION'i /
+'LOCK'i /
+'LOCKED'i /
+'LOGGED'i /
+'MACRO'i /
+'MAPPING'i /
+'MATCH'i /
+'MATERIALIZED'i /
+'MAXVALUE'i /
+'METHOD'i /
+'MICROSECOND'i /
+'MICROSECONDS'i /
+'MILLENNIUM'i /
+'MILLENNIA'i /
+'MILLISECOND'i /
+'MILLISECONDS'i /
+'MINUTE'i /
+'MINUTES'i /
+'MINVALUE'i /
+'MODE'i /
+'MONTH'i /
+'MONTHS'i /
+'MOVE'i /
+'NAME'i /
+'NAMES'i /
+'NEW'i /
+'NEXT'i /
+'NO'i /
+'NOTHING'i /
+'NOTIFY'i /
+'NOWAIT'i /
+'NULLS'i /
+'OBJECT'i /
+'OF'i /
+'OFF'i /
+'OIDS'i /
+'OLD'i /
+'OPERATOR'i /
+'OPTION'i /
+'OPTIONS'i /
+'ORDINALITY'i /
+'OTHERS'i /
+'OVER'i /
+'OVERRIDING'i /
+'OWNED'i /
+'OWNER'i /
+'PARALLEL'i /
+'PARSER'i /
+'PARTIAL'i /
+'PARTITION'i /
+'PARTITIONED'i /
+'PASSING'i /
+'PASSWORD'i /
+'PERCENT'i /
+'PERSISTENT'i /
+'PLANS'i /
+'POLICY'i /
+'PRAGMA'i /
+'PRECEDING'i /
+'PREPARE'i /
+'PREPARED'i /
+'PRESERVE'i /
+'PRIOR'i /
+'PRIVILEGES'i /
+'PROCEDURAL'i /
+'PROCEDURE'i /
+'PROGRAM'i /
+'PUBLICATION'i /
+'QUARTER'i /
+'QUARTERS'i /
+'QUOTE'i /
+'RANGE'i /
+'READ'i /
+'REASSIGN'i /
+'RECHECK'i /
+'RECURSIVE'i /
+'REF'i /
+'REFERENCING'i /
+'REFRESH'i /
+'REINDEX'i /
+'RELATIVE'i /
+'RELEASE'i /
+'RENAME'i /
+'REPEATABLE'i /
+'REPLACE'i /
+'REPLICA'i /
+'RESET'i /
+'RESPECT'i /
+'RESTART'i /
+'RESTRICT'i /
+'RETURNS'i /
+'REVOKE'i /
+'ROLE'i /
+'ROLLBACK'i /
+'ROLLUP'i /
+'ROWS'i /
+'RULE'i /
+'SAMPLE'i /
+'SAVEPOINT'i /
+'SCHEMA'i /
+'SCHEMAS'i /
+'SCOPE'i /
+'SCROLL'i /
+'SEARCH'i /
+'SECRET'i /
+'SECOND'i /
+'SECONDS'i /
+'SECURITY'i /
+'SEQUENCE'i /
+'SEQUENCES'i /
+'SERIALIZABLE'i /
+'SERVER'i /
+'SESSION'i /
+'SET'i /
+'SETS'i /
+'SHARE'i /
+'SIMPLE'i /
+'SKIP'i /
+'SNAPSHOT'i /
+'SORTED'i /
+'SQL'i /
+'STABLE'i /
+'STANDALONE'i /
+'START'i /
+'STATEMENT'i /
+'STATISTICS'i /
+'STDIN'i /
+'STDOUT'i /
+'STORAGE'i /
+'STORED'i /
+'STRICT'i /
+'STRIP'i /
+'SUBSCRIPTION'i /
+'SYSID'i /
+'SYSTEM'i /
+'TABLES'i /
+'TABLESPACE'i /
+'TEMP'i /
+'TEMPLATE'i /
+'TEMPORARY'i /
+'TEXT'i /
+'TIES'i /
+'TRANSACTION'i /
+'TRANSFORM'i /
+'TRIGGER'i /
+'TRUNCATE'i /
+'TRUSTED'i /
+'TYPE'i /
+'TYPES'i /
+'UNBOUNDED'i /
+'UNCOMMITTED'i /
+'UNENCRYPTED'i /
+'UNKNOWN'i /
+'UNLISTEN'i /
+'UNLOGGED'i /
+'UNTIL'i /
+'UPDATE'i /
+'USE'i /
+'USER'i /
+'VACUUM'i /
+'VALID'i /
+'VALIDATE'i /
+'VALIDATOR'i /
+'VALUE'i /
+'VARIABLE'i /
+'VARYING'i /
+'VERSION'i /
+'VIEW'i /
+'VIEWS'i /
+'VIRTUAL'i /
+'VOLATILE'i /
+'WEEK'i /
+'WEEKS'i /
+'WHITESPACE'i /
+'WITHIN'i /
+'WITHOUT'i /
+'WORK'i /
+'WRAPPER'i /
+'WRITE'i /
+'XML'i /
+'YEAR'i /
+'YEARS'i /
+'YES'i /
+'ZONE'i
+ReservedKeyword <- 'ALL'i /
 'ANALYSE'i /
 'ANALYZE'i /
 'AND'i /
@@ -119,7 +355,6 @@ ReservedKeyword <-
 'FOR'i /
 'FOREIGN'i /
 'FROM'i /
-'GRANT'i /
 'GROUP'i /
 'HAVING'i /
 'QUALIFY'i /
@@ -127,6 +362,7 @@ ReservedKeyword <-
 'INITIALLY'i /
 'INTERSECT'i /
 'INTO'i /
+'LAMBDA'i /
 'LATERAL'i /
 'LEADING'i /
 'LIMIT'i /
@@ -163,366 +399,120 @@ ReservedKeyword <-
 'WHERE'i /
 'WINDOW'i /
 'WITH'i
-
-UnreservedKeyword <-
-  'ABORT' /
-  'ABSOLUTE' /
-  'ACCESS' /
-  'ACTION' /
-  'ADD' /
-  'ADMIN' /
-  'AFTER' /
-  'AGGREGATE' /
-  'ALSO' /
-  'ALTER' /
-  'ALWAYS' /
-  'ASSERTION' /
-  'ASSIGNMENT' /
-  'ATTACH' /
-  'ATTRIBUTE' /
-  'BACKWARD' /
-  'BEFORE' /
-  'BEGIN' /
-  'BY' /
-  'CACHE' /
-  'CALL' /
-  'CALLED' /
-  'CASCADE' /
-  'CASCADED' /
-  'CATALOG' /
-  'CENTURY' /
-  'CENTURIES' /
-  'CHAIN' /
-  'CHARACTERISTICS' /
-  'CHECKPOINT' /
-  'CLASS' /
-  'CLOSE' /
-  'CLUSTER' /
-  'COMMENT' /
-  'COMMENTS' /
-  'COMMIT' /
-  'COMMITTED' /
-  'COMPRESSION' /
-  'CONFIGURATION' /
-  'CONFLICT' /
-  'CONNECTION' /
-  'CONSTRAINTS' /
-  'CONTENT' /
-  'CONTINUE' /
-  'CONVERSION' /
-  'COPY' /
-  'COST' /
-  'CSV' /
-  'CUBE' /
-  'CURRENT' /
-  'CURSOR' /
-  'CYCLE' /
-  'DATA' /
-  'DATABASE' /
-  'DAY' /
-  'DAYS' /
-  'DEALLOCATE' /
-  'DECADE' /
-  'DECADES' /
-  'DECLARE' /
-  'DEFAULTS' /
-  'DEFERRED' /
-  'DEFINER' /
-  'DELETE' /
-  'DELIMITER' /
-  'DELIMITERS' /
-  'DEPENDS' /
-  'DETACH' /
-  'DICTIONARY' /
-  'DISABLE' /
-  'DISCARD' /
-  'DOCUMENT' /
-  'DOMAIN' /
-  'DOUBLE' /
-  'DROP' /
-  'EACH' /
-  'ENABLE' /
-  'ENCODING' /
-  'ENCRYPTED' /
-  'ENUM' /
-  'ESCAPE' /
-  'EVENT' /
-  'EXCLUDE' /
-  'EXCLUDING' /
-  'EXCLUSIVE' /
-  'EXECUTE' /
-  'EXPLAIN' /
-  'EXPORT' /
-  'EXPORT_STATE' /
-  'EXTENSION' /
-  'EXTENSIONS' /
-  'EXTERNAL' /
-  'FAMILY' /
-  'FILTER' /
-  'FIRST' /
-  'FOLLOWING' /
-  'FORCE' /
-  'FORWARD' /
-  'FUNCTION' /
-  'FUNCTIONS' /
-  'GLOBAL' /
-  'GRANT' /
-  'GRANTED' /
-  'GROUPS' /
-  'HANDLER' /
-  'HEADER' /
-  'HOLD' /
-  'HOUR' /
-  'HOURS' /
-  'IDENTITY' /
-  'IF' /
-  'IGNORE' /
-  'IMMEDIATE' /
-  'IMMUTABLE' /
-  'IMPLICIT' /
-  'IMPORT' /
-  'INCLUDE' /
-  'INCLUDING' /
-  'INCREMENT' /
-  'INDEX' /
-  'INDEXES' /
-  'INHERIT' /
-  'INHERITS' /
-  'INLINE' /
-  'INPUT' /
-  'INSENSITIVE' /
-  'INSERT' /
-  'INSTALL' /
-  'INSTEAD' /
-  'INVOKER' /
-  'JSON' /
-  'ISOLATION' /
-  'KEY' /
-  'LABEL' /
-  'LANGUAGE' /
-  'LARGE' /
-  'LAST' /
-  'LEAKPROOF' /
-  'LEVEL' /
-  'LISTEN' /
-  'LOAD' /
-  'LOCAL' /
-  'LOCATION' /
-  'LOCK' /
-  'LOCKED' /
-  'LOGGED' /
-  'MACRO' /
-  'MAPPING' /
-  'MATCH' /
-  'MATERIALIZED' /
-  'MAXVALUE' /
-  'METHOD' /
-  'MICROSECOND' /
-  'MICROSECONDS' /
-  'MILLENNIUM' /
-  'MILLENNIA' /
-  'MILLISECOND' /
-  'MILLISECONDS' /
-  'MINUTE' /
-  'MINUTES' /
-  'MINVALUE' /
-  'MODE' /
-  'MONTH' /
-  'MONTHS' /
-  'MOVE' /
-  'NAME' /
-  'NAMES' /
-  'NEW' /
-  'NEXT' /
-  'NO' /
-  'NOTHING' /
-  'NOTIFY' /
-  'NOWAIT' /
-  'NULLS' /
-  'OBJECT' /
-  'OF' /
-  'OFF' /
-  'OIDS' /
-  'OLD' /
-  'OPERATOR' /
-  'OPTION' /
-  'OPTIONS' /
-  'ORDINALITY' /
-  'OTHERS' /
-  'OVER' /
-  'OVERRIDING' /
-  'OWNED' /
-  'OWNER' /
-  'PARALLEL' /
-  'PARSER' /
-  'PARTIAL' /
-  'PARTITION' /
-  'PARTITIONED' /
-  'PASSING' /
-  'PASSWORD' /
-  'PERCENT' /
-  'PERSISTENT' /
-  'PLANS' /
-  'POLICY' /
-  'PRAGMA' /
-  'PRECEDING' /
-  'PREPARE' /
-  'PREPARED' /
-  'PRESERVE' /
-  'PRIOR' /
-  'PRIVILEGES' /
-  'PROCEDURAL' /
-  'PROCEDURE' /
-  'PROGRAM' /
-  'PUBLICATION' /
-  'QUARTER' /
-  'QUARTERS' /
-  'QUOTE' /
-  'RANGE' /
-  'READ' /
-  'REASSIGN' /
-  'RECHECK' /
-  'RECURSIVE' /
-  'REF' /
-  'REFERENCING' /
-  'REFRESH' /
-  'REINDEX' /
-  'RELATIVE' /
-  'RELEASE' /
-  'RENAME' /
-  'REPEATABLE' /
-  'REPLACE' /
-  'REPLICA' /
-  'RESET' /
-  'RESPECT' /
-  'RESTART' /
-  'RESTRICT' /
-  'RETURNS' /
-  'REVOKE' /
-  'ROLE' /
-  'ROLLBACK' /
-  'ROLLUP' /
-  'ROWS' /
-  'RULE' /
-  'SAMPLE' /
-  'SAVEPOINT' /
-  'SCHEMA' /
-  'SCHEMAS' /
-  'SCOPE' /
-  'SCROLL' /
-  'SEARCH' /
-  'SECRET' /
-  'SECOND' /
-  'SECONDS' /
-  'SECURITY' /
-  'SEQUENCE' /
-  'SEQUENCES' /
-  'SERIALIZABLE' /
-  'SERVER' /
-  'SESSION' /
-  'SET' /
-  'SETS' /
-  'SHARE' /
-  'SIMPLE' /
-  'SKIP' /
-  'SNAPSHOT' /
-  'SORTED' /
-  'SQL' /
-  'STABLE' /
-  'STANDALONE' /
-  'START' /
-  'STATEMENT' /
-  'STATISTICS' /
-  'STDIN' /
-  'STDOUT' /
-  'STORAGE' /
-  'STORED' /
-  'STRICT' /
-  'STRIP' /
-  'SUBSCRIPTION' /
-  'SYSID' /
-  'SYSTEM' /
-  'TABLES' /
-  'TABLESPACE' /
-  'TEMP' /
-  'TEMPLATE' /
-  'TEMPORARY' /
-  'TEXT' /
-  'TIES' /
-  'TRANSACTION' /
-  'TRANSFORM' /
-  'TRIGGER' /
-  'TRUNCATE' /
-  'TRUSTED' /
-  'TYPE' /
-  'TYPES' /
-  'UNBOUNDED' /
-  'UNCOMMITTED' /
-  'UNENCRYPTED' /
-  'UNKNOWN' /
-  'UNLISTEN' /
-  'UNLOGGED' /
-  'UNTIL' /
-  'UPDATE' /
-  'USE' /
-  'USER' /
-  'VACUUM' /
-  'VALID' /
-  'VALIDATE' /
-  'VALIDATOR' /
-  'VALUE' /
-  'VARIABLE' /
-  'VARYING' /
-  'VERSION' /
-  'VIEW' /
-  'VIEWS' /
-  'VIRTUAL' /
-  'VOLATILE' /
-  'WEEK' /
-  'WEEKS' /
-  'WHITESPACE' /
-  'WITHIN' /
-  'WITHOUT' /
-  'WORK' /
-  'WRAPPER' /
-  'WRITE' /
-  'XML' /
-  'YEAR' /
-  'YEARS' /
-  'YES' /
-  'ZONE'
-
-FuncNameKeyword <-
-  'ASOF' /
-  'AT' /
-  'AUTHORIZATION' /
-  'BINARY' /
-  'COLLATION' /
-  'CONCURRENTLY' /
-  'CROSS' /
-  'FREEZE' /
-  'FULL' /
-  'GENERATED' /
-  'GLOB' /
-  'ILIKE' /
-  'INNER' /
-  'IS' /
-  'ISNULL' /
-  'JOIN' /
-  'LEFT' /
-  'LIKE' /
-  'MAP' /
-  'NATURAL' /
-  'NOTNULL' /
-  'OUTER' /
-  'OVERLAPS' /
-  'POSITIONAL' /
-  'RIGHT' /
-  'SIMILAR' /
-  'STRUCT' /
-  'TABLESAMPLE' /
-  'VERBOSE'
-
+ColumnNameKeyword <- 'BETWEEN'i /
+'BIGINT'i /
+'BIT'i /
+'BOOLEAN'i /
+'CHAR'i /
+'CHARACTER'i /
+'COALESCE'i /
+'COLUMNS'i /
+'DEC'i /
+'DECIMAL'i /
+'EXISTS'i /
+'EXTRACT'i /
+'FLOAT'i /
+'GENERATED'i /
+'GROUPING'i /
+'GROUPING_ID'i /
+'INOUT'i /
+'INT'i /
+'INTEGER'i /
+'INTERVAL'i /
+'MAP'i /
+'NATIONAL'i /
+'NCHAR'i /
+'NONE'i /
+'NULLIF'i /
+'NUMERIC'i /
+'OUT'i /
+'OVERLAY'i /
+'POSITION'i /
+'PRECISION'i /
+'REAL'i /
+'ROW'i /
+'SETOF'i /
+'SMALLINT'i /
+'SUBSTRING'i /
+'STRUCT'i /
+'TIME'i /
+'TIMESTAMP'i /
+'TREAT'i /
+'TRIM'i /
+'TRY_CAST'i /
+'VALUES'i /
+'VARCHAR'i /
+'XMLATTRIBUTES'i /
+'XMLCONCAT'i /
+'XMLELEMENT'i /
+'XMLEXISTS'i /
+'XMLFOREST'i /
+'XMLNAMESPACES'i /
+'XMLPARSE'i /
+'XMLPI'i /
+'XMLROOT'i /
+'XMLSERIALIZE'i /
+'XMLTABLE'i
+FuncNameKeyword <- 'ASOF'i /
+'AT'i /
+'AUTHORIZATION'i /
+'BINARY'i /
+'COLLATION'i /
+'CONCURRENTLY'i /
+'CROSS'i /
+'FREEZE'i /
+'FULL'i /
+'GENERATED'i /
+'GLOB'i /
+'ILIKE'i /
+'INNER'i /
+'IS'i /
+'ISNULL'i /
+'JOIN'i /
+'LEFT'i /
+'LIKE'i /
+'MAP'i /
+'NATURAL'i /
+'NOTNULL'i /
+'OUTER'i /
+'OVERLAPS'i /
+'POSITIONAL'i /
+'RIGHT'i /
+'SIMILAR'i /
+'STRUCT'i /
+'TABLESAMPLE'i /
+'VERBOSE'i
+TypeNameKeyword <- 'ASOF'i /
+'AT'i /
+'AUTHORIZATION'i /
+'BINARY'i /
+'COLLATION'i /
+'COLUMNS'i /
+'CONCURRENTLY'i /
+'CROSS'i /
+'FREEZE'i /
+'FULL'i /
+'GLOB'i /
+'ILIKE'i /
+'INNER'i /
+'IS'i /
+'ISNULL'i /
+'JOIN'i /
+'LEFT'i /
+'LIKE'i /
+'NATURAL'i /
+'NOTNULL'i /
+'OUTER'i /
+'OVERLAPS'i /
+'POSITIONAL'i /
+'RIGHT'i /
+'UNPACK'i /
+'SIMILAR'i /
+'TABLESAMPLE'i /
+'TRY_CAST'i /
+'VERBOSE'i /
+'SEMI'i /
+'ANTI'i
 PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? GroupByClause?
 
 PivotOn <- 'ON' PivotColumnList
