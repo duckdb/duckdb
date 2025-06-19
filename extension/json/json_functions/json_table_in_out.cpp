@@ -138,7 +138,7 @@ struct JSONTableInOutLocalState : LocalTableFunctionState {
 	yyjson_alc *alc;
 
 	string path;
-	size_t len;
+	idx_t len;
 	yyjson_doc *doc;
 	bool initialized;
 
