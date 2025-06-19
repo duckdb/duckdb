@@ -208,8 +208,8 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	auto state_type = AggregateStateType::GetStateType(arg_return_type);
 
 	// now we can look up the function in the catalog again and bind it
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-	                                                         DEFAULT_SCHEMA, state_type.function_name);
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
+	                                                                                        state_type.function_name);
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", state_type.function_name);
 	}

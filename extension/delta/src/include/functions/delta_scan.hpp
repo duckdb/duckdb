@@ -9,7 +9,7 @@
 #pragma once
 
 #include "delta_utils.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -42,7 +42,7 @@ struct DeltaSnapshot : public MultiFileList {
 	//! MultiFileList API
 public:
 	void Bind(vector<LogicalType> &return_types, vector<string> &names);
-	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) override;
 	vector<string> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
@@ -108,11 +108,11 @@ struct DeltaMultiFileReader : public MultiFileReader {
 
 	//! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
 	//! readers will try read
-	bool Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-	          vector<string> &names, MultiFileReaderBindData &bind_data) override;
+	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
+	          MultiFileReaderBindData &bind_data) override;
 
 	//! Override the Options bind
-	void BindOptions(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
 	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
 
 	void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
@@ -122,12 +122,12 @@ struct DeltaMultiFileReader : public MultiFileReader {
 	                       optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
 	unique_ptr<MultiFileReaderGlobalState>
-	InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
+	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
 	                      const vector<LogicalType> &global_types, const vector<string> &global_names,
 	                      const vector<column_t> &global_column_ids) override;
 
-	void FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
+	void FinalizeBind(const MultiFileOptions &file_options, const MultiFileReaderBindData &options,
 	                  const string &filename, const vector<string> &local_names,
 	                  const vector<LogicalType> &global_types, const vector<string> &global_names,
 	                  const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
@@ -139,8 +139,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
 	                   optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
 	//! Override the ParseOption call to parse delta_scan specific options
-	bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
-	                 ClientContext &context) override;
+	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options, ClientContext &context) override;
 };
 
 } // namespace duckdb

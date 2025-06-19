@@ -95,10 +95,6 @@ public:
 		return total_segment_count;
 	}
 
-	inline idx_t GetMaxSegmentsPerBuffer() const {
-		return available_segments_per_buffer;
-	}
-
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
 	//! Merge another FixedSizeAllocator into this allocator. Both must have the same segment size
@@ -128,12 +124,15 @@ public:
 	void Init(const FixedSizeAllocatorInfo &info);
 	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
-	//! Removes empty buffers.
-	void RemoveEmptyBuffers();
+
 	//! Returns true, if the allocator does not contain any segments.
-	inline bool IsEmpty() {
+	inline bool Empty() {
 		return total_segment_count == 0;
 	}
+	//! Removes empty buffers.
+	void RemoveEmptyBuffers();
+	//! Verifies that the number of empty buffers does not exceed the empty buffer threshold.
+	void VerifyBuffers();
 
 private:
 	//! Allocation size of one segment in a buffer
@@ -152,16 +151,23 @@ private:
 	//! We can recalculate this by iterating over all buffers
 	idx_t total_segment_count;
 
-	//! Buffers containing the segments
+	//! Buffers containing the segments.
 	unordered_map<idx_t, unique_ptr<FixedSizeBuffer>> buffers;
-	//! Buffers with free space
+	//! Buffers with free space.
 	unordered_set<idx_t> buffers_with_free_space;
+	//! Caches the next buffer to be filled up.
+	//! Unordered sets make no guarantee that begin() returns the same element.
+	//! By caching one of the buffers with free space, we get more consistency when filling buffers.
+	optional_idx buffer_with_free_space;
+
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
 	unordered_set<idx_t> vacuum_buffers;
 
 private:
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
+	//! Caches the next buffer that we're going to fill.
+	void NextBufferWithFreeSpace();
 };
 
 } // namespace duckdb

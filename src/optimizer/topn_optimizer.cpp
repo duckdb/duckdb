@@ -29,6 +29,15 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 
 		auto child_op = op.children[0].get();
 
+		auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
+		auto child_card = static_cast<double>(child_op->estimated_cardinality);
+
+		// if the child cardinality is not 98 times more than the
+		bool limit_is_large = constant_limit > 5000;
+		if (constant_limit > child_card * 0.007 && limit_is_large) {
+			return false;
+		}
+
 		while (child_op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			D_ASSERT(!child_op->children.empty());
 			child_op = child_op->children[0].get();
@@ -53,6 +62,10 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	}
 	if (op.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// we can only pushdown on ORDER BY [col] currently
+		return;
+	}
+	if (op.dynamic_filter) {
+		// dynamic filter is already set
 		return;
 	}
 	auto &colref = op.orders[0].expression->Cast<BoundColumnRefExpression>();
@@ -136,7 +149,6 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		if (topn->children[0]->has_estimated_cardinality && topn->children[0]->estimated_cardinality < limit_val) {
 			cardinality = topn->children[0]->estimated_cardinality;
 		}
-		PushdownDynamicFilters(*topn);
 		topn->SetEstimatedCardinality(cardinality);
 		op = std::move(topn);
 
@@ -147,6 +159,9 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 			op = std::move(node);
 			projections.pop_back();
 		}
+	}
+	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
+		PushdownDynamicFilters(op->Cast<LogicalTopN>());
 	}
 
 	for (auto &child : op->children) {

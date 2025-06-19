@@ -36,7 +36,7 @@ ErrorData::ErrorData(const string &message)
 			raw_message = message;
 		}
 	} else {
-		auto info = StringUtil::ParseJSONMap(message);
+		auto info = StringUtil::ParseJSONMap(message)->Flatten();
 		for (auto &entry : info) {
 			if (entry.first == "exception_type") {
 				type = Exception::StringToExceptionType(entry.second);
@@ -64,7 +64,7 @@ string ErrorData::ConstructFinalMessage() const {
 	if (type == ExceptionType::INTERNAL) {
 		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
-		         "https://duckdb.org/docs/dev/internal_errors";
+		         "https://duckdb.org/docs/stable/dev/internal_errors";
 	}
 	return error;
 }

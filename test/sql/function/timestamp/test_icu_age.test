@@ -64,21 +64,21 @@ INSERT INTO timestamps VALUES
 query T
 SELECT AGE(t1, TIMESTAMPTZ '1957-06-13') FROM timestamps;
 ----
-43 years 9 months 28 days
+43 years 9 months 27 days
 56 years 10 months 12 days
 56 years 10 months 12 days
-61 years 11 months 29 days
+61 years 11 months 28 days
 NULL
-61 years 11 months 29 days
+61 years 11 months 28 days
 NULL
 
 # Time fields caused by DST
 query T
 SELECT AGE(TIMESTAMPTZ '2001-04-10', t2) FROM timestamps;
 ----
-43 years 9 months 28 days
+43 years 9 months 27 days
 -13 years -7 days
--12 years -8 months -22 days
+-12 years -8 months -21 days
 -18 years -2 months -1 day
 -18 years -2 months -1 day
 NULL
@@ -87,7 +87,7 @@ NULL
 query T
 SELECT AGE(t1, t2) FROM timestamps;
 ----
-43 years 9 months 28 days
+43 years 9 months 27 days
 8 days
 3 months 24 days
 00:00:00

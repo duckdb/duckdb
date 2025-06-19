@@ -32,6 +32,26 @@ select * exclude (filename), replace(filename, '\', '/') as filename from read_j
 5	Raising Arizona	data/json/example_r.ndjson
 5	Raising Arizona	data/json/example_rn.ndjson
 
+# virtual column
+query III
+select *, replace(filename, '\', '/') from read_json_auto('data/json/example_*.ndjson') order by all
+----
+1	O Brother, Where Art Thou?	data/json/example_n.ndjson
+1	O Brother, Where Art Thou?	data/json/example_r.ndjson
+1	O Brother, Where Art Thou?	data/json/example_rn.ndjson
+2	Home for the Holidays	data/json/example_n.ndjson
+2	Home for the Holidays	data/json/example_r.ndjson
+2	Home for the Holidays	data/json/example_rn.ndjson
+3	The Firm	data/json/example_n.ndjson
+3	The Firm	data/json/example_r.ndjson
+3	The Firm	data/json/example_rn.ndjson
+4	Broadcast News	data/json/example_n.ndjson
+4	Broadcast News	data/json/example_r.ndjson
+4	Broadcast News	data/json/example_rn.ndjson
+5	Raising Arizona	data/json/example_n.ndjson
+5	Raising Arizona	data/json/example_r.ndjson
+5	Raising Arizona	data/json/example_rn.ndjson
+
 query III
 select * from read_json_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
 ----
@@ -125,11 +145,15 @@ order by j;
 statement ok
 SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'])
 
-# both have 5 rows, so if we set sample_size=1, we cannot read them together anymore, because we only sample 1 file
+# both have 5 rows, so if we set sample_size=1, and maximum_sample_files=1, we cannot read them together anymore
 statement error
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1)
+SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, maximum_sample_files=1)
 ----
 Invalid Input Error
+
+# if we increase maximum_sample_files, or set union_by_name=true, then we can read them again
+statement ok
+SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, maximum_sample_files=99)
 
 # if we set union_by_name=true, then we sample sample_size rows per file, so then we can read them again
 statement ok

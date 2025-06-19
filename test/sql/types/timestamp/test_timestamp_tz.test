@@ -26,3 +26,9 @@ SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::${datatype}
 ----
 
 endloop
+
+# 19th century offset with seconds resolution
+query I
+SELECT '1880-05-15T12:00:00+00:50:20'::TIMESTAMPTZ;
+----
+1880-05-15 11:09:40+00

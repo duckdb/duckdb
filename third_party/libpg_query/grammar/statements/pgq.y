@@ -765,7 +765,7 @@ Arrow:
 	ArrowRight
             {   $$ = $1;    }
     |
-        '<' LAMBDA_ARROW
+        '<' SINGLE_ARROW
             {   $$ = "<->"; }
     |
         '<' '-' '>'
@@ -776,7 +776,7 @@ Arrow:
         ;
 
 ArrowRight:
-        LAMBDA_ARROW
+        SINGLE_ARROW
             {   $$ = "->";  }
     |
         '-' '>'
@@ -1077,9 +1077,9 @@ pgq_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
-			| pgq_expr LAMBDA_ARROW pgq_expr
+			| pgq_expr SINGLE_ARROW pgq_expr
 			{
-				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				PGSingleArrowFunction *n = makeNode(PGSingleArrowFunction);
 				n->lhs = $1;
 				n->rhs = $3;
 				n->location = @2;

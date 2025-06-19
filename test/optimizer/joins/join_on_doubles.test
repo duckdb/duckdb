@@ -1,0 +1,39 @@
+# name: test/optimizer/joins/join_on_doubles.test
+# description: tests for #16901 / #16965
+# group: [joins]
+
+statement ok
+create table x (a double);
+
+statement ok
+create table y (b double);
+
+statement ok
+insert into x values ('0.0'), ('NaN');
+
+statement ok
+insert into y values ('-0.0'), ('-NaN');
+
+query TT
+select a::text, b::text from x inner join y on a = b;
+----
+0.0	-0.0
+nan	-nan
+
+query TT
+select a::text, b::text from y inner join x on a = b;
+----
+0.0	-0.0
+nan	-nan
+
+query TT
+select a::text, b::text from x right join y on a = b;
+----
+0.0	-0.0
+nan	-nan
+
+query TT
+select a::text, b::text from x left join y on a = b;
+----
+0.0	-0.0
+nan	-nan

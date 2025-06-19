@@ -329,6 +329,9 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &type, const BaseStatistics &stats) {
 	auto min = NumericStats::Min(stats);
 	auto max = NumericStats::Max(stats);
+	if (max < min) {
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	}
 
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));

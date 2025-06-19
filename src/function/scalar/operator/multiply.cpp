@@ -4,10 +4,8 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
-#include <limits>
 #include <algorithm>
 
 namespace duckdb {
@@ -39,6 +37,89 @@ interval_t MultiplyOperator::Operation(interval_t left, int64_t right) {
 template <>
 interval_t MultiplyOperator::Operation(int64_t left, interval_t right) {
 	return MultiplyOperator::Operation<interval_t, int64_t, interval_t>(right, left);
+}
+
+// TSROUND.
+// Avoid std::rint because it can raise exceptions and we know that can't happen.
+inline double PGTimestampRound(const double &j) {
+	return (std::nearbyint(((double)(j)) * Interval::MICROS_PER_SEC) / Interval::MICROS_PER_SEC);
+}
+
+// Taken from Postgres src.backend/utils/adt/timestamp.c:interval_mul
+template <>
+bool TryMultiplyOperator::Operation(interval_t left, double right, interval_t &result) {
+	double d = left.months * right;
+	if (std::isnan(d) || d < NumericLimits<int32_t>::Minimum() || d > NumericLimits<int32_t>::Maximum()) {
+		return false;
+	}
+	result.months = LossyNumericCast<int32_t>(d);
+
+	d = left.days * right;
+	if (std::isnan(d) || d < NumericLimits<int32_t>::Minimum() || d > NumericLimits<int32_t>::Maximum()) {
+		return false;
+	}
+	result.days = LossyNumericCast<int32_t>(d);
+
+	/*
+	 * The above correctly handles the whole-number part of the month and day
+	 * products, but we have to do something with any fractional part
+	 * resulting when the factor is non-integral.  We cascade the fractions
+	 * down to lower units using the conversion factors DAYS_PER_MONTH and
+	 * SECS_PER_DAY.  Note we do NOT cascade up, since we are not forced to do
+	 * so by the representation.  The user can choose to cascade up later,
+	 * using justify_hours and/or justify_days.
+	 */
+
+	/*
+	 * Fractional months full days into days.
+	 *
+	 * Floating point calculation are inherently imprecise, so these
+	 * calculations are crafted to produce the most reliable result possible.
+	 * TSROUND() is needed to more accurately produce whole numbers where
+	 * appropriate.
+	 */
+	double month_remainder = (left.months * right - result.months) * Interval::DAYS_PER_MONTH;
+	month_remainder = PGTimestampRound(month_remainder);
+	auto day_remainder = LossyNumericCast<int32_t>(month_remainder);
+
+	double sec_remainder = (left.days * right - result.days + month_remainder - day_remainder) * Interval::SECS_PER_DAY;
+	sec_remainder = PGTimestampRound(sec_remainder);
+
+	/*
+	 * Might have 24:00:00 hours due to rounding, or >24 hours because of time
+	 * cascade from months and days.  It might still be >24 if the combination
+	 * of cascade and the seconds factor operation itself.
+	 */
+	if (std::fabs(sec_remainder) >= Interval::SECS_PER_DAY) {
+		result.days += LossyNumericCast<int32_t>(sec_remainder / Interval::SECS_PER_DAY);
+		sec_remainder -= LossyNumericCast<int32_t>(sec_remainder / Interval::SECS_PER_DAY) * Interval::SECS_PER_DAY;
+	}
+
+	/* cascade units down */
+	result.days += day_remainder;
+	if (!TryCast::Operation<int64_t, double>(left.micros, d)) {
+		return false;
+	}
+	d = std::nearbyint(d * right + sec_remainder * Interval::MICROS_PER_SEC);
+	if (std::isnan(d) || !TryCast::Operation<double, int64_t>(d, result.micros)) {
+		return false;
+	}
+
+	return true;
+}
+
+template <>
+interval_t MultiplyOperator::Operation(interval_t left, double right) {
+	interval_t result;
+	if (!TryMultiplyOperator::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in multiplication of INTERVAL.");
+	}
+	return result;
+}
+
+template <>
+interval_t MultiplyOperator::Operation(double left, interval_t right) {
+	return MultiplyOperator::Operation<interval_t, double, interval_t>(right, left);
 }
 
 //===--------------------------------------------------------------------===//

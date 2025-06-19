@@ -119,7 +119,7 @@ idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state
 	return scan_count;
 }
 
-idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -130,7 +130,7 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 			ConstantVector::SetNull(target_vector, true);
 			continue;
 		}
-		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count);
+		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count, result_offset);
 	}
 	return scan_count;
 }

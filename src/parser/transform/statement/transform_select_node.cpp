@@ -31,11 +31,20 @@ void Transformer::TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, Quer
 			node.modifiers.push_back(std::move(limit_percent_modifier));
 		} else {
 			auto limit_modifier = make_uniq<LimitModifier>();
-			if (stmt.limitCount) {
-				limit_modifier->limit = TransformExpression(stmt.limitCount);
-			}
-			if (stmt.limitOffset) {
-				limit_modifier->offset = TransformExpression(stmt.limitOffset);
+			if (stmt.offset_first) {
+				if (stmt.limitOffset) {
+					limit_modifier->offset = TransformExpression(stmt.limitOffset);
+				}
+				if (stmt.limitCount) {
+					limit_modifier->limit = TransformExpression(stmt.limitCount);
+				}
+			} else {
+				if (stmt.limitCount) {
+					limit_modifier->limit = TransformExpression(stmt.limitCount);
+				}
+				if (stmt.limitOffset) {
+					limit_modifier->offset = TransformExpression(stmt.limitOffset);
+				}
 			}
 			node.modifiers.push_back(std::move(limit_modifier));
 		}

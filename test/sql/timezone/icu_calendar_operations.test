@@ -1,0 +1,40 @@
+# name: test/sql/timezone/icu_calendar_operations.test
+# description: Test the ICU calendar interface
+# group: [timezone]
+
+require icu
+
+# Normalise the testing locale
+statement ok
+SET TimeZone = 'UTC';
+
+# Test intervals for lunar calendars
+foreach cal hebrew coptic ethiopic
+
+statement ok
+SET Calendar = '${cal}';
+
+statement error
+select age('2020-01-01'::timestamptz);
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+select '2020-01-01'::timestamptz + interval '380 days'
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+select '2021-01-01'::timestamptz - interval '380 days'
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+select 
+	'2020-01-01'::timestamptz as start_date,
+	'2021-01-01'::timestamptz as end_date,
+	age(end_date, start_date) as delta;
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+endloop

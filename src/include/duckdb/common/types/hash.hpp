@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/datetime.hpp"
 
 namespace duckdb {
 
@@ -63,6 +64,8 @@ template <>
 DUCKDB_API hash_t Hash(string_t val);
 template <>
 DUCKDB_API hash_t Hash(interval_t val);
+template <>
+DUCKDB_API hash_t Hash(dtime_tz_t val);
 DUCKDB_API hash_t Hash(const char *val, size_t size);
 DUCKDB_API hash_t Hash(uint8_t *val, size_t size);
 

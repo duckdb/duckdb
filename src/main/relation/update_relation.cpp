@@ -7,17 +7,19 @@
 namespace duckdb {
 
 UpdateRelation::UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition_p,
-                               string schema_name_p, string table_name_p, vector<string> update_columns_p,
-                               vector<unique_ptr<ParsedExpression>> expressions_p)
+                               string catalog_name_p, string schema_name_p, string table_name_p,
+                               vector<string> update_columns_p, vector<unique_ptr<ParsedExpression>> expressions_p)
     : Relation(context, RelationType::UPDATE_RELATION), condition(std::move(condition_p)),
-      schema_name(std::move(schema_name_p)), table_name(std::move(table_name_p)),
-      update_columns(std::move(update_columns_p)), expressions(std::move(expressions_p)) {
+      catalog_name(std::move(catalog_name_p)), schema_name(std::move(schema_name_p)),
+      table_name(std::move(table_name_p)), update_columns(std::move(update_columns_p)),
+      expressions(std::move(expressions_p)) {
 	D_ASSERT(update_columns.size() == expressions.size());
 	TryBindRelation(columns);
 }
 
 BoundStatement UpdateRelation::Bind(Binder &binder) {
 	auto basetable = make_uniq<BaseTableRef>();
+	basetable->catalog_name = catalog_name;
 	basetable->schema_name = schema_name;
 	basetable->table_name = table_name;
 
@@ -38,7 +40,8 @@ const vector<ColumnDefinition> &UpdateRelation::Columns() {
 }
 
 string UpdateRelation::ToString(idx_t depth) {
-	string str = RenderWhitespace(depth) + "UPDATE " + table_name + " SET\n";
+	string str = RenderWhitespace(depth) + "UPDATE " +
+	             ParseInfo::QualifierToString(catalog_name, schema_name, table_name) + " SET\n";
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		str += update_columns[i] + " = " + expressions[i]->ToString() + "\n";
 	}

@@ -23,7 +23,27 @@ public:
 	}
 
 public:
-	void BeginWrite(WriteStream &writer, const int64_t &first_value) {
+	template <class T>
+	void BeginWrite(WriteStream &writer, const T &first_value) {
+		throw InternalException("DbpEncoder should only be used with integers");
+	}
+
+	template <class T>
+	void WriteValue(WriteStream &writer, const T &value) {
+		throw InternalException("DbpEncoder should only be used with integers");
+	}
+
+	void FinishWrite(WriteStream &writer) {
+		if (count + block_count != total_value_count) {
+			throw InternalException("value count mismatch when writing DELTA_BINARY_PACKED");
+		}
+		if (block_count != 0) {
+			WriteBlock(writer);
+		}
+	}
+
+private:
+	void BeginWriteInternal(WriteStream &writer, const int64_t &first_value) {
 		// <block size in values> <number of miniblocks in a block> <total value count> <first value>
 
 		// the block size is a multiple of 128; it is stored as a ULEB128 int
@@ -50,7 +70,7 @@ public:
 		block_count = 0;
 	}
 
-	void WriteValue(WriteStream &writer, const int64_t &value) {
+	void WriteValueInternal(WriteStream &writer, const int64_t &value) {
 		// 1. Compute the differences between consecutive elements. For the first element in the block,
 		// use the last element in the previous block or, in the case of the first block,
 		// use the first value of the whole sequence, stored in the header.
@@ -72,16 +92,6 @@ public:
 		}
 	}
 
-	void FinishWrite(WriteStream &writer) {
-		if (count + block_count != total_value_count) {
-			throw InternalException("value count mismatch when writing DELTA_BINARY_PACKED");
-		}
-		if (block_count != 0) {
-			WriteBlock(writer);
-		}
-	}
-
-private:
 	void WriteBlock(WriteStream &writer) {
 		D_ASSERT(count + block_count == total_value_count || block_count == BLOCK_SIZE_IN_VALUES);
 		const auto number_of_miniblocks =
@@ -175,5 +185,45 @@ private:
 	bitpacking_width_t list_of_bitwidths_of_miniblocks[NUMBER_OF_MINIBLOCKS_IN_A_BLOCK];
 	data_t data_packed[NUMBER_OF_VALUES_IN_A_MINIBLOCK * sizeof(int64_t)];
 };
+
+template <>
+inline void DbpEncoder::BeginWrite(WriteStream &writer, const int32_t &first_value) {
+	BeginWriteInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::BeginWrite(WriteStream &writer, const int64_t &first_value) {
+	BeginWriteInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::BeginWrite(WriteStream &writer, const uint32_t &first_value) {
+	BeginWriteInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::BeginWrite(WriteStream &writer, const uint64_t &first_value) {
+	BeginWriteInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::WriteValue(WriteStream &writer, const int32_t &first_value) {
+	WriteValueInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::WriteValue(WriteStream &writer, const int64_t &first_value) {
+	WriteValueInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::WriteValue(WriteStream &writer, const uint32_t &first_value) {
+	WriteValueInternal(writer, first_value);
+}
+
+template <>
+inline void DbpEncoder::WriteValue(WriteStream &writer, const uint64_t &first_value) {
+	WriteValueInternal(writer, first_value);
+}
 
 } // namespace duckdb

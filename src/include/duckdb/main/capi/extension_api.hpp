@@ -471,6 +471,38 @@ typedef struct {
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	// New functions around the client context
+
+	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
+	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
+	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
+	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
+	// New functions around scalar function binding
+
+	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
+	void (*duckdb_scalar_function_bind_set_error)(duckdb_bind_info info, const char *error);
+	void (*duckdb_scalar_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+	void (*duckdb_scalar_function_set_bind_data)(duckdb_bind_info info, void *bind_data,
+	                                             duckdb_delete_callback_t destroy);
+	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
+	// New string functions that are added
+
+	char *(*duckdb_value_to_string)(duckdb_value value);
+	// New value functions that are added
+
+	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
+	                                        idx_t entry_count);
+	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
+	// An API to create new vector types
+
+	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
+	void (*duckdb_destroy_vector)(duckdb_vector *vector);
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_vector_reference_value)(duckdb_vector vector, duckdb_value value);
+	void (*duckdb_vector_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
+	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -886,6 +918,26 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
+	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
+	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
+	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
+	result.duckdb_get_table_names = duckdb_get_table_names;
+	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
+	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;
+	result.duckdb_scalar_function_get_client_context = duckdb_scalar_function_get_client_context;
+	result.duckdb_scalar_function_set_bind_data = duckdb_scalar_function_set_bind_data;
+	result.duckdb_scalar_function_get_bind_data = duckdb_scalar_function_get_bind_data;
+	result.duckdb_value_to_string = duckdb_value_to_string;
+	result.duckdb_create_map_value = duckdb_create_map_value;
+	result.duckdb_create_union_value = duckdb_create_union_value;
+	result.duckdb_create_vector = duckdb_create_vector;
+	result.duckdb_destroy_vector = duckdb_destroy_vector;
+	result.duckdb_slice_vector = duckdb_slice_vector;
+	result.duckdb_vector_reference_value = duckdb_vector_reference_value;
+	result.duckdb_vector_reference_vector = duckdb_vector_reference_vector;
+	result.duckdb_create_selection_vector = duckdb_create_selection_vector;
+	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
+	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	return result;
 }
 

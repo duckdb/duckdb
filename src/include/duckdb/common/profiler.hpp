@@ -45,6 +45,6 @@ private:
 	bool finished = false;
 };
 
-using Profiler = BaseProfiler<system_clock>;
+using Profiler = BaseProfiler<steady_clock>;
 
 } // namespace duckdb

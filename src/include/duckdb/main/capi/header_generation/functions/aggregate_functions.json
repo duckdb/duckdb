@@ -212,7 +212,7 @@
                 "param_comments": {
                     "aggregate_function": "The aggregate function",
                     "extra_info": "The extra information",
-                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                    "destroy": "The callback that will be called to destroy the extra information (if any)"
                 }
             }
         },

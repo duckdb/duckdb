@@ -3,7 +3,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -43,11 +43,11 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	idx_t count = 0;
 	while (count < STANDARD_VECTOR_SIZE) {
-		string file;
+		OpenFileInfo file;
 		if (!bind_data.file_list->Scan(state.file_list_scan, file)) {
 			break;
 		}
-		output.data[0].SetValue(count++, file);
+		output.data[0].SetValue(count++, file.path);
 	}
 	output.SetCardinality(count);
 }

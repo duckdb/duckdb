@@ -17,9 +17,9 @@ SELECT lhs.i, rhs.i
 FROM list_str lhs, list_str rhs
 ORDER BY lhs.i, rhs.i
 ----
-{'x': duck, 'y': }	{'x': duck, 'y': }
-{'x': duck, 'y': }	{'x': duck, 'y': goose}
-{'x': duck, 'y': goose}	{'x': duck, 'y': }
+{'x': duck, 'y': ''}	{'x': duck, 'y': ''}
+{'x': duck, 'y': ''}	{'x': duck, 'y': goose}
+{'x': duck, 'y': goose}	{'x': duck, 'y': ''}
 {'x': duck, 'y': goose}	{'x': duck, 'y': goose}
 
 statement ok
@@ -34,7 +34,7 @@ SELECT lhs.i, rhs.i
 FROM test lhs, test rhs
 ORDER BY lhs.i, rhs.i
 ----
-[duck, ]	[duck, ]
-[duck, ]	[duck, goose]
-[duck, goose]	[duck, ]
+[duck, '']	[duck, '']
+[duck, '']	[duck, goose]
+[duck, goose]	[duck, '']
 [duck, goose]	[duck, goose]

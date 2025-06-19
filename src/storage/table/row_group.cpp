@@ -385,8 +385,9 @@ void RowGroup::CommitDrop() {
 	}
 }
 
-void RowGroup::CommitDropColumn(idx_t column_idx) {
-	GetColumn(column_idx).CommitDropColumn();
+void RowGroup::CommitDropColumn(const idx_t column_index) {
+	auto &column = GetColumn(column_index);
+	column.CommitDropColumn();
 }
 
 void RowGroup::NextVector(CollectionScanState &state) {
@@ -401,7 +402,7 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
-static FilterPropagateResult CheckRowIdFilter(TableFilter &filter, idx_t beg_row, idx_t end_row) {
+FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
 	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
@@ -605,6 +606,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// this filter is always true - skip it
 						continue;
 					}
+					auto &table_filter_state = *filter.filter_state;
 
 					const auto scan_idx = filter.scan_column_index;
 					const auto column_idx = filter.table_column_index;
@@ -639,13 +641,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
 						result_vector.ToUnifiedFormat(approved_tuple_count, vdata);
-						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, approved_tuple_count,
-						                               approved_tuple_count);
+						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, table_filter_state,
+						                               approved_tuple_count, approved_tuple_count);
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
 						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector,
-						                sel, approved_tuple_count, filter.filter);
+						                sel, approved_tuple_count, filter.filter, table_filter_state);
 					}
 				}
 				for (auto &table_filter : filter_list) {
@@ -1010,6 +1012,7 @@ bool RowGroup::HasUnloadedDeletes() const {
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	vector<CompressionType> compression_types;
 	compression_types.reserve(columns.size());
+
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
 		if (column.count != this->count) {
@@ -1017,7 +1020,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			                        "group has %llu rows, column has %llu)",
 			                        column_idx, this->count.load(), column.count.load());
 		}
-		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
+		auto compression_type = writer.GetColumnCompressionType(column_idx);
+		compression_types.push_back(compression_type);
 	}
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());

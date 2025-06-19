@@ -43,7 +43,6 @@ env:
 
 jobs:
  linux-x64-docker:
-    # Builds binaries for linux_amd64_gcc4
     name: Docker tests on Linux (x64)
     runs-on: ubuntu-latest
 

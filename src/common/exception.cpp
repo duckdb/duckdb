@@ -32,7 +32,7 @@ string Exception::ToJSON(ExceptionType type, const string &message) {
 string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
 #ifndef DUCKDB_DEBUG_STACKTRACE
 	// by default we only enable stack traces for internal exceptions
-	if (type == ExceptionType::INTERNAL)
+	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL)
 #endif
 	{
 		auto extended_extra_info = extra_info;
@@ -194,6 +194,17 @@ unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_
 	return result;
 }
 
+bool Exception::IsExecutionError(ExceptionType type) {
+	switch (type) {
+	case ExceptionType::INVALID_INPUT:
+	case ExceptionType::OUT_OF_RANGE:
+	case ExceptionType::CONVERSION:
+		return true;
+	default:
+		return false;
+	}
+}
+
 unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
 	unordered_map<string, string> result;
 	result["error_subtype"] = subtype;
@@ -344,7 +355,23 @@ InvalidConfigurationException::InvalidConfigurationException(const string &msg,
     : Exception(ExceptionType::INVALID_CONFIGURATION, msg, extra_info) {
 }
 
-OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {
+OutOfMemoryException::OutOfMemoryException(const string &msg)
+    : Exception(ExceptionType::OUT_OF_MEMORY, ExtendOutOfMemoryError(msg)) {
+}
+
+string OutOfMemoryException::ExtendOutOfMemoryError(const string &msg) {
+	string link = "https://duckdb.org/docs/stable/guides/performance/how_to_tune_workloads";
+	if (StringUtil::Contains(msg, link)) {
+		// already extended
+		return msg;
+	}
+	string new_msg = msg;
+	new_msg += "\n\nPossible solutions:\n";
+	new_msg += "* Reducing the number of threads (SET threads=X)\n";
+	new_msg += "* Disabling insertion-order preservation (SET preserve_insertion_order=false)\n";
+	new_msg += "* Increasing the memory limit (SET memory_limit='...GB')\n";
+	new_msg += "\nSee also " + link;
+	return new_msg;
 }
 
 ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)

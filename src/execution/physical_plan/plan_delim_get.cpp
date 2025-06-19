@@ -4,13 +4,11 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimGet &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDelimGet &op) {
+	// Create a PhysicalChunkScan without an owned_collection.
+	// We'll add the collection later.
 	D_ASSERT(op.children.empty());
-
-	// create a PhysicalChunkScan without an owned_collection, the collection will be added later
-	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::DELIM_SCAN,
-	                                                    op.estimated_cardinality, nullptr);
-	return std::move(chunk_scan);
+	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::DELIM_SCAN, op.estimated_cardinality, nullptr);
 }
 
 } // namespace duckdb

@@ -150,6 +150,7 @@ runs:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
+        # TODO we should no longer override this but we should probably check that it is what we expect
         DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
         CMAKE_VARS_BUILD: ${{ inputs.cmake_flags }}
 

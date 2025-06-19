@@ -1,9 +1,9 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -365,6 +365,20 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->case_checks.push_back(std::move(check));
 		expr->else_expr = std::move(children[2]);
 		return std::move(expr);
+	} else if (lowercase_name == "unpack") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(children);
+		return std::move(expr);
+	} else if (lowercase_name == "try") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to TRY expression");
+		}
+		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		try_expression->children = std::move(children);
+		return std::move(try_expression);
 	} else if (lowercase_name == "construct_array") {
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
@@ -409,6 +423,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			children.emplace_back(std::move(sense));
 			children.emplace_back(std::move(nulls));
 		}
+	} else if (lowercase_name == "date") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(children[0])));
 	}
 
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),

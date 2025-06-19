@@ -10,7 +10,8 @@ select row(42, 'hello') union all select '{'': 42,'': hello}';
 ----
 Conversion Error
 
-statement error
+query I
 select row(42, 'hello') union all select '(84, world)';
 ----
-unsupported
+(42, hello)
+(84, world)

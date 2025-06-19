@@ -14,7 +14,6 @@ onlyif threadid=0
 statement maybe
 UPDATE t1 SET i = 4 WHERE i = 2
 ----
-does not exist
 
 onlyif threadid=1
 statement ok

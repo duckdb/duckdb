@@ -18,24 +18,18 @@ include_directories = [
         'third_party/zstd/include',
     ]
 ]
-# source files
-source_files = [
-    os.path.sep.join(x.split('/'))
-    for x in [
-        'extension/parquet/column_reader.cpp',
-        'extension/parquet/column_writer.cpp',
-        'extension/parquet/parquet_crypto.cpp',
-        'extension/parquet/parquet_extension.cpp',
-        'extension/parquet/parquet_metadata.cpp',
-        'extension/parquet/parquet_reader.cpp',
-        'extension/parquet/parquet_statistics.cpp',
-        'extension/parquet/parquet_timestamp.cpp',
-        'extension/parquet/parquet_writer.cpp',
-        'extension/parquet/serialize_parquet.cpp',
-        'extension/parquet/zstd_file_system.cpp',
-        'extension/parquet/geo_parquet.cpp',
-    ]
-]
+prefix = os.path.join('extension', 'parquet')
+
+
+def list_files_recursive(rootdir, suffix):
+    file_list = []
+    for root, _, files in os.walk(rootdir):
+        file_list += [os.path.join(root, f) for f in files if f.endswith(suffix)]
+    return file_list
+
+
+source_files = list_files_recursive(prefix, '.cpp')
+
 # parquet/thrift/snappy
 source_files += [
     os.path.sep.join(x.split('/'))

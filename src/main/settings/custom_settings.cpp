@@ -25,6 +25,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -195,6 +196,9 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
+	if (!config.file_system) {
+		throw InvalidInputException("Cannot change/set allowed_directories before the database is started");
+	}
 	config.options.allowed_directories.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
@@ -225,6 +229,10 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
+	if (!config.file_system) {
+		throw InvalidInputException("Cannot change/set allowed_paths before the database is started");
+	}
+
 	config.options.allowed_paths.clear();
 	auto &list = ListValue::GetChildren(input);
 	for (auto &val : list) {
@@ -332,7 +340,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	// parse the file content
 	unordered_map<string, string> json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString());
+		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
@@ -657,6 +665,28 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 }
 
 //===----------------------------------------------------------------------===//
+// Enable External File Cache
+//===----------------------------------------------------------------------===//
+void EnableExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_external_file_cache = input.GetValue<bool>();
+	if (db) {
+		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
+	}
+}
+
+void EnableExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_external_file_cache = DBConfig().options.enable_external_file_cache;
+	if (db) {
+		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
+	}
+}
+
+Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.enable_external_file_cache);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Logging
 //===----------------------------------------------------------------------===//
 Value EnableLogging::GetSetting(const ClientContext &context) {
@@ -953,6 +983,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
+		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
 		if (CompressionTypeIsDeprecated(compression_type)) {
 			throw ParserException("Attempted to force a deprecated compression type (%s)",
 			                      CompressionTypeToString(compression_type));
@@ -994,6 +1025,25 @@ bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &con
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
 	}
 	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Lambda Syntax Setting
+//===----------------------------------------------------------------------===//
+void LambdaSyntaxSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto setting_type = EnumUtil::FromString<LambdaSyntax>(input.ToString());
+	auto &config = ClientConfig::GetConfig(context);
+	config.lambda_syntax = setting_type;
+}
+
+void LambdaSyntaxSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.lambda_syntax = LambdaSyntax::DEFAULT;
+}
+
+Value LambdaSyntaxSetting::GetSetting(const ClientContext &context) {
+	const auto &config = ClientConfig::GetConfig(context);
+	return Value(EnumUtil::ToString(config.lambda_syntax));
 }
 
 //===----------------------------------------------------------------------===//

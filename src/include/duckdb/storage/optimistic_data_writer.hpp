@@ -39,7 +39,7 @@ private:
 private:
 	//! The table
 	DataTable &table;
-	//! The partial block manager (if we created one yet)
+	//! The partial block manager, if any was created.
 	unique_ptr<PartialBlockManager> partial_manager;
 };
 

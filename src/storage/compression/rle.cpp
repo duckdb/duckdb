@@ -91,7 +91,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<RLEAnalyzeState<T>>(info);
 }
 
@@ -151,7 +151,7 @@ struct RLECompressState : public CompressionState {
 		auto &type = checkpoint_data.GetType();
 
 		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-		                                                            info.GetBlockSize());
+		                                                            info.GetBlockManager());
 		current_segment = std::move(column_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -442,7 +442,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
-               idx_t &sel_count, const TableFilter &filter) {
+               idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -466,7 +466,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 
 		SelectionVector run_matches;
 		scan_state.matching_run_count = total_run_count;
-		ColumnSegment::FilterSelection(run_matches, run_vector, run_format, filter, total_run_count,
+		ColumnSegment::FilterSelection(run_matches, run_vector, run_format, filter, filter_state, total_run_count,
 		                               scan_state.matching_run_count);
 
 		// for any runs that pass the filter - set the matches to true

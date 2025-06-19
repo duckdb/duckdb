@@ -16,6 +16,7 @@
 #include "parquet_types.h"
 
 namespace duckdb {
+struct ParquetColumnSchema;
 
 enum class WKBGeometryType : uint16_t {
 	POINT = 1,
@@ -127,14 +128,14 @@ public:
 	void FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 
-	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const LogicalType &logical_type,
-	                                            const duckdb_parquet::SchemaElement &s_ele, idx_t schema_idx_p,
-	                                            idx_t max_define_p, idx_t max_repeat_p, ClientContext &context);
+	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                            ClientContext &context);
 
 	bool IsGeometryColumn(const string &column_name) const;
 	void RegisterGeometryColumn(const string &column_name);
 
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
+	static LogicalType GeometryType();
 
 private:
 	mutex write_lock;

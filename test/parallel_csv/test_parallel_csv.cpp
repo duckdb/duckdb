@@ -25,8 +25,6 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
-
 bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
                        ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
@@ -74,13 +72,10 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 	return true;
 }
 
-bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
+bool RunFull(const std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
              bool set_temp_dir = false) {
 	DuckDB db(nullptr);
 	Connection conn(db);
-	if (!run) {
-		return true;
-	}
 	// Here we run the csv file first with the full buffer.
 	// Then a combination of multiple buffers.
 	if (skip) {
@@ -124,7 +119,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			all_tests_passed = all_tests_passed && RunFull(csv_file, skip, add_parameters);
+			all_tests_passed = all_tests_passed && RunFull(csv_file.path, skip, add_parameters);
 		}
 	}
 	REQUIRE(all_tests_passed);

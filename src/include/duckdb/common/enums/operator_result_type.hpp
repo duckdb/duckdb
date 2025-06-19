@@ -31,6 +31,9 @@ enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FIN
 //! HAVE_MORE_OUTPUT means the operator contains more results.
 enum class OperatorFinalizeResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED };
 
+//! OperatorFinalResultType is used for the final call
+enum class OperatorFinalResultType : uint8_t { FINISHED, BLOCKED };
+
 //! SourceResultType is used to indicate the result of data being pulled out of a source.
 //! There are three possible results:
 //! HAVE_MORE_OUTPUT means the source has more output, this flag should only be set when data is returned, empty results

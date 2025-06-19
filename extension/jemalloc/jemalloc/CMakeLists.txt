@@ -69,8 +69,10 @@ set(JEMALLOC_C_FILES
 
 # if we add this jemalloc overrides new/delete
 # would be great but causes trouble in our Python client
-# should be resolvable, with some effort
-# src/jemalloc_cpp.cpp
+# so we only add it as an optional build parameter
+if(OVERRIDE_NEW_DELETE)
+    set(JEMALLOC_C_FILES ${JEMALLOC_C_FILES} src/jemalloc_cpp.cpp)
+endif()
 
 add_library(jemalloc OBJECT ${JEMALLOC_C_FILES})
 

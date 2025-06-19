@@ -1,10 +1,12 @@
 # name: test/sql/storage/compression/bitpacking/bitpacking_storage_info.test
-# description: Test storage with Bitpacking
+# description: Test storage info with Bitpacking
 # group: [bitpacking]
 
 # This test defaults to another compression function for smaller block sizes,
 # because the bitpacking groups no longer fit the blocks.
 require block_size 262144
+
+require vector_size 2048
 
 load __TEST_DIR__/test_bitpacking.db
 
@@ -24,3 +26,46 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 BitPacking
+
+statement ok
+CREATE TABLE test_bp (a INTEGER)
+
+statement ok
+INSERT INTO test_bp SELECT 1 FROM range(0, 10000) tbl(i)
+
+statement ok
+INSERT INTO test_bp SELECT 2 FROM range(0, 10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT
+	segment_info
+FROM
+	pragma_storage_info('test_bp')
+WHERE segment_type NOT IN ('VALIDITY')
+----
+CONSTANT: 9, DELTA_FOR: 1
+
+statement ok
+PRAGMA force_bitpacking_mode = 'delta_for'
+
+statement ok
+CREATE OR REPLACE TABLE test_bp (a INTEGER)
+
+statement ok
+INSERT INTO test_bp SELECT 3*(i // 1000) + (i%10) FROM range(0, 10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+# Should have all 5 blocks for 10K integers (1 block per 2048 tuples) forced to DELTA_FOR
+query I
+SELECT
+	segment_info
+FROM
+	pragma_storage_info('test_bp')
+WHERE segment_type NOT IN ('VALIDITY')
+----
+DELTA_FOR: 5

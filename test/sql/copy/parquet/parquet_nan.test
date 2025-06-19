@@ -11,3 +11,22 @@ select * from parquet_scan('data/parquet-testing/nan-float.parquet') order by 1
 2.5	baz	1
 inf	bar	0
 
+query II
+select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where f='nan';
+----
+nan	nan
+
+query II
+select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where f>10;
+----
+nan	nan
+
+query II
+select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where d='nan';
+----
+nan	nan
+
+query II
+select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where d>10;
+----
+nan	nan

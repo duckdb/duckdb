@@ -29,7 +29,6 @@ bool TestMemoryLeaks() {
 int main(int argc, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
-	bool delete_test_path = true;
 
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
@@ -44,7 +43,7 @@ int main(int argc, char *argv[]) {
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
 		} else if (string(argv[i]) == "--test-temp-dir") {
-			delete_test_path = false;
+			SetDeleteTestPath(false);
 			auto test_dir = string(argv[++i]);
 			if (fs->DirectoryExists(test_dir)) {
 				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n",
@@ -82,7 +81,7 @@ int main(int argc, char *argv[]) {
 
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	if (delete_test_path) {
+	if (DeleteTestPath()) {
 		TestDeleteDirectory(dir);
 	}
 

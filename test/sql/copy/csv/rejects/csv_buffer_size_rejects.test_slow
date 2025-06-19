@@ -50,8 +50,8 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIII rowsort
 SELECT * EXCLUDE (file_id, scan_id, user_arguments) FROM reject_scans order by #1;
 ----
-data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
-data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+data/csv/error/mismatch/big_bad.csv	,	(empty)	(empty)	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+data/csv/error/mismatch/big_bad2.csv	,	(empty)	(empty)	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
 
 query IIIIIIII rowsort
 SELECT * EXCLUDE (file_id, scan_id) FROM reject_errors order by all;

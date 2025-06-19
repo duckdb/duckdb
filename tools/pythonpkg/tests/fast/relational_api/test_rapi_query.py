@@ -177,8 +177,8 @@ class TestRAPIQuery(object):
         assert duckdb.sql("select 42").fetchall() == [(42,)]
         duckdb.close()
 
-        with pytest.raises(duckdb.ConnectionException, match='Connection Error: Connection already closed!'):
-            duckdb.sql("select 42").fetchall()
+        # This works just fine because the default connection is silently replaced with a new one
+        duckdb.sql("select 42").fetchall()
 
         con2 = duckdb.connect()
         duckdb.set_default_connection(con2)
@@ -188,5 +188,5 @@ class TestRAPIQuery(object):
         con3.close()
         duckdb.set_default_connection(con3)
 
-        with pytest.raises(duckdb.ConnectionException, match='Connection Error: Connection already closed!'):
-            duckdb.sql("select 42").fetchall()
+        # The closed default connection gets replaced with a new one silently
+        duckdb.sql("select 42").fetchall()

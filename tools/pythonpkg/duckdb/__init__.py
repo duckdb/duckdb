@@ -30,6 +30,7 @@ from .duckdb import (
     StarExpression,
     FunctionExpression,
     CaseExpression,
+    SQLExpression
 )
 _exported_symbols.extend([
     "DuckDBPyRelation",
@@ -45,6 +46,7 @@ _exported_symbols.extend([
     "StarExpression",
     "FunctionExpression",
     "CaseExpression",
+    "SQLExpression"
 ])
 
 # These are overloaded twice, we define them inside of C++ so pybind can deal with it
@@ -87,6 +89,7 @@ from .duckdb import (
 	executemany,
 	close,
 	interrupt,
+	query_progress,
 	fetchone,
 	fetchmany,
 	fetchall,
@@ -166,6 +169,7 @@ _exported_symbols.extend([
 	'executemany',
 	'close',
 	'interrupt',
+	'query_progress',
 	'fetchone',
 	'fetchmany',
 	'fetchall',

@@ -1,0 +1,114 @@
+# name: test/sql/error/test_try_expression.test
+# group: [error]
+
+statement ok
+pragma enable_verification;
+
+# --- OPERATOR_CAST ---
+
+query I
+select TRY('abc'::INTEGER)
+----
+NULL
+
+# --- OPERATOR_NOT ---
+
+statement error
+select ~CAST('abc' as INTEGER)
+----
+Could not convert string
+
+query I
+select TRY(~CAST('abc' as INTEGER))
+----
+NULL
+
+# --- OPERATOR_IS_NULL ---
+
+query I
+select TRY(CAST('abc' as INTEGER) IS NULL);
+----
+NULL
+
+
+# --- OPERATOR_IS_NOT_NULL ---
+
+query I
+select TRY(CAST('abc' as INTEGER) IS NOT NULL);
+----
+NULL
+
+# --- COMPARE_EQUAL ---
+
+query I
+select TRY(CAST('abc' as INTEGER) == 'abc')
+----
+NULL
+
+# --- COMPARE_EQUAL ---
+
+query I
+select TRY(CAST('abc' as INTEGER) == 'abc')
+----
+NULL
+
+# --- COMPARE_NOTEQUAL ---
+
+query I
+select TRY(CAST('abc' as INTEGER) != 'abc')
+----
+NULL
+
+# --- Functions ---
+
+query I
+select TRY(ln(0));
+----
+NULL
+
+query I
+with cte as (
+	select * from (VALUES
+		('123'),
+		('test'),
+		('235')
+	) t(a)
+)
+select try(a::INTEGER) from cte
+----
+123
+NULL
+235
+
+# Using TRY('abc'::BIGINT) results in null
+# Making the result of these queries equivalent
+
+query I nosort expected_result
+with cte as (
+	select i % 5 i from range(100_000) t(i)
+),
+cte2 as (
+	select if(i == 0, NULL, i) res from cte
+)
+select count(res) from cte2;
+----
+
+query I nosort expected_result
+with cte as (
+	select i % 5 i from range(100_000) t(i)
+),
+cte2 as (
+	select TRY(if(i == 0, 'abc', i::VARCHAR)::BIGINT) res from cte
+)
+select count(res) from cte2;
+----
+
+statement error
+select try(if(random() > 2.0, '123', 'abc')::TINYINT)
+----
+TRY can not be used in combination with a volatile function
+
+statement error
+select try(CAST((select 'ABC') as INTEGER))
+----
+TRY can not be used in combination with a scalar subquery

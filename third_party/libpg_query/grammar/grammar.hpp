@@ -197,7 +197,7 @@ static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);
 static void insertSelectOptions(PGSelectStmt *stmt,
 								PGList *sortClause, PGList *lockingClause,
-								PGNode *limitOffset, PGNode *limitCount,
+								PGNode *limitOffset, PGNode *limitCount, PGNode *isLimitOffsetFirst,
 								PGWithClause *withClause,
 								core_yyscan_t yyscanner);
 static PGNode *makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg);

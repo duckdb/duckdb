@@ -21,7 +21,7 @@ bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, Boun
 		case PhysicalOperatorType::TABLE_SCAN:
 			return false;
 		case PhysicalOperatorType::PROJECTION:
-			current_ref = *current_op.children[0];
+			current_ref = current_op.children[0];
 			break;
 		default:
 			finished = true;
@@ -46,40 +46,43 @@ bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, Boun
 #endif
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	D_ASSERT(op.children.size() == 1);
+	auto &plan = CreatePlan(*op.children[0]);
 
-	auto plan = CreatePlan(*op.children[0]);
-
-	unique_ptr<PhysicalOperator> limit;
 	switch (op.limit_val.Type()) {
 	case LimitNodeType::EXPRESSION_PERCENTAGE:
-	case LimitNodeType::CONSTANT_PERCENTAGE:
-		limit = make_uniq<PhysicalLimitPercent>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-		                                        op.estimated_cardinality);
-		break;
-	default:
-		if (!PreserveInsertionOrder(*plan)) {
-			// use parallel streaming limit if insertion order is not important
-			limit = make_uniq<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-			                                          op.estimated_cardinality, true);
-		} else {
-			// maintaining insertion order is important
-			if (UseBatchIndex(*plan) && UseBatchLimit(*plan, op.limit_val, op.offset_val)) {
-				// source supports batch index: use parallel batch limit
-				limit = make_uniq<PhysicalLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-				                                 op.estimated_cardinality);
-			} else {
-				// source does not support batch index: use a non-parallel streaming limit
-				limit = make_uniq<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-				                                          op.estimated_cardinality, false);
-			}
-		}
-		break;
+	case LimitNodeType::CONSTANT_PERCENTAGE: {
+		auto &limit = Make<PhysicalLimitPercent>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+		                                         op.estimated_cardinality);
+		limit.children.push_back(plan);
+		return limit;
 	}
+	default: {
+		if (!PreserveInsertionOrder(plan)) {
+			// use parallel streaming limit if insertion order is not important
+			auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+			                                           op.estimated_cardinality, true);
+			limit.children.push_back(plan);
+			return limit;
+		}
 
-	limit->children.push_back(std::move(plan));
-	return limit;
+		// maintaining insertion order is important
+		if (UseBatchIndex(plan) && UseBatchLimit(plan, op.limit_val, op.offset_val)) {
+			// source supports batch index: use parallel batch limit
+			auto &limit = Make<PhysicalLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+			                                  op.estimated_cardinality);
+			limit.children.push_back(plan);
+			return limit;
+		}
+
+		// source does not support batch index: use a non-parallel streaming limit
+		auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+		                                           op.estimated_cardinality, false);
+		limit.children.push_back(plan);
+		return limit;
+	}
+	}
 }
 
 } // namespace duckdb

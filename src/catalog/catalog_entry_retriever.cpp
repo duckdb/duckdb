@@ -13,8 +13,8 @@ namespace duckdb {
 
 LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const string &schema, const string &name,
                                            OnEntryNotFound on_entry_not_found) {
-	QueryErrorContext error_context;
-	auto result = GetEntry(CatalogType::TYPE_ENTRY, catalog, schema, name, on_entry_not_found, error_context);
+	EntryLookupInfo lookup_info(CatalogType::TYPE_ENTRY, name);
+	auto result = GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 	if (!result) {
 		return LogicalType::INVALID;
 	}
@@ -24,8 +24,8 @@ LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const string &schem
 
 LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &schema, const string &name,
                                            OnEntryNotFound on_entry_not_found) {
-	QueryErrorContext error_context;
-	auto result = GetEntry(CatalogType::TYPE_ENTRY, catalog, schema, name, on_entry_not_found, error_context);
+	EntryLookupInfo lookup_info(CatalogType::TYPE_ENTRY, name);
+	auto result = GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 	if (!result) {
 		return LogicalType::INVALID;
 	}
@@ -33,17 +33,17 @@ LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &
 	return type_entry.user_type;
 }
 
-optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(CatalogType type, const string &catalog,
-                                                           const string &schema, const string &name,
-                                                           OnEntryNotFound on_entry_not_found,
-                                                           QueryErrorContext error_context) {
-	return ReturnAndCallback(Catalog::GetEntry(*this, type, catalog, schema, name, on_entry_not_found, error_context));
+optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog, const string &schema,
+                                                           const EntryLookupInfo &lookup_info,
+                                                           OnEntryNotFound on_entry_not_found) {
+	return ReturnAndCallback(Catalog::GetEntry(*this, catalog, schema, lookup_info, on_entry_not_found));
 }
 
-optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog, const string &name,
-                                                                  OnEntryNotFound on_entry_not_found,
-                                                                  QueryErrorContext error_context) {
-	auto result = Catalog::GetSchema(*this, catalog, name, on_entry_not_found, error_context);
+optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog,
+                                                                  const EntryLookupInfo &schema_lookup_p,
+                                                                  OnEntryNotFound on_entry_not_found) {
+	EntryLookupInfo schema_lookup(schema_lookup_p, at_clause);
+	auto result = Catalog::GetSchema(*this, catalog, schema_lookup, on_entry_not_found);
 	if (!result) {
 		return result;
 	}
@@ -54,10 +54,10 @@ optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &
 	return result;
 }
 
-optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(CatalogType type, Catalog &catalog, const string &schema,
-                                                           const string &name, OnEntryNotFound on_entry_not_found,
-                                                           QueryErrorContext error_context) {
-	return ReturnAndCallback(catalog.GetEntry(*this, type, schema, name, on_entry_not_found, error_context));
+optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(Catalog &catalog, const string &schema,
+                                                           const EntryLookupInfo &lookup_info,
+                                                           OnEntryNotFound on_entry_not_found) {
+	return ReturnAndCallback(catalog.GetEntry(*this, schema, lookup_info, on_entry_not_found));
 }
 
 optional_ptr<CatalogEntry> CatalogEntryRetriever::ReturnAndCallback(optional_ptr<CatalogEntry> result) {
@@ -74,6 +74,7 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::ReturnAndCallback(optional_ptr
 void CatalogEntryRetriever::Inherit(const CatalogEntryRetriever &parent) {
 	this->callback = parent.callback;
 	this->search_path = parent.search_path;
+	this->at_clause = parent.at_clause;
 }
 
 const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
@@ -106,6 +107,14 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	}
 
 	this->search_path = make_shared_ptr<CatalogSearchPath>(context, std::move(new_path));
+}
+
+optional_ptr<BoundAtClause> CatalogEntryRetriever::GetAtClause() const {
+	return at_clause;
+}
+
+void CatalogEntryRetriever::SetAtClause(optional_ptr<BoundAtClause> at_clause_p) {
+	at_clause = at_clause_p;
 }
 
 void CatalogEntryRetriever::SetCallback(catalog_entry_callback_t callback) {

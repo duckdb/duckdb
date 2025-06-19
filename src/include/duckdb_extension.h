@@ -542,6 +542,48 @@ typedef struct {
 	                                               idx_t row);
 #endif
 
+// New functions around the client context
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
+	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
+	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
+	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
+#endif
+
+// New functions around scalar function binding
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
+	void (*duckdb_scalar_function_bind_set_error)(duckdb_bind_info info, const char *error);
+	void (*duckdb_scalar_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+	void (*duckdb_scalar_function_set_bind_data)(duckdb_bind_info info, void *bind_data,
+	                                             duckdb_delete_callback_t destroy);
+	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
+#endif
+
+// New string functions that are added
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	char *(*duckdb_value_to_string)(duckdb_value value);
+#endif
+
+// New value functions that are added
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
+	                                        idx_t entry_count);
+	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
+#endif
+
+// An API to create new vector types
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
+	void (*duckdb_destroy_vector)(duckdb_vector *vector);
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_vector_reference_value)(duckdb_vector vector, duckdb_value value);
+	void (*duckdb_vector_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
+	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
+#endif
+
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -963,6 +1005,36 @@ typedef struct {
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_open_connect_functions
+#define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
+#define duckdb_client_context_get_connection_id duckdb_ext_api.duckdb_client_context_get_connection_id
+#define duckdb_destroy_client_context           duckdb_ext_api.duckdb_destroy_client_context
+#define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
+
+// Version unstable_new_scalar_function_functions
+#define duckdb_scalar_function_set_bind           duckdb_ext_api.duckdb_scalar_function_set_bind
+#define duckdb_scalar_function_set_bind_data      duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_bind_set_error     duckdb_ext_api.duckdb_scalar_function_bind_set_error
+#define duckdb_scalar_function_get_bind_data      duckdb_ext_api.duckdb_scalar_function_get_bind_data
+#define duckdb_scalar_function_get_client_context duckdb_ext_api.duckdb_scalar_function_get_client_context
+
+// Version unstable_new_string_functions
+#define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_value_functions
+#define duckdb_create_map_value   duckdb_ext_api.duckdb_create_map_value
+#define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
+
+// Version unstable_new_vector_types
+#define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector
+#define duckdb_destroy_vector                duckdb_ext_api.duckdb_destroy_vector
+#define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_vector_reference_value        duckdb_ext_api.duckdb_vector_reference_value
+#define duckdb_vector_reference_vector       duckdb_ext_api.duckdb_vector_reference_vector
+#define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

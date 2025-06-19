@@ -1,0 +1,26 @@
+# name: test/sql/storage/compression/test_using_compression.test
+# group: [compression]
+
+load __TEST_DIR__/using_compression_test readwrite v1.0.0
+
+# Can't use CHIMP because it's deprecated
+statement error
+CREATE OR REPLACE TABLE t(
+	x VARCHAR USING COMPRESSION chimp
+);
+----
+Binder Error: Can't compress using user-provided compression type 'Chimp', that type is deprecated and only has decompress support
+
+# Can't use Dictionary because the column is not VARCHAR
+statement error
+CREATE OR REPLACE TABLE t(
+	x BIGINT USING COMPRESSION Dictionary
+);
+----
+Binder Error: Can't compress column "x" with type 'BIGINT' (physical: INT64) using compression type 'Dictionary'
+
+# Can use Dictionary for a VARCHAR column
+statement ok
+CREATE OR REPLACE TABLE t(
+	x VARCHAR USING COMPRESSION Dictionary
+);

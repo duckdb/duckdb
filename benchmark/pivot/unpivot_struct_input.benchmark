@@ -1,0 +1,14 @@
+# name: benchmark/pivot/unpivot_struct_input.benchmark
+# description: Unpivot with a struct column as input column that must be projected alongside the unpivot columns
+# group: [pivot]
+
+name Nested Unpivot
+group csv
+
+load
+CREATE TABLE structs AS
+SELECT {'id': i, 'uuid': uuid(), 'str_uuid': uuid()::varchar} AS struct, i AS "2020", i + 10 AS "2021", i + 100 AS "2022", i + 1000 AS "2023", i + 10000 AS "2024"
+FROM range(10000000) t(i)
+
+run
+UNPIVOT structs ON "2020", "2021", "2022", "2023", "2024"

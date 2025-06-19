@@ -10,7 +10,6 @@
 
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/execution/operator/csv_scanner/header_value.hpp"
@@ -24,6 +23,13 @@ struct DateTimestampSniffing {
 	idx_t initial_size;
 };
 
+struct QuoteEscapeCombination {
+	QuoteEscapeCombination(char quote, char escape) : quote(quote), escape(escape) {
+	}
+	char quote;
+	char escape;
+};
+
 //! All the options that will be used to sniff the dialect of the CSV file
 struct DialectCandidates {
 	//! The constructor populates all of our the options that will be used in our sniffer search space
@@ -31,12 +37,8 @@ struct DialectCandidates {
 
 	//! Static functions to get defaults of the search space
 	static vector<string> GetDefaultDelimiter();
-
-	static vector<vector<char>> GetDefaultQuote();
-
-	static vector<QuoteRule> GetDefaultQuoteRule();
-
-	static vector<vector<char>> GetDefaultEscape();
+	//! Default Quote/Escape combinations in priority order
+	static vector<QuoteEscapeCombination> GetDefaultQuoteEscapeCombination();
 
 	static vector<char> GetDefaultComment();
 
@@ -46,57 +48,8 @@ struct DialectCandidates {
 	vector<string> delim_candidates;
 	//! Candidates for the comment
 	vector<char> comment_candidates;
-	//! Quote-Rule Candidates
-	vector<QuoteRule> quote_rule_candidates;
-	//! Candidates for the quote option
-	unordered_map<uint8_t, vector<char>> quote_candidates_map;
-	//! Candidates for the escape option
-	unordered_map<uint8_t, vector<char>> escape_candidates_map;
-};
-
-//! This represents the data related to columns that have been set by the user
-//! e.g., from a copy command
-struct SetColumns {
-	SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p) : types(types_p), names(names_p) {
-		if (!types) {
-			D_ASSERT(!types && !names);
-		} else {
-			D_ASSERT(types->size() == names->size());
-		}
-	}
-	SetColumns() {};
-	//! Return Types that were detected
-	const vector<LogicalType> *types = nullptr;
-	//! Column Names that were detected
-	const vector<string> *names = nullptr;
-	//! If columns are set
-	bool IsSet() const;
-	//! How many columns
-	idx_t Size() const;
-	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
-	                                    bool last_value_always_empty) const {
-		if (!IsSet() || ignore_errors) {
-			// We can't say its unacceptable if it's not set or if we ignore errors
-			return false;
-		}
-		idx_t size = Size();
-		// If the columns are set and there is a mismatch with the expected number of columns, with null_padding and
-		// ignore_errors not set, we don't have a suitable candidate.
-		// Note that we compare with max_columns_found + 1, because some broken files have the behaviour where two
-		// columns are represented as: | col 1 | col_2 |
-		if (num_cols == size || num_cols == size + last_value_always_empty) {
-			// Good Candidate
-			return false;
-		}
-		// if we detected more columns than we have set, it's all good because we can null-pad them
-		if (null_padding && num_cols > size) {
-			return false;
-		}
-
-		// Unacceptable
-		return true;
-	}
+	//! Candidates for combinations of quotes and escapes
+	vector<QuoteEscapeCombination> quote_escape_candidates;
 };
 
 //! Struct used to know if we have a date or timestamp type already identified in this CSV File
@@ -108,8 +61,9 @@ struct HasType {
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, bool default_null_to_varchar = true);
+	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
+	                    shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache,
+	                    bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -134,21 +88,28 @@ public:
 
 	//! If a string_t value can be cast to a type
 	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
-	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
+	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator,
+	                         const char thousands_separator);
 
 	idx_t LinesSniffed() const;
 
 	bool EmptyOrOnlyHeader() const;
 
 private:
+	//! If all our candidates failed due to lines being bigger than the max line size.
+	bool all_fail_max_line_size = true;
+	CSVError line_error;
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;
 	//! Highest number of columns found
 	idx_t max_columns_found = 0;
+	idx_t max_columns_found_error = 0;
 	//! Current Candidates being considered
 	vector<unique_ptr<ColumnCountScanner>> candidates;
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
+	//! The multi-file reader options
+	const MultiFileOptions &file_options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! Information regarding columns that were set by user/query
@@ -236,7 +197,8 @@ private:
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
 	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
+	                     CSVReaderOptions &options, const MultiFileOptions &file_options,
+	                     CSVErrorHandler &error_handler);
 	vector<string> names;
 	//! If the file only has a header
 	bool single_row_file = false;

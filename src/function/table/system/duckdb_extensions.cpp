@@ -84,7 +84,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.loaded = false;
 		info.file_path = extension.statically_loaded ? "(BUILT-IN)" : string();
 		info.install_mode =
-		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::UNKNOWN;
+		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::NOT_INSTALLED;
 		info.description = extension.description;
 		for (idx_t k = 0; k < alias_count; k++) {
 			auto alias = ExtensionHelper::GetExtensionAlias(k);
@@ -206,7 +206,7 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
 		output.SetValue(6, count, Value(entry.extension_version));
 		// installed_mode LogicalType::VARCHAR
-		output.SetValue(7, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
+		output.SetValue(7, count, EnumUtil::ToString(entry.install_mode));
 		// installed_source LogicalType::VARCHAR
 		output.SetValue(8, count, Value(entry.installed_from));
 

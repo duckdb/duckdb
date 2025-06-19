@@ -6,7 +6,8 @@
         "children": [
             "pyarrow.dataset",
             "pyarrow.Table",
-            "pyarrow.RecordBatchReader"
+            "pyarrow.RecordBatchReader",
+            "pyarrow.ipc"
         ]
     },
     "pyarrow.dataset": {
@@ -676,6 +677,20 @@
         "type": "attribute",
         "full_path": "pandas.Series",
         "name": "Series",
+        "children": []
+    },
+    "pyarrow.ipc": {
+        "type": "attribute",
+        "full_path": "pyarrow.ipc",
+        "name": "ipc",
+        "children": [
+            "pyarrow.ipc.MessageReader"
+        ]
+    },
+    "pyarrow.ipc.MessageReader": {
+        "type": "attribute",
+        "full_path": "pyarrow.ipc.MessageReader",
+        "name": "MessageReader",
         "children": []
     }
 }

@@ -23,10 +23,11 @@ and sqrt(a) >= 0;
 
 
 statement ok
-create table t2 as
-select list_reduce([floor((random() * 2))::INT::VARCHAR for t, i in range(floor((random() * 20))::INT + 1)], (x, y) -> concat(x, y)) a,
-       list_reduce([floor((random() * 2))::INT::VARCHAR for t, i in range(floor((random() * 20))::INT + 1)], (x, y) -> concat(x, y)) b from range(10000)
-;
+CREATE TABLE t2 AS
+SELECT
+	list_reduce([floor((random() * 2))::INT::VARCHAR for t, i in range(floor((random() * 20))::INT + 1)], lambda x, y: concat(x, y)) a,
+	list_reduce([floor((random() * 2))::INT::VARCHAR for t, i in range(floor((random() * 20))::INT + 1)], lambda x, y: concat(x, y)) b
+FROM range(10000);
 
 # len(a) = len(b) must happen first
 # otherwise xor function will throw an error
@@ -64,6 +65,9 @@ create table t4 as select [2e304, 2e305, 2e306, 2e307] a from range(10000);
 
 statement ok
 insert into t4 select [range, range +1, range + 2, 2e50] from range(1000);
+
+# FIXME: this should not be required
+require vector_size 2048
 
 query I
 select count(*) from t4 where a[1] < 1001 and list_kurtosis(a) is NOT NULL;

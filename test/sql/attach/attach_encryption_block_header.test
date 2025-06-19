@@ -1,0 +1,75 @@
+# name: test/sql/attach/attach_encryption_block_header.test
+# group: [attach]
+
+# workaround - alternative verify always forces the latest storage
+require no_alternative_verify
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' (STORAGE_VERSION 'v1.0.0');
+
+statement  ok
+CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(10) t(i);
+
+statement  ok
+CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM encrypted.tbl
+----
+45
+
+query I
+SELECT SUM(i) FROM unencrypted.tbl
+----
+45
+
+statement ok
+DETACH encrypted
+
+statement ok
+DETACH unencrypted
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted
+----
+
+statement error
+ATTACH '__TEST_DIR__/unencrypted.duckdb' AS unencrypted (ENCRYPTION_KEY 'asdf');
+----
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb';
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+query I
+SELECT SUM(i) FROM encrypted.tbl
+----
+45
+
+query I
+SELECT tags FROM duckdb_databases() WHERE database_name LIKE '%encrypted%' ORDER BY database_name;
+----
+{storage_version=v1.3.0+}
+{storage_version=v1.0.0+}
+
+statement ok
+DETACH encrypted
+
+statement ok
+DETACH unencrypted
+
+statement error
+ATTACH '__TEST_DIR__/incompatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.2.0');
+----
+Explicit provided STORAGE_VERSION ("v1.2.0") and ENCRYPTION_KEY (storage >= v1.3.0) are not compatible
+
+statement ok
+ATTACH '__TEST_DIR__/compatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.3.0');

@@ -103,6 +103,16 @@ append(appender::Appender, val::Time) = duckdb_append_time(appender.handle, Date
 append(appender::Appender, val::DateTime) =
     duckdb_append_timestamp(appender.handle, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000);
 
+function append(appender::Appender, val::AbstractVector{T}) where {T}
+    value = create_value(val)
+    if length(val) == 0
+        duckdb_append_null(appender.handle)
+    else
+        duckdb_append_value(appender.handle, value.handle)
+    end
+    return
+end
+
 function append(appender::Appender, val::Any)
     println(val)
     throw(NotImplementedException("unsupported type for append"))

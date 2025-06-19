@@ -133,7 +133,6 @@ public:
 	}
 
 public:
-	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;

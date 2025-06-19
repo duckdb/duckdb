@@ -14,6 +14,11 @@ select first(encodings) from parquet_metadata('__TEST_DIR__/dict-${type}.parquet
 ----
 RLE_DICTIONARY
 
+query I
+SELECT COUNT(*) from '__TEST_DIR__/dict-${type}.parquet' WHERE r='20'
+----
+1000
+
 query III
 select column_id, BOOL_AND(bloom_filter_offset > 4), BOOL_AND(bloom_filter_length > 1)  from parquet_metadata('__TEST_DIR__/dict-${type}.parquet') group by column_id order by column_id;
 ----

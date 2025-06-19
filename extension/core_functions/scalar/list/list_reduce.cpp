@@ -8,6 +8,9 @@ namespace duckdb {
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
 	    : left_slice(make_uniq<Vector>(*info.child_vector)) {
+		if (info.has_initial) {
+			initial_value_offset = 0;
+		}
 		SelectionVector left_vector(info.row_count);
 		active_rows.Resize(info.row_count);
 		active_rows.SetAllValid(info.row_count);
@@ -17,10 +20,14 @@ struct ReduceExecuteInfo {
 
 		idx_t reduced_row_idx = 0;
 
+		if (info.has_initial) {
+			left_vector.set_index(0, 0);
+		}
+
 		for (idx_t original_row_idx = 0; original_row_idx < info.row_count; original_row_idx++) {
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
-				if (info.list_entries[list_column_format_index].length == 0) {
+				if (info.list_entries[list_column_format_index].length == 0 && !info.has_initial) {
 					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
 				}
 				left_vector.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset);
@@ -38,29 +45,34 @@ struct ReduceExecuteInfo {
 		}
 		input_types.push_back(left_slice->GetType());
 		input_types.push_back(left_slice->GetType());
-		for (auto &entry : info.column_infos) {
-			input_types.push_back(entry.vector.get().GetType());
+		// skip the first entry if there is an initial value
+		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
+			input_types.push_back(info.column_infos[i].vector.get().GetType());
 		}
 
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
+
 	ValidityMask active_rows;
 	unique_ptr<Vector> left_slice;
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 
+	idx_t initial_value_offset = 1;
 	SelectionVector left_sel;
 	SelectionVector active_rows_sel;
 };
 
-static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
+static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
                           DataChunk &result_chunk) {
 	idx_t original_row_idx = 0;
 	idx_t reduced_row_idx = 0;
 	idx_t valid_row_idx = 0;
 
+	idx_t loops_offset = loops + execute_info.initial_value_offset;
+
 	// create selection vectors for the left and right slice
-	auto data = execute_info.active_rows.GetData();
+	const auto data = execute_info.active_rows.GetData();
 
 	// reset right_sel each iteration to prevent referencing issues
 	SelectionVector right_sel;
@@ -79,13 +91,21 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 				continue;
 			}
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
-			if (info.list_entries[list_column_format_index].length > loops + 1) {
-				right_sel.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset + loops + 1);
+			if (info.list_entries[list_column_format_index].length > loops_offset) {
+				// While the list has more entries set the right slice to the next entry
+				right_sel.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset + loops_offset);
 				execute_info.left_sel.set_index(reduced_row_idx, valid_row_idx);
 				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
 				reduced_row_idx++;
 
+			} else if (info.list_entries[list_column_format_index].length == 0 && info.has_initial &&
+			           loops_offset == 0) {
+				// If the list is empty and there is an initial value, use the initial value
+				execute_info.active_rows.SetInvalid(original_row_idx);
+				auto val = info.column_infos[0].vector.get().GetValue(original_row_idx);
+				info.result.SetValue(original_row_idx, val);
 			} else {
+				// If the list has no more entries, write the result
 				execute_info.active_rows.SetInvalid(original_row_idx);
 				auto val = execute_info.left_slice->GetValue(valid_row_idx);
 				info.result.SetValue(original_row_idx, val);
@@ -100,8 +120,8 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 		return true;
 	}
 
-	// create the index vector
-	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops + 2)));
+	// create the index vector, where the index is that of the current node.
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset + 1)));
 
 	// slice the left and right slice
 	execute_info.left_slice->Slice(*execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
@@ -112,22 +132,31 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	input_chunk.InitializeEmpty(execute_info.input_types);
 	input_chunk.SetCardinality(reduced_row_idx);
 
-	idx_t slice_offset = info.has_index ? 1 : 0;
+	const idx_t slice_offset = info.has_index ? 1 : 0;
 	if (info.has_index) {
 		input_chunk.data[0].Reference(index_vector);
 	}
-	input_chunk.data[slice_offset + 1].Reference(*execute_info.left_slice);
+
+	if (loops == 0 && info.has_initial) {
+		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
+		input_chunk.data[slice_offset + 1].Reference(info.column_infos[0].vector);
+	} else {
+		input_chunk.data[slice_offset + 1].Reference(*execute_info.left_slice);
+	}
 	input_chunk.data[slice_offset].Reference(right_slice);
 
 	// add the other columns
+	// skip the initial value if there is one
 	vector<Vector> slices;
-	for (idx_t i = 0; i < info.column_infos.size(); i++) {
+	const idx_t initial_offset = info.has_initial ? 1 : 0;
+	for (idx_t i = 0; i < info.column_infos.size() - initial_offset; i++) {
 		if (info.column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectors
-			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[i].vector);
+			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[initial_offset + i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(info.column_infos[i].vector, execute_info.active_rows_sel, reduced_row_idx);
+			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel,
+			                    reduced_row_idx);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}
@@ -146,7 +175,7 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// Initializes the left slice from the list entries, active rows, the expression executor and the input types
 	bool completed = false;
-	LambdaFunctions::LambdaInfo info(args, state, result, completed);
+	LambdaInfo info(args, state, result, completed);
 	if (completed) {
 		return;
 	}
@@ -183,7 +212,7 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
                                                vector<unique_ptr<Expression>> &arguments) {
 
 	// the list column and the bound lambda expression
-	D_ASSERT(arguments.size() == 2);
+	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
@@ -204,20 +233,41 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 	auto list_child_type = arguments[0]->return_type;
 	list_child_type = ListType::GetChildType(list_child_type);
 
+	bool has_initial = arguments.size() == 3;
+	if (has_initial) {
+		const auto initial_value_type = arguments[2]->return_type;
+		// Check if the initial value type is the same as the list child type and if not find the max logical type
+		if (list_child_type != initial_value_type) {
+			LogicalType max_logical_type;
+			const auto has_max_logical_type =
+			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
+			if (!has_max_logical_type) {
+				throw BinderException(
+				    "The initial value type must be the same as the list child type or a common super type");
+			}
+
+			list_child_type = max_logical_type;
+			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]),
+			                                                  LogicalType::LIST(max_logical_type));
+			arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), max_logical_type);
+		}
+	}
+
 	auto cast_lambda_expr =
-	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type, false);
+	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type);
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda expression to list child type");
 	}
 	bound_function.return_type = cast_lambda_expr->return_type;
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index);
+	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index,
+	                                     has_initial);
 }
 
 static LogicalType ListReduceBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
 	return LambdaFunctions::BindTernaryLambda(parameter_idx, list_child_type);
 }
 
-ScalarFunction ListReduceFun::GetFunction() {
+ScalarFunctionSet ListReduceFun::GetFunctions() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::ANY,
 	                   LambdaFunctions::ListReduceFunction, ListReduceBind, nullptr, nullptr);
 
@@ -226,7 +276,11 @@ ScalarFunction ListReduceFun::GetFunction() {
 	fun.deserialize = ListLambdaBindData::Deserialize;
 	fun.bind_lambda = ListReduceBindLambda;
 
-	return fun;
+	ScalarFunctionSet set;
+	set.AddFunction(fun);
+	fun.arguments.push_back(LogicalType::ANY);
+	set.AddFunction(fun);
+	return set;
 }
 
 } // namespace duckdb

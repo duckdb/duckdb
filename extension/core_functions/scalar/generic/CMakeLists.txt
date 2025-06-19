@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   alias.cpp
   binning.cpp
+  cast_to_type.cpp
   can_implicitly_cast.cpp
   current_setting.cpp
   hash.cpp

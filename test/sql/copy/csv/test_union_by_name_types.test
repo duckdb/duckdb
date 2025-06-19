@@ -10,11 +10,11 @@ SELECT typeof(#1), typeof(#2), typeof(#3), typeof(#4), typeof(#5), typeof(#6), t
 FROM read_csv(['data/csv/union-by-name/gabor/Post/*.csv', 'data/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)
 LIMIT 1;
 ----
-TIMESTAMP	BIGINT	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	BIGINT	BIGINT	BIGINT	BIGINT	BIGINT	BIGINT
+TIMESTAMP WITH TIME ZONE	BIGINT	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	BIGINT	BIGINT	BIGINT	BIGINT	BIGINT	BIGINT
 
 query IIIIIIIIIIIII
 FROM read_csv(['data/csv/union-by-name/gabor/Post/*.csv', 'data/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)
 ORDER BY ALL
 LIMIT 1;
 ----
-2010-08-30 19:22:19.91	412317908996	NULL	1.2.0.161	Chrome	zh	About Mohammed Zahir Shah, in 2002 whicAbout George Bernard Shaw, ore than 60 About Keith Richards,	99	332	1048576	1	NULL	NULL
+2010-08-30 19:22:19.91+00	412317908996	NULL	1.2.0.161	Chrome	zh	About Mohammed Zahir Shah, in 2002 whicAbout George Bernard Shaw, ore than 60 About Keith Richards,	99	332	1048576	1	NULL	NULL

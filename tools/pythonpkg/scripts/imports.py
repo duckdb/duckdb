@@ -5,6 +5,7 @@ pyarrow.dataset.Scanner
 pyarrow.dataset.Dataset
 pyarrow.Table
 pyarrow.RecordBatchReader
+pyarrow.ipc.MessageReader
 
 import pandas
 

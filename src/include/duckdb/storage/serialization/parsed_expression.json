@@ -258,6 +258,13 @@
         "id": 201,
         "name": "expr",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 202,
+        "name": "syntax_type",
+        "type": "LambdaSyntaxType",
+        "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
+        "version": "v1.3.0"
       }
     ]
   },
@@ -333,7 +340,8 @@
         "id": 205,
         "name": "unpacked",
         "type": "bool",
-        "default": "false"
+        "default": "false",
+        "status": "read_only"
       },
       {
         "id": 206,
@@ -349,7 +357,7 @@
         "default": "qualified_column_map_t<string>()"
       }
     ],
-    "constructor": ["exclude_list", "qualified_exclude_list"]
+    "constructor_method": "StarExpression::DeserializeStarExpression"
   },
   {
     "class": "SubqueryExpression",

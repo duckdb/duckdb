@@ -6,11 +6,12 @@ include_directories(include)
 add_subdirectory(json_functions)
 
 set(JSON_EXTENSION_FILES
-    buffered_json_reader.cpp
+    json_reader.cpp
     json_extension.cpp
     json_common.cpp
     json_enums.cpp
     json_functions.cpp
+    json_multi_file_info.cpp
     json_scan.cpp
     json_serializer.cpp
     json_deserializer.cpp
@@ -23,6 +24,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_keys.cpp
     json_functions/json_merge_patch.cpp
     json_functions/json_pretty.cpp
+    json_functions/json_table_in_out.cpp
     json_functions/json_structure.cpp
     json_functions/json_transform.cpp
     json_functions/json_create.cpp

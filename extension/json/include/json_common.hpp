@@ -18,11 +18,23 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+class JSONAllocator;
+
+class JSONStringVectorBuffer : public VectorBuffer {
+public:
+	explicit JSONStringVectorBuffer(shared_ptr<JSONAllocator> allocator_p)
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), allocator(std::move(allocator_p)) {
+	}
+
+private:
+	shared_ptr<JSONAllocator> allocator;
+};
+
 //! JSON allocator is a custom allocator for yyjson that prevents many tiny allocations
-class JSONAllocator {
+class JSONAllocator : public enable_shared_from_this<JSONAllocator> {
 public:
 	explicit JSONAllocator(Allocator &allocator)
-	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, &arena_allocator}) {
+	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, this}) {
 	}
 
 	inline yyjson_alc *GetYYAlc() {
@@ -33,15 +45,26 @@ public:
 		arena_allocator.Reset();
 	}
 
+	void AddBuffer(Vector &vector) {
+		if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+			StringVector::AddBuffer(vector, make_buffer<JSONStringVectorBuffer>(shared_from_this()));
+		}
+	}
+
+	static void AddBuffer(Vector &vector, yyjson_alc *alc) {
+		auto alloc = (JSONAllocator *)alc->ctx; // NOLINT
+		alloc->AddBuffer(vector);
+	}
+
 private:
 	static inline void *Allocate(void *ctx, size_t size) {
-		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->AllocateAligned(size);
+		auto alloc = (JSONAllocator *)ctx; // NOLINT
+		return alloc->arena_allocator.AllocateAligned(size);
 	}
 
 	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
-		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->ReallocateAligned(data_ptr_cast(ptr), old_size, size);
+		auto alloc = (JSONAllocator *)ctx; // NOLINT
+		return alloc->arena_allocator.ReallocateAligned(data_ptr_cast(ptr), old_size, size);
 	}
 
 	static inline void Free(void *ctx, void *ptr) {
@@ -205,12 +228,15 @@ public:
 
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
+		// Go to blob so we can have a better error message for weird strings
+		auto blob = Value::BLOB(string(data, length));
 		// Truncate, so we don't print megabytes worth of JSON
-		string input = length > 50 ? string(data, 47) + "..." : string(data, length);
+		string input = blob.ToString();
+		input = input.length() > 50 ? string(input.c_str(), 47) + "..." : input;
 		// Have to replace \r, otherwise output is unreadable
 		input = StringUtil::Replace(input, "\r", "\\r");
-		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: %s", error.pos, error.msg, extra,
-		                          input);
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: \"%s\"", error.pos, error.msg,
+		                          extra, input);
 	}
 	static void ThrowParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		throw InvalidInputException(FormatParseError(data, length, error, extra));
@@ -300,6 +326,20 @@ public:
 
 	//! Validate JSON Path ($.field[index]... syntax), returns true if there are wildcards in the path
 	static JSONPathType ValidatePath(const char *ptr, const idx_t &len, const bool binder);
+
+public:
+	//! Same as BigQuery json_value
+	static inline string_t JSONValue(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &mask, idx_t idx) {
+		switch (yyjson_get_tag(val)) {
+		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+			mask.SetInvalid(idx);
+			return string_t {};
+		default:
+			return JSONCommon::WriteVal<yyjson_val>(val, alc);
+		}
+	}
 
 private:
 	//! Get JSON pointer (/field/index/... syntax)

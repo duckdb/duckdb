@@ -1,6 +1,5 @@
 #include "duckdb/common/types/time.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -11,7 +10,6 @@
 
 #include <cctype>
 #include <cstring>
-#include <sstream>
 
 namespace duckdb {
 static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
@@ -182,27 +180,18 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 		pos++;
 	}
 
-	//	Get the ±HH[:MM] part
+	//	Get the ±HH[:MM[:SS]] part
+	//	(PG claims they don't support :SS but they do...)
 	int hh = 0;
 	int mm = 0;
+	int ss = 0;
 	has_offset = (pos < len);
-	if (has_offset && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm)) {
+	if (has_offset && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm, ss)) {
 		return false;
 	}
 
 	//	Offsets are in seconds in the open interval (-16:00:00, +16:00:00)
-	int32_t offset = ((hh * Interval::MINS_PER_HOUR) + mm) * Interval::SECS_PER_MINUTE;
-
-	//	Check for trailing seconds.
-	//	(PG claims they don't support this but they do...)
-	if (pos < len && buf[pos] == ':') {
-		++pos;
-		int ss = 0;
-		if (!Date::ParseDoubleDigit(buf, len, pos, ss)) {
-			return false;
-		}
-		offset += (offset < 0) ? -ss : ss;
-	}
+	int32_t offset = ((hh * Interval::MINS_PER_HOUR) + mm) * Interval::SECS_PER_MINUTE + ss;
 
 	if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
 		return false;

@@ -89,6 +89,11 @@ public:
 		}
 		return *connection;
 	}
+
+	bool ConnectionIsClosed() const {
+		return connection == nullptr;
+	}
+
 	const Connection &GetConnection() const {
 		if (!connection) {
 			ThrowConnectionException();
@@ -290,6 +295,8 @@ public:
 	void Close();
 
 	void Interrupt();
+
+	double QueryProgress();
 
 	ModifiedMemoryFileSystem &GetObjectFileSystem();
 

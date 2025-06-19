@@ -14,11 +14,14 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
-                                                       unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
-                                                       JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, std::move(left), std::move(right),
-                        std::move(cond), join_type, estimated_cardinality) {
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op, PhysicalOperator &left,
+                                                       PhysicalOperator &right, vector<JoinCondition> cond,
+                                                       JoinType join_type, idx_t estimated_cardinality,
+                                                       unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+    : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond), join_type,
+                        estimated_cardinality) {
+
+	filter_pushdown = std::move(pushdown_info_p);
 
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
@@ -56,15 +59,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class MergeJoinLocalState : public LocalSinkState {
-public:
-	explicit MergeJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child)
-	    : table(context, op, child) {
-	}
-
-	//! The local sort state
-	PhysicalRangeJoin::LocalSortedTable table;
-};
+class MergeJoinLocalState;
 
 class MergeJoinGlobalState : public GlobalSinkState {
 public:
@@ -73,30 +68,43 @@ public:
 public:
 	MergeJoinGlobalState(ClientContext &context, const PhysicalPiecewiseMergeJoin &op) {
 		RowLayout rhs_layout;
-		rhs_layout.Initialize(op.children[1]->types);
+		rhs_layout.Initialize(op.children[1].get().GetTypes());
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
+		if (op.filter_pushdown) {
+			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
+			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
+		}
 	}
 
 	inline idx_t Count() const {
 		return table->count;
 	}
 
-	void Sink(DataChunk &input, MergeJoinLocalState &lstate) {
-		auto &global_sort_state = table->global_sort_state;
-		auto &local_sort_state = lstate.table.local_sort_state;
+	void Sink(DataChunk &input, MergeJoinLocalState &lstate);
 
-		// Sink the data into the local sort state
-		lstate.table.Sink(input, global_sort_state);
+	unique_ptr<GlobalSortedTable> table;
+	//! Should we not bother pushing down filters?
+	bool skip_filter_pushdown = false;
+	//! The global filter states to push down (if any)
+	unique_ptr<JoinFilterGlobalState> global_filter_state;
+};
 
-		// When sorting data reaches a certain size, we sort it
-		if (local_sort_state.SizeInBytes() >= table->memory_per_thread) {
-			local_sort_state.Sort(global_sort_state, true);
+class MergeJoinLocalState : public LocalSinkState {
+public:
+	explicit MergeJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, MergeJoinGlobalState &gstate,
+	                             const idx_t child)
+	    : table(context, op, child) {
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
 		}
 	}
 
-	unique_ptr<GlobalSortedTable> table;
+	//! The local sort state
+	PhysicalRangeJoin::LocalSortedTable table;
+	//! Local state for accumulating filter statistics
+	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -105,7 +113,21 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_uniq<MergeJoinLocalState>(context.client, *this, 1U);
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
+	return make_uniq<MergeJoinLocalState>(context.client, *this, gstate, 1U);
+}
+
+void MergeJoinGlobalState::Sink(DataChunk &input, MergeJoinLocalState &lstate) {
+	auto &global_sort_state = table->global_sort_state;
+	auto &local_sort_state = lstate.table.local_sort_state;
+
+	// Sink the data into the local sort state
+	lstate.table.Sink(input, global_sort_state);
+
+	// When sorting data reaches a certain size, we sort it
+	if (local_sort_state.SizeInBytes() >= table->memory_per_thread) {
+		local_sort_state.Sort(global_sort_state, true);
+	}
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -114,6 +136,10 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataC
 	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 
 	gstate.Sink(chunk, lstate);
+
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Sink(lstate.table.keys, *lstate.local_filter_state);
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -127,6 +153,9 @@ SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &cont
 
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
+	}
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -137,6 +166,9 @@ SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &cont
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                       OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		(void)filter_pushdown->Finalize(context, nullptr, *gstate.global_filter_state, *this);
+	}
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (PropagatesBuildSide(join_type)) {
@@ -171,8 +203,8 @@ public:
 			condition_types.push_back(order.expression->return_type);
 		}
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
-		lhs_layout.Initialize(op.children[0]->types);
-		lhs_payload.Initialize(allocator, op.children[0]->types);
+		lhs_layout.Initialize(op.children[0].get().GetTypes());
+		lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
 
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 
@@ -222,7 +254,7 @@ public:
 public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
-		lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
+		lhs_global_state = make_uniq<GlobalSortState>(context, lhs_order, lhs_layout);
 		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0U);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
@@ -747,13 +779,12 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0]->types.size();
+			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
 				result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result.data[col_idx], true);
 			}
-			const idx_t right_column_count = children[1]->types.size();
-			;
+			const idx_t right_column_count = children[1].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
