@@ -132,6 +132,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
       RUN_SLOW_VERIFIERS: 1
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage'
 
     steps:
     - uses: actions/checkout@v4
@@ -156,7 +157,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: SUMMARIZE_FAILURES=1 build/reldebug/test/unittest --force-storage
+      run: build/reldebug/test/unittest --force-storage
 
  force-restart:
     name: Force Restart
@@ -169,6 +170,7 @@ jobs:
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage --force-restart'
 
     steps:
     - uses: actions/checkout@v4
@@ -193,8 +195,6 @@ jobs:
 
     - name: Test
       shell: bash
-      env:
-        SUMMARIZE_FAILURES: 1
       run: build/reldebug/test/unittest --force-reload --force-storage
 
  no-string-inline:
@@ -209,6 +209,7 @@ jobs:
       ALTERNATIVE_VERIFY: 1
       DISABLE_POINTER_SALT: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
       - uses: actions/checkout@v3
@@ -231,8 +232,6 @@ jobs:
 
       - name: Test
         shell: bash
-        env:
-         SUMMARIZE_FAILURES: 1
         run: build/relassert/test/unittest
 
  prefetch-all-parquet-files:
@@ -266,8 +265,6 @@ jobs:
 
      - name: Test
        shell: bash
-       env:
-        SUMMARIZE_FAILURES: 1
        run: build/relassert/test/unittest
 
  vector-sizes:
@@ -278,6 +275,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
       - name: Clean up the disc space
@@ -348,8 +346,6 @@ jobs:
 
     - name: Test
       shell: bash
-      env:
-        SUMMARIZE_FAILURES: 1
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  vector-verification:
@@ -381,36 +377,37 @@ jobs:
         shell: bash
         env:
           DISABLE_CPP_UNITTESTS: 1
+          DUCKDB_TEST_DESCRIPTION: 'Tests run with --verify_vector=[VECTOR]. Use require no_vector_verification to skip tests.'
         run: make reldebug
 
       - name: Test dictionary_expression
         shell: bash
         env:
-          DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_expression
+          DUCKDB_TEST_VERIFY_VECTOR: dictionary_expression
         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
       - name: Test dictionary_operator
         shell: bash
         env:
-          DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_operator
+          DUCKDB_TEST_VERIFY_VECTOR: dictionary_operator
         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
       - name: Test constant_operator
         shell: bash
         env:
-          DUCKDB_DEBUG_VERIFY_VECTOR: constant_operator
+          DUCKDB_TEST_VERIFY_VECTOR: constant_operator
         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
       - name: Test sequence_operator
         shell: bash
         env:
-          DUCKDB_DEBUG_VERIFY_VECTOR: sequence_operator
+          DUCKDB_TEST_VERIFY_VECTOR: sequence_operator
         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
       - name: Test nested_shuffle
         shell: bash
         env:
-          DUCKDB_DEBUG_VERIFY_VECTOR: nested_shuffle
+          DUCKDB_TEST_VERIFY_VECTOR: nested_shuffle
         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
 
  latest-storage:
@@ -458,6 +455,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
     - uses: actions/checkout@v3
