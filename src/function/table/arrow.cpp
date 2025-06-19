@@ -35,7 +35,6 @@ void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType
 		}
 		names.push_back(name);
 	}
-
 }
 
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &context, TableFunctionBindInput &input,
@@ -215,7 +214,7 @@ OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &c
 	return OperatorPartitionData(state.batch_index);
 }
 
-static bool CanPushdown(const ArrowType& type) {
+static bool CanPushdown(const ArrowType &type) {
 	auto duck_type = type.GetDuckType();
 	switch (duck_type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -239,7 +238,7 @@ static bool CanPushdown(const ArrowType& type) {
 	case LogicalTypeId::VARCHAR:
 		return true;
 	case LogicalTypeId::BLOB:
-			// PyArrow doesn't support binary view filters yet
+		// PyArrow doesn't support binary view filters yet
 		return type.GetTypeInfo<ArrowStringInfo>().GetSizeType() != ArrowVariableSizeType::VIEW;
 	case LogicalTypeId::DECIMAL: {
 		switch (duck_type.InternalType()) {
@@ -254,7 +253,7 @@ static bool CanPushdown(const ArrowType& type) {
 		}
 	}
 	case LogicalTypeId::STRUCT: {
-		const auto& struct_info = type.GetTypeInfo<ArrowStructInfo>();
+		const auto &struct_info = type.GetTypeInfo<ArrowStructInfo>();
 		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
 			if (!CanPushdown(struct_info.GetChild(i))) {
 				return false;
@@ -266,12 +265,11 @@ static bool CanPushdown(const ArrowType& type) {
 		return false;
 	}
 }
-bool ArrowTableFunction::ArrowPushdownType(const FunctionData& bind_data, idx_t col_idx) {
+bool ArrowTableFunction::ArrowPushdownType(const FunctionData &bind_data, idx_t col_idx) {
 	auto &arrow_bind_data = bind_data.Cast<ArrowScanFunctionData>();
 	const auto &column_info = arrow_bind_data.arrow_table.GetColumns();
 	auto column_type = column_info.at(col_idx);
 	return CanPushdown(*column_type);
-
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
