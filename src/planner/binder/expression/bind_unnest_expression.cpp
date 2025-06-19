@@ -14,6 +14,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
