@@ -87,20 +87,23 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 	return *ClientData::Get(context).profiler;
 }
 
-void QueryProfiler::Reset(const bool running_p, string query) {
+void QueryProfiler::Start(string query) {
+	Reset();
+	query_info.query_name = std::move(query);
+	running = true;
+	main_query.Start();
+}
+
+void QueryProfiler::Reset() {
 	tree_map.clear();
 	root = nullptr;
 	phase_timings.clear();
 	phase_stack.clear();
-	query_info.query_name = std::move(query);
-	running = running_p;
-
-	if (running_p) {
-		main_query.Start();
-	}
+	running = false;
+	query_info.query_name = "";
 }
 
-void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool start_at_optimizer) {
+void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
@@ -117,7 +120,7 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool sta
 		D_ASSERT(PrintOptimizerOutput());
 		return;
 	}
-	Reset(true, std::move(query));
+	Start(std::move(query));
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
