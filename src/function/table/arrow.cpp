@@ -237,10 +237,7 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return true;
 	case LogicalTypeId::BLOB:
-		return static_cast<ArrowTypeInfo *>(type.AuxInfo()->interop_info.get())
-		           ->Cast<ArrowTypeInfo>()
-		           .Cast<ArrowStringInfo>()
-		           .GetSizeType() != ArrowVariableSizeType::VIEW;
+		return true;
 	case LogicalTypeId::DECIMAL: {
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:

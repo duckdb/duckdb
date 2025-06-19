@@ -11,7 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/extension_type_info.hpp"
-#include "duckdb/function/table/arrow/arrow_type_info.hpp"
 
 namespace duckdb {
 
@@ -35,7 +34,6 @@ struct ExtraTypeInfo {
 	ExtraTypeInfoType type;
 	string alias;
 	unique_ptr<ExtensionTypeInfo> extension_info;
-	unique_ptr<InteropInfo> interop_info;
 
 	explicit ExtraTypeInfo(ExtraTypeInfoType type);
 	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias);

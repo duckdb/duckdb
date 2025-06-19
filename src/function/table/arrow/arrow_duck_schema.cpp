@@ -1,7 +1,6 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
@@ -359,11 +358,6 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		}
 		return LogicalType::UNION(std::move(new_children));
 	}
-	case LogicalTypeId::BLOB:
-		auto new_type = type.DeepCopy();
-		auto aux_info = new_type.GetAuxInfoShrPtr();
-		aux_info->interop_info = type_info;
-		auto type return LogicalType(type.id(), type.GetExtensionInfo(), type_info);
 	default: {
 		if (extension_data) {
 			return extension_data->GetDuckDBType();
