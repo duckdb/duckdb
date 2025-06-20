@@ -14,7 +14,7 @@ namespace duckdb {
 
 using JSONPathType = JSONCommon::JSONPathType;
 
-JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, size_t &len) {
+JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, idx_t &len) {
 	if (path_val.IsNull()) {
 		throw BinderException("JSON path cannot be NULL");
 	}
@@ -60,7 +60,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path;
-	size_t len = 0;
+	idx_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
@@ -80,7 +80,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }
 
-JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
+JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<idx_t> lens_p)
     : paths(std::move(paths_p)), lens(std::move(lens_p)) {
 	for (const auto &path : paths) {
 		ptrs.push_back(path.c_str());
@@ -107,7 +107,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	}
 
 	vector<string> paths;
-	vector<size_t> lens;
+	vector<idx_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
