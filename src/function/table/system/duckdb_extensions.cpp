@@ -138,38 +138,39 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 #endif
 
 	// Finally, we check the list of currently loaded extensions
-	auto &extensions = db.GetExtensions();
-	for (auto &e : extensions) {
-		if (!e.second.is_loaded) {
-			continue;
-		}
-		auto &ext_name = e.first;
-		auto &ext_data = e.second;
-		if (auto &ext_install_info = ext_data.install_info) {
-			auto entry = installed_extensions.find(ext_name);
-			if (entry == installed_extensions.end() || !entry->second.installed) {
-				ExtensionInformation &info = installed_extensions[ext_name];
-
-				info.name = ext_name;
-				info.loaded = true;
-				info.extension_version = ext_install_info->version;
-				info.installed = ext_install_info->mode == ExtensionInstallMode::STATICALLY_LINKED;
-				info.install_mode = ext_install_info->mode;
-				if (ext_data.install_info->mode == ExtensionInstallMode::STATICALLY_LINKED && info.file_path.empty()) {
-					info.file_path = "(BUILT-IN)";
-				}
-			} else {
-				entry->second.loaded = true;
-				entry->second.extension_version = ext_install_info->version;
-			}
-		}
-		if (auto &ext_load_info = ext_data.load_info) {
-			auto entry = installed_extensions.find(ext_name);
-			if (entry != installed_extensions.end()) {
-				entry->second.description = ext_load_info->description;
-			}
-		}
-	}
+	auto &manager = ExtensionManager::Get(db);
+	throw InternalException("FIXME");
+	// for (auto &e : extensions) {
+	// 	if (!e.second.is_loaded) {
+	// 		continue;
+	// 	}
+	// 	auto &ext_name = e.first;
+	// 	auto &ext_data = e.second;
+	// 	if (auto &ext_install_info = ext_data.install_info) {
+	// 		auto entry = installed_extensions.find(ext_name);
+	// 		if (entry == installed_extensions.end() || !entry->second.installed) {
+	// 			ExtensionInformation &info = installed_extensions[ext_name];
+	//
+	// 			info.name = ext_name;
+	// 			info.loaded = true;
+	// 			info.extension_version = ext_install_info->version;
+	// 			info.installed = ext_install_info->mode == ExtensionInstallMode::STATICALLY_LINKED;
+	// 			info.install_mode = ext_install_info->mode;
+	// 			if (ext_data.install_info->mode == ExtensionInstallMode::STATICALLY_LINKED && info.file_path.empty()) {
+	// 				info.file_path = "(BUILT-IN)";
+	// 			}
+	// 		} else {
+	// 			entry->second.loaded = true;
+	// 			entry->second.extension_version = ext_install_info->version;
+	// 		}
+	// 	}
+	// 	if (auto &ext_load_info = ext_data.load_info) {
+	// 		auto entry = installed_extensions.find(ext_name);
+	// 		if (entry != installed_extensions.end()) {
+	// 			entry->second.description = ext_load_info->description;
+	// 		}
+	// 	}
+	// }
 
 	result->entries.reserve(installed_extensions.size());
 	for (auto &kv : installed_extensions) {
