@@ -14,6 +14,11 @@ def valid_filter(filter):
     assert sql_expression is not None
 
 
+def invalid_filter(filter):
+    sql_expression = _predicate_to_expression(filter)
+    assert sql_expression is None
+
+
 class TestPolars(object):
     def test_polars(self, duckdb_cursor):
         df = pl.DataFrame(
@@ -344,6 +349,9 @@ class TestPolars(object):
         ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
         ts_2020 = datetime.datetime(2020, 3, 1, 10, 0, 1)
 
+        # These will require a cast, which we currently do not support, hence the filter won't be pushed down, but the results
+        # Should still be correct, and we check we can't really pushdown the filter yet.
+
         # ==
         assert lazy_df.filter(pl.col("a") == ts_2008).select(pl.len()).collect().item() == 1
         # >
@@ -378,16 +386,17 @@ class TestPolars(object):
         )
 
         # Validate Filter
-        # valid_filter(pl.col("a") == ts_2008)
-        # valid_filter(pl.col("a") > ts_2008)
-        # valid_filter(pl.col("a") >= ts_2010)
-        # valid_filter(pl.col("a") < ts_2010)
-        # valid_filter(pl.col("a") <= ts_2010)
-        # valid_filter(pl.col("a").is_null())
-        # valid_filter(pl.col("a").is_not_null())
-        # valid_filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008))
-        # valid_filter((pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020))
-        # valid_filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008))
+        invalid_filter(pl.col("a") == ts_2008)
+        invalid_filter(pl.col("a") > ts_2008)
+        invalid_filter(pl.col("a") >= ts_2010)
+        invalid_filter(pl.col("a") < ts_2010)
+        invalid_filter(pl.col("a") <= ts_2010)
+        # These two are actually valid because they don't produce a cast
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        invalid_filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008))
+        invalid_filter((pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020))
+        invalid_filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008))
 
     def test_polars_lazy_pushdown_date(self, duckdb_cursor):
         duckdb_cursor.execute(

@@ -1,6 +1,7 @@
 import duckdb
 import polars as pl
-from typing import Iterator
+from typing import Iterator, Optional
+
 from polars.io.plugins import register_io_source
 from duckdb import SQLExpression
 import json
@@ -184,7 +185,7 @@ def _pl_tree_to_sql(tree: dict) -> str:
                     raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
 
         case _:
-            raise NotImplementedError(node_type)
+            raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
     """
