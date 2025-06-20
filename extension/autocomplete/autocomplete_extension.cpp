@@ -10,7 +10,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
 #include "duckdb/catalog/default/builtin_types/types.hpp"
