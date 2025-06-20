@@ -4,10 +4,10 @@ inputs:
   # Test config
   run_tests:
     description: 'Run extension tests after build'
-    default: 1
+    default: '1'
   run_autoload_tests:
     description: 'Runs the autoloading tests'
-    default: 1
+    default: '1'
 
   # Deploy config
   deploy_as:
@@ -32,19 +32,19 @@ inputs:
     default: ''
   static_link_build:
     description: 'Links DuckDB statically to the loadable extensions'
-    default: 1
+    default: '1'
   no_static_linking:
     description: 'Disables linking extensions into DuckDB for testing'
-    default: 0
+    default: '0'
   vcpkg_build:
     description: 'Installs vcpkg and pass its toolchain to CMakes'
-    default: 1
+    default: '1'
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
   ninja:
     description: 'Use ninja for building'
-    default: 0
+    default: '0'
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: ''
@@ -53,28 +53,28 @@ inputs:
     default: ''
   treat_warn_as_error:
     description: 'Treat compilation warnings as errors'
-    default: 1
+    default: '1'
   build_in_tree_extensions:
     description: 'Build in-tree extensions'
-    default: 1
+    default: '1'
   build_out_of_tree_extensions:
     description: 'Build out-of-tree extensions'
-    default: 1
+    default: '1'
   build_complete_extensions_set:
     description: 'Whether all extensions needs to be built'
-    default: 1
+    default: '1'
   bundle_static_lib_mode:
     description: 'Build the default bundled extensions to publish the static libs'
-    default: 0
+    default: '0'
   osx_universal:
     description: 'Build Universal Binary for OSX'
-    default: 0
+    default: '0'
   osx_arch:
     description: 'Build specific architecture for OSX'
     default: ''
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
-    default: 0
+    default: '0'
   vcpkg_target_triplet:
     description: 'Target triplet for installing vcpkg dependencies'
     default: ''
@@ -103,13 +103,13 @@ runs:
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
 
     - name: Setup vcpkg
-      if: inputs.vcpkg_build == 1
+      if: ${{ inputs.vcpkg_build == 1 }}
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgGitCommitId: ce613c41372b23b1f51333815feb3edd87ef8a8b
 
     - name: Set vcpkg env variables
-      if: inputs.vcpkg_build == 1
+      if: ${{ inputs.vcpkg_build == 1 }}
       shell: bash
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
@@ -134,7 +134,7 @@ runs:
         echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
-      if: inputs.vcpkg_build == 1 && inputs.build_out_of_tree_extensions == 1
+      if: ${{ inputs.vcpkg_build == '1' && inputs.build_out_of_tree_extensions == '1' }}
       shell: bash
       run: |
         make extension_configuration
@@ -174,7 +174,7 @@ runs:
     # - statically linked extensions are disable on startup but a sqlogictest require will call their load function
     # - loadable-only extensions have their loadable extension loaded with the LOAD statement on a sqlogictest require
     - name: Test statically linked extensions
-      if: ${{ inputs.run_tests == 1 && inputs.no_static_linking == 0}}
+      if: ${{ inputs.run_tests == '1' && inputs.no_static_linking == '0' }}
       shell: bash
       run: |
         ${{ inputs.unittest_script }}
@@ -184,19 +184,19 @@ runs:
       shell: bash
       run: |
         ls
-        cd  ${{ inputs.build_dir}}
+        cd  ${{ inputs.build_dir }}
         ${{ inputs.post_install }}
 
     # The reason we need to rebuild is we need to test auto-loading extensions: this is only possible without the other
     # extensions linked
     - name: Rebuild DuckDB without any extensions, but with all extension tests
-      if: ${{ inputs.run_autoload_tests == 1 }}
+      if: ${{ inputs.run_autoload_tests == '1' }}
       shell: bash
       env:
         EXTENSION_TESTS_ONLY: 1
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
-        GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        GEN: ${{ inputs.ninja == '1' && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
       run: |
         cd  ${{ inputs.build_dir}}
@@ -207,10 +207,10 @@ runs:
 
     # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
     - name: Run tests with auto loading
-      if: ${{ inputs.run_autoload_tests == 1 }}
+      if: ${{ inputs.run_autoload_tests == '1' }}
       shell: bash
       env:
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
         DUCKDB_TEST_DESCRIPTION: 'Extension autoloading tests. All `require` calls are ignored and auto-loading is tested. Use require no_extension_autoloading in the test to skip tests.'
       run: |
         cd  ${{ inputs.build_dir}}

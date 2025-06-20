@@ -331,6 +331,10 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 		}
 
 		auto buffer_block_pointer = info.block_pointers[i];
+		if (buffer_block_pointer.block_id >= MAXIMUM_BLOCK) {
+			throw SerializationException("invalid block ID in index storage information");
+		}
+
 		auto segment_count = info.segment_counts[i];
 		auto allocation_size = info.allocation_sizes[i];
 
