@@ -86,15 +86,17 @@ void sqlite3_randomness(int N, void *pBuf) {
 }
 
 int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
-                 sqlite3 **ppDb        /* OUT: SQLite db handle */
+                 sqlite3 **ppDb,       /* OUT: SQLite db handle */
+                 const char *password  /* encryption key for full encryption */
 ) {
-	return sqlite3_open_v2(filename, ppDb, 0, NULL);
+	return sqlite3_open_v2(filename, ppDb, 0, NULL, password);
 }
 
 int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
                     sqlite3 **ppDb,       /* OUT: SQLite db handle */
                     int flags,            /* Flags */
-                    const char *zVfs      /* Name of VFS module to use */
+                    const char *zVfs,     /* Name of VFS module to use */
+                    const char *password  /* Encryption key*/
 ) {
 	if (filename && strcmp(filename, ":memory:") == 0) {
 		filename = NULL;
@@ -122,7 +124,10 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_LATEST_STORAGE_VERSION) {
 			config.options.serialization_compatibility = SerializationCompatibility::FromString("latest");
 		}
-
+		if (flags & DUCKDB_ENCRYPTION_KEY) {
+			config.options.contains_user_key = true;
+			config.options.user_key = make_shared_ptr<string>(password);
+		}
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,
 		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
