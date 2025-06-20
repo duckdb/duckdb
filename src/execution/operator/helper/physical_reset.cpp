@@ -12,28 +12,28 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		extension_option.set_function(context.client, scope, extension_option.default_value);
 	}
 	if (scope == SetScope::GLOBAL) {
-		config.ResetOption(name);
+		config.ResetOption(name.GetString());
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.set_variables[name] = extension_option.default_value;
+		client_config.set_variables[name.GetString()] = extension_option.default_value;
 	}
 }
 
 SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	if (scope == SetScope::VARIABLE) {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.ResetUserVariable(name);
+		client_config.ResetUserVariable(name.GetString());
 		return SourceResultType::FINISHED;
 	}
 	auto &config = DBConfig::GetConfig(context.client);
-	config.CheckLock(name);
-	auto option = DBConfig::GetOptionByName(name);
+	config.CheckLock(name.GetString());
+	auto option = DBConfig::GetOptionByName(name.GetString());
 	if (!option) {
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(name);
+		auto entry = config.extension_parameters.find(name.GetString());
 		if (entry == config.extension_parameters.end()) {
-			Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(name);
+			Catalog::AutoloadExtensionByConfigName(context.client, name.GetString());
+			entry = config.extension_parameters.find(name.GetString());
 			D_ASSERT(entry != config.extension_parameters.end());
 		}
 		ResetExtensionVariable(context, config, entry->second);
@@ -54,7 +54,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
-			throw CatalogException("option \"%s\" cannot be reset globally", name);
+			throw CatalogException("option \"%s\" cannot be reset globally", name.GetString());
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
 		config.ResetOption(&db, *option);
@@ -62,7 +62,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	}
 	case SetScope::SESSION:
 		if (!option->reset_local) {
-			throw CatalogException("option \"%s\" cannot be reset locally", name);
+			throw CatalogException("option \"%s\" cannot be reset locally", name.GetString());
 		}
 		option->reset_local(context.client);
 		break;
