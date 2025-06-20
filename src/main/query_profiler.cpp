@@ -87,7 +87,23 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 	return *ClientData::Get(context).profiler;
 }
 
-void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool start_at_optimizer) {
+void QueryProfiler::Start(const string &query) {
+	Reset();
+	query_info.query_name = query;
+	running = true;
+	main_query.Start();
+}
+
+void QueryProfiler::Reset() {
+	tree_map.clear();
+	root = nullptr;
+	phase_timings.clear();
+	phase_stack.clear();
+	running = false;
+	query_info.query_name = "";
+}
+
+void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
@@ -104,14 +120,7 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool sta
 		D_ASSERT(PrintOptimizerOutput());
 		return;
 	}
-
-	running = true;
-	query_info.query_name = std::move(query);
-	tree_map.clear();
-	root = nullptr;
-	phase_timings.clear();
-	phase_stack.clear();
-	main_query.Start();
+	Start(query);
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
@@ -316,7 +325,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
-		std::stringstream str;
+		duckdb::stringstream str;
 		auto &info = root->GetProfilingInfo();
 		if (info.Enabled(info.expanded_settings, MetricsType::OPERATOR_TIMING)) {
 			info.metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
@@ -590,7 +599,7 @@ static string RenderTiming(double timing) {
 }
 
 string QueryProfiler::QueryTreeToString() const {
-	std::stringstream str;
+	duckdb::stringstream str;
 	QueryTreeToStream(str);
 	return str.str();
 }
