@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 

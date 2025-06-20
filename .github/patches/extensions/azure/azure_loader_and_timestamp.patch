@@ -1,5 +1,5 @@
 diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
-index 6ba3a0e..d8c79a3 100644
+index ee19c8c..fdc766b 100644
 --- a/src/azure_blob_filesystem.cpp
 +++ b/src/azure_blob_filesystem.cpp
 @@ -12,7 +12,7 @@
@@ -70,6 +70,31 @@ index 5ce0b8d..d0758e2 100644
 -#endif
 +}
 \ No newline at end of file
+diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
+index d7ed201..d8051e4 100644
+--- a/src/azure_filesystem.cpp
++++ b/src/azure_filesystem.cpp
+@@ -93,7 +93,7 @@ int64_t AzureStorageFileSystem::GetFileSize(FileHandle &handle) {
+ 	return afh.length;
+ }
+ 
+-time_t AzureStorageFileSystem::GetLastModifiedTime(FileHandle &handle) {
++timestamp_t AzureStorageFileSystem::GetLastModifiedTime(FileHandle &handle) {
+ 	auto &afh = handle.Cast<AzureFileHandle>();
+ 	return afh.last_modified;
+ }
+@@ -228,9 +228,9 @@ AzureReadOptions AzureStorageFileSystem::ParseAzureReadOptions(optional_ptr<File
+ 	return options;
+ }
+ 
+-time_t AzureStorageFileSystem::ToTimeT(const Azure::DateTime &dt) {
++timestamp_t AzureStorageFileSystem::ToTimeT(const Azure::DateTime &dt) {
+ 	auto time_point = static_cast<std::chrono::system_clock::time_point>(dt);
+-	return std::chrono::system_clock::to_time_t(time_point);
++	return Timestamp::FromTimeT(std::chrono::system_clock::to_time_t(time_point));
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/azure_secret.cpp b/src/azure_secret.cpp
 index e9f08f0..7b1919a 100644
 --- a/src/azure_secret.cpp
@@ -144,6 +169,45 @@ index c9be37e..1a8404f 100644
  	std::string Name() override;
  };
  
+diff --git a/src/include/azure_filesystem.hpp b/src/include/azure_filesystem.hpp
+index 32c26bf..e8a43d2 100644
+--- a/src/include/azure_filesystem.hpp
++++ b/src/include/azure_filesystem.hpp
+@@ -6,6 +6,7 @@
+ #include "duckdb/common/shared_ptr.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/main/client_context_state.hpp"
++#include "duckdb/common/types/timestamp.hpp"
+ #include <azure/core/datetime.hpp>
+ #include <ctime>
+ #include <cstdint>
+@@ -61,7 +62,7 @@ public:
+ 
+ 	// File info
+ 	idx_t length;
+-	time_t last_modified;
++	timestamp_t last_modified;
+ 
+ 	// Read buffer
+ 	duckdb::unique_ptr<data_t[]> read_buffer;
+@@ -93,7 +94,7 @@ public:
+ 		return false;
+ 	}
+ 	int64_t GetFileSize(FileHandle &handle) override;
+-	time_t GetLastModifiedTime(FileHandle &handle) override;
++	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+ 	void Seek(FileHandle &handle, idx_t location) override;
+ 	void FileSync(FileHandle &handle) override;
+ 
+@@ -125,7 +126,7 @@ protected:
+ 	static AzureReadOptions ParseAzureReadOptions(optional_ptr<FileOpener> opener);
+ 
+ public:
+-	static time_t ToTimeT(const Azure::DateTime &dt);
++	static timestamp_t ToTimestamp(const Azure::DateTime &dt);
+ };
+ 
+ } // namespace duckdb
 diff --git a/src/include/azure_secret.hpp b/src/include/azure_secret.hpp
 index 3dc39e9..6b81816 100644
 --- a/src/include/azure_secret.hpp
