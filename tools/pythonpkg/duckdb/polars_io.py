@@ -146,13 +146,13 @@ def _pl_tree_to_sql(tree: dict) -> str:
 
             # Datetime with microseconds since epoch
             if str(dtype).startswith("{'Datetime'"):
-                micros = value['DatetimeOwned'][0]
+                micros = value['Datetime'][0]
                 dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
                 return f"'{str(dt_timestamp)}'::TIMESTAMP"
 
             # Match simple types
             match dtype:
-                case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64" | "Float32" | "Float64":
+                case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64" | "Float32" | "Float64"|"Boolean":
                     return str(value[str(dtype)])
                 
                 case "Time":
@@ -168,13 +168,9 @@ def _pl_tree_to_sql(tree: dict) -> str:
                     days_since_epoch = value["Date"]
                     date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)
                     return f"'{str(date)}'::DATE"
-
-                case "Boolean":
-                    return str(value["Bool"])
-
                 case "Binary":
                     # Convert binary data to hex string for BLOB
-                    binary_data = bytes(value["BinaryOwned"])
+                    binary_data = bytes(value["Binary"])
                     escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
                     return f"'{escaped}'::BLOB"
 
