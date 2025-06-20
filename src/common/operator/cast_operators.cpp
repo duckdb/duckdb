@@ -1273,6 +1273,11 @@ dtime_t CastTimestampNsToTime::Operation(timestamp_t input) {
 }
 
 template <>
+dtime_ns_t CastTimestampNsToTimeNs::Operation(timestamp_ns_t input) {
+	return Timestamp::GetTimeNs(input);
+}
+
+template <>
 timestamp_t CastTimestampSecToMs::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;

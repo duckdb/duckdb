@@ -847,6 +847,12 @@ struct CastTimestampNsToTime {
 		throw duckdb::NotImplementedException("Cast to TIME could not be performed!");
 	}
 };
+struct CastTimestampNsToTimeNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIME_NS could not be performed!");
+	}
+};
 struct CastTimestampNsToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {

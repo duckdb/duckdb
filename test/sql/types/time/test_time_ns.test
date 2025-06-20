@@ -1,0 +1,16 @@
+# name: test/sql/types/time/test_time_ns.test
+# description: Have you seen the fnords?
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '2025-05-20 15:30:00.123456789'::TIMESTAMP_NS::TIME_NS t;
+----
+15:30:00.123456789
+
+query I
+SELECT '1962-05-20 15:30:00.123456789'::TIMESTAMP_NS::TIME_NS t;
+----
+15:30:00.123456789
