@@ -15,8 +15,6 @@ ExtensionActiveLoad::ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &in
 void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	info.is_loaded = true;
 	info.install_info = make_uniq<ExtensionInstallInfo>(install_info);
-	// finished loading - unlock prior to calling callbacks
-	load_lock.unlock();
 
 	auto &callbacks = DBConfig::GetConfig(db).extension_callbacks;
 	for (auto &callback : callbacks) {
