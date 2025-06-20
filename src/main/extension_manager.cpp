@@ -5,11 +5,12 @@
 
 namespace duckdb {
 
-ExtensionInfo::ExtensionInfo() : is_loaded(false) {}
-
-ExtensionActiveLoad::ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p) : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)) {
+ExtensionInfo::ExtensionInfo() : is_loaded(false) {
 }
 
+ExtensionActiveLoad::ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p)
+    : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)) {
+}
 
 void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	info.is_loaded = true;
@@ -88,7 +89,6 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 	}
 	// extension is not loaded yet and we are in charge of loading it - return
 	return result;
-
 }
 
-}
+} // namespace duckdb
