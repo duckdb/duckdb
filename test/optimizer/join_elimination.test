@@ -218,7 +218,7 @@ SELECT c.*
 statement ok
 select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
 
-# union intersect unnest, pivot
+# union intersect unnest, pivot, delim scan, inline cte, materialized 
 
 query II
 explain 

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -18,20 +19,39 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include <utility>
 
 namespace duckdb {
-
 class JoinElimination;
-
-struct JoinEliminationStat {
-	optional_ptr<LogicalOperator> join_parent;
-	unique_ptr<JoinElimination> left_child = nullptr;
-	unique_ptr<JoinElimination> right_child = nullptr;
-};
+class JoinRelation;
+class PipelineInfo;
 
 struct DistinctGroupRef {
 	column_binding_set_t distinct_group;
 	unordered_set<idx_t> ref_column_ids;
+};
+
+class PipelineInfo {
+public:
+	optional_ptr<PipelineInfo> parent;
+	unique_ptr<LogicalOperator> root = nullptr;
+	unordered_set<idx_t> ref_table_ids;
+	unordered_map<idx_t, column_binding_set_t> distinct_groups;
+
+	// pushdown filter condition(ex in table scan operator),
+	// if have outer table columns then cannot elimination
+	bool has_filter = false;
+
+	optional_ptr<LogicalOperator> join_parent = nullptr;
+	idx_t join_index = 0;
+
+	PipelineInfo CreateChild() {
+		auto result = PipelineInfo();
+		result.ref_table_ids = ref_table_ids;
+		result.distinct_groups = distinct_groups;
+		result.parent = this;
+		return result;
+	}
 };
 
 class JoinElimination : public LogicalOperatorVisitor {
@@ -39,6 +59,7 @@ public:
 	explicit JoinElimination() {
 	}
 
+	void OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx);
 	// with specific condition we can eliminate a (left/right, semi, inner) join.
 	// exemplify left/right join eliminaion condition:
 	// 1. output can only have outer table columns
@@ -47,24 +68,26 @@ public:
 	//  1) inner table join condition is unique(ex. 1. join conditions have inner table's primary key 2. inner table
 	//  join condition columns contains a whole distinct group) 2) join result columns contains a whole distinct group
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+	void OptimizeInternal(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
+	unique_ptr<JoinElimination> CreateChildren() {
+		auto result = make_uniq<JoinElimination>();
+		result->pipe_info = pipe_info.CreateChild();
+		return result;
+	}
+
 private:
-	unique_ptr<LogicalOperator> OptimizeChildren(unique_ptr<LogicalOperator> op, optional_ptr<LogicalOperator> parent);
-	unique_ptr<LogicalOperator> TryEliminateJoin(unique_ptr<LogicalOperator> op, JoinEliminationStat &stat);
+	unique_ptr<LogicalOperator> TryEliminateJoin();
 	// void ExtractDistinctReferences(vector<Expression> &expressions, idx_t target_table_index);
 	bool ContainDistinctGroup(vector<ColumnBinding> &exprs);
 
-	idx_t inner_idx = 0;
-	idx_t outer_idx = 0;
+	PipelineInfo pipe_info;
 
-	unordered_set<idx_t> ref_table_ids;
-	unordered_map<idx_t, column_binding_set_t> distinct_groups;
+	optional_ptr<LogicalOperator> children_root;
+	vector<unique_ptr<JoinElimination>> children;
 
-	vector<JoinEliminationStat> stats;
-
-	// pushdown filter condition(ex in table scan operator),
-	// if have outer table columns then cannot elimination
-	bool inner_has_filter = false;
+	unique_ptr<JoinElimination> left_child;
+	unique_ptr<JoinElimination> right_child;
 };
 } // namespace duckdb
