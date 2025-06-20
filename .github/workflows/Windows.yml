@@ -98,6 +98,14 @@ jobs:
       run: |
         test/Release/unittest.exe
 
+    - name: Test with VS2019 C++ stdlib
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        cd test/Release && wget https://blobs.duckdb.org/ci/msvcp140.dll
+        test/Release/unittest.exe
+        rm test/Release/msvcp140.dll
+
     - name: Tools Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
