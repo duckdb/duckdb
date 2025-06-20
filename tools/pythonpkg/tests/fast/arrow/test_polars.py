@@ -2,10 +2,16 @@ import duckdb
 import pytest
 import sys
 import datetime
+from duckdb.polars_io import _predicate_to_expression
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
 pl_testing = pytest.importorskip("polars.testing")
+
+
+def valid_filter(filter):
+    sql_expression = _predicate_to_expression(filter)
+    assert sql_expression is not None
 
 
 class TestPolars(object):
@@ -157,6 +163,7 @@ class TestPolars(object):
 
         # Equality
         assert lazy_df.filter(pl.col("a") == 1).select("a").collect().to_dicts() == [{"a": 1}]
+
         # Greater than
         assert lazy_df.filter(pl.col("a") > 1).select("a").collect().to_dicts() == [{"a": 10}, {"a": 100}]
         # Greater than or equal
@@ -186,6 +193,18 @@ class TestPolars(object):
             {"a": 1, "b": 1},
             {"a": 100, "b": 10},
         ]
+
+        # Validate Filters
+        valid_filter(pl.col("a") == 1)
+        valid_filter(pl.col("a") > 1)
+        valid_filter(pl.col("a") >= 10)
+        valid_filter(pl.col("a") < 10)
+        valid_filter(pl.col("a") <= 10)
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        valid_filter((pl.col("a") == 10) & (pl.col("b") == 1))
+        valid_filter((pl.col("a") == 100) & (pl.col("b") == 10) & (pl.col("c") == 100))
+        valid_filter((pl.col("a") == 100) | (pl.col("b") == 1))
 
     def test_polars_lazy_pushdown_bool(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -222,6 +241,13 @@ class TestPolars(object):
 
         # OR
         assert lazy_df.filter((pl.col("a") == True) | (pl.col("b") == True)).select(pl.len()).collect().item() == 3
+
+        # Validate Filters
+        valid_filter(pl.col("a") == True)
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        valid_filter((pl.col("a") == True) & (pl.col("b") == True))
+        valid_filter((pl.col("a") == True) | (pl.col("b") == True))
 
     def test_polars_lazy_pushdown_time(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -278,6 +304,18 @@ class TestPolars(object):
 
         # OR condition
         assert lazy_df.filter((pl.col("a") == t_100) | (pl.col("b") == t_001)).select(pl.len()).collect().item() == 2
+
+        # Validate Filter
+        valid_filter(pl.col("a") == t_001)
+        valid_filter(pl.col("a") > t_001)
+        valid_filter(pl.col("a") >= t_010)
+        valid_filter(pl.col("a") < t_010)
+        valid_filter(pl.col("a") <= t_010)
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        valid_filter((pl.col("a") == t_010) & (pl.col("b") == t_001))
+        valid_filter((pl.col("a") == t_100) & (pl.col("b") == t_010) & (pl.col("c") == t_100))
+        valid_filter((pl.col("a") == t_100) | (pl.col("b") == t_001))
 
     def test_polars_lazy_pushdown_timestamp(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -338,6 +376,18 @@ class TestPolars(object):
         assert (
             lazy_df.filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 2
         )
+
+        # Validate Filter
+        # valid_filter(pl.col("a") == ts_2008)
+        # valid_filter(pl.col("a") > ts_2008)
+        # valid_filter(pl.col("a") >= ts_2010)
+        # valid_filter(pl.col("a") < ts_2010)
+        # valid_filter(pl.col("a") <= ts_2010)
+        # valid_filter(pl.col("a").is_null())
+        # valid_filter(pl.col("a").is_not_null())
+        # valid_filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008))
+        # valid_filter((pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020))
+        # valid_filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008))
 
     def test_polars_lazy_pushdown_date(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -409,6 +459,18 @@ class TestPolars(object):
             == 2
         )
 
+        # Validate Filter
+        valid_filter(pl.col("a") == d_2000_01_01)
+        valid_filter(pl.col("a") > d_2000_01_01)
+        valid_filter(pl.col("a") >= d_2000_10_01)
+        valid_filter(pl.col("a") < d_2000_10_01)
+        valid_filter(pl.col("a") <= d_2000_10_01)
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        valid_filter((pl.col("a") == d_2000_10_01) & (pl.col("b") == d_2000_01_01))
+        valid_filter((pl.col("a") == d_2010_01_01) & (pl.col("b") == d_2000_10_01) & (pl.col("c") == d_2010_01_01))
+        valid_filter((pl.col("a") == d_2010_01_01) | (pl.col("b") == d_2000_01_01))
+
     def test_polars_lazy_pushdown_blob(self, duckdb_cursor):
         import pandas
 
@@ -454,6 +516,18 @@ class TestPolars(object):
 
         # OR
         assert lazy_df.filter((pl.col("a") == b1) | (pl.col("b") == b2)).select(pl.len()).collect().item() == 2
+
+        # Validate Filter
+        valid_filter(pl.col("a") == b1)
+        valid_filter(pl.col("a") > b1)
+        valid_filter(pl.col("a") >= b2)
+        valid_filter(pl.col("a") < b2)
+        valid_filter(pl.col("a") <= b2)
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        valid_filter((pl.col("a") == b2) & (pl.col("b") == b1))
+        valid_filter((pl.col("a") == b2) & (pl.col("b") == b2) & (pl.col("c") == b2))
+        valid_filter((pl.col("a") == b1) | (pl.col("b") == b2))
 
     def test_polars_lazy_many_batches(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()

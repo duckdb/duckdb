@@ -389,7 +389,7 @@
 			{
 				"name": "lazy",
 				"default": "False",
-				"type": "Optional[bool]"
+				"type": "bool"
 			}
 		],
 		"return": "polars.DataFrame"

@@ -7,7 +7,7 @@ import json
 from decimal import Decimal
 import datetime
 
-def _predicate_to_expression(predicate: pl.Expr):
+def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
     """
     Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
     
