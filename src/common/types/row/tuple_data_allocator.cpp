@@ -107,7 +107,7 @@ void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
 bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                        TupleDataChunkState &chunk_state, const idx_t append_offset,
                                        const idx_t append_count) {
-	if (layout.HasDestructor()) {
+	if (!layout.AllConstant() || layout.HasDestructor()) {
 		return false;
 	}
 
@@ -127,41 +127,14 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 	const auto row_width = layout.GetRowWidth();
 	const auto added_size = append_count * row_width;
 	if (row_block.size + added_size > row_block.capacity) {
-		return false; // Rows don't fit
+		return false;
 	}
 
-	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	// We can do the fast path append!
+	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
-	if (layout.AllConstant()) {
-		// All constant: we can do the fast path append
-		for (idx_t i = 0; i < append_count; i++) {
-			row_locations[append_offset + i] = base_row_ptr + i * row_width;
-		}
-	} else {
-		// For variable-sized data we have to do some calculations to see if it will fit
-		if (part.total_heap_size == 0) {
-			return false; // No heap block yet
-		}
-
-		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-		const auto base_heap_ptr = GetBaseHeapPointer(pin_state, part) + part.heap_block_offset + part.total_heap_size;
-		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-		idx_t added_heap_size = 0;
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto idx = append_offset + i;
-			row_locations[idx] = base_row_ptr + i * row_width;
-			heap_locations[idx] = base_heap_ptr + added_heap_size;
-			added_heap_size += heap_sizes[idx];
-		}
-
-		auto &heap_block = heap_blocks[part.heap_block_index];
-		if (heap_block.size + added_heap_size > heap_block.capacity) {
-			return false; // Heap doesn't fit
-		}
-
-		part.total_heap_size += added_heap_size;
-		heap_block.size += added_heap_size;
-		segment.data_size += added_heap_size;
+	for (idx_t i = 0; i < append_count; i++) {
+		row_locations[append_offset + i] = base_row_ptr + i * row_width;
 	}
 
 	// Increment counts and sizes
