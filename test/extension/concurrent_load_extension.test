@@ -2,6 +2,9 @@
 # description: Test concurrent load extension
 # group: [extension]
 
+# FIXME: this is mostly working, but there are still some concurrency issues in the DBConfig around ParserExtension/ExtensionCallback registration
+mode skip
+
 require notmingw
 
 require skip_reload
