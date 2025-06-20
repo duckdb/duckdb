@@ -10,8 +10,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parser.hpp"
 #include "matcher.hpp"
 #include "duckdb/catalog/default/builtin_types/types.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -58,7 +58,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
-		if (prefix.size() == 0) {
+		if (prefix.empty()) {
 		} else if (prefix.size() < str.size()) {
 			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
@@ -267,6 +267,7 @@ class AutoCompleteTokenizer : public BaseTokenizer {
 public:
 	AutoCompleteTokenizer(const string &sql, MatchState &state)
 	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+		last_pos = 0;
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
@@ -290,9 +291,7 @@ struct UnicodeSpace {
 	idx_t bytes;
 };
 
-
-
-static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
+bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<UnicodeSpace> &unicode_spaces) {
 	if (unicode_spaces.empty()) {
 		// no unicode spaces found
 		return false;
@@ -307,12 +306,12 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 	return true;
 }
 
-static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
+bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
 	// the first character can be between A-Z, a-z, or \200 - \377
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0x80;
 }
 
-static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
+bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	// subsequent characters can also be between 0-9
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
 }
@@ -438,8 +437,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	MatchState state(tokens, suggestions);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
-	ReplaceUnicodeSpaces(sql, clean_sql, unicode_spaces);
-	AutoCompleteTokenizer tokenizer(clean_sql, state);
+	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	AutoCompleteTokenizer tokenizer(sql_ref, state);
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
@@ -574,14 +573,12 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	names.emplace_back("success");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	auto sql = StringValue::Get(input.inputs[0]);
+	const auto sql = StringValue::Get(input.inputs[0]);
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
-	if (StripUnicodeSpaces(sql, clean_sql)) {
-		sql = clean_sql;
-	}
-	ParserTokenizer tokenizer(sql, root_tokens);
+	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
