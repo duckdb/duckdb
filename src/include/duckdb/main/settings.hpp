@@ -24,7 +24,7 @@ enum class SettingScope : uint8_t {
 	GLOBAL,
 	//! Setting is from the local Setting scope
 	LOCAL,
-	//! Setting was not feteched from settings, but it was fetched from a secret instead
+	//! Setting was not fetched from settings, but it was fetched from a secret instead
 	SECRET,
 	//! The setting was not found or invalid in some other way
 	INVALID
@@ -448,6 +448,16 @@ struct DefaultSecretStorageSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DefaultUserKeySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "default_user_key";
+	static constexpr const char *Description = "User key for new (not-yet existing) encrypted database files.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

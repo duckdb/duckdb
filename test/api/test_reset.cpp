@@ -171,6 +171,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",
+	    "default_user_key",
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
 	    "index_scan_max_count"};

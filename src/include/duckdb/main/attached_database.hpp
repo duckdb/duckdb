@@ -76,6 +76,22 @@ public:
 		return db;
 	}
 
+	void SetEncryptionKeyId(const string &key_id) {
+		encryption_key_id = key_id;
+	};
+
+	string &GetEncryptionKeyId() {
+		return encryption_key_id;
+	};
+
+	void SetIsEncrypted() {
+		is_encrypted = true;
+	};
+
+	bool GetIsEncrypted() {
+		return is_encrypted;
+	};
+
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
 	}
@@ -104,6 +120,10 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
+
+	//! key ID for encryption
+	string encryption_key_id;
+	bool is_encrypted = false;
 };
 
 } // namespace duckdb
