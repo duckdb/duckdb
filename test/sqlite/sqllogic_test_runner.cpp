@@ -30,10 +30,6 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
 	}
-	auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
-	if (verify_vector) {
-		config->options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(verify_vector);
-	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -104,7 +100,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 		ExtensionHelper::LoadExtension(*db, "core_functions");
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
-		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		SQLLogicTestLogger::LoadDatabaseFail(file_name, dbpath, err.Message());
 		FAIL();
 	}
 	Reconnect();
@@ -135,6 +131,16 @@ void SQLLogicTestRunner::Reconnect() {
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
+	}
+
+	auto &test_config = TestConfiguration::Get();
+	auto init_cmd = test_config.OnConnectCommand();
+	if (!init_cmd.empty()) {
+		test_config.ProcessPath(init_cmd, file_name);
+		auto res = con->Query(ReplaceKeywords(init_cmd));
+		if (res->HasError()) {
+			FAIL("Startup queries provided via on_init failed: " + res->GetError());
+		}
 	}
 }
 
@@ -390,7 +396,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "noforcestorage") {
-		if (TestForceStorage()) {
+		if (TestConfiguration::TestForceStorage()) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
@@ -516,8 +522,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_vector_verification") {
-		auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
-		if (verify_vector) {
+		auto &test_config = TestConfiguration::Get();
+		if (test_config.GetVectorVerification() != DebugVectorVerification::NONE) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
@@ -628,6 +634,7 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 

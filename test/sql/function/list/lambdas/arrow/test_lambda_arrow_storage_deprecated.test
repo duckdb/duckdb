@@ -2,8 +2,6 @@
 # description: Test creating a macro with the lambda arrow and loading that from storage.
 # group: [arrow]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification;
 

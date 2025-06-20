@@ -2,9 +2,9 @@
 # description: Test the maximum swap space.
 # group: [temp_directory]
 
-require skip_reload
-
 require noforcestorage
+
+require skip_reload
 
 # This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
 require block_size 262144

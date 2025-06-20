@@ -6,6 +6,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
+#ifndef DUCKDB_CLANG_TIDY
 namespace std {
 template <class C>
 bool isspace(C c) {
@@ -26,9 +27,13 @@ static std::shared_ptr<T> make_shared(ARGS &&...__args) { // NOLINT: mimic std s
 }
 #endif // DUCKDB_ENABLE_DEPRECATED_API
 
+template <class charT, class traits = char_traits<charT>, class Allocator = allocator<charT>>
+class basic_stringstream_mock;
+
+typedef basic_stringstream_mock<char> stringstream;
+
 } // namespace std
 
-#ifndef DUCKDB_CLANG_TIDY
 using std::isspace;
 using std::make_shared;
 using std::make_unique;

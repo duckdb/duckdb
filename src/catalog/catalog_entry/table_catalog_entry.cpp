@@ -79,7 +79,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 }
 
 string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 
 	ss << "(";
 
@@ -185,7 +185,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 		return "";
 	}
 
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "(";
 
 	for (auto &column : columns.Logical()) {

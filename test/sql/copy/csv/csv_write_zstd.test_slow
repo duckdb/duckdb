@@ -4,6 +4,8 @@
 
 require parquet
 
+require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
+
 statement ok
 PRAGMA enable_verification
 

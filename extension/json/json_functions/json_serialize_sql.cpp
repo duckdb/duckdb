@@ -171,8 +171,8 @@ ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 //----------------------------------------------------------------------
 // JSON DESERIALIZE
 //----------------------------------------------------------------------
-static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yyjson_alc *alc) {
-	auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t input, yyjson_alc *alc) {
+	auto doc = yyjson_doc_ptr(JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc));
 	if (!doc) {
 		throw ParserException("Could not parse json");
 	}
@@ -196,16 +196,22 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 	if (size == 0) {
 		throw ParserException("Error parsing json: no statements");
 	}
-	if (size > 1) {
-		throw ParserException("Error parsing json: more than one statement");
+
+	vector<unique_ptr<SelectStatement>> result;
+
+	idx_t idx;
+	idx_t max;
+	yyjson_val *stmt_json;
+	yyjson_arr_foreach(statements, idx, max, stmt_json) {
+		JsonDeserializer deserializer(stmt_json, doc);
+		auto stmt = SelectStatement::Deserialize(deserializer);
+		if (!stmt->node) {
+			throw ParserException("Error parsing json: no select node found in json");
+		}
+		result.push_back(std::move(stmt));
 	}
-	auto stmt_json = yyjson_arr_get(statements, 0);
-	JsonDeserializer deserializer(stmt_json, doc);
-	auto stmt = SelectStatement::Deserialize(deserializer);
-	if (!stmt->node) {
-		throw ParserException("Error parsing json: no select node found in json");
-	}
-	return stmt;
+
+	return result;
 }
 
 //----------------------------------------------------------------------
@@ -217,8 +223,17 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 	auto &inputs = args.data[0];
 
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
-		auto stmt = DeserializeSelectStatement(input, alc);
-		return StringVector::AddString(result, stmt->ToString());
+		auto stmts = DeserializeSelectStatement(input, alc);
+		// Combine all statements into a single semicolon separated string
+		string str;
+		for (idx_t i = 0; i < stmts.size(); i++) {
+			if (i > 0) {
+				str += "; ";
+			}
+			str += stmts[i]->ToString();
+		}
+
+		return StringVector::AddString(result, str);
 	});
 }
 
@@ -237,8 +252,11 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 	auto alc = local_state.json_allocator->GetYYAlc();
 
 	auto input = parameters.values[0].GetValueUnsafe<string_t>();
-	auto stmt = DeserializeSelectStatement(input, alc);
-	return stmt->ToString();
+	auto stmts = DeserializeSelectStatement(input, alc);
+	if (stmts.size() != 1) {
+		throw BinderException("json_execute_serialized_sql pragma expects exactly one statement");
+	}
+	return stmts[0]->ToString();
 }
 
 PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
@@ -268,8 +286,11 @@ struct ExecuteSqlTableFunction {
 			throw BinderException("json_execute_serialized_sql cannot execute NULL plan");
 		}
 		auto serialized = input.inputs[0].GetValueUnsafe<string>();
-		auto stmt = DeserializeSelectStatement(serialized, alc);
-		result->plan = result->con->RelationFromQuery(std::move(stmt));
+		auto stmts = DeserializeSelectStatement(serialized, alc);
+		if (stmts.size() != 1) {
+			throw BinderException("json_execute_serialized_sql expects exactly one statement");
+		}
+		result->plan = result->con->RelationFromQuery(std::move(stmts[0]));
 
 		for (auto &col : result->plan->Columns()) {
 			return_types.emplace_back(col.Type());

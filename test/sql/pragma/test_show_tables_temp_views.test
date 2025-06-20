@@ -2,8 +2,6 @@
 # description: Test SHOW/DESCRIBE tables with views
 # group: [pragma]
 
-require noforcestorage
-
 statement ok
 CREATE TEMPORARY VIEW v1 AS SELECT 42 AS a
 

@@ -4,8 +4,6 @@
 
 require json
 
-require noforcestorage
-
 require skip_reload
 
 statement ok

@@ -19,25 +19,25 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 string JSONTreeRenderer::ToString(const LogicalOperator &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const PhysicalOperator &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const ProfilingNode &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const Pipeline &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }

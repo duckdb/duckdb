@@ -18,6 +18,7 @@ namespace duckdb_base_std {
 	using ::std::unique_ptr;
 	using ::std::shared_ptr;
 	using ::std::make_shared;
+	using ::std::stringstream;
 } // namespace duckdb_base_std
 #endif
 // optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
@@ -9120,7 +9121,8 @@ namespace detail {
 
     template<typename T>
     inline auto convertInto( std::string const &source, T& target ) -> ParserResult {
-        std::stringstream ss;
+        duckdb_base_std::stringstream ss;
+	ss.imbue(std::locale::classic());
         ss << source;
         ss >> target;
         if( ss.fail() )
@@ -11693,7 +11695,8 @@ namespace Floating {
 #endif
 
     std::string WithinUlpsMatcher::describe() const {
-        std::stringstream ret;
+        duckdb_base_std::stringstream ret;
+	ret.imbue(std::locale::classic());
 
         ret << "is within " << m_ulps << " ULPs of ";
 
@@ -12219,7 +12222,8 @@ namespace Catch {
     }
 
     std::string TempFile::getContents() {
-        std::stringstream sstr;
+        duckdb_base_std::stringstream sstr;
+	sstr.imbue(std::locale::classic());
         char buffer[100] = {};
         std::rewind(m_file);
         while (std::fgets(buffer, sizeof(buffer), m_file)) {

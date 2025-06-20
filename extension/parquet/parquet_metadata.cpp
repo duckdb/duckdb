@@ -63,14 +63,14 @@ public:
 
 template <class T>
 string ConvertParquetElementToString(T &&entry) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << entry;
 	return ss.str();
 }
 
 template <class T>
 string PrintParquetElementToString(T &&entry) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	entry.printTo(ss);
 	return ss.str();
 }

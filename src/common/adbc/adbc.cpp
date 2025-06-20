@@ -1067,7 +1067,7 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "Statement Set Option " << key << " is not yet accepted by DuckDB";
 	SetError(error, ss.str());
 	return ADBC_STATUS_INVALID_ARGUMENT;

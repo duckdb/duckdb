@@ -360,4 +360,23 @@ inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &l
 	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 
+struct yyjson_doc_deleter {
+	void operator()(yyjson_doc *doc) {
+		if (doc) {
+			yyjson_doc_free(doc);
+		}
+	}
+};
+
+struct yyjson_mut_doc_deleter {
+	void operator()(yyjson_mut_doc *doc) {
+		if (doc) {
+			yyjson_mut_doc_free(doc);
+		}
+	}
+};
+
+using yyjson_doc_ptr = unique_ptr<yyjson_doc, yyjson_doc_deleter>;
+using yyjson_mut_doc_ptr = unique_ptr<yyjson_mut_doc, yyjson_mut_doc_deleter>;
+
 } // namespace duckdb

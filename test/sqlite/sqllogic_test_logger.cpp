@@ -7,11 +7,6 @@
 
 namespace duckdb {
 
-// static mutex summary_mutex;
-// static vector<string> failures_summary;
-
-auto &summary = FailureSummary::Instance();
-
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
     : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
       sql_query(context.sql_query) {
@@ -21,8 +16,7 @@ SQLLogicTestLogger::~SQLLogicTestLogger() {
 }
 
 void SQLLogicTestLogger::AppendFailure(const string &log_message) {
-	lock_guard<mutex> lock(summary.summary_mutex);
-	summary.failures_summary.push_back(log_message);
+	FailureSummary::Log(log_message);
 }
 
 void SQLLogicTestLogger::LogFailure(const string &log_message) {
@@ -36,7 +30,7 @@ void SQLLogicTestLogger::Log(const string &str) {
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
-	auto failures_count = to_string(summary.GetSummaryCounter());
+	auto failures_count = to_string(FailureSummary::GetSummaryCounter());
 	if (std::getenv("NO_DUPLICATING_HEADERS") == 0) {
 		LogFailure("\n" + failures_count + ". " + file_name + "\n");
 		PrintLineSep();
@@ -340,8 +334,8 @@ void SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
 	PrintResultString(result);
 }
 
-void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &message) {
-	PrintErrorHeader(string(), 0, "Failed to load database " + dbpath);
+void SQLLogicTestLogger::LoadDatabaseFail(const string &file_name, const string &dbpath, const string &message) {
+	PrintErrorHeader(file_name, 0, "Failed to load database " + dbpath);
 	PrintLineSep();
 	LogFailure("Error message: " + message + "\n");
 	PrintLineSep();

@@ -1,8 +1,6 @@
 # name: test/sql/copy/encryption/multiple_encrypted_databases.test_slow
 # group: [encryption]
 
-require noforcestorage
-
 require skip_reload
 
 require tpch

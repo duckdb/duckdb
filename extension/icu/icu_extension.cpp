@@ -259,7 +259,7 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_
 	string candidate_str =
 	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, tz_str), "Candidate time zones");
 	if (error_message) {
-		std::stringstream ss;
+		duckdb::stringstream ss;
 		ss << "Unknown TimeZone '" << tz_str << "'!\n" << candidate_str;
 		*error_message = ss.str();
 		return nullptr;

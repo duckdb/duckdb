@@ -1,0 +1,60 @@
+# name: test/sql/types/nested/array/array_unnest.test
+# description: Test unnest with arrays
+# group: [array]
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+SELECT UNNEST(array_value(1, 2, NULL, 4, 5));
+----
+1
+2
+NULL
+4
+5
+
+query I
+SELECT UNNEST(array_value('this is', 'a test', NULL, 'of unnesting arrays'));
+----
+this is
+a test
+NULL
+of unnesting arrays
+
+statement ok
+CREATE TABLE t1 AS SELECT array_value(i + 1, i + 2) j FROM range(0, 10, 2) as t(i)
+
+query II
+SELECT j, UNNEST(j) FROM t1
+----
+[1, 2]	1
+[1, 2]	2
+[3, 4]	3
+[3, 4]	4
+[5, 6]	5
+[5, 6]	6
+[7, 8]	7
+[7, 8]	8
+[9, 10]	9
+[9, 10]	10
+
+# from #16672
+statement ok
+CREATE TABLE doubles_table (doubles_dynamic DOUBLE[], doubles_fixed DOUBLE[2]);
+
+statement ok
+INSERT INTO doubles_table VALUES ([1.2, 2.3], [1.2, 2.3]);
+
+query I
+SELECT UNNEST(doubles_dynamic) FROM doubles_table;
+----
+1.2
+2.3
+
+query I
+SELECT UNNEST(doubles_fixed) FROM doubles_table;
+----
+1.2
+2.3
+

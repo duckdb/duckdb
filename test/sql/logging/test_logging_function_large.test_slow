@@ -2,8 +2,6 @@
 # description: Use test_logging function with 1 million log entries
 # group: [logging]
 
-require noforcestorage
-
 mode skip
 
 query IIIIIIIII

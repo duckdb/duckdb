@@ -3,8 +3,6 @@
 # group: [pg_catalog]
 
 # avoid loading a storage database because it changes the initial database name
-require noforcestorage
-
 query I
 SELECT CURRENT_USER
 ----

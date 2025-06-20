@@ -1,0 +1,10 @@
+# name: test/sql/pragma/test_db_invalidation_after_load.test
+# description: Test trying to disable database invalidation after opening the database.
+# group: [pragma]
+
+load __TEST_DIR__/db_invalidation.db
+
+statement error
+SET disable_database_invalidation=true;
+----
+<REGEX>:Invalid Input Error.*Cannot change disable_database_invalidation setting while database is running.*
