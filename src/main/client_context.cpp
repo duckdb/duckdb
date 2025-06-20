@@ -488,6 +488,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw ErrorManager::InvalidatedTransaction(*this);
 	}
+
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
 	for (auto &it : statement.properties.modified_databases) {
@@ -1141,6 +1142,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		throw TransactionException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
+
 	// check if we are on AutoCommit. In this case we should start a transaction
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	if (require_new_transaction) {
