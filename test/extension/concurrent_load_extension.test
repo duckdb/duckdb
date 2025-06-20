@@ -13,4 +13,7 @@ concurrentloop i 0 100
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
+statement ok
+FROM duckdb_extensions();
+
 endloop

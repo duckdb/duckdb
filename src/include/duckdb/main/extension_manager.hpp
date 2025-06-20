@@ -12,7 +12,8 @@
 #include "duckdb/main/extension_install_info.hpp"
 
 namespace duckdb {
-struct ExtensionInfo {
+
+class ExtensionInfo {
 public:
 	ExtensionInfo();
 
@@ -22,7 +23,8 @@ public:
 	unique_ptr<ExtensionLoadedInfo> load_info;
 };
 
-struct ExtensionActiveLoad {
+class ExtensionActiveLoad {
+public:
 	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name);
 
 	DatabaseInstance &db;
@@ -30,6 +32,7 @@ struct ExtensionActiveLoad {
 	ExtensionInfo &info;
 	string extension_name;
 
+public:
 	void FinishLoad(ExtensionInstallInfo &install_info);
 };
 
@@ -38,6 +41,7 @@ public:
 	explicit ExtensionManager(DatabaseInstance &db);
 
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
+	DUCKDB_API vector<string> GetExtensions();
 	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension);
 

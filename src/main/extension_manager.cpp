@@ -47,6 +47,16 @@ optional_ptr<ExtensionInfo> ExtensionManager::GetExtensionInfo(const string &nam
 	return entry->second.get();
 }
 
+vector<string> ExtensionManager::GetExtensions() {
+	lock_guard<mutex> guard(lock);
+
+	vector<string> result;
+	for (auto &entry : loaded_extensions_info) {
+		result.push_back(entry.first);
+	}
+	return result;
+}
+
 bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	auto info = GetExtensionInfo(name);
 	if (!info) {
