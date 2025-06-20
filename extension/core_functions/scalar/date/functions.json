@@ -209,6 +209,13 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "make_timestamp_ms",
+        "parameters": "nanos",
+        "description": "The timestamp for the given microseconds since the epoch",
+        "example": "make_timestamp_ms(1732117793000000)",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "make_timestamp_ns",
         "parameters": "nanos",
         "description": "The timestamp for the given nanoseconds since epoch",
