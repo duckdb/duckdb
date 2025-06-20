@@ -129,7 +129,7 @@ public:
 
 private:
 	//! Sink radix bits to initialize with
-	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
+	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 6;
 	//! Maximum Sink radix bits (independent of threads)
 	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 8;
 
