@@ -49,6 +49,7 @@ benchmark/micro/cast/cast_string_struct_missing_val.benchmark
 benchmark/micro/cast/cast_struct_string.benchmark
 benchmark/micro/cast/cast_timestamp_string.benchmark
 benchmark/micro/cast/cast_varcharlist_string.benchmark
+benchmark/micro/cast/cast_varcharmap_string.benchmark
 benchmark/micro/cast/cast_varcharstruct_string.benchmark
 benchmark/micro/cast/format_int_string.benchmark
 benchmark/micro/cast/strftime.benchmark
