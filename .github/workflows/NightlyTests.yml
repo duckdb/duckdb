@@ -692,8 +692,6 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-22.04
     needs: linux-memory-leaks
-    strategy:
-      fail-fast: false
     env:
       GEN: ninja
     steps:

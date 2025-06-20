@@ -271,7 +271,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	auto &config = ClientConfig::GetConfig(context);
 	if (!config.force_asof_iejoin) {
-		if (op.children[0]->has_estimated_cardinality && lhs_cardinality <= config.asof_loop_join_threshold) {
+		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < config.asof_loop_join_threshold) {
 			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {
 				return *result;

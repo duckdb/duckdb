@@ -7,7 +7,7 @@ namespace duckdb {
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 66;
+const uint64_t VERSION_NUMBER_UPPER = 67;
 
 static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
 static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
@@ -80,13 +80,15 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.2.1", 65},
 	{"v1.2.2", 65},
 	{"v1.3.0", 66},
+	{"v1.3.1", 66},
+	{"v1.4.0", 67},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
 static_assert(DEFAULT_STORAGE_VERSION_INFO == VERSION_NUMBER, "Check on VERSION_INFO");
 
 // START OF SERIALIZATION VERSION INFO
-const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 5;
+const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 6;
 const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
 static const SerializationVersionInfo serialization_version_info[] = {
 	{"v0.10.0", 1},
@@ -102,7 +104,9 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.2.1", 4},
 	{"v1.2.2", 4},
 	{"v1.3.0", 5},
-	{"latest", 5},
+	{"v1.3.1", 5},
+	{"v1.4.0", 6},
+	{"latest", 6},
 	{nullptr, 0}
 };
 // END OF SERIALIZATION VERSION INFO

@@ -2,8 +2,6 @@
 # description: Test duckdb_views function
 # group: [table_function]
 
-require noforcestorage
-
 query I
 SELECT COUNT(*) FROM duckdb_views;
 ----

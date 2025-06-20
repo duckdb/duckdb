@@ -23,7 +23,7 @@ public:
 	template <typename T>
 	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size) {
 		if (buffer_.len % sizeof(T) != 0) {
-			std::stringstream error;
+			duckdb::stringstream error;
 			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
 			      << ") should be a multiple of the type size (" << sizeof(T) << ")";
 			throw std::runtime_error(error.str());
@@ -44,7 +44,7 @@ public:
 	template <typename T>
 	void Skip(uint32_t batch_size) {
 		if (buffer_.len % sizeof(T) != 0) {
-			std::stringstream error;
+			duckdb::stringstream error;
 			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
 			      << ") should be a multiple of the type size (" << sizeof(T) << ")";
 			throw std::runtime_error(error.str());
