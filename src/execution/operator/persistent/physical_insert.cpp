@@ -644,7 +644,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 		collection->InitializeAppend(lstate.local_append_state);
 
 		lock_guard<mutex> l(gstate.lock);
-		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(data_table);
+		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, data_table);
 		lstate.collection_index = data_table.CreateOptimisticCollection(context.client, std::move(collection));
 	}
 

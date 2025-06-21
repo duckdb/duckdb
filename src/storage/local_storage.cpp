@@ -15,7 +15,7 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
+    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(context, table),
       merged_storage(false) {
 
 	auto types = table.GetTypes();
