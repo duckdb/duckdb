@@ -103,26 +103,29 @@ private:
 			} else {
 				result_mask.Copy(mask, count);
 			}
-			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
-			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+			for (idx_t base_idx = 0, entry_idx = 0;
+			     entry_idx < entry_count;
+			     entry_idx++) {
 				auto validity_entry = mask.GetValidityEntry(entry_idx);
-				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
-					for (; base_idx < next; base_idx++) {
+					for (idx_t end_idx = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+					     base_idx < end_idx;
+					     base_idx++) {
 						result_data[base_idx] = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
 						    ldata[base_idx], result_mask, base_idx, dataptr);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
-					base_idx = next;
+					base_idx = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 					continue;
 				} else {
 					// partially valid: need to check individual elements for validity
-					idx_t start = base_idx;
-					for (; base_idx < next; base_idx++) {
-						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+					for (idx_t start_idx = base_idx,
+					           end_idx = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+					     base_idx < end_idx; base_idx++) {
+						if (ValidityMask::RowIsValid(validity_entry, base_idx - start_idx)) {
 							D_ASSERT(mask.RowIsValid(base_idx));
 							result_data[base_idx] = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
 							    ldata[base_idx], result_mask, base_idx, dataptr);
