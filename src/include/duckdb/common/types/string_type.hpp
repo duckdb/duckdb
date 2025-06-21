@@ -14,6 +14,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -68,6 +69,41 @@ public:
 	}
 	string_t(const string &value) // NOLINT: Allow implicit conversion from `const char*`
 	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size())) {
+	}
+
+	// Allocate using an arena allocator
+	string_t(const char *data, const uint32_t len, ArenaAllocator &arena) {
+		value.inlined.length = len;
+		D_ASSERT(data || GetSize() == 0);
+		if (IsInlined()) {
+			// zero initialize the prefix first
+			// this makes sure that strings with length smaller than 4 still have an equal prefix
+			memset(value.inlined.inlined, 0, INLINE_BYTES);
+			if (GetSize() == 0) {
+				return;
+			}
+			// small string: inlined
+			memcpy(value.inlined.inlined, data, GetSize());
+		} else {
+			// large string: store pointer
+#ifndef DUCKDB_DEBUG_NO_INLINE
+			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
+#else
+			memset(value.pointer.prefix, 0, PREFIX_BYTES);
+#endif
+			// copy the data into the arena
+			const auto data_ptr = arena.AllocateAligned(sizeof(char) * GetSize());
+			memcpy(data_ptr, data, GetSize());
+
+			value.pointer.ptr = (char *)data_ptr; // NOLINT
+		}
+	}
+
+	string_t(const char *data, ArenaAllocator &arena) // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(data, UnsafeNumericCast<uint32_t>(strlen(data)), arena) {
+	}
+	string_t(const string &value, ArenaAllocator &arena) // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size()), arena) {
 	}
 
 	bool IsInlined() const {
