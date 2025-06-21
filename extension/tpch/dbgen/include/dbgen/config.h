@@ -132,7 +132,15 @@
 #define DSS_HUGE __int64_t
 #endif /* SGI */
 
-#if (defined(WIN32) && !defined(_POSIX_))
+#ifdef WIN32
+#ifdef __GNUC__
+#define STDLIB_HAS_GETOPT
+#define DSS_HUGE long long int
+#define HUGE_FORMAT "%lld"
+#define HUGE_DATE_FORMAT "%02lld"
+#define RNG_A 6364136223846793005ull
+#define RNG_C 1ull
+#else /* WIN32 with GCC */
 #define PATH_SEP '\\'
 #define DSS_HUGE __int64
 #define RNG_A 6364136223846793005uI64
@@ -141,7 +149,8 @@
 #define HUGE_DATE_FORMAT "%02I64d"
 /* requried by move to Visual Studio 2005 */
 #define strdup(x) _strdup(x)
-#endif /* WIN32 */
+#endif
+#endif /* WIN32 with MSVC */
 
 #ifndef PATH_SEP
 #define PATH_SEP '/'
