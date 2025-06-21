@@ -219,7 +219,7 @@ private:
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
 	//! Adds a segment to this TupleDataCollection
-	void AddSegment(TupleDataSegment &&segment);
+	void AddSegment(unsafe_unique_ptr<TupleDataSegment> segment);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
@@ -270,7 +270,7 @@ private:
 	//! The size (in bytes) of this TupleDataCollection
 	idx_t data_size;
 	//! The data segments of the TupleDataCollection
-	unsafe_vector<TupleDataSegment> segments;
+	unsafe_vector<unsafe_unique_ptr<TupleDataSegment>> segments;
 	//! The set of scatter functions
 	vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
