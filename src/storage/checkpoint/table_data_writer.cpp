@@ -23,6 +23,21 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
+void TableDataWriter::WriteIndexData(Serializer &serializer) {
+	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
+	case_insensitive_map_t<Value> options;
+	if (!v1_0_0_storage) {
+		options.emplace("v1_0_0_storage", v1_0_0_storage);
+	}
+	auto info = table.GetStorage().GetDataTableInfo();
+	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
+
+	// write empty block pointers for forwards compatibility
+	vector<BlockPointer> compat_block_pointers;
+	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+}
+
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
 	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
@@ -91,6 +106,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
+	/* move these code into TableDataWriter::WriteIndexData
 	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
 	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
@@ -112,6 +128,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
 	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+	*/
 }
 
 } // namespace duckdb
