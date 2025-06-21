@@ -20,6 +20,25 @@
 
 namespace duckdb {
 
+struct DuckdbPolarsioCacheItem : public PythonImportCacheItem {
+
+public:
+	static constexpr const char *Name = "duckdb.polars_io";
+
+public:
+	DuckdbPolarsioCacheItem() : PythonImportCacheItem("duckdb.polars_io"), duckdb_source("duckdb_source", this) {
+	}
+	~DuckdbPolarsioCacheItem() override {
+	}
+
+	PythonImportCacheItem duckdb_source;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
+};
+
 struct DuckdbFilesystemCacheItem : public PythonImportCacheItem {
 
 public:
@@ -46,13 +65,14 @@ public:
 	static constexpr const char *Name = "duckdb";
 
 public:
-	DuckdbCacheItem() : PythonImportCacheItem("duckdb"), filesystem(), Value("Value", this) {
+	DuckdbCacheItem() : PythonImportCacheItem("duckdb"), filesystem(), Value("Value", this), polars_io() {
 	}
 	~DuckdbCacheItem() override {
 	}
 
 	DuckdbFilesystemCacheItem filesystem;
 	PythonImportCacheItem Value;
+	DuckdbPolarsioCacheItem polars_io;
 };
 
 } // namespace duckdb

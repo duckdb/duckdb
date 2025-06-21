@@ -68,7 +68,7 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
-	         py::arg("batch_size") = 1000000)
+	         py::arg("batch_size") = 1000000, py::kw_only(), py::arg("lazy") = false)
 	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
 	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors");
 	const char *capsule_docs = R"(
