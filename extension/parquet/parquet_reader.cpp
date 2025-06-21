@@ -527,8 +527,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 	// Check for geoparquet spatial types
 	if (depth == 1) {
-		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
-		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name)) {
+		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
+		// geoarrow types, although geometry columns, are structs and have chilren and are handled below.
+		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
 			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
 			return ParquetColumnSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
 			                           ParquetColumnSchemaType::GEOMETRY);
