@@ -181,7 +181,7 @@ public:
 		                             std::move(file_options), std::move(options), std::move(interface));
 	}
 
-	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
+	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info, TableFunction &,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
