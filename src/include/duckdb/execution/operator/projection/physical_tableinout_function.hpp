@@ -41,6 +41,9 @@ public:
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
+	//! Information for WITH ORDINALITY
+	OrdinalityData ordinality_data;
+
 private:
 	//! The table function
 	TableFunction function;

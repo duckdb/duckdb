@@ -272,6 +272,8 @@ enum class OrderPreservationType : uint8_t;
 
 enum class OrderType : uint8_t;
 
+enum class OrdinalityType : uint8_t;
+
 enum class OutputStream : uint8_t;
 
 enum class ParseInfoType : uint8_t;
@@ -780,6 +782,9 @@ const char* EnumUtil::ToChars<OrderPreservationType>(OrderPreservationType value
 
 template<>
 const char* EnumUtil::ToChars<OrderType>(OrderType value);
+
+template<>
+const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value);
 
 template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
@@ -1363,6 +1368,9 @@ OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *va
 
 template<>
 OrderType EnumUtil::FromString<OrderType>(const char *value);
+
+template<>
+OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value);
 
 template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
