@@ -4,11 +4,11 @@ if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()
 
-project(imdb CXX)
+project(duckdb_imdb CXX)
 
 include_directories(include)
 
 set(CMAKE_BUILD_TYPE "Release")
-add_library(imdb STATIC imdb.cpp ${ALL_OBJECT_FILES})
+add_library(duckdb_imdb STATIC imdb.cpp ${ALL_OBJECT_FILES})
 
-disable_target_warnings(imdb)
+disable_target_warnings(duckdb_imdb)
