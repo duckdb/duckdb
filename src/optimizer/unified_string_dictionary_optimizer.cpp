@@ -8,45 +8,16 @@ namespace duckdb {
 
 unique_ptr<LogicalOperator>
 UnifiedStringDictionaryOptimizer::CheckIfUnifiedStringDictionaryRequired(unique_ptr<LogicalOperator> op) {
-	op = Rewrite(std::move(op));
-	for (auto &ds : chosen_data_sources) {
-		InsertUnifiedStringDictionaryOperator(ds);
-	}
-	if (!chosen_data_sources.empty()) {
+	auto rewrite_result = Rewrite(std::move(op));
+	if (rewrite_result.target_operator_found) {
 		optimizer->context.UnifiedStringDictionary.reset();
 		optimizer->context.UnifiedStringDictionary = make_uniq<UnifiedStringsDictionary>(1ull);
 	}
-	return op;
+	return std::move(rewrite_result.op);
 }
 
-void UnifiedStringDictionaryOptimizer::InsertUnifiedStringDictionaryOperator(optional_ptr<LogicalOperator> op) {
-	for (idx_t i = 0; i < op->children.size(); ++i) {
-		vector<bool> usd_insert_vec;
-		for (auto &type : op->children[i]->types) {
-			if (type == LogicalType::VARCHAR) {
-				usd_insert_vec.push_back(true);
-			} else {
-				usd_insert_vec.push_back(false);
-			}
-		}
-
-		auto new_operator = make_uniq<LogicalUnifiedStringDictionaryInsertion>(std::move(usd_insert_vec));
-		new_operator->children.push_back(std::move(op->children[i]));
-		op->children[i] = std::move(new_operator);
-
-		op->ResolveOperatorTypes();
-	}
-}
-
-void UnifiedStringDictionaryOptimizer::AddMarkedDataSources() {
-	for (auto &ds : candidate_data_sources) {
-		chosen_data_sources.push_back(ds);
-	}
-	candidate_data_sources.clear();
-	return;
-}
-
-bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOperator> op) {
+void UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_ptr<LogicalOperator> op) {
+	bool isTargetOperator = false;
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr_op = op->Cast<LogicalAggregate>();
@@ -54,7 +25,7 @@ bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOper
 			if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.return_type == LogicalType::VARCHAR) {
-					return true;
+					isTargetOperator = true;
 				}
 			}
 		}
@@ -66,7 +37,7 @@ bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOper
 			if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.return_type == LogicalType::VARCHAR) {
-					return true;
+					isTargetOperator = true;
 				}
 			}
 		}
@@ -79,18 +50,18 @@ bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOper
 			if (condition.left->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = condition.left->Cast<BoundColumnRefExpression>();
 				if (bound_colref.return_type == LogicalType::VARCHAR) {
-					return true;
+					isTargetOperator = true;
 				}
 			}
 			if (condition.right->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = condition.right->Cast<BoundColumnRefExpression>();
 				if (bound_colref.return_type == LogicalType::VARCHAR) {
-					return true;
+					isTargetOperator = true;
 				}
 			}
 			for (auto &type : join_op.types) {
 				if (type == LogicalType::VARCHAR) {
-					return true;
+					isTargetOperator = true;
 				}
 			}
 		}
@@ -102,7 +73,7 @@ bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOper
 			if (node.expression->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = node.expression->Cast<BoundColumnRefExpression>();
 				if (bound_colref.return_type == LogicalType::VARCHAR) {
-					return true;
+					isTargetOperator = true;
 				}
 			}
 		}
@@ -111,32 +82,40 @@ bool UnifiedStringDictionaryOptimizer::IsTargetOperator(optional_ptr<LogicalOper
 	default:
 		break;
 	}
-	return false;
-}
 
-unique_ptr<LogicalOperator> UnifiedStringDictionaryOptimizer::Rewrite(unique_ptr<LogicalOperator> op) {
-	op->ResolveOperatorTypes();
-
-	for (idx_t i = 0; i < op->children.size(); ++i) {
-		if (op->children[i]->type == LogicalOperatorType::LOGICAL_GET) {
-			for (const auto &type : op->children[i]->types) {
-				if (type.id() == LogicalTypeId::VARCHAR) {
-					candidate_data_sources.push_back(op.get());
-					break;
+	if(isTargetOperator){
+		for (idx_t i = 0; i < op->children.size(); ++i) {
+			vector<bool> usd_insert_vec;
+			for (auto &type : op->children[i]->types) {
+				if (type == LogicalType::VARCHAR) {
+					usd_insert_vec.push_back(true);
+				} else {
+					usd_insert_vec.push_back(false);
 				}
 			}
+			auto new_operator = make_uniq<LogicalUnifiedStringDictionaryInsertion>(std::move(usd_insert_vec));
+			new_operator->children.push_back(std::move(op->children[i]));
+			op->children[i] = std::move(new_operator);
+
+			op->ResolveOperatorTypes();
 		}
 	}
+}
 
-	auto string_usage = IsTargetOperator(op.get());
+UnifiedStringDictionaryOptimizerContext UnifiedStringDictionaryOptimizer::Rewrite(unique_ptr<LogicalOperator> op) {
+	op->ResolveOperatorTypes();
+
+	auto children_target_operator_result = false;
 	// Depth-first-search post-order
 	for (idx_t i = 0; i < op->children.size(); ++i) {
-		op->children[i] = Rewrite(std::move(op->children[i]));
-		if (string_usage) {
-			AddMarkedDataSources();
-		}
+		auto rewrite_result = Rewrite(std::move(op->children[i]));
+		children_target_operator_result |= rewrite_result.target_operator_found;
+		op->children[i] = std::move(rewrite_result.op);
 	}
-	return op;
+	if(!children_target_operator_result){
+		CheckIfTargetOperatorAndInsert(op);
+	}
+	return {std::move(op), children_target_operator_result};
 }
 
 } // namespace duckdb
