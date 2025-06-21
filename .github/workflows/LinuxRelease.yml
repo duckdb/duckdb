@@ -379,6 +379,7 @@ jobs:
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-22.04
+    needs: linux-extensions-64
     env:
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
       S3_TEST_SERVER_AVAILABLE: 1
