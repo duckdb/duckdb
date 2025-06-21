@@ -21,6 +21,7 @@ add_library_unity(
   test_capi_complex_types.cpp
   test_capi_to_decimal.cpp
   test_capi_values.cpp
+  test_capi_vector.cpp
   test_capi_replacement_scan.cpp
   test_capi_streaming.cpp
   test_capi_table_description.cpp
