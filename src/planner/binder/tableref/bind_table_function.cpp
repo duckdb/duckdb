@@ -277,7 +277,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-	                              get->GetTable().get(), std::move(virtual_columns));
+	                              get->GetTable(context).get(), std::move(virtual_columns));
 	return std::move(get);
 }
 

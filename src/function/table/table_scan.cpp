@@ -677,7 +677,7 @@ vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, G
 	return storage.GetPartitionStats(context);
 }
 
-BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+BindInfo TableScanGetBindInfo(ClientContext &, const optional_ptr<FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	return BindInfo(bind_data.table);
 }

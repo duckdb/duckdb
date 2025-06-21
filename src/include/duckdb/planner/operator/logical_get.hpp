@@ -62,7 +62,7 @@ public:
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
-	optional_ptr<TableCatalogEntry> GetTable() const;
+	optional_ptr<TableCatalogEntry> GetTable(ClientContext &context) const;
 	//! Returns any column to query - preferably the cheapest column
 	//! This is used when we are running e.g. a COUNT(*) and don't care about the contents of any columns in the table
 	column_t GetAnyColumn() const;

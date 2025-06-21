@@ -284,7 +284,7 @@ typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionCon
 typedef OperatorPartitionData (*table_function_get_partition_data_t)(ClientContext &context,
                                                                      TableFunctionGetPartitionInput &input);
 
-typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
+typedef BindInfo (*table_function_get_bind_info_t)(ClientContext &context, const optional_ptr<FunctionData> bind_data);
 
 typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(const TableFunction &);
 

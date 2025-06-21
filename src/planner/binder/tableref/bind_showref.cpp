@@ -17,7 +17,7 @@ struct BaseTableColumnInfo {
 	optional_ptr<const ColumnDefinition> column = nullptr;
 };
 
-BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding binding) {
+BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ClientContext &context, ColumnBinding binding) {
 	BaseTableColumnInfo result;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
@@ -25,7 +25,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (get.table_index != binding.table_index) {
 			return result;
 		}
-		auto table = get.GetTable();
+		auto table = get.GetTable(context);
 		if (!table) {
 			break;
 		}
@@ -50,7 +50,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			// if the projection at this index only has a column reference we can directly trace it to the base table
 			auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-			return FindBaseTableColumn(*projection.children[0], bound_colref.binding);
+			return FindBaseTableColumn(*projection.children[0], context, bound_colref.binding);
 		}
 		break;
 	}
@@ -67,7 +67,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		// for any "pass-through" operators - search in children directly
 		for (auto &child : op.children) {
-			result = FindBaseTableColumn(*child, binding);
+			result = FindBaseTableColumn(*child, context, binding);
 			if (result.table) {
 				return result;
 			}
@@ -80,9 +80,9 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 	return result;
 }
 
-BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, idx_t column_index) {
+BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ClientContext &context, idx_t column_index) {
 	auto bindings = op.GetColumnBindings();
-	return FindBaseTableColumn(op, bindings[column_index]);
+	return FindBaseTableColumn(op, context, bindings[column_index]);
 }
 
 unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
@@ -102,7 +102,7 @@ unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
 	collection->InitializeAppend(append_state);
 	for (idx_t column_idx = 0; column_idx < plan.types.size(); column_idx++) {
 		// check if we can trace the column to a base table so that we can figure out constraint information
-		auto result = FindBaseTableColumn(*plan.plan, column_idx);
+		auto result = FindBaseTableColumn(*plan.plan, context, column_idx);
 		idx_t row_index = output.size();
 		auto &alias = plan.names[column_idx];
 		if (result.table) {

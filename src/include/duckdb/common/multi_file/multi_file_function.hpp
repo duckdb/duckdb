@@ -695,7 +695,7 @@ public:
 		}
 	}
 
-	static BindInfo MultiFileGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+	static BindInfo MultiFileGetBindInfo(ClientContext &, const optional_ptr<FunctionData> bind_data_p) {
 		BindInfo bind_info(ScanType::EXTERNAL);
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 

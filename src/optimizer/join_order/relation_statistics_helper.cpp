@@ -73,7 +73,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto cardinality_after_filters = base_table_cardinality;
 	unique_ptr<BaseStatistics> column_statistics;
 
-	auto catalog_table = get.GetTable();
+	auto catalog_table = get.GetTable(context);
 	auto name = string("some table");
 	if (catalog_table) {
 		name = catalog_table->name;
