@@ -3,7 +3,6 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -22,6 +21,9 @@
 namespace duckdb {
 void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		if (!parent) {
+			return; 
+		}
 		D_ASSERT(!pipe_info.join_parent);
 		pipe_info.join_parent = parent;
 		pipe_info.join_index = idx;
@@ -145,13 +147,13 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 			auto &expression = projection.expressions.get(idx);
 			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
-				auto disinct_group_it = pipe_info.distinct_groups.find(col_ref.binding.table_index);
-				if (disinct_group_it == pipe_info.distinct_groups.end()) {
+				auto distinct_group_it = pipe_info.distinct_groups.find(col_ref.binding.table_index);
+				if (distinct_group_it == pipe_info.distinct_groups.end()) {
 					continue;
 				}
 				if (ref_table_columns.find(col_ref.binding.table_index) == ref_table_columns.end()) {
 					auto ref = DistinctGroupRef();
-					for (auto &col : disinct_group_it->second) {
+					for (auto &col : distinct_group_it->second) {
 						ref.ref_column_ids.insert(col.column_index);
 					}
 					ref_table_columns[col_ref.binding.table_index] = ref;

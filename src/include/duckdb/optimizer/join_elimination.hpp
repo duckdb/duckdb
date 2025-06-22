@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -19,7 +18,6 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include <utility>
 
 namespace duckdb {
 class JoinElimination;
@@ -33,7 +31,6 @@ struct DistinctGroupRef {
 
 class PipelineInfo {
 public:
-	optional_ptr<PipelineInfo> parent;
 	unique_ptr<LogicalOperator> root = nullptr;
 	unordered_set<idx_t> ref_table_ids;
 	unordered_map<idx_t, column_binding_set_t> distinct_groups;
@@ -49,7 +46,6 @@ public:
 		auto result = PipelineInfo();
 		result.ref_table_ids = ref_table_ids;
 		result.distinct_groups = distinct_groups;
-		result.parent = this;
 		return result;
 	}
 };
