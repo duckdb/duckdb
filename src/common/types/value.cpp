@@ -2056,6 +2056,12 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		if (type_.id() == LogicalTypeId::BLOB) {
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
+		} else if (type_.id() == LogicalTypeId::BIT) {
+			auto bit_str = Bit::ToString(StringValue::Get(*this));
+			serializer.WriteProperty(102, "value", bit_str);
+		} else if (type_.id() == LogicalTypeId::VARINT) {
+			auto varint_str = Varint::VarIntToVarchar(StringValue::Get(*this));
+			serializer.WriteProperty(102, "value", varint_str);
 		} else {
 			serializer.WriteProperty(102, "value", StringValue::Get(*this));
 		}
@@ -2139,6 +2145,10 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		auto str = deserializer.ReadProperty<string>(102, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));
+		} else if (type.id() == LogicalTypeId::BIT) {
+			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Bit::ToBit(str));
+		} else if (type.id() == LogicalTypeId::VARINT) {
+			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Varint::VarcharToVarInt(str));
 		} else {
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(str);
 		}
