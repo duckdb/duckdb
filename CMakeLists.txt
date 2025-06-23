@@ -47,10 +47,6 @@ else()
   endif()
 endif()
 
-if (SHADOW_FORBIDDEN_FUNCTIONS)
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include 'duckdb/common/shadow_forbidden_functions.hpp'")
-endif()
-
 # Determine install paths
 # default to gnu standard installation directories (lib, bin, include)
 # https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html
@@ -83,6 +79,10 @@ if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   endif()
 endif()
 
+option(SHADOW_FORBIDDEN_FUNCTIONS "Compile time test on usage of deprecated functions" FALSE)
+if (SHADOW_FORBIDDEN_FUNCTIONS)
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include 'duckdb/common/shadow_forbidden_functions.hpp'")
+endif()
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 option(USE_WASM_THREADS "Should threads be used" FALSE)
@@ -430,6 +430,7 @@ option(EXTENSION_STATIC_BUILD
 
 if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
 
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)

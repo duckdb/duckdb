@@ -2,8 +2,6 @@
 # description: Test attach mixed with the COPY statement
 # group: [copy_database]
 
-require noforcestorage
-
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
 

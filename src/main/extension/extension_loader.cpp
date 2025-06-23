@@ -19,6 +19,10 @@
 
 namespace duckdb {
 
+ExtensionLoader::ExtensionLoader(ExtensionActiveLoad &load_info)
+    : db(load_info.db), extension_name(load_info.extension_name), extension_info(load_info.info) {
+}
+
 ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(db), extension_name(name) {
 }
 
@@ -32,9 +36,10 @@ void ExtensionLoader::SetDescription(const string &description) {
 
 void ExtensionLoader::FinalizeLoad() {
 	// Set extension description, if provided
-	if (!extension_description.empty()) {
-		const ExtensionLoadedInfo info {extension_description};
-		db.AddExtensionInfo(extension_name, info);
+	if (!extension_description.empty() && extension_info) {
+		auto info = make_uniq<ExtensionLoadedInfo>();
+		info->description = extension_description;
+		extension_info->load_info = std::move(info);
 	}
 }
 
