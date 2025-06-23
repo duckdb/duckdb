@@ -503,6 +503,9 @@ public:
 		for (size_t i = PART; i <= REGION; i++) {
 			if (parameters.tables[i]) {
 				auto &tbl_catalog = *parameters.tables[i];
+				if (!tbl_catalog.IsDuckTable()) {
+					throw InvalidInputException("dbgen is only supported for DuckDB database files");
+				}
 				append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog, flush_count);
 			}
 		}

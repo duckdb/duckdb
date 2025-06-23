@@ -178,6 +178,8 @@ struct DBConfigOptions {
 	string collation = string();
 	//! The order type used when none is specified (default: ASC)
 	OrderType default_order_type = OrderType::ASCENDING;
+	//! Disables invalidating the database instance when encountering a fatal error.
+	bool disable_database_invalidation = false;
 	//! NULL ordering used when none is specified (default: NULLS LAST)
 	DefaultOrderByNullType default_null_order = DefaultOrderByNullType::NULLS_LAST;
 	//! enable COPY and related commands
@@ -266,10 +268,6 @@ struct DBConfigOptions {
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
-	//! Database encryption key (plaintext)
-	//! This key corresponds to one database
-	shared_ptr<string> user_key;
-	bool contains_user_key = false;
 	//!  By default, WAL is encrypted for encrypted databases
 	bool enable_wal_encryption = true;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).

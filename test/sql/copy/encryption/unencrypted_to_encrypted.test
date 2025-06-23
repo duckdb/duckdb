@@ -1,8 +1,6 @@
 # name: test/sql/copy/encryption/unencrypted_to_encrypted.test
 # group: [encryption]
 
-require noforcestorage
-
 require skip_reload
 
 require tpch

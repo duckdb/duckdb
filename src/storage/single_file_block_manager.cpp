@@ -343,10 +343,6 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
 }
 
-void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options) {
-	return CheckAndAddEncryptionKey(main_header, *config_options.user_key);
-}
-
 void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context) {
 	auto flags = GetFileFlags(true);
 
@@ -374,16 +370,8 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 		GenerateSalt(db, salt, options);
 		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
 		options.encryption_options.user_key = nullptr;
-	} else if (config.options.contains_user_key) {
-		//! user key given in cli (with -key '')
-		//! we generate a random salt for each password
-		GenerateSalt(db, salt, options);
-		EncryptionKeyManager::DeriveKey(*config.options.user_key, salt, derived_key);
-		options.encryption_options.encryption_enabled = true;
-		config.options.contains_user_key = false;
-	}
 
-	if (options.encryption_options.encryption_enabled) {
+		// set the encrypted db bit to 0
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
 		//! the derived key is wiped in addkeytocache
@@ -464,9 +452,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 		// database is not encrypted, but is tried to be opened with a key
-	} else if (!main_header.IsEncrypted() && config.options.contains_user_key) {
-		// We provide a -key, but database is not encrypted
-		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 	}
 
 	if (main_header.IsEncrypted()) {
@@ -483,17 +468,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			CheckAndAddEncryptionKey(main_header);
 			// delete user key ptr
 			options.encryption_options.user_key = nullptr;
-		} else if (config.options.contains_user_key) {
-			//! A new (encrypted) database is added through the Command Line
-			//! If a user key is given, let's try this key
-			//! If it succeeds, we put the key in cache
-			//! input key is with -key in the command line
-			CheckAndAddEncryptionKey(main_header, *config.options.user_key);
-			options.encryption_options.encryption_enabled = true;
-			options.encryption_options.user_key = nullptr;
-
-			//! Set to false once key is used
-			config.options.contains_user_key = false;
 		}
 
 		if (!options.encryption_options.encryption_enabled) {

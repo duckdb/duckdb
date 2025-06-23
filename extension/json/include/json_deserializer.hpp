@@ -6,12 +6,9 @@ namespace duckdb {
 
 class JsonDeserializer : public Deserializer {
 public:
-	JsonDeserializer(yyjson_val *val, yyjson_doc *doc) : doc(doc) {
+	JsonDeserializer(yyjson_val *val, const yyjson_doc_ptr &doc) : doc(doc.get()) {
 		deserialize_enum_from_string = true;
 		stack.emplace_back(val);
-	}
-	~JsonDeserializer() {
-		yyjson_doc_free(doc);
 	}
 
 private:

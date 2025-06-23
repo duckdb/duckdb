@@ -10,6 +10,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
 #include <list>
@@ -140,7 +141,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
                                                           string file_name, idx_t query_line) const {
 	query_break(query_line);
-	if (TestForceReload() && TestForceStorage()) {
+	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
 
@@ -616,7 +617,7 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
-				SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());
 				FAIL();
 			}
 		}
