@@ -2,11 +2,12 @@ import duckdb
 import pytest
 import sys
 import datetime
-from duckdb.polars_io import _predicate_to_expression
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
 pl_testing = pytest.importorskip("polars.testing")
+
+from duckdb.polars_io import _predicate_to_expression
 
 
 def valid_filter(filter):
