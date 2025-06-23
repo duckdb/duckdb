@@ -552,7 +552,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
 
-	if (db.config.options.full_encryption) {
+	if (db.config.options.full_encryption && db.config.options.enable_temp_file_encryption) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
 		//! Write the nonce (and tag for GCM).

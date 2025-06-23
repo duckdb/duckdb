@@ -57,8 +57,8 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 
 void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
                                     FileBuffer &temp_buffer_manager, uint64_t delta) {
-	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 
+	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(GetKeyFromCache(db, key_id),
 	                                                                      MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
@@ -131,6 +131,10 @@ void EncryptionEngine::DecryptBlock(DatabaseInstance &db, const string &key_id, 
 void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
                                               uint8_t *metadata) {
 
+	if (!ContainsKey(db, "temp_key")) {
+		AddTempKeyToCache(db);
+	}
+
 	auto temp_key = GetKeyFromCache(db, "temp_key");
 	auto encryption_util = db.GetEncryptionUtil();
 	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
@@ -145,13 +149,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 	uint8_t nonce[MainHeader::AES_IV_LEN];
 	memset(nonce, 0, MainHeader::AES_IV_LEN);
 
-#ifdef DEBUG
-	uint8_t fixed_nonce[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0};
-	memcpy(nonce, fixed_nonce, MainHeader::AES_NONCE_LEN);
-#else
-
 	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
-#endif
 
 	//! store the nonce at the the start of metadata buffer
 	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);
@@ -175,6 +173,11 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 }
 
 void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata) {
+
+	if (!ContainsKey(db, "temp_key")) {
+		AddTempKeyToCache(db);
+	}
+
 	auto temp_key = GetKeyFromCache(db, "temp_key");
 
 	auto encryption_util = db.GetEncryptionUtil();
@@ -190,13 +193,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 	uint8_t nonce[MainHeader::AES_IV_LEN];
 	memset(nonce, 0, MainHeader::AES_IV_LEN);
 
-#ifdef DEBUG
-	uint8_t fixed_nonce[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0};
-	memcpy(nonce, fixed_nonce, MainHeader::AES_NONCE_LEN);
-#else
-
 	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
-#endif
 
 	//! store the nonce at the the start of metadata buffer
 	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);
@@ -224,6 +221,9 @@ void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, Alloc
                                                      AllocatedData &out_buffer, idx_t nr_bytes, uint8_t *metadata) {
 
 	// this already expects an empty ("header" of delta bytes).
+	if (!ContainsKey(db, "temp_key")) {
+		AddTempKeyToCache(db);
+	}
 	auto temp_key = GetKeyFromCache(db, "temp_key");
 
 	auto encryption_util = db.GetEncryptionUtil();
@@ -239,13 +239,7 @@ void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, Alloc
 	uint8_t nonce[MainHeader::AES_IV_LEN];
 	memset(nonce, 0, MainHeader::AES_IV_LEN);
 
-#ifdef DEBUG
-	uint8_t fixed_nonce[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0};
-	memcpy(nonce, fixed_nonce, MainHeader::AES_NONCE_LEN);
-#else
-
 	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
-#endif
 
 	//! store the nonce at the the start of metadata buffer
 	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);

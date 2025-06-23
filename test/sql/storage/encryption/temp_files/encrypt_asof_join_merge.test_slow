@@ -24,15 +24,15 @@ SET temp_directory='__TEST_DIR__/temp.tmp'
 statement ok
 PRAGMA asof_loop_join_threshold = 0;
 
-# query II
-# WITH build AS (
-# 	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
-# 	FROM range(3000000) t(i), range(2) tk(k)
-# ), probe AS (
-# 	SELECT k, t
-# 	FROM range(2) tk(k),
-# 		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
-# ) SELECT SUM(v) AS v, COUNT(*) AS n
-# FROM probe ASOF JOIN build USING(k, t)
-# ----
-# 26790	1488
+query II
+WITH build AS (
+	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
+	FROM range(3000000) t(i), range(2) tk(k)
+), probe AS (
+	SELECT k, t
+	FROM range(2) tk(k),
+		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
+) SELECT SUM(v) AS v, COUNT(*) AS n
+FROM probe ASOF JOIN build USING(k, t)
+----
+26790	1488
