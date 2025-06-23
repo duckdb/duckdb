@@ -112,17 +112,6 @@ class SparkSession:
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
-    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types, names) -> DataFrame:
-        df = self._create_dataframe(data)
-
-        # Cast to types
-        if types:
-            df = df._cast_types(*types)
-        # Alias to names
-        if names:
-            df = df.toDF(*names)
-        return df
-
     def createDataFrame(
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
@@ -148,17 +137,6 @@ class SparkSession:
                 types, names = schema.extract_types_and_names()
             else:
                 names = schema
-
-        try:
-            import pandas
-
-            has_pandas = True
-        except ImportError:
-            has_pandas = False
-        # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
-        # Then check if 'data' is None or []
-        if has_pandas and isinstance(data, pandas.DataFrame):
-            return self._createDataFrameFromPandas(data, types, names)
 
         # Finally check if a schema was provided
         is_empty = False
