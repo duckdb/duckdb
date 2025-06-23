@@ -5,10 +5,13 @@
 require autocomplete
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir);$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from range(200000) using sample reservoir(90 PERCENT);$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from range(200000) tablesample reservoir(90%);$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from range(200000) tablesample reservoir(90 PERCENT);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir);$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from integers tablesample reservoir(10);$TEST_PEG_PARSER$);

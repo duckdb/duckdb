@@ -77,7 +77,7 @@ WhereClause <- 'WHERE'i Expression
 GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
 HavingClause <- 'HAVING'i Expression
 QualifyClause <- 'QUALIFY'i Expression
-SampleClause <- (UsingSample / TableSample) SampleEntry
+SampleClause <- (TableSample / UsingSample) SampleEntry
 UsingSample <- 'USING'i 'SAMPLE'i
 TableSample <- 'TABLESAMPLE'i
 WindowClause <- 'WINDOW'i List(WindowDefinition)
@@ -88,7 +88,7 @@ SampleEntryCount <- SampleCount Parens(SampleProperties)?
 SampleEntryFunction <- SampleFunction? Parens(SampleCount) RepeatableSample?
 SampleFunction <- ColId
 SampleProperties <- ColId (',' NumberLiteral)?
-RepeatableSample <- 'REPEATABLE' Parens(NumberLiteral)
+RepeatableSample <- 'REPEATABLE'i Parens(NumberLiteral)
 
 SampleCount <- Expression SampleUnit?
 SampleUnit <- '%' / 'PERCENT'i / 'ROWS'i
