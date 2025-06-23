@@ -3,11 +3,6 @@
 using namespace duckdb;
 using namespace std;
 
-string get_string_from_duckdb_string_t(duckdb_string_t *input) {
-	const char *ptr = duckdb_string_is_inlined(*input) ? input->value.inlined.inlined : input->value.pointer.ptr;
-	return string(ptr, duckdb_string_t_length(*input));
-}
-
 TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", "[capi]") {
 	duckdb_database db;
 	duckdb_connection con;
