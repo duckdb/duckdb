@@ -106,10 +106,12 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
+        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
         zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v4
       with:
