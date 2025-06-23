@@ -140,7 +140,7 @@ bool ConflictManager::AddNull(const idx_t index_in_chunk) {
 	if (!IsConflict(LookupResultType::LOOKUP_NULL)) {
 		return false;
 	}
-	auto row_id = UnsafeNumericCast<row_t>(DConstants::INVALID_INDEX);
+	auto row_id = static_cast<row_t>(DConstants::INVALID_INDEX);
 	return AddHit(index_in_chunk, row_id);
 }
 
