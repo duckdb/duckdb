@@ -1,5 +1,5 @@
 diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
-index ee19c8c..56e30eb 100644
+index ee19c8c..4116a59 100644
 --- a/src/azure_blob_filesystem.cpp
 +++ b/src/azure_blob_filesystem.cpp
 @@ -12,7 +12,7 @@
@@ -22,8 +22,12 @@ index ee19c8c..56e30eb 100644
  				result.push_back(info);
  			}
  		}
-@@ -174,7 +174,7 @@ void AzureBlobStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
- 	if (hfh.length == 0 && hfh.last_modified == 0) {
+@@ -171,10 +171,10 @@ vector<OpenFileInfo> AzureBlobStorageFileSystem::Glob(const string &path, FileOp
+ void AzureBlobStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
+ 	auto &hfh = handle.Cast<AzureBlobStorageFileHandle>();
+ 
+-	if (hfh.length == 0 && hfh.last_modified == 0) {
++	if (hfh.length == 0 && hfh.last_modified == timestamp_t(0)) {
  		auto res = hfh.blob_client.GetProperties();
  		hfh.length = res.Value.BlobSize;
 -		hfh.last_modified = ToTimeT(res.Value.LastModified);
