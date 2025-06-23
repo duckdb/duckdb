@@ -1,10 +1,3 @@
-diff --git a/duckdb b/duckdb
-index e92be67..d260074 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit e92be6795f5683c4ef6873ee20ed7502f1d5d1aa
-+Subproject commit d26007417b7770860ae78278c898d2ecf13f08fd
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 index e27fb02..dc6f5c2 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
