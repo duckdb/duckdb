@@ -1047,7 +1047,7 @@ bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict) {
-	if (!TryMultiplyOperator::Operation(input.micros, Interval::NANOS_PER_MSEC, result.micros)) {
+	if (!TryMultiplyOperator::Operation(input.micros, Interval::NANOS_PER_MICRO, result.micros)) {
 		throw ConversionException("Could not convert TIME to TIME_NS");
 	}
 	return true;
@@ -1562,6 +1562,15 @@ dtime_t Cast::Operation(string_t input) {
 // Cast To Time (ns)
 //===--------------------------------------------------------------------===//
 template <>
+bool TryCastErrorMessage::Operation(string_t input, dtime_ns_t &result, CastParameters &parameters) {
+	if (!TryCast::Operation<string_t, dtime_ns_t>(input, result, parameters.strict)) {
+		HandleCastError::AssignError(Time::ConversionError(input), parameters);
+		return false;
+	}
+	return true;
+}
+
+template <>
 bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	idx_t pos;
 	dtime_t micros;
@@ -1572,7 +1581,7 @@ bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	if (!TryCast::Operation(micros, result)) {
 		return false;
 	}
-	return TryAddOperator::Operation<int64_t, int32_t, int64_t>(result.micros, nanos, result.micros);
+	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.micros, nanos, result.micros);
 }
 
 template <>

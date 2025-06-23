@@ -5,6 +5,14 @@
 statement ok
 PRAGMA enable_verification
 
+# Parse and format
+query I
+SELECT '15:30:00.123456789'::TIME_NS;
+----
+15:30:00.123456789
+
+# Cast TIMESTAMP_NS => TIME_NS
+
 query I
 SELECT '2025-05-20 15:30:00.123456789'::TIMESTAMP_NS::TIME_NS t;
 ----
