@@ -38,7 +38,7 @@ env:
 jobs:
  linux-debug:
     name: Linux Debug (${{ matrix.tag }})
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.event.pull_request.draft == false && !startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -95,6 +95,7 @@ jobs:
 
  linux-release:
     name: Linux Release (full suite)
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     env:
       GEN: ninja
@@ -125,7 +126,7 @@ jobs:
 
  force-storage:
     name: Force Storage
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.event.pull_request.draft == false && !startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -163,7 +164,7 @@ jobs:
 
  force-restart:
     name: Force Restart
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.event.pull_request.draft == false && !startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     needs: force-storage
     env:
@@ -201,6 +202,7 @@ jobs:
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     needs: force-storage
     env:
@@ -238,6 +240,7 @@ jobs:
 
  prefetch-all-parquet-files:
    name: Prefetch All Parquet Files
+   if: github.event.pull_request.draft == false
    runs-on: ubuntu-24.04
    needs: force-storage
    env:
@@ -271,6 +274,7 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-22.04
     needs: force-storage
     env:
@@ -314,7 +318,7 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.event.pull_request.draft == false && !startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     needs: force-storage
     env:
@@ -352,6 +356,7 @@ jobs:
 
  vector-verification:
     name: Vector Verification Tests
+    if: github.event.pull_request.draft == false
     needs: force-storage
     runs-on: ubuntu-22.04
     env:
@@ -414,6 +419,7 @@ jobs:
 
  latest-storage:
     name: Latest Storage
+    if: github.event.pull_request.draft == false
     needs: force-storage
     runs-on: ubuntu-22.04
     env:
@@ -448,6 +454,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
+    if: github.event.pull_request.draft == false
     needs: force-storage
     runs-on: ubuntu-24.04
     env:
@@ -491,6 +498,7 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-22.04
     env:
       CC: clang
