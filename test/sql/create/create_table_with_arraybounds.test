@@ -1,8 +1,6 @@
 # name: test/sql/create/create_table_with_arraybounds.test
 # group: [create]
 
-require noforcestorage
-
 # Create a table with an ENUM[] type
 statement ok
 create table T (

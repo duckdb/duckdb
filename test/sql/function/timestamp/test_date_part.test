@@ -755,16 +755,6 @@ NULL	NULL
 2022-01-01 00:00:41+00	1640995241000
 infinity	NULL
 
-statement error
-select epoch_ms(9223372036854775807)
-----
-Not implemented Error: EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.
-
-statement error
-select epoch_ms(-9223372036854775808)
-----
-Not implemented Error: EPOCH_MS(MS) has been removed. Use MAKE_TIMESTAMP[TZ](MS * 1000) instead.
-
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;
 ----

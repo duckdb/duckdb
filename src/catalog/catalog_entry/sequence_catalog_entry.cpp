@@ -108,7 +108,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 string SequenceCatalogEntry::ToSQL() const {
 	auto seq_data = GetData();
 
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
 	ss << name;
 	ss << " INCREMENT BY " << seq_data.increment;
