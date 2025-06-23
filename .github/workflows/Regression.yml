@@ -47,6 +47,7 @@ env:
 jobs:
   regression-test-benchmark-runner:
     name: Regression Tests
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -184,6 +185,7 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -264,6 +266,7 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -306,6 +309,7 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10

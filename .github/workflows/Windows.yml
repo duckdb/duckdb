@@ -60,7 +60,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    if: github.event.pull_request.draft == false
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -150,7 +150,7 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    if: github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true')
+    if: ${{ github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
     runs-on: windows-latest
     needs: win-release-64
 
@@ -190,7 +190,7 @@ jobs:
 
  win-release-arm64:
    name: Windows (ARM64)
-   if: github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true')
+   if: ${{ github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
    runs-on: windows-latest
    needs: win-release-64
 
@@ -254,9 +254,8 @@ jobs:
 
  mingw:
      name: MinGW (64 Bit)
-     if: github.event.pull_request.draft == false
+     if: ${{ github.event.pull_request.draft == false && inputs.skip_tests != 'true' }}
      runs-on: windows-latest
-     if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
      steps:
        - uses: actions/checkout@v4
@@ -301,7 +300,7 @@ jobs:
  win-extensions-64:
    # Builds extensions for windows_amd64
    name: Windows Extensions (64-bit)
-   if: github.event.pull_request.draft == false
+   if: ${{ github.event.pull_request.draft == false }}
    runs-on: windows-latest
    needs: win-release-64
    steps:
@@ -340,7 +339,7 @@ jobs:
 
  upload-windows_amd64-extensions:
     name: Upload windows_amd64 Extensions
-    if: github.event.pull_request.draft == false
+    if: ${{ github.event.pull_request.draft == false }}
     needs: win-extensions-64
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
@@ -351,7 +350,7 @@ jobs:
 
  win-packaged-upload:
    runs-on: windows-latest
-   if: github.event.pull_request.draft == false
+   if: ${{ github.event.pull_request.draft == false }}
    needs:
      - win-release-64
      - win-release-arm64

@@ -39,7 +39,7 @@ env:
 jobs:
   format-check:
     name: Format Check
-    if: github.event.pull_request.draft == false
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
 
     env:
@@ -76,7 +76,7 @@ jobs:
 
   enum-check:
     name: C Enum Integrity Check
-    if: github.event.pull_request.draft == false
+    if: ${{ github.event.pull_request.draft == false }}
     needs: format-check
     runs-on: ubuntu-22.04
 
@@ -102,7 +102,7 @@ jobs:
 
   tidy-check:
     name: Tidy Check
-    if: github.event.pull_request.draft == false
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     needs: format-check
 
