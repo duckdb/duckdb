@@ -824,10 +824,10 @@ QualifiedSchemaName <- CatalogQualification? SchemaName
 
 DropSecretStorage <- 'FROM'i Identifier
 
-UpdateStatement <- WithClause? 'UPDATE'i UpdateTarget 'SET'i UpdateSetClause FromClause? WhereClause? ReturningClause?
+UpdateStatement <- WithClause? 'UPDATE'i UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
 
-UpdateTarget <- BaseTableName UpdateAlias?
-UpdateAlias <- 'AS'i? Identifier
+UpdateTarget <- (BaseTableName 'SET'i) / (BaseTableName UpdateAlias? 'SET'i)
+UpdateAlias <- 'AS'i? ColId
 UpdateSetClause <- List(UpdateSetElement) / (Parens(List(ColumnName)) '=' Expression)
 UpdateSetElement <- ColumnName '=' Expression
 
@@ -940,7 +940,7 @@ WhereClause <- 'WHERE'i Expression
 GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
 HavingClause <- 'HAVING'i Expression
 QualifyClause <- 'QUALIFY'i Expression
-SampleClause <- (UsingSample / TableSample) SampleEntry
+SampleClause <- (TableSample / UsingSample) SampleEntry
 UsingSample <- 'USING'i 'SAMPLE'i
 TableSample <- 'TABLESAMPLE'i
 WindowClause <- 'WINDOW'i List(WindowDefinition)
@@ -951,7 +951,7 @@ SampleEntryCount <- SampleCount Parens(SampleProperties)?
 SampleEntryFunction <- SampleFunction? Parens(SampleCount) RepeatableSample?
 SampleFunction <- ColId
 SampleProperties <- ColId (',' NumberLiteral)?
-RepeatableSample <- 'REPEATABLE' Parens(NumberLiteral)
+RepeatableSample <- 'REPEATABLE'i Parens(NumberLiteral)
 
 SampleCount <- Expression SampleUnit?
 SampleUnit <- '%' / 'PERCENT'i / 'ROWS'i
@@ -1155,7 +1155,7 @@ Statement <-
 CatalogName <- ColIdOrString
 SchemaName <- ColIdOrString
 TableName <- ColIdOrString
-ColumnName <- DottedIdentifier
+ColumnName <- ColId ('.' ColLabel)*
 IndexName <- ColId ('.' ColId)*
 SettingName <- ColId
 PragmaName <- ColId
@@ -1234,7 +1234,7 @@ RowType <- RowOrStruct Parens(List(ColIdType))
 UnionType <- 'UNION'i Parens(List(ColIdType))
 MapType <- 'MAP'i Parens(List(Type))
 ColIdType <- ColId Type
-ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'
+ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'i
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- 'TIME'i / 'TIMESTAMP'i
 TimeZone <- WithOrWithout 'TIME'i 'ZONE'i
