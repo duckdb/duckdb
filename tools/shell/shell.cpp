@@ -4689,7 +4689,6 @@ static const char zOptions[] =
     "   -html                set output mode to HTML\n"
     "   -interactive         force interactive I/O\n"
     "   -json                set output mode to 'json'\n"
-    "   -key PASSWORD        add an encryption key to encrypt a single database\n"
     "   -line                set output mode to 'line'\n"
     "   -list                set output mode to 'list'\n"
     "   -markdown            set output mode to 'markdown'\n"
