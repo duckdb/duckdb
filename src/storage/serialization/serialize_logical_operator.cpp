@@ -784,11 +784,13 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer)
 void LogicalUnifiedStringDictionaryInsertion::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<bool>>(200, "insert_to_usd", insert_to_usd);
+	serializer.WritePropertyWithDefault<bool>(201, "insert_flat_vectors", insert_flat_vectors);
 }
 
 unique_ptr<LogicalOperator> LogicalUnifiedStringDictionaryInsertion::Deserialize(Deserializer &deserializer) {
 	auto insert_to_usd = deserializer.ReadPropertyWithDefault<vector<bool>>(200, "insert_to_usd");
-	auto result = duckdb::unique_ptr<LogicalUnifiedStringDictionaryInsertion>(new LogicalUnifiedStringDictionaryInsertion(std::move(insert_to_usd)));
+	auto insert_flat_vectors = deserializer.ReadPropertyWithDefault<bool>(201, "insert_flat_vectors");
+	auto result = duckdb::unique_ptr<LogicalUnifiedStringDictionaryInsertion>(new LogicalUnifiedStringDictionaryInsertion(std::move(insert_to_usd), insert_flat_vectors));
 	return std::move(result);
 }
 

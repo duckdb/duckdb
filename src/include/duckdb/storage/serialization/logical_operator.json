@@ -1078,8 +1078,13 @@
         "id": 200,
         "name": "insert_to_usd",
         "type": "vector<bool>"
+      },
+      {
+        "id": 201,
+        "name": "insert_flat_vectors",
+        "type": "bool"
       }
     ],
-    "constructor": ["insert_to_usd"]
+    "constructor": ["insert_to_usd", "insert_flat_vectors"]
   }
 ]

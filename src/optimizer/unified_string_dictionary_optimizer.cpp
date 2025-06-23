@@ -16,7 +16,7 @@ UnifiedStringDictionaryOptimizer::CheckIfUnifiedStringDictionaryRequired(unique_
 	return std::move(rewrite_result.op);
 }
 
-void UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_ptr<LogicalOperator> op) {
+bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_ptr<LogicalOperator> op) {
 	bool isTargetOperator = false;
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -83,7 +83,7 @@ void UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 		break;
 	}
 
-	if(isTargetOperator){
+	if (isTargetOperator) {
 		for (idx_t i = 0; i < op->children.size(); ++i) {
 			vector<bool> usd_insert_vec;
 			for (auto &type : op->children[i]->types) {
@@ -93,29 +93,39 @@ void UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 					usd_insert_vec.push_back(false);
 				}
 			}
-			auto new_operator = make_uniq<LogicalUnifiedStringDictionaryInsertion>(std::move(usd_insert_vec));
+
+			bool insert_flat_vecs = false;
+			if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+			    op->children[i]->has_estimated_cardinality && op->children[i]->estimated_cardinality < 1000) {
+				insert_flat_vecs = true;
+			}
+
+			auto new_operator =
+			    make_uniq<LogicalUnifiedStringDictionaryInsertion>(std::move(usd_insert_vec), insert_flat_vecs);
 			new_operator->children.push_back(std::move(op->children[i]));
 			op->children[i] = std::move(new_operator);
 
 			op->ResolveOperatorTypes();
 		}
+		return true;
 	}
+	return false;
 }
 
 UnifiedStringDictionaryOptimizerContext UnifiedStringDictionaryOptimizer::Rewrite(unique_ptr<LogicalOperator> op) {
 	op->ResolveOperatorTypes();
 
-	auto children_target_operator_result = false;
+	auto target_operator_result = false;
 	// Depth-first-search post-order
 	for (idx_t i = 0; i < op->children.size(); ++i) {
 		auto rewrite_result = Rewrite(std::move(op->children[i]));
-		children_target_operator_result |= rewrite_result.target_operator_found;
+		target_operator_result |= rewrite_result.target_operator_found;
 		op->children[i] = std::move(rewrite_result.op);
 	}
-	if(!children_target_operator_result){
-		CheckIfTargetOperatorAndInsert(op);
+	if (!target_operator_result) {
+		   target_operator_result |= CheckIfTargetOperatorAndInsert(op);
 	}
-	return {std::move(op), children_target_operator_result};
+	return {std::move(op), target_operator_result};
 }
 
 } // namespace duckdb

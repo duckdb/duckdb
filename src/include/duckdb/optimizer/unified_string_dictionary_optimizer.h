@@ -8,7 +8,7 @@ class Optimizer;
 class BoundColumnRefExpression;
 class ClientContext;
 
-struct UnifiedStringDictionaryOptimizerContext{
+struct UnifiedStringDictionaryOptimizerContext {
 	unique_ptr<LogicalOperator> op;
 	bool target_operator_found;
 };
@@ -25,7 +25,7 @@ public:
 private:
 	Optimizer *optimizer;
 
-	void CheckIfTargetOperatorAndInsert(optional_ptr<LogicalOperator> op);
+	bool CheckIfTargetOperatorAndInsert(optional_ptr<LogicalOperator> op);
 };
 
 } // namespace duckdb

@@ -41,74 +41,84 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 	auto &state = state_p.Cast<USDInsertionState>();
 	auto &global_state = gstate.Cast<USDInsertionGState>();
 	for (idx_t col_idx = 0; col_idx < input.data.size(); ++col_idx) {
-		if (input.data[col_idx].GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-		    input.data[col_idx].GetType() != LogicalType::VARCHAR ||
+		if (input.data[col_idx].GetType() != LogicalType::VARCHAR || !insert_to_usd[col_idx] ||
 		    input.size() == 1 // FIXME: this condition is not needed but there's an extremely odd bug with this test:
 		                      // test/sql/copy/partitioned/hive_partition_escape.test
 		) {
 			continue;
 		}
-		auto &dict = DictionaryVector::Child(input.data[col_idx]);
-		auto size = DictionaryVector::DictionarySize(input.data[col_idx]);
-		if (!size.IsValid()) {
-			continue;
-		}
-		auto dict_validity = FlatVector::Validity(dict);
 
-		if (insert_to_usd[col_idx] && !global_state.is_high_cardinality[col_idx] &&
-		    DictionaryVector::DictionaryId(input.data[col_idx]) != state.current_dict_ids[col_idx]) {
-			auto start = reinterpret_cast<string_t *>(dict.GetData());
-			for (idx_t i = 0; i < size.GetIndex(); i++) {
-				if (!dict_validity.RowIsValid(i)) {
-					continue;
-				}
-				auto result = context.client.GetUnifiedStringDictionary().insert(start[i]);
-				// process the results, we use the statistics to determine the unique cardinality of the column
-				switch (result) {
-				case InsertResult::SUCCESS:
-					++state.n_success;
-					break;
-				case InsertResult::ALREADY_EXISTS:
-					++state.n_already_exists;
-					break;
-				case InsertResult::REJECTED_PROBING:
-					++state.n_rejected_probing;
-					break;
-				case InsertResult::REJECTED_FULL:
-					++state.n_rejected_full;
-					break;
-				default:
-					break;
-				}
+		if (input.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			auto str_value = reinterpret_cast<string_t *>(ConstantVector::GetData(input.data[col_idx]));
+			context.client.GetUnifiedStringDictionary().insert(*str_value);
+		} else if (input.data[col_idx].GetVectorType() == VectorType::FLAT_VECTOR && insert_flat_vectors) {
+			auto start = reinterpret_cast<string_t *>(FlatVector::GetData(input.data[col_idx]));
+			for (idx_t i = 0; i < input.size(); i++) {
+				context.client.GetUnifiedStringDictionary().insert(start[i]);
 			}
-			// update local and global states
-			state.current_dict_ids[col_idx] = DictionaryVector::DictionaryId(input.data[col_idx]);
-			unique_lock<mutex> lock(global_state.statistics_lock);
-			global_state.inserted_unique_strings[col_idx] += size.GetIndex();
-			global_state.unique_strings_in_unified_dictionary_per_column[col_idx] += state.n_success;
-			global_state.inserted_dictionaries[col_idx]++;
-
-			constexpr double TOTAL_GROWTH_THRESHOLD = 0.1;
-			const idx_t MIN_STRING_SEEN = 10000;
-
-			if (global_state.inserted_unique_strings[col_idx] > MIN_STRING_SEEN) {
-				auto avg_growth =
-				    static_cast<double>(global_state.unique_strings_in_unified_dictionary_per_column[col_idx]) /
-				    static_cast<double>(global_state.inserted_unique_strings[col_idx]);
-
-				if (avg_growth > TOTAL_GROWTH_THRESHOLD) {
-					global_state.is_high_cardinality[col_idx] = true;
-				}
+		} else if (input.data[col_idx].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &dict = DictionaryVector::Child(input.data[col_idx]);
+			auto size = DictionaryVector::DictionarySize(input.data[col_idx]);
+			if (!size.IsValid()) {
+				continue;
 			}
-			lock.unlock();
+			auto dict_validity = FlatVector::Validity(dict);
 
-			context.client.GetUnifiedStringDictionary().UpdateFailedAttempts(state.n_rejected_probing +
-			                                                                 state.n_rejected_full);
+			if (!global_state.is_high_cardinality[col_idx] &&
+			    DictionaryVector::DictionaryId(input.data[col_idx]) != state.current_dict_ids[col_idx]) {
+				auto start = reinterpret_cast<string_t *>(dict.GetData());
+				for (idx_t i = 0; i < size.GetIndex(); i++) {
+					if (!dict_validity.RowIsValid(i)) {
+						continue;
+					}
+					auto result = context.client.GetUnifiedStringDictionary().insert(start[i]);
+					// process the results, we use the statistics to determine the unique cardinality of the column
+					switch (result) {
+					case InsertResult::SUCCESS:
+						++state.n_success;
+						break;
+					case InsertResult::ALREADY_EXISTS:
+						++state.n_already_exists;
+						break;
+					case InsertResult::REJECTED_PROBING:
+						++state.n_rejected_probing;
+						break;
+					case InsertResult::REJECTED_FULL:
+						++state.n_rejected_full;
+						break;
+					default:
+						break;
+					}
+				}
+				// update local and global states
+				state.current_dict_ids[col_idx] = DictionaryVector::DictionaryId(input.data[col_idx]);
+				unique_lock<mutex> lock(global_state.statistics_lock);
+				global_state.inserted_unique_strings[col_idx] += size.GetIndex();
+				global_state.unique_strings_in_unified_dictionary_per_column[col_idx] += state.n_success;
+				global_state.inserted_dictionaries[col_idx]++;
 
-			state.n_success = 0;
-			state.n_rejected_full = 0;
-			state.n_rejected_probing = 0;
-			state.n_already_exists = 0;
+				constexpr double TOTAL_GROWTH_THRESHOLD = 0.1;
+				const idx_t MIN_STRING_SEEN = 10000;
+
+				if (global_state.inserted_unique_strings[col_idx] > MIN_STRING_SEEN) {
+					auto avg_growth =
+					    static_cast<double>(global_state.unique_strings_in_unified_dictionary_per_column[col_idx]) /
+					    static_cast<double>(global_state.inserted_unique_strings[col_idx]);
+
+					if (avg_growth > TOTAL_GROWTH_THRESHOLD) {
+						global_state.is_high_cardinality[col_idx] = true;
+					}
+				}
+				lock.unlock();
+
+				context.client.GetUnifiedStringDictionary().UpdateFailedAttempts(state.n_rejected_probing +
+				                                                                 state.n_rejected_full);
+
+				state.n_success = 0;
+				state.n_rejected_full = 0;
+				state.n_rejected_probing = 0;
+				state.n_already_exists = 0;
+			}
 		}
 	}
 	chunk.Reference(input);

@@ -12,9 +12,10 @@ public:
 
 public:
 	PhysicalUnifiedStringDictionary(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<bool> insert_to_usd,
-	                                idx_t estimated_cardinality)
+	                                bool insert_flat_vectors, idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, TYPE, std::move(types), estimated_cardinality) {
 		this->insert_to_usd = std::move(insert_to_usd);
+		this->insert_flat_vectors = insert_flat_vectors;
 	};
 
 	bool ParallelOperator() const override {
@@ -36,6 +37,7 @@ public:
 
 private:
 	vector<bool> insert_to_usd;
+	bool insert_flat_vectors;
 };
 
 } // namespace duckdb
