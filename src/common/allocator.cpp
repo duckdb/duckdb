@@ -143,12 +143,6 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	if (!result) {
 		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
 	}
-	if (size == DUCKDB_BLOCK_ALLOC_SIZE) {
-		// Pre-fault the memory, this amortizes the overhead by doing all pages at the same time
-		for (idx_t i = 0; i < size; i += 4096) {
-			result[i] = 0;
-		}
-	}
 	return result;
 }
 
