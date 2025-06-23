@@ -50,11 +50,17 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 
 		if (input.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto str_value = reinterpret_cast<string_t *>(ConstantVector::GetData(input.data[col_idx]));
-			context.client.GetUnifiedStringDictionary().insert(*str_value);
+			auto validity = ConstantVector::Validity(input.data[col_idx]);
+			if(validity.AllValid()){
+				context.client.GetUnifiedStringDictionary().insert(*str_value);
+			}
 		} else if (input.data[col_idx].GetVectorType() == VectorType::FLAT_VECTOR && insert_flat_vectors) {
 			auto start = reinterpret_cast<string_t *>(FlatVector::GetData(input.data[col_idx]));
+			auto validity = FlatVector::Validity(input.data[col_idx]);
 			for (idx_t i = 0; i < input.size(); i++) {
-				context.client.GetUnifiedStringDictionary().insert(start[i]);
+				if(validity.RowIsValid(i)){
+					context.client.GetUnifiedStringDictionary().insert(start[i]);
+				}
 			}
 		} else if (input.data[col_idx].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			auto &dict = DictionaryVector::Child(input.data[col_idx]);
