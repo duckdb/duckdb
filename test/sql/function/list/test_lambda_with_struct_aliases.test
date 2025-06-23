@@ -1,6 +1,6 @@
-# name: test/sql/function/list/lambdas/test_lambda_with_struct_aliases.test
+# name: test/sql/function/list/test_lambda_with_struct_aliases.test
 # description: Test binding lambda functions containing a STRUCT with an alias.
-# group: [lambdas]
+# group: [list]
 
 statement ok
 PRAGMA enable_verification;
