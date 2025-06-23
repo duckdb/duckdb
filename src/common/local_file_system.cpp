@@ -1216,8 +1216,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
 		options.emplace("file_size", Value::BIGINT(file_size_bytes));
 		// last modified time
-		auto last_modified_time = FiletimeToTimeT(ffd.ftLastWriteTime);
-		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(last_modified_time)));
+		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
+		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
 
 		// callback
 		callback(info);
