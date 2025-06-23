@@ -15,7 +15,7 @@
                     "name": "types"
                 },
                 {
-                    "type": "duckdb_value *",
+                    "type": "char **",
                     "name": "names"
                 },
                 {

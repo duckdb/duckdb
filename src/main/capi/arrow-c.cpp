@@ -15,21 +15,17 @@ using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
 DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_properties,
-                                                      duckdb_logical_type *types, duckdb_value *names,
-                                                      idx_t column_count, duckdb_arrow_schema *out_schema) {
+                                                      duckdb_logical_type *types, char **names, idx_t column_count,
+                                                      duckdb_arrow_schema *out_schema) {
 
 	if (!types || !names || !out_schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
 	}
 	duckdb::vector<LogicalType> schema_types;
 	duckdb::vector<std::string> schema_names;
-	auto names_array = reinterpret_cast<duckdb::Value *>(names);
 	auto types_array = reinterpret_cast<duckdb::LogicalType *>(types);
 	for (idx_t i = 0; i < column_count; i++) {
-		if (names_array[i].type() != LogicalType::VARCHAR) {
-			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Name Value must be a string");
-		}
-		schema_names.emplace_back(names_array[i].ToString());
+		schema_names.emplace_back(names[i]);
 		schema_types.emplace_back(types_array[i]);
 	}
 	auto client_properties_wrapper = reinterpret_cast<duckdb::ClientProperties *>(client_properties);

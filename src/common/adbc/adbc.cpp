@@ -538,16 +538,20 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto wrapper = reinterpret_cast<duckdb::ArrowResultWrapper *>(stream->private_data);
 	auto count = wrapper->result->types.size();
 	auto types = new duckdb::LogicalType[count];
-	auto names = new duckdb::Value[count];
+	// Allocate array of char* using new
+	char **names = new char *[count];
 
 	for (idx_t i = 0; i < count; i++) {
 		types[i] = wrapper->result->types[i];
-		names[i] = duckdb::Value(wrapper->result->names[i]);
+		names[i] = new char[wrapper->result->names[i].size() + 1];
+		std::strcpy(names[i], wrapper->result->names[i].c_str());
 	}
-	auto res =
-	    duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&wrapper->result->client_properties),
-	                           reinterpret_cast<duckdb_logical_type *>(types), reinterpret_cast<duckdb_value *>(names),
-	                           count, reinterpret_cast<duckdb_arrow_schema *>(&out));
+	auto res = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&wrapper->result->client_properties),
+	                                  reinterpret_cast<duckdb_logical_type *>(types), names, count,
+	                                  reinterpret_cast<duckdb_arrow_schema *>(&out));
+	for (idx_t i = 0; i < count; i++) {
+		delete[] names[i]; // Delete each individual C-string
+	}
 	delete[] types;
 	delete[] names;
 	if (res) {
@@ -758,7 +762,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	}
 	auto count = prepared_wrapper->statement->data->properties.parameter_count;
 	auto types = new duckdb::LogicalType[count];
-	auto names = new duckdb::Value[count];
+	char **names = new char *[count];
 
 	for (idx_t i = 0; i < count; i++) {
 		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
@@ -768,14 +772,18 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
 		auto name = std::to_string(i);
 		types[i] = type;
-		names[i] = duckdb::Value(name);
+		names[i] = new char[name.size() + 1];
+		std::strcpy(names[i], name.c_str());
 	}
 	auto client_properties =
 	    reinterpret_cast<duckdb::Connection *>(wrapper->connection)->context->GetClientProperties();
-	auto res =
-	    duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&client_properties),
-	                           reinterpret_cast<duckdb_logical_type *>(types), reinterpret_cast<duckdb_value *>(names),
-	                           count, reinterpret_cast<duckdb_arrow_schema *>(&schema));
+
+	auto res = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&client_properties),
+	                                  reinterpret_cast<duckdb_logical_type *>(types), names, count,
+	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
+	for (idx_t i = 0; i < count; i++) {
+		delete[] names[i]; // Delete each individual C-string
+	}
 	delete[] types;
 	delete[] names;
 

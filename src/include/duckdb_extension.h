@@ -546,8 +546,7 @@ typedef struct {
 // New arrow interface functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties *client_properties, duckdb_logical_type *types,
-	                                            duckdb_value *names, idx_t column_count,
-	                                            duckdb_arrow_schema *out_schema);
+	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
 #endif
 
 // New functions for duckdb error data
