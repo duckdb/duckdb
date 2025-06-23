@@ -722,7 +722,7 @@ typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
 
-//! Holds an arrow array. Remember to release the respective ArrowArray object.
+//! The Client Properties
 typedef struct _duckdb_client_properties {
 	void *internal_ptr;
 } * duckdb_client_properties;
@@ -861,6 +861,15 @@ DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connect
                                                        duckdb_client_context *out_context);
 
 /*!
+Retrieves the client properties of the connection.
+
+* @param connection The connection.
+* @param out_context The client properties of the connection. Must be destroyed with `duckdb_destroy_client_properties`.
+*/
+DUCKDB_C_API void duckdb_connection_get_client_properties(duckdb_connection connection,
+                                                          duckdb_client_properties *out_context);
+
+/*!
 Returns the connection id of the client context.
 
 * @param context The client context.
@@ -874,6 +883,12 @@ Destroys the client context and deallocates its memory.
 * @param context The client context to destroy.
 */
 DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
+
+/*!
+Destroys the client properties and deallocates its memory.
+
+*/
+DUCKDB_C_API void duckdb_destroy_client_properties(duckdb_client_properties *properties);
 
 /*!
 Returns the version of the linked DuckDB, with a version postfix for dev versions

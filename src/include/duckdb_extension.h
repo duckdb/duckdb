@@ -564,6 +564,9 @@ typedef struct {
 	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
+	void (*duckdb_connection_get_client_properties)(duckdb_connection connection,
+	                                                duckdb_client_properties *out_context);
+	void (*duckdb_destroy_client_properties)(duckdb_client_properties *properties);
 #endif
 
 // New functions around scalar function binding
@@ -1036,8 +1039,10 @@ typedef struct {
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
+#define duckdb_connection_get_client_properties duckdb_ext_api.duckdb_connection_get_client_properties
 #define duckdb_client_context_get_connection_id duckdb_ext_api.duckdb_client_context_get_connection_id
 #define duckdb_destroy_client_context           duckdb_ext_api.duckdb_destroy_client_context
+#define duckdb_destroy_client_properties        duckdb_ext_api.duckdb_destroy_client_properties
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
 
 // Version unstable_new_scalar_function_functions

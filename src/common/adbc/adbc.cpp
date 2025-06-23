@@ -775,17 +775,18 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		names[i] = new char[name.size() + 1];
 		std::strcpy(names[i], name.c_str());
 	}
-	auto client_properties =
-	    reinterpret_cast<duckdb::Connection *>(wrapper->connection)->context->GetClientProperties();
 
-	auto res = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&client_properties),
-	                                  reinterpret_cast<duckdb_logical_type *>(types), names, count,
+	duckdb_client_properties *client_properties = nullptr;
+	duckdb_connection_get_client_properties(wrapper->connection, client_properties);
+
+	auto res = duckdb_to_arrow_schema(client_properties, reinterpret_cast<duckdb_logical_type *>(types), names, count,
 	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
 	for (idx_t i = 0; i < count; i++) {
-		delete[] names[i]; // Delete each individual C-string
+		delete[] names[i];
 	}
 	delete[] types;
 	delete[] names;
+	duckdb_destroy_client_properties(client_properties);
 
 	if (res) {
 		return ADBC_STATUS_INVALID_ARGUMENT;

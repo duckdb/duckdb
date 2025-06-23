@@ -1,6 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::CClientContextWrapper;
+using duckdb::CClientPropertiesWrapper;
 using duckdb::Connection;
 using duckdb::DatabaseWrapper;
 using duckdb::DBConfig;
@@ -151,6 +152,16 @@ void duckdb_connection_get_client_context(duckdb_connection connection, duckdb_c
 	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
+void duckdb_connection_get_client_properties(duckdb_connection connection, duckdb_client_properties *out_context) {
+	if (!connection || !out_context) {
+		return;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	auto client_properties = conn->context->GetClientProperties();
+	auto wrapper = new CClientPropertiesWrapper(client_properties);
+	*out_context = reinterpret_cast<duckdb_client_properties>(wrapper);
+}
+
 idx_t duckdb_client_context_get_connection_id(duckdb_client_context context) {
 	auto wrapper = reinterpret_cast<CClientContextWrapper *>(context);
 	return wrapper->context.GetConnectionId();
@@ -161,6 +172,14 @@ void duckdb_destroy_client_context(duckdb_client_context *context) {
 		auto wrapper = reinterpret_cast<CClientContextWrapper *>(*context);
 		delete wrapper;
 		*context = nullptr;
+	}
+}
+
+void duckdb_destroy_client_properties(duckdb_client_properties *properties) {
+	if (properties && *properties) {
+		auto wrapper = reinterpret_cast<CClientPropertiesWrapper *>(*properties);
+		delete wrapper;
+		*properties = nullptr;
 	}
 }
 
