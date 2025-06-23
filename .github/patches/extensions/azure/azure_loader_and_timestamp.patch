@@ -32,7 +32,7 @@ index ee19c8c..56e30eb 100644
  }
  
 diff --git a/src/azure_dfs_filesystem.cpp b/src/azure_dfs_filesystem.cpp
-index 5feb445..1a01950 100644
+index 5feb445..af8f03c 100644
 --- a/src/azure_dfs_filesystem.cpp
 +++ b/src/azure_dfs_filesystem.cpp
 @@ -67,8 +67,8 @@ static void Walk(const Azure::Storage::Files::DataLake::DataLakeFileSystemClient
@@ -46,8 +46,12 @@ index 5feb445..1a01950 100644
  					out_result->push_back(info);
  				}
  			}
-@@ -175,7 +175,7 @@ void AzureDfsStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
- 	if (hfh.length == 0 && hfh.last_modified == 0) {
+@@ -172,10 +172,10 @@ vector<OpenFileInfo> AzureDfsStorageFileSystem::Glob(const string &path, FileOpe
+ void AzureDfsStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
+ 	auto &hfh = handle.Cast<AzureDfsStorageFileHandle>();
+ 
+-	if (hfh.length == 0 && hfh.last_modified == 0) {
++	if (hfh.length == 0 && hfh.last_modified == timestamp_t(0)) {
  		auto res = hfh.file_client.GetProperties();
  		hfh.length = res.Value.FileSize;
 -		hfh.last_modified = ToTimeT(res.Value.LastModified);
