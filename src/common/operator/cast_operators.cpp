@@ -1574,7 +1574,7 @@ template <>
 bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	idx_t pos;
 	dtime_t micros;
-	int32_t nanos;
+	int32_t nanos = 0;
 	if (!Time::TryConvertTime(input.GetData(), input.GetSize(), pos, micros, strict, &nanos)) {
 		return false;
 	}

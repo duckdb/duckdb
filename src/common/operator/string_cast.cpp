@@ -125,6 +125,7 @@ duckdb::string_t StringAsTime(dtime_t input, Vector &vector) {
 	idx_t nano_length = 0;
 	if (picos) {
 		//	If there are ps, we need all the µs
+		TimeToStringCast::FormatMicros(time[3], micro_buffer);
 		time_length = 15;
 		nano_length = 6;
 		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));
@@ -134,7 +135,7 @@ duckdb::string_t StringAsTime(dtime_t input, Vector &vector) {
 	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetDataWriteable();
 
-	TimeToStringCast::Format(data, length, time, micro_buffer);
+	TimeToStringCast::Format(data, time_length, time, micro_buffer);
 	data += time_length;
 	memcpy(data, nano_buffer, nano_length);
 	D_ASSERT(data + nano_length <= result.GetDataWriteable() + length);
