@@ -390,6 +390,8 @@ enum class TemporaryBufferSize : uint64_t;
 
 enum class TemporaryCompressionLevel : int;
 
+enum class ThreadPinMode : uint8_t;
+
 enum class TimestampCastResult : uint8_t;
 
 enum class TransactionModifierType : uint8_t;
@@ -957,6 +959,9 @@ const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
 
 template<>
 const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value);
+
+template<>
+const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
@@ -1540,6 +1545,9 @@ TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value)
 
 template<>
 TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value);
+
+template<>
+ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);

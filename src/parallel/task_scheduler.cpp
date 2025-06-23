@@ -21,6 +21,9 @@
 #elif defined(__GNUC__)
 #include <sched.h>
 #include <unistd.h>
+#if defined(__GLIBC__)
+#include <pthread.h>
+#endif
 #endif
 
 namespace duckdb {
@@ -444,6 +447,20 @@ void TaskScheduler::RelaunchThreads() {
 	RelaunchThreadsInternal(n);
 }
 
+#ifndef DUCKDB_NO_THREADS
+static void SetThreadAffinity(thread &thread, const int &cpu_id) {
+#if defined(__GLIBC__)
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(cpu_id, &cpuset);
+
+	// note that we don't care about the return value here
+	// if we did not manage to set affinity, the thread just does not have affinity, which is OK
+	pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
+#endif
+}
+#endif
+
 void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
@@ -469,12 +486,21 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 	if (threads.size() < new_thread_count) {
 		// we are increasing the number of threads: launch them and run tasks on them
 		idx_t create_new_threads = new_thread_count - threads.size();
+
+		// Whether to pin threads to cores
+		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
+		const auto pin_threads = db.config.options.pin_threads == ThreadPinMode::ON ||
+		                         (db.config.options.pin_threads == ThreadPinMode::AUTO &&
+		                          std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
 			unique_ptr<thread> worker_thread;
 			try {
 				worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
+				if (pin_threads) {
+					SetThreadAffinity(*worker_thread, NumericCast<int>(threads.size()));
+				}
 			} catch (std::exception &ex) {
 				// thread constructor failed - this can happen when the system has too many threads allocated
 				// in this case we cannot allocate more threads - stop launching them

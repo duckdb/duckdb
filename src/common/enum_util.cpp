@@ -59,6 +59,7 @@
 #include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
@@ -4370,6 +4371,25 @@ const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLev
 template<>
 TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value) {
 	return static_cast<TemporaryCompressionLevel>(StringUtil::StringToEnum(GetTemporaryCompressionLevelValues(), 7, "TemporaryCompressionLevel", value));
+}
+
+const StringUtil::EnumStringLiteral *GetThreadPinModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ThreadPinMode::OFF), "OFF" },
+		{ static_cast<uint32_t>(ThreadPinMode::ON), "ON" },
+		{ static_cast<uint32_t>(ThreadPinMode::AUTO), "AUTO" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value) {
+	return StringUtil::EnumToString(GetThreadPinModeValues(), 3, "ThreadPinMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value) {
+	return static_cast<ThreadPinMode>(StringUtil::StringToEnum(GetThreadPinModeValues(), 3, "ThreadPinMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
