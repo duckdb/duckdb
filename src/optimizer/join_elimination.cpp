@@ -22,7 +22,7 @@ namespace duckdb {
 void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<LogicalOperator> parent, idx_t idx) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		if (!parent) {
-			return; 
+			return;
 		}
 		D_ASSERT(!pipe_info.join_parent);
 		pipe_info.join_parent = parent;
@@ -213,7 +213,6 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 
 	auto &join = join_op->Cast<LogicalComparisonJoin>();
 	bool is_output_unique = false;
-	D_ASSERT(join.join_type != JoinType::RIGHT);
 	idx_t inner_idx = 1;
 	idx_t outer_idx = 0;
 	switch (join.join_type) {
@@ -221,6 +220,10 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 		break;
 	case JoinType::SINGLE: {
 		is_output_unique = true;
+		break;
+	case JoinType::RIGHT:
+		inner_idx = 0;
+		outer_idx = 1;
 		break;
 	}
 	default:

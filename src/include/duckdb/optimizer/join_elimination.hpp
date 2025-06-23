@@ -21,7 +21,6 @@
 
 namespace duckdb {
 class JoinElimination;
-class JoinRelation;
 class PipelineInfo;
 
 struct DistinctGroupRef {
