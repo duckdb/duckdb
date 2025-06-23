@@ -79,7 +79,7 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
+	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
 	vector<LogicalType> auto_type_candidates = {
 	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
 	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,

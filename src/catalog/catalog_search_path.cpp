@@ -149,10 +149,16 @@ string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
 }
 
 void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type) {
-	if (set_type != CatalogSetPathType::SET_SCHEMAS && new_paths.size() != 1) {
+	if (set_type == CatalogSetPathType::SET_SCHEMA && new_paths.size() != 1) {
 		throw CatalogException("%s can set only 1 schema. This has %d", GetSetName(set_type), new_paths.size());
 	}
 	for (auto &path : new_paths) {
+		if (set_type == CatalogSetPathType::SET_DIRECTLY) {
+			if (path.catalog.empty() || path.schema.empty()) {
+				throw InternalException("SET_WITHOUT_VERIFICATION requires a fully qualified set path");
+			}
+			continue;
+		}
 		auto schema_entry = Catalog::GetSchema(context, path.catalog, path.schema, OnEntryNotFound::RETURN_NULL);
 		if (schema_entry) {
 			// we are setting a schema - update the catalog and schema

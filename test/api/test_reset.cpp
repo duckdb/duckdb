@@ -62,6 +62,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
+	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
@@ -151,12 +152,13 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",         // cant change this while db is running
-	    "disabled_filesystems",       // cant change this while db is running
-	    "enable_external_access",     // cant change this while db is running
-	    "allow_unsigned_extensions",  // cant change this while db is running
-	    "allow_community_extensions", // cant change this while db is running
-	    "allow_unredacted_secrets",   // cant change this while db is running
+	    "lock_configuration",            // cant change this while db is running
+	    "disabled_filesystems",          // cant change this while db is running
+	    "enable_external_access",        // cant change this while db is running
+	    "allow_unsigned_extensions",     // cant change this while db is running
+	    "allow_community_extensions",    // cant change this while db is running
+	    "allow_unredacted_secrets",      // cant change this while db is running
+	    "disable_database_invalidation", // cant change this while db is running
 	    "enable_object_cache",
 	    "streaming_buffer_size",
 	    "log_query_path",

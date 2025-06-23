@@ -192,3 +192,10 @@ NULL	NULL
 2	42
 3	42
 
+query II
+SELECT i, (SELECT CASE WHEN sum(i) > 1 THEN 0 ELSE 1 END FROM integers WHERE i=i1.i) FROM integers i1;
+----
+1	1
+2	0
+3	0
+NULL	1

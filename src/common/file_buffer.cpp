@@ -105,9 +105,9 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 	handle.Read(internal_buffer, internal_size, location);
 }
 
-void FileBuffer::Write(FileHandle &handle, uint64_t location) {
+void FileBuffer::Write(optional_ptr<ClientContext> context, FileHandle &handle, const uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
-	handle.Write(internal_buffer, internal_size, location);
+	handle.Write(context, internal_buffer, internal_size, location);
 }
 
 void FileBuffer::Clear() {

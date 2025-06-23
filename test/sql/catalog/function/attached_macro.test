@@ -1,8 +1,6 @@
 # name: test/sql/catalog/function/attached_macro.test
 # group: [function]
 
-require noforcestorage
-
 statement ok
 ATTACH ':memory:' AS checksum_macro;
 

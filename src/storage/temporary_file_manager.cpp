@@ -228,9 +228,9 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
-		buffer.Write(*handle, GetPositionInFile(block_index));
+		buffer.Write(nullptr, *handle, GetPositionInFile(block_index));
 	} else {
-		handle->Write(compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
+		handle->Write(nullptr, compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
 		              GetPositionInFile(block_index));
 	}
 }

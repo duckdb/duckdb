@@ -94,7 +94,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
+			string log_message;
 			logger.PrintErrorHeader(csv_error);
+
 			return false;
 		}
 	} else {
@@ -221,26 +223,32 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	} else {
 		bool hash_compare_error = false;
 		if (query_has_label) {
-			// the query has a label: check if the hash has already been computed
-			auto entry = runner.hash_label_map.find(query_label);
-			if (entry == runner.hash_label_map.end()) {
-				// not computed yet: add it tot he map
-				runner.hash_label_map[query_label] = hash_value;
-				runner.result_label_map[query_label] = std::move(owned_result);
-			} else {
-				hash_compare_error = entry->second != hash_value;
-			}
+			runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+				// the query has a label: check if the hash has already been computed
+				auto entry = map.find(query_label);
+				if (entry == map.end()) {
+					// not computed yet: add it tot he map
+					map.emplace(query_label, CachedLabelData(hash_value, std::move(owned_result)));
+				} else {
+					hash_compare_error = entry->second.hash != hash_value;
+				}
+			});
 		}
+		string expected_hash;
 		if (result_is_hash) {
+			expected_hash = values[0];
 			D_ASSERT(values.size() == 1);
-			hash_compare_error = values[0] != hash_value;
+			hash_compare_error = expected_hash != hash_value;
 		}
 		if (hash_compare_error) {
 			QueryResult *expected_result = nullptr;
-			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
-				expected_result = runner.result_label_map[query_label].get();
-			}
-			logger.WrongResultHash(expected_result, result);
+			runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+				auto it = map.find(query_label);
+				if (it != map.end()) {
+					expected_result = it->second.result.get();
+				}
+				logger.WrongResultHash(expected_result, result, expected_hash, hash_value);
+			});
 			return false;
 		}
 		REQUIRE(!hash_compare_error);
@@ -252,7 +260,6 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
                                             duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
-
 	SQLLogicTestLogger logger(context, statement);
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
@@ -502,15 +509,16 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
+		std::ostringstream oss;
 		logger.PrintErrorHeader("Wrong result in query!");
 		logger.PrintLineSep();
 		logger.PrintSQL();
 		logger.PrintLineSep();
-
-		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-		          << termcolor::reset;
-		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
+		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
+		    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
+		    << termcolor::reset;
+		oss << lvalue_str << " <> " << rvalue_str << std::endl;
+		logger.LogFailure(oss.str());
 		logger.PrintLineSep();
 		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
 		return false;
@@ -521,15 +529,16 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
-
 	RE2::Options options;
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
+		std::ostringstream oss;
 		logger.PrintErrorHeader("Test error!");
 		logger.PrintLineSep();
-		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
-		          << std::endl;
+		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
+		    << std::endl;
+		logger.LogFailure(oss.str());
 		logger.PrintLineSep();
 		return false;
 	}

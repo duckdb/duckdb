@@ -650,12 +650,13 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
 
+	auto &config = DBConfig::GetConfig(context);
+	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
+
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
-	auto databases = db_manager.GetDatabases(context);
-	auto &config = DBConfig::GetConfig(context);
+	auto databases = db_manager.GetDatabases(context, max_schema_count);
 
-	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
 	for (auto database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
@@ -669,7 +670,8 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			unseen_schemas.insert(current_schema.get());
 		}
 	}
-	// check if the entry exists in any extension
+
+	// Check if the entry exists in any extension.
 	string extension_name;
 	auto type = lookup_info.GetCatalogType();
 	auto &entry_name = lookup_info.GetEntryName();
@@ -732,6 +734,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entries = SimilarEntriesInSchemas(context, lookup_info, unseen_schemas);
 	set<string> suggestions;
+
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
@@ -1199,6 +1202,9 @@ bool Catalog::IsTemporaryCatalog() const {
 
 void Catalog::Initialize(optional_ptr<ClientContext> context, bool load_builtin) {
 	Initialize(load_builtin);
+}
+
+void Catalog::FinalizeLoad(optional_ptr<ClientContext> context) {
 }
 
 void Catalog::OnDetach(ClientContext &context) {

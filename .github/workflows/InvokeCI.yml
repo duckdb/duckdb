@@ -130,6 +130,7 @@ jobs:
       duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
+      override-git-describe: ${{ inputs.override_git_describe }}
 
   notify-specific-branch-on-external-repos:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
@@ -142,3 +143,4 @@ jobs:
       duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
+      override-git-describe: ${{ inputs.override_git_describe }}

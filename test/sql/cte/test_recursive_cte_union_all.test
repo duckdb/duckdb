@@ -71,7 +71,12 @@ with recursive t as (select 1 as x union all select sum(x+1) AS x from t where x
 2
 3
 
+# some of the following recursive queries are terminated by the LIMIT clause
+# this requires CTE inlining, which enable_verification disables
 require no_alternative_verify
+
+statement ok
+PRAGMA disable_verification
 
 # infinite aggregate function: will result in timeout if pipelining is not implemented
 query I
@@ -88,6 +93,9 @@ NULL
 NULL
 NULL
 NULL
+
+statement ok
+PRAGMA enable_verification
 
 # recursive CTE with table-producing function
 query I

@@ -17,7 +17,7 @@ import re
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
-MAIN_BRANCH_VERSIONING = False
+MAIN_BRANCH_VERSIONING = True
 if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
     MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
@@ -34,6 +34,9 @@ def bump_version(base_version: str, distance: int, dirty: bool = False):
         raise ValueError(f"Incorrect version format: {base_version} (expected X.Y.Z)")
 
     major, minor, patch = map(int, base_version_match.groups())
+
+    # Make sure distance is set correctly
+    distance = int(distance or 0)
 
     # If we're exactly on a tag (distance = 0, dirty=False)
     if distance == 0 and not dirty:

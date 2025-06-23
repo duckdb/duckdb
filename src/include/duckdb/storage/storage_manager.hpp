@@ -58,8 +58,7 @@ struct CheckpointOptions {
 	CheckpointType type;
 };
 
-//! StorageManager is responsible for managing the physical storage of the
-//! database on disk
+//! StorageManager is responsible for managing the physical storage of a persistent database.
 class StorageManager {
 public:
 	StorageManager(AttachedDatabase &db, string path, bool read_only);
@@ -72,7 +71,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(StorageOptions options);
+	void Initialize(optional_ptr<ClientContext> context, StorageOptions &options);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -119,10 +118,10 @@ public:
 	}
 
 protected:
-	virtual void LoadDatabase(StorageOptions options) = 0;
+	virtual void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &options) = 0;
 
 protected:
-	//! The database this storage manager belongs to
+	//! The attached database managed by this storage manager.
 	AttachedDatabase &db;
 	//! The path of the database
 	string path;
@@ -149,15 +148,15 @@ public:
 	}
 };
 
-//! Stores database in a single file.
+//! Stores the database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
 	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
 
-	//! The BlockManager to read/store meta information and data in blocks
+	//! The BlockManager to read from and write to blocks (meta data and data).
 	unique_ptr<BlockManager> block_manager;
-	//! TableIoManager
+	//! The table I/O manager.
 	unique_ptr<TableIOManager> table_io_manager;
 
 public:
@@ -171,6 +170,6 @@ public:
 	BlockManager &GetBlockManager() override;
 
 protected:
-	void LoadDatabase(StorageOptions options) override;
+	void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &options) override;
 };
 } // namespace duckdb

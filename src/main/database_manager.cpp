@@ -29,6 +29,13 @@ void DatabaseManager::InitializeSystemCatalog() {
 	system->Initialize();
 }
 
+void DatabaseManager::FinalizeStartup() {
+	auto databases = GetDatabases();
+	for (auto &db : databases) {
+		db.get().FinalizeLoad(nullptr);
+	}
+}
+
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
@@ -236,9 +243,19 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 }
 // LCOV_EXCL_STOP
 
-vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
+                                                                  const optional_idx max_db_count) {
 	vector<reference<AttachedDatabase>> result;
-	databases->Scan(context, [&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	idx_t count = 2;
+	databases->ScanWithReturn(context, [&](CatalogEntry &entry) {
+		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
+			return false;
+		}
+		result.push_back(entry.Cast<AttachedDatabase>());
+		count++;
+		return true;
+	});
+
 	result.push_back(*system);
 	result.push_back(*context.client_data->temporary_objects);
 	return result;

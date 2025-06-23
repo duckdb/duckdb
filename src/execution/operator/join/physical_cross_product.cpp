@@ -6,9 +6,10 @@
 
 namespace duckdb {
 
-PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, PhysicalOperator &left, PhysicalOperator &right,
-                                           idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, std::move(types), estimated_cardinality) {
+PhysicalCrossProduct::PhysicalCrossProduct(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                           PhysicalOperator &left, PhysicalOperator &right, idx_t estimated_cardinality)
+    : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::CROSS_PRODUCT, std::move(types),
+                              estimated_cardinality) {
 	children.push_back(left);
 	children.push_back(right);
 }
