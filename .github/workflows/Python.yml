@@ -71,6 +71,7 @@ jobs:
 # This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
     name: Python 3.10 Linux
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-22.04
 
     env:
@@ -135,6 +136,7 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-22.04
     needs: linux-python3-10
     strategy:
@@ -236,7 +238,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
   osx-python3:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true'
+      if: github.event.pull_request.draft == false && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true')
       name: Python 3 OSX
       needs: linux-python3-10
       runs-on: macos-latest
@@ -300,6 +302,7 @@ jobs:
 
   win-python3:
       name: Python 3 Windows
+      if: github.event.pull_request.draft == false
       runs-on: windows-latest
       needs: linux-python3-10
       strategy:
@@ -384,7 +387,7 @@ jobs:
           ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
   linux-release-cleanup:
-     if: github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main'
+     if: github.event.pull_request.draft == false && (github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main')
      name: PyPi Release Cleanup
      needs: twine-upload
      runs-on: ubuntu-22.04
@@ -420,7 +423,7 @@ jobs:
     # Note that want to run this by default ONLY if no override_git_describe is provided
     # This means we are not staging a release, or we explicitly set `twine_upload`
     # Why? If present, it means we are staging releases, and we want to do the upload manually
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
+    if: github.event.pull_request.draft == false && ((( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' )))
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
     with:

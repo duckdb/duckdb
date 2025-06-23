@@ -39,6 +39,7 @@ jobs:
 
   test-apple-platforms:
     name: Test Apple Platforms
+    if: github.event.pull_request.draft == false
     strategy:
       matrix:
         # destinations need to match selected version of Xcode

@@ -38,6 +38,7 @@ concurrency:
 jobs:
   format_check:
     name: Julia Format Check
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +59,7 @@ jobs:
 
   main_julia:
     name: Julia ${{ matrix.version }}
+    if: github.event.pull_request.draft == false
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
