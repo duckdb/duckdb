@@ -1,4 +1,4 @@
-# name: test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test
+# name: test/sql/storage/encryption/temp_files/encrypted_tmp_file_pragmas.test
 # group: [temp_files]
 
 require block_size 262144
@@ -12,13 +12,16 @@ ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
 statement ok
 USE enc;
 
+# we do not encrypt temporary files at all
+statement ok
+PRAGMA debug_disable_temp_file_encryption;
+
 statement ok
 SET memory_limit = '8MB';
 
 statement ok
 SET enable_external_access=false
 
-# cannot modify the temp directory when enable_external_access is set
 statement error
 SET temp_directory='__TEST_DIR__/new_temp_dir'
 ----
@@ -29,6 +32,19 @@ RESET temp_directory
 ----
 disabled by configuration
 
-# 10M row table with 8B rows -> 80MB uncompressed - this requires the temp directory
+# temp files are not encrypted
 statement ok
 CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000)
+
+# note; you should be very careful using this
+# If some tmp files are encrypted and others not
+# this will lead to corrupt files
+statement ok
+PRAGMA debug_enable_temp_file_encryption;
+
+# temp files are encrypted again
+statement ok
+CREATE TEMPORARY TABLE tbl2 AS FROM range(10_000_000)
+
+statement ok
+SELECT * FROM tbl, tbl2 LIMIT 10;

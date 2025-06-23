@@ -483,7 +483,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		config.options.enable_wal_encryption = true;
 		config.options.enable_temp_file_encryption = true;
 		config.options.full_encryption = true;
-
 	}
 
 	options.version_number = main_header.version_number;
@@ -843,6 +842,7 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
+	source_buffer.Restructure(*this);
 	return make_uniq<Block>(source_buffer, block_id);
 }
 

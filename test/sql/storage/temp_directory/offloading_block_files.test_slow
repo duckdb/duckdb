@@ -1,4 +1,4 @@
-# name: test/sql/storage/temp_directory/encrypted_offloading_block_files.test_slow
+# name: test/sql/storage/temp_directory/offloading_block_files.test_slow
 # group: [temp_directory]
 
 # For smaller block sizes, the total meta data size increases.

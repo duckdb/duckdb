@@ -1,18 +1,13 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
-# group: [temp_directory]
+# group: [temp_files]
 
-# For smaller block sizes, the total meta data size increases.
-# On the GitHub runners, this test OOMs on the first query instead of the second.
-# The memory usage and database size is around 7.4 GiB after table creation.
-# In comparison, it is 3.2 GiB for the default block size.
-# FIXME: Investigate why the database size is twice the size of the default block size.
 require block_size 262144
 
 load __TEST_DIR__/offloading_block_files.db
 
 # ATTACH DB
 statement ok
-ATTACH 'encrypted.db' as enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted.db' as enc (ENCRYPTION_KEY 'asdf');
 
 statement ok
 USE enc;
@@ -36,8 +31,3 @@ SET memory_limit = '1GB';
 statement error
 SELECT * FROM tbl ORDER BY random_value;
 ----
-
-
-# Actual result:
-# ================================================================================
-# Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
