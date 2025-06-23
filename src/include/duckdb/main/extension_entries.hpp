@@ -435,6 +435,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"make_date", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_time", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"make_timestamp_ms", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp_ns", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1048,8 +1049,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parquet"},
-                                                              {"json", "json"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
+static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
+    {"parquet", "parquet"}, {"json", "json"}, {"avro", "avro"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1092,8 +1093,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
-    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"},  {".ndjson", "json"},
-    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}, {".xlsx", "excel"},
+    {".parquet", "parquet"}, {".json", "json"},   {".jsonl", "json"}, {".ndjson", "json"}, {".shp", "spatial"},
+    {".gpkg", "spatial"},    {".fgb", "spatial"}, {".xlsx", "excel"}, {".avro", "avro"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

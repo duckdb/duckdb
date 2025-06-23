@@ -3,8 +3,6 @@
 
 require parquet
 
-require noforcestorage
-
 require httpfs
 
 statement ok

@@ -206,8 +206,6 @@ jobs:
 
     - name: Test
       shell: bash
-      env:
-        SUMMARIZE_FAILURES: 1
       run: |
           build/release/test/unittest "*"
 
@@ -278,8 +276,6 @@ jobs:
 
       - name: Test
         shell: bash
-        env:
-         SUMMARIZE_FAILURES: 1
         run: build/release/test/unittest
 
   linux-tarball:

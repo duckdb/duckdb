@@ -41,6 +41,11 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
 		auto entry = compressed_fs.find(compression);
 		if (entry == compressed_fs.end()) {
+			if (compression == FileCompressionType::ZSTD) {
+				throw NotImplementedException(
+				    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
+				    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+			}
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}

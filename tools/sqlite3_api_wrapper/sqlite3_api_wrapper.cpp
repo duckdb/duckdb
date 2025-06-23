@@ -86,17 +86,15 @@ void sqlite3_randomness(int N, void *pBuf) {
 }
 
 int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
-                 sqlite3 **ppDb,       /* OUT: SQLite db handle */
-                 const char *password  /* encryption key for full encryption */
+                 sqlite3 **ppDb        /* OUT: SQLite db handle */
 ) {
-	return sqlite3_open_v2(filename, ppDb, 0, NULL, password);
+	return sqlite3_open_v2(filename, ppDb, 0, NULL);
 }
 
 int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
                     sqlite3 **ppDb,       /* OUT: SQLite db handle */
                     int flags,            /* Flags */
-                    const char *zVfs,     /* Name of VFS module to use */
-                    const char *password  /* Encryption key*/
+                    const char *zVfs      /* Name of VFS module to use */
 ) {
 	if (filename && strcmp(filename, ":memory:") == 0) {
 		filename = NULL;
@@ -123,10 +121,6 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		}
 		if (flags & DUCKDB_LATEST_STORAGE_VERSION) {
 			config.options.serialization_compatibility = SerializationCompatibility::FromString("latest");
-		}
-		if (flags & DUCKDB_ENCRYPTION_KEY) {
-			config.options.contains_user_key = true;
-			config.options.user_key = make_shared_ptr<string>(password);
 		}
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,
@@ -708,7 +702,7 @@ const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 		return nullptr;
 	}
 	if (!stmt->prepared) {
-		throw InternalException("Called sqlite3_bind_parameter_name on a eagerly executed prepared query");
+		return nullptr;
 	}
 	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return nullptr;

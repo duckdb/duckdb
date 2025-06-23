@@ -34,6 +34,7 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/original/std/memory.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>

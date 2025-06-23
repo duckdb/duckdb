@@ -185,6 +185,23 @@ bool AllowUnredactedSecretsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig
 }
 
 //===----------------------------------------------------------------------===//
+// Disable Database Invalidation
+//===----------------------------------------------------------------------===//
+bool DisableDatabaseInvalidationSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db && input.GetValue<bool>()) {
+		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
+	}
+	return true;
+}
+
+bool DisableDatabaseInvalidationSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
+	}
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
 bool AllowUnsignedExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -473,34 +490,6 @@ void DefaultBlockSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config
 Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::UBIGINT(config.options.default_block_alloc_size);
-}
-
-//===----------------------------------------------------------------------===//
-// Default User Key
-//===----------------------------------------------------------------------===//
-void DefaultUserKeySetting::SetLocal(ClientContext &context, const Value &input) {
-	auto const &type = input.type();
-	if (type.id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("\"%s\" is not a valid key. A key must be of type VARCHAR", input.ToString());
-	} else if (input.GetValue<string>().empty()) {
-		throw BinderException("Not a valid key. A key cannot be empty");
-	}
-	auto &config = DBConfig::GetConfig(context);
-	config.options.user_key = make_shared_ptr<string>(StringValue::Get(input.DefaultCastAs(LogicalType::BLOB)));
-	config.options.contains_user_key = true;
-}
-
-void DefaultUserKeySetting::ResetLocal(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	// zero out the memory
-	std::fill(config.options.user_key->begin(), config.options.user_key->end(), '\0');
-	config.options.user_key = nullptr;
-	config.options.contains_user_key = false;
-}
-
-Value DefaultUserKeySetting::GetSetting(const ClientContext &context) {
-	// We should not return anything if one tries to get the password
-	return Value("NULL");
 }
 
 //===----------------------------------------------------------------------===//

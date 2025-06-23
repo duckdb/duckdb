@@ -11,7 +11,7 @@ using namespace std;
 
 static string file_to_string(string filename) {
 	std::ifstream stream(filename, ios_base::binary);
-	std::stringstream buffer;
+	duckdb::stringstream buffer;
 	buffer << stream.rdbuf();
 	return buffer.str();
 }
