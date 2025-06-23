@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/original/std/sstream.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -14,7 +15,6 @@
 #include <cctype>
 #include <iomanip>
 #include <memory>
-#include <sstream>
 #include <stdarg.h>
 #include <string.h>
 #include <stack>
@@ -27,7 +27,7 @@ namespace duckdb {
 
 string StringUtil::GenerateRandomName(idx_t length) {
 	RandomEngine engine;
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	for (idx_t i = 0; i < length; i++) {
 		ss << "0123456789abcdef"[engine.NextRandomInteger(0, 15)];
 	}
@@ -105,7 +105,7 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 namespace string_util_internal {
 
 inline void SkipSpaces(const string &str, idx_t &index) {
-	while (index < str.size() && std::isspace(str[index])) {
+	while (index < str.size() && StringUtil::CharacterIsSpace(str[index])) {
 		index++;
 	}
 }
@@ -136,7 +136,9 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 		ConsumeLetter(str, index, quote);
 	} else {
 		TakeWhile(
-		    str, index, [delimiter, quote](char c) { return c != delimiter && c != quote && !std::isspace(c); }, entry);
+		    str, index,
+		    [delimiter, quote](char c) { return c != delimiter && c != quote && !StringUtil::CharacterIsSpace(c); },
+		    entry);
 	}
 
 	return entry;
@@ -342,7 +344,7 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
+	duckdb::stringstream ss(str);
 	vector<string> lines;
 	string temp;
 	while (getline(ss, temp, delimiter)) {

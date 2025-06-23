@@ -64,6 +64,7 @@ public:
 
 	//! Initializes the catalog and storage of the attached database.
 	void Initialize(optional_ptr<ClientContext> context = nullptr, StorageOptions options = StorageOptions());
+	void FinalizeLoad(optional_ptr<ClientContext> context);
 	void Close();
 
 	Catalog &ParentCatalog() override;

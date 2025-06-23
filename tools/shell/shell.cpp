@@ -5032,7 +5032,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-version") == 0) {
-			printf("%s %s\n", sqlite3_libversion(), sqlite3_sourceid());
+			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
+			       duckdb::DuckDB::SourceID());
 			free(azCmd);
 			return 0;
 		} else if (strcmp(z, "-interactive") == 0) {
@@ -5048,11 +5049,14 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			if (i == argc - 1) {
 				break;
 			}
+			auto old_bail = bail_on_error;
+			bail_on_error = true;
 			z = cmdline_option_value(argc, argv, ++i);
 			if (!data.ProcessFile(string(z))) {
 				free(azCmd);
 				return 1;
 			}
+			bail_on_error = old_bail;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;

@@ -11,7 +11,7 @@ namespace duckdb {
 StringColumnReader::StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
     : ColumnReader(reader, schema) {
 	fixed_width_string_length = 0;
-	if (schema.type_length > 0) {
+	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
 		fixed_width_string_length = schema.type_length;
 	}
 }

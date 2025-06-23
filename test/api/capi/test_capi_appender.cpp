@@ -30,10 +30,17 @@ public:
 
 } // namespace
 
-void TestAppenderError(duckdb_appender &appender, const string &expected) {
-	auto error = duckdb_appender_error(appender);
-	REQUIRE(error != nullptr);
-	REQUIRE(duckdb::StringUtil::Contains(error, expected));
+void TestAppenderError(duckdb_appender &appender, const duckdb_error_type type, const string &expected) {
+	auto error_data = duckdb_appender_error_data(appender);
+	REQUIRE(error_data != nullptr);
+	REQUIRE(duckdb_error_data_has_error(error_data));
+
+	auto error_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(error_type == type);
+	string error_msg = duckdb_error_data_message(error_data);
+	REQUIRE(duckdb::StringUtil::Contains(error_msg, expected));
+
+	duckdb_destroy_error_data(&error_data);
 }
 
 void AssertDecimalValueMatches(duckdb::unique_ptr<CAPIResult> &result, duckdb_decimal expected) {
@@ -206,11 +213,11 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// Creating the table with an unknown table fails, but creates an appender object.
 	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "unknown_table", &appender) == DuckDBError);
 	REQUIRE(appender != nullptr);
-	TestAppenderError(appender, "could not be found");
+	TestAppenderError(appender, DUCKDB_ERROR_CATALOG, "could not be found");
 
 	// Flushing, closing, or destroying the appender also fails due to its invalid table.
 	REQUIRE(duckdb_appender_close(appender) == DuckDBError);
-	TestAppenderError(appender, "could not be found");
+	TestAppenderError(appender, DUCKDB_ERROR_INVALID, "not a valid appender");
 
 	// Any data is still destroyed, so there are no leaks, even if duckdb_appender_destroy returns DuckDBError.
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBError);
@@ -231,7 +238,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	// Exceed the column count.
 	REQUIRE(duckdb_append_int32(appender, 42) == DuckDBError);
-	TestAppenderError(appender, "Too many appends for chunk");
+	TestAppenderError(appender, DUCKDB_ERROR_INVALID_INPUT, "Too many appends for chunk");
 
 	// Finish and flush the row.
 	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
@@ -245,7 +252,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// Missing column.
 	REQUIRE(duckdb_appender_end_row(appender) == DuckDBError);
 	REQUIRE(duckdb_appender_error(appender) != nullptr);
-	TestAppenderError(appender, "Call to EndRow before all columns have been appended to");
+	TestAppenderError(appender, DUCKDB_ERROR_INVALID_INPUT, "Call to EndRow before all columns have been appended to");
 
 	// Append the missing column.
 	REQUIRE(duckdb_append_varchar(appender, "Hello, World") == DuckDBSuccess);
@@ -1071,7 +1078,7 @@ TEST_CASE("Test appending with an active column list in the C API") {
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
 	REQUIRE(duckdb_appender_add_column(appender, "hello") == DuckDBError);
-	TestAppenderError(appender, "the column must exist in the table");
+	TestAppenderError(appender, DUCKDB_ERROR_INVALID_INPUT, "the column must exist in the table");
 	REQUIRE(duckdb_appender_add_column(appender, "j") == DuckDBSuccess);
 
 	duckdb_logical_type types[1];

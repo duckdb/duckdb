@@ -8,6 +8,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
@@ -29,9 +30,10 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 	ht.data_collection->InitializeChunkState(chunk_state, ht.equality_predicate_columns);
 }
 
-JoinHashTable::JoinHashTable(ClientContext &context_p, const vector<JoinCondition> &conditions_p,
-                             vector<LogicalType> btypes, JoinType type_p, const vector<idx_t> &output_columns_p)
-    : context(context_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
+JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
+                             const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
+                             const vector<idx_t> &output_columns_p)
+    : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
       radix_bits(INITIAL_RADIX_BITS) {
@@ -258,7 +260,6 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
-
 		hashes_v.ToUnifiedFormat(count, hashes_unified_v);
 		uses_unified = true;
 
@@ -271,8 +272,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			hashes_dense[i] = hashes_unified[uvf_index];
 		}
 	} else {
-		hashes_v.Flatten(count);
-		state.hashes_dense_v.Reference(hashes_v);
+		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
 	}
 
 	// the number of keys that match for all iterations of the following loop
@@ -282,7 +282,6 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	idx_t elements_to_probe_count = count;
 
 	do {
-
 		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, hashes_v, pointers_result_v,
 		                                                                row_sel, elements_to_probe_count, has_row_sel);
 
@@ -756,6 +755,10 @@ void JoinHashTable::AllocatePointerTable() {
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(ht_entry_t));
 
 	bitmask = capacity - 1;
+
+	DUCKDB_LOG(context, PhysicalOperatorLogType, op, "JoinHashTable", "Build",
+	           {{"rows", to_string(data_collection->Count())},
+	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {

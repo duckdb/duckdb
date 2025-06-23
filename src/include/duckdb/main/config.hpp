@@ -178,6 +178,8 @@ struct DBConfigOptions {
 	string collation = string();
 	//! The order type used when none is specified (default: ASC)
 	OrderType default_order_type = OrderType::ASCENDING;
+	//! Disables invalidating the database instance when encountering a fatal error.
+	bool disable_database_invalidation = false;
 	//! NULL ordering used when none is specified (default: NULLS LAST)
 	DefaultOrderByNullType default_null_order = DefaultOrderByNullType::NULLS_LAST;
 	//! enable COPY and related commands
@@ -296,6 +298,8 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
+	//! Output version of arrow depending on the format version
+	ArrowFormatVersion arrow_output_version = V1_0;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;

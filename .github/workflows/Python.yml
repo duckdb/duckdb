@@ -15,14 +15,19 @@ on:
   workflow_dispatch:
     inputs:
       override_git_describe:
+        description: 'Version tag to override git describe'
         type: string
       git_ref:
+        description: 'Git ref'
         type: string
       skip_tests:
+        description: 'Pass "true" to skip tests'
         type: string
       run_all:
+        description: 'Pass "true" to run all jobs'
         type: string
       override_twine_upload:
+        description: 'Pass "true" to trigger TwineUpload.yml when not on tag or in "main"'
         type: string
   push:
     branches-ignore:
@@ -38,6 +43,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -50,7 +56,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
-
+      - '.github/config/out_of_tree_extensions.cmake'
 
 concurrency:
   group: python-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -294,7 +300,7 @@ jobs:
 
   win-python3:
       name: Python 3 Windows
-      runs-on: windows-2019
+      runs-on: windows-latest
       needs: linux-python3-10
       strategy:
        matrix:
@@ -399,7 +405,7 @@ jobs:
 
      - name: Install Packages
        shell: bash
-       run: python3 -m pip install pyotp requests
+       run: python3 -m pip install pyotp requests urllib3
 
      - name: Cleanup Releases
        shell: bash

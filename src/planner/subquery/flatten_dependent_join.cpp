@@ -110,11 +110,27 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		// first we check which logical operators have correlated expressions in the first place
 		flatten.DetectCorrelatedExpressions(*delim_join->children[1], op.is_lateral_join, lateral_depth);
 
+		if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &cte = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
+			// check if the left side of the CTE has correlated expressions
+			auto entry = flatten.has_correlated_expressions.find(*cte.children[0]);
+			if (entry != flatten.has_correlated_expressions.end()) {
+				if (!entry->second) {
+					// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
+					auto cte = std::move(delim_join->children[1]);
+					delim_join->children[1] = std::move(cte->children[1]);
+					cte->children[1] = Decorrelate(std::move(delim_join), parent_propagate_null_values, lateral_depth);
+					return cte;
+				}
+			}
+		}
+
 		// now we push the dependent join down
 		delim_join->children[1] =
 		    flatten.PushDownDependentJoin(std::move(delim_join->children[1]), propagate_null_values, lateral_depth);
 		data_offset = flatten.data_offset;
-		delim_offset = flatten.delim_offset;
+		auto left_offset = delim_join->children[0]->GetColumnBindings().size();
+		delim_offset = left_offset + flatten.delim_offset;
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -222,7 +238,24 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 		auto entry = has_correlated_expressions.find(op);
 
 		if (entry == has_correlated_expressions.end()) {
-			has_correlated_expressions[op] = false;
+			// Try to find a recursive CTE for this operator
+			auto &cteref = op.Cast<LogicalCTERef>();
+			auto cte = binder.recursive_ctes.find(cteref.cte_index);
+
+			has_correlated_expressions[op] = false; // Default: not correlated
+
+			// recursive_ctes may be a misnomer at this point, as it may also contain materialized CTEs
+			if (cte != binder.recursive_ctes.end()) {
+				auto cte_node = cte->second;
+
+				if (cte_node->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+					// Found a recursive CTE, subtree is correlated
+					return true;
+				}
+				// Found a materialized CTE, subtree correlation depends on the CTE node
+				return has_correlated_expressions[*cte_node];
+			}
+			// No CTE found: subtree is correlated
 			return true;
 		}
 	}
@@ -233,8 +266,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	// If we detect correlation in a materialized or recursive CTE, the entire right side of the operator
 	// needs to be marked as correlated. Otherwise, function PushDownDependentJoinInternal does not do the
 	// right thing.
-	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
-	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		auto &setop = op.Cast<LogicalCTE>();
 		binder.recursive_ctes[setop.table_index] = &setop;
 		if (has_correlation) {
@@ -242,6 +274,20 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 			MarkSubtreeCorrelated(*op.children[1].get());
 		}
 	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		auto &setop = op.Cast<LogicalCTE>();
+		binder.recursive_ctes[setop.table_index] = &setop;
+		// only mark the entire subtree as correlated if the materializing side is correlated
+		auto entry = has_correlated_expressions.find(*op.children[0]);
+		if (entry != has_correlated_expressions.end()) {
+			if (has_correlation && entry->second) {
+				setop.correlated_columns = correlated_columns;
+				MarkSubtreeCorrelated(*op.children[1].get());
+			}
+		}
+	}
+
 	return has_correlation;
 }
 
@@ -423,7 +469,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 
 		base_binding.table_index = proj.table_index;
-		this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
+		base_binding.column_index = plan->expressions.size() - correlated_columns.size();
+		this->delim_offset = base_binding.column_index;
 		this->data_offset = 0;
 		return plan;
 	}
@@ -638,9 +685,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {
-			if (right_has_correlation) {
-				throw NotImplementedException("MARK join with correlation in RHS not supported");
-			}
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
@@ -656,6 +700,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// push into both sides
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+		auto left_delim_offset = delim_offset;
 		auto left_binding = this->base_binding;
 		plan->children[1] =
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
@@ -665,6 +710,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// because the RIGHT binding might contain NULL values
 		if (join.join_type == JoinType::LEFT) {
 			this->base_binding = left_binding;
+			delim_offset = left_delim_offset;
 		} else if (join.join_type == JoinType::RIGHT) {
 			this->base_binding = right_binding;
 			delim_offset += plan->children[0]->GetColumnBindings().size();
@@ -936,6 +982,20 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();
 #endif
+		if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			// check the correlated expressions in the children of the join
+			bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
+			bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
+
+			if (!left_has_correlation && right_has_correlation) {
+				// only right has correlation: push into right
+				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
+				                                                  parent_propagate_null_values, lateral_depth);
+				plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
+				return plan;
+			}
+		}
+
 		idx_t table_index = 0;
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);

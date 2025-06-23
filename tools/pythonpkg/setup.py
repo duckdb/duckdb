@@ -1,7 +1,100 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import ctypes
 import os
+import re
+
+########################################################################
+# START VERSIONING LOGIC
+#
+# Keep this at the top of this file, before setuptools_scm is imported.
+#
+########################################################################
+
+# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+MAIN_BRANCH_VERSIONING = True
+if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
+    MAIN_BRANCH_VERSIONING = False
+if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
+    MAIN_BRANCH_VERSIONING = True
+
+VERSION_RE = re.compile(r"^(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)$")
+
+
+def bump_version(base_version: str, distance: int, dirty: bool = False):
+    """Bump the version if needed."""
+    # Validate the base version (this should never include anything else than X.Y.Z)
+    base_version_match = VERSION_RE.match(base_version)
+    if not base_version_match:
+        raise ValueError(f"Incorrect version format: {base_version} (expected X.Y.Z)")
+
+    major, minor, patch = map(int, base_version_match.groups())
+
+    # Make sure distance is set correctly
+    distance = int(distance or 0)
+
+    # If we're exactly on a tag (distance = 0, dirty=False)
+    if distance == 0 and not dirty:
+        return f"{major}.{minor}.{patch}"
+
+    # Otherwise we're at a distance and / or dirty, and need to bump
+    if MAIN_BRANCH_VERSIONING:
+        return f"{major}.{minor+1}.0.dev{distance}"
+    return f"{major}.{minor}.{patch+1}.dev{distance}"
+
+
+# Here we handle getting versions from env vars. We only support a single way of
+# manually overriding the version, which is through OVERRIDE_GIT_DESCRIBE. If
+# SETUPTOOLS_SCM_PRETEND_VERSION* is set we unset it.
+SCM_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"
+OVERRIDE_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_GIT_DESCRIBE"
+OVERRIDE = os.getenv(OVERRIDE_GIT_DESCRIBE_ENV_VAR)
+
+if OVERRIDE:
+    # OVERRIDE_GIT_DESCRIBE_ENV_VAR is set, we'll put it in SCM_PRETEND_ENV_VAR_FOR_DUCKDB
+    print(f"[setup.py] Found {OVERRIDE_GIT_DESCRIBE_ENV_VAR}={OVERRIDE}")
+    DESCRIBE_RE = re.compile(
+        r"""
+        ^v(?P<tag>\d+\.\d+\.\d+)        # vX.Y.Z
+        (?:-(?P<distance>\d+))?         # optional -N
+        (?:-g(?P<hash>[0-9a-fA-F]+))?   # optional -g<sha>
+        $""",
+        re.VERBOSE,
+    )
+    match = DESCRIBE_RE.match(OVERRIDE)
+    if not match:
+        raise ValueError(f"Invalid {OVERRIDE_GIT_DESCRIBE_ENV_VAR}: {OVERRIDE}")
+
+    tag = match["tag"]
+    distance = match["distance"]
+    commit = match["hash"] and match["hash"].lower()
+
+    # If we get an override we do need to bump
+    pep440 = bump_version(tag, int(distance or 0))
+    if commit:
+        pep440 += f"+g{commit}"
+
+    os.environ[SCM_PRETEND_ENV_VAR] = pep440
+    print(f"[setup.py] Injected {SCM_PRETEND_ENV_VAR}={pep440}")
+elif SCM_PRETEND_ENV_VAR in os.environ:
+    # SCM_PRETEND_ENV_VAR is already set, but we don't allow that
+    print(f"[setup.py] WARNING: We do not support {SCM_PRETEND_ENV_VAR}! Removing.")
+    del os.environ[SCM_PRETEND_ENV_VAR]
+
+
+if "SETUPTOOLS_SCM_PRETEND_VERSION" in os.environ:
+    print(f"[setup.py] WARNING: We do not support SETUPTOOLS_SCM_PRETEND_VERSION! Removing.")
+    del os.environ["SETUPTOOLS_SCM_PRETEND_VERSION"]
+########################################################################
+# END VERSIONING LOGIC
+########################################################################
+
+import ctypes
 import platform
 import sys
 import traceback
@@ -376,79 +469,8 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
-from setuptools_scm import Configuration, ScmVersion
-from pathlib import Path
-import os
-
-######
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/amalgamation.py
-# - scripts/package_build.py
-# - tools/pythonpkg/setup.py
-######
-
-# Whether to use main branch versioning logic, defaults to True
-MAIN_BRANCH_VERSIONING = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
-
-
-def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
-    from setuptools_scm.git import parse as git_parse
-    from setuptools_scm.version import meta
-
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        parts = override.split('-')
-        if len(parts) == 3:
-            # Already in correct format tag-distance-gnode
-            tag, distance, node = parts
-            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
-        elif len(parts) == 1:
-            # Just tag, add -0-gnode
-            tag = parts[0]
-            distance = 0
-        elif len(parts) == 2:
-            # tag-distance, need to add -gnode
-            tag, distance = parts
-        else:
-            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
-        return meta(tag=tag, distance=int(distance), config=config)
-
-    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
-    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
-
-    try:
-        return git_parse(root, config, describe_command=git_describe_command)
-    except Exception:
-        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
-
-
-def version_scheme(version):
-    def prefix_version(version):
-        """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
-        if version.startswith('v'):
-            return version
-        return 'v' + version
-
-    # If we're exactly on a tag (dev_iteration = 0, dirty=False)
-    if version.exact:
-        return version.format_with("{tag}")
-
-    major, minor, patch = [int(x) for x in str(version.tag).split('.')]
-    # Increment minor version if main_branch_versioning is enabled (default),
-    # otherwise increment patch version
-    if MAIN_BRANCH_VERSIONING == True:
-        minor += 1
-        patch = 0
-    else:
-        patch += 1
-
-    # Format as v{major}.{minor}.{patch}-dev{distance}
-    next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
-    return prefix_version(next_version)
-
-
 setup(
+    name="duckdb",  # Needed to make SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB work
     data_files=data_files,
     # NOTE: might need to be find_packages() ?
     packages=packages,
@@ -456,10 +478,9 @@ setup(
     long_description="See here for an introduction: https://duckdb.org/docs/stable/clients/python/overview",
     ext_modules=[libduckdb],
     use_scm_version={
-        "version_scheme": version_scheme,
+        "version_scheme": lambda v: bump_version(str(v.tag), v.distance, v.dirty),
         "root": "../..",
-        "parse": parse,
-        "fallback_version": "v0.0.0",
+        "fallback_version": "0.0.0",
         "local_scheme": "no-local-version",
     },
     cmdclass={"build_ext": build_ext},

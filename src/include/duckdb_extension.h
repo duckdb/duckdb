@@ -540,6 +540,16 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+#endif
+
+// New functions for duckdb error data
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
+	void (*duckdb_destroy_error_data)(duckdb_error_data *error_data);
+	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
+	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
 #endif
 
 // New functions around the client context
@@ -558,6 +568,7 @@ typedef struct {
 	void (*duckdb_scalar_function_set_bind_data)(duckdb_bind_info info, void *bind_data,
 	                                             duckdb_delete_callback_t destroy);
 	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
+	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
 #endif
 
 // New string functions that are added
@@ -576,12 +587,12 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
-	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
 	void (*duckdb_vector_reference_value)(duckdb_vector vector, duckdb_value value);
 	void (*duckdb_vector_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
-	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
-	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector sel);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 #endif
 
 } duckdb_ext_api_v1;
@@ -1004,7 +1015,15 @@ typedef struct {
 #define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
 
 // Version unstable_new_append_functions
+#define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_error_data_functions
+#define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
+#define duckdb_destroy_error_data    duckdb_ext_api.duckdb_destroy_error_data
+#define duckdb_error_data_error_type duckdb_ext_api.duckdb_error_data_error_type
+#define duckdb_error_data_message    duckdb_ext_api.duckdb_error_data_message
+#define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
@@ -1013,11 +1032,12 @@ typedef struct {
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
 
 // Version unstable_new_scalar_function_functions
-#define duckdb_scalar_function_set_bind           duckdb_ext_api.duckdb_scalar_function_set_bind
-#define duckdb_scalar_function_set_bind_data      duckdb_ext_api.duckdb_scalar_function_set_bind_data
-#define duckdb_scalar_function_bind_set_error     duckdb_ext_api.duckdb_scalar_function_bind_set_error
-#define duckdb_scalar_function_get_bind_data      duckdb_ext_api.duckdb_scalar_function_get_bind_data
-#define duckdb_scalar_function_get_client_context duckdb_ext_api.duckdb_scalar_function_get_client_context
+#define duckdb_scalar_function_set_bind            duckdb_ext_api.duckdb_scalar_function_set_bind
+#define duckdb_scalar_function_set_bind_data       duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_bind_set_error      duckdb_ext_api.duckdb_scalar_function_bind_set_error
+#define duckdb_scalar_function_bind_get_extra_info duckdb_ext_api.duckdb_scalar_function_bind_get_extra_info
+#define duckdb_scalar_function_get_bind_data       duckdb_ext_api.duckdb_scalar_function_get_bind_data
+#define duckdb_scalar_function_get_client_context  duckdb_ext_api.duckdb_scalar_function_get_client_context
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string

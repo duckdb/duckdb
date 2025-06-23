@@ -26,6 +26,7 @@ public:
 
 protected:
 	vector<ColumnBinding> bindings;
+	vector<LogicalType> types;
 	bool verify_only;
 
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;

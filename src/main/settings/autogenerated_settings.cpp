@@ -178,6 +178,13 @@ Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Arrow Output Version
+//===----------------------------------------------------------------------===//
+void ArrowOutputVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_output_version = DBConfig().options.arrow_output_version;
+}
+
+//===----------------------------------------------------------------------===//
 // Asof Loop Join Threshold
 //===----------------------------------------------------------------------===//
 void AsofLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -424,6 +431,28 @@ Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.default_order_type = DBConfig().options.default_order_type;
+}
+
+//===----------------------------------------------------------------------===//
+// Disable Database Invalidation
+//===----------------------------------------------------------------------===//
+void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!OnGlobalSet(db, config, input)) {
+		return;
+	}
+	config.options.disable_database_invalidation = input.GetValue<bool>();
+}
+
+void DisableDatabaseInvalidationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!OnGlobalReset(db, config)) {
+		return;
+	}
+	config.options.disable_database_invalidation = DBConfig().options.disable_database_invalidation;
+}
+
+Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.disable_database_invalidation);
 }
 
 //===----------------------------------------------------------------------===//

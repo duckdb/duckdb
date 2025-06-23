@@ -60,7 +60,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: windows-2019
+    runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
       with:
@@ -150,7 +150,7 @@ jobs:
  win-release-32:
     name: Windows (32 Bit)
     if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true'
-    runs-on: windows-2019
+    runs-on: windows-latest
     needs: win-release-64
 
     steps:
@@ -190,7 +190,7 @@ jobs:
  win-release-arm64:
    name: Windows (ARM64)
    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true'
-   runs-on: windows-2019
+   runs-on: windows-latest
    needs: win-release-64
 
    steps:
@@ -253,7 +253,7 @@ jobs:
 
  mingw:
      name: MinGW (64 Bit)
-     runs-on: windows-2019
+     runs-on: windows-latest
      if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
      steps:
@@ -265,6 +265,8 @@ jobs:
            msystem: MINGW64
            update: true
            install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+           cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
@@ -297,7 +299,7 @@ jobs:
  win-extensions-64:
    # Builds extensions for windows_amd64
    name: Windows Extensions (64-bit)
-   runs-on: windows-2019
+   runs-on: windows-latest
    needs: win-release-64
    steps:
      - name: Keep \n line endings
@@ -325,6 +327,7 @@ jobs:
          run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+         build_complete_extensions_set: ${{ github.event_name != 'pull_request' && 1 || 0 }}
 
      - uses: actions/upload-artifact@v4
        with:
@@ -343,7 +346,7 @@ jobs:
       duckdb_sha: ${{ github.sha }}
 
  win-packaged-upload:
-   runs-on: windows-2019
+   runs-on: windows-latest
    needs:
      - win-release-64
      - win-release-arm64

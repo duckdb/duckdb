@@ -471,7 +471,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 				rc = sqlite3_finalize(pStmt);
 				pStmt = nullptr;
 				zSql = zLeftover;
-				while (isspace(zSql[0]))
+				while (StringUtil::CharacterIsSpace(zSql[0]))
 					zSql++;
 				break;
 			} else if (rc != SQLITE_ROW) {
@@ -703,7 +703,7 @@ const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 		return nullptr;
 	}
 	if (!stmt->prepared) {
-		throw InternalException("Called sqlite3_bind_parameter_name on a eagerly executed prepared query");
+		return nullptr;
 	}
 	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return nullptr;
