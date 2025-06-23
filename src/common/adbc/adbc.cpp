@@ -21,6 +21,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "duckdb/main/prepared_statement_data.hpp"
+
 // We must leak the symbols of the init function
 AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {
 	if (!driver) {
@@ -732,8 +734,33 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
 	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that
 	// would be worth the extra management
-	auto res = duckdb_prepared_arrow_schema(wrapper->statement, reinterpret_cast<duckdb_arrow_schema *>(&schema));
-	if (res != DuckDBSuccess) {
+
+	auto prepared_wrapper = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement);
+	if (!prepared_wrapper || !prepared_wrapper->statement || !prepared_wrapper->statement->data) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto count = prepared_wrapper->statement->data->properties.parameter_count;
+	auto types = new duckdb::LogicalType[count];
+	auto names = new duckdb::Value[count];
+
+	for (idx_t i = 0; i < count; i++) {
+		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
+		// 'AdbcStatementGetParameterSchema'
+		const auto type = duckdb::LogicalType::SQLNULL;
+
+		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
+		auto name = std::to_string(i);
+		types[i] = type;
+		names[i] = duckdb::Value(name);
+	}
+
+	auto res = duckdb_to_arrow_schema(wrapper->connection, reinterpret_cast<duckdb_logical_type *>(types),
+	                                  reinterpret_cast<duckdb_value *>(names), count,
+	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
+	delete[] types;
+	delete[] names;
+
+	if (res) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	return ADBC_STATUS_OK;

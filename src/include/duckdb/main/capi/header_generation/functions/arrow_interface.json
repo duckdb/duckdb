@@ -1,10 +1,48 @@
 {
     "group": "arrow_interface",
-    "deprecated": true,
+    "deprecated": false,
     "entries": [
+        {
+            "name": "duckdb_to_arrow_schema",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "types"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "names"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                },
+                {
+                    "type": "duckdb_arrow_schema *",
+                    "name": "out_schema"
+                }
+            ],
+            "comment": {
+                "description": "Transforms a DuckDB Schema into an Arrow Schema \n\n",
+                "param_comments": {
+                    "connection": "The connection to extract the arrow settings from.",
+                    "query": "The DuckDB Logical Types for each column in the schema.",
+                    "names": "The names for each column in the schema.",
+                    "column_count": "The number of columns that exist in the schema.",
+                    "out_result": "The resulting arrow schema."
+                },
+                "return_value": "The error data."
+            }
+        },
         {
             "name": "duckdb_query_arrow",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_connection",
@@ -32,6 +70,7 @@
         {
             "name": "duckdb_query_arrow_schema",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -54,6 +93,7 @@
         {
             "name": "duckdb_prepared_arrow_schema",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_prepared_statement",
@@ -76,6 +116,7 @@
         {
             "name": "duckdb_result_arrow_array",
             "return_type": "void",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_result",
@@ -102,6 +143,7 @@
         {
             "name": "duckdb_query_arrow_array",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -124,6 +166,7 @@
         {
             "name": "duckdb_arrow_column_count",
             "return_type": "idx_t",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -141,6 +184,7 @@
         {
             "name": "duckdb_arrow_row_count",
             "return_type": "idx_t",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -158,6 +202,7 @@
         {
             "name": "duckdb_arrow_rows_changed",
             "return_type": "idx_t",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -175,6 +220,7 @@
         {
             "name": "duckdb_query_arrow_error",
             "return_type": "const char *",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -192,6 +238,7 @@
         {
             "name": "duckdb_destroy_arrow",
             "return_type": "void",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow *",
@@ -208,6 +255,7 @@
         {
             "name": "duckdb_destroy_arrow_stream",
             "return_type": "void",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow_stream *",
@@ -224,6 +272,7 @@
         {
             "name": "duckdb_execute_prepared_arrow",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_prepared_statement",
@@ -246,6 +295,7 @@
         {
             "name": "duckdb_arrow_scan",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_connection",
@@ -273,6 +323,7 @@
         {
             "name": "duckdb_arrow_array_scan",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_connection",

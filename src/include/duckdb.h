@@ -4469,6 +4469,18 @@ DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_descrip
 // Arrow Interface
 //===--------------------------------------------------------------------===//
 
+/*!
+Transforms a DuckDB Schema into an Arrow Schema
+
+* @param connection The connection to extract the arrow settings from.
+* @param names The names for each column in the schema.
+* @param column_count The number of columns that exist in the schema.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_connection connection, duckdb_logical_type *types,
+                                                      duckdb_value *names, idx_t column_count,
+                                                      duckdb_arrow_schema *out_schema);
+
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.

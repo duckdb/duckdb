@@ -14,6 +14,35 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
+DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_connection connection, duckdb_logical_type *types,
+                                                      duckdb_value *names, idx_t column_count,
+                                                      duckdb_arrow_schema *out_schema) {
+	if (!connection || !types || !names || !out_schema) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
+	}
+	auto conn = reinterpret_cast<Connection *>(connection);
+	duckdb::vector<LogicalType> schema_types;
+	duckdb::vector<std::string> schema_names;
+	auto names_array = reinterpret_cast<duckdb::Value *>(names);
+	auto types_array = reinterpret_cast<duckdb::LogicalType *>(types);
+	for (idx_t i = 0; i < column_count; i++) {
+		if (names_array[i].type() != LogicalType::VARCHAR) {
+			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Name Value must be a string");
+		}
+		schema_names.emplace_back(names_array[i].ToString());
+		schema_types.emplace_back(types_array[i]);
+	}
+	auto client_properties = conn->context->GetClientProperties();
+	try {
+		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(*out_schema), schema_types, schema_names,
+		                              client_properties);
+	} catch (...) {
+		// TODO : catch actual exception
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
+	}
+	return nullptr;
+}
+
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {
 	Connection *conn = (Connection *)connection;
 	auto wrapper = new ArrowResultWrapper();

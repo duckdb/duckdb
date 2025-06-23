@@ -472,6 +472,11 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	// New arrow interface functions
+
+	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_connection connection, duckdb_logical_type *types,
+	                                            duckdb_value *names, idx_t column_count,
+	                                            duckdb_arrow_schema *out_schema);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -928,6 +933,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
+	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;

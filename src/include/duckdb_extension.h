@@ -543,6 +543,13 @@ typedef struct {
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
 #endif
 
+// New arrow interface functions
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_connection connection, duckdb_logical_type *types,
+	                                            duckdb_value *names, idx_t column_count,
+	                                            duckdb_arrow_schema *out_schema);
+#endif
+
 // New functions for duckdb error data
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -1017,6 +1024,9 @@ typedef struct {
 // Version unstable_new_append_functions
 #define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_arrow_functions
+#define duckdb_to_arrow_schema duckdb_ext_api.duckdb_to_arrow_schema
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
