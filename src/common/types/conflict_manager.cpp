@@ -5,29 +5,29 @@
 
 namespace duckdb {
 
-ConflictManager::ConflictManager(const VerifyExistenceType verify_existence_type, const idx_t chunk_count,
+ConflictManager::ConflictManager(const VerifyExistenceType verify_existence_type, const idx_t chunk_size,
                                  optional_ptr<ConflictInfo> conflict_info)
-    : verify_existence_type(verify_existence_type), chunk_count(chunk_count), conflict_info(conflict_info),
-      conflicts(chunk_count, false), mode(ConflictManagerMode::THROW) {
+    : verify_existence_type(verify_existence_type), chunk_size(chunk_size), conflict_info(conflict_info),
+      conflicts(chunk_size, false), mode(ConflictManagerMode::THROW) {
 }
 
 ManagedSelection &ConflictManager::InternalSelection() {
 	if (!conflicts.Initialized()) {
-		conflicts.Initialize(chunk_count);
+		conflicts.Initialize(chunk_size);
 	}
 	return conflicts;
 }
 
 Vector &ConflictManager::InternalRowIds() {
 	if (!row_ids) {
-		row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_count);
+		row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
 	}
 	return *row_ids;
 }
 
 Vector &ConflictManager::InternalIntermediate() {
 	if (!intermediate_vector) {
-		intermediate_vector = make_uniq<Vector>(LogicalType::BOOLEAN, true, true, chunk_count);
+		intermediate_vector = make_uniq<Vector>(LogicalType::BOOLEAN, true, true, chunk_size);
 	}
 	return *intermediate_vector;
 }
@@ -117,7 +117,7 @@ bool ConflictManager::IsConflict(LookupResultType type) {
 }
 
 bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
-	D_ASSERT(index_in_chunk < chunk_count);
+	D_ASSERT(index_in_chunk < chunk_size);
 	if (ShouldThrow(index_in_chunk)) {
 		return true;
 	}
@@ -136,7 +136,7 @@ bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
 }
 
 bool ConflictManager::AddNull(const idx_t index_in_chunk) {
-	D_ASSERT(index_in_chunk < chunk_count);
+	D_ASSERT(index_in_chunk < chunk_size);
 	if (!IsConflict(LookupResultType::LOOKUP_NULL)) {
 		return false;
 	}
@@ -205,7 +205,7 @@ void ConflictManager::Finalize() {
 	auto data = FlatVector::GetData<bool>(intermediate);
 	auto &selection = InternalSelection();
 	// Create the selection vector from the encountered conflicts
-	for (idx_t i = 0; i < chunk_count; i++) {
+	for (idx_t i = 0; i < chunk_size; i++) {
 		if (data[i]) {
 			selection.Append(i);
 		}
@@ -217,7 +217,7 @@ void ConflictManager::Finalize() {
 	for (idx_t i = 0; i < selection.Count(); i++) {
 		D_ASSERT(!row_to_rowid.empty());
 		auto index = selection[i];
-		D_ASSERT(index < chunk_count);
+		D_ASSERT(index < chunk_size);
 		auto row_id = row_to_rowid[index];
 		row_id_data[i] = row_id;
 	}

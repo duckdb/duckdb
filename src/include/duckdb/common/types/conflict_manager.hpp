@@ -32,7 +32,7 @@ enum class LookupResultType : uint8_t { LOOKUP_MISS, LOOKUP_HIT, LOOKUP_NULL };
 //! they match the ON CONFLICT DO target.
 class ConflictManager {
 public:
-	ConflictManager(const VerifyExistenceType lookup_type, const idx_t chunk_count,
+	ConflictManager(const VerifyExistenceType lookup_type, const idx_t chunk_size,
 	                optional_ptr<ConflictInfo> conflict_info = nullptr);
 
 public:
@@ -91,7 +91,7 @@ private:
 	//! The type of constraint verification for which we're using the conflict manager.
 	VerifyExistenceType verify_existence_type;
 	//! The count of the data chunk for which we've created the conflict manager.
-	idx_t chunk_count;
+	idx_t chunk_size;
 	//! Optional information to match indexes to the conflict target.
 	optional_ptr<ConflictInfo> conflict_info;
 
