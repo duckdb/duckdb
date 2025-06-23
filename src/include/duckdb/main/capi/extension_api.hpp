@@ -474,7 +474,7 @@ typedef struct {
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
 	// New arrow interface functions
 
-	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_connection connection, duckdb_logical_type *types,
+	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties *client_properties, duckdb_logical_type *types,
 	                                            duckdb_value *names, idx_t column_count,
 	                                            duckdb_arrow_schema *out_schema);
 	// New functions for duckdb error data

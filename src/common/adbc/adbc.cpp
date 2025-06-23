@@ -535,8 +535,25 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	if (!stream || !stream->private_data || !out) {
 		return DuckDBError;
 	}
-	return duckdb_query_arrow_schema(static_cast<duckdb_arrow>(stream->private_data),
-	                                 reinterpret_cast<duckdb_arrow_schema *>(&out));
+	auto wrapper = reinterpret_cast<duckdb::ArrowResultWrapper *>(stream->private_data);
+	auto count = wrapper->result->types.size();
+	auto types = new duckdb::LogicalType[count];
+	auto names = new duckdb::Value[count];
+
+	for (idx_t i = 0; i < count; i++) {
+		types[i] = wrapper->result->types[i];
+		names[i] = duckdb::Value(wrapper->result->names[i]);
+	}
+	auto res =
+	    duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&wrapper->result->client_properties),
+	                           reinterpret_cast<duckdb_logical_type *>(types), reinterpret_cast<duckdb_value *>(names),
+	                           count, reinterpret_cast<duckdb_arrow_schema *>(&out));
+	delete[] types;
+	delete[] names;
+	if (res) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }
 
 static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
@@ -753,10 +770,12 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		types[i] = type;
 		names[i] = duckdb::Value(name);
 	}
-
-	auto res = duckdb_to_arrow_schema(wrapper->connection, reinterpret_cast<duckdb_logical_type *>(types),
-	                                  reinterpret_cast<duckdb_value *>(names), count,
-	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
+	auto client_properties =
+	    reinterpret_cast<duckdb::Connection *>(wrapper->connection)->context->GetClientProperties();
+	auto res =
+	    duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&client_properties),
+	                           reinterpret_cast<duckdb_logical_type *>(types), reinterpret_cast<duckdb_value *>(names),
+	                           count, reinterpret_cast<duckdb_arrow_schema *>(&schema));
 	delete[] types;
 	delete[] names;
 

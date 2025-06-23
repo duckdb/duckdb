@@ -7,8 +7,8 @@
             "return_type": "duckdb_error_data",
             "params": [
                 {
-                    "type": "duckdb_connection",
-                    "name": "connection"
+                    "type": "duckdb_client_properties *",
+                    "name": "client_properties"
                 },
                 {
                     "type": "duckdb_logical_type *",
@@ -30,7 +30,7 @@
             "comment": {
                 "description": "Transforms a DuckDB Schema into an Arrow Schema \n\n",
                 "param_comments": {
-                    "connection": "The connection to extract the arrow settings from.",
+                    "connection": "The client properties to extract the arrow settings from.",
                     "query": "The DuckDB Logical Types for each column in the schema.",
                     "names": "The names for each column in the schema.",
                     "column_count": "The number of columns that exist in the schema.",

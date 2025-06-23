@@ -721,6 +721,12 @@ typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
 
+//! Holds an arrow array. Remember to release the respective ArrowArray object.
+typedef struct _duckdb_client_properties {
+	void *internal_ptr;
+} * duckdb_client_properties;
+
+
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
 //===--------------------------------------------------------------------===//
