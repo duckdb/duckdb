@@ -184,7 +184,8 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOp
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(context, options);
+		QueryContext query_context(context);
+		storage->Initialize(query_context, options);
 	}
 }
 
@@ -262,7 +263,8 @@ void AttachedDatabase::Close() {
 			}
 			CheckpointOptions options;
 			options.wal_action = CheckpointWALAction::DELETE_WAL;
-			storage->CreateCheckpoint(nullptr, options);
+			QueryContext context;
+			storage->CreateCheckpoint(context, options);
 		}
 	} catch (...) { // NOLINT
 	}

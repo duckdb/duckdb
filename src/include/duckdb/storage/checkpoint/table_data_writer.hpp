@@ -23,7 +23,7 @@ class TableStatistics;
 //! Abstraction will support, for example: tiering, versioning, or splitting into multiple block managers.
 class TableDataWriter {
 public:
-	explicit TableDataWriter(TableCatalogEntry &table, optional_ptr<ClientContext> client_context);
+	explicit TableDataWriter(TableCatalogEntry &table, QueryContext &context);
 	virtual ~TableDataWriter();
 
 public:
@@ -40,7 +40,7 @@ public:
 
 protected:
 	DuckTableEntry &table;
-	optional_ptr<ClientContext> client_context;
+	QueryContext &context;
 	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
 };

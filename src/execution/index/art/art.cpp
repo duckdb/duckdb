@@ -1089,8 +1089,7 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	return info;
 }
 
-IndexStorageInfo ART::SerializeToDisk(optional_ptr<ClientContext> context,
-                                      const case_insensitive_map_t<Value> &options) {
+IndexStorageInfo ART::SerializeToDisk(QueryContext &context, const case_insensitive_map_t<Value> &options) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");
@@ -1128,7 +1127,7 @@ IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &option
 	return info;
 }
 
-void ART::WritePartialBlocks(optional_ptr<ClientContext> context, const bool v1_0_0_storage) {
+void ART::WritePartialBlocks(QueryContext &context, const bool v1_0_0_storage) {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
 

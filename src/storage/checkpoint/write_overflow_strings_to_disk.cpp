@@ -109,7 +109,8 @@ void WriteOverflowStringsToDisk::Flush() {
 		}
 		// write to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		block_manager.Write(nullptr, handle.GetFileBuffer(), block_id);
+		QueryContext context;
+		block_manager.Write(context, handle.GetFileBuffer(), block_id);
 	}
 	block_id = INVALID_BLOCK;
 	offset = 0;

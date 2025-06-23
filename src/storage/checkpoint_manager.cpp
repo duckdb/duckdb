@@ -36,12 +36,8 @@ namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(optional_ptr<ClientContext> client_context_p,
-                                                       AttachedDatabase &db, BlockManager &block_manager,
-                                                       CheckpointType checkpoint_type)
-    : CheckpointWriter(db), client_context(client_context_p),
-      partial_block_manager(client_context_p, block_manager, PartialBlockType::FULL_CHECKPOINT),
-      checkpoint_type(checkpoint_type) {
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext &context, AttachedDatabase &db, BlockManager &block_manager, CheckpointType checkpoint_type)
+    : CheckpointWriter(db), context(context), partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), checkpoint_type(checkpoint_type) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -212,7 +208,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.meta_block = meta_block.block_pointer;
 	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
-	block_manager.WriteHeader(client_context, header);
+	block_manager.WriteHeader(context, header);
 
 #ifdef DUCKDB_BLOCK_VERIFICATION
 	// extend verify_block_usage_count

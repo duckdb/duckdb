@@ -31,7 +31,7 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(optional_ptr<ClientContext> context, block_id_t block_id,
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext &context, block_id_t block_id,
                                                           shared_ptr<BlockHandle> old_block, BufferHandle old_handle) {
 	// register a block with the new block id
 	auto new_block = RegisterBlock(block_id);
@@ -73,7 +73,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(optional_ptr<ClientCon
 	return new_block;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(optional_ptr<ClientContext> context, block_id_t block_id,
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext &context, block_id_t block_id,
                                                           shared_ptr<BlockHandle> old_block) {
 	// pin the old block to ensure we have it loaded in memory
 	auto handle = buffer_manager.Pin(old_block);

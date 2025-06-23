@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, optional_ptr<ClientContext> client_context_p)
-    : table(table_p.Cast<DuckTableEntry>()), client_context(client_context_p) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext &context)
+    : table(table_p.Cast<DuckTableEntry>()), context(context) {
 	D_ASSERT(table_p.IsDuckTable());
 }
 
@@ -32,15 +32,15 @@ DatabaseInstance &TableDataWriter::GetDatabase() {
 }
 
 unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
-	if (client_context) {
-		return make_uniq<TaskExecutor>(*client_context);
+	if (context.Valid()) {
+		return make_uniq<TaskExecutor>(context.GetClientContext());
 	}
 	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
                                                      TableCatalogEntry &table, MetadataWriter &table_data_writer)
-    : TableDataWriter(table, checkpoint_manager.GetClientContext()), checkpoint_manager(checkpoint_manager),
+    : TableDataWriter(table, checkpoint_manager.GetQueryContext()), checkpoint_manager(checkpoint_manager),
       table_data_writer(table_data_writer) {
 }
 
@@ -92,7 +92,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info->GetIndexes().SerializeToDisk(client_context, options);
+	auto index_storage_infos = info->GetIndexes().SerializeToDisk(context, options);
 
 #ifdef DUCKDB_BLOCK_VERIFICATION
 	for (auto &entry : index_storage_infos) {

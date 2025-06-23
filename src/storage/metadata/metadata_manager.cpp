@@ -1,8 +1,10 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
+
 #include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
@@ -174,9 +176,10 @@ idx_t MetadataManager::BlockCount() {
 }
 
 void MetadataManager::Flush() {
+	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
+	QueryContext context;
 
-	// write the blocks of the metadata manager to disk
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
@@ -184,14 +187,14 @@ void MetadataManager::Flush() {
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
-			// temporary block - convert to persistent
+			// Convert the temporary block to a persistent block.
 			block.block =
-			    block_manager.ConvertToPersistent(nullptr, kv.first, std::move(block.block), std::move(handle));
-		} else {
-			// already a persistent block - only need to write it
-			D_ASSERT(block.block->BlockId() == block.block_id);
-			block_manager.Write(nullptr, handle.GetFileBuffer(), block.block_id);
+			    block_manager.ConvertToPersistent(context, kv.first, std::move(block.block), std::move(handle));
+			continue;
 		}
+		// Already a persistent block, so we only need to write it.
+		D_ASSERT(block.block->BlockId() == block.block_id);
+		block_manager.Write(context, handle.GetFileBuffer(), block.block_id);
 	}
 }
 

@@ -162,7 +162,8 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// open file for writing
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE));
 	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write(nullptr, (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
+	QueryContext context;
+	REQUIRE_NOTHROW(handle->Write(context, (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
 	handle.reset();
 

@@ -223,7 +223,7 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//
-void ColumnSegment::ConvertToPersistent(optional_ptr<ClientContext> context, optional_ptr<BlockManager> block_manager,
+void ColumnSegment::ConvertToPersistent(QueryContext &context, optional_ptr<BlockManager> block_manager,
                                         block_id_t block_id_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;

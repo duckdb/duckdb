@@ -227,12 +227,13 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
                                                AllocatedData &compressed_buffer) const {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
+	QueryContext context;
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
-		buffer.Write(nullptr, *handle, GetPositionInFile(block_index));
-	} else {
-		handle->Write(nullptr, compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
-		              GetPositionInFile(block_index));
+		buffer.Write(context, *handle, GetPositionInFile(block_index));
+		return;
 	}
+	auto size = TemporaryBufferSizeToSize(identifier.size);
+	handle->Write(context, compressed_buffer.get(), size, GetPositionInFile(block_index));
 }
 
 void TemporaryFileHandle::EraseBlockIndex(block_id_t block_index) {
