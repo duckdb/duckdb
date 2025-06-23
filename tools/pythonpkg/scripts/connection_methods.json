@@ -385,6 +385,13 @@
 				"type": "int"
 			}
 		],
+		"kwargs": [
+			{
+				"name": "lazy",
+				"default": "False",
+				"type": "bool"
+			}
+		],
 		"return": "polars.DataFrame"
 	},
 	{
