@@ -178,6 +178,8 @@ struct DBConfigOptions {
 	string collation = string();
 	//! The order type used when none is specified (default: ASC)
 	OrderType default_order_type = OrderType::ASCENDING;
+	//! Disables invalidating the database instance when encountering a fatal error.
+	bool disable_database_invalidation = false;
 	//! NULL ordering used when none is specified (default: NULLS LAST)
 	DefaultOrderByNullType default_null_order = DefaultOrderByNullType::NULLS_LAST;
 	//! enable COPY and related commands
