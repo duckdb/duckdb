@@ -374,6 +374,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 			auto &pivot_aggr_name = aggregate_names[aggr_name_idx++];
 			// replace column ref with name
 			ReplacePivotColumnRef(*aggr, pivot_aggr_name);
+			aggr->alias = pivot_aggr_name;
 
 			final_pivot_operator->select_list.push_back(std::move(aggr));
 		}
