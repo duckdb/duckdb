@@ -356,8 +356,6 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-	auto &config = DBConfig::GetConfig(db.GetDatabase());
-
 	// Derive the encryption key and add it to cache
 	// Unused for plain databases
 	uint8_t salt[MainHeader::SALT_LEN];
@@ -447,7 +445,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
-	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
