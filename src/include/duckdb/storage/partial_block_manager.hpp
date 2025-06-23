@@ -99,8 +99,8 @@ public:
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
-	PartialBlockManager(QueryContext &context, BlockManager &block_manager,
-	                    PartialBlockType partial_block_type, optional_idx max_partial_block_size = optional_idx(),
+	PartialBlockManager(QueryContext &context, BlockManager &block_manager, PartialBlockType partial_block_type,
+	                    optional_idx max_partial_block_size = optional_idx(),
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
 

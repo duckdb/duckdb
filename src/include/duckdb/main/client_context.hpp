@@ -330,9 +330,12 @@ private:
 //! It makes query-related information available to operations.
 class QueryContext {
 public:
-	QueryContext() : context(nullptr) {}
-	QueryContext(ClientContext &context) : context(context) {}
-	QueryContext(optional_ptr<ClientContext> context) : context(context) {}
+	QueryContext() : context(nullptr) {
+	}
+	QueryContext(ClientContext &context) : context(context) {
+	}
+	QueryContext(optional_ptr<ClientContext> context) : context(context) {
+	}
 
 	QueryContext(const QueryContext &) = delete;
 	QueryContext &operator=(const QueryContext &) = delete;

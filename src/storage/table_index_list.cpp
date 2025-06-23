@@ -192,7 +192,8 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext &context, const case_insensitive_map_t<Value> &options) {
+vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext &context,
+                                                         const case_insensitive_map_t<Value> &options) {
 	vector<IndexStorageInfo> infos;
 	for (auto &index : indexes) {
 		if (index->IsBound()) {

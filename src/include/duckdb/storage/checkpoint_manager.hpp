@@ -97,8 +97,8 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	SingleFileCheckpointWriter(QueryContext &context, AttachedDatabase &db,
-	                           BlockManager &block_manager, CheckpointType checkpoint_type);
+	SingleFileCheckpointWriter(QueryContext &context, AttachedDatabase &db, BlockManager &block_manager,
+	                           CheckpointType checkpoint_type);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)
