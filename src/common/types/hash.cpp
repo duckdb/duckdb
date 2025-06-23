@@ -101,6 +101,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 	// Finalize
 	return Hash(h);
 }
+atomic<idx_t> counter {0};
 
 template <>
 hash_t Hash(string_t val) {
@@ -136,14 +137,13 @@ hash_t Hash(string_t val) {
 		return h;
 	} else if (string_t::isInUnifiedStringDictionary(val.GetTaggedPointer())) {
 		D_ASSERT(ValueIsAligned(reinterpret_cast<uint64_t>(
-		    data_ptr_cast(val.GetPointer()) - (sizeof(hash_t) + UnifiedStringsDictionary::STR_LENGTH_BYTES))));
+		    data_ptr_cast(val.GetPointer()) - (sizeof(hash_t)))));
 		return *(reinterpret_cast<uint64_t *>(data_ptr_cast(val.GetPointer()) -
-		                                      (sizeof(hash_t) + UnifiedStringsDictionary::STR_LENGTH_BYTES)));
+		                                      (sizeof(hash_t))));
 	}
 	// Required for DUCKDB_DEBUG_NO_INLINE
 	return HashBytes<string_t::INLINE_LENGTH >= sizeof(hash_t)>(const_data_ptr_cast(val.GetData()), val.GetSize());
 }
-
 template <>
 hash_t Hash(char *val) {
 	return Hash<const char *>(val);
