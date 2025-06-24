@@ -34,10 +34,10 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(QueryContext &context, BlockManager &block_manager,
+PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &block_manager,
                                          PartialBlockType partial_block_type, optional_idx max_partial_block_size_p,
                                          uint32_t max_use_count)
-    : context(context), block_manager(block_manager), partial_block_type(partial_block_type),
+    : context(context.GetClientContext()), block_manager(block_manager), partial_block_type(partial_block_type),
       max_use_count(max_use_count) {
 
 	if (max_partial_block_size_p.IsValid()) {
@@ -184,7 +184,7 @@ BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
 }
 
-QueryContext &PartialBlockManager::GetQueryContext() {
+optional_ptr<ClientContext> PartialBlockManager::GetClientContext() const {
 	return context;
 }
 

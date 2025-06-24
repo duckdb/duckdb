@@ -523,9 +523,8 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
 
-	QueryContext context;
-	handle->Write(context, &buffer.size, sizeof(idx_t), 0);
-	buffer.Write(context, *handle, sizeof(idx_t));
+	handle->Write(QueryContext(), &buffer.size, sizeof(idx_t), 0);
+	buffer.Write(QueryContext(), *handle, sizeof(idx_t));
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,

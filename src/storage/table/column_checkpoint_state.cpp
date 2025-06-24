@@ -36,7 +36,7 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 	return segments.empty();
 }
 
-void PartialBlockForCheckpoint::Flush(QueryContext &context, const idx_t free_space_left) {
+void PartialBlockForCheckpoint::Flush(QueryContext context, const idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
@@ -168,7 +168,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
 	} else {
-		segment->ConvertToPersistent(partial_block_manager.GetQueryContext(), nullptr, INVALID_BLOCK);
+		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
 	}
 
 	// construct the data pointer

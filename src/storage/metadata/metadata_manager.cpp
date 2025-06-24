@@ -178,7 +178,6 @@ idx_t MetadataManager::BlockCount() {
 void MetadataManager::Flush() {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
-	QueryContext context;
 
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -189,12 +188,12 @@ void MetadataManager::Flush() {
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
 			// Convert the temporary block to a persistent block.
 			block.block =
-			    block_manager.ConvertToPersistent(context, kv.first, std::move(block.block), std::move(handle));
+			    block_manager.ConvertToPersistent(QueryContext(), kv.first, std::move(block.block), std::move(handle));
 			continue;
 		}
 		// Already a persistent block, so we only need to write it.
 		D_ASSERT(block.block->BlockId() == block.block_id);
-		block_manager.Write(context, handle.GetFileBuffer(), block.block_id);
+		block_manager.Write(QueryContext(), handle.GetFileBuffer(), block.block_id);
 	}
 }
 

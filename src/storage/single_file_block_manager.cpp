@@ -316,7 +316,7 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	main_header.SetEncryptionMetadata(metadata);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(QueryContext &context) {
+void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -529,7 +529,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	CheckChecksum(block, location, delta, skip_block_header);
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(QueryContext &context, FileBuffer &block, uint64_t location,
+void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &block, uint64_t location,
                                               bool skip_block_header) const {
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	uint64_t checksum;
@@ -870,11 +870,10 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
-	QueryContext context;
-	Write(context, buffer, block_id);
+	Write(QueryContext(), buffer, block_id);
 }
 
-void SingleFileBlockManager::Write(QueryContext &context, FileBuffer &buffer, block_id_t block_id) {
+void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
 	ChecksumAndWrite(context, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
@@ -946,7 +945,7 @@ protected:
 	}
 };
 
-void SingleFileBlockManager::WriteHeader(QueryContext &context, DatabaseHeader header) {
+void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list

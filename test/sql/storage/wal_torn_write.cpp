@@ -121,8 +121,7 @@ static void FlipWALByte(FileSystem &fs, const string &path, idx_t byte_pos) {
 	handle->Read(wal_contents.get(), wal_size, 0);
 	wal_contents[byte_pos]++;
 
-	QueryContext context;
-	handle->Write(context, wal_contents.get(), wal_size, 0);
+	handle->Write(QueryContext(), wal_contents.get(), wal_size, 0);
 }
 
 TEST_CASE("Test WAL checksums", "[storage][.]") {

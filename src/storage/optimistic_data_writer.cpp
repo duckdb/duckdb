@@ -27,9 +27,8 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
-		QueryContext query_context(context);
 		partial_manager =
-		    make_uniq<PartialBlockManager>(query_context, block_manager, PartialBlockType::APPEND_TO_TABLE);
+		    make_uniq<PartialBlockManager>(QueryContext(context), block_manager, PartialBlockType::APPEND_TO_TABLE);
 	}
 	return true;
 }

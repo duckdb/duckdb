@@ -436,7 +436,6 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
-	QueryContext query_context(context);
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
 		auto &data_info = info.allocator_infos[i];
@@ -454,7 +453,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockId();
-				block_manager->ConvertToPersistent(query_context, block_id, std::move(block_handle),
+				block_manager->ConvertToPersistent(QueryContext(context), block_id, std::move(block_handle),
 				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}

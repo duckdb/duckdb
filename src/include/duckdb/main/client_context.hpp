@@ -332,15 +332,8 @@ class QueryContext {
 public:
 	QueryContext() : context(nullptr) {
 	}
-	QueryContext(ClientContext &context) : context(context) {
-	}
 	QueryContext(optional_ptr<ClientContext> context) : context(context) {
 	}
-
-	QueryContext(const QueryContext &) = delete;
-	QueryContext &operator=(const QueryContext &) = delete;
-	QueryContext(QueryContext &&other) noexcept = delete;
-	QueryContext &operator=(QueryContext &&other) noexcept = delete;
 
 public:
 	bool Valid() const {

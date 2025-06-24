@@ -97,7 +97,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	SingleFileCheckpointWriter(QueryContext &context, AttachedDatabase &db, BlockManager &block_manager,
+	SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
 	                           CheckpointType checkpoint_type);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
@@ -112,8 +112,7 @@ public:
 	CheckpointType GetCheckpointType() const {
 		return checkpoint_type;
 	}
-
-	QueryContext &GetQueryContext() const {
+	optional_ptr<ClientContext> GetClientContext() const {
 		return context;
 	}
 
@@ -121,7 +120,7 @@ public:
 	void WriteTable(TableCatalogEntry &table, Serializer &serializer) override;
 
 private:
-	QueryContext &context;
+	optional_ptr<ClientContext> context;
 	//! The metadata writer is responsible for writing schema information
 	unique_ptr<MetadataWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks
