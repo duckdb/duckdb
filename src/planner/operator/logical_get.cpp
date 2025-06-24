@@ -221,6 +221,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
 	serializer.WritePropertyWithDefault<OrdinalityType>(213, "ordinality_request", ordinality_data.ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
+	serializer.WriteProperty(214, "column_id", ordinality_data.column_id);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -251,6 +252,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(213, "ordinality_request", result->ordinality_data.ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
+	deserializer.ReadProperty(214, "column_id", result->ordinality_data.column_id);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -274,8 +276,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
-		auto ordinality_pos = bind_return_types.begin() + result->ordinality_data.column_id;
-		bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
+		if (result->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY) {
+			auto ordinality_pos = bind_return_types.begin() + result->ordinality_data.column_id;
+			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
+		}
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
