@@ -164,8 +164,13 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 }
 
 bool TestConfiguration::ShouldSkipTest(const string &test) {
-	string skip_list = string(",") + GetOptionOrDefault("skip_tests", string()) + string(",");
-	string to_find = string(",") + test + string(",");
+
+	auto entry = options.find("skip_tests");
+	if (entry == options.end()) {
+		return false;
+	}
+	string skip_list = GetOptionOrDefault("skip_tests", string());
+	string to_find = string("\"") + test + string("\"");
 	if (skip_list.find(to_find) != std::string::npos) {
 		return true;
 	}
