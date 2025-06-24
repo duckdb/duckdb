@@ -31,14 +31,14 @@ SELECT * FROM enc.test ORDER BY 1
 13	22
 
 statement ok
-PRAGMA debug_disable_wal_encryption
+SET wal_encryption = false;
 
 statement ok
 INSERT INTO enc.test VALUES (10, 'hello')
 
 # enable WAL encryption for the other tests
 statement ok
-PRAGMA debug_enable_wal_encryption
+SET wal_encryption = true;
 
 restart
 
@@ -113,10 +113,10 @@ SELECT * FROM enc.test ORDER BY 1
 13	22
 
 statement ok
-PRAGMA debug_disable_wal_encryption
+SET wal_encryption = false;
 
 statement ok
-PRAGMA debug_enable_wal_encryption
+SET wal_encryption = true;
 
 statement ok
 INSERT INTO enc.test VALUES (10, 'hello')

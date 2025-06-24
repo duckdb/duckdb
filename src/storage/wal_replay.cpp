@@ -136,7 +136,7 @@ public:
 			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
 
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
-			auto derived_key = keys.GetKey(state_p.db.GetEncryptionKeyId());
+			auto derived_key = keys.GetKey(state_p.db.GetCatalog().GetEncryptionKeyId());
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
 			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);

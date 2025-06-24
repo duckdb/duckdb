@@ -21,6 +21,12 @@ public:
 public:
 	bool IsDuckCatalog() override;
 	void Initialize(bool load_builtin) override;
+
+	void SetEncryptionKeyId(const string &key_id) override;
+	string &GetEncryptionKeyId() override;
+	void SetIsEncrypted() override;
+	bool GetIsEncrypted() override;
+
 	string GetCatalogType() override {
 		return "duckdb";
 	}
@@ -79,6 +85,11 @@ private:
 	mutex write_lock;
 	//! The catalog set holding the schemas
 	unique_ptr<CatalogSet> schemas;
+
+	//! Identifies whether the db is encrypted
+	bool is_encrypted = false;
+	//! If is encrypted, store the encryption key_id
+	string encryption_key_id;
 };
 
 } // namespace duckdb
