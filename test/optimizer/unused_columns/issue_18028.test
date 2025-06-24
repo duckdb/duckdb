@@ -1,0 +1,18 @@
+# name: test/optimizer/unused_columns/issue_18028.test
+# description: Test remove unused columns with dynamic filters
+# group: [unused_columns]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+INSTALL tpch
+
+statement ok
+LOAD tpch;
+
+statement ok
+CALL dbgen(sf=0.1);
+
+statement ok
+SELECT * FROM (SELECT * FROM lineitem LIMIT 500) ORDER BY l_orderkey DESC LIMIT 10;

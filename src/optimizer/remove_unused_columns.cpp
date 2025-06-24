@@ -256,7 +256,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
-				VisitExpression(&filter_expr);
+				if (filter_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+					AddBinding(*column_ref);
+				} else {
+					VisitExpression(&filter_expr);
+				}
 				filter_expressions.push_back(std::move(filter_expr));
 			}
 
