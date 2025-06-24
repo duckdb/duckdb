@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -237,6 +239,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			ClearUnusedExpressions(proj_sel, get.table_index, false);
 
 			vector<unique_ptr<Expression>> filter_expressions;
+			vector<unique_ptr<BoundColumnRefExpression>> column_refs;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
@@ -258,6 +261,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				auto filter_expr = filter.second->ToExpression(*column_ref);
 				if (filter_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 					AddBinding(*column_ref);
+					column_refs.push_back(std::move(column_ref));
 				} else {
 					VisitExpression(&filter_expr);
 				}
