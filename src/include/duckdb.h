@@ -1090,6 +1090,18 @@ Returns `NULL` if the column is out of range.
 DUCKDB_C_API duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col);
 
 /*!
+Returns the client properties associated with the given result.
+
+This provides metadata about the client that executed the query, such as whether SSL was used or the client’s
+identifier.
+
+Returns default-initialized properties if unavailable.
+* @param result The result object to fetch client properties from.
+* @return The client properties associated with the given result.
+*/
+DUCKDB_C_API duckdb_client_properties duckdb_client_property(duckdb_result *result);
+
+/*!
 Returns the number of columns present in a the result object.
 
 * @param result The result object.

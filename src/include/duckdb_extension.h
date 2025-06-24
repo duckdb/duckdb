@@ -571,6 +571,11 @@ typedef struct {
 	void (*duckdb_destroy_client_properties)(duckdb_client_properties *properties);
 #endif
 
+// New query execution functions
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_client_properties (*duckdb_client_property)(duckdb_result *result);
+#endif
+
 // New functions around scalar function binding
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
@@ -1047,6 +1052,9 @@ typedef struct {
 #define duckdb_destroy_client_context           duckdb_ext_api.duckdb_destroy_client_context
 #define duckdb_destroy_client_properties        duckdb_ext_api.duckdb_destroy_client_properties
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
+
+// Version unstable_new_query_execution_functions
+#define duckdb_client_property duckdb_ext_api.duckdb_client_property
 
 // Version unstable_new_scalar_function_functions
 #define duckdb_scalar_function_set_bind            duckdb_ext_api.duckdb_scalar_function_set_bind

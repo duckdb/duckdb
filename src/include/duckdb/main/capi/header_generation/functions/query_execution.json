@@ -129,6 +129,23 @@
             }
         },
         {
+            "name": "duckdb_client_property",
+            "return_type": "duckdb_client_properties",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+           "comment": {
+                "description": "Returns the client properties associated with the given result.\n\nThis provides metadata about the client that executed the query, such as whether SSL was used or the client’s identifier.\n\nReturns default-initialized properties if unavailable.\n",
+                "param_comments": {
+                    "result": "The result object to fetch client properties from."
+                },
+                "return_value": "The client properties associated with the given result."
+            }
+        },
+        {
             "name": "duckdb_column_count",
             "return_type": "idx_t",
             "params": [
