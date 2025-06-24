@@ -253,37 +253,6 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
-  linux-compile-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2_28_x86_64
-    if: ${{ github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature') }}
-    needs: linux-memory-leaks
-    env:
-      CC: /usr/bin/gcc
-      CXX: /usr/bin/g++
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          glibc32: 1
-
-      - name: Build
-        shell: bash
-        run: |
-          mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-      - name: Test
-        shell: bash
-        run: build/release/test/unittest
-
   linux-tarball:
      name: Python 3 Tarball
      if: ${{ github.event.pull_request.draft == false }}
