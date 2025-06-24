@@ -204,15 +204,18 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	return SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
 }
 
-void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates) {
-	match_functions.reserve(predicates.size());
-	for (idx_t col_idx = 0; col_idx < predicates.size(); col_idx++) {
-		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[col_idx]));
-	}
-}
-
 void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates,
-                            vector<column_t> &columns) {
+                            vector<column_t> columns_p) {
+	if (columns_p.empty()) {
+		// Assume all columns
+		columns_p.reserve(predicates.size());
+		for (column_t col_idx = 0; col_idx < predicates.size(); col_idx++) {
+			columns_p.emplace_back(col_idx);
+		}
+	}
+
+	rhs_layout = &layout;
+	columns = columns_p;
 
 	// The columns must have the same size as the predicates vector
 	D_ASSERT(columns.size() == predicates.size());
@@ -222,27 +225,14 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 
 	match_functions.reserve(predicates.size());
 	for (idx_t idx = 0; idx < predicates.size(); idx++) {
-		column_t col_idx = columns[idx];
+		const column_t col_idx = columns[idx];
 		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[idx]));
+		rhs_types.push_back(layout.GetTypes()[col_idx]);
 	}
 }
 
 idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
-                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                        SelectionVector *no_match_sel, idx_t &no_match_count) {
-	D_ASSERT(!match_functions.empty());
-	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
-		const auto &match_function = match_functions[col_idx];
-		count =
-		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
-		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
-	}
-	return count;
-}
-
-idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
-                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                        SelectionVector *no_match_sel, idx_t &no_match_count, const vector<column_t> &columns) {
+                        idx_t count, Vector &rhs_row_locations, SelectionVector *no_match_sel, idx_t &no_match_count) {
 	D_ASSERT(!match_functions.empty());
 
 	// The column_ids must have the same size as the match_functions vector
@@ -258,7 +248,7 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 
 		const auto &match_function = match_functions[fun_idx];
 		count =
-		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
+		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, *rhs_layout, rhs_row_locations,
 		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
 	}
 	return count;

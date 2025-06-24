@@ -292,9 +292,9 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 
 		// Perform row comparisons, after Match function call salt_match_sel will point to the keys that match
 		keys_no_match_count = 0;
-		const idx_t keys_match_count = ht.row_matcher_build.Match(
-		    keys, key_state.vector_data, state.keys_to_compare_sel, keys_to_compare_count, *ht.layout_ptr,
-		    pointers_result_v, &state.keys_no_match_sel, keys_no_match_count);
+		const idx_t keys_match_count =
+		    ht.row_matcher_build.Match(keys, key_state.vector_data, state.keys_to_compare_sel, keys_to_compare_count,
+		                               pointers_result_v, &state.keys_no_match_sel, keys_no_match_count);
 
 		D_ASSERT(keys_match_count + keys_no_match_count == keys_to_compare_count);
 
@@ -562,9 +562,9 @@ static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinH
 	}
 
 	// Perform row comparisons
-	key_match_count = ht.row_matcher_build.Match(state.lhs_data, state.chunk_state.vector_data, state.key_match_sel,
-	                                             count, *ht.layout_ptr, state.rhs_row_locations,
-	                                             &state.keys_no_match_sel, key_no_match_count);
+	key_match_count =
+	    ht.row_matcher_build.Match(state.lhs_data, state.chunk_state.vector_data, state.key_match_sel, count,
+	                               state.rhs_row_locations, &state.keys_no_match_sel, key_no_match_count);
 
 	D_ASSERT(key_match_count + key_no_match_count == count);
 }
@@ -898,8 +898,8 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 
 		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely
 		// the non-equality columns
-		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, *ht.layout_ptr, pointers,
-		                      no_match_sel, no_match_count, ht.non_equality_predicate_columns);
+		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, pointers, no_match_sel,
+		                      no_match_count);
 	} else {
 		// no match sel is the opposite of match sel
 		return this->count;

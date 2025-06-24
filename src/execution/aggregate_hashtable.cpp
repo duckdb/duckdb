@@ -785,8 +785,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 			// Perform group comparisons
 			row_matcher.Match(state.group_chunk, state.partitioned_append_state.chunk_state.vector_data,
-			                  state.group_compare_vector, need_compare_count, *layout_ptr, addresses_v,
-			                  &state.no_match_vector, no_match_count);
+			                  state.group_compare_vector, need_compare_count, addresses_v, &state.no_match_vector,
+			                  no_match_count);
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
