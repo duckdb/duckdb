@@ -17,6 +17,14 @@ def test_autocomplete_select(shell, autocomplete_extension):
     result = test.run()
     result.check_stdout('SELECT')
 
+def test_autocomplete_first_from(shell, autocomplete_extension):
+    test = (
+        ShellTest(shell)
+        .statement("CALL sql_auto_complete('FRO')")
+    )
+    result = test.run()
+    result.check_stdout('FROM')
+
 def test_autocomplete_column(shell, autocomplete_extension):
     test = (
         ShellTest(shell)
@@ -102,7 +110,7 @@ def test_autocomplete_update(shell, autocomplete_extension):
     test = (
         ShellTest(shell)
         .statement("CREATE TABLE my_table(my_column INTEGER);")
-        .statement("SELECT * FROM sql_auto_complete('U') LIMIT 1;")
+        .statement("SELECT * FROM sql_auto_complete('UP') LIMIT 1;")
     )
     result = test.run()
     result.check_stdout('UPDATE')
@@ -256,7 +264,7 @@ def test_autocomplete_tpch(shell, autocomplete_extension):
         .statement("CREATE TABLE partsupp(ps_suppkey int);")
         .statement("CREATE TABLE supplier(s_suppkey int);")
         .statement("CREATE TABLE nation(n_nationkey int);")
-        .statement("SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_') LIMIT 1;")
+        .statement("SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_su') LIMIT 1;")
     )
     result = test.run()
     result.check_stdout('ps_suppkey')

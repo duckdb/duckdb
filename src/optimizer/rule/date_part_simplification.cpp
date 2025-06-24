@@ -92,11 +92,11 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(date_part.children[1]));
 
-	string error;
+	ErrorData error;
 	FunctionBinder binder(rewriter.context);
 	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, std::move(children), error, false);
 	if (!function) {
-		throw BinderException(error);
+		error.Throw();
 	}
 	return function;
 }

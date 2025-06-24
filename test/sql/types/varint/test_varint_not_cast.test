@@ -1,0 +1,15 @@
+# name: test/sql/types/varint/test_varint_not_cast.test
+# description: Test that varints don't try to cast to values they should now
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type bool	date	time	timestamp	timestamp_s	timestamp_ms	timestamp_ns	time_tz	timestamp_tz	dec_4_1	dec_9_4	dec_18_6	dec38_10	uuid	interval	blob	bit		int_array	double_array	date_array	timestamp_array	timestamptz_array	varchar_array	nested_int_array	struct	struct_of_arrays	array_of_structs	map	fixed_int_array	fixed_varchar_array	fixed_nested_int_array	fixed_nested_varchar_array	fixed_struct_array	struct_of_fixed_array	fixed_array_of_int_list	list_of_fixed_int_array
+
+statement error
+select ${type}::varint FROM test_all_types() limit 1;
+----
+Unimplemented type for cast
+
+endloop

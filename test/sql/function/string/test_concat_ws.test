@@ -68,9 +68,11 @@ MotörHead,SUFFIX
 # concat WS needs at least two parameters
 statement error
 select CONCAT_WS()
+----
 
 statement error
 select CONCAT_WS(',')
+----
 
 # one entry: just returns the entry
 query T

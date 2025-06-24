@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -23,7 +25,7 @@ class TransactionManager;
 //! current transaction
 class TransactionContext {
 public:
-	TransactionContext(ClientContext &context);
+	explicit TransactionContext(ClientContext &context);
 	~TransactionContext();
 
 	MetaTransaction &ActiveTransaction() {
@@ -33,19 +35,21 @@ public:
 		return *current_transaction;
 	}
 
-	bool HasActiveTransaction() {
-		return !!current_transaction;
+	bool HasActiveTransaction() const {
+		return current_transaction.get();
 	}
 
 	void BeginTransaction();
 	void Commit();
-	void Rollback();
+	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
 
 	void SetAutoCommit(bool value);
-	bool IsAutoCommit() {
+	bool IsAutoCommit() const {
 		return auto_commit;
 	}
+
+	void SetReadOnly();
 
 	idx_t GetActiveQuery();
 	void ResetActiveQuery();

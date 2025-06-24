@@ -1,3 +1,4 @@
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
@@ -17,10 +18,11 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<CaseExpressionState>(expr, root);
 	for (auto &case_check : expr.case_checks) {
-		result->AddChild(case_check.when_expr.get());
-		result->AddChild(case_check.then_expr.get());
+		result->AddChild(*case_check.when_expr);
+		result->AddChild(*case_check.then_expr);
 	}
-	result->AddChild(expr.else_expr.get());
+	result->AddChild(*expr.else_expr);
+
 	result->Finalize();
 	return std::move(result);
 }
@@ -57,7 +59,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 		} else {
 			// we need to execute and then fill in the desired tuples in the result
 			Execute(*case_check.then_expr, then_state, current_true_sel, tcount, intermediate_result);
-			FillSwitch(intermediate_result, result, *current_true_sel, tcount);
+			FillSwitch(intermediate_result, result, *current_true_sel, NumericCast<sel_t>(tcount));
 		}
 		// continue with the false tuples
 		current_sel = current_false_sel;
@@ -78,7 +80,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 
 			D_ASSERT(current_sel);
 			Execute(*expr.else_expr, else_state, current_sel, current_count, intermediate_result);
-			FillSwitch(intermediate_result, result, *current_sel, current_count);
+			FillSwitch(intermediate_result, result, *current_sel, NumericCast<sel_t>(current_count));
 		}
 	}
 	if (sel) {
@@ -169,6 +171,9 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 		break;
 	case PhysicalType::INT128:
 		TemplatedFillLoop<hugeint_t>(vector, result, sel, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedFillLoop<uhugeint_t>(vector, result, sel, count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedFillLoop<float>(vector, result, sel, count);

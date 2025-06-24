@@ -14,7 +14,7 @@ WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type,
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
+      function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -28,6 +28,7 @@ WindowExpression::WindowExpression(ExpressionType type, string catalog_name, str
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_FILL:
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
@@ -57,6 +58,8 @@ ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_LAG;
 	} else if (fun_name == "ntile") {
 		return ExpressionType::WINDOW_NTILE;
+	} else if (fun_name == "fill") {
+		return ExpressionType::WINDOW_FILL;
 	}
 	return ExpressionType::WINDOW_AGGREGATE;
 }
@@ -70,17 +73,39 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	if (a.ignore_nulls != b.ignore_nulls) {
 		return false;
 	}
+	if (a.distinct != b.distinct) {
+		return false;
+	}
 	if (!ParsedExpression::ListEquals(a.children, b.children)) {
 		return false;
 	}
 	if (a.start != b.start || a.end != b.end) {
 		return false;
 	}
-	// check if the framing expressions are equivalentbind_
+	if (a.exclude_clause != b.exclude_clause) {
+		return false;
+	}
+	// check if the framing expressions are equivalent
 	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
 	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
 	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
 		return false;
+	}
+
+	// check if the argument orderings are equivalent
+	if (a.arg_orders.size() != b.arg_orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < a.arg_orders.size(); i++) {
+		if (a.arg_orders[i].type != b.arg_orders[i].type) {
+			return false;
+		}
+		if (a.arg_orders[i].null_order != b.arg_orders[i].null_order) {
+			return false;
+		}
+		if (!a.arg_orders[i].expression->Equals(*b.arg_orders[i].expression)) {
+			return false;
+		}
 	}
 
 	// check if the partitions are equivalent
@@ -93,6 +118,9 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	}
 	for (idx_t i = 0; i < a.orders.size(); i++) {
 		if (a.orders[i].type != b.orders[i].type) {
+			return false;
+		}
+		if (a.orders[i].null_order != b.orders[i].null_order) {
 			return false;
 		}
 		if (!a.orders[i].expression->Equals(*b.orders[i].expression)) {
@@ -123,15 +151,21 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
+	for (auto &o : arg_orders) {
+		new_window->arg_orders.emplace_back(o.type, o.null_order, o.expression->Copy());
+	}
+
 	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
 
 	new_window->start = start;
 	new_window->end = end;
+	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
+	new_window->distinct = distinct;
 
 	return std::move(new_window);
 }

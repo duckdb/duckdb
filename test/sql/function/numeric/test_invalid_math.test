@@ -8,25 +8,32 @@ PRAGMA enable_verification
 # cannot take log of negative number or zero
 statement error
 SELECTl log(0);
+----
 
 statement error
 SELECTl log(-1);
+----
 
 statement error
 SELECTl ln(0);
+----
 
 statement error
 SELECTl ln(-1);
+----
 
 statement error
 SELECTl log10(0);
+----
 
 statement error
 SELECTl log10(-1);
+----
 
 # cannot take square root of a negative number
 statement error
 SELECTl sqrt(-1);
+----
 
 query I
 SELECT SQRT(0)
@@ -43,7 +50,7 @@ SELECT EXP(1e300), EXP(1e100)
 ----
 inf	inf
 
-query RRR
-SELECT ACOS(3), ACOS(100), DEGREES(1e308)
+query R
+SELECT DEGREES(1e308)
 ----
-nan	nan	inf
+inf

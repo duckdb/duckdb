@@ -12,4 +12,8 @@ unique_ptr<SQLStatement> PragmaStatement::Copy() const {
 	return unique_ptr<PragmaStatement>(new PragmaStatement(*this));
 }
 
+string PragmaStatement::ToString() const {
+	return info->ToString();
+}
+
 } // namespace duckdb

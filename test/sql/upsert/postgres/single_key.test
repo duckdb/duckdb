@@ -45,13 +45,9 @@ insert into insertconflicttest values (2, 'Orange') on conflict (key, key, key) 
 
 # Succeed, since multi-assignment does not involve subquery:
 
-## -- We don't allow assigning to the column that's part of an Index -- ##
-statement error
-insert into insertconflicttest
-values (1, 'Apple'), (2, 'Orange')
-on conflict (key) do update set fruit = excluded.fruit, key = excluded.key;
-----
-Binder Error: Can not assign to column 'key' because it has a UNIQUE/PRIMARY KEY constraint
+statement ok
+INSERT INTO insertconflicttest VALUES (1, 'Apple'), (2, 'Orange')
+ON CONFLICT (key) DO UPDATE SET fruit = excluded.fruit, key = excluded.key;
 
 # Give good diagnostic message when EXCLUDED.* spuriously referenced from
 # RETURNING:
@@ -66,25 +62,31 @@ Not implemented Error: 'excluded' qualified columns are not supported in the RET
 
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (keyy) do update set fruit = excluded.fruit;
+----
 
 # Have useful HINT for EXCLUDED.* RTE within UPDATE:
 
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
+----
 
 # inference fails:
 
 statement error
 insert into insertconflicttest values (3, 'Kiwi') on conflict (key, fruit) do update set fruit = excluded.fruit;
+----
 
 statement error
 insert into insertconflicttest values (4, 'Mango') on conflict (fruit, key) do update set fruit = excluded.fruit;
+----
 
 statement error
 insert into insertconflicttest values (5, 'Lemon') on conflict (fruit) do update set fruit = excluded.fruit;
+----
 
 statement error
 insert into insertconflicttest values (6, 'Passionfruit') on conflict (fruit) do update set fruit = excluded.fruit;
+----
 
 # Check the target relation can be aliased
 
@@ -96,6 +98,7 @@ statement ok
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = ict.fruit;
 # ok, alias
 
+# error, references aliased away name
 statement error
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = insertconflicttest.fruit;
-# error, references aliased away name
+----

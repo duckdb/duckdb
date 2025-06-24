@@ -31,6 +31,9 @@ enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FIN
 //! HAVE_MORE_OUTPUT means the operator contains more results.
 enum class OperatorFinalizeResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED };
 
+//! OperatorFinalResultType is used for the final call
+enum class OperatorFinalResultType : uint8_t { FINISHED, BLOCKED };
+
 //! SourceResultType is used to indicate the result of data being pulled out of a source.
 //! There are three possible results:
 //! HAVE_MORE_OUTPUT means the source has more output, this flag should only be set when data is returned, empty results
@@ -55,5 +58,11 @@ enum class SinkCombineResultType : uint8_t { FINISHED, BLOCKED };
 //! NO_OUTPUT_POSSIBLE means the sink will never provide output, and any pipelines involving the sink can be skipped
 //! BLOCKED means the finalize call to the sink is currently blocked, e.g. by some async I/O.
 enum class SinkFinalizeType : uint8_t { READY, NO_OUTPUT_POSSIBLE, BLOCKED };
+
+//! The SinkNextBatchType is used to indicate the result of a NextBatch call on a sink
+//! There are two possible results:
+//! READY means the sink is ready for further processing
+//! BLOCKED means the NextBatch call to the sink is currently blocked, e.g. by some async I/O.
+enum class SinkNextBatchType : uint8_t { READY, BLOCKED };
 
 } // namespace duckdb

@@ -1,20 +1,36 @@
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
+void CommonAggregateOptimizer::StandardVisitOperator(LogicalOperator &op) {
+	VisitOperatorChildren(op);
+	if (!aggregate_map.empty()) {
+		VisitOperatorExpressions(op);
+	}
+}
+
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
-	LogicalOperatorVisitor::VisitOperator(op);
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
-		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		CommonAggregateOptimizer common_aggregate;
+		common_aggregate.StandardVisitOperator(op);
+		return;
+	}
 	default:
 		break;
+	}
+
+	StandardVisitOperator(op);
+	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
 	}
 }
 
@@ -47,7 +63,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 		} else {
 			// aggregate already exists! we can remove this entry
 			total_erased++;
-			aggr.expressions.erase(aggr.expressions.begin() + i);
+			aggr.expressions.erase_at(i);
 			i--;
 			// we need to remap any references to this aggregate so they point to the other aggregate
 			ColumnBinding original_binding(aggr.aggregate_index, original_index);

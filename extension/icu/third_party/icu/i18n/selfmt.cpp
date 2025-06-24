@@ -164,7 +164,7 @@ SelectFormat::operator=(const SelectFormat& other) {
     return *this;
 }
 
-UBool
+bool
 SelectFormat::operator==(const Format& other) const {
     if (this == &other) {
         return TRUE;
@@ -176,7 +176,7 @@ SelectFormat::operator==(const Format& other) const {
     return msgPattern == o.msgPattern;
 }
 
-UBool
+bool
 SelectFormat::operator!=(const Format& other) const {
     return  !operator==(other);
 }

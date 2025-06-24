@@ -1,0 +1,38 @@
+# name: test/sql/copy/csv/test_timestamptz_12926.test
+# description: Test CSV with a timestamptz
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_csv('data/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ]);
+----
+Could not convert string "1/1/2020" to 'TIMESTAMP WITH TIME ZONE'
+
+query I
+FROM read_csv('data/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ], timestampformat = '%d/%m/%Y');
+----
+2020-01-01 00:00:00+00
+2020-01-01 00:00:00+00
+2020-01-01 00:00:00+00
+1995-07-05 00:00:00+00
+
+statement ok
+CREATE TABLE test (column0 timestamptz);
+
+statement error
+INSERT INTO test SELECT * FROM 'data/csv/timestamp_tz.csv';
+----
+Could not convert string "1/1/2020" to 'TIMESTAMP WITH TIME ZONE'
+
+statement ok
+INSERT INTO test SELECT * FROM  read_csv('data/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ], timestampformat = '%d/%m/%Y');
+
+query I
+FROM test
+----
+2020-01-01 00:00:00+00
+2020-01-01 00:00:00+00
+2020-01-01 00:00:00+00
+1995-07-05 00:00:00+00

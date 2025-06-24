@@ -1,0 +1,43 @@
+# name: test/sql/show_select/describe_subquery.test
+# description: Test describe in subquery
+# group: [show_select]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT column_name FROM (DESCRIBE SELECT 42 AS a)
+----
+a
+
+query I
+SELECT t.column_name FROM (DESCRIBE SELECT 42 AS a) t
+----
+a
+
+statement ok
+(DESCRIBE SELECT 42 AS a)
+
+statement ok
+CREATE TABLE t AS SELECT 42 AS a
+
+query I
+SELECT t.column_name FROM (DESCRIBE t) t
+----
+a
+
+statement ok
+FROM (SHOW databases) t
+
+query I
+SELECT column_name FROM (DESCRIBE ( DESCRIBE SELECT * FROM (SELECT 32 as a)));
+----
+column_name
+column_type
+null
+key
+default
+extra
+
+statement ok
+(DESCRIBE (values(42))) UNION ALL (DESCRIBE (values(42)));

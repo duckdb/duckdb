@@ -103,7 +103,7 @@ public:
      * @return       true if this object is equal to the given object.
      * @stable ICU 4.2
      */
-    virtual UBool operator==(const UObject& other) const;
+    virtual bool operator==(const UObject& other) const;
 
 
     /** 
@@ -112,7 +112,7 @@ public:
      * @return       true if this object is not equal to the given object.
      * @stable ICU 4.2
      */
-    UBool operator!=(const UObject& other) const;
+    bool operator!=(const UObject& other) const;
 
 
     /**
@@ -160,7 +160,7 @@ public:
 
 
 
-inline UBool 
+inline bool
 TimeUnitAmount::operator!=(const UObject& other) const {
     return !operator==(other);
 }

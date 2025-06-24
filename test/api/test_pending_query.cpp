@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 
 #include <thread>
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -92,21 +93,24 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
+
 	SECTION("Runtime error in pending query (streaming)") {
 		// this succeeds initially
 		auto pending_query =
 		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)", true);
 		REQUIRE(!pending_query->HasError());
-		// still succeeds...
 		auto result = pending_query->Execute();
-		REQUIRE(!result->HasError());
-		auto chunk = result->Fetch();
-		REQUIRE(!chunk);
 		REQUIRE(result->HasError());
 
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+	SECTION("Pending results errors as JSON") {
+		con.Query("SET errors_as_json = true;");
+		auto pending_query = con.PendingQuery("SELCT 32;");
+		REQUIRE(pending_query->HasError());
+		REQUIRE(duckdb::StringUtil::Contains(pending_query->GetError(), "SYNTAX_ERROR"));
 	}
 }
 
@@ -190,10 +194,6 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		REQUIRE(!pending_query->HasError());
 		// still succeeds...
 		auto result = pending_query->Execute();
-		REQUIRE(!result->HasError());
-		//! fail!
-		auto chunk = result->Fetch();
-		REQUIRE(!chunk);
 		REQUIRE(result->HasError());
 
 		// query the connection as normal after
@@ -203,8 +203,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		// if we change the parameter this works
 		parameters = {Value::INTEGER(2000000)};
 		pending_query = prepared->PendingQuery(parameters, true);
-		REQUIRE(!pending_query->HasError());
-		// still succeeds...
+
 		result = pending_query->Execute();
 		REQUIRE(!result->HasError());
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(0)}));

@@ -1,0 +1,28 @@
+# name: test/sql/alter/add_pk/test_add_multi_column_pk.test
+# description: Test adding a multi-column PRIMARY KEY to a table.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER, d TEXT);
+
+statement ok
+INSERT INTO test VALUES (3, 4, 'hello'), (44, 45, '56');
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (i, j);
+
+statement ok
+INSERT INTO test VALUES (1, 1, 'foo'), (1, 2, 'bar');
+
+statement error
+INSERT INTO test VALUES (1, 2, 'oops');
+----
+<REGEX>:Constraint Error.*Duplicate key "i: 1, j: 2" violates primary key constraint.*
+
+statement error
+INSERT INTO test VALUES (NULL, 2, 'nada');
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed: test.i.*

@@ -11,13 +11,14 @@ LogicalDistinct::LogicalDistinct(vector<unique_ptr<Expression>> targets, Distinc
       distinct_targets(std::move(targets)) {
 }
 
-string LogicalDistinct::ParamsToString() const {
-	string result = LogicalOperator::ParamsToString();
+InsertionOrderPreservingMap<string> LogicalDistinct::ParamsToString() const {
+	auto result = LogicalOperator::ParamsToString();
 	if (!distinct_targets.empty()) {
-		result += StringUtil::Join(distinct_targets, distinct_targets.size(), "\n",
-		                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
+		result["Distinct Targets"] =
+		    StringUtil::Join(distinct_targets, distinct_targets.size(), "\n",
+		                     [](const unique_ptr<Expression> &child) { return child->GetName(); });
 	}
-
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

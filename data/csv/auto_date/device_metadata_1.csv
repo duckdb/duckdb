@@ -1,0 +1,26 @@
+device_id,device_name,device_type,manufacturer,model_number,firmware_version,installation_date,location_id,location_name,facility_zone,is_active,expected_lifetime_months,maintenance_interval_days,last_maintenance_date
+DEV000,Motor_000,Motor,Emerson,MOD736,2.9.1,2023-10-15,LOC4,South Plant,Zone B,True,83,60,2023-12-17
+DEV001,Motor_001,Motor,Emerson,MOD537,4.4.6,2023-02-20,LOC3,South Plant,Zone A,True,88,30,2023-12-14
+DEV002,Motor_002,Motor,GE,MOD780,1.5.2,2023-08-08,LOC1,North Plant,Zone A,True,65,180,2023-12-20
+DEV003,Motor_003,Motor,Schneider,MOD605,4.3.4,2023-04-17,LOC3,South Plant,Zone A,True,113,180,2023-12-12
+DEV004,Valve_004,Valve,Siemens,MOD922,1.6.0,2023-06-29,LOC3,South Plant,Zone A,True,61,60,2023-12-04
+DEV005,Compressor_005,Compressor,Schneider,MOD437,3.4.8,2023-07-17,LOC4,South Plant,Zone B,True,71,60,2023-12-27
+DEV006,Valve_006,Valve,GE,MOD131,2.7.5,2023-06-14,LOC4,South Plant,Zone B,True,105,30,2023-12-10
+DEV007,Motor_007,Motor,Schneider,MOD129,3.5.9,2023-10-23,LOC1,North Plant,Zone A,True,100,30,2023-12-14
+DEV008,Motor_008,Motor,ABB,MOD370,4.5.3,2023-11-16,LOC4,South Plant,Zone B,True,91,90,2023-12-07
+DEV009,Pump_009,Pump,GE,MOD285,2.9.0,2023-09-17,LOC1,North Plant,Zone A,True,77,90,2023-12-25
+DEV010,Valve_010,Valve,GE,MOD980,3.5.0,2023-01-30,LOC4,South Plant,Zone B,True,101,60,2023-12-30
+DEV011,Valve_011,Valve,GE,MOD751,3.3.4,2023-01-01,LOC1,North Plant,Zone A,True,92,60,2023-12-04
+DEV012,Valve_012,Valve,Schneider,MOD397,1.9.6,2023-09-06,LOC2,North Plant,Zone B,True,75,180,2023-12-29
+DEV013,Compressor_013,Compressor,Schneider,MOD104,4.2.3,2023-10-07,LOC3,South Plant,Zone A,True,102,30,2023-12-26
+DEV014,Pump_014,Pump,Schneider,MOD624,1.3.1,2023-11-10,LOC2,North Plant,Zone B,True,75,60,2023-12-09
+DEV015,Motor_015,Motor,GE,MOD245,1.8.3,2023-10-02,LOC3,South Plant,Zone A,True,86,90,2023-12-11
+DEV016,Compressor_016,Compressor,Siemens,MOD769,3.0.0,2023-06-14,LOC3,South Plant,Zone A,True,99,90,2023-12-22
+DEV017,Motor_017,Motor,Emerson,MOD105,4.4.2,2023-10-06,LOC4,South Plant,Zone B,True,83,90,2023-12-23
+DEV018,Motor_018,Motor,Schneider,MOD956,4.4.8,2023-08-02,LOC3,South Plant,Zone A,True,102,30,2023-12-31
+DEV019,Compressor_019,Compressor,Emerson,MOD710,1.3.8,2023-10-02,LOC4,South Plant,Zone B,True,91,30,2023-12-30
+DEV020,Valve_020,Valve,GE,MOD194,1.2.8,2023-02-15,LOC4,South Plant,Zone B,True,66,180,2023-12-14
+DEV021,Compressor_021,Compressor,Emerson,MOD435,2.8.5,2023-10-20,LOC4,South Plant,Zone B,True,107,180,2023-12-20
+DEV022,Generator_022,Generator,Emerson,MOD593,3.3.6,2023-01-08,LOC2,North Plant,Zone B,True,107,180,2023-12-04
+DEV023,Generator_023,Generator,Emerson,MOD672,2.6.8,2023-11-01,LOC4,South Plant,Zone B,True,108,180,2023-12-09
+DEV024,Pump_024,Pump,Emerson,MOD862,3.4.0,2023-02-12,LOC1,North Plant,Zone A,True,81,60,2023-12-05

@@ -15,6 +15,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IS_NULL";
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		return "IS_NOT_NULL";
+	case ExpressionType::OPERATOR_UNPACK:
+		return "UNPACK";
 	case ExpressionType::COMPARE_EQUAL:
 		return "EQUAL";
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -77,6 +79,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LAG";
 	case ExpressionType::WINDOW_NTILE:
 		return "NTILE";
+	case ExpressionType::WINDOW_FILL:
+		return "FILL";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::CASE_EXPR:
@@ -85,6 +89,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "NULLIF";
 	case ExpressionType::OPERATOR_COALESCE:
 		return "COALESCE";
+	case ExpressionType::OPERATOR_TRY:
+		return "TRY";
 	case ExpressionType::ARRAY_EXTRACT:
 		return "ARRAY_EXTRACT";
 	case ExpressionType::ARRAY_SLICE:
@@ -99,6 +105,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "PLACEHOLDER";
 	case ExpressionType::COLUMN_REF:
 		return "COLUMN_REF";
+	case ExpressionType::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionType::FUNCTION_REF:
 		return "FUNCTION_REF";
 	case ExpressionType::TABLE_REF:
@@ -139,6 +147,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LAMBDA";
 	case ExpressionType::ARROW:
 		return "ARROW";
+	case ExpressionType::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	case ExpressionType::INVALID:
 		break;
 	}
@@ -156,6 +166,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "CAST";
 	case ExpressionClass::COLUMN_REF:
 		return "COLUMN_REF";
+	case ExpressionClass::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionClass::COMPARISON:
 		return "COMPARISON";
 	case ExpressionClass::CONJUNCTION:
@@ -220,6 +232,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_LAMBDA";
 	case ExpressionClass::BOUND_EXPRESSION:
 		return "BOUND_EXPRESSION";
+	case ExpressionClass::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
 		return "ExpressionClass::!!UNIMPLEMENTED_CASE!!";
 	}

@@ -4,7 +4,6 @@ add_library_unity(
   query_graph.cpp
   join_relation_set.cpp
   join_node.cpp
-  estimated_properties.cpp
   join_order_optimizer.cpp
   cardinality_estimator.cpp
   cost_model.cpp

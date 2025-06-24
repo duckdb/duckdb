@@ -29,6 +29,9 @@ public:
 	JoinRefType join_ref_type;
 	vector<ColumnDefinition> columns;
 
+	vector<unique_ptr<ParsedExpression>> duplicate_eliminated_columns;
+	bool delim_flipped = false;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 

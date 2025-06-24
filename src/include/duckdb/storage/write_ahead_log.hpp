@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/enums/wal_type.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/common/enums/wal_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -34,56 +35,10 @@ class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
+class WriteAheadLogDeserializer;
+struct PersistentCollectionData;
 
-class ReplayState {
-public:
-	ReplayState(AttachedDatabase &db, ClientContext &context)
-	    : db(db), context(context), catalog(db.GetCatalog()), deserialize_only(false) {
-	}
-
-	AttachedDatabase &db;
-	ClientContext &context;
-	Catalog &catalog;
-	optional_ptr<TableCatalogEntry> current_table;
-	bool deserialize_only;
-	MetaBlockPointer checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type, BinaryDeserializer &deserializer);
-
-protected:
-	virtual void ReplayCreateTable(BinaryDeserializer &deserializer);
-	void ReplayDropTable(BinaryDeserializer &deserializer);
-	void ReplayAlter(BinaryDeserializer &deserializer);
-
-	void ReplayCreateView(BinaryDeserializer &deserializer);
-	void ReplayDropView(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSchema(BinaryDeserializer &deserializer);
-	void ReplayDropSchema(BinaryDeserializer &deserializer);
-
-	void ReplayCreateType(BinaryDeserializer &deserializer);
-	void ReplayDropType(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSequence(BinaryDeserializer &deserializer);
-	void ReplayDropSequence(BinaryDeserializer &deserializer);
-	void ReplaySequenceValue(BinaryDeserializer &deserializer);
-
-	void ReplayCreateMacro(BinaryDeserializer &deserializer);
-	void ReplayDropMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateTableMacro(BinaryDeserializer &deserializer);
-	void ReplayDropTableMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateIndex(BinaryDeserializer &deserializer);
-	void ReplayDropIndex(BinaryDeserializer &deserializer);
-
-	void ReplayUseTable(BinaryDeserializer &deserializer);
-	void ReplayInsert(BinaryDeserializer &deserializer);
-	void ReplayDelete(BinaryDeserializer &deserializer);
-	void ReplayUpdate(BinaryDeserializer &deserializer);
-	void ReplayCheckpoint(BinaryDeserializer &deserializer);
-};
+enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -92,20 +47,27 @@ protected:
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(AttachedDatabase &database, const string &path);
+	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size = 0ULL,
+	                       WALInitState state = WALInitState::NO_WAL);
 	virtual ~WriteAheadLog();
 
-	//! Skip writing to the WAL
-	bool skip_writing;
-
 public:
-	//! Replay the WAL
-	static bool Replay(AttachedDatabase &database, string &path);
+	//! Replay and initialize the WAL
+	static unique_ptr<WriteAheadLog> Replay(FileSystem &fs, AttachedDatabase &database, const string &wal_path);
 
-	//! Returns the current size of the WAL in bytes
-	int64_t GetWALSize();
+	AttachedDatabase &GetDatabase();
+
 	//! Gets the total bytes written to the WAL since startup
-	idx_t GetTotalWritten();
+	idx_t GetWALSize() const;
+	//! Gets the total bytes written to the WAL since startup
+	idx_t GetTotalWritten() const;
+
+	//! A WAL is initialized, if a writer to a file exists.
+	bool Initialized() const;
+	//! Initializes the file of the WAL by creating the file writer.
+	BufferedFileWriter &Initialize();
+
+	void WriteVersion();
 
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);
@@ -118,7 +80,7 @@ public:
 
 	void WriteCreateSequence(const SequenceCatalogEntry &entry);
 	void WriteDropSequence(const SequenceCatalogEntry &entry);
-	void WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val);
+	void WriteSequenceValue(SequenceValue val);
 
 	void WriteCreateMacro(const ScalarMacroCatalogEntry &entry);
 	void WriteDropMacro(const ScalarMacroCatalogEntry &entry);
@@ -132,11 +94,12 @@ public:
 	void WriteCreateType(const TypeCatalogEntry &entry);
 	void WriteDropType(const TypeCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
-	void WriteSetTable(string &schema, string &table);
+	void WriteSetTable(const string &schema, const string &table);
 
-	void WriteAlter(const AlterInfo &info);
+	void WriteAlter(CatalogEntry &entry, const AlterInfo &info);
 
 	void WriteInsert(DataChunk &chunk);
+	void WriteRowGroupData(const PersistentCollectionData &data);
 	void WriteDelete(DataChunk &chunk);
 	//! Write a single (sub-) column update to the WAL. Chunk must be a pair of (COL, ROW_ID).
 	//! The column_path vector is a *path* towards a column within the table
@@ -149,7 +112,7 @@ public:
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
-	void Truncate(int64_t size);
+	void Truncate(idx_t size);
 	//! Delete the WAL file on disk. The WAL should not be used after this point.
 	void Delete();
 	void Flush();
@@ -157,9 +120,15 @@ public:
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
+	static unique_ptr<WriteAheadLog> ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+
+protected:
 	AttachedDatabase &database;
+	mutex wal_lock;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
+	atomic<idx_t> wal_size;
+	atomic<WALInitState> init_state;
 };
 
 } // namespace duckdb

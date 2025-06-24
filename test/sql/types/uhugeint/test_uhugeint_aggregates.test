@@ -1,0 +1,44 @@
+# name: test/sql/types/uhugeint/test_uhugeint_aggregates.test
+# description: Test uhugeint aggregates
+# group: [uhugeint]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE hugeints(g INTEGER, h UHUGEINT);
+
+statement ok
+INSERT INTO hugeints VALUES (1, 42), (2, 1267650600228229401496703205376), (2, 0), (1, '8');
+
+# min, max, first, sum
+# ungrouped aggregate
+query IIIII
+SELECT MIN(h), MAX(h), SUM(h), FIRST(h), LAST(h) FROM hugeints;
+----
+0	1267650600228229401496703205376	1267650600228229401496703205426	42	8
+
+# grouped aggregate
+query IIIIII
+SELECT g, MIN(h), MAX(h), SUM(h), FIRST(h), LAST(h) FROM hugeints GROUP BY g ORDER BY 1;
+----
+1	8	42	50	42	8
+2	0	1267650600228229401496703205376	1267650600228229401496703205426	1267650600228229401496703205376	0
+
+# first aggr gets confused otherwise
+statement ok
+PRAGMA threads=1
+
+# ungrouped aggregate
+query II
+SELECT FIRST(h), LAST(h) FROM hugeints;
+----
+42	8
+
+# grouped aggregate
+query III
+SELECT g, FIRST(h), LAST(h) FROM hugeints GROUP BY g ORDER BY 1;
+----
+1	42	8
+2	1267650600228229401496703205376	0
+

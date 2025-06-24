@@ -12,6 +12,13 @@
 
 namespace duckdb {
 
-enum class PendingExecutionResult : uint8_t { RESULT_READY, RESULT_NOT_READY, EXECUTION_ERROR, NO_TASKS_AVAILABLE };
+enum class PendingExecutionResult : uint8_t {
+	RESULT_READY,
+	RESULT_NOT_READY,
+	EXECUTION_ERROR,
+	BLOCKED,
+	NO_TASKS_AVAILABLE,
+	EXECUTION_FINISHED
+};
 
 } // namespace duckdb

@@ -14,8 +14,9 @@ namespace duckdb {
 
 class TpchExtension : public Extension {
 public:
-	void Load(DuckDB &db) override;
+	void Load(ExtensionLoader &loader) override;
 	std::string Name() override;
+	std::string Version() const override;
 
 	//! Gets the specified TPC-H Query number as a string
 	static std::string GetQuery(int query);

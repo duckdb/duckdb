@@ -37,12 +37,14 @@ SELECT
     GROUPING()
 FROM tbl_ProductSales
 GROUP BY Product_Category
+----
 
 statement error
 SELECT
     1
 FROM tbl_ProductSales
 GROUP BY GROUPING(Product_Name)
+----
 
 statement error
 SELECT
@@ -50,39 +52,46 @@ SELECT
 FROM tbl_ProductSales
 WHERE GROUPING(Product_Category) > 1
 GROUP BY GROUPING SETS((Product_Category))
+----
 
 statement error
 SELECT
     AVG(GROUPING(Product_Category))
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS((Product_Category))
+----
 
 statement error
 SELECT
     GROUPING(1)
 FROM tbl_ProductSales
 GROUP BY Product_Category
+----
 
 statement error
 SELECT
     col1 IN (SELECT ColID + col2 FROM tbl_ProductSales)
 FROM another_T
 GROUP BY ROLLUP(col1)
+----
 
 statement error
 SELECT
     (SELECT GROUPING(t1.col1) FROM tbl_ProductSales)
 FROM another_T t1
+----
 
 statement error
 SELECT
     GROUPING(Product_Name)
 FROM tbl_ProductSales
+----
 
 statement error
 SELECT
     GROUPING(Product_Name)
 FROM tbl_ProductSales GROUP BY ()
+----
 
 query I rowsort
 SELECT
@@ -433,6 +442,7 @@ FROM tbl_ProductSales
 INNER JOIN tbl_X
 ON tbl_ProductSales.ColID = tbl_X.ColID
 GROUP BY CUBE(tbl_ProductSales.Product_Category)
+----
 
 query I rowsort
 SELECT

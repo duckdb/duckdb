@@ -2,17 +2,17 @@
 # description: Test interactions with the SYSTEM catalog
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
 # cannot detach system/temp catalogs
 statement error
 DETACH DATABASE system
+----
 
 statement error
 DETACH DATABASE temp
+----
 
 # cannot create entries in the system catalog
 statement error

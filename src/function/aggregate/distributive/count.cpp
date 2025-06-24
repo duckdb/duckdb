@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
@@ -34,23 +35,26 @@ struct CountStarFunction : public BaseCountFunction {
 	}
 
 	template <typename RESULT_TYPE>
-	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
-		D_ASSERT(input_count == 0);
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition, const_data_ptr_t,
+	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
+		D_ASSERT(partition.column_ids.empty());
+
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
-		const auto begin = frame.start;
-		const auto end = frame.end;
-		// Slice to any filtered rows
-		if (!filter_mask.AllValid()) {
-			RESULT_TYPE filtered = 0;
-			for (auto i = begin; i < end; ++i) {
-				filtered += filter_mask.RowIsValid(i);
+		RESULT_TYPE total = 0;
+		for (const auto &frame : frames) {
+			const auto begin = frame.start;
+			const auto end = frame.end;
+
+			// Slice to any filtered rows
+			if (partition.filter_mask.AllValid()) {
+				total += end - begin;
+				continue;
 			}
-			data[rid] = filtered;
-		} else {
-			data[rid] = end - begin;
+			for (auto i = begin; i < end; ++i) {
+				total += partition.filter_mask.RowIsValid(i);
+			}
 		}
+		data[rid] = total;
 	}
 };
 
@@ -62,7 +66,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 
 	static void ConstantOperation(STATE &state, idx_t count) {
-		state += count;
+		state += UnsafeNumericCast<STATE>(count);
 	}
 
 	static bool IgnoreNull() {
@@ -144,7 +148,7 @@ struct CountFunction : public BaseCountFunction {
 			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
 				// all valid
-				result += next - base_idx;
+				result += UnsafeNumericCast<STATE>(next - base_idx);
 				base_idx = next;
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
@@ -166,7 +170,7 @@ struct CountFunction : public BaseCountFunction {
 	                                   const SelectionVector &sel_vector) {
 		if (mask.AllValid()) {
 			// no NULL values
-			result += count;
+			result += UnsafeNumericCast<STATE>(count);
 			return;
 		}
 		for (idx_t i = 0; i < count; i++) {
@@ -184,7 +188,7 @@ struct CountFunction : public BaseCountFunction {
 		case VectorType::CONSTANT_VECTOR: {
 			if (!ConstantVector::IsNull(input)) {
 				// if the constant is not null increment the state
-				result += count;
+				result += UnsafeNumericCast<STATE>(count);
 			}
 			break;
 		}
@@ -194,7 +198,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			// sequence vectors cannot have NULL values
-			result += count;
+			result += UnsafeNumericCast<STATE>(count);
 			break;
 		}
 		default: {
@@ -207,7 +211,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-AggregateFunction CountFun::GetFunction() {
+AggregateFunction CountFunctionBase::GetFunction() {
 	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
 	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
 	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
@@ -222,6 +226,7 @@ AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = CountStarFunction::Window<int64_t>;
 	return fun;
 }
@@ -237,23 +242,14 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
 	return nullptr;
 }
 
-void CountFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction count_function = CountFun::GetFunction();
+AggregateFunctionSet CountFun::GetFunctions() {
+	AggregateFunction count_function = CountFunctionBase::GetFunction();
 	count_function.statistics = CountPropagateStats;
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
-	count_function.arguments.clear();
-	count_function.statistics = nullptr;
-	count_function.window = CountStarFunction::Window<int64_t>;
-	count.AddFunction(count_function);
-	set.AddFunction(count);
-}
-
-void CountStarFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet count("count_star");
 	count.AddFunction(CountStarFun::GetFunction());
-	set.AddFunction(count);
+	return count;
 }
 
 } // namespace duckdb

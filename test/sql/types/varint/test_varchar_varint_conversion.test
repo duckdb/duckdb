@@ -1,0 +1,74 @@
+# name: test/sql/types/varint/test_varchar_varint_conversion.test
+# description: Test basics of varint type
+# group: [varint]
+
+# Basic compatibility tests
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '340282366920938463463374607431768211455'::UHUGEINT::varint
+----
+340282366920938463463374607431768211455
+
+query I
+select distinct  i::varchar::varint = i::varint  from range(-1000, 1000) t(i);
+----
+true
+
+query I
+select '2147483646'::varint = 2147483646::varint
+----
+true
+
+query I
+select '340282366920938463463374607431768211455'::UHUGEINT::varint = '340282366920938463463374607431768211455'::varint
+----
+true
+
+query I
+select '-2147483646'::varint = (-2147483646)::varint
+----
+true
+
+query I
+select '100'::varint = 100::varint;
+----
+true
+
+query I
+select '256'::varint = 256::varint;
+----
+true
+
+# Now let's try to get some of these values back to strings
+query I
+select '256'::varint;
+----
+256
+
+query I
+select '2147483646'::varint;
+----
+2147483646
+
+query I
+select '21474836460000000000958'::varint;
+----
+21474836460000000000958
+
+query I
+select '-21474836460000000000958'::varint;
+----
+-21474836460000000000958
+
+query I
+select '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958'::varint;
+----
+-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958
+
+query I
+select '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958'::varint < '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000957'::varint;
+----
+true

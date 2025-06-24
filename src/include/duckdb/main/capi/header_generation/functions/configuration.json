@@ -1,0 +1,102 @@
+{
+    "group": "configuration",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_create_config",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_config *",
+                    "name": "out_config"
+                }
+            ],
+            "comment": {
+                "description": "Initializes an empty configuration object that can be used to provide start-up options for the DuckDB instance\nthrough `duckdb_open_ext`.\nThe duckdb_config must be destroyed using 'duckdb_destroy_config'\n\nThis will always succeed unless there is a malloc failure.\n\nNote that `duckdb_destroy_config` should always be called on the resulting config, even if the function returns\n`DuckDBError`.\n\n",
+                "param_comments": {
+                    "out_config": "The result configuration object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_config_count",
+            "return_type": "size_t",
+            "params": [],
+            "comment": {
+                "description": "This returns the total amount of configuration options available for usage with `duckdb_get_config_flag`.\n\nThis should not be called in a loop as it internally loops over all the options.\n\n",
+                "return_value": "The amount of config options available."
+            }
+        },
+        {
+            "name": "duckdb_get_config_flag",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "size_t",
+                    "name": "index"
+                },
+                {
+                    "type": "const char **",
+                    "name": "out_name"
+                },
+                {
+                    "type": "const char **",
+                    "name": "out_description"
+                }
+            ],
+            "comment": {
+                "description": "Obtains a human-readable name and description of a specific configuration option. This can be used to e.g.\ndisplay configuration options. This will succeed unless `index` is out of range (i.e. `>= duckdb_config_count`).\n\nThe result name or description MUST NOT be freed.\n\n",
+                "param_comments": {
+                    "index": "The index of the configuration option (between 0 and `duckdb_config_count`)",
+                    "out_name": "A name of the configuration flag.",
+                    "out_description": "A description of the configuration flag."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_set_config",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_config",
+                    "name": "config"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                },
+                {
+                    "type": "const char *",
+                    "name": "option"
+                }
+            ],
+            "comment": {
+                "description": "Sets the specified option for the specified configuration. The configuration option is indicated by name.\nTo obtain a list of config options, see `duckdb_get_config_flag`.\n\nIn the source code, configuration options are defined in `config.cpp`.\n\nThis can fail if either the name is invalid, or if the value provided for the option is invalid.\n\n",
+                "param_comments": {
+                    "config": "The configuration object to set the option on.",
+                    "name": "The name of the configuration flag to set.",
+                    "option": "The value to set the configuration flag to."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_destroy_config",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_config *",
+                    "name": "config"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the specified configuration object and de-allocates all memory allocated for the object.\n\n",
+                "param_comments": {
+                    "config": "The configuration object to destroy."
+                }
+            }
+        }
+    ]
+}

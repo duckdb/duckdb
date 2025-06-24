@@ -7,13 +7,18 @@ PRAGMA enable_verification;
 
 statement error
 SELECT sum(c2) c0 FROM (SELECT 1) t1(c2) HAVING (SELECT c0);
----
+----
 cannot reference alias
 
 statement error
-SELECT count() c0 FROM (SELECT 1) t1(c2) HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
+SELECT count() as c0 FROM (SELECT 1) t1(c2) HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
 ----
 cannot reference alias
+
+statement error
+SELECT count() as c0 FROM (SELECT 1) t1(c2) GROUP BY c0 HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
+----
+Binder Error: GROUP BY clause cannot contain aggregates
 
 statement ok
 SELECT count() c0 FROM (SELECT 1) t1(c2) HAVING c0 = 1

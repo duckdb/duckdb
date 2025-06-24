@@ -62,12 +62,6 @@ EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETW
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
 
-# wide between: both are always true, entire filter can be pruned
-query II
-EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
-----
-logical_opt	<!REGEX>:.*FILTER.*
-
 # lower clause is always true: between should be converted into i <= 2
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
@@ -138,6 +132,20 @@ SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
 0
 0
 
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# wide between: both are always true, entire filter can be pruned. (happens during physical planning).
+# see https://github.com/duckdb/duckdb-fuzzer/issues/1357
+# https://github.com/duckdb/duckdb-fuzzer/issues/1358
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
 # now insert a null value
 statement ok
 INSERT INTO integers VALUES (NULL)
@@ -147,6 +155,12 @@ query II
 EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN -1 AND 0;
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# between is always false or null: we can still prune the entire filter
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN -1 AND 0;
+----
+logical_opt	<!REGEX>:.*FILTER.*
 
 # however, if used in a select clause, we can only replace it with a constant_or_null clause
 query II

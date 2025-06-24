@@ -2,9 +2,9 @@
 # description: Issue #4644: Incomplete checkpoints issue
 # group: [pedro]
 
-load __TEST_DIR__/incomplete_checkpoint.db
-
 require skip_reload
+
+load __TEST_DIR__/incomplete_checkpoint.db
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
@@ -30,13 +30,16 @@ PRAGMA DEBUG_CHECKPOINT_ABORT = 'after_free_list_write';
 statement ok
 CREATE SCHEMA s3;
 
-# error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
+# error Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
+----
+<REGEX>:FATAL Error.*Checkpoint aborted.*checkpoint_abort flag.*
 
-# error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
+----
+<REGEX>:FATAL Error.*Checkpoint aborted.*checkpoint_abort flag.*
 
 restart
 

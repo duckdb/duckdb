@@ -16,12 +16,38 @@ namespace duckdb {
 
 class Command;
 class LoopCommand;
+class SQLLogicParser;
+
+enum class RequireResult { PRESENT, MISSING };
+
+struct CachedLabelData {
+public:
+	CachedLabelData(const string &hash, unique_ptr<QueryResult> result) : hash(hash), result(std::move(result)) {
+	}
+
+public:
+	string hash;
+	unique_ptr<QueryResult> result;
+};
+
+struct HashLabelMap {
+public:
+	void WithLock(std::function<void(unordered_map<string, CachedLabelData> &map)> cb) {
+		std::lock_guard<std::mutex> guard(lock);
+		cb(map);
+	}
+
+public:
+	std::mutex lock;
+	unordered_map<string, CachedLabelData> map;
+};
 
 class SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath);
 	~SQLLogicTestRunner();
 
+	string file_name;
 	string dbpath;
 	vector<string> loaded_databases;
 	duckdb::unique_ptr<DuckDB> db;
@@ -41,6 +67,7 @@ public:
 	bool enable_verification = false;
 	bool skip_reload = false;
 	unordered_map<string, string> environment_variables;
+	string local_extension_repo;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
@@ -48,13 +75,12 @@ public:
 	unordered_set<string> always_fail_error_messages = {"differs from original result!", "INTERNAL"};
 
 	//! The map converting the labels to the hash values
-	unordered_map<string, string> hash_label_map;
-	unordered_map<string, duckdb::unique_ptr<QueryResult>> result_label_map;
+	HashLabelMap hash_label_map;
 	mutex log_lock;
 
 public:
 	void ExecuteFile(string script);
-	virtual void LoadDatabase(string dbpath);
+	virtual void LoadDatabase(string dbpath, bool load_extensions);
 
 	string ReplaceKeywords(string input);
 
@@ -65,9 +91,12 @@ public:
 	void Reconnect();
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
-	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
-	static string LoopReplacement(string text, const vector<LoopDefinition> &loops);
-	static bool ForEachTokenReplace(const string &parameter, vector<string> &result);
+	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
+	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
+	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
+
+private:
+	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
 };
 
 } // namespace duckdb

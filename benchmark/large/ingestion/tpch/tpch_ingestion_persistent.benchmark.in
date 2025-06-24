@@ -1,0 +1,21 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [ingestion]
+
+name Q${table_name}
+group ingestion
+subgroup tpch
+
+require parquet
+
+require tpch
+
+cache tpch_sf10_ingest.duckdb
+
+load benchmark/large/ingestion/tpch/load_tpch_sf10.sql
+
+run
+create or replace table ${table_name}_ingested as select * from ${table_name}_${format};
+
+cleanup
+DROP TABLE ${table_name}_ingested;

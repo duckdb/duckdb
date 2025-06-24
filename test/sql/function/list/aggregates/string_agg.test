@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 SELECT list_string_agg()
+----
 
 # scalar values
 query T
@@ -43,7 +44,7 @@ INSERT INTO strings VALUES ([1, 1, 2, 2, 2, 3, 4, 4, 4], ['a', 'b', 'i', NULL, '
 	['/', '-', '/', '-', '+', '/', '/', '-', '+']);
 
 query TTT
-SELECT list_string_agg(x), list_string_agg(y), list_string_agg(g) FROM strings
+SELECT list_string_agg(x), list_string_agg(y), list_string_agg(g::varchar[]) FROM strings
 ----
 a,b,i,j,p,x,y,z	/,-,/,-,+,/,/,-,+	1,1,2,2,2,3,4,4,4
 
@@ -51,9 +52,14 @@ query T
 SELECT list_string_agg(x) FROM strings WHERE g > [100]
 ----
 
-# numerics are auto cast to strings
-query T
+# numerics are auto cast to strings for string agg
+query I
 SELECT list_string_agg([1, 2])
+----
+1,2
+
+query T
+SELECT list_string_agg([1, 2]::varchar[])
 ----
 1,2
 

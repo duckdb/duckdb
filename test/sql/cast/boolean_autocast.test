@@ -53,6 +53,11 @@ SELECT true='1';
 true
 
 query T
+SELECT true='1'::VARCHAR;
+----
+true
+
+query T
 SELECT true='0';
 ----
 false
@@ -130,6 +135,8 @@ false
 # failed to auto cast
 statement error
 SELECT false='unknownbool';
+----
 
 statement error
 SELECT 'unknownbool'=false;
+----

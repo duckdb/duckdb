@@ -1,10 +1,13 @@
 # name: test/sql/copy/csv/auto/test_date_format_bug_linux.test
 # group: [auto]
 
+statement ok
+PRAGMA enable_verification
+
+
 query I
-SELECT *  FROM read_csv_auto('test/sql/copy/csv/data/auto/date_format_bug_linux.csv')
+SELECT *  FROM read_csv_auto('data/csv/auto/date_format_bug_linux.csv')
 ----
-test
 8cb123cb8
 34fd321
 fg5391jn4

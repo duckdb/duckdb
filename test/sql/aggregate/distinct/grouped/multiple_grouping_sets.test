@@ -268,3 +268,16 @@ select sum(distinct value), count(*), course, type
 10	7	NULL	NULL
 25	2	Math	NULL
 30	2	NULL	Bachelor
+
+# re-do the first query with one thread (internal issue 2046)
+statement ok
+set threads=1
+
+query IIII
+select course, type, count(*), sum(distinct value) from students group by course, type order by all;
+----
+CS	NULL	2	-5
+CS	Bachelor	2	30
+CS	PhD	1	-20
+Math	NULL	1	15
+Math	Masters	1	10

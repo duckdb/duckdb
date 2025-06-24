@@ -1,0 +1,112 @@
+# name: test/sql/binder/string_literal_binding.test
+# description: Test string literal binding
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+# string literals bind differently from strings
+# they can be auto-cast to everything
+# this is an integer comparison
+query I
+select '01'=1;
+----
+true
+
+query I
+SELECT cos('0')
+----
+1
+
+# date comparison
+query I
+select date '1992-01-01'>'1991-01-01';
+----
+true
+
+# Issue #9948 - this is a date comparison, and (2023-12-11 < 2023-12-11) = false
+query I
+select date '2023-12-11' < '2023-12-11 15:54:45.119';
+----
+false
+
+# Issue #8529 - Inconsistent Date Partition Handling Between DuckDB and PostgreSQL
+statement ok
+CREATE TABLE test (
+    "date" DATE,
+    value VARCHAR
+);
+
+statement ok
+INSERT INTO test VALUES ('2023-08-01', 1), ('2023-08-02', 2), ('2023-08-03', 3), ('2023-08-04', 4), ('2023-08-05', 5), ('2023-08-06', 6), ('2023-08-07', 7);
+
+query II
+SELECT * FROM test WHERE date >= '2023-08-05 00:00:00' AND date < '2023-08-06 00:00:00';
+----
+2023-08-05	5
+
+# literals prefer to be strings
+query I
+SELECT '[hello]'[1];
+----
+[
+
+query I
+SELECT list('hello world')
+----
+[hello world]
+
+# literals in IN clause work correctly
+query I
+select 1 IN ('1', '2');
+----
+true
+
+# as does COALESCE with string literals
+query I
+SELECT COALESCE(1, '1');
+----
+1
+
+# we can do equality comparison with string columns
+query I
+select i=1 from (values ('01')) t(i);
+----
+true
+
+# or with an IN clause
+query I
+select i IN (1) from (values ('01')) t(i);
+----
+true
+
+# consistency between IN and equality
+query I
+WITH cte AS (SELECT '01' AS s)
+SELECT 1=s AS in_res FROM cte;
+----
+true
+
+query I
+WITH cte AS (SELECT '01' AS s)
+SELECT 1 IN (s) AS in_res FROM cte;
+----
+true
+
+# but not >
+statement error
+select i>1 from (values ('01')) t(i);
+----
+an explicit cast is required
+
+# we cannot do the same comparison with string columns
+statement error
+select date '1992-01-01'>i from (values ('1991-01-01')) t(i);
+----
+Cannot compare values of type
+
+# we cannot subscript dates or other types
+statement error
+select d[1] from (values (date '1992-01-01')) t(d);
+----
+No function matches the given name and argument types

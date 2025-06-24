@@ -21,6 +21,7 @@ template <class T>
 static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
                              bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -88,6 +89,10 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		assert(table_def.name);
 		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 
+		if (!table_entry.IsDuckTable()) {
+			throw InvalidInputException("dsdgen is only supported for DuckDB database files");
+		}
+
 		auto append = make_uniq<tpcds_append_information>(context, &table_entry);
 		append->table_def = table_def;
 		append_info[table_id] = std::move(append);
@@ -114,10 +119,13 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		assert(builder_func);
 
 		for (ds_key_t i = k_first_row; k_row_count; i++, k_row_count--) {
+			if (k_row_count % 1000 == 0 && context.interrupted) {
+				throw InterruptException();
+			}
 			// append happens directly in builders since they dump child tables
 			// immediately
 			if (builder_func((void *)&append_info, i)) {
-				throw Exception("Table generation failed");
+				throw InternalException("Table generation failed");
 			}
 		}
 	}

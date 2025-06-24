@@ -116,6 +116,7 @@ NULL	NULL
 # not supported yet: left outer join on JoinSide::BOTH
 statement error
 SELECT l, (SELECT SUM(s1.l[1]) FROM lists s1 LEFT OUTER JOIN lists s2 ON (SELECT i1.l[1]+s1.l[1])=(SELECT i1.l[1]+s2.l[1])) AS j FROM lists i1 ORDER BY l;
+----
 
 # REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 # REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 6, 6}));

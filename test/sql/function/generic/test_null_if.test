@@ -42,7 +42,7 @@ statement ok
 INSERT INTO test3 VALUES (11, 22), (13, 22), (12, 21)
 
 query T
-SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test3;
+SELECT NULLIF(CAST(a AS VARCHAR), '11') FROM test3;
 ----
 NULL
 13

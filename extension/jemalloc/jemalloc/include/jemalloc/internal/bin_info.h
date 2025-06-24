@@ -1,10 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_BIN_INFO_H
 #define JEMALLOC_INTERNAL_BIN_INFO_H
 
-#include "jemalloc/internal/jemalloc_internal_decls.h"
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/bitmap.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * Read-only information associated with each element of arena_t's bins array
@@ -46,10 +44,19 @@ struct bin_info_s {
 	bitmap_info_t		bitmap_info;
 };
 
+/* The maximum size a size class can be and still get batching behavior. */
+extern size_t opt_bin_info_max_batched_size;
+/* The number of batches per batched size class. */
+extern size_t opt_bin_info_remote_free_max_batch;
+// The max number of pending elems (across all batches)
+extern size_t opt_bin_info_remote_free_max;
+
+extern szind_t bin_info_nbatched_sizes;
+extern unsigned bin_info_nbatched_bins;
+extern unsigned bin_info_nunbatched_bins;
+
 extern bin_info_t bin_infos[SC_NBINS];
 
 void bin_info_boot(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS]);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIN_INFO_H */

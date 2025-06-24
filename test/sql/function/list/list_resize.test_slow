@@ -1,0 +1,23 @@
+# name: test/sql/function/list/list_resize.test_slow
+# description: Tests list_resize for large padding counts.
+# group: [list]
+
+statement ok
+PRAGMA enable_verification;
+
+# Issue 12816
+
+statement ok
+CREATE TABLE test_table (id INTEGER,
+	data STRUCT(a INTEGER, b DOUBLE, c VARCHAR)[]);
+
+statement ok
+INSERT INTO test_table SELECT range, [
+	{'a': 1, 'b': 1.1, 'c': 'one'},
+	{'a': 2, 'b': 2.2, 'c': 'two'},
+	{'a': 3, 'b': 3.3, 'c': 'three'}] FROM range(1001);
+
+statement ok
+CREATE OR REPLACE TABLE padded_test_table AS
+	SELECT id, list_resize(data, 10000, struct_pack(a := 0, b := 0.0, c := 'padding')) AS padded_data
+	FROM test_table;

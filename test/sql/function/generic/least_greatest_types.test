@@ -1,0 +1,20 @@
+# name: test/sql/function/generic/least_greatest_types.test
+# description: Test LEAST/GREATEST with all types
+# group: [generic]
+
+statement ok
+CREATE TABLE all_types AS FROM test_all_types()
+
+foreach col <all_types_columns>
+
+query I
+SELECT LEAST((SELECT MAX("${col}") FROM all_types), (SELECT MIN("${col}") FROM all_types)) IS NOT DISTINCT FROM (SELECT MIN("${col}") FROM all_types)
+----
+true
+
+query I
+SELECT GREATEST((SELECT MAX("${col}") FROM all_types), (SELECT MIN("${col}") FROM all_types)) IS NOT DISTINCT FROM (SELECT MAX("${col}") FROM all_types)
+----
+true
+
+endloop

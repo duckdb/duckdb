@@ -2,7 +2,7 @@
 # description: Test usage of functions/settings that are found in extensions without having the extension loaded
 # group: [error]
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: This tests behaviour when extensions can't be loaded, expected"
 
 # this function is in the dbgen extension
 statement error

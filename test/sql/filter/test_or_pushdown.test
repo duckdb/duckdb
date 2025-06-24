@@ -1,0 +1,87 @@
+# name: test/sql/filter/test_or_pushdown.test
+# description: Test or filter pushdown into zone maps
+# group: [filter]
+
+# no force storage otherwise test to check scanned tupls fails
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+create table t1 as select range a, 'foo' || (range%100)::VARCHAR b, 100000-range c, timestamp '1992-01-01' + interval (range * 20) minute d from range(900000);
+
+query I
+select count(*) from t1 where a < 5 or b = 'foo8';
+----
+9005
+
+query II
+explain select * from t1 where a<5 or b = 'foo8';
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# columns are different
+query II
+explain select * from t1 where a<5 or c>8000;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# two different row groups can be propagated here.
+query I
+select a from t1 where a=5 or a=899999;
+----
+5
+899999
+
+# check that multiple rows from mulitple row groups are being projected and not just 2.
+query II
+explain select * from t1 where a<5 or a>10;
+----
+physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+
+# need to flip the comparison
+query II
+explain select * from t1 where 5>a or 10<a;
+----
+physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+
+query II
+explain select * from t1 where 5>=a or 10<=a;
+----
+physical_plan	<REGEX>:.*optional.*a<=5.*a>=10.*
+
+query II
+explain select * from t1 where a in (1, 5, 10);
+----
+physical_plan	<REGEX>:.*optional.*
+
+query II
+explain select * from t1 where a = 1 or a = 5 or a = 10;
+----
+physical_plan	<REGEX>:.*optional.*
+
+query II
+explain select * from t1 where a in (1, 2, 3);
+----
+physical_plan	<!REGEX>:.*optional.*
+
+query II
+explain select * from t1 where a in (1);
+----
+physical_plan	<!REGEX>:.*optional.*
+
+query II
+explain select b from t1 where b = 'foo9' or b = 'foo10';
+----
+physical_plan	<REGEX>:.*optional.*
+
+# two different row groups can be propagated here.
+query I
+select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
+----
+5
+899999
+
+query II
+explain select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
+----
+physical_plan	<REGEX>:.*optional.*d.*

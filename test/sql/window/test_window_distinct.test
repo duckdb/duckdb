@@ -1,0 +1,309 @@
+# name: test/sql/window/test_window_distinct.test
+# description: Windowed distinct aggregates functionality
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT COUNT(DISTINCT 42) OVER ()
+----
+1
+
+query IIII
+WITH t AS (
+	SELECT col0 AS a, col1 AS b 
+	FROM (VALUES
+		(1,2),
+		(1,1),
+		(1,2),
+		(2,1),
+		(2,1),
+		(2,2),
+		(2,3),
+		(2,4)
+	) v) 
+SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) 
+FROM t
+ORDER BY 1, 2
+----
+1	1	3	2
+1	2	3	2
+1	2	3	2
+2	1	5	4
+2	1	5	4
+2	2	5	4
+2	3	5	4
+2	4	5	4
+
+statement ok
+CREATE TABLE figure1 AS 
+	SELECT * 
+	FROM VALUES 
+			(1, 'a'),
+			(2, 'b'),
+			(3, 'b'),
+			(4, 'c'),
+			(5, 'c'),
+			(6, 'b'),
+			(7, 'c'),
+			(8, 'a')
+		v(i, s);
+
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM figure1
+ORDER BY i
+----
+1	a	2
+2	b	3
+3	b	3
+4	c	2
+5	c	2
+6	b	3
+7	c	3
+8	a	3
+
+query III
+WITH uncascaded AS (
+	SELECT i, i % 29 AS v 
+	FROM range(1000) tbl(i)
+)
+SELECT i
+	, v
+	, COUNT(DISTINCT v) OVER (ORDER BY i ROWS BETWEEN 25 PRECEDING AND 25 FOLLOWING) AS w
+FROM uncascaded
+ORDER BY i
+----
+3000 values hashing to cb9c296986f7b9eaeee380bbc049ab39
+
+query III
+WITH cascaded AS (
+	SELECT i, i % 29 AS v 
+	FROM range(10000) tbl(i)
+)
+SELECT i
+	, v
+	, COUNT(DISTINCT v) OVER (ORDER BY i ROWS BETWEEN 25 PRECEDING AND 25 FOLLOWING) AS w
+FROM cascaded
+ORDER BY i
+----
+30000 values hashing to 673869e81fecab82f0bcec032236115a
+
+# Exclude falls back to naïve
+query IIII
+SELECT i
+	, s
+	, i // 2 AS o
+	, COUNT(DISTINCT s) OVER(
+		ORDER BY i // 2
+		ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING 
+		EXCLUDE TIES
+	) AS c
+FROM figure1
+ORDER BY i
+----
+1	a	0	2
+2	b	1	3
+3	b	1	3
+4	c	2	2
+5	c	2	2
+6	b	3	3
+7	c	3	2
+8	a	4	3
+
+# DISTINCT aggregate with NULL values in the dataset
+statement ok
+INSERT INTO figure1 VALUES 
+	(9, NULL),
+	(NULL, 'b'),
+	(NULL, NULL),
+;
+
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM figure1
+ORDER BY i
+----
+1	a	2
+2	b	3
+3	b	3
+4	c	2
+5	c	2
+6	b	3
+7	c	3
+8	a	3
+9	NULL	3
+NULL	b	2
+NULL	NULL	1
+
+# DISTINCT over nested types, e.g. LIST/STRUCT
+statement ok
+CREATE TABLE nested AS
+	SELECT 
+		i, 
+		s, 
+		{"m": i % 2, "s": s} AS n,
+		[(i % 2)::VARCHAR, s] AS l,
+		i * i AS r
+	FROM figure1
+
+query III
+SELECT i
+	, n
+	, COUNT(DISTINCT n) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	{'m': 1, 's': a}	3
+2	{'m': 0, 's': b}	4
+3	{'m': 1, 's': b}	5
+4	{'m': 0, 's': c}	4
+5	{'m': 1, 's': c}	4
+6	{'m': 0, 's': b}	4
+7	{'m': 1, 's': c}	4
+8	{'m': 0, 's': a}	5
+9	{'m': 1, 's': NULL}	5
+NULL	{'m': NULL, 's': b}	4
+NULL	{'m': NULL, 's': NULL}	3
+
+query III
+SELECT i
+	, l
+	, COUNT(DISTINCT l) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	[1, a]	3
+2	[0, b]	4
+3	[1, b]	5
+4	[0, c]	4
+5	[1, c]	4
+6	[0, b]	4
+7	[1, c]	4
+8	[0, a]	5
+9	[1, NULL]	5
+NULL	[NULL, b]	4
+NULL	[NULL, NULL]	3
+
+# DISTINCT with RANGE instead of ROWS
+query III
+SELECT r
+	, s
+	, COUNT(DISTINCT s) OVER( ORDER BY r RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	a	2
+4	b	2
+9	b	3
+16	c	2
+25	c	1
+36	b	1
+49	c	1
+64	a	1
+81	NULL	0
+NULL	b	1
+NULL	NULL	1
+
+# DISTINCT with an aggregate with a destructor (e.g. LIST or STRING_AGG)
+query III
+SELECT i
+	, s
+	, STRING_AGG(DISTINCT s, ', ') OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	a	a, b
+2	b	a, b, c
+3	b	a, b, c
+4	c	b, c
+5	c	b, c
+6	b	c, b, a
+7	c	c, b, a
+8	a	b, c, a
+9	NULL	c, a, b
+NULL	b	a, b
+NULL	NULL	b
+
+# DISTINCT MEDIAN, or distinct for aggregates that have a special window function?
+query III
+SELECT i
+	, s
+	, MEDIAN(DISTINCT s) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	a	a
+2	b	b
+3	b	b
+4	c	b
+5	c	b
+6	b	b
+7	c	b
+8	a	b
+9	NULL	b
+NULL	b	a
+NULL	NULL	b
+
+# DISTINCT FILTER
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) FILTER (WHERE i % 3 = 0) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	a	1
+2	b	1
+3	b	1
+4	c	1
+5	c	1
+6	b	1
+7	c	1
+8	a	1
+9	NULL	0
+NULL	b	0
+NULL	NULL	0
+
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) FILTER (WHERE i % 3 = 1) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	a	1
+2	b	2
+3	b	2
+4	c	1
+5	c	1
+6	b	1
+7	c	1
+8	a	1
+9	NULL	1
+NULL	b	0
+NULL	NULL	0
+
+query III
+SELECT i
+	, s
+	, COUNT(DISTINCT s) FILTER (WHERE i % 3 = 2) OVER( ORDER BY i ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) AS c
+FROM nested
+ORDER BY i
+----
+1	a	1
+2	b	1
+3	b	2
+4	c	2
+5	c	1
+6	b	2
+7	c	2
+8	a	1
+9	NULL	1
+NULL	b	1
+NULL	NULL	0

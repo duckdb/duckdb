@@ -14,6 +14,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/function/cast/nested_to_varchar_cast.hpp"
 
 namespace duckdb {
 
@@ -21,20 +22,9 @@ template <class OP>
 struct VectorStringCastOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto result = (Vector *)dataptr;
+		auto result = reinterpret_cast<Vector *>(dataptr);
 		return OP::template Operation<INPUT_TYPE>(input, *result);
 	}
-};
-
-struct VectorTryCastData {
-	VectorTryCastData(Vector &result_p, string *error_message_p, bool strict_p)
-	    : result(result_p), error_message(error_message_p), strict(strict_p) {
-	}
-
-	Vector &result;
-	string *error_message;
-	bool strict;
-	bool all_converted = true;
 };
 
 template <class OP>
@@ -45,9 +35,9 @@ struct VectorTryCastOperator {
 		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output))) {
 			return output;
 		}
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
-		                                                     idx, data->error_message, data->all_converted);
+		                                                     idx, *data);
 	}
 };
 
@@ -55,13 +45,13 @@ template <class OP>
 struct VectorTryCastStrictOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->strict))) {
+		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->parameters.strict))) {
 			return output;
 		}
 		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
-		                                                     idx, data->error_message, data->all_converted);
+		                                                     idx, *data);
 	}
 };
 
@@ -69,16 +59,15 @@ template <class OP>
 struct VectorTryCastErrorOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(
-		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->error_message, data->strict))) {
+		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->parameters))) {
 			return output;
 		}
-		bool has_error = data->error_message && !data->error_message->empty();
+		bool has_error = data->parameters.error_message && !data->parameters.error_message->empty();
 		return HandleVectorCastError::Operation<RESULT_TYPE>(
-		    has_error ? *data->error_message : CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx,
-		    data->error_message, data->all_converted);
+		    has_error ? *data->parameters.error_message : CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx,
+		    *data);
 	}
 };
 
@@ -86,38 +75,37 @@ template <class OP>
 struct VectorTryCastStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result,
-		                                                                  data->error_message, data->strict))) {
+		if (DUCKDB_LIKELY(
+		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->parameters))) {
 			return output;
 		}
 		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
-		                                                     idx, data->error_message, data->all_converted);
+		                                                     idx, *data);
 	}
 };
 
 struct VectorDecimalCastData {
-	VectorDecimalCastData(string *error_message_p, uint8_t width_p, uint8_t scale_p)
-	    : error_message(error_message_p), width(width_p), scale(scale_p) {
+	VectorDecimalCastData(Vector &result, CastParameters &parameters, uint8_t width_p, uint8_t scale_p)
+	    : vector_cast_data(result, parameters), width(width_p), scale(scale_p) {
 	}
 
-	string *error_message;
+	VectorTryCastData vector_cast_data;
 	uint8_t width;
 	uint8_t scale;
-	bool all_converted = true;
 };
 
 template <class OP>
 struct VectorDecimalCastOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorDecimalCastData *)dataptr;
+		auto data = reinterpret_cast<VectorDecimalCastData *>(dataptr);
 		RESULT_TYPE result_value;
-		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->error_message, data->width,
-		                                                     data->scale)) {
+		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->vector_cast_data.parameters,
+		                                                     data->width, data->scale)) {
 			return HandleVectorCastError::Operation<RESULT_TYPE>("Failed to cast decimal value", mask, idx,
-			                                                     data->error_message, data->all_converted);
+			                                                     data->vector_cast_data);
 		}
 		return result_value;
 	}
@@ -132,7 +120,7 @@ struct VectorCastHelpers {
 
 	template <class SRC, class DST, class OP>
 	static bool TemplatedTryCastLoop(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		VectorTryCastData input(result, parameters.error_message, parameters.strict);
+		VectorTryCastData input(result, parameters);
 		UnaryExecutor::GenericExecute<SRC, DST, OP>(source, result, count, &input, parameters.error_message);
 		return input.all_converted;
 	}
@@ -166,12 +154,12 @@ struct VectorCastHelpers {
 	}
 
 	template <class SRC, class T, class OP>
-	static bool TemplatedDecimalCast(Vector &source, Vector &result, idx_t count, string *error_message, uint8_t width,
-	                                 uint8_t scale) {
-		VectorDecimalCastData input(error_message, width, scale);
+	static bool TemplatedDecimalCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters,
+	                                 uint8_t width, uint8_t scale) {
+		VectorDecimalCastData input(result, parameters, width, scale);
 		UnaryExecutor::GenericExecute<SRC, T, VectorDecimalCastOperator<OP>>(source, result, count, (void *)&input,
-		                                                                     error_message);
-		return input.all_converted;
+		                                                                     parameters.error_message);
+		return input.vector_cast_data.all_converted;
 	}
 
 	template <class T>
@@ -181,20 +169,100 @@ struct VectorCastHelpers {
 		auto scale = DecimalType::GetScale(result_type);
 		switch (result_type.InternalType()) {
 		case PhysicalType::INT16:
-			return TemplatedDecimalCast<T, int16_t, TryCastToDecimal>(source, result, count, parameters.error_message,
-			                                                          width, scale);
+			return TemplatedDecimalCast<T, int16_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		case PhysicalType::INT32:
-			return TemplatedDecimalCast<T, int32_t, TryCastToDecimal>(source, result, count, parameters.error_message,
-			                                                          width, scale);
+			return TemplatedDecimalCast<T, int32_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		case PhysicalType::INT64:
-			return TemplatedDecimalCast<T, int64_t, TryCastToDecimal>(source, result, count, parameters.error_message,
-			                                                          width, scale);
+			return TemplatedDecimalCast<T, int64_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		case PhysicalType::INT128:
-			return TemplatedDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, parameters.error_message,
-			                                                            width, scale);
+			return TemplatedDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, parameters, width,
+			                                                            scale);
 		default:
 			throw InternalException("Unimplemented internal type for decimal");
 		}
+	}
+
+	template <bool STRUCT_KEY>
+	static idx_t CalculateEscapedStringLength(const string_t &string, bool &needs_quotes) {
+		auto base_length = string.GetSize();
+		idx_t length = 0;
+		auto string_data = string.GetData();
+		needs_quotes = false;
+
+		if (base_length == 0) {
+			//! Empty quotes
+			needs_quotes = true;
+			return 2;
+		}
+
+		if (STRUCT_KEY) {
+			needs_quotes = true;
+		} else if (StringUtil::CharacterIsSpace(string_data[0])) {
+			needs_quotes = true;
+		} else if (base_length >= 2 && StringUtil::CharacterIsSpace(string_data[base_length - 1])) {
+			needs_quotes = true;
+		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
+			needs_quotes = true;
+		} else {
+			const bool *table = NestedToVarcharCast::LOOKUP_TABLE;
+			for (idx_t i = 0; i < base_length; i++) {
+				needs_quotes |= table[(uint8_t)string_data[i]];
+			}
+		}
+
+		if (!needs_quotes) {
+			return base_length;
+		}
+
+		for (idx_t i = 0; i < base_length; i++) {
+			length += 1 + (string_data[i] == '\'' || string_data[i] == '\\');
+		}
+		length += 2;
+		return length;
+	}
+
+	static idx_t CalculateStringLength(const string_t &string, bool &needs_quotes) {
+		needs_quotes = false;
+		return string.GetSize();
+	}
+
+	template <bool STRUCT_KEY>
+	static idx_t WriteEscapedString(void *dest, const string_t &string, bool needs_quotes) {
+		auto base_length = string.GetSize();
+		if (base_length == 0) {
+			D_ASSERT(needs_quotes);
+			memcpy(dest, "''", 2);
+			return 2;
+		}
+
+		auto string_start = string.GetData();
+		auto string_data = string_start;
+
+		auto destination = reinterpret_cast<char *>(dest);
+		if (!needs_quotes) {
+			memcpy(destination, string_data, base_length);
+			return base_length;
+		}
+
+		idx_t offset = 0;
+		destination[offset++] = '\'';
+
+		for (idx_t i = 0; i < base_length; i++) {
+			const bool needs_quote = string_data[i] == '\\' || string_data[i] == '\'';
+			destination[offset] = '\\';
+			destination[offset + needs_quote] = string_data[i];
+			offset += 1 + needs_quote;
+		}
+
+		destination[offset++] = '\'';
+		return offset;
+	}
+
+	static idx_t WriteString(void *dest, const string_t &string, bool needs_quotes) {
+		D_ASSERT(needs_quotes == false);
+		auto len = string.GetSize();
+		memcpy(dest, string.GetData(), len);
+		return len;
 	}
 };
 
@@ -206,9 +274,15 @@ struct VectorStringToList {
 	                                       const SelectionVector *sel);
 };
 
+struct VectorStringToArray {
+	static bool StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask, Vector &result,
+	                                       ValidityMask &result_mask, idx_t count, CastParameters &parameters,
+	                                       const SelectionVector *sel);
+};
+
 struct VectorStringToStruct {
 	static bool SplitStruct(const string_t &input, vector<unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
-	                        string_map_t<idx_t> &child_names, vector<ValidityMask *> &child_masks);
+	                        string_map_t<idx_t> &child_names, vector<reference<ValidityMask>> &child_masks);
 	static bool StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask, Vector &result,
 	                                       ValidityMask &result_mask, idx_t count, CastParameters &parameters,
 	                                       const SelectionVector *sel);

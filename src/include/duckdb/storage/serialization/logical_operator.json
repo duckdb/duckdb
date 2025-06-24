@@ -143,25 +143,15 @@
       {
         "id": 200,
         "name": "limit_val",
-        "type": "int64_t"
+        "type": "BoundLimitNode"
       },
       {
         "id": 201,
         "name": "offset_val",
-        "type": "int64_t"
-      },
-      {
-        "id": 202,
-        "name": "limit",
-        "type": "Expression*"
-      },
-      {
-        "id": 203,
-        "name": "offset",
-        "type": "Expression*"
+        "type": "BoundLimitNode"
       }
     ],
-    "constructor": ["limit_val", "offset_val", "limit", "offset"]
+    "constructor": ["limit_val", "offset_val"]
   },
   {
     "class": "LogicalOrder",
@@ -176,7 +166,8 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>"
+        "type": "vector<idx_t>",
+        "property": "projection_map"
       }
     ],
     "constructor": ["orders"]
@@ -240,34 +231,6 @@
     ]
   },
   {
-    "class": "LogicalLimitPercent",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_LIMIT_PERCENT",
-    "members": [
-      {
-        "id": 200,
-        "name": "limit_percent",
-        "type": "double"
-      },
-      {
-        "id": 201,
-        "name": "offset_val",
-        "type": "int64_t"
-      },
-      {
-        "id": 202,
-        "name": "limit",
-        "type": "Expression*"
-      },
-      {
-        "id": 203,
-        "name": "offset",
-        "type": "Expression*"
-      }
-    ],
-    "constructor": ["limit_percent", "offset_val", "limit", "offset"]
-  },
-  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",
@@ -285,7 +248,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]
@@ -367,7 +330,7 @@
     "enum": "LOGICAL_CTE_REF",
     "members": [
       {
-        "id": 200,  
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
@@ -390,6 +353,10 @@
         "id": 204,
         "name": "materialized_cte",
         "type": "CTEMaterialize"
+      }, {
+        "id": 205,
+        "name": "is_recurring",
+        "type": "bool"
       }
     ],
     "constructor": ["table_index", "cte_index", "chunk_types", "bound_columns", "materialized_cte"]
@@ -433,6 +400,17 @@
         "id": 206,
         "name": "duplicate_eliminated_columns",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "delim_flipped",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 208,
+        "name": "predicate",
+        "type": "Expression*"
       }
     ],
     "constructor": ["join_type", "type"]
@@ -498,9 +476,21 @@
         "id": 201,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 203,
+        "name": "allow_out_of_order",
+        "type": "bool",
+        "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type"]
+    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
   },
   {
     "class": "LogicalRecursiveCTE",
@@ -526,6 +516,16 @@
         "id": 203,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "key_targets",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 205,
+        "name": "ref_recurring",
+        "type": "bool"
       }
     ]
   },
@@ -548,6 +548,12 @@
         "id": 202,
         "name": "ctename",
         "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "materialize",
+        "type": "CTEMaterialize",
+        "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
     ]
   },
@@ -650,6 +656,12 @@
         "id": 217,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 218,
+        "name": "update_is_del_and_insert",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["$ClientContext", "table_info"]
@@ -783,23 +795,6 @@
     "constructor": ["explain_type"]
   },
   {
-    "class": "LogicalShow",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_SHOW",
-    "members": [
-      {
-        "id": 200,
-        "name": "types_select",
-        "type": "vector<LogicalType>"
-      },
-      {
-        "id": 201,
-        "name": "aliases",
-        "type": "vector<string>"
-      }
-    ]
-  },
-  {
     "class": "LogicalSet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_SET",
@@ -843,7 +838,7 @@
   {
     "class": "LogicalSimple",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_ALTER", "LOGICAL_VACUUM", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
+    "enum": ["LOGICAL_ALTER", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
     "members": [
       {
         "id": 200,
@@ -877,6 +872,20 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalCopyDatabase",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_COPY_DATABASE",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "CopyDatabaseInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["info"]
+  },
+  {
     "class": "LogicalCopyToFile",
     "base": "LogicalOperator",
     "enum": "LOGICAL_COPY_TO_FILE",
@@ -897,15 +906,47 @@
         "id": 201,
         "name": "unbound_expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 202,
+        "name": "alter_table_info",
+        "type": "unique_ptr<AlterTableInfo>",
+        "base": "ParseInfo"
       }
     ],
-    "constructor": ["$ClientContext", "info", "unbound_expressions"]
+    "constructor": ["$ClientContext", "info", "unbound_expressions", "alter_table_info"]
   },
   {
     "class": "LogicalExtensionOperator",
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
     "custom_implementation": true
+  },
+  {
+    "class": "LogicalVacuum",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_VACUUM",
+    "custom_implementation": true
+  },
+  {
+    "class": "LogicalExport",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXPORT",
+    "members": [
+      {
+        "id": 200,
+        "name": "copy_info",
+        "type": "CopyInfo*",
+        "base": "ParseInfo"
+      },
+      {
+        "id": 201,
+        "name": "exported_tables",
+        "type": "BoundExportData*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["$ClientContext", "copy_info", "exported_tables"]
   },
   {
     "class": "FilenamePattern",
@@ -915,22 +956,42 @@
         "id": 200,
         "name": "base",
         "type": "string",
-        "serialize_property": "_base",
-        "deserialize_property": "_base"
+        "serialize_property": "SerializeBase()"
       },
       {
         "id": 201,
         "name": "pos",
         "type": "idx_t",
-        "serialize_property": "_pos",
-        "deserialize_property": "_pos"
+        "serialize_property": "SerializePos()"
       },
       {
         "id": 202,
         "name": "uuid",
         "type": "bool",
-        "serialize_property": "_uuid",
-        "deserialize_property": "_uuid"
+        "serialize_property": "HasUUID()"
+      },
+      {
+        "id": 203,
+        "name": "segments",
+        "type": "vector<FileNameSegment>",
+        "serialize_property": "SerializeSegments()"
+      }
+    ],
+    "constructor": ["base", "pos", "uuid", "segments"]
+  },
+  {
+    "class": "FileNameSegment",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "FileNameSegmentType"
+      },
+      {
+        "id": 201,
+        "name": "data",
+        "type": "string"
       }
     ]
   }

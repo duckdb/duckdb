@@ -20,12 +20,11 @@ UPDATE test SET i=i+1;
 statement error con2
 CHECKPOINT
 ----
-TransactionContext Error: Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint
+Cannot CHECKPOINT: there are other write transactions
 
-statement ok con2
-FORCE CHECKPOINT
+statement ok con1
+ROLLBACK
 
-# force checkpoint rolled back the transaction of con1
 query III con1
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
@@ -78,10 +77,7 @@ UPDATE test SET i=i+1 WHERE i > 3000 AND i < 4000
 statement error
 CHECKPOINT
 ----
-TransactionContext Error: Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint
-
-statement ok
-FORCE CHECKPOINT
+Cannot CHECKPOINT: there are other write transactions
 
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
@@ -93,20 +89,32 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
 
+statement ok con2
+ROLLBACK
+
 query III con2
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
+
+statement ok con3
+ROLLBACK
 
 query III con3
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
 
+statement ok con4
+ROLLBACK
+
 query III con4
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
+
+statement ok con5
+ROLLBACK
 
 query III con5
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;

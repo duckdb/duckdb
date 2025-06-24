@@ -1,3 +1,4 @@
+
 #include "duckdb/optimizer/rule/conjunction_simplification.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
@@ -19,7 +20,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConj
 	for (idx_t i = 0; i < conj.children.size(); i++) {
 		if (conj.children[i].get() == &expr) {
 			// erase the expression
-			conj.children.erase(conj.children.begin() + i);
+			conj.children.erase_at(i);
 			break;
 		}
 	}
@@ -47,7 +48,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
 	}
-	if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
+	if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in AND, result of expression is false
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
@@ -56,7 +57,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 			return RemoveExpression(conjunction, constant_expr);
 		}
 	} else {
-		D_ASSERT(conjunction.type == ExpressionType::CONJUNCTION_OR);
+		D_ASSERT(conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR);
 		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in OR, remove the expression from the set
 			return RemoveExpression(conjunction, constant_expr);

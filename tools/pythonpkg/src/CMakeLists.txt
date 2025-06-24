@@ -1,10 +1,4 @@
 # this is used for clang-tidy checks
-
-find_package(pybind11 REQUIRED)
-
-include_directories(${pybind11_INCLUDE_DIR})
-include_directories(${PYTHON_INCLUDE_DIRS})
-
 add_subdirectory(pyrelation)
 add_subdirectory(pyexpression)
 add_subdirectory(pybind11)
@@ -23,7 +17,10 @@ add_library(
   path_like.cpp
   python_udf.cpp
   pyconnection.cpp
+  pystatement.cpp
   python_import_cache.cpp
+  python_replacement_scan.cpp
+  python_dependency.cpp
   pyrelation.cpp
   pyexpression.cpp
   dataframe.cpp
@@ -31,6 +28,4 @@ add_library(
   pyfilesystem.cpp
   map.cpp)
 
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:python_src>
-    PARENT_SCOPE)
+target_link_libraries(python_src PRIVATE pytooling)

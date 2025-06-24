@@ -1,0 +1,18 @@
+# name: test/sql/copy/parquet/bigdecimal.test
+# description: Read a file created by Google BigQuery with a BIGDECIMAL column (i.e. DECIMAL(77,38))
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+FROM 'data/parquet-testing/bigdecimal.parquet'
+----
+0.5
+-0.5
+1.2345678912345679e+26
+-1.2345678912345679e+26
+5.7896044618658096e+38
+-5.7896044618658096e+38

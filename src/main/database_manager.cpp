@@ -1,13 +1,18 @@
 #include "duckdb/main/database_manager.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db)
+    : next_oid(0), current_query_number(1), current_transaction_id(0) {
 	system = make_uniq<AttachedDatabase>(db);
 	databases = make_uniq<CatalogSet>(system->GetCatalog());
 }
@@ -20,26 +25,70 @@ DatabaseManager &DatabaseManager::Get(AttachedDatabase &db) {
 }
 
 void DatabaseManager::InitializeSystemCatalog() {
+	// The SYSTEM_DATABASE has no persistent storage.
 	system->Initialize();
+}
+
+void DatabaseManager::FinalizeStartup() {
+	auto databases = GetDatabases();
+	for (auto &db : databases) {
+		db.get().FinalizeLoad(nullptr);
+	}
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
+	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
+		return system;
+	}
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
-void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
-	auto name = db_instance->GetName();
-	db_instance->oid = ModifyCatalog();
-	DependencyList dependencies;
+optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
+                                                               AttachOptions &options) {
+	if (AttachedDatabase::NameIsReserved(info.name)) {
+		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
+	}
+	string extension = "";
+	if (FileSystem::IsRemoteFile(info.path, extension)) {
+		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
+			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", info.path,
+			                                extension);
+		}
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
+	}
+
+	// now create the attached database
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto attached_db = db.CreateAttachedDatabase(context, info, options);
+
+	if (options.db_type.empty()) {
+		InsertDatabasePath(context, info.path, attached_db->name);
+	}
+
+	const auto name = attached_db->GetName();
+	attached_db->oid = NextOid();
+	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (!databases->CreateEntry(context, name, std::move(db_instance), dependencies)) {
+
+	// and add it to the databases catalog set
+	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
+	}
+	if (!databases->CreateEntry(context, name, std::move(attached_db), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
+
+	return GetDatabase(context, name);
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
@@ -48,16 +97,25 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      "database using `USE` to allow detaching this database",
 		                      name);
 	}
-	if (!databases->DropEntry(context, name, false, true)) {
+
+	auto entry = databases->GetEntry(context, name);
+	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
+		return;
+	}
+	auto &db = entry->Cast<AttachedDatabase>();
+	db.OnDetach(context);
+
+	if (!databases->DropEntry(context, name, false, true)) {
+		throw InternalException("Failed to drop attached database");
 	}
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
-	auto databases = GetDatabases(context);
-	for (auto &db_ref : databases) {
+	auto database_list = GetDatabases(context);
+	for (auto &db_ref : database_list) {
 		auto &db = db_ref.get();
 		if (db.IsSystem()) {
 			continue;
@@ -72,6 +130,88 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContex
 		}
 	}
 	return nullptr;
+}
+
+void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
+	// ensure that we did not already attach a database with the same path
+	bool path_exists;
+	{
+		lock_guard<mutex> path_lock(db_paths_lock);
+		path_exists = db_paths.find(path) != db_paths.end();
+	}
+	if (path_exists) {
+		// check that the database is actually still attached
+		auto entry = GetDatabaseFromPath(context, path);
+		if (entry) {
+			throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
+			                      entry->name, path);
+		}
+	}
+}
+
+void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &path, const string &name) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+
+	CheckPathConflict(context, path);
+	lock_guard<mutex> path_lock(db_paths_lock);
+	db_paths.insert(path);
+}
+
+void DatabaseManager::EraseDatabasePath(const string &path) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+	lock_guard<mutex> path_lock(db_paths_lock);
+	auto path_it = db_paths.find(path);
+	if (path_it != db_paths.end()) {
+		db_paths.erase(path_it);
+	}
+}
+
+vector<string> DatabaseManager::GetAttachedDatabasePaths() {
+	lock_guard<mutex> path_lock(db_paths_lock);
+	vector<string> paths;
+	for (auto &path : db_paths) {
+		paths.push_back(path);
+	}
+	return paths;
+}
+
+void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
+                                      AttachOptions &options) {
+
+	// Test if the database is a DuckDB database file.
+	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
+		options.db_type = "";
+		return;
+	}
+
+	// Try to extract the database type from the path.
+	if (options.db_type.empty()) {
+		CheckPathConflict(context, info.path);
+
+		auto &fs = FileSystem::GetFileSystem(context);
+		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
+	}
+
+	if (options.db_type.empty()) {
+		return;
+	}
+
+	if (config.storage_extensions.find(options.db_type) != config.storage_extensions.end()) {
+		// If the database type is already registered, we don't need to load it again.
+		return;
+	}
+
+	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
+	if (!Catalog::TryAutoLoad(context, options.db_type)) {
+		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
+		// so that either there will be success or a message to throw, and load will be
+		// attempted only once respecting the auto-loading options
+		ExtensionHelper::LoadExternalExtension(context, options.db_type);
+	}
 }
 
 const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
@@ -103,12 +243,39 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 }
 // LCOV_EXCL_STOP
 
-vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
+                                                                  const optional_idx max_db_count) {
 	vector<reference<AttachedDatabase>> result;
-	databases->Scan(context, [&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	idx_t count = 2;
+	databases->ScanWithReturn(context, [&](CatalogEntry &entry) {
+		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
+			return false;
+		}
+		result.push_back(entry.Cast<AttachedDatabase>());
+		count++;
+		return true;
+	});
+
 	result.push_back(*system);
 	result.push_back(*context.client_data->temporary_objects);
 	return result;
+}
+
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases() {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	result.push_back(*system);
+	return result;
+}
+
+void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	for (auto &database : result) {
+		database.get().Close();
+	}
+	scheduler.reset();
+	databases.reset();
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {

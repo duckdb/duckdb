@@ -8,9 +8,13 @@ PRAGMA enable_verification
 # issue tests
 statement error
 SELECT 1000::bigint<<55;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 statement error
 SELECT 256::bigint<<55;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 query I
 SELECT 255::bigint<<55;
@@ -26,6 +30,8 @@ SELECT 0::bigint<<999;
 # tinyint
 statement error
 SELECT 10::tinyint<<4::tinyint;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 query I
 SELECT 10::tinyint<<3::tinyint;
@@ -35,16 +41,24 @@ SELECT 10::tinyint<<3::tinyint;
 # cannot left shift negative numbers
 statement error
 SELECT (-128)::tinyint<<0::tinyint;
+----
+<REGEX>:Out of Range Error.*Cannot left-shift.*
 
 statement error
 SELECT (-10)::tinyint<<4::tinyint;
+----
+<REGEX>:Out of Range Error.*Cannot left-shift.*
 
 statement error
 SELECT (-10)::tinyint<<3::tinyint;
+----
+<REGEX>:Out of Range Error.*Cannot left-shift.*
 
 # smallint
 statement error
 SELECT 1000::smallint<<6::smallint;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 query I
 SELECT 1000::smallint<<5::smallint;
@@ -54,6 +68,8 @@ SELECT 1000::smallint<<5::smallint;
 # integer
 statement error
 SELECT 1000::integer<<22::integer;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 query I
 SELECT 1000::integer<<21::integer;
@@ -63,6 +79,8 @@ SELECT 1000::integer<<21::integer;
 # bigint
 statement error
 SELECT 1000::bigint<<54::bigint;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 query I
 SELECT 1000::bigint<<53::bigint;
@@ -72,6 +90,8 @@ SELECT 1000::bigint<<53::bigint;
 # hugeint
 statement error
 SELECT 1000::hugeint<<118::hugeint;
+----
+<REGEX>:Out of Range Error.*Overflow in left shift.*
 
 query I
 SELECT 1000::hugeint<<117::hugeint;

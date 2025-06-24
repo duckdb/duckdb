@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector_size.hpp"
 
@@ -18,7 +20,7 @@ class VectorBuffer;
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
 
-	unsafe_unique_array<sel_t> owned_data;
+	AllocatedData owned_data;
 };
 
 struct SelectionVector {
@@ -31,7 +33,7 @@ struct SelectionVector {
 		Initialize(count);
 	}
 	SelectionVector(idx_t start, idx_t count) {
-		Initialize(STANDARD_VECTOR_SIZE);
+		Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 		for (idx_t i = 0; i < count; i++) {
 			set_index(i, start + i);
 		}
@@ -42,7 +44,7 @@ struct SelectionVector {
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(std::move(data));
 	}
-	SelectionVector &operator=(SelectionVector &&other) {
+	SelectionVector &operator=(SelectionVector &&other) noexcept {
 		sel_vector = other.sel_vector;
 		other.sel_vector = nullptr;
 		selection_data = std::move(other.selection_data);
@@ -70,36 +72,36 @@ public:
 		sel_vector = sel;
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
-		selection_data = make_shared<SelectionData>(count);
-		sel_vector = selection_data->owned_data.get();
+		selection_data = make_shared_ptr<SelectionData>(count);
+		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {
 		selection_data = std::move(data);
-		sel_vector = selection_data->owned_data.get();
+		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
 		sel_vector = other.sel_vector;
 	}
 
-	inline void set_index(idx_t idx, idx_t loc) {
-		sel_vector[idx] = loc;
+	inline void set_index(idx_t idx, idx_t loc) { // NOLINT: allow casing for legacy reasons
+		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
-	inline void swap(idx_t i, idx_t j) {
+	inline void swap(idx_t i, idx_t j) { // NOLINT: allow casing for legacy reasons
 		sel_t tmp = sel_vector[i];
 		sel_vector[i] = sel_vector[j];
 		sel_vector[j] = tmp;
 	}
-	inline idx_t get_index(idx_t idx) const {
+	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
 		return sel_vector ? sel_vector[idx] : idx;
 	}
-	sel_t *data() {
+	sel_t *data() { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	const sel_t *data() const {
+	const sel_t *data() const { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	buffer_ptr<SelectionData> sel_data() {
+	buffer_ptr<SelectionData> sel_data() { // NOLINT: allow casing for legacy reasons
 		return selection_data;
 	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
@@ -110,6 +112,11 @@ public:
 	inline sel_t &operator[](idx_t index) const {
 		return sel_vector[index];
 	}
+	inline bool IsSet() const {
+		return sel_vector;
+	}
+	void Verify(idx_t count, idx_t vector_size) const;
+	void Sort(idx_t count);
 
 private:
 	sel_t *sel_vector;
@@ -118,7 +125,7 @@ private:
 
 class OptionalSelection {
 public:
-	explicit inline OptionalSelection(SelectionVector *sel_p) {
+	explicit OptionalSelection(SelectionVector *sel_p) {
 		Initialize(sel_p);
 	}
 	void Initialize(SelectionVector *sel_p) {
@@ -129,7 +136,7 @@ public:
 		}
 	}
 
-	inline operator SelectionVector *() {
+	inline operator SelectionVector *() { // NOLINT: allow implicit conversion to SelectionVector
 		return sel;
 	}
 
@@ -168,10 +175,10 @@ public:
 	bool Initialized() const {
 		return initialized;
 	}
-	void Initialize(idx_t size) {
+	void Initialize(idx_t new_size) {
 		D_ASSERT(!initialized);
-		this->size = size;
-		sel_vec.Initialize(size);
+		size = new_size;
+		sel_vec.Initialize(new_size);
 		internal_opt_selvec.Initialize(&sel_vec);
 		initialized = true;
 	}

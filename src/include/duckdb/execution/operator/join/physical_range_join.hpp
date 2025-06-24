@@ -45,12 +45,13 @@ public:
 
 	private:
 		// Merge the NULLs of all non-DISTINCT predicates into the primary so they sort to the end.
-		idx_t MergeNulls(const vector<JoinCondition> &conditions);
+		idx_t MergeNulls(Vector &primary, const vector<JoinCondition> &conditions);
 	};
 
 	class GlobalSortedTable {
 	public:
-		GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
+		GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout,
+		                  const PhysicalOperator &op);
 
 		inline idx_t Count() const {
 			return count;
@@ -77,6 +78,8 @@ public:
 		//! Schedules tasks to merge sort the current child's data during a Finalize phase
 		void ScheduleMergeTasks(Pipeline &pipeline, Event &event);
 
+		//! The hosting operator
+		const PhysicalOperator &op;
 		GlobalSortState global_sort_state;
 		//! Whether or not the RHS has NULL values
 		atomic<idx_t> has_null;
@@ -89,8 +92,8 @@ public:
 	};
 
 public:
-	PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
-	                  unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
+	PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
+	                  PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
 	                  idx_t estimated_cardinality);
 
 	// Projection mappings

@@ -16,6 +16,7 @@ add_library_unity(
   bind_operator_expression.cpp
   bind_parameter_expression.cpp
   bind_positional_reference_expression.cpp
+  bind_unpacked_star_expression.cpp
   bind_star_expression.cpp
   bind_subquery_expression.cpp
   bind_unnest_expression.cpp

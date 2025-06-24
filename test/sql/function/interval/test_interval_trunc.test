@@ -59,15 +59,15 @@ SELECT i FROM intervals;
 5 months 7 days 12:34:56.789012
 -3 months -3 days 12:34:56.789012
 1 month 11 days 12:34:56.789012
--1 months -2 days 12:34:56.789012
+-1 month -2 days 12:34:56.789012
 1 month 16 days 12:34:56.789012
--1 months -9 days 12:34:56.789012
+-1 month -9 days 12:34:56.789012
 1 month 24 days 12:34:56.789012
--1 months -17 days 12:34:56.789012
+-1 month -17 days 12:34:56.789012
 1 month 29 days 12:34:56.789012
--1 months -26 days 12:34:56.789012
+-1 month -26 days 12:34:56.789012
 1 month 7 days 12:34:56.789012
--1 months -29 days 12:34:56.789012
+-1 month -29 days 12:34:56.789012
 NULL
 
 query I
@@ -220,15 +220,15 @@ SELECT DATE_TRUNC('${datepart}', i) FROM intervals
 5 months 7 days
 -3 months
 1 month 7 days
--1 months
+-1 month
 1 month 14 days
--1 months -7 days
+-1 month -7 days
 1 month 21 days
--1 months -14 days
+-1 month -14 days
 1 month 28 days
--1 months -21 days
+-1 month -21 days
 1 month 7 days
--1 months -28 days
+-1 month -28 days
 NULL
 
 endloop
@@ -255,15 +255,15 @@ SELECT DATE_TRUNC('${datepart}', i) FROM intervals
 5 months 7 days
 -3 months -3 days
 1 month 11 days
--1 months -2 days
+-1 month -2 days
 1 month 16 days
--1 months -9 days
+-1 month -9 days
 1 month 24 days
--1 months -17 days
+-1 month -17 days
 1 month 29 days
--1 months -26 days
+-1 month -26 days
 1 month 7 days
--1 months -29 days
+-1 month -29 days
 NULL
 
 endloop
@@ -288,15 +288,15 @@ SELECT DATE_TRUNC('hour', i) FROM intervals
 5 months 7 days 12:00:00
 -3 months -3 days 12:00:00
 1 month 11 days 12:00:00
--1 months -2 days 12:00:00
+-1 month -2 days 12:00:00
 1 month 16 days 12:00:00
--1 months -9 days 12:00:00
+-1 month -9 days 12:00:00
 1 month 24 days 12:00:00
--1 months -17 days 12:00:00
+-1 month -17 days 12:00:00
 1 month 29 days 12:00:00
--1 months -26 days 12:00:00
+-1 month -26 days 12:00:00
 1 month 7 days 12:00:00
--1 months -29 days 12:00:00
+-1 month -29 days 12:00:00
 NULL
 
 query I
@@ -319,15 +319,15 @@ SELECT DATE_TRUNC('minute', i) FROM intervals
 5 months 7 days 12:34:00
 -3 months -3 days 12:34:00
 1 month 11 days 12:34:00
--1 months -2 days 12:34:00
+-1 month -2 days 12:34:00
 1 month 16 days 12:34:00
--1 months -9 days 12:34:00
+-1 month -9 days 12:34:00
 1 month 24 days 12:34:00
--1 months -17 days 12:34:00
+-1 month -17 days 12:34:00
 1 month 29 days 12:34:00
--1 months -26 days 12:34:00
+-1 month -26 days 12:34:00
 1 month 7 days 12:34:00
--1 months -29 days 12:34:00
+-1 month -29 days 12:34:00
 NULL
 
 foreach datepart second epoch
@@ -352,15 +352,15 @@ SELECT DATE_TRUNC('${datepart}', i) FROM intervals
 5 months 7 days 12:34:56
 -3 months -3 days 12:34:56
 1 month 11 days 12:34:56
--1 months -2 days 12:34:56
+-1 month -2 days 12:34:56
 1 month 16 days 12:34:56
--1 months -9 days 12:34:56
+-1 month -9 days 12:34:56
 1 month 24 days 12:34:56
--1 months -17 days 12:34:56
+-1 month -17 days 12:34:56
 1 month 29 days 12:34:56
--1 months -26 days 12:34:56
+-1 month -26 days 12:34:56
 1 month 7 days 12:34:56
--1 months -29 days 12:34:56
+-1 month -29 days 12:34:56
 NULL
 
 endloop
@@ -385,15 +385,15 @@ SELECT DATE_TRUNC('millisecond', i) FROM intervals
 5 months 7 days 12:34:56.789
 -3 months -3 days 12:34:56.789
 1 month 11 days 12:34:56.789
--1 months -2 days 12:34:56.789
+-1 month -2 days 12:34:56.789
 1 month 16 days 12:34:56.789
--1 months -9 days 12:34:56.789
+-1 month -9 days 12:34:56.789
 1 month 24 days 12:34:56.789
--1 months -17 days 12:34:56.789
+-1 month -17 days 12:34:56.789
 1 month 29 days 12:34:56.789
--1 months -26 days 12:34:56.789
+-1 month -26 days 12:34:56.789
 1 month 7 days 12:34:56.789
--1 months -29 days 12:34:56.789
+-1 month -29 days 12:34:56.789
 NULL
 
 query I
@@ -416,15 +416,15 @@ SELECT DATE_TRUNC('microsecond', i) FROM intervals
 5 months 7 days 12:34:56.789012
 -3 months -3 days 12:34:56.789012
 1 month 11 days 12:34:56.789012
--1 months -2 days 12:34:56.789012
+-1 month -2 days 12:34:56.789012
 1 month 16 days 12:34:56.789012
--1 months -9 days 12:34:56.789012
+-1 month -9 days 12:34:56.789012
 1 month 24 days 12:34:56.789012
--1 months -17 days 12:34:56.789012
+-1 month -17 days 12:34:56.789012
 1 month 29 days 12:34:56.789012
--1 months -26 days 12:34:56.789012
+-1 month -26 days 12:34:56.789012
 1 month 7 days 12:34:56.789012
--1 months -29 days 12:34:56.789012
+-1 month -29 days 12:34:56.789012
 NULL
 
 # Variable part name
@@ -448,15 +448,15 @@ SELECT DATE_TRUNC(s, i) FROM intervals
 5 months 7 days
 -3 months -3 days
 1 month 11 days 12:00:00
--1 months -2 days 12:00:00
+-1 month -2 days 12:00:00
 1 month 16 days 12:34:00
--1 months -9 days 12:34:00
+-1 month -9 days 12:34:00
 1 month 24 days 12:34:56
--1 months -17 days 12:34:56
+-1 month -17 days 12:34:56
 1 month 29 days 12:34:56.789
--1 months -26 days 12:34:56.789
+-1 month -26 days 12:34:56.789
 1 month 7 days 12:34:56.789012
--1 months -29 days 12:34:56.789012
+-1 month -29 days 12:34:56.789012
 NULL
 
 # NULL part name

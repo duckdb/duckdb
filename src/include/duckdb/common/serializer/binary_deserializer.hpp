@@ -89,6 +89,7 @@ private:
 	}
 
 	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		D_ASSERT(!has_buffered_field);
 		stream.ReadData(buffer, read_size);
 	}
 
@@ -102,7 +103,7 @@ private:
 	template <class T>
 	T VarIntDecode() {
 		// FIXME: maybe we should pass a source to EncodingUtil instead
-		uint8_t buffer[16];
+		uint8_t buffer[16] = {};
 		idx_t varint_size;
 		for (varint_size = 0; varint_size < 16; varint_size++) {
 			ReadData(buffer + varint_size, 1);
@@ -149,6 +150,7 @@ private:
 	double ReadDouble() final;
 	string ReadString() final;
 	hugeint_t ReadHugeInt() final;
+	uhugeint_t ReadUhugeInt() final;
 	void ReadDataPtr(data_ptr_t &ptr, idx_t count) final;
 };
 

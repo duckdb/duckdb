@@ -1,0 +1,50 @@
+# name: test/sql/optimizer/expression/test_timestamp_offset.test
+# description: Test pushdown of varchars converted to timestamps
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create or replace table table1 (
+    timestamp_str varchar
+);
+
+statement ok
+insert into table1 values ('2024-05-03 01:00:00'), ('2024-05-03 01:00:02');
+
+query II
+select timestamp_str, cast(timestamp_str as timestamp)
+from table1
+where cast(timestamp_str as timestamp) > cast('2024-05-03 01:00:00' as timestamp);
+----
+2024-05-03 01:00:02	2024-05-03 01:00:02
+
+statement ok
+truncate table table1;
+
+statement ok
+insert into table1 values ('2024-05-03T01:00:00+00:00'), ('2024-05-03T01:00:02+00:00');
+
+query II
+select timestamp_str, cast(timestamp_str as timestamp)
+from table1
+where cast(timestamp_str as timestamp) > cast('2024-05-03 01:00:00' as timestamp);
+----
+2024-05-03T01:00:02+00:00	2024-05-03 01:00:02
+
+query II
+select timestamp_str, cast(timestamp_str as timestamp)
+from table1
+where cast(timestamp_str as timestamp) > cast('2024-05-03T01:00:00+00:00' as timestamp);
+----
+2024-05-03T01:00:02+00:00	2024-05-03 01:00:02
+
+query II
+select * from (
+    select timestamp_str, cast(timestamp_str as timestamp) as timestamp_column
+    from table1
+)
+where timestamp_column > cast('2024-05-03 01:00:00' as timestamp);
+----
+2024-05-03T01:00:02+00:00	2024-05-03 01:00:02

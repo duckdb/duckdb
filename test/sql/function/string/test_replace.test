@@ -69,10 +69,13 @@ Motöread
 # test incorrect usage of replace
 statement error
 select REPLACE(1)
+----
 
 statement error
 select REPLACE(1, 2)
+----
 
 statement error
 select REPLACE(1, 2, 3, 4)
+----
 

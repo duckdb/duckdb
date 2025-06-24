@@ -1,0 +1,10 @@
+# name: benchmark/tpch/aggregate/top_n_in_group_agg.benchmark
+# group: [aggregate]
+
+# default to SF5
+argument sf 5
+
+include benchmark/tpch/tpch_load.benchmark.in
+
+run
+SELECT max(l_extendedprice, 3) FROM lineitem GROUP BY l_suppkey ORDER BY ALL;

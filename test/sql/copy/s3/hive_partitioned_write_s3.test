@@ -21,6 +21,20 @@ require-env DUCKDB_S3_USE_SSL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+statement ok
+CREATE SECRET (
+    TYPE S3,
+    PROVIDER config,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    REGION '${AWS_DEFAULT_REGION}',
+    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+    USE_SSL '${DUCKDB_S3_USE_SSL}'
+)
+
+statement ok
+set s3_endpoint='ensure.secret.is.used.instead.of.duckdb.setting.com'
+
 # Simple table that is easy to partition
 statement ok
 CREATE TABLE test as SELECT i%2 as part_col, (i+1)%5 as value_col, i as value2_col from range(0,10) tbl(i);
@@ -69,8 +83,13 @@ prefix-1	3	7
 prefix-1	0	9
 
 # Test partitioning by all
-statement ok
+statement error
 COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE);
+----
+No column to write as all columns are specified as partition columns
+
+statement ok
+COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE, WRITE_PARTITION_COLUMNS 1);
 
 query I
 SELECT min(value2_col) as min_val
@@ -107,13 +126,13 @@ SELECT part_col, value_col, value2_col FROM parquet_scan('s3://test-bucket/parti
 statement error
 COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 ----
-IO Error: Directory
+Directory
 
 # a file already exist and, OVERWRITE_OR_IGNORE is set to false, throw error
 statement error
 COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col, OVERWRITE_OR_IGNORE FALSE);
 ----
-IO Error: Directory
+Directory
 
 # Trailing slash ist auch gut!
 statement ok
@@ -143,7 +162,7 @@ Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY
 
 # partitioning csv files is also a thing
 statement ok
-COPY test TO 's3://test-bucket/partitioned7' (FORMAT CSV, HEADER TRUE, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
+COPY test TO 's3://test-bucket/partitioned7' (FORMAT CSV, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned7/part_col=0/*.csv' ORDER BY value2_col;

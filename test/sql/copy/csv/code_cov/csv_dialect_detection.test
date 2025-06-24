@@ -5,24 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
-# Test with wrong new line delimiter
-
-statement error
-SELECT count(*) from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_r_n.csv', new_line = '\n')
-----
-CSV options could not be auto-detected.
-
 query I
-SELECT * from read_csv_auto('data/csv/escape.csv', escape=']')
+SELECT * from read_csv_auto('data/csv/escape.csv', escape=']', header = 0)
 ----
 "bla"
 
 query I
-SELECT * from read_csv_auto('data/csv/escape.csv')
+SELECT * from read_csv_auto('data/csv/escape.csv', header = 0)
 ----
 "]"bla]""
 
 statement error
 SELECT * from read_csv_auto('data/csv/no_opt.csv', delim = ';')
 ----
-CSV options could not be auto-detected.
+It was not possible to automatically detect the CSV Parsing dialect

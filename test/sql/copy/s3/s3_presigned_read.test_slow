@@ -26,6 +26,12 @@ require-env S3_LARGE_PARQUET_PRESIGNED_URL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
 
 query I
 SELECT

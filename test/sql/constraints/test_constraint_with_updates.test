@@ -22,9 +22,11 @@ UPDATE integers SET i=i, j=3
 # update to a passing value should work
 statement error
 UPDATE integers SET i=i, i=10
+----
 
 statement error
 UPDATE integers SET i=i, j=10
+----
 
 # now update the value without explicitly mentioning the other column
 statement ok
@@ -32,6 +34,7 @@ UPDATE integers SET j=2
 
 statement error
 UPDATE integers SET j=10
+----
 
 # verify that the final result is correct
 query III
@@ -57,9 +60,11 @@ UPDATE integers SET j=3
 # now update the value so it doesn't pass
 statement error
 UPDATE integers SET i=NULL
+----
 
 statement error
 UPDATE integers SET j=NULL
+----
 
 # verify that the final result is correct
 query II

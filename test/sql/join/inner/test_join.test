@@ -31,6 +31,7 @@ SELECT a, test.b, c FROM test, test2 WHERE test.b = test2.b ORDER BY c;
 # ambiguous reference to column
 statement error
 SELECT b FROM test, test2 WHERE test.b > test2.b;
+----
 
 # simple cross product + multiple join conditions
 query III
@@ -62,7 +63,7 @@ SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b ORDER BY c;
 11	1	20
 12	2	30
 
-# explicit join with additional condition that is no left-right comparision
+# explicit join with additional condition that is no left-right comparison
 query III
 SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b and test.b = 2;
 ----
@@ -76,7 +77,7 @@ SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b and 2 = 2 ORD
 11	1	20
 12	2	30
 
-# explicit join with only condition that is no left-right comparision
+# explicit join with only condition that is no left-right comparison
 query III
 SELECT a, test.b, c FROM test INNER JOIN test2 ON test.b = 2 ORDER BY c;
 ----

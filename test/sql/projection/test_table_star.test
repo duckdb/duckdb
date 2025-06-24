@@ -34,12 +34,15 @@ SELECT t.* FROM test t
 
 statement error
 SELECT test.* FROM test t
+----
 
 statement error
 SELECT xyz.* FROM test
+----
 
 statement error
 SELECT xyz.*
+----
 
 # issue 415
 statement ok

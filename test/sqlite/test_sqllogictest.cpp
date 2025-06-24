@@ -5,6 +5,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 
 #include <functional>
 #include <string>
@@ -37,13 +38,24 @@ static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
-	// fprintf(stderr, "%s\n", name.c_str());
-	string initial_dbpath;
-	if (TestForceStorage()) {
-		auto storage_name = StringUtil::Replace(name, "/", "_");
-		storage_name = StringUtil::Replace(storage_name, ".", "_");
-		storage_name = StringUtil::Replace(storage_name, "\\", "_");
-		initial_dbpath = TestCreatePath(storage_name + ".db");
+
+	auto &test_config = TestConfiguration::Get();
+
+	string initial_dbpath = test_config.GetInitialDBPath();
+	test_config.ProcessPath(initial_dbpath, name);
+	if (!initial_dbpath.empty()) {
+		auto test_path = StringUtil::Replace(initial_dbpath, TestDirectoryPath(), string());
+		test_path = StringUtil::Replace(test_path, "\\", "/");
+		auto components = StringUtil::Split(test_path, "/");
+		components.pop_back();
+		string total_path = TestDirectoryPath();
+		for (auto &component : components) {
+			if (component.empty()) {
+				continue;
+			}
+			total_path = TestJoinPath(total_path, component);
+			TestCreateDirectory(total_path);
+		}
 	}
 	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
@@ -59,8 +71,8 @@ static void testRunner() {
 
 		std::size_t found = name.rfind("test/sql");
 		if (found == std::string::npos) {
-			throw Exception("Failed to auto detect working dir for test '" + name +
-			                "' because a non-standard path was used!");
+			throw InvalidInputException("Failed to auto detect working dir for test '" + name +
+			                            "' because a non-standard path was used!");
 		}
 		auto test_working_dir = name.substr(0, found);
 
@@ -73,6 +85,9 @@ static void testRunner() {
 	if (AUTO_SWITCH_TEST_DIR) {
 		TestChangeDirectory(prev_directory);
 	}
+
+	// clear test directory after running tests
+	ClearTestDirectory();
 }
 
 static string ParseGroupFromPath(string file) {
@@ -171,6 +186,15 @@ void RegisterSqllogictests() {
 	    "test/random/expr/slt_good_80.test", "test/random/expr/slt_good_75.test", "test/random/expr/slt_good_42.test",
 	    "test/random/expr/slt_good_49.test", "test/random/expr/slt_good_24.test", "test/random/expr/slt_good_30.test",
 	    "test/random/expr/slt_good_8.test", "test/random/expr/slt_good_61.test",
+	    // dependencies between tables/views prevent dropping in DuckDB without CASCADE
+	    "test/index/view/1000/slt_good_0.test", "test/index/view/100/slt_good_0.test",
+	    "test/index/view/100/slt_good_5.test", "test/index/view/100/slt_good_1.test",
+	    "test/index/view/100/slt_good_3.test", "test/index/view/100/slt_good_4.test",
+	    "test/index/view/100/slt_good_2.test", "test/index/view/10000/slt_good_0.test",
+	    "test/index/view/10/slt_good_5.test", "test/index/view/10/slt_good_7.test",
+	    "test/index/view/10/slt_good_1.test", "test/index/view/10/slt_good_3.test",
+	    "test/index/view/10/slt_good_4.test", "test/index/view/10/slt_good_6.test",
+	    "test/index/view/10/slt_good_2.test",
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();

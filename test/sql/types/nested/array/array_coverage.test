@@ -1,0 +1,45 @@
+# name: test/sql/types/nested/array/array_coverage.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+query I
+SELECT DISTINCT array_value(array_value(1, 2, 3), array_value(4,5,6));
+----
+[[1, 2, 3], [4, 5, 6]]
+
+query I
+SELECT DISTINCT array_value([1,2,3], [4,5,6]);
+----
+[[1, 2, 3], [4, 5, 6]]
+
+query I
+SELECT DISTINCT [array_value(1,2,3), array_value(4,5,6)];
+----
+[[1, 2, 3], [4, 5, 6]]
+
+
+query I
+SELECT * FROM (VALUES (array_value(NULL, 'abc')), (array_value(NULL, 'defg')), (NULL)) ORDER BY 1 DESC;
+----
+[NULL, defg]
+[NULL, abc]
+NULL
+
+query I
+SELECT * FROM (VALUES (array_value(NULL, 'ghf', NULL)), (array_value(NULL, NULL, 'defg')), (NULL)) ORDER BY 1 DESC;
+----
+[NULL, NULL, defg]
+[NULL, ghf, NULL]
+NULL
+
+query I
+SELECT * FROM (VALUES (array_value(NULL, NULL, 'ghf')), (array_value(NULL, 'defg', NULL)), (NULL)) ORDER BY 1 DESC;
+----
+[NULL, NULL, ghf]
+[NULL, defg, NULL]
+NULL

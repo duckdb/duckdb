@@ -1,0 +1,61 @@
+# name: test/optimizer/pushdown/test_pushdown_cte_group_by_all.test
+# description: If a CTE contains GROUP BY ALL then predicate pushdown on non-aggregated columns should occur
+# group: [pushdown]
+
+statement ok
+create or replace table my_temp as
+from generate_series(99) t(i)
+select i, i % 10 as group_1;
+
+statement ok
+pragma explain_output='optimized_only';
+
+
+query II
+explain
+with my_cte as (
+  from my_temp
+  select
+    group_1,
+    min(i) as min_i,
+    max(i) as max_i
+  group by ALL
+)
+from my_cte
+where
+  group_1 = 2;
+----
+logical_opt	<REGEX>:.*Filters:.*
+
+
+query II
+explain
+with my_cte as (
+ from my_temp
+ select
+   group_1,
+   min(i) as min_i,
+   max(i) as max_i
+ group by group_1
+)
+from my_cte
+where
+ group_1 = 2;
+----
+logical_opt	<REGEX>:.*Filters:.*
+
+
+query II
+explain
+with my_cte as (
+  from my_temp
+  select
+    group_1,
+    min(i) as min_i,
+    max(i) as max_i
+  group by group_1 having min_i > 1
+)
+from my_cte
+where group_1 = 2;
+----
+logical_opt	<REGEX>:.*FILTER.*Filters:.*

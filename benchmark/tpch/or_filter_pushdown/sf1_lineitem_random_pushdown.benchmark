@@ -1,0 +1,9 @@
+# name: benchmark/tpch/or_filter_pushdown/sf1_lineitem_random_pushdown.benchmark
+# description: pushdown or into lineitem
+# group: [or_filter_pushdown]
+
+template benchmark/tpch/or_filter_pushdown/or_filter_pushdown.benchmark.in
+QUERY_NAME=lineitem_unordered_sf1_pushdown
+DISABLED_OPTIMIZERS=''
+TABLE_NAME=lineitem_sf1_random
+COLUMN_NAME=l_orderkey

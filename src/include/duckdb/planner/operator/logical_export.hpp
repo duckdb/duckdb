@@ -20,19 +20,23 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPORT;
 
 public:
-	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info, BoundExportData exported_tables)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPORT), function(function), copy_info(std::move(copy_info)),
-	      exported_tables(std::move(exported_tables)) {
-	}
-	CopyFunction function;
-	unique_ptr<CopyInfo> copy_info;
-	BoundExportData exported_tables;
+	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info, unique_ptr<BoundExportData> exported_tables);
 
-public:
+	unique_ptr<CopyInfo> copy_info;
+	CopyFunction function;
+	unique_ptr<BoundExportData> exported_tables;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 protected:
+	LogicalExport(ClientContext &context, unique_ptr<ParseInfo> copy_info, unique_ptr<ParseInfo> exported_tables);
+
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);
 	}
+
+	CopyFunction GetCopyFunction(ClientContext &context, CopyInfo &info);
 };
 
 } // namespace duckdb

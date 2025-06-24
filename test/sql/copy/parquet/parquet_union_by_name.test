@@ -43,6 +43,7 @@ COPY ubn3 TO '__TEST_DIR__/ubn3.parquet' WITH (FORMAT PARQUET);
 # If use SELECT * some filesystem may surprisingly success
 statement error
 SELECT a,b,c FROM parquet_scan('__TEST_DIR__/ubn*.parquet')
+----
 
 query III
 SELECT a,b,c 
@@ -63,6 +64,7 @@ statement error
 SELECT a 
 FROM parquet_scan(['__TEST_DIR__/ubn2.parquet', '__TEST_DIR__/ubn1.parquet', '__TEST_DIR__/ubn3.parquet']) 
 ORDER BY a;
+----
 
 # with union by name, parquet readers will use max logical type
 query I
@@ -83,6 +85,7 @@ statement error
 SELECT b
 FROM parquet_scan('__TEST_DIR__/ubn*.parquet') 
 ORDER BY b;
+----
 
 query I
 SELECT b
@@ -125,12 +128,6 @@ FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
 LIMIT 1;
 ----
 INTEGER[]	BIGINT[]	INTEGER[]
-
-
-# interger can not cast to list
-statement error
-SELECT *
-FROM parquet_scan('__TEST_DIR__/*.parquet', union_by_name=true);
 
 statement ok
 PRAGMA threads=1

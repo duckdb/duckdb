@@ -1,0 +1,35 @@
+# name: test/sql/types/nested/array/array_string_heap_gather.test_slow
+# group: [array]
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+PRAGMA enable_verification
+
+# Test for list
+statement ok
+CREATE TABLE test_list AS
+SELECT range % 4 g,
+       10000 - range o,
+       [range, range + 1, range + 2]::VARCHAR[] a,
+       range i
+FROM range(10000);
+
+query IIII rowsort expected_result
+SELECT g o, a, sum(i) OVER (PARTITION BY g ORDER BY o) FROM test_list;
+----
+
+# We expect arrays to produce the same result as lists
+statement ok
+CREATE TABLE test_array AS
+SELECT range % 4 g,
+       10000 - range o,
+       [range, range + 1, range + 2]::VARCHAR[3] a,
+       range i
+FROM range(10000);
+
+
+query IIII rowsort expected_result
+SELECT g o, a, sum(i) OVER (PARTITION BY g ORDER BY o) FROM test_array;
+----

@@ -1,0 +1,161 @@
+# name: test/optimizer/pushdown_semi_anti_join.test
+# description: Pushdown set operations
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = 'OPTIMIZED_ONLY'
+
+statement ok
+create table t0 as (select 42 a);
+
+statement ok
+create table t1 as (select 42 b);
+
+query II
+explain select a from t0 semi join (select * from t1 where 1 = 0) on a = b;
+----
+logical_opt	<!REGEX>:.*SEMI.*
+
+# SEMI JOIN is empty if either side is empty
+query II
+explain select * from t0 SEMI JOIN (select * from t1 where 1=0) tmp on a = b;
+----
+logical_opt	<!REGEX>:.*SEMI.*
+
+query II
+explain select * from (select * from t0 where 1=0) tmp0 SEMI JOIN (select * from t1) tmp1 on (a = b);
+----
+logical_opt	<!REGEX>:.*SEMI.*
+
+# ANTI JOIN is empty if LHS is empty
+query II
+explain select * from (select 42 where 1=0) tmp0(a) ANTI JOIN (select 42) tmp1(b) on (a=b);
+----
+logical_opt	<!REGEX>:.*EXCEPT.*
+
+# if RHS is empty we can optimize away the ANTI JOIN
+query II
+explain select * from t0 ANTI JOIN (select * from t1 where 1=0) on (a=b);
+----
+logical_opt	<!REGEX>:.*ANTI.*
+
+# now pushdown subquery with set ops
+query II
+explain select * from ((select 42) tbl(a) SEMI JOIN t1 on (a=b)) where a=42;
+----
+logical_opt	<REGEX>:.*SEMI.*
+
+query II
+explain select * from ((select 42) tbl(a) SEMI JOIN t1 on (a=b)) where a=43;
+----
+logical_opt	<!REGEX>:.*SEMI.*
+
+query II
+explain select * from ((select 43) tbl(i) SEMI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+logical_opt	<!REGEX>:.*SEMI.*
+
+query II
+explain select * from ((select 42) tbl(i) ANTI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+logical_opt	<REGEX>:.*ANTI.*
+
+query II
+explain select * from ((select 42) tbl(i) ANTI JOIN (select 43) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+logical_opt	<!REGEX>:.*ANTI.*
+
+query II
+explain select * from ((select 43) tbl(i) ANTI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+logical_opt	<!REGEX>:.*ANTI.*
+
+query I
+select * from (select 42) tbl(a) SEMI JOIN (select 43) tbl2(b) on (a=b) where a = 42;
+----
+
+query I
+select * from (select 42) tbl(a) SEMI JOIN (select 42 where 1=0) tbl2(b) on (a=b);
+----
+
+query I
+select * from (select 42 where 1=0) tbl(a) SEMI JOIN (select 42) tbl2(b) on (a=b);
+----
+
+query I
+select * from (select 42 where 1=0) tbl(a) ANTI JOIN (select 42) tbl2(b) on (a=b);
+----
+
+query I
+select * from (select 42) tbl(a) ANTI JOIN (select 42 where 1=0) tbl2(b) on (a=b);
+----
+42
+
+query I
+select * from (select * from (select 42) tbl(i) SEMI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+42
+
+query I
+select * from (select * from (select 42) tbl(i) SEMI JOIN (select 43) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+
+query I
+select * from (select * from (select 43) tbl(i) SEMI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+
+query I
+select * from (select * from (select 42) tbl(i) ANTI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+
+query I
+select * from (select * from (select 42) tbl(i) ANTI JOIN (select 43) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+42
+
+query I
+select * from (select * from (select 43) tbl(i) ANTI JOIN (select 42) tbl2(u) on (i=u)) tbl(i) where i=42;
+----
+
+
+statement ok
+create table t2 as select range a, range+8 b from range(11);
+
+statement ok
+create table t3 as select range a, range+8 b from range(11);
+
+statement ok
+create table t4 as select range a, range+8 b from range(11);
+
+statement ok
+create table t5 as select range a, range+8 b from range(11);
+
+# no semis or antis in this
+query II
+explain select a from (select * from t2 semi join (select * from t3 where 1 = 0) tt0 on (t2.a = tt0.b)) tmp1 ANTI JOIN (select * from t3 semi join (select * from t4) tt1 on (t3.a = tt1.b)) tmp2 on (tmp1.a=tmp2.a);
+----
+logical_opt	<!REGEX>:.*(SEMI|ANTI).*
+
+
+# with complex join condition, answer is still correct
+query II no_sort no_filter
+select * from t2 semi join t3 on (t2.a + 70 + t3.b = t2.b**t3.a);
+----
+1   9
+
+# filter is not pushed down to right side, otherwise answer is incorrect
+query II no_sort no_filter
+select * from t2 semi join t3 on (t2.a + 70 + t3.b = t2.b**t3.a) where a < 10;
+----
+1   9
+
+statement ok
+create table left_table as (select * from VALUES (1, 9), (1, 10) t(a, b));
+
+statement ok
+create table right_table as (select * from VALUES (1, 4) t(a, b));
+
+query II
+select * from left_table anti join right_table on (left_table.b-5 = right_table.b) where b > 5;
+----
+1	10

@@ -23,7 +23,7 @@ bool BoundOperatorExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundOperatorExpression::Copy() {
+unique_ptr<Expression> BoundOperatorExpression::Copy() const {
 	auto copy = make_uniq<BoundOperatorExpression>(type, return_type);
 	copy->CopyProperties(*this);
 	for (auto &child : children) {

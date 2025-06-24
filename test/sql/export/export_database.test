@@ -48,6 +48,7 @@ CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
 
 statement error
 CREATE TABLE "same_name"(i INTEGER, j INTEGER);
+----
 
 statement ok
 INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)
@@ -174,9 +175,15 @@ SELECT * FROM s2.table01 ORDER BY i;
 5	5
 6	6
 
+statement ok
+PRAGMA verify_serializer
+
 # now export the db
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
+
+statement ok
+PRAGMA disable_verification
 
 statement ok
 ROLLBACK
@@ -276,6 +283,8 @@ SELECT * FROM s2.table01 ORDER BY i;
 # verify that constraints are still there
 statement error
 INSERT INTO integers VALUES (5, 6)
+----
 
 statement error
 INSERT INTO strings VALUES(NULL, NULL)
+----

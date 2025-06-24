@@ -1,0 +1,9 @@
+# name: test/parquet/test_legacy_empty_pandas_parquet.test
+# group: [parquet]
+
+require parquet
+
+# This file includes the unsupported NULL (24) ConvertedType
+# Which is not supported by the spec, but written by some ancient versions of Pandas (pre-2020)
+statement ok
+select * from 'data/parquet-testing/empty.parquet'

@@ -5,8 +5,18 @@
 statement ok
 PRAGMA enable_verification
 
-statement error
+query I
 SELECT 1 FROM range((SELECT 1) - 0);
+----
+1
 
-statement error
+query I
 SELECT (SELECT 1 FROM range((SELECT 1) - 0));
+----
+1
+
+query I
+FROM range((SELECT 3) - 1)
+----
+0
+1

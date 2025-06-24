@@ -1,0 +1,82 @@
+# name: benchmark/realnest/micro/16_most_common_list_aggregates.benchmark
+# description: Combination of the most common list_aggregate functions
+# group: [micro]
+
+name most_common_list_aggregates
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT 
+  list_aggregate(tau_pt, 'list'),
+  list_aggregate(tau_eta, 'list'),
+  list_aggregate(jet_pt, 'list'),
+  list_aggregate(jet_eta, 'list'),
+  list_aggregate(muon_pt, 'list'),
+  list_aggregate(muon_eta, 'list'),
+  list_aggregate(ph_pt, 'list'),
+  list_aggregate(ph_eta, 'list'),
+  list_aggregate(tau_pt, 'sum'),
+  list_aggregate(tau_eta, 'sum'),
+  list_aggregate(jet_pt, 'sum'),
+  list_aggregate(jet_eta, 'sum'),
+  list_aggregate(muon_pt, 'sum'),
+  list_aggregate(muon_eta, 'sum'),
+  list_aggregate(ph_pt, 'sum'),
+  list_aggregate(ph_eta, 'sum'),
+  list_aggregate(tau_pt, 'min'),
+  list_aggregate(tau_eta, 'min'),
+  list_aggregate(jet_pt, 'min'),
+  list_aggregate(jet_eta, 'min'),
+  list_aggregate(muon_pt, 'min'),
+  list_aggregate(muon_eta, 'min'),
+  list_aggregate(ph_pt, 'min'),
+  list_aggregate(ph_eta, 'min'),
+  list_aggregate(tau_pt, 'max'),
+  list_aggregate(tau_eta, 'max'),
+  list_aggregate(jet_pt, 'max'),
+  list_aggregate(jet_eta, 'max'),
+  list_aggregate(muon_pt, 'max'),
+  list_aggregate(muon_eta, 'max'),
+  list_aggregate(ph_pt, 'max'),
+  list_aggregate(ph_eta, 'max'),
+  list_aggregate(tau_pt, 'count'),
+  list_aggregate(tau_eta, 'count'),
+  list_aggregate(jet_pt, 'count'),
+  list_aggregate(jet_eta, 'count'),
+  list_aggregate(muon_pt, 'count'),
+  list_aggregate(muon_eta, 'count'),
+  list_aggregate(ph_pt, 'count'),
+  list_aggregate(ph_eta, 'count'),
+  list_aggregate(tau_pt, 'string_agg', '|'),
+  list_aggregate(tau_eta, 'string_agg', '|'),
+  list_aggregate(jet_pt, 'string_agg', '|'),
+  list_aggregate(jet_eta, 'string_agg', '|'),
+  list_aggregate(muon_pt, 'string_agg', '|'),
+  list_aggregate(muon_eta, 'string_agg', '|'),
+  list_aggregate(ph_pt, 'string_agg', '|'),
+  list_aggregate(ph_eta, 'string_agg', '|'),
+  list_aggregate(tau_pt, 'avg'),
+  list_aggregate(tau_eta, 'avg'),
+  list_aggregate(jet_pt, 'avg'),
+  list_aggregate(jet_eta, 'avg'),
+  list_aggregate(muon_pt, 'avg'),
+  list_aggregate(muon_eta, 'avg'),
+  list_aggregate(ph_pt, 'avg'),
+  list_aggregate(ph_eta, 'avg'),
+  list_aggregate(tau_pt, 'median'),
+  list_aggregate(tau_eta, 'median'),
+  list_aggregate(jet_pt, 'median'),
+  list_aggregate(jet_eta, 'median'),
+  list_aggregate(muon_pt, 'median'),
+  list_aggregate(muon_eta, 'median'),
+  list_aggregate(ph_pt, 'median'),
+  list_aggregate(ph_eta, 'median') 
+FROM singleMu;

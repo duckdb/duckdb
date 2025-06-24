@@ -18,27 +18,22 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
-	                    physical_index_vector_t<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
-	                    idx_t estimated_cardinality);
+	PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &table,
+	                    vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality);
 	//! CREATE TABLE AS
-	PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
-	                    idx_t estimated_cardinality);
+	PhysicalBatchInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
+	                    unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality);
 
-	//! The map from insert column index to table column index
-	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
 	optional_ptr<TableCatalogEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
-	//! The default expressions of the columns for which no value is provided
-	vector<unique_ptr<Expression>> bound_defaults;
+	//! The bound constraints for the table
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Table schema, in case of CREATE TABLE AS
 	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
-	// Which action to perform on conflict
-	OnConflictAction action_type;
 
 public:
 	// Source interface
@@ -52,14 +47,14 @@ public:
 	// Sink interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
-	void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const override;
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool IsSink() const override {
@@ -69,6 +64,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const;
+	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const;
 };
 
 } // namespace duckdb

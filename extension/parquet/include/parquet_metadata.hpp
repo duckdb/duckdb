@@ -23,4 +23,19 @@ public:
 	ParquetSchemaFunction();
 };
 
+class ParquetKeyValueMetadataFunction : public TableFunction {
+public:
+	ParquetKeyValueMetadataFunction();
+};
+
+class ParquetFileMetadataFunction : public TableFunction {
+public:
+	ParquetFileMetadataFunction();
+};
+
+class ParquetBloomProbeFunction : public TableFunction {
+public:
+	ParquetBloomProbeFunction();
+};
+
 } // namespace duckdb

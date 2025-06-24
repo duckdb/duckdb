@@ -141,7 +141,7 @@ public:
      * @return      true if the given Format objects are not semantically equal.
      * @deprecated ICU 53
      */
-    UBool operator!=(const Format& other) const;
+    bool operator!=(const Format& other) const;
 
     /**
      * Set the locale used for formatting or parsing.
@@ -236,7 +236,7 @@ private:
     friend struct TimeUnitFormatReadSink;
 };
 
-inline UBool
+inline bool
 TimeUnitFormat::operator!=(const Format& other) const  {
     return !operator==(other);
 }

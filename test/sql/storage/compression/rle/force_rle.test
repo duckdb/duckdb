@@ -1,0 +1,24 @@
+# name: test/sql/storage/compression/rle/force_rle.test
+# description: Test forcing RLE as the compression scheme
+# group: [rle]
+
+require vector_size 2048
+
+load __TEST_DIR__/force_rle.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE test_rle (a INTEGER);
+
+statement ok
+INSERT INTO test_rle SELECT i FROM range(0, 2000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_rle') WHERE segment_type ILIKE 'INTEGER'
+----
+RLE

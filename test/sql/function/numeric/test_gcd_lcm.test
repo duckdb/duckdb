@@ -30,6 +30,7 @@ NULL
 
 statement error
 SELECT gcd(42, 'abcd')
+----
 
 query I
 select lcm(120,25);
@@ -59,6 +60,8 @@ NULL
 
 statement error
 SELECT lcm(42, 'abcd')
+----
 
 statement error
 select lcm(4200000000000000000,5700000000000000000)
+----

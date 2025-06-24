@@ -72,7 +72,7 @@ class TestPyArrowUDF(object):
         # The return type of the function is set to BIGINT, but it takes a VARCHAR
         con.create_function('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT, type='arrow')
 
-        # Succesful conversion
+        # Successful conversion
         res = con.sql("""select pyarrow_string_to_num('5')""").fetchall()
         assert res == [(5,)]
 
@@ -101,7 +101,7 @@ class TestPyArrowUDF(object):
 
         con = duckdb.connect()
         con.create_function('will_crash', returns_none, [BIGINT], BIGINT, type='arrow')
-        with pytest.raises(duckdb.Error, match="""Invalid Error: TypeError: 'NoneType' object is not iterable"""):
+        with pytest.raises(duckdb.Error, match="""Could not convert the result into an Arrow Table"""):
             res = con.sql("""select will_crash(5)""").fetchall()
 
     def test_empty_result(self):
@@ -123,6 +123,30 @@ class TestPyArrowUDF(object):
         con.create_function('too_many_tuples', return_too_many, [BIGINT], BIGINT, type='arrow')
         with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 5'):
             res = con.sql("""select too_many_tuples(5)""").fetchall()
+
+    def test_arrow_side_effects(self, duckdb_cursor):
+        import random as r
+
+        def random_arrow(x):
+            if not hasattr(random_arrow, 'data'):
+                random_arrow.data = 0
+
+            input = x.to_pylist()
+            val = random_arrow.data
+            output = [val + i for i in range(len(input))]
+            random_arrow.data += len(input)
+            return output
+
+        duckdb_cursor.create_function(
+            "random_arrow",
+            random_arrow,
+            [VARCHAR],
+            INTEGER,
+            side_effects=True,
+            type="arrow",
+        )
+        res = duckdb_cursor.query("SELECT random_arrow('') FROM range(10)").fetchall()
+        assert res == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,)]
 
     def test_return_struct(self):
         def return_struct(col):
@@ -185,3 +209,14 @@ class TestPyArrowUDF(object):
         res = con.sql('select return_five(NULL) from range(10)').fetchall()
         # Because we didn't specify 'special' null handling, these are all NULL
         assert res == [(None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,)]
+
+    def test_struct_with_non_inlined_string(self, duckdb_cursor):
+        def func(data):
+            return pa.array([{'x': 1, 'y': 'this is not an inlined string'}] * data.length())
+
+        duckdb_cursor.create_function(
+            name="func", function=func, return_type="STRUCT(x integer, y varchar)", type="arrow", side_effects=False
+        )
+
+        res = duckdb_cursor.sql("select func(1).y").fetchone()
+        assert res == ('this is not an inlined string',)

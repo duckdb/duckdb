@@ -162,22 +162,22 @@ select a from t1, t2 where t1.a = t2.b;
 4
 
 query I
-select count(*) from t1, t2 where t1.a < t2.b;
+select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
 ----
 20
 
 query I
-select count(*) from t1, t2 where t1.a <= t2.b;
+select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
 ----
 28
 
 query I
-select count(*) from t1, t2 where t1.a > t2.b;
+select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
 ----
 36
 
 query I
-select count(*) from t1, t2 where t1.a >= t2.b;
+select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
 ----
 44
 
@@ -202,23 +202,35 @@ create table t1 as select date, time, timestamp, timestamp_s, timestamp_ms, time
 statement ok
 create table t2 as select * from VALUES ('294247-01-10 04:00:54.775806'::new_type), ('83 years 3 months 999 days 00:16:39.999999'::new_type), ('1677-09-21 00:12:43.145225'::new_type), ('other enum type'::new_type), ('another 1'::new_type), ('~~~'::new_type) t(b);
 
-statement ok
+statement error
 select count(*) from t1, t2 where t1.date = t2.b;
+----
+Conversion Error
 
-statement ok
+statement error
 select count(*) from t1, t2 where t1.time = t2.b;
+----
+Conversion Error
 
-statement ok
+statement error
 select count(*) from t1, t2 where t1.timestamp = t2.b;
+----
+Conversion Error
 
-statement ok
+statement error
 select count(*) from t1, t2 where t1.timestamp_s = t2.b;
+----
+Conversion Error
 
-statement ok
+statement error
 select count(*) from t1, t2 where t1.timestamp_ms = t2.b;
+----
+Conversion Error
 
-statement ok
+statement error
 select count(*) from t1, t2 where t1.timestamp_ns = t2.b;
+----
+Conversion Error
 
 # in types.hpp logical type of timestamp_tz, time_tz, interval, and blob are all higher 
 # than varchar, causing a direct cast from varchar to the type to happen. 

@@ -19,6 +19,7 @@ ALTER TABLE test DROP COLUMN j
 # con2 cannot add a new column now!
 statement error con2
 ALTER TABLE test ADD COLUMN k INTEGER
+----
 
 statement ok con1
 COMMIT
@@ -47,10 +48,14 @@ ALTER TABLE test DROP COLUMN i
 # con2 cannot append now!
 statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
+----
+altered
 
-# but we can delete rows!
-statement ok con2
+# nor delete
+statement error con2
 DELETE FROM test WHERE i=1
+----
+altered
 
 query I con1
 SELECT * FROM test
@@ -61,11 +66,13 @@ SELECT * FROM test
 query II con2
 SELECT * FROM test
 ----
+1	1
 2	2
 
 # we can't update on tables that have been altered
 statement error con2
 UPDATE test SET j=100
+----
 
 query I con1
 SELECT * FROM test
@@ -82,6 +89,7 @@ COMMIT
 query I con1
 SELECT * FROM test
 ----
+100
 100
 
 statement ok con1
@@ -107,6 +115,7 @@ ALTER TABLE test DROP COLUMN i
 # cannot commit con2! conflict on append
 statement error con2
 COMMIT
+----
 
 statement ok con1
 DROP TABLE test
@@ -128,4 +137,5 @@ ALTER TABLE test DROP COLUMN j
 # now con tries to add an index to that column: this should fail
 statement error con1
 CREATE INDEX i_index ON test(j
+----
 

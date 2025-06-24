@@ -29,7 +29,7 @@ public:
 	BoundCastInfo bound_cast;
 
 public:
-	LogicalType source_type() {
+	LogicalType source_type() { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(child->return_type.IsValid());
 		return child->return_type;
 	}
@@ -40,6 +40,10 @@ public:
 	//! Cast an expression to the specified SQL type if required
 	DUCKDB_API static unique_ptr<Expression> AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
 	                                                       const LogicalType &target_type, bool try_cast = false);
+
+	//! If the expression returns an array, cast it to return a list with the same child type. Otherwise do nothing.
+	DUCKDB_API static unique_ptr<Expression> AddArrayCastToList(ClientContext &context, unique_ptr<Expression> expr);
+
 	//! Returns true if a cast is invertible (i.e. CAST(s -> t -> s) = s for all values of s). This is not true for e.g.
 	//! boolean casts, because that can be e.g. -1 -> TRUE -> 1. This is necessary to prevent some optimizer bugs.
 	static bool CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type);
@@ -48,7 +52,9 @@ public:
 
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
+
+	bool CanThrow() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);

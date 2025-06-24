@@ -15,11 +15,13 @@ namespace duckdb {
 struct JSONStructureDescription;
 struct DateFormatMap;
 struct StrpTimeFormat;
+class MutableDateFormatMap;
 
 struct JSONStructureNode {
 public:
 	JSONStructureNode();
-	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p);
+	JSONStructureNode(const char *key_ptr, const size_t key_len);
+	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, bool ignore_errors);
 
 	//! Disable copy constructors
 	JSONStructureNode(const JSONStructureNode &other) = delete;
@@ -31,25 +33,27 @@ public:
 	JSONStructureDescription &GetOrCreateDescription(LogicalTypeId type);
 
 	bool ContainsVarchar() const;
-	void InitializeCandidateTypes(const idx_t max_depth, idx_t depth = 0);
-	void RefineCandidateTypes(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
-	                          DateFormatMap &date_format_map);
+	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers, idx_t depth = 0);
+	void RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector, ArenaAllocator &allocator,
+	                          MutableDateFormatMap &date_format_map);
 
 private:
-	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
-	                               DateFormatMap &date_format_map);
-	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
-	                                DateFormatMap &date_format_map);
-	void RefineCandidateTypesString(yyjson_val *vals[], idx_t count, Vector &string_vector,
-	                                DateFormatMap &date_format_map);
-	void EliminateCandidateTypes(idx_t count, Vector &string_vector, DateFormatMap &date_format_map);
-	bool EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
-	                               vector<StrpTimeFormat> &formats);
+	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
+	                               ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
+	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
+	                                ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
+	void RefineCandidateTypesString(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
+	                                MutableDateFormatMap &date_format_map);
+	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, MutableDateFormatMap &date_format_map);
+	bool EliminateCandidateFormats(idx_t vec_count, Vector &string_vector, const Vector &result_vector,
+	                               MutableDateFormatMap &date_format_map);
 
 public:
-	duckdb::unique_ptr<string> key;
+	unique_ptr<string> key;
 	bool initialized = false;
 	vector<JSONStructureDescription> descriptions;
+	idx_t count;
+	idx_t null_count;
 };
 
 struct JSONStructureDescription {
@@ -63,7 +67,8 @@ public:
 	JSONStructureDescription &operator=(JSONStructureDescription &&) noexcept;
 
 	JSONStructureNode &GetOrCreateChild();
-	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val);
+	JSONStructureNode &GetOrCreateChild(const char *key_ptr, size_t key_size);
+	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val, bool ignore_errors);
 
 public:
 	//! Type of this description
@@ -79,9 +84,11 @@ public:
 
 struct JSONStructure {
 public:
-	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
-	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-	                                   idx_t depth = 0);
+	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node, bool ignore_errors);
+	static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node);
+	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, idx_t max_depth,
+	                                   double field_appearance_threshold, idx_t map_inference_threshold,
+	                                   idx_t depth = 0, const LogicalType &null_type = LogicalType::JSON());
 };
 
 } // namespace duckdb

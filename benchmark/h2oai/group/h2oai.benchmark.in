@@ -2,12 +2,14 @@
 # description: ${DESCRIPTION}
 # group: [h2oai]
 
-require httpfs
+require httpfs load_only
 
 name Q${QUERY_NUMBER_PADDED}
 group H2OAI
 
 cache h2oai.duckdb
+
+retry load 5
 
 load benchmark/h2oai/group/queries/load.sql
 

@@ -1,0 +1,95 @@
+{
+    "group": "helpers",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_malloc",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "size_t",
+                    "name": "size"
+                }
+            ],
+            "comment": {
+                "description": "Allocate `size` bytes of memory using the duckdb internal malloc function. Any memory allocated in this manner\nshould be freed using `duckdb_free`.\n\n",
+                "param_comments": {
+                    "size": "The number of bytes to allocate."
+                },
+                "return_value": "A pointer to the allocated memory region."
+            }
+        },
+        {
+            "name": "duckdb_free",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "void *",
+                    "name": "ptr"
+                }
+            ],
+            "comment": {
+                "description": "Free a value returned from `duckdb_malloc`, `duckdb_value_varchar`, `duckdb_value_blob`, or\n`duckdb_value_string`.\n\n",
+                "param_comments": {
+                    "ptr": "The memory region to de-allocate."
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_size",
+            "return_type": "idx_t",
+            "params": [],
+            "comment": {
+                "description": "The internal vector size used by DuckDB.\nThis is the amount of tuples that will fit into a data chunk created by `duckdb_create_data_chunk`.\n\n",
+                "return_value": "The vector size."
+            }
+        },
+        {
+            "name": "duckdb_string_is_inlined",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_string_t",
+                    "name": "string"
+                }
+            ],
+            "comment": {
+                "description": "Whether or not the duckdb_string_t value is inlined.\nThis means that the data of the string does not have a separate allocation.\n\n"
+            }
+        },
+        {
+            "name": "duckdb_string_t_length",
+            "return_type": "uint32_t",
+            "params": [
+                {
+                    "type": "duckdb_string_t",
+                    "name": "string"
+                }
+            ],
+            "comment": {
+                "description": "Get the string length of a string_t\n\n",
+                "return_value": "The length.",
+                "param_comments": {
+                    "string": "The string to get the length of."
+                }
+            }
+        },
+        {
+            "name": "duckdb_string_t_data",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_string_t *",
+                    "name": "string"
+                }
+            ],
+            "comment": {
+                "description": "Get a pointer to the string data of a string_t\n\n",
+                "return_value": "The pointer.",
+                "param_comments": {
+                    "string": "The string to get the pointer to."
+                }
+            }
+        }
+    ]
+}

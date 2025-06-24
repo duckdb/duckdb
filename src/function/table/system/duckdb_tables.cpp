@@ -41,6 +41,12 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 	names.emplace_back("table_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -80,18 +86,6 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 	return std::move(result);
 }
 
-static bool TableHasPrimaryKey(TableCatalogEntry &table) {
-	for (auto &constraint : table.GetConstraints()) {
-		if (constraint->type == ConstraintType::UNIQUE) {
-			auto &unique = constraint->Cast<UniqueConstraint>();
-			if (unique.is_primary_key) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	idx_t check_count = 0;
 	for (auto &constraint : table.GetConstraints()) {
@@ -124,34 +118,41 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// database_name, VARCHAR
 		output.SetValue(col++, count, table.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.catalog.GetOid())));
 		// schema_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(table.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.schema.oid)));
 		// table_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(table.name));
 		// table_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.oid)));
+		// comment, LogicalType::VARCHAR
+		output.SetValue(col++, count, Value(table.comment));
+		// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
+		output.SetValue(col++, count, Value::MAP(table.tags));
 		// internal, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(table.internal));
 		// temporary, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(table.temporary));
 		// has_primary_key, LogicalType::BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
+		output.SetValue(col++, count, Value::BOOLEAN(table.HasPrimaryKey()));
 		// estimated_size, LogicalType::BIGINT
-		Value card_val =
-		    storage_info.cardinality == DConstants::INVALID_INDEX ? Value() : Value::BIGINT(storage_info.cardinality);
+
+		Value card_val = !storage_info.cardinality.IsValid()
+		                     ? Value()
+		                     : Value::BIGINT(NumericCast<int64_t>(storage_info.cardinality.GetIndex()));
 		output.SetValue(col++, count, card_val);
 		// column_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.GetColumns().LogicalColumnCount())));
 		// index_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(storage_info.index_info.size()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(storage_info.index_info.size())));
 		// check_constraint_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(CheckConstraintCount(table)));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(CheckConstraintCount(table))));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(table.ToSQL()));
-
+		auto table_info = table.GetInfo();
+		table_info->catalog.clear();
+		output.SetValue(col++, count, Value(table_info->ToString()));
 		count++;
 	}
 	output.SetCardinality(count);

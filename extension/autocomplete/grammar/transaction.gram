@@ -1,0 +1,11 @@
+TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
+
+BeginTransaction <- StartOrBegin Transaction? ReadOrWrite?
+RollbackTransaction <- AbortOrRollback Transaction?
+CommitTransaction <- CommitOrEnd Transaction?
+
+StartOrBegin <- 'START'i / 'BEGIN'i
+Transaction <- 'WORK'i / 'TRANSACTION'i
+ReadOrWrite <- 'READ'i ('ONLY'i / 'WRITE'i)
+AbortOrRollback <- 'ABORT'i / 'ROLLBACK'i
+CommitOrEnd <- 'COMMIT'i / 'END'i

@@ -95,7 +95,7 @@ SELECT 'C3',2010,80
 from CPB pivot (sum(jg) for nf in (2010, 2017, 2018, 2022) group by cpdh)
 ----
 
-require noalternativeverify
+require no_alternative_verify
 
 # nested CTEs with overlapping names
 query IIIII rowsort pivot

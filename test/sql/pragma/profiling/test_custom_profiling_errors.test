@@ -1,0 +1,28 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_errors.test
+# description: Test different errors for custom_profiling_settings.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement error
+PRAGMA custom_profiling_settings='}}}}}}'
+----
+<REGEX>:IO Error.*Could not parse the custom profiler settings file due to incorrect JSON: "}}}}}}".*
+
+statement error
+PRAGMA custom_profiling_settings=BONJOUR
+----
+<REGEX>:IO Error.*Could not parse the custom profiler settings file due to incorrect JSON: "BONJOUR".*
+
+statement error
+PRAGMA custom_profiling_settings=[NOT_A_JSON]
+----
+<REGEX>:Binder Error.*SET value cannot contain column names.*
+
+statement error
+PRAGMA custom_profiling_settings='{"INVALID_SETTING": "true"}'
+----
+<REGEX>:IO Error.*Invalid custom profiler settings: "INVALID_SETTING".*

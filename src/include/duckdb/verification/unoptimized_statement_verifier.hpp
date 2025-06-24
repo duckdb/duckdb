@@ -14,8 +14,10 @@ namespace duckdb {
 
 class UnoptimizedStatementVerifier : public StatementVerifier {
 public:
-	explicit UnoptimizedStatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement_p);
+	explicit UnoptimizedStatementVerifier(unique_ptr<SQLStatement> statement_p,
+	                                      optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters);
+	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement_p,
+	                                            optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters);
 
 	bool DisableOptimizer() const override {
 		return true;

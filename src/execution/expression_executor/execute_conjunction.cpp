@@ -2,7 +2,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
-#include "duckdb/common/chrono.hpp"
 
 #include <random>
 
@@ -19,8 +18,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConju
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ConjunctionState>(expr, root);
 	for (auto &child : expr.children) {
-		result->AddChild(child.get());
+		result->AddChild(*child);
 	}
+
 	result->Finalize();
 	return std::move(result);
 }
@@ -38,7 +38,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 		} else {
 			Vector intermediate(LogicalType::BOOLEAN);
 			// AND/OR together
-			switch (expr.type) {
+			switch (expr.GetExpressionType()) {
 			case ExpressionType::CONJUNCTION_AND:
 				VectorOperations::And(current_result, result, intermediate, count);
 				break;
@@ -58,10 +58,9 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
                                  SelectionVector *false_sel) {
 	auto &state = state_p->Cast<ConjunctionState>();
 
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics
-		auto start_time = high_resolution_clock::now();
-
+		auto filter_state = state.adaptive_filter->BeginFilter();
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
 		idx_t false_count = 0;
@@ -96,14 +95,12 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				current_sel = true_sel;
 			}
 		}
-
 		// adapt runtime statistics
-		auto end_time = high_resolution_clock::now();
-		state.adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+		state.adaptive_filter->EndFilter(filter_state);
 		return current_count;
 	} else {
 		// get runtime statistics
-		auto start_time = high_resolution_clock::now();
+		auto filter_state = state.adaptive_filter->BeginFilter();
 
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
@@ -133,10 +130,12 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				current_sel = false_sel;
 			}
 		}
+		if (true_sel) {
+			true_sel->Sort(result_count);
+		}
 
 		// adapt runtime statistics
-		auto end_time = high_resolution_clock::now();
-		state.adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+		state.adaptive_filter->EndFilter(filter_state);
 		return result_count;
 	}
 }

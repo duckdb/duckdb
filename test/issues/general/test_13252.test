@@ -1,0 +1,13 @@
+# name: test/issues/general/test_13252.test
+# description: DuckDB Internal Error with the UNION_EXTRACT
+# group: [general]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+WITH tbl1 AS (SELECT NULL AS u) SELECT UNION_EXTRACT(CAST(u AS JSON), 'a') FROM tbl1;
+----
+union_extract can only take a union parameter

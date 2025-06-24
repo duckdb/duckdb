@@ -7,21 +7,28 @@ PRAGMA enable_verification
 
 statement error
 SELECT cast('   ' as interval)
+----
 
 statement error
 SELECT cast('AAAA' as interval)
+----
 
-statement error
+query I
 SELECT cast('00:00:' as interval)
+----
+00:00:00
 
 statement error
 SELECT cast('3 doopiedoos' as interval)
+----
 
 statement error
 SELECT cast('3 years 2 doy' as interval)
+----
 
 statement error
 SELECT cast('3 yearweek' as interval)
+----
 
 query I
 SELECT cast(NULL as interval)
@@ -41,7 +48,7 @@ NULL
 query I
 SELECT try_cast('00:00:' as interval)
 ----
-NULL
+00:00:00
 
 query I
 SELECT try_cast('3 doopiedoos' as interval)

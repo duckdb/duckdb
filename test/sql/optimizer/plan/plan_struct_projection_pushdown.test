@@ -1,0 +1,110 @@
+# name: test/sql/optimizer/plan/plan_struct_projection_pushdown.test
+# description: Test struct projection pushdown
+# group: [plan]
+
+require parquet
+
+statement ok
+CREATE TABLE struct_pushdown_test(id INT, struct_col STRUCT(sub_col1 integer, sub_col2 bool));
+
+statement ok
+INSERT INTO struct_pushdown_test VALUES (1, {'sub_col1': 42, 'sub_col2': true}), (2, NULL), (3, {'sub_col1': 84, 'sub_col2': NULL}), (4, {'sub_col1': NULL, 'sub_col2': false});
+
+statement ok
+COPY struct_pushdown_test TO '__TEST_DIR__/struct_pushdown_test.parquet'
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY';
+
+foreach source struct_pushdown_test read_parquet('__TEST_DIR__/struct_pushdown_test.parquet')
+
+# verify we are only selecting sub_col2
+query II
+EXPLAIN SELECT struct_col.sub_col2 FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.sub_col2.*
+
+# verify we are only selecting sub_col1
+query II
+EXPLAIN SELECT struct_col.sub_col1 FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.sub_col1.*
+
+query II
+EXPLAIN SELECT struct_col.sub_col1, struct_col.sub_col2 FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.sub_col1.*struct_col.sub_col2.*
+
+# here we need to select the entire column
+query II
+EXPLAIN SELECT struct_col.sub_col1, struct_col FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col .*
+
+endloop
+
+# do the same with 2-nested structs
+statement ok
+CREATE TABLE nested_struct_pushdown_test(id INT, struct_col STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool)));
+
+statement ok
+INSERT INTO nested_struct_pushdown_test
+VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
+       (2, NULL),
+       (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
+       (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+statement ok
+COPY nested_struct_pushdown_test TO '__TEST_DIR__/nested_struct_pushdown_test.parquet'
+
+foreach source nested_struct_pushdown_test read_parquet('__TEST_DIR__/nested_struct_pushdown_test.parquet')
+
+query II
+EXPLAIN SELECT struct_col.name.id FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.name.id.*
+
+query II
+EXPLAIN SELECT struct_col.name.id, struct_col.name FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.name .*
+
+query II
+EXPLAIN SELECT struct_col.name.id, struct_col FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col .*
+
+endloop
+
+# 3 layers of nesting
+statement ok
+CREATE OR REPLACE TABLE nested_struct_pushdown_test(id INT, struct_col STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+
+statement ok
+INSERT INTO nested_struct_pushdown_test
+VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}}),
+       (2, NULL),
+       (3, {'s': {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}}),
+       (4, {'s': {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}});
+
+statement ok
+COPY nested_struct_pushdown_test TO '__TEST_DIR__/nested_struct_pushdown_test.parquet'
+
+foreach source nested_struct_pushdown_test read_parquet('__TEST_DIR__/nested_struct_pushdown_test.parquet')
+
+query II
+EXPLAIN SELECT struct_col.s.name.id FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.s.name.id.*
+
+query II
+EXPLAIN SELECT struct_col.s.name.id, struct_col.s.name FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col.s.name .*
+
+query II
+EXPLAIN SELECT struct_col.s.name.id, struct_col FROM ${source};
+----
+physical_plan	<REGEX>:.*struct_col .*
+
+endloop

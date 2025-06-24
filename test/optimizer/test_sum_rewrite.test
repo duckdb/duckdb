@@ -1,0 +1,62 @@
+# name: test/optimizer/test_sum_rewrite.test
+# description: Test SUM rewrite
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers AS FROM range(10000) t(i);
+
+query IIII
+SELECT SUM(i + 1), SUM(i + 2), SUM(i + 3), SUM(i + 4) FROM integers
+----
+50005000	50015000	50025000	50035000
+
+query IIII
+SELECT SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers
+----
+50005000	50015000	50025000	50035000
+
+query IIIII
+SELECT i//100000 grp, SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers GROUP BY grp
+----
+0	50005000	50015000	50025000	50035000
+
+# empty result
+query IIII
+SELECT SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers WHERE i > 100000
+----
+NULL	NULL	NULL	NULL
+
+# nulls
+statement ok
+CREATE TABLE integer_nulls AS SELECT CASE WHEN i%2=0 THEN NULL ELSE i END i FROM range(10000) t(i);
+
+query IIII
+SELECT SUM(i + 1), SUM(i + 2), SUM(i + 3), SUM(i + 4) FROM integer_nulls;
+----
+25005000	25010000	25015000	25020000
+
+# check that we did the rewrite using explain
+statement ok
+pragma explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT SUM(i + 1), SUM(i + 2), SUM(i + 3), SUM(i + 4) FROM integers
+----
+logical_opt	<REGEX>:.*sum_no_overflow\(i\).*
+
+query II
+EXPLAIN SELECT SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers
+----
+logical_opt	<REGEX>:.*sum_no_overflow\(i\).*
+
+# test rewrite with HUGEINT
+statement ok
+CREATE TABLE T(a HUGEINT);
+
+statement ok
+INSERT INTO T VALUES ('-40282366920938463463374607431768211455'::HUGEINT),('-40282366920938463463374607431768211455'::HUGEINT),('-40282366920938463463374607431768211455'::HUGEINT),('-40282366920938463463374607431768211455'::HUGEINT),('-40282366920938463463374607431768211455'::HUGEINT),('-40282366920938463463374607431768211455'::HUGEINT);
+
+query I
+SELECT sum(a + '40282366920938463463374607431768211455'::HUGEINT) FROM T;
+----
+0

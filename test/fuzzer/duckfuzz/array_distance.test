@@ -1,0 +1,22 @@
+# name: test/fuzzer/duckfuzz/array_distance.test
+# description: Repeat row with NULL argument
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+
+statement error
+SELECT array_distance('asdf', [42]::INTEGER[1]);
+----
+array_distance: Arguments must be arrays of FLOAT or DOUBLE
+
+# original issue: https://github.com/duckdb/duckdb-fuzzer/issues/2693
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement error
+SELECT array_distance('db6d3411-3fe9-4668-bf60-06d94108c0f7', c44) FROM all_types AS t51(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51)
+----
+array_distance: Arguments must be arrays of FLOAT or DOUBLE

@@ -3,41 +3,33 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
+PRAGMA enable_verification;
 
 statement ok
-CREATE TABLE integers(i INTEGER, j INTEGER)
+CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-insert into integers values (1,1), (2,2), (3,3)
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3);
 
-# Test single column
+# Test single indexed column.
 
 statement ok
-create index i_index on integers(i);
+CREATE UNIQUE INDEX i_index ON integers(i);
 
 query II
-EXPLAIN SELECT i FROM integers  where i = 1
+EXPLAIN ANALYZE SELECT i, j FROM integers WHERE i = 1;
 ----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
-
-statement ok
-drop index i_index
-
-# Test more complex expression
-
-statement ok
-create index i_index on integers using art((i+j))
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query II
-EXPLAIN SELECT i FROM integers  where i+j = 2
+SELECT i, j FROM integers WHERE i = 1;
 ----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+1	1
 
-query I
-SELECT i FROM integers  where i+j = 2
+statement error
+INSERT INTO integers VALUES (1, 1);
 ----
-1
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement ok
-drop index i_index
+DROP INDEX i_index;

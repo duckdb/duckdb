@@ -2,8 +2,6 @@
 # description: Test attaching of a persistent database
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -12,6 +10,7 @@ ATTACH '__TEST_DIR__/persistent_attach.db'
 
 statement error
 ATTACH '__TEST_DIR__/persistent_attach.db'
+----
 
 statement ok
 CREATE TABLE persistent_attach.integers(i INTEGER)

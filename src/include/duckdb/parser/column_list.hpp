@@ -18,7 +18,7 @@ public:
 	class ColumnListIterator;
 
 public:
-	DUCKDB_API ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API explicit ColumnList(bool allow_duplicate_names = false);
 	DUCKDB_API explicit ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names = false);
 
 	DUCKDB_API void AddColumn(ColumnDefinition column);
@@ -45,7 +45,7 @@ public:
 	idx_t PhysicalColumnCount() const {
 		return physical_columns.size();
 	}
-	bool empty() const {
+	bool empty() const { // NOLINT: match stl API
 		return columns.empty();
 	}
 
@@ -117,10 +117,10 @@ public:
 			return physical ? list.PhysicalColumnCount() : list.LogicalColumnCount();
 		}
 
-		ColumnLogicalIteratorInternal begin() {
+		ColumnLogicalIteratorInternal begin() { // NOLINT: match stl API
 			return ColumnLogicalIteratorInternal(list, physical, 0, Size());
 		}
-		ColumnLogicalIteratorInternal end() {
+		ColumnLogicalIteratorInternal end() { // NOLINT: match stl API
 			return ColumnLogicalIteratorInternal(list, physical, Size(), Size());
 		}
 	};

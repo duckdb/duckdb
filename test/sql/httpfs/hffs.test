@@ -1,0 +1,42 @@
+# name: test/sql/httpfs/hffs.test
+# description: Ensure the HuggingFace filesystem works as expected
+# group: [httpfs]
+
+require parquet
+
+require httpfs
+
+statement error
+FROM parquet_scan('hf://')
+----
+IO Error: Failed to parse 'hf://'. Please format url like: 'hf://datasets/my-username/my-dataset/path/to/file.parquet'
+
+statement error
+FROM 'hf://file.parquet'
+----
+IO Error: Failed to parse 'hf://file.parquet'. Please format url like: 'hf://datasets/my-username/my-dataset/path/to/file.parquet'
+
+statement error
+FROM 'hf://yepthisdoesntwork/file.parquet'
+----
+IO Error: Failed to parse: 'hf://yepthisdoesntwork/file.parquet'. Currently DuckDB only supports querying datasets or spaces, so the url should start with 'hf://datasets' or 'hf://spaces'
+
+statement error
+FROM 'hf://stil/not/file.parquet'
+----
+IO Error: Failed to parse: 'hf://stil/not/file.parquet'. Currently DuckDB only supports querying datasets or spaces, so the url should start with 'hf://datasets' or 'hf://spaces'
+
+statement error
+FROM 'hf://datasets/file.parquet'
+----
+IO Error: Failed to parse 'hf://datasets/file.parquet'. Please format url like: 'hf://datasets/my-username/my-dataset/path/to/file.parquet'
+
+statement error
+FROM 'hf://datasets/myname/file.parquet'
+----
+IO Error: Failed to parse 'hf://datasets/myname/file.parquet'. Please format url like: 'hf://datasets/my-username/my-dataset/path/to/file.parquet'
+
+statement error
+FROM 'hf://datasets/**/file.parquet'
+----
+IO Error: Failed to parse 'hf://datasets/**/file.parquet'. Please format url like: 'hf://datasets/my-username/my-dataset/path/to/file.parquet'

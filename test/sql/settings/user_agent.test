@@ -1,0 +1,28 @@
+# name: test/sql/settings/user_agent.test
+# description: Test user agent setting
+# group: [settings]
+
+statement error
+SET custom_user_agent='something else'
+----
+Cannot change custom_user_agent setting while database is running
+
+statement error
+RESET custom_user_agent
+----
+Cannot change custom_user_agent setting while database is running
+
+query T
+SELECT current_setting('custom_user_agent')
+----
+(empty)
+
+statement error
+SET duckdb_api='something else'
+----
+Cannot change duckdb_api setting while database is running
+
+query T
+SELECT regexp_matches(user_agent, '^duckdb/.*(.*)') FROM pragma_user_agent()
+----
+true

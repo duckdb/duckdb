@@ -14,6 +14,7 @@ namespace duckdb {
 
 struct ChunkMetaData;
 struct VectorMetaData;
+struct SwizzleMetaData;
 
 struct BlockMetaData {
 	//! The underlying block handle
@@ -32,10 +33,13 @@ public:
 	explicit ColumnDataAllocator(BufferManager &buffer_manager);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
+	~ColumnDataAllocator();
 
 	//! Returns an allocator object to allocate with. This returns the allocator in IN_MEMORY_ALLOCATOR, and a buffer
 	//! allocator in case of BUFFER_MANAGER_ALLOCATOR.
 	Allocator &GetAllocator();
+	//! Returns the buffer manager, if this is not an in-memory allocation.
+	BufferManager &GetBufferManager();
 	//! Returns the allocator type
 	ColumnDataAllocatorType GetType() {
 		return type;
@@ -56,6 +60,15 @@ public:
 		}
 		return total_size;
 	}
+	idx_t AllocationSize() const {
+		return allocated_size;
+	}
+	//! Sets the partition index of this tuple data collection
+	void SetPartitionIndex(idx_t index) {
+		D_ASSERT(!partition_index.IsValid());
+		D_ASSERT(blocks.empty() && allocated_data.empty());
+		partition_index = index;
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -63,11 +76,11 @@ public:
 	void Initialize(ColumnDataAllocator &other);
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
-	void UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
-	                       uint32_t block_id, uint32_t offset);
+	void UnswizzlePointers(ChunkManagementState &state, Vector &result, SwizzleMetaData &swizzle_segment,
+	                       const VectorMetaData &string_heap_segment, const idx_t &v_offset, const bool &copied);
 
-	//! Deletes the block with the given id
-	void DeleteBlock(uint32_t block_id);
+	//! Prevents the block with the given id from being added to the eviction queue
+	void SetDestroyBufferUponUnpin(uint32_t block_id);
 
 private:
 	void AllocateEmptyBlock(idx_t size);
@@ -99,6 +112,10 @@ private:
 	bool shared = false;
 	//! Lock used in case this ColumnDataAllocator is shared across threads
 	mutex lock;
+	//! Total allocated size
+	idx_t allocated_size = 0;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 } // namespace duckdb

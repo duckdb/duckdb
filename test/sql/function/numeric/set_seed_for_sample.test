@@ -1,0 +1,20 @@
+# name: test/sql/function/numeric/set_seed_for_sample.test
+# description: Test setseed for samples
+# group: [numeric]
+
+statement ok
+create table t1 as select * from generate_series(1,50) as t(number);
+
+set seed 0.1
+
+query I rowsort result_1
+select * from t1 using sample 5;
+----
+
+set seed 0.1
+
+query I rowsort result_1
+select * from t1 using sample 5;
+----
+
+

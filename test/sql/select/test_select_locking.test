@@ -8,15 +8,19 @@ CREATE TABLE t (t TEXT);
 # unsupported
 statement error
 SELECT * FROM t FOR UPDATE;
+----
 
 # unsupported
 statement error
 SELECT * FROM t FOR NO KEY UPDATE;
+----
 
 # unsupported
 statement error
 SELECT * FROM t FOR SHARE;
+----
 
 # unsupported
 statement error
 SELECT * FROM t KEY SHARE;
+----

@@ -2,8 +2,6 @@
 # description: Test describe all
 # group: [show_select]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 
@@ -13,7 +11,7 @@ CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
 statement ok
 DESCRIBE;
 
-query IIIIII
+query TTTTTT
 DESCRIBE
 ----
 memory	main	integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	false
@@ -25,7 +23,7 @@ DROP TABLE integers
 statement ok
 create table t(plant text, dt date, mwh bigint);
 
-query IIIIII
+query TTTTTT
 DESCRIBE;
 ----
 memory	main	t	[plant, dt, mwh]	[VARCHAR, DATE, BIGINT]	false

@@ -1,0 +1,10 @@
+# name: benchmark/micro/logger/disabled/logging_disabled_client_context.benchmark
+# description: Benchmarking the Client Context logger
+# group: [disabled]
+
+name Client Context NopLogger
+group logger
+
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger
+run
+SELECT write_log('hello world', scope := 'connection') from range(0,50000000);

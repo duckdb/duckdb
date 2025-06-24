@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_SEQ_H
 #define JEMALLOC_INTERNAL_SEQ_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * A simple seqlock implementation.
@@ -53,7 +52,5 @@ seq_try_load_##short_type(type *dst, seq_##short_type##_t *src) {	\
 	memcpy(dst, buf, sizeof(type));					\
 	return true;							\
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SEQ_H */

@@ -1,5 +1,40 @@
 [
   {
+    "class": "LogicalTypeModifier",
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "members": [
+      {
+        "id": 100,
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "id": 101,
+        "name": "label",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["value"]
+  },
+  {
+    "class": "ExtensionTypeInfo",
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "members": [
+      {
+        "id": 100,
+        "name": "modifiers",
+        "type": "vector<LogicalTypeModifier>"
+      },
+      {
+        "id": 101,
+        "name": "properties",
+        "type": "unordered_map<string, Value>",
+        "default": "unordered_map<string, Value>()"
+      }
+    ]
+  },
+  {
     "class": "ExtraTypeInfo",
     "class_type": "type",
     "includes": [
@@ -15,6 +50,17 @@
         "id": 101,
         "name": "alias",
         "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "modifiers",
+        "type": "vector<Value>",
+        "status": "deleted"
+      },
+      {
+        "id": 103,
+        "name": "extension_info",
+        "type": "unique_ptr<ExtensionTypeInfo>"
       }
     ],
     "pointer_type": "shared_ptr"
@@ -98,6 +144,24 @@
     ]
   },
   {
+    "class": "ArrayTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ARRAY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "size",
+        "type": "uint32_t"
+      }
+    ],
+    "constructor": ["child_type", "size"]
+  },
+  {
     "class": "UserTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "USER_TYPE_INFO",
@@ -106,6 +170,23 @@
         "id": 200,
         "name": "user_type_name",
         "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string",
+        "default": "string()"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string",
+        "default": "string()"
+      },
+      {
+        "id": 203,
+        "name": "user_type_modifiers",
+        "type": "vector<Value>"
       }
     ]
   },
@@ -125,6 +206,35 @@
     "class": "GenericTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
-    "custom_switch_code": "result = make_shared<ExtraTypeInfo>(type);\nbreak;"
+    "custom_switch_code": "result = make_shared_ptr<ExtraTypeInfo>(type);\nbreak;"
+  },
+  {
+    "class": "AnyTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ANY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "target_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "cast_score",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "IntegerLiteralTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "INTEGER_LITERAL_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "constant_value",
+        "type": "Value"
+      }
+    ]
   }
 ]

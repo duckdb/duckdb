@@ -1,0 +1,117 @@
+# name: test/sql/pg_catalog/pg_type.test
+# description: Test pg_type function
+# group: [pg_catalog]
+
+statement ok
+CREATE TYPE greeting AS ENUM('hi', 'bonjour', 'konnichiwa', 'howdy')
+
+statement ok
+SELECT * FROM pg_type
+
+statement ok
+SELECT * FROM pg_catalog.pg_type
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'int8' AND oid IS NOT NULL
+----
+20
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'bytea' AND oid IS NOT NULL
+----
+17
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'bit' AND oid IS NOT NULL
+----
+1560
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'bool' AND oid IS NOT NULL
+----
+16
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'varchar' AND oid IS NOT NULL
+----
+1043
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'date' AND oid IS NOT NULL
+----
+1082
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'float8' AND oid IS NOT NULL
+----
+701
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'float4' AND oid IS NOT NULL
+----
+700
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'uuid' AND oid IS NOT NULL
+----
+2950
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'int4' AND oid IS NOT NULL
+----
+23
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'int2' AND oid IS NOT NULL
+----
+21
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'interval' AND oid IS NOT NULL
+----
+1186
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'time' AND oid IS NOT NULL
+----
+1083
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'timestamp' AND oid IS NOT NULL
+----
+1114
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'timestamptz' AND oid IS NOT NULL
+----
+1184
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'timetz' AND oid IS NOT NULL
+----
+1266
+
+query I
+SELECT count(*) FROM pg_type where typname = 'greeting'
+----
+1
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'numeric' AND oid IS NOT NULL
+----
+1700
+
+query I
+SELECT count(*) FROM pg_type where typname = 'enum' AND oid is NOT NULL
+----
+0
+
+query I
+SELECT pg_catalog.format_pg_type('DECIMAL', 'test');
+----
+numeric
+
+query I
+SELECT pg_catalog.format_pg_type('decimal', 'test');
+----
+numeric

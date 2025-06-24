@@ -1,0 +1,16 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [sf1]
+
+name ${QUERY_NAME}
+group or_filter_pushdown
+
+require tpch
+
+cache tpch_sf100.duckdb
+
+load benchmark/tpch/or_filter_pushdown/load.sql
+
+run
+pragma disabled_optimizers='${DISABLED_OPTIMIZERS}';
+select * from ${TABLE_NAME} where ${COLUMN_NAME} in (99584, 5900006);

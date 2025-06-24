@@ -1,0 +1,99 @@
+{
+    "group": "extract_statements",
+    "description": "// A query string can be extracted into multiple SQL statements. Each statement can be prepared and executed separately.",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_extract_statements",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "duckdb_extracted_statements *",
+                    "name": "out_extracted_statements"
+                }
+            ],
+            "comment": {
+                "description": "Extract all statements from a query.\nNote that after calling `duckdb_extract_statements`, the extracted statements should always be destroyed using\n`duckdb_destroy_extracted`, even if no statements were extracted.\n\nIf the extract fails, `duckdb_extract_statements_error` can be called to obtain the reason why the extract failed.\n\n",
+                "param_comments": {
+                    "connection": "The connection object",
+                    "query": "The SQL query to extract",
+                    "out_extracted_statements": "The resulting extracted statements object"
+                },
+                "return_value": "The number of extracted statements or 0 on failure."
+            }
+        },
+        {
+            "name": "duckdb_prepare_extracted_statement",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "duckdb_extracted_statements",
+                    "name": "extracted_statements"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "duckdb_prepared_statement *",
+                    "name": "out_prepared_statement"
+                }
+            ],
+            "comment": {
+                "description": "Prepare an extracted statement.\nNote that after calling `duckdb_prepare_extracted_statement`, the prepared statement should always be destroyed using\n`duckdb_destroy_prepare`, even if the prepare fails.\n\nIf the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.\n\n",
+                "param_comments": {
+                    "connection": "The connection object",
+                    "extracted_statements": "The extracted statements object",
+                    "index": "The index of the extracted statement to prepare",
+                    "out_prepared_statement": "The resulting prepared statement object"
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_extract_statements_error",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_extracted_statements",
+                    "name": "extracted_statements"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error message contained within the extracted statements.\nThe result of this function must not be freed. It will be cleaned up when `duckdb_destroy_extracted` is called.\n\n",
+                "param_comments": {
+                    "extracted_statements": "The extracted statements to fetch the error from."
+                },
+                "return_value": "The error of the extracted statements."
+            }
+        },
+        {
+            "name": "duckdb_destroy_extracted",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_extracted_statements *",
+                    "name": "extracted_statements"
+                }
+            ],
+            "comment": {
+                "description": "De-allocates all memory allocated for the extracted statements.\n",
+                "param_comments": {
+                    "extracted_statements": "The extracted statements to destroy."
+                }
+            }
+        }
+    ]
+}

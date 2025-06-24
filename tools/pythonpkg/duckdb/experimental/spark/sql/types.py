@@ -13,13 +13,13 @@ from typing import (
     TypeVar,
     ClassVar,
     Iterator,
-    TYPE_CHECKING,
 )
 from builtins import tuple
 import datetime
 import calendar
 import time
 import math
+import re
 
 import duckdb
 from duckdb.typing import DuckDBPyType
@@ -57,6 +57,7 @@ __all__ = [
     "LongType",
     "UnsignedLongType",
     "HugeIntegerType",
+    "UnsignedHugeIntegerType",
     "DayTimeIntervalType",
     "Row",
     "ArrayType",
@@ -463,7 +464,7 @@ class UnsignedLongType(IntegralType):
 class HugeIntegerType(IntegralType):
     """Huge integer data type, i.e. a signed 128-bit integer.
 
-    If the values are beyond the range of [-170141183460469231731687303715884105727, 170141183460469231731687303715884105727],
+    If the values are beyond the range of [-170141183460469231731687303715884105728, 170141183460469231731687303715884105727],
     please use :class:`DecimalType`.
     """
 
@@ -472,6 +473,20 @@ class HugeIntegerType(IntegralType):
 
     def simpleString(self) -> str:
         return "hugeint"
+
+
+class UnsignedHugeIntegerType(IntegralType):
+    """Unsigned huge integer data type, i.e. a unsigned 128-bit integer.
+
+    If the values are beyond the range of [0, 340282366920938463463374607431768211455],
+    please use :class:`DecimalType`.
+    """
+
+    def __init__(self):
+        super().__init__(DuckDBPyType("UHUGEINT"))
+
+    def simpleString(self) -> str:
+        return "uhugeint"
 
 
 class TimeType(IntegralType):
@@ -1064,7 +1079,6 @@ _all_complex_types: Dict[str, Type[Union[ArrayType, MapType, StructType]]] = dic
     (v.typeName(), v) for v in _complex_types
 )
 
-import re
 
 _FIXED_DECIMAL = re.compile(r"decimal\(\s*(\d+)\s*,\s*(-?\d+)\s*\)")
 _INTERVAL_DAYTIME = re.compile(r"interval (day|hour|minute|second)( to (day|hour|minute|second))?")

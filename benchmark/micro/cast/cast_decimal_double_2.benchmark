@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_decimal_double_2.benchmark
+# description: Cast string values to double, range 0-1e15, converted to DECIMAL(38,8), top part of the range is empty
+# group: [cast]
+
+name Cast DECIMAL -> DOUBLE
+group cast
+
+load
+CREATE TABLE doubles AS SELECT (random()*1e15)::DECIMAL(38,8) AS d FROM range(0, 10000000) tbl(i);
+
+run
+SELECT SUM(CAST(d AS DOUBLE)) > 0.0 FROM doubles
+
+result I
+true

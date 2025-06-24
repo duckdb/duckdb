@@ -1,11 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_CACHE_BIN_H
 #define JEMALLOC_INTERNAL_CACHE_BIN_H
 
-#include "jemalloc/internal/assert.h"
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/jemalloc_internal_externs.h"
 #include "jemalloc/internal/ql.h"
+#include "jemalloc/internal/safety_check.h"
 #include "jemalloc/internal/sz.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * The cache_bins are the mechanism that the tcache and the arena use to
@@ -23,16 +23,20 @@ namespace duckdb_jemalloc {
  */
 typedef uint16_t cache_bin_sz_t;
 
+#define JUNK_ADDR ((uintptr_t)0x7a7a7a7a7a7a7a7aULL)
 /*
  * Leave a noticeable mark pattern on the cache bin stack boundaries, in case a
  * bug starts leaking those.  Make it look like the junk pattern but be distinct
  * from it.
  */
-static const uintptr_t cache_bin_preceding_junk =
-    (uintptr_t)0x7a7a7a7a7a7a7a7aULL;
-/* Note: a7 vs. 7a above -- this tells you which pointer leaked. */
-static const uintptr_t cache_bin_trailing_junk =
-    (uintptr_t)0xa7a7a7a7a7a7a7a7ULL;
+static const uintptr_t cache_bin_preceding_junk = JUNK_ADDR;
+/* Note: JUNK_ADDR vs. JUNK_ADDR + 1 -- this tells you which pointer leaked. */
+static const uintptr_t cache_bin_trailing_junk = JUNK_ADDR + 1;
+/*
+ * A pointer used to initialize a fake stack_head for disabled small bins
+ * so that the enabled/disabled assessment does not rely on ncached_max.
+ */
+extern const uintptr_t disabled_bin;
 
 /*
  * That implies the following value, for the maximum number of items in any
@@ -125,6 +129,9 @@ struct cache_bin_s {
 	 * array.  Immutable after initialization.
 	 */
 	uint16_t low_bits_empty;
+
+	/* The maximum number of cached items in the bin. */
+	cache_bin_info_t bin_info;
 };
 
 /*
@@ -171,10 +178,41 @@ cache_bin_nonfast_aligned(const void *ptr) {
 	return ((uintptr_t)ptr & san_cache_bin_nonfast_mask) == 0;
 }
 
+static inline const void *
+cache_bin_disabled_bin_stack(void) {
+	return &disabled_bin;
+}
+
+/*
+ * If a cache bin was zero initialized (either because it lives in static or
+ * thread-local storage, or was memset to 0), this function indicates whether or
+ * not cache_bin_init was called on it.
+ */
+static inline bool
+cache_bin_still_zero_initialized(cache_bin_t *bin) {
+	return bin->stack_head == NULL;
+}
+
+static inline bool
+cache_bin_disabled(cache_bin_t *bin) {
+	bool disabled = (bin->stack_head == cache_bin_disabled_bin_stack());
+	if (disabled) {
+		assert((uintptr_t)(*bin->stack_head) == JUNK_ADDR);
+	}
+	return disabled;
+}
+
+/* Gets ncached_max without asserting that the bin is enabled. */
+static inline cache_bin_sz_t
+cache_bin_ncached_max_get_unsafe(cache_bin_t *bin) {
+	return bin->bin_info.ncached_max;
+}
+
 /* Returns ncached_max: Upper limit on ncached. */
 static inline cache_bin_sz_t
-cache_bin_info_ncached_max(cache_bin_info_t *info) {
-	return info->ncached_max;
+cache_bin_ncached_max_get(cache_bin_t *bin) {
+	assert(!cache_bin_disabled(bin));
+	return cache_bin_ncached_max_get_unsafe(bin);
 }
 
 /*
@@ -196,28 +234,19 @@ cache_bin_assert_earlier(cache_bin_t *bin, uint16_t earlier, uint16_t later) {
  * Does difference calculations that handle wraparound correctly.  Earlier must
  * be associated with the position earlier in memory.
  */
-static inline uint16_t
-cache_bin_diff(cache_bin_t *bin, uint16_t earlier, uint16_t later, bool racy) {
-	/*
-	 * When it's racy, bin->low_bits_full can be modified concurrently. It
-	 * can cross the uint16_t max value and become less than
-	 * bin->low_bits_empty at the time of the check.
-	 */
-	if (!racy) {
-		cache_bin_assert_earlier(bin, earlier, later);
-	}
+static inline cache_bin_sz_t
+cache_bin_diff(cache_bin_t *bin, uint16_t earlier, uint16_t later) {
+	cache_bin_assert_earlier(bin, earlier, later);
 	return later - earlier;
 }
 
 /*
  * Number of items currently cached in the bin, without checking ncached_max.
- * We require specifying whether or not the request is racy or not (i.e. whether
- * or not concurrent modifications are possible).
  */
 static inline cache_bin_sz_t
-cache_bin_ncached_get_internal(cache_bin_t *bin, bool racy) {
+cache_bin_ncached_get_internal(cache_bin_t *bin) {
 	cache_bin_sz_t diff = cache_bin_diff(bin,
-	    (uint16_t)(uintptr_t)bin->stack_head, bin->low_bits_empty, racy);
+	    (uint16_t)(uintptr_t)bin->stack_head, bin->low_bits_empty);
 	cache_bin_sz_t n = diff / sizeof(void *);
 	/*
 	 * We have undefined behavior here; if this function is called from the
@@ -228,7 +257,7 @@ cache_bin_ncached_get_internal(cache_bin_t *bin, bool racy) {
 	 * fast paths.  This should still be "safe" in the sense of generating
 	 * the correct assembly for the foreseeable future, though.
 	 */
-	assert(n == 0 || *(bin->stack_head) != NULL || racy);
+	assert(n == 0 || *(bin->stack_head) != NULL);
 	return n;
 }
 
@@ -238,10 +267,9 @@ cache_bin_ncached_get_internal(cache_bin_t *bin, bool racy) {
  * possible.
  */
 static inline cache_bin_sz_t
-cache_bin_ncached_get_local(cache_bin_t *bin, cache_bin_info_t *info) {
-	cache_bin_sz_t n = cache_bin_ncached_get_internal(bin,
-	    /* racy */ false);
-	assert(n <= cache_bin_info_ncached_max(info));
+cache_bin_ncached_get_local(cache_bin_t *bin) {
+	cache_bin_sz_t n = cache_bin_ncached_get_internal(bin);
+	assert(n <= cache_bin_ncached_max_get(bin));
 	return n;
 }
 
@@ -256,9 +284,8 @@ cache_bin_ncached_get_local(cache_bin_t *bin, cache_bin_info_t *info) {
 static inline void **
 cache_bin_empty_position_get(cache_bin_t *bin) {
 	cache_bin_sz_t diff = cache_bin_diff(bin,
-	    (uint16_t)(uintptr_t)bin->stack_head, bin->low_bits_empty,
-	    /* racy */ false);
-	uintptr_t empty_bits = (uintptr_t)bin->stack_head + diff;
+	    (uint16_t)(uintptr_t)bin->stack_head, bin->low_bits_empty);
+	byte_t *empty_bits = (byte_t *)bin->stack_head + diff;
 	void **ret = (void **)empty_bits;
 
 	assert(ret >= bin->stack_head);
@@ -277,9 +304,9 @@ cache_bin_empty_position_get(cache_bin_t *bin) {
  * arena statistics collection.
  */
 static inline uint16_t
-cache_bin_low_bits_low_bound_get(cache_bin_t *bin, cache_bin_info_t *info) {
+cache_bin_low_bits_low_bound_get(cache_bin_t *bin) {
 	return (uint16_t)bin->low_bits_empty -
-	    info->ncached_max * sizeof(void *);
+	    cache_bin_ncached_max_get(bin) * sizeof(void *);
 }
 
 /*
@@ -288,8 +315,8 @@ cache_bin_low_bits_low_bound_get(cache_bin_t *bin, cache_bin_info_t *info) {
  * A pointer to the position with the lowest address of the backing array.
  */
 static inline void **
-cache_bin_low_bound_get(cache_bin_t *bin, cache_bin_info_t *info) {
-	cache_bin_sz_t ncached_max = cache_bin_info_ncached_max(info);
+cache_bin_low_bound_get(cache_bin_t *bin) {
+	cache_bin_sz_t ncached_max = cache_bin_ncached_max_get(bin);
 	void **ret = cache_bin_empty_position_get(bin) - ncached_max;
 	assert(ret <= bin->stack_head);
 
@@ -301,8 +328,8 @@ cache_bin_low_bound_get(cache_bin_t *bin, cache_bin_info_t *info) {
  * batch fill a nonempty cache bin.
  */
 static inline void
-cache_bin_assert_empty(cache_bin_t *bin, cache_bin_info_t *info) {
-	assert(cache_bin_ncached_get_local(bin, info) == 0);
+cache_bin_assert_empty(cache_bin_t *bin) {
+	assert(cache_bin_ncached_get_local(bin) == 0);
 	assert(cache_bin_empty_position_get(bin) == bin->stack_head);
 }
 
@@ -314,15 +341,15 @@ cache_bin_assert_empty(cache_bin_t *bin, cache_bin_info_t *info) {
 static inline cache_bin_sz_t
 cache_bin_low_water_get_internal(cache_bin_t *bin) {
 	return cache_bin_diff(bin, bin->low_bits_low_water,
-	    bin->low_bits_empty, /* racy */ false) / sizeof(void *);
+	    bin->low_bits_empty) / sizeof(void *);
 }
 
 /* Returns the numeric value of low water in [0, ncached]. */
 static inline cache_bin_sz_t
-cache_bin_low_water_get(cache_bin_t *bin, cache_bin_info_t *info) {
+cache_bin_low_water_get(cache_bin_t *bin) {
 	cache_bin_sz_t low_water = cache_bin_low_water_get_internal(bin);
-	assert(low_water <= cache_bin_info_ncached_max(info));
-	assert(low_water <= cache_bin_ncached_get_local(bin, info));
+	assert(low_water <= cache_bin_ncached_max_get(bin));
+	assert(low_water <= cache_bin_ncached_get_local(bin));
 
 	cache_bin_assert_earlier(bin, (uint16_t)(uintptr_t)bin->stack_head,
 	    bin->low_bits_low_water);
@@ -336,12 +363,14 @@ cache_bin_low_water_get(cache_bin_t *bin, cache_bin_info_t *info) {
  */
 static inline void
 cache_bin_low_water_set(cache_bin_t *bin) {
+	assert(!cache_bin_disabled(bin));
 	bin->low_bits_low_water = (uint16_t)(uintptr_t)bin->stack_head;
 }
 
 static inline void
 cache_bin_low_water_adjust(cache_bin_t *bin) {
-	if (cache_bin_ncached_get_internal(bin, /* racy */ false)
+	assert(!cache_bin_disabled(bin));
+	if (cache_bin_ncached_get_internal(bin)
 	    < cache_bin_low_water_get_internal(bin)) {
 		cache_bin_low_water_set(bin);
 	}
@@ -413,8 +442,7 @@ cache_bin_alloc(cache_bin_t *bin, bool *success) {
 
 JEMALLOC_ALWAYS_INLINE cache_bin_sz_t
 cache_bin_alloc_batch(cache_bin_t *bin, size_t num, void **out) {
-	cache_bin_sz_t n = cache_bin_ncached_get_internal(bin,
-	    /* racy */ false);
+	cache_bin_sz_t n = cache_bin_ncached_get_internal(bin);
 	if (n > num) {
 		n = (cache_bin_sz_t)num;
 	}
@@ -431,12 +459,45 @@ cache_bin_full(cache_bin_t *bin) {
 }
 
 /*
+ * Scans the allocated area of the cache_bin for the given pointer up to limit.
+ * Fires safety_check_fail if the ptr is found and returns true.
+ */
+JEMALLOC_ALWAYS_INLINE bool
+cache_bin_dalloc_safety_checks(cache_bin_t *bin, void *ptr) {
+	if (!config_debug || opt_debug_double_free_max_scan == 0) {
+		return false;
+	}
+
+	cache_bin_sz_t ncached = cache_bin_ncached_get_internal(bin);
+	unsigned max_scan = opt_debug_double_free_max_scan < ncached
+	    ? opt_debug_double_free_max_scan
+	    : ncached;
+
+	void **cur = bin->stack_head;
+	void **limit = cur + max_scan;
+	for (; cur < limit; cur++) {
+		if (*cur == ptr) {
+			safety_check_fail(
+			    "Invalid deallocation detected: double free of "
+			    "pointer %p\n",
+			    ptr);
+			return true;
+		}
+	}
+	return false;
+}
+
+/*
  * Free an object into the given bin.  Fails only if the bin is full.
  */
 JEMALLOC_ALWAYS_INLINE bool
 cache_bin_dalloc_easy(cache_bin_t *bin, void *ptr) {
 	if (unlikely(cache_bin_full(bin))) {
 		return false;
+	}
+
+	if (unlikely(cache_bin_dalloc_safety_checks(bin, ptr))) {
+		return true;
 	}
 
 	bin->stack_head--;
@@ -457,9 +518,8 @@ cache_bin_stash(cache_bin_t *bin, void *ptr) {
 	/* Stash at the full position, in the [full, head) range. */
 	uint16_t low_bits_head = (uint16_t)(uintptr_t)bin->stack_head;
 	/* Wraparound handled as well. */
-	uint16_t diff = cache_bin_diff(bin, bin->low_bits_full, low_bits_head,
-	    /* racy */ false);
-	*(void **)((uintptr_t)bin->stack_head - diff) = ptr;
+	uint16_t diff = cache_bin_diff(bin, bin->low_bits_full, low_bits_head);
+	*(void **)((byte_t *)bin->stack_head - diff) = ptr;
 
 	assert(!cache_bin_full(bin));
 	bin->low_bits_full += sizeof(void *);
@@ -468,28 +528,18 @@ cache_bin_stash(cache_bin_t *bin, void *ptr) {
 	return true;
 }
 
-/*
- * Get the number of stashed pointers.
- *
- * When called from a thread not owning the TLS (i.e. racy = true), it's
- * important to keep in mind that 'bin->stack_head' and 'bin->low_bits_full' can
- * be modified concurrently and almost none assertions about their values can be
- * made.
- */
+/* Get the number of stashed pointers. */
 JEMALLOC_ALWAYS_INLINE cache_bin_sz_t
-cache_bin_nstashed_get_internal(cache_bin_t *bin, cache_bin_info_t *info,
-    bool racy) {
-	cache_bin_sz_t ncached_max = cache_bin_info_ncached_max(info);
-	uint16_t low_bits_low_bound = cache_bin_low_bits_low_bound_get(bin,
-	    info);
+cache_bin_nstashed_get_internal(cache_bin_t *bin) {
+	cache_bin_sz_t ncached_max = cache_bin_ncached_max_get(bin);
+	uint16_t low_bits_low_bound = cache_bin_low_bits_low_bound_get(bin);
 
 	cache_bin_sz_t n = cache_bin_diff(bin, low_bits_low_bound,
-	    bin->low_bits_full, racy) / sizeof(void *);
+	    bin->low_bits_full) / sizeof(void *);
 	assert(n <= ncached_max);
-
-	if (!racy) {
+	if (config_debug && n != 0) {
 		/* Below are for assertions only. */
-		void **low_bound = cache_bin_low_bound_get(bin, info);
+		void **low_bound = cache_bin_low_bound_get(bin);
 
 		assert((uint16_t)(uintptr_t)low_bound == low_bits_low_bound);
 		void *stashed = *(low_bound + n - 1);
@@ -498,36 +548,65 @@ cache_bin_nstashed_get_internal(cache_bin_t *bin, cache_bin_info_t *info,
 		/* Allow arbitrary pointers to be stashed in tests. */
 		aligned = true;
 #endif
-		assert(n == 0 || (stashed != NULL && aligned));
+		assert(stashed != NULL && aligned);
 	}
 
 	return n;
 }
 
 JEMALLOC_ALWAYS_INLINE cache_bin_sz_t
-cache_bin_nstashed_get_local(cache_bin_t *bin, cache_bin_info_t *info) {
-	cache_bin_sz_t n = cache_bin_nstashed_get_internal(bin, info,
-	    /* racy */ false);
-	assert(n <= cache_bin_info_ncached_max(info));
+cache_bin_nstashed_get_local(cache_bin_t *bin) {
+	cache_bin_sz_t n = cache_bin_nstashed_get_internal(bin);
+	assert(n <= cache_bin_ncached_max_get(bin));
 	return n;
 }
 
 /*
  * Obtain a racy view of the number of items currently in the cache bin, in the
  * presence of possible concurrent modifications.
+ *
+ * Note that this is the only racy function in this header.  Any other functions
+ * are assumed to be non-racy.  The "racy" term here means accessed from another
+ * thread (that is not the owner of the specific cache bin).  This only happens
+ * when gathering stats (read-only).  The only change because of the racy
+ * condition is that assertions based on mutable fields are omitted.
+ *
+ * It's important to keep in mind that 'bin->stack_head' and
+ * 'bin->low_bits_full' can be modified concurrently and almost no assertions
+ * about their values can be made.
+ *
+ * This function should not call other utility functions because the racy
+ * condition may cause unexpected / undefined behaviors in unverified utility
+ * functions.  Currently, this function calls two utility functions
+ * cache_bin_ncached_max_get and cache_bin_low_bits_low_bound_get because
+ * they help access values that will not be concurrently modified.
  */
 static inline void
-cache_bin_nitems_get_remote(cache_bin_t *bin, cache_bin_info_t *info,
-    cache_bin_sz_t *ncached, cache_bin_sz_t *nstashed) {
-	cache_bin_sz_t n = cache_bin_ncached_get_internal(bin, /* racy */ true);
-	assert(n <= cache_bin_info_ncached_max(info));
+cache_bin_nitems_get_remote(cache_bin_t *bin, cache_bin_sz_t *ncached,
+    cache_bin_sz_t *nstashed) {
+	/* Racy version of cache_bin_ncached_get_internal. */
+	cache_bin_sz_t diff = bin->low_bits_empty -
+	    (uint16_t)(uintptr_t)bin->stack_head;
+	cache_bin_sz_t n = diff / sizeof(void *);
 	*ncached = n;
 
-	n = cache_bin_nstashed_get_internal(bin, info, /* racy */ true);
-	assert(n <= cache_bin_info_ncached_max(info));
+	/* Racy version of cache_bin_nstashed_get_internal. */
+	uint16_t low_bits_low_bound = cache_bin_low_bits_low_bound_get(bin);
+	n = (bin->low_bits_full - low_bits_low_bound) / sizeof(void *);
 	*nstashed = n;
-	/* Note that cannot assert ncached + nstashed <= ncached_max (racy). */
+	/*
+	 * Note that cannot assert anything regarding ncached_max because
+	 * it can be configured on the fly and is thus racy.
+	 */
 }
+
+/*
+ * Limit how many items can be flushed in a batch (Which is the upper bound
+ * for the nflush parameter in tcache_bin_flush_impl()).
+ * This is to avoid stack overflow when we do batch edata look up, which
+ * reserves a nflush * sizeof(emap_batch_lookup_result_t) stack variable.
+ */
+#define CACHE_BIN_NFLUSH_BATCH_MAX (VARIABLE_ARRAY_SIZE_MAX >> LG_SIZEOF_PTR)
 
 /*
  * Filling and flushing are done in batch, on arrays of void *s.  For filling,
@@ -570,9 +649,9 @@ struct cache_bin_ptr_array_s {
  * finish_fill call before doing any alloc/dalloc operations on the bin.
  */
 static inline void
-cache_bin_init_ptr_array_for_fill(cache_bin_t *bin, cache_bin_info_t *info,
-    cache_bin_ptr_array_t *arr, cache_bin_sz_t nfill) {
-	cache_bin_assert_empty(bin, info);
+cache_bin_init_ptr_array_for_fill(cache_bin_t *bin, cache_bin_ptr_array_t *arr,
+    cache_bin_sz_t nfill) {
+	cache_bin_assert_empty(bin);
 	arr->ptr = cache_bin_empty_position_get(bin) - nfill;
 }
 
@@ -582,9 +661,9 @@ cache_bin_init_ptr_array_for_fill(cache_bin_t *bin, cache_bin_info_t *info,
  * case of OOM.
  */
 static inline void
-cache_bin_finish_fill(cache_bin_t *bin, cache_bin_info_t *info,
-    cache_bin_ptr_array_t *arr, cache_bin_sz_t nfilled) {
-	cache_bin_assert_empty(bin, info);
+cache_bin_finish_fill(cache_bin_t *bin, cache_bin_ptr_array_t *arr,
+    cache_bin_sz_t nfilled) {
+	cache_bin_assert_empty(bin);
 	void **empty_position = cache_bin_empty_position_get(bin);
 	if (nfilled < arr->n) {
 		memmove(empty_position - nfilled, empty_position - arr->n,
@@ -598,42 +677,41 @@ cache_bin_finish_fill(cache_bin_t *bin, cache_bin_info_t *info,
  * everything we give them.
  */
 static inline void
-cache_bin_init_ptr_array_for_flush(cache_bin_t *bin, cache_bin_info_t *info,
+cache_bin_init_ptr_array_for_flush(cache_bin_t *bin,
     cache_bin_ptr_array_t *arr, cache_bin_sz_t nflush) {
 	arr->ptr = cache_bin_empty_position_get(bin) - nflush;
-	assert(cache_bin_ncached_get_local(bin, info) == 0
+	assert(cache_bin_ncached_get_local(bin) == 0
 	    || *arr->ptr != NULL);
 }
 
 static inline void
-cache_bin_finish_flush(cache_bin_t *bin, cache_bin_info_t *info,
-    cache_bin_ptr_array_t *arr, cache_bin_sz_t nflushed) {
-	unsigned rem = cache_bin_ncached_get_local(bin, info) - nflushed;
+cache_bin_finish_flush(cache_bin_t *bin, cache_bin_ptr_array_t *arr,
+    cache_bin_sz_t nflushed) {
+	unsigned rem = cache_bin_ncached_get_local(bin) - nflushed;
 	memmove(bin->stack_head + nflushed, bin->stack_head,
 	    rem * sizeof(void *));
-	bin->stack_head = bin->stack_head + nflushed;
+	bin->stack_head += nflushed;
 	cache_bin_low_water_adjust(bin);
 }
 
 static inline void
 cache_bin_init_ptr_array_for_stashed(cache_bin_t *bin, szind_t binind,
-    cache_bin_info_t *info, cache_bin_ptr_array_t *arr,
-    cache_bin_sz_t nstashed) {
+    cache_bin_ptr_array_t *arr, cache_bin_sz_t nstashed) {
 	assert(nstashed > 0);
-	assert(cache_bin_nstashed_get_local(bin, info) == nstashed);
+	assert(cache_bin_nstashed_get_local(bin) == nstashed);
 
-	void **low_bound = cache_bin_low_bound_get(bin, info);
+	void **low_bound = cache_bin_low_bound_get(bin);
 	arr->ptr = low_bound;
 	assert(*arr->ptr != NULL);
 }
 
 static inline void
-cache_bin_finish_flush_stashed(cache_bin_t *bin, cache_bin_info_t *info) {
-	void **low_bound = cache_bin_low_bound_get(bin, info);
+cache_bin_finish_flush_stashed(cache_bin_t *bin) {
+	void **low_bound = cache_bin_low_bound_get(bin);
 
 	/* Reset the bin local full position. */
 	bin->low_bits_full = (uint16_t)(uintptr_t)low_bound;
-	assert(cache_bin_nstashed_get_local(bin, info) == 0);
+	assert(cache_bin_nstashed_get_local(bin) == 0);
 }
 
 /*
@@ -646,8 +724,8 @@ void cache_bin_info_init(cache_bin_info_t *bin_info,
  * Given an array of initialized cache_bin_info_ts, determine how big an
  * allocation is required to initialize a full set of cache_bin_ts.
  */
-void cache_bin_info_compute_alloc(cache_bin_info_t *infos, szind_t ninfos,
-    size_t *size, size_t *alignment);
+void cache_bin_info_compute_alloc(const cache_bin_info_t *infos,
+    szind_t ninfos, size_t *size, size_t *alignment);
 
 /*
  * Actually initialize some cache bins.  Callers should allocate the backing
@@ -656,20 +734,13 @@ void cache_bin_info_compute_alloc(cache_bin_info_t *infos, szind_t ninfos,
  * cache_bin_postincrement.  *alloc_cur will then point immediately past the end
  * of the allocation.
  */
-void cache_bin_preincrement(cache_bin_info_t *infos, szind_t ninfos,
+void cache_bin_preincrement(const cache_bin_info_t *infos, szind_t ninfos,
     void *alloc, size_t *cur_offset);
-void cache_bin_postincrement(cache_bin_info_t *infos, szind_t ninfos,
+void cache_bin_postincrement(void *alloc, size_t *cur_offset);
+void cache_bin_init(cache_bin_t *bin, const cache_bin_info_t *info,
     void *alloc, size_t *cur_offset);
-void cache_bin_init(cache_bin_t *bin, cache_bin_info_t *info, void *alloc,
-    size_t *cur_offset);
+void cache_bin_init_disabled(cache_bin_t *bin, cache_bin_sz_t ncached_max);
 
-/*
- * If a cache bin was zero initialized (either because it lives in static or
- * thread-local storage, or was memset to 0), this function indicates whether or
- * not cache_bin_init was called on it.
- */
-bool cache_bin_still_zero_initialized(cache_bin_t *bin);
-
-} // namespace duckdb_jemalloc
+bool cache_bin_stack_use_thp(void);
 
 #endif /* JEMALLOC_INTERNAL_CACHE_BIN_H */

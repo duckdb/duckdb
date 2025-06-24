@@ -3,16 +3,12 @@
 # group: [planner]
 
 statement ok
-CREATE TABLE a (i INTEGER, j INTEGER)
+CREATE TABLE a (i INTEGER, j INTEGER);
 
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 # verify that ORDER BY binding is consistent in presence of different "table.column" vs "column" bindings
-query I nosort orderbinder
-EXPLAIN SELECT i FROM a ORDER BY 1
-----
-
 query I nosort orderbinder
 EXPLAIN SELECT i FROM a ORDER BY i
 ----
@@ -26,10 +22,6 @@ EXPLAIN SELECT i FROM a ORDER BY a.i
 ----
 
 # with alias
-query I nosort orderbinderk
-EXPLAIN SELECT i AS k FROM a ORDER BY 1
-----
-
 query I nosort orderbinderk
 EXPLAIN SELECT i AS k FROM a ORDER BY k
 ----

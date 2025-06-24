@@ -49,3 +49,4 @@ SELECT factorial(30);
 # overflow
 statement error
 SELECT factorial(40);
+----

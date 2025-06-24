@@ -1,32 +1,81 @@
-from ..exception import ContributionsAcceptedError
-
-from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict, cast, Callable
-from duckdb import StarExpression, ColumnExpression, Expression
-
-from ..errors import PySparkTypeError
-from .readwriter import DataFrameWriter
-from .types import Row, StructType
-from .type_utils import duckdb_to_spark_schema
-from .column import Column
-import duckdb
 from functools import reduce
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Dict,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+    overload,
+)
+import uuid
+from keyword import iskeyword
+
+import duckdb
+from duckdb import ColumnExpression, Expression, StarExpression
+
+from ._typing import ColumnOrName
+from ..errors import PySparkTypeError, PySparkValueError, PySparkIndexError
+from ..exception import ContributionsAcceptedError
+from .column import Column
+from .readwriter import DataFrameWriter
+from .type_utils import duckdb_to_spark_schema
+from .types import Row, StructType
 
 if TYPE_CHECKING:
-    from .session import SparkSession
-    from .group import GroupedData, Grouping
+    import pyarrow as pa
+    from pandas.core.frame import DataFrame as PandasDataFrame
 
-from .functions import _to_column
+    from .group import GroupedData, Grouping
+    from .session import SparkSession
 
 from ..errors import PySparkValueError
+from .functions import _to_column_expr, col, lit
+
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
         self.relation = relation
         self.session = session
-        self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types) if self.relation else None
+        self._schema = None
+        if self.relation is not None:
+            self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
 
     def show(self, **kwargs) -> None:
         self.relation.show()
+
+    def toPandas(self) -> "PandasDataFrame":
+        return self.relation.df()
+
+    def toArrow(self) -> "pa.Table":
+        """
+        Returns the contents of this :class:`DataFrame` as PyArrow ``pyarrow.Table``.
+
+        This is only available if PyArrow is installed and available.
+
+        .. versionadded:: 4.0.0
+
+        Notes
+        -----
+        This method should only be used if the resulting PyArrow ``pyarrow.Table`` is
+        expected to be small, as all the data is loaded into the driver's memory.
+
+        This API is a developer API.
+
+        Examples
+        --------
+        >>> df.toArrow()  # doctest: +SKIP
+        pyarrow.Table
+        age: int64
+        name: string
+        ----
+        age: [[2,5]]
+        name: [["Alice","Bob"]]
+        """
+        return self.relation.arrow()
 
     def createOrReplaceTempView(self, name: str) -> None:
         """Creates or replaces a local temporary view with this :class:`DataFrame`.
@@ -94,7 +143,157 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def transform(self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any) -> "DataFrame":
+    def withColumns(self, *colsMap: Dict[str, Column]) -> "DataFrame":
+        """
+        Returns a new :class:`DataFrame` by adding multiple columns or replacing the
+        existing columns that have the same names.
+
+        The colsMap is a map of column name and column, the column must only refer to attributes
+        supplied by this Dataset. It is an error to add columns that refer to some other Dataset.
+
+        .. versionadded:: 3.3.0
+           Added support for multiple columns adding
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        colsMap : dict
+            a dict of column name and :class:`Column`. Currently, only a single map is supported.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with new or replaced columns.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df.withColumns({'age2': df.age + 2, 'age3': df.age + 3}).show()
+        +---+-----+----+----+
+        |age| name|age2|age3|
+        +---+-----+----+----+
+        |  2|Alice|   4|   5|
+        |  5|  Bob|   7|   8|
+        +---+-----+----+----+
+        """
+        # Below code is to help enable kwargs in future.
+        assert len(colsMap) == 1
+        colsMap = colsMap[0]  # type: ignore[assignment]
+
+        if not isinstance(colsMap, dict):
+            raise PySparkTypeError(
+                error_class="NOT_DICT",
+                message_parameters={
+                    "arg_name": "colsMap",
+                    "arg_type": type(colsMap).__name__,
+                },
+            )
+
+        column_names = list(colsMap.keys())
+        columns = list(colsMap.values())
+
+        # Compute this only once
+        column_names_for_comparison = [x.casefold() for x in column_names]
+
+        cols = []
+        for x in self.relation.columns:
+            if x.casefold() in column_names_for_comparison:
+                idx = column_names_for_comparison.index(x)
+                # We extract the column name from the originally passed
+                # in ones, as the casing might be different than the one
+                # in the relation
+                col_name = column_names.pop(idx)
+                col = columns.pop(idx)
+                cols.append(col.expr.alias(col_name))
+            else:
+                cols.append(ColumnExpression(x))
+
+        # In case anything is remaining, these are new columns
+        # that we need to add to the DataFrame
+        for col_name, col in zip(column_names, columns):
+            cols.append(col.expr.alias(col_name))
+
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
+    def withColumnsRenamed(self, colsMap: Dict[str, str]) -> "DataFrame":
+        """
+        Returns a new :class:`DataFrame` by renaming multiple columns.
+        This is a no-op if the schema doesn't contain the given column names.
+
+        .. versionadded:: 3.4.0
+           Added support for multiple columns renaming
+
+        Parameters
+        ----------
+        colsMap : dict
+            a dict of existing column names and corresponding desired column names.
+            Currently, only a single map is supported.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with renamed columns.
+
+        See Also
+        --------
+        :meth:`withColumnRenamed`
+
+        Notes
+        -----
+        Support Spark Connect
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = df.withColumns({'age2': df.age + 2, 'age3': df.age + 3})
+        >>> df.withColumnsRenamed({'age2': 'age4', 'age3': 'age5'}).show()
+        +---+-----+----+----+
+        |age| name|age4|age5|
+        +---+-----+----+----+
+        |  2|Alice|   4|   5|
+        |  5|  Bob|   7|   8|
+        +---+-----+----+----+
+        """
+        if not isinstance(colsMap, dict):
+            raise PySparkTypeError(
+                error_class="NOT_DICT",
+                message_parameters={"arg_name": "colsMap", "arg_type": type(colsMap).__name__},
+            )
+
+        unknown_columns = set(colsMap.keys()) - set(self.relation.columns)
+        if unknown_columns:
+            raise ValueError(
+                f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
+            )
+
+        # Compute this only once
+        old_column_names = list(colsMap.keys())
+        old_column_names_for_comparison = [x.casefold() for x in old_column_names]
+
+        cols = []
+        for x in self.relation.columns:
+            col = ColumnExpression(x)
+            if x.casefold() in old_column_names_for_comparison:
+                idx = old_column_names.index(x)
+                # We extract the column name from the originally passed
+                # in ones, as the casing might be different than the one
+                # in the relation
+                col_name = old_column_names.pop(idx)
+                new_col_name = colsMap[col_name]
+                col = col.alias(new_col_name)
+            cols.append(col)
+
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
+
+
+    def transform(
+        self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any
+    ) -> "DataFrame":
         """Returns a new :class:`DataFrame`. Concise syntax for chaining custom transformations.
 
         .. versionadded:: 3.0.0
@@ -150,12 +349,15 @@ class DataFrame:
         +---+-----+
         """
         result = func(self, *args, **kwargs)
-        assert isinstance(
-            result, DataFrame
-        ), "Func returned an instance of type [%s], " "should have been DataFrame." % type(result)
+        assert isinstance(result, DataFrame), (
+            "Func returned an instance of type [%s], "
+            "should have been DataFrame." % type(result)
+        )
         return result
 
-    def sort(self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any) -> "DataFrame":
+    def sort(
+        self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any
+    ) -> "DataFrame":
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
         Parameters
@@ -239,18 +441,62 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        if kwargs:
-            raise ContributionsAcceptedError
+        if not cols:
+            raise PySparkValueError(
+                error_class="CANNOT_BE_EMPTY",
+                message_parameters={"item": "column"},
+            )
+        if len(cols) == 1 and isinstance(cols[0], list):
+            cols = cols[0]
+
         columns = []
-        for col in cols:
-            if isinstance(col, (str, Column)):
-                columns.append(_to_column(col))
-            else:
-                raise ContributionsAcceptedError
+        for c in cols:
+            _c = c
+            if isinstance(c, str):
+                _c = col(c)
+            elif isinstance(c, int) and not isinstance(c, bool):
+                # ordinal is 1-based
+                if c > 0:
+                    _c = self[c - 1]
+                # negative ordinal means sort by desc
+                elif c < 0:
+                    _c = self[-c - 1].desc()
+                else:
+                    raise PySparkIndexError(
+                        error_class="ZERO_INDEX",
+                        message_parameters={},
+                    )
+            columns.append(_c)
+
+        ascending = kwargs.get("ascending", True)
+
+        if isinstance(ascending, (bool, int)):
+            if not ascending:
+                columns = [c.desc() for c in columns]
+        elif isinstance(ascending, list):
+            columns = [c if asc else c.desc() for asc, c in zip(ascending, columns)]
+        else:
+            raise PySparkTypeError(
+                error_class="NOT_BOOL_OR_LIST",
+                message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
+            )
+
+        columns = [_to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
 
     orderBy = sort
+
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], List[Row]]:
+        if n is None:
+            rs = self.head(1)
+            return rs[0] if rs else None
+        return self.take(n)
+
+    first = head
+
+    def take(self, num: int) -> List[Row]:
+        return self.limit(num).collect()
 
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
         """Filters rows using the given condition.
@@ -303,7 +549,15 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        cond = condition.expr if isinstance(condition, Column) else condition
+        if isinstance(condition, Column):
+            cond = condition.expr
+        elif isinstance(condition, str):
+            cond = condition
+        else:
+            raise PySparkTypeError(
+                error_class="NOT_COLUMN_OR_STR",
+                message_parameters={"arg_name": "condition", "arg_type": type(condition).__name__},
+            )
         rel = self.relation.filter(cond)
         return DataFrame(rel, self.session)
 
@@ -314,9 +568,13 @@ class DataFrame:
         if len(cols) == 1:
             cols = cols[0]
         if isinstance(cols, list):
-            projections = [x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols]
+            projections = [
+                x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols
+            ]
         else:
-            projections = [cols.expr if isinstance(cols, Column) else ColumnExpression(cols)]
+            projections = [
+                cols.expr if isinstance(cols, Column) else ColumnExpression(cols)
+            ]
         rel = self.relation.select(*projections)
         return DataFrame(rel, self.session)
 
@@ -330,6 +588,16 @@ class DataFrame:
         ['age', 'name']
         """
         return [f.name for f in self.schema.fields]
+
+    def _ipython_key_completions_(self) -> List[str]:
+        # Provides tab-completion for column names in PySpark DataFrame
+        # when accessed in bracket notation, e.g. df['<TAB>]
+        return self.columns
+
+    def __dir__(self) -> List[str]:
+        out = set(super().__dir__())
+        out.update(c for c in self.columns if c.isidentifier() and not iskeyword(c))
+        return sorted(out)
 
     def join(
         self,
@@ -427,15 +695,17 @@ class DataFrame:
 
         if on is not None and not isinstance(on, list):
             on = [on]  # type: ignore[assignment]
-
-        if on is not None:
+        if on is not None and not all([isinstance(x, str) for x in on]):
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
-            on = [_to_column(x) for x in on]
+            on = [_to_column_expr(x) for x in on]
 
             # & all the Expressions together to form one Expression
-            assert isinstance(on[0], Expression), "on should be Column or list of Column"
+            assert isinstance(
+                on[0], Expression
+            ), "on should be Column or list of Column"
             on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
+
 
         if on is None and how is None:
             result = self.relation.join(other.relation)
@@ -444,18 +714,21 @@ class DataFrame:
                 how = "inner"
             if on is None:
                 on = "true"
+            elif isinstance(on, list) and all([isinstance(x, str) for x in on]):
+                # Passed directly through as a list of strings
+                on = on
             else:
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
 
             def map_to_recognized_jointype(how):
                 known_aliases = {
-                    'inner': [],
-                    'outer': ['full', 'fullouter', 'full_outer'],
-                    'left': ['leftouter', 'left_outer'],
-                    'right': ['rightouter', 'right_outer'],
-                    'anti': ['leftanti', 'left_anti'],
-                    'semi': ['leftsemi', 'left_semi'],
+                    "inner": [],
+                    "outer": ["full", "fullouter", "full_outer"],
+                    "left": ["leftouter", "left_outer"],
+                    "right": ["rightouter", "right_outer"],
+                    "anti": ["leftanti", "left_anti"],
+                    "semi": ["leftsemi", "left_semi"],
                 }
                 mapped_type = None
                 for type, aliases in known_aliases.items():
@@ -470,6 +743,45 @@ class DataFrame:
             how = map_to_recognized_jointype(how)
             result = self.relation.join(other.relation, on, how)
         return DataFrame(result, self.session)
+
+    def crossJoin(self, other: "DataFrame") -> "DataFrame":
+        """Returns the cartesian product with another :class:`DataFrame`.
+
+        .. versionadded:: 2.1.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Right side of the cartesian product.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Joined DataFrame.
+
+        Examples
+        --------
+        >>> from pyspark.sql import Row
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df2 = spark.createDataFrame(
+        ...     [Row(height=80, name="Tom"), Row(height=85, name="Bob")])
+        >>> df.crossJoin(df2.select("height")).select("age", "name", "height").show()
+        +---+-----+------+
+        |age| name|height|
+        +---+-----+------+
+        | 14|  Tom|    80|
+        | 14|  Tom|    85|
+        | 23|Alice|    80|
+        | 23|Alice|    85|
+        | 16|  Bob|    80|
+        | 16|  Bob|    85|
+        +---+-----+------+
+        """
+        return DataFrame(self.relation.cross(other.relation), self.session)
 
     def alias(self, alias: str) -> "DataFrame":
         """Returns a new :class:`DataFrame` with an alias set.
@@ -506,19 +818,17 @@ class DataFrame:
         return DataFrame(self.relation.set_alias(alias), self.session)
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
-        if len(cols) == 1:
-            col = cols[0]
+        exclude = []
+        for col in cols:
             if isinstance(col, str):
-                exclude = [col]
+                exclude.append(col)
             elif isinstance(col, Column):
-                exclude = [col.expr]
+                exclude.append(col.expr.get_name())
             else:
-                raise TypeError("col should be a string or a Column")
-        else:
-            for col in cols:
-                if not isinstance(col, str):
-                    raise TypeError("each col in the param list should be a string")
-            exclude = list(cols)
+                raise PySparkTypeError(
+                    error_class="NOT_COLUMN_OR_STR",
+                    message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+                )
         # Filter out the columns that don't exist in the relation
         exclude = [x for x in exclude if x in self.relation.columns]
         expr = StarExpression(exclude=exclude)
@@ -586,7 +896,9 @@ class DataFrame:
     def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame":
         ...
 
-    def __getitem__(self, item: Union[int, str, Column, List, Tuple]) -> Union[Column, "DataFrame"]:
+    def __getitem__(
+        self, item: Union[int, str, Column, List, Tuple]
+    ) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
 
         Examples
@@ -601,16 +913,15 @@ class DataFrame:
         [Row(age=5, name='Bob')]
         """
         if isinstance(item, str):
-            return self.item
-        # elif isinstance(item, Column):
-        #    return self.filter(item)
-        # elif isinstance(item, (list, tuple)):
-        #    return self.select(*item)
-        # elif isinstance(item, int):
-        #    jc = self._jdf.apply(self.columns[item])
-        #    return Column(jc)
+            return Column(duckdb.ColumnExpression(self.relation.alias, item))
+        elif isinstance(item, Column):
+            return self.filter(item)
+        elif isinstance(item, (list, tuple)):
+            return self.select(*item)
+        elif isinstance(item, int):
+            return col(self._schema[item].name)
         else:
-            raise TypeError("unexpected item type: %s" % type(item))
+            raise TypeError(f"Unexpected item type: {type(item)}")
 
     def __getattr__(self, name: str) -> Column:
         """Returns the :class:`Column` denoted by ``name``.
@@ -621,8 +932,10 @@ class DataFrame:
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
-        return Column(duckdb.ColumnExpression(name))
+            raise AttributeError(
+                "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
+            )
+        return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
@@ -698,8 +1011,13 @@ class DataFrame:
         """
         from .group import GroupedData, Grouping
 
-        groups = Grouping(*cols)
-        return GroupedData(groups, self)
+        if len(cols) == 1 and isinstance(cols[0], list):
+            columns = cols[0]
+        else:
+            columns = cols
+        return GroupedData(Grouping(*columns), self)
+
+    groupby = groupBy
 
     @property
     def write(self) -> DataFrameWriter:
@@ -755,7 +1073,9 @@ class DataFrame:
 
     unionAll = union
 
-    def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
+    def unionByName(
+        self, other: "DataFrame", allowMissingColumns: bool = False
+    ) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing union of rows in this and another
         :class:`DataFrame`.
 
@@ -811,11 +1131,133 @@ class DataFrame:
         |NULL|   4|   5|   6|
         +----+----+----+----+
         """
-        if not allowMissingColumns:
-            raise ContributionsAcceptedError
-        raise NotImplementedError
-        # The relational API does not have support for 'union_by_name' yet
-        # return DataFrame(self.relation.union_by_name(other.relation, allowMissingColumns), self.session)
+        if allowMissingColumns:
+            cols = []
+            for col in self.relation.columns:
+                if col in other.relation.columns:
+                    cols.append(col)
+                else:
+                    cols.append(lit(None))
+            other = other.select(*cols)
+        else:
+            other = other.select(*self.relation.columns)
+
+        return DataFrame(self.relation.union(other.relation), self.session)
+
+    def intersect(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing rows only in
+        both this :class:`DataFrame` and another :class:`DataFrame`.
+        Note that any duplicates are removed. To preserve duplicates
+        use :func:`intersectAll`.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Another :class:`DataFrame` that needs to be combined.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Combined DataFrame.
+
+        Notes
+        -----
+        This is equivalent to `INTERSECT` in SQL.
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3), ("c", 4)], ["C1", "C2"])
+        >>> df2 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3)], ["C1", "C2"])
+        >>> df1.intersect(df2).sort(df1.C1.desc()).show()
+        +---+---+
+        | C1| C2|
+        +---+---+
+        |  b|  3|
+        |  a|  1|
+        +---+---+
+        """
+        return self.intersectAll(other).drop_duplicates()
+
+    def intersectAll(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing rows in both this :class:`DataFrame`
+        and another :class:`DataFrame` while preserving duplicates.
+
+        This is equivalent to `INTERSECT ALL` in SQL. As standard in SQL, this function
+        resolves columns by position (not by name).
+
+        .. versionadded:: 2.4.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Another :class:`DataFrame` that needs to be combined.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Combined DataFrame.
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3), ("c", 4)], ["C1", "C2"])
+        >>> df2 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3)], ["C1", "C2"])
+        >>> df1.intersectAll(df2).sort("C1", "C2").show()
+        +---+---+
+        | C1| C2|
+        +---+---+
+        |  a|  1|
+        |  a|  1|
+        |  b|  3|
+        +---+---+
+        """
+        return DataFrame(self.relation.intersect(other.relation), self.session)
+
+    def exceptAll(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing rows in this :class:`DataFrame` but
+        not in another :class:`DataFrame` while preserving duplicates.
+
+        This is equivalent to `EXCEPT ALL` in SQL.
+        As standard in SQL, this function resolves columns by position (not by name).
+
+        .. versionadded:: 2.4.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            The other :class:`DataFrame` to compare to.
+
+        Returns
+        -------
+        :class:`DataFrame`
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame(
+        ...         [("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b",  3), ("c", 4)], ["C1", "C2"])
+        >>> df2 = spark.createDataFrame([("a", 1), ("b", 3)], ["C1", "C2"])
+        >>> df1.exceptAll(df2).show()
+        +---+---+
+        | C1| C2|
+        +---+---+
+        |  a|  1|
+        |  a|  1|
+        |  a|  2|
+        |  c|  4|
+        +---+---+
+
+        """
+        return DataFrame(self.relation.except_(other.relation), self.session)
 
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
@@ -868,8 +1310,16 @@ class DataFrame:
         +-----+---+------+
         """
         if subset:
-            raise ContributionsAcceptedError
+            rn_col = f"tmp_col_{uuid.uuid1().hex}"
+            subset_str = ', '.join([f'"{c}"' for c in subset])
+            window_spec = f"OVER(PARTITION BY {subset_str}) AS {rn_col}"
+            df = DataFrame(self.relation.row_number(window_spec, "*"), self.session)
+            return df.filter(f"{rn_col} = 1").drop(rn_col)
+
         return self.distinct()
+
+    drop_duplicates = dropDuplicates
+
 
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.
@@ -919,9 +1369,10 @@ class DataFrame:
         assert types_count == len(existing_columns)
 
         cast_expressions = [
-            f'{existing}::{target_type} as {existing}' for existing, target_type in zip(existing_columns, types)
+            f"{existing}::{target_type} as {existing}"
+            for existing, target_type in zip(existing_columns, types)
         ]
-        cast_expressions = ', '.join(cast_expressions)
+        cast_expressions = ", ".join(cast_expressions)
         new_rel = self.relation.project(cast_expressions)
         return DataFrame(new_rel, self.session)
 
@@ -934,17 +1385,21 @@ class DataFrame:
             )
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
-        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
+        projections = [
+            existing.alias(new) for existing, new in zip(existing_columns, cols)
+        ]
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 
     def collect(self) -> List[Row]:
         columns = self.relation.columns
         result = self.relation.fetchall()
+
         def construct_row(values, names) -> Row:
             row = tuple.__new__(Row, list(values))
             row.__fields__ = list(names)
             return row
+
         rows = [construct_row(x, columns) for x in result]
         return rows
 

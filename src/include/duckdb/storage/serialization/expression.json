@@ -23,6 +23,12 @@
         "id": 102,
         "name": "alias",
         "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "query_location",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ]
   },
@@ -230,7 +236,8 @@
       {
         "id": 202,
         "name": "lambda_index",
-        "type": "idx_t"
+        "type": "idx_t",
+        "property": "lambda_idx"
       },
       {
         "id": 203,

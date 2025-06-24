@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_TYPED_LIST_H
 #define JEMALLOC_INTERNAL_TYPED_LIST_H
 
-namespace duckdb_jemalloc {
-
 /*
  * This wraps the ql module to implement a list class in a way that's a little
  * bit easier to use; it handles ql_elm_new calls and provides type safety.
@@ -53,7 +51,5 @@ static inline void							\
 list_type##_concat(list_type##_t *list_a, list_type##_t *list_b) {	\
 	ql_concat(&list_a->head, &list_b->head, linkage);		\
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TYPED_LIST_H */

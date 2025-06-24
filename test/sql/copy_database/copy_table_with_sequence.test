@@ -1,0 +1,106 @@
+# name: test/sql/copy_database/copy_table_with_sequence.test
+# group: [copy_database]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+attach '__TEST_DIR__/backup.db';
+
+## Only specifying a sequence name
+
+statement ok
+create sequence seq start 1;
+
+statement ok
+create table tbl (
+	id int default nextval('seq')
+);
+
+statement ok
+insert into tbl values (DEFAULT);
+insert into tbl values (DEFAULT);
+
+statement ok
+copy from database memory to backup;
+
+statement ok
+drop sequence seq cascade;
+
+query I
+select * from backup.tbl;
+----
+1
+2
+
+query I
+select currval('backup.main.seq');
+----
+3
+
+statement ok
+drop sequence backup.main.seq cascade;
+
+## Explicitly specifying the schema
+
+statement ok
+create schema my_schema;
+
+statement ok
+create sequence my_schema.seq start 1;
+
+statement ok
+create table tbl (
+	id int default nextval('my_schema.seq')
+);
+
+statement ok
+copy from database memory to backup;
+
+statement ok
+drop sequence my_schema.seq cascade;
+
+statement ok
+drop sequence backup.my_schema.seq cascade;
+
+## Explicitly specifying the schema, with the same name as the catalog
+
+statement ok
+create schema backup;
+
+statement ok
+create sequence memory.backup.seq start 1;
+
+statement error
+create table tbl (
+	id int default nextval('backup.seq')
+);
+----
+Ambiguous reference to catalog or schema "backup"
+
+statement ok
+drop schema backup cascade;
+
+## Explicitly specifying the catalog + schema (results in an error)
+
+statement ok
+create schema backup;
+
+statement ok
+create sequence memory.backup.seq start 1;
+
+statement ok
+create table tbl (
+	id int default nextval('memory.backup.seq')
+);
+
+statement error
+copy from database memory to backup;
+----
+<REGEX>:TransactionContext Error: Attempting to write to database .* in a transaction that has already modified database .*
+
+statement ok
+drop sequence memory.backup.seq cascade;
+
+statement ok
+drop sequence backup.backup.seq cascade;

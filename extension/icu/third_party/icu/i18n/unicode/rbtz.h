@@ -76,7 +76,7 @@ public:
       *semantically equal.
      * @stable ICU 3.8
      */
-    virtual UBool operator==(const TimeZone& that) const;
+    virtual bool operator==(const TimeZone& that) const;
 
     /**
      * Return true if the given <code>TimeZone</code> objects are
@@ -86,7 +86,7 @@ public:
      * semantically unequal.
      * @stable ICU 3.8
      */
-    virtual UBool operator!=(const TimeZone& that) const;
+    virtual bool operator!=(const TimeZone& that) const;
 
     /**
      * Adds the <code>TimeZoneRule</code> which represents time transitions.

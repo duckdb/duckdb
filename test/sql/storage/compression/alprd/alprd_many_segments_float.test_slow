@@ -1,0 +1,44 @@
+# name: test/sql/storage/compression/alprd/alprd_many_segments_float.test_slow
+# description: Test storage of alprd, but simple
+# group: [alprd]
+
+# load the DB from disk
+load __TEST_DIR__/test_alprd.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# Create a table with random floats of limited precision compressed as Uncompressed
+# This data should achieve x6 compression ratio
+statement ok
+create table random_float as select random()::FLOAT as data from range(500000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_float') WHERE segment_type == 'float' AND compression != 'Uncompressed';
+----
+
+# Now create a duplicate of this table, compressed with ALPRD instead
+statement ok
+PRAGMA force_compression='alprd'
+
+statement ok
+create table random_alp_float as select * from random_float;
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_alp_float') WHERE segment_type == 'float' AND compression != 'ALPRD';
+----
+
+# Assert that the data was not corrupted by compressing to ALP
+query I sort r1
+select * from random_float;
+----
+
+query I sort r1
+select * from random_alp_float;
+----

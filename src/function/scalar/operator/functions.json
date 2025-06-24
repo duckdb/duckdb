@@ -1,0 +1,55 @@
+[
+    {
+        "name": "+",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set",
+        "aliases": ["add"],
+        "struct": "OperatorAddFun"
+    },
+    {
+        "name": "-",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set",
+        "aliases": ["subtract"],
+        "struct": "OperatorSubtractFun"
+    },
+    {
+        "name": "*",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set",
+        "aliases": ["multiply"],
+        "struct": "OperatorMultiplyFun"
+    },
+    {
+        "name": "/",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set",
+        "struct": "OperatorFloatDivideFun"
+    },
+    {
+        "name": "//",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set",
+        "aliases": ["divide"],
+        "struct": "OperatorIntegerDivideFun"
+    },
+    {
+        "name": "%",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function_set",
+        "aliases": ["mod"],
+        "struct": "OperatorModuloFun"
+    }
+]

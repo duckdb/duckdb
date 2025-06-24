@@ -2,9 +2,6 @@
 # description: test a chain of table creates and renames in a transaction, followed by a commit
 # group: [rename_table]
 
-require skip_reload
-
-
 statement ok con1
 CREATE TABLE entry(i INTEGER);
 
@@ -53,18 +50,22 @@ SELECT * FROM entry
 
 statement error con2
 SELECT * FROM entry2
+----
 
 statement error con2
 SELECT * FROM entry3
+----
 
 statement error con2
 SELECT * FROM entry4
+----
 
 statement ok con1
 COMMIT
 
 statement error con2
 SELECT * FROM entry
+----
 
 query I con2
 SELECT * FROM entry4

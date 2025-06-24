@@ -48,16 +48,20 @@ SELECT * FROM vw1
 
 statement error con2
 SELECT * FROM vw2
+----
 
 statement error con2
 SELECT * FROM vw3
+----
 
 statement error con2
 SELECT * FROM vw4
+----
 
 # con3 sees ONLY vw2
 statement error con3
 SELECT * FROM vw1
+----
 
 query I con3
 SELECT * FROM vw2
@@ -67,16 +71,20 @@ SELECT * FROM vw2
 
 statement error con3
 SELECT * FROM vw3
+----
 
 statement error con3
 SELECT * FROM vw4
+----
 
 # con4 sees ONLY vw3
 statement error con4
 SELECT * FROM vw1
+----
 
 statement error con4
 SELECT * FROM vw2
+----
 
 query I con4
 SELECT * FROM vw3
@@ -86,16 +94,20 @@ SELECT * FROM vw3
 
 statement error con4
 SELECT * FROM vw4
+----
 
 # con1 sees ONLY vw4
 statement error con1
 SELECT * FROM vw1
+----
 
 statement error con1
 SELECT * FROM vw2
+----
 
 statement error con1
 SELECT * FROM vw3
+----
 
 query I con1
 SELECT * FROM vw4

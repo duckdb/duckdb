@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 
@@ -20,17 +19,26 @@ public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
+	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
-	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
+	PartitionGlobalHashGroup(ClientContext &context, const Orders &partitions, const Orders &orders,
 	                         const Types &payload_types, bool external);
 
-	int ComparePartitions(const SBIterator &left, const SBIterator &right) const;
+	inline int ComparePartitions(const SBIterator &left, const SBIterator &right) {
+		int part_cmp = 0;
+		if (partition_layout.all_constant) {
+			part_cmp = FastMemcmp(left.entry_ptr, right.entry_ptr, partition_layout.comparison_size);
+		} else {
+			part_cmp = Comparators::CompareTuple(left.scan, right.scan, left.entry_ptr, right.entry_ptr,
+			                                     partition_layout, left.external);
+		}
+		return part_cmp;
+	}
 
-	void ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask);
+	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;
-	idx_t batch_base;
 
 	// Mask computation
 	SortLayout partition_layout;
@@ -52,6 +60,7 @@ public:
 	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
+	virtual ~PartitionGlobalSinkState() = default;
 
 	bool HasMergeTasks() const;
 
@@ -61,6 +70,9 @@ public:
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 
+	virtual void OnBeginMerge() {};
+	virtual void OnSortedPartition(const idx_t hash_bin_p) {};
+
 	ClientContext &context;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
@@ -69,7 +81,7 @@ public:
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	TupleDataLayout grouping_types;
+	shared_ptr<TupleDataLayout> grouping_types_ptr;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 
@@ -132,7 +144,7 @@ public:
 	void Combine();
 };
 
-enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED };
+enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED, FINISHED };
 
 class PartitionLocalMergeState;
 
@@ -146,9 +158,8 @@ public:
 	//	OVER(ORDER BY...)
 	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink);
 
-	bool IsSorted() const {
-		lock_guard<mutex> guard(lock);
-		return stage == PartitionSortStage::SORTED;
+	bool IsFinished() const {
+		return stage == PartitionSortStage::FINISHED;
 	}
 
 	bool AssignTask(PartitionLocalMergeState &local_state);
@@ -158,6 +169,7 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
+	const idx_t group_idx;
 	vector<column_t> column_ids;
 	TupleDataParallelScanState chunk_state;
 	GlobalSortState *global_sort;
@@ -166,7 +178,7 @@ public:
 
 private:
 	mutable mutex lock;
-	PartitionSortStage stage;
+	atomic<PartitionSortStage> stage;
 	idx_t total_tasks;
 	idx_t tasks_assigned;
 	idx_t tasks_completed;
@@ -183,6 +195,7 @@ public:
 	void Prepare();
 	void Scan();
 	void Merge();
+	void Sorted();
 
 	void ExecuteTask();
 
@@ -199,6 +212,8 @@ public:
 class PartitionGlobalMergeStates {
 public:
 	struct Callback {
+		virtual ~Callback() = default;
+
 		virtual bool HasError() const {
 			return false;
 		}
@@ -215,12 +230,13 @@ public:
 
 class PartitionMergeEvent : public BasePipelineEvent {
 public:
-	PartitionMergeEvent(PartitionGlobalSinkState &gstate_p, Pipeline &pipeline_p)
-	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p) {
+	PartitionMergeEvent(PartitionGlobalSinkState &gstate_p, Pipeline &pipeline_p, const PhysicalOperator &op_p)
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p), op(op_p) {
 	}
 
 	PartitionGlobalSinkState &gstate;
 	PartitionGlobalMergeStates merge_states;
+	const PhysicalOperator &op;
 
 public:
 	void Schedule() override;

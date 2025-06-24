@@ -69,7 +69,7 @@ class TestRAPIJoins(object):
         expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
         rel = a.join(b, expr, 'right')
         res = rel.fetchall()
-        assert res == [(2, 1, 1, 4), (1, 1, 1, 4), (None, None, 3, 5)]
+        assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (None, None, 3, 5)]
 
     def test_semi_join(self, con):
         a = con.table('tbl_a')
@@ -78,3 +78,10 @@ class TestRAPIJoins(object):
         rel = a.join(b, expr, 'semi')
         res = rel.fetchall()
         assert res == [(1, 1), (2, 1)]
+
+    def test_cross_join(self, con):
+        a = con.table('tbl_a')
+        b = con.table('tbl_b')
+        rel = a.cross(b)
+        res = rel.fetchall()
+        assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (3, 2, 1, 4), (1, 1, 3, 5), (2, 1, 3, 5), (3, 2, 3, 5)]

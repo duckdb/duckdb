@@ -1,0 +1,11 @@
+# name: test/sql/types/list/list_parse_recursion.test
+# description: Test string -> list conversion of very deeply nested lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT REPEAT ( '[{"a":' , 100000 )::INT[]
+----
+can't be cast to the destination type

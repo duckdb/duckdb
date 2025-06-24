@@ -1,0 +1,16 @@
+# name: benchmark/micro/list/list_min_max.benchmark
+# description: List min/max
+# group: [list]
+
+name List min/max
+group micro
+subgroup list
+
+load
+CREATE TABLE lists AS SELECT [i, i + 1, i + 2] l FROM range(100000001) t(i);
+
+run
+SELECT MIN(l), MAX(l) FROM lists;
+
+result II
+[0, 1, 2]	[100000000, 100000001, 100000002]

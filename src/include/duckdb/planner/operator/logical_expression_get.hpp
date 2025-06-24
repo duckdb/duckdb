@@ -20,8 +20,8 @@ public:
 public:
 	LogicalExpressionGet(idx_t table_index, vector<LogicalType> types,
 	                     vector<vector<unique_ptr<Expression>>> expressions)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPRESSION_GET), table_index(table_index), expr_types(types),
-	      expressions(std::move(expressions)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPRESSION_GET), table_index(table_index),
+	      expr_types(std::move(types)), expressions(std::move(expressions)) {
 	}
 
 	//! The table index in the current bind context

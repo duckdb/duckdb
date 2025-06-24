@@ -13,12 +13,12 @@ statement ok
 COPY ${tpch_tbl}_original TO '__TEST_DIR__/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
 
 statement ok
-CREATE VIEW ${tpch_tbl} AS FROM read_csv_auto('__TEST_DIR__/${tpch_tbl}.csv', sep='|', header=1);
-
-endloop
+DROP TABLE ${tpch_tbl}_original
 
 statement ok
-SET threads=1
+CREATE VIEW ${tpch_tbl} AS FROM read_csv_auto('__TEST_DIR__/${tpch_tbl}.csv', sep='|');
+
+endloop
 
 loop i 1 9
 

@@ -1,0 +1,33 @@
+# name: test/optimizer/misc/test_count_and_sum.test
+# description: Arithmetic simplification test
+# group: [misc]
+
+statement ok
+DROP VIEW IF EXISTS v0;
+
+statement ok
+CREATE TABLE t0 (c0 TEXT);
+
+statement ok
+CREATE TABLE t1 (c1 TEXT);
+
+statement ok
+CREATE VIEW v0 AS
+SELECT t0.c0
+FROM t1
+LEFT JOIN t0 ON t1.c1 = t0.c0;
+
+statement ok
+INSERT INTO t1(c1) VALUES ('example_value');
+
+query I nosort result_1
+SELECT COUNT(*)
+FROM v0
+WHERE (CURRENT_TIMESTAMP, c0) != (CAST(NULL AS TEXT), '0');
+----
+
+
+query I nosort result_1
+SELECT SUM(CASE WHEN (CURRENT_TIMESTAMP, c0) != (CAST(NULL AS TEXT), '0') THEN 1 ELSE 0 END)
+FROM v0;
+----

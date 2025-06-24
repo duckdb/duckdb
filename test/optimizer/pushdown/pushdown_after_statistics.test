@@ -1,0 +1,42 @@
+# name: test/optimizer/pushdown/pushdown_after_statistics.test
+# description: Test Table Filter Push Down
+# group: [pushdown]
+
+statement ok
+set explain_output='optimized_only';
+
+
+statement ok
+create table big_probe as select range%3000 a, range%4000 b from range(100000);
+
+statement ok
+create table into_semi as select range%300 c from range(10000);
+
+statement ok
+create table into_get as select range d from range(100);
+
+
+# the IN filter becomes a mark join. We should keep it a mark join at this point
+query II
+explain select * from big_probe, into_semi, into_get where c in (1, 3, 5, 7, 10, 14, 16, 20, 22) and c = d and a = c;
+----
+logical_opt	<REGEX>:.*MARK.*
+
+
+statement ok
+create table mark_join_build as select range e from range(200);
+
+# Now the in filter is a semi join.
+query II
+explain select * from big_probe, into_semi, into_get where c in (select e from mark_join_build) and c = d and a = c;
+----
+logical_opt	<REGEX>:.*SEMI.*
+
+
+statement ok
+select t1.a from big_probe t1
+where t1.a in 
+	(select t2.b 
+	from big_probe t2
+	where t2.b in (1206, 1202, 1322, 1204, 1370)
+	and t2.b not in (select t2_filter.a from big_probe t2_filter));

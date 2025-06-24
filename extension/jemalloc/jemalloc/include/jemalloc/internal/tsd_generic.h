@@ -3,7 +3,10 @@
 #endif
 #define JEMALLOC_INTERNAL_TSD_GENERIC_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/ql.h"
+#include "jemalloc/internal/tsd_internals.h"
+#include "jemalloc/internal/tsd_types.h"
 
 typedef struct tsd_init_block_s tsd_init_block_t;
 struct tsd_init_block_s {
@@ -43,7 +46,7 @@ tsd_cleanup_wrapper(void *arg) {
 			{
 				malloc_write("<jemalloc>: Error setting TSD\n");
 				if (opt_abort) {
-					jemalloc_abort();
+					abort();
 				}
 			}
 			return;
@@ -59,7 +62,7 @@ tsd_wrapper_set(tsd_wrapper_t *wrapper) {
 	}
 	if (pthread_setspecific(tsd_tsd, (void *)wrapper) != 0) {
 		malloc_write("<jemalloc>: Error setting TSD\n");
-		jemalloc_abort();
+		abort();
 	}
 }
 
@@ -85,7 +88,7 @@ tsd_wrapper_get(bool init) {
 		block.data = (void *)wrapper;
 		if (wrapper == NULL) {
 			malloc_write("<jemalloc>: Error allocating TSD\n");
-			jemalloc_abort();
+			abort();
 		} else {
 			wrapper->initialized = false;
       JEMALLOC_DIAGNOSTIC_PUSH
@@ -126,7 +129,7 @@ tsd_boot1(void) {
 	wrapper = (tsd_wrapper_t *)malloc_tsd_malloc(sizeof(tsd_wrapper_t));
 	if (wrapper == NULL) {
 		malloc_write("<jemalloc>: Error allocating TSD\n");
-		jemalloc_abort();
+		abort();
 	}
 	tsd_boot_wrapper.initialized = false;
 	tsd_cleanup(&tsd_boot_wrapper.val);
@@ -182,5 +185,3 @@ tsd_set(tsd_t *val) {
 	}
 	wrapper->initialized = true;
 }
-
-} // namespace duckdb_jemalloc

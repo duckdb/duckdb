@@ -1,0 +1,28 @@
+# name: test/optimizer/unnest_rewriter_issue_14542.test
+# description: Test issue #14542: INTERNAL error when using a macro to expand json[] array (json_each)
+# group: [optimizer]
+
+require json
+
+statement ok
+CREATE OR REPLACE MACRO json_each(input) AS
+TABLE (
+  SELECT
+      CASE json_type (val::json)
+      WHEN 'ARRAY' THEN
+          unnest(RANGE (json_array_length(val::json)::bigint)) ::varchar
+      ELSE
+          unnest(json_keys (val::json))
+      END AS key,
+      json_extract (val::json, key) AS value
+  FROM (SELECT input as val)
+);
+
+statement ok
+FROM (SELECT '[1,2,3]' as message) CROSS JOIN json_each(message);
+
+statement ok
+FROM (SELECT '[1,2,3]'::json as message) CROSS JOIN json_each(message);
+
+statement ok
+FROM (SELECT '[1,2,3]'::json[] as message) CROSS JOIN json_each(message);

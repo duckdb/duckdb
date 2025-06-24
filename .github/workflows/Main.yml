@@ -3,29 +3,29 @@ on:
   workflow_dispatch:
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
-    tags:
-      - '**'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
-
+      - '.github/config/out_of_tree_extensions.cmake'
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
 
 
 concurrency:
@@ -37,20 +37,31 @@ env:
 
 jobs:
  linux-debug:
-    name: Linux Debug
+    name: Linux Debug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: 1
+            start_offset: ""
+            end_offset: "--end-offset 2000"
+          - tag: 2
+            start_offset: "--start-offset 2000"
+            end_offset: ""
     env:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
-      BUILD_VISUALIZER: 1
       GEN: ninja
+      CRASH_ON_ASSERT: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+    - uses: actions/checkout@v4
+
+    - id: describe_step
+      run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install
       shell: bash
@@ -66,37 +77,67 @@ jobs:
       shell: bash
       run:  make debug
 
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
+
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: bash
+      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo $DUCKDB_INSTALL_LIB
+
     - name: Test
       shell: bash
       run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
+        python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
 
+ linux-release:
+    name: Linux Release (full suite)
+    runs-on: ubuntu-24.04
+    env:
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make release
+
+    - name: Test
+      shell: bash
+      run: make allunit
 
  force-storage:
     name: Force Storage
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
-    needs: linux-debug
+    runs-on: ubuntu-22.04
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
+      RUN_SLOW_VERIFIERS: 1
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage'
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -111,6 +152,10 @@ jobs:
     - name: Build
       shell: bash
       run: make reldebug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
 
     - name: Test
       shell: bash
@@ -119,27 +164,18 @@ jobs:
  force-restart:
     name: Force Restart
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
-    needs: linux-debug
+    runs-on: ubuntu-22.04
+    needs: force-storage
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage --force-restart'
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -155,21 +191,273 @@ jobs:
       shell: bash
       run: make reldebug
 
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
+
     - name: Test
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
 
- valgrind:
-    name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
-    needs: linux-debug
+ no-string-inline:
+    name: No String Inline / Destroy Unpinned Blocks
+    runs-on: ubuntu-24.04
+    needs: force-storage
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
+      DISABLE_POINTER_SALT: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
+
+ prefetch-all-parquet-files:
+   name: Prefetch All Parquet Files
+   runs-on: ubuntu-24.04
+   needs: force-storage
+   env:
+     GEN: ninja
+     CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+     PREFETCH_ALL_PARQUET_FILES: 1
+     LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+     - name: Build
+       shell: bash
+       run: make relassert
+
+     - name: Test
+       shell: bash
+       run: build/relassert/test/unittest
+
+ vector-sizes:
+    name: Vector Sizes
+    runs-on: ubuntu-22.04
+    needs: force-storage
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
+      DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
+
+    steps:
+      - name: Clean up the disc space
+        shell: bash
+        run: |
+          echo "Disk usage before clean up:"
+          df -h
+          rm -rf /opt/hostedtoolcache/CodeQL Java* Pypy Ruby go node
+          echo "Disk usage after clean up:"
+          df -h
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: STANDARD_VECTOR_SIZE=2 make reldebug
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
+
+ valgrind:
+    name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    needs: force-storage
+    env:
+      CC: clang
+      CXX: clang++
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: 'icu;json;parquet;tpch'
       GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make relassert
+
+    - name: Output version info
+      shell: bash
+      run: ./build/relassert/duckdb -c "PRAGMA version;"
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+ vector-verification:
+    name: Vector Verification Tests
+    needs: force-storage
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        env:
+          DISABLE_CPP_UNITTESTS: 1
+          DUCKDB_TEST_DESCRIPTION: 'Tests run with --verify_vector=[VECTOR]. Use require no_vector_verification to skip tests.'
+        run: make reldebug
+
+      - name: Test dictionary_expression
+        shell: bash
+        env:
+          DUCKDB_TEST_VERIFY_VECTOR: dictionary_expression
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test dictionary_operator
+        shell: bash
+        env:
+          DUCKDB_TEST_VERIFY_VECTOR: dictionary_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test constant_operator
+        shell: bash
+        env:
+          DUCKDB_TEST_VERIFY_VECTOR: constant_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test sequence_operator
+        shell: bash
+        env:
+          DUCKDB_TEST_VERIFY_VECTOR: sequence_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test nested_shuffle
+        shell: bash
+        env:
+          DUCKDB_TEST_VERIFY_VECTOR: nested_shuffle
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+ latest-storage:
+    name: Latest Storage
+    needs: force-storage
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: DEBUG_STACKTRACE=1 BLOCK_VERIFICATION=1 LATEST_STORAGE=1 make reldebug
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
+
+ threadsan:
+    name: Thread Sanitizer
+    needs: force-storage
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
     - uses: actions/checkout@v3
@@ -178,7 +466,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -188,103 +476,43 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make debug
+      run: THREADSAN=1 make reldebug
 
     - name: Test
       shell: bash
-      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
-
- docs:
-    name: Website Docs
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Clone Website
-      shell: bash
-      run: git clone https://github.com/duckdb/duckdb-web
-
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Package
-      shell: bash
       run: |
-        cd duckdb-web
-        python3 scripts/generate_docs.py ..
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
 
- odbc:
-    name: ODBC
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+ amalgamation-tests:
+    name: Amalgamation Tests
     runs-on: ubuntu-22.04
-    needs: linux-debug
     env:
-      BUILD_ODBC: 1
-      GEN: ninja
+      CC: clang
+      CXX: clang++
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ github.ref }}
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
-    - name: Dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq
-        sudo apt-get install -y -qq ninja-build unixodbc-dev
-        pip3 install pyodbc
-
-    - name: Install nanodbc
-      shell: bash
-      run: |
-        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.14.0.tar.gz -O nanodbc.tgz
-        mkdir nanodbc
-        tar xvf nanodbc.tgz -C nanodbc --strip-components=1
-        cd nanodbc
-        wget https://github.com/catchorg/Catch2/releases/download/v2.13.9/catch.hpp
-        cp catch.hpp test/catch/catch.hpp
-        sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt
-        mkdir build
-        cd build
-        cmake -DNANODBC_DISABLE_TESTS=OFF ..
-        cmake --build .
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
       with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        version: "14.0"
 
-    - name: Build
+    - name: Generate Amalgamation
       shell: bash
-      run: DISABLE_SANITIZER=1 make debug
-
-    - name: Test Standard ODBC tests
-      shell: bash
-      run: build/debug/tools/odbc/test/test_odbc
-
-    - name: Test nanodbc
-      shell: bash
-      run: ./tools/odbc/test/run_nanodbc_tests.sh
-
-    - name: Test isql
-      shell: bash
-      run: ./tools/odbc/test/run_isql_tests.sh
-
-    - name: Test R ODBC
-      shell: bash
-      run: R -f tools/odbc/test/rodbc.R
-
-    - name: Test Python ODBC
-      shell: bash
-      run: ./tools/odbc/test/run_pyodbc_tests.sh
+      run:  |
+          python scripts/amalgamation.py --extended
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0

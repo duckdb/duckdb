@@ -6,20 +6,25 @@ foreach prefix 0b 0B
 # Empty binary should fail
 statement error
 SELECT '${prefix}'::INT
+----
 
 # Binary with invalid characters should fail
 statement error
 SELECT '${prefix}2'::INT
+----
 
 statement error
 SELECT '${prefix}10105'::INT
+----
 
 # Negative binary should fail
 statement error
 SELECT '${prefix}-1'::INT
+----
 
 statement error
 SELECT '-${prefix}1'::INT
+----
 
 # Basic asserts
 query I
@@ -61,15 +66,19 @@ SELECT '${prefix}11110000_11110000'::INT
 # But dont allow them at the start or end
 statement error
 SELECT '${prefix}_1'::INT
+----
 
 statement error
 SELECT '${prefix}1_'::INT
+----
 
 statement error
 SELECT '${prefix}1_0_'::INT
+----
 
 statement error
 SELECT '${prefix}_1_0'::INT
+----
 
 
 # Property check! 
@@ -101,6 +110,7 @@ SELECT '${prefix}0000000000000000000000000000000011111111'::UINT8
 
 statement error
 SELECT '${prefix}00000000000000000000000000000000111111111'::TINYINT
+----
 
 query I
 SELECT '${prefix}1111111111111111111111111111111'::INT
@@ -109,6 +119,7 @@ SELECT '${prefix}1111111111111111111111111111111'::INT
 
 statement error
 SELECT '${prefix}11111111111111111111111111111111'::INT
+----
 
 query I
 SELECT '${prefix}01111111111111111111111111111111'::UINT32
@@ -132,6 +143,7 @@ SELECT '${prefix}111111111111111111111111111111111111111111111111111111111111111
 
 statement error
 SELECT '${prefix}1111111111111111111111111111111111111111111111111111111111111111'::BIGINT
+----
 
 query I
 SELECT '${prefix}1111111111111111111111111111111111111111111111111111111111111111'::UINT64

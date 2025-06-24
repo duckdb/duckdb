@@ -5,10 +5,12 @@
 # nothing to rollback
 statement error
 ROLLBACK;
+----
 
 # nothing to commit
 statement error
 COMMIT;
+----
 
 statement ok
 BEGIN;
@@ -16,6 +18,7 @@ BEGIN;
 # cannot start a transaction in a transaction
 statement error
 BEGIN;
+----
 
 statement ok
 ROLLBACK;

@@ -1,0 +1,76 @@
+# name: test/sql/function/list/repeat_list.test
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT repeat([1], 10);
+----
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+
+query I
+SELECT repeat([{'x': 1}], 5);
+----
+[{'x': 1}, {'x': 1}, {'x': 1}, {'x': 1}, {'x': 1}]
+
+query I
+SELECT repeat([[1]], 10);
+----
+[[1], [1], [1], [1], [1], [1], [1], [1], [1], [1]]
+
+query I
+SELECT repeat([1, 2], 5);
+----
+[1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+query I
+SELECT repeat([[[], [], [NULL], NULL]], 3);
+----
+[[[], [], [NULL], NULL], [[], [], [NULL], NULL], [[], [], [NULL], NULL]]
+
+query I
+SELECT repeat(['hello', 'thisisalongstring'], 5);
+----
+[hello, thisisalongstring, hello, thisisalongstring, hello, thisisalongstring, hello, thisisalongstring, hello, thisisalongstring]
+
+query I
+SELECT repeat([], 10);
+----
+[]
+
+query I
+SELECT repeat([], -1);
+----
+[]
+
+query I
+SELECT repeat(NULL::INT[], 10);
+----
+NULL
+
+query I
+SELECT repeat(repeat([1], 50), 50) = repeat([1], 2500);
+----
+true
+
+# fuzzer issue with repeat of different vector types
+query I
+SELECT REPEAT(c,2) FROM TEST_VECTOR_TYPES(CAST(NULL AS INT[])) AS t(c)
+----
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[]
+[NULL, NULL]
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[-2147483648, 2147483647, -2147483648, 2147483647]
+[]
+[NULL, NULL]
+[3, 5, 3, 5]
+[]
+[7, 7]
+
+statement error
+SELECT repeat([1], 99999999999999999);
+----
+maximum allowed vector size

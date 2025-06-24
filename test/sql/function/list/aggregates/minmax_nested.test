@@ -1,0 +1,227 @@
+# name: test/sql/function/list/aggregates/minmax_nested.test
+# description: Test the min/max functions on complex nested types aggregate function
+# group: [aggregates]
+
+statement ok
+pragma enable_verification
+
+# structs
+statement ok
+CREATE TABLE structs AS SELECT {'i': i} s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': 0}	{'i': 999}
+
+# larger values
+statement ok
+INSERT INTO structs VALUES ({'i': 99999999});
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': 0}	{'i': 99999999}
+
+# limits
+statement ok
+INSERT INTO structs VALUES ({'i': -9223372036854775808}), ({'i': 9223372036854775807});
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': -9223372036854775808}	{'i': 9223372036854775807}
+
+# null values
+statement ok
+INSERT INTO structs VALUES ({'i': NULL}), (NULL)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': -9223372036854775808}	{'i': NULL}
+
+# structs with varchars
+statement ok
+CREATE TABLE varchar_structs AS SELECT {'i': concat('long_prefix_', i)} s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM varchar_structs;
+----
+{'i': long_prefix_0}	{'i': long_prefix_999}
+
+# null bytes
+statement ok
+INSERT INTO varchar_structs VALUES ({'i': chr(0)}), ({'i': 'zzzzz' || chr(0)})
+
+query II
+SELECT MIN(s), MAX(s) FROM varchar_structs;
+----
+{'i': \0}	{'i': zzzzz\0}
+
+# structs with blobs
+statement ok
+CREATE TABLE blob_structs AS SELECT {'i': concat('long_prefix_', '\x', 16+i%239)::blob} s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM blob_structs;
+----
+{'i': long_prefix_\x100}	{'i': long_prefix_\x99}
+
+# null bytes
+statement ok
+INSERT INTO blob_structs VALUES ({'i': '\x00z\x00\x00z\x00zzzz\x00'::blob}), ({'i': 'zzzzzz\x01\x01\x01\x00\x01\x01\x00'::blob})
+
+query II
+SELECT MIN(s), MAX(s) FROM blob_structs;
+----
+{'i': \x00z\x00\x00z\x00zzzz\x00}	{'i': zzzzzz\x01\x01\x01\x00\x01\x01\x00}
+
+# multi-member structs
+statement ok
+CREATE TABLE multi_member_struct AS SELECT {'i': (1000-i)//5, 'j': i} s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM multi_member_struct;
+----
+{'i': 0, 'j': 996}	{'i': 200, 'j': 0}
+
+# lists
+statement ok
+CREATE TABLE lists AS SELECT case when i<500 then [i, i + 1, i + 2] else [i, 0] end AS l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM lists;
+----
+[0, 1, 2]	[999, 0]
+
+# empty list and null entries
+statement ok
+INSERT INTO lists VALUES ([]), (NULL), ([NULL, NULL, NULL]);
+
+query II
+SELECT MIN(l), MAX(l) FROM lists;
+----
+[]	[NULL, NULL, NULL]
+
+# lists with structs
+statement ok
+CREATE TABLE list_with_structs AS SELECT case when i<500 then [{'i': i}, {'i': i + 1}, {'i': i + 2}] else [{'i': i}, {'i': 0}] end AS l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_with_structs;
+----
+[{'i': 0}, {'i': 1}, {'i': 2}]	[{'i': 999}, {'i': 0}]
+
+# null within a struct
+statement ok
+INSERT INTO list_with_structs VALUES ([{'i': NULL}, {'i': 100}, NULL, {'i': NULL}]);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_with_structs;
+----
+[{'i': 0}, {'i': 1}, {'i': 2}]	[{'i': NULL}, {'i': 100}, NULL, {'i': NULL}]
+
+# empty list and null entries
+statement ok
+INSERT INTO list_with_structs VALUES ([]), (NULL), ([NULL, NULL, NULL]);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_with_structs;
+----
+[]	[NULL, NULL, NULL]
+
+# list with multi member struct
+statement ok
+CREATE TABLE list_multi_member_struct AS SELECT [NULL, {'i': (1000-i)//5, 'j': i}, NULL] l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_multi_member_struct;
+----
+[NULL, {'i': 0, 'j': 996}, NULL]	[NULL, {'i': 200, 'j': 0}, NULL]
+
+# nulls at different levels
+statement ok
+INSERT INTO list_multi_member_struct VALUES ([{'i': NULL, 'j': 42}]), ([NULL, NULL, {'i': 84, 'j': NULL}])
+
+query II
+SELECT MIN(l), MAX(l) FROM list_multi_member_struct;
+----
+[{'i': NULL, 'j': 42}]	[NULL, NULL, {'i': 84, 'j': NULL}]
+
+# struct with lists
+statement ok
+CREATE TABLE struct_with_lists AS SELECT {'i': case when i<500 then [i, i + 1, i + 2] else [i, 0] end} AS s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM struct_with_lists;
+----
+{'i': [0, 1, 2]}	{'i': [999, 0]}
+
+# empty list and null entries
+statement ok
+INSERT INTO struct_with_lists VALUES ({'i': []}), (NULL), ({'i': [NULL, NULL, NULL]})
+
+query II
+SELECT MIN(s), MAX(s) FROM struct_with_lists;
+----
+{'i': []}	{'i': [NULL, NULL, NULL]}
+
+statement ok
+INSERT INTO struct_with_lists VALUES ({'i': NULL})
+
+query I
+SELECT MAX(s) FROM struct_with_lists;
+----
+{'i': NULL}
+
+# arrays
+statement ok
+CREATE TABLE arrays AS SELECT (case when i<500 then [i, i + 1, i + 2] else [i, 0, 0] end)::BIGINT[3] AS l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM arrays;
+----
+[0, 1, 2]	[999, 0, 0]
+
+# null entries
+statement ok
+INSERT INTO arrays VALUES (NULL), ([NULL, NULL, NULL]);
+
+query II
+SELECT MIN(l), MAX(l) FROM arrays;
+----
+[0, 1, 2]	[NULL, NULL, NULL]
+
+# floats
+statement ok
+CREATE TABLE float_values(f FLOAT);
+
+statement ok
+INSERT INTO float_values VALUES ('0'), ('-3.4e38'), ('3.4e38'), ('nan'), ('inf'), ('-inf')
+
+query II
+SELECT f, (SELECT MIN({'v': x}) FROM (VALUES (f)) t(x)) FROM float_values;
+----
+0.0	{'v': 0.0}
+-3.4e+38	{'v': -3.4e+38}
+3.4e+38	{'v': 3.4e+38}
+nan	{'v': nan}
+inf	{'v': inf}
+-inf	{'v': -inf}
+
+statement ok
+CREATE TABLE double_values(d DOUBLE);
+
+statement ok
+INSERT INTO double_values VALUES ('0'), ('-1e308'), ('1e308'), ('nan'), ('inf'), ('-inf')
+
+query II
+SELECT d, (SELECT MIN({'v': x}) FROM (VALUES (d)) t(x)) FROM double_values;
+----
+0.0	{'v': 0.0}
+-1e+308	{'v': -1e+308}
+1e+308	{'v': 1e+308}
+nan	{'v': nan}
+inf	{'v': inf}
+-inf	{'v': -inf}

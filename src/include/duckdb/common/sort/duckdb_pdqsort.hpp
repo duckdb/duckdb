@@ -11,7 +11,7 @@ applications, and to alter it and redistribute it freely, subject to the followi
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the
     original software. If you use this software in a product, an acknowledgment in the product
-	documentation would be appreciated but is not required.
+    documentation would be appreciated but is not required.
 
 2. Altered source versions must be plainly marked as such, and must not be misrepresented as
     being the original software.
@@ -35,16 +35,16 @@ applications, and to alter it and redistribute it freely, subject to the followi
 
 namespace duckdb_pdqsort {
 
-using duckdb::idx_t;
-using duckdb::data_t;
 using duckdb::data_ptr_t;
-using duckdb::unique_ptr;
-using duckdb::unique_array;
-using duckdb::unsafe_unique_array;
-using duckdb::make_uniq_array;
-using duckdb::make_unsafe_uniq_array;
-using duckdb::FastMemcpy;
+using duckdb::data_t;
 using duckdb::FastMemcmp;
+using duckdb::FastMemcpy;
+using duckdb::idx_t;
+using duckdb::make_unsafe_uniq_array_uninitialized;
+using duckdb::unique_ptr;
+using duckdb::unsafe_unique_array;
+
+// NOLINTBEGIN
 
 enum {
 	// Partitions below this size are sorted using insertion sort.
@@ -78,9 +78,10 @@ inline int log2(T n) {
 struct PDQConstants {
 	PDQConstants(idx_t entry_size, idx_t comp_offset, idx_t comp_size, data_ptr_t end)
 	    : entry_size(entry_size), comp_offset(comp_offset), comp_size(comp_size),
-	      tmp_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)), tmp_buf(tmp_buf_ptr.get()),
-	      iter_swap_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)), iter_swap_buf(iter_swap_buf_ptr.get()),
-	      swap_offsets_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)),
+	      tmp_buf_ptr(make_unsafe_uniq_array_uninitialized<data_t>(entry_size)), tmp_buf(tmp_buf_ptr.get()),
+	      iter_swap_buf_ptr(make_unsafe_uniq_array_uninitialized<data_t>(entry_size)),
+	      iter_swap_buf(iter_swap_buf_ptr.get()),
+	      swap_offsets_buf_ptr(make_unsafe_uniq_array_uninitialized<data_t>(entry_size)),
 	      swap_offsets_buf(swap_offsets_buf_ptr.get()), end(end) {
 	}
 
@@ -152,9 +153,9 @@ struct PDQIterator {
 	}
 
 	inline friend idx_t operator-(const PDQIterator &lhs, const PDQIterator &rhs) {
-		D_ASSERT((*lhs - *rhs) % lhs.entry_size == 0);
+		D_ASSERT(duckdb::NumericCast<idx_t>(*lhs - *rhs) % lhs.entry_size == 0);
 		D_ASSERT(*lhs - *rhs >= 0);
-		return (*lhs - *rhs) / lhs.entry_size;
+		return duckdb::NumericCast<idx_t>(*lhs - *rhs) / lhs.entry_size;
 	}
 
 	inline friend bool operator<(const PDQIterator &lhs, const PDQIterator &rhs) {
@@ -318,7 +319,7 @@ inline T *align_cacheline(T *p) {
 #else
 	std::size_t ip = reinterpret_cast<std::size_t>(p);
 #endif
-	ip = (ip + cacheline_size - 1) & -cacheline_size;
+	ip = (ip + cacheline_size - 1) & -duckdb::UnsafeNumericCast<uintptr_t>(cacheline_size);
 	return reinterpret_cast<T *>(ip);
 }
 
@@ -401,7 +402,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 
 			// Fill the offset blocks.
 			if (left_split >= block_size) {
-				for (size_t i = 0; i < block_size;) {
+				for (unsigned char i = 0; i < block_size;) {
 					offsets_l[num_l] = i++;
 					num_l += !comp(*first, pivot, constants);
 					++first;
@@ -428,7 +429,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 					++first;
 				}
 			} else {
-				for (size_t i = 0; i < left_split;) {
+				for (unsigned char i = 0; i < left_split;) {
 					offsets_l[num_l] = i++;
 					num_l += !comp(*first, pivot, constants);
 					++first;
@@ -436,7 +437,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 			}
 
 			if (right_split >= block_size) {
-				for (size_t i = 0; i < block_size;) {
+				for (unsigned char i = 0; i < block_size;) {
 					offsets_r[num_r] = ++i;
 					num_r += comp(*--last, pivot, constants);
 					offsets_r[num_r] = ++i;
@@ -455,7 +456,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 					num_r += comp(*--last, pivot, constants);
 				}
 			} else {
-				for (size_t i = 0; i < right_split;) {
+				for (unsigned char i = 0; i < right_split;) {
 					offsets_r[num_r] = ++i;
 					num_r += comp(*--last, pivot, constants);
 				}
@@ -704,5 +705,6 @@ inline void pdqsort_branchless(const PDQIterator &begin, const PDQIterator &end,
 	}
 	pdqsort_loop<true>(begin, end, constants, log2(end - begin));
 }
+// NOLINTEND
 
 } // namespace duckdb_pdqsort

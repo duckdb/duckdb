@@ -2,13 +2,18 @@
 # description: Test export functions
 # group: [export]
 
+require icu
+
+statement ok
+PRAGMA enable_verification
+
 statement ok
 BEGIN TRANSACTION
 
 statement ok
 CREATE TABLE tbl(
     d DATE DEFAULT CURRENT_DATE,
-    t TIME DEFAULT CURRENT_TIME,
+    t TIME WITH TIME ZONE DEFAULT CURRENT_TIME,
     ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     cur_user VARCHAR DEFAULT CURRENT_USER,
     "user" VARCHAR DEFAULT USER,

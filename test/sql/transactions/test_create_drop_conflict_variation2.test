@@ -1,0 +1,48 @@
+# name: test/sql/transactions/test_create_drop_conflict_variation2.test
+# description: Test a conflict with create/drop across transactions
+# group: [transactions]
+
+###
+### The variation is that con1's query is now *also* in a transaction, we first commit the CREATE TABLE (con1's query)
+###
+
+load __TEST_DIR__/broken.db
+
+statement ok
+CREATE SCHEMA foo;
+
+statement ok con2
+START TRANSACTION;
+
+# Drop the schema in con2
+statement ok con2
+DROP SCHEMA IF EXISTS foo CASCADE;
+
+statement ok con1
+START TRANSACTION
+
+# Create a table on the schema we're dropping
+# This should succeed because the schema drop isn't committed yet
+statement ok con1
+create table foo.bar as select 42;
+
+# This passes because the 'drop schema' was not committed yet
+statement ok con1
+COMMIT;
+
+# This fails because the create table introduces a new dependency
+statement error con2
+COMMIT;
+----
+
+statement ok
+DROP SCHEMA foo CASCADE;
+
+statement error
+select * from foo.bar;
+----
+Table with name bar does not exist!
+
+query I
+select schema_name from duckdb_schemas() where schema_name = 'foo';
+----

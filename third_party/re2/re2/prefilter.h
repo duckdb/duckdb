@@ -60,7 +60,20 @@ class Prefilter {
   std::string DebugString() const;
 
  private:
+  // A comparator used to store exact strings. We compare by length,
+  // then lexicographically. This ordering makes it easier to reduce the
+  // set of strings in SimplifyStringSet.
+  struct LengthThenLex {
+    bool operator()(const std::string& a, const std::string& b) const {
+       return (a.size() < b.size()) || (a.size() == b.size() && a < b);
+    }
+  };
+
   class Info;
+
+  using SSet = std::set<std::string, LengthThenLex>;
+  using SSIter = SSet::iterator;
+  using ConstSSIter = SSet::const_iterator;
 
   // Combines two prefilters together to create an AND. The passed
   // Prefilters will be part of the returned Prefilter or deleted.
@@ -77,11 +90,20 @@ class Prefilter {
 
   static Prefilter* FromString(const std::string& str);
 
-  static Prefilter* OrStrings(std::set<std::string>* ss);
+  static Prefilter* OrStrings(SSet* ss);
 
   static Info* BuildInfo(Regexp* re);
 
   Prefilter* Simplify();
+
+  // Removes redundant strings from the set. A string is redundant if
+  // any of the other strings appear as a substring. The empty string
+  // is a special case, which is ignored.
+  static void SimplifyStringSet(SSet* ss);
+
+  // Adds the cross-product of a and b to dst.
+  // (For each string i in a and j in b, add i+j.)
+  static void CrossProduct(const SSet& a, const SSet& b, SSet* dst);
 
   // Kind of Prefilter.
   Op op_;
@@ -103,6 +125,6 @@ class Prefilter {
   Prefilter& operator=(const Prefilter&) = delete;
 };
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // RE2_PREFILTER_H_

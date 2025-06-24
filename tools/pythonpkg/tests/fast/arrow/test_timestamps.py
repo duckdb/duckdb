@@ -59,17 +59,19 @@ class TestArrowTimestamps(object):
         assert arrow_from_duck['b'] == arrow_table['b']
         assert arrow_from_duck['c'] == arrow_table['c']
 
-        with pytest.raises(duckdb.ConversionException, match='Could not convert'):
-            duck_rel = duckdb.from_arrow(arrow_table)
-            res = duck_rel.project('a::TIMESTAMP_US')
-            res.fetchone()
+        expected = (datetime.datetime(9999, 12, 31, 23, 59, 59, 999999),)
 
-        with pytest.raises(duckdb.ConversionException, match='Could not convert'):
-            duck_rel = duckdb.from_arrow(arrow_table)
-            res = duck_rel.project('b::TIMESTAMP_US')
-            res.fetchone()
+        duck_rel = duckdb.from_arrow(arrow_table)
+        res = duck_rel.project('a::TIMESTAMP_US')
+        result = res.fetchone()
+        assert result == expected
 
-        with pytest.raises(duckdb.ConversionException, match='Could not convert'):
-            duck_rel = duckdb.from_arrow(arrow_table)
-            res = duck_rel.project('c::TIMESTAMP_NS')
-            res.fetchone()
+        duck_rel = duckdb.from_arrow(arrow_table)
+        res = duck_rel.project('b::TIMESTAMP_US')
+        result = res.fetchone()
+        assert result == expected
+
+        duck_rel = duckdb.from_arrow(arrow_table)
+        res = duck_rel.project('c::TIMESTAMP_NS')
+        result = res.fetchone()
+        assert result == expected

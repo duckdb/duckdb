@@ -26,10 +26,9 @@ struct PrimitiveTypeState {
 
 template <class INPUT_TYPE>
 struct PrimitiveType {
-	PrimitiveType() {
+	PrimitiveType() = default;
+	PrimitiveType(INPUT_TYPE val) : val(val) { // NOLINT: allow implicit cast
 	}
-	PrimitiveType(INPUT_TYPE val) : val(val) {
-	} // NOLINT: allow implicit cast
 
 	INPUT_TYPE val;
 
@@ -214,6 +213,35 @@ struct StructTypeQuaternary {
 	}
 };
 
+template <class CHILD_TYPE>
+struct GenericListType {
+	vector<CHILD_TYPE> values;
+
+	using STRUCT_STATE = PrimitiveTypeState;
+
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, GenericListType<CHILD_TYPE> &result) {
+		throw InternalException("FIXME: implement ConstructType for lists");
+	}
+
+	static void AssignResult(Vector &result, idx_t i, GenericListType<CHILD_TYPE> value) {
+		auto &child = ListVector::GetEntry(result);
+		auto current_size = ListVector::GetListSize(result);
+
+		// reserve space in the child element
+		auto list_size = value.values.size();
+		ListVector::Reserve(result, current_size + list_size);
+
+		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		list_entries[i].offset = current_size;
+		list_entries[i].length = list_size;
+
+		for (idx_t child_idx = 0; child_idx < list_size; child_idx++) {
+			CHILD_TYPE::AssignResult(child, current_size + child_idx, value.values[child_idx]);
+		}
+		ListVector::SetListSize(result, current_size + list_size);
+	}
+};
+
 //! The GenericExecutor can handle struct types in addition to primitive types
 struct GenericExecutor {
 private:
@@ -254,7 +282,7 @@ private:
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
-			auto b_idx = a_state.main_data.sel->get_index(i);
+			auto b_idx = b_state.main_data.sel->get_index(i);
 			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx)) {
 				FlatVector::SetNull(result, i, true);
 				continue;
@@ -288,8 +316,8 @@ private:
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
-			auto b_idx = a_state.main_data.sel->get_index(i);
-			auto c_idx = a_state.main_data.sel->get_index(i);
+			auto b_idx = b_state.main_data.sel->get_index(i);
+			auto c_idx = c_state.main_data.sel->get_index(i);
 			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx) ||
 			    !c_state.main_data.validity.RowIsValid(c_idx)) {
 				FlatVector::SetNull(result, i, true);
@@ -329,9 +357,9 @@ private:
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
-			auto b_idx = a_state.main_data.sel->get_index(i);
-			auto c_idx = a_state.main_data.sel->get_index(i);
-			auto d_idx = a_state.main_data.sel->get_index(i);
+			auto b_idx = b_state.main_data.sel->get_index(i);
+			auto c_idx = c_state.main_data.sel->get_index(i);
+			auto d_idx = d_state.main_data.sel->get_index(i);
 			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx) ||
 			    !c_state.main_data.validity.RowIsValid(c_idx) || !d_state.main_data.validity.RowIsValid(d_idx)) {
 				FlatVector::SetNull(result, i, true);

@@ -8,16 +8,26 @@
 
 #pragma once
 
-#include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
 enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO = 2 };
+
+struct MacroBindResult {
+	explicit MacroBindResult(string error_p) : error(std::move(error_p)) {
+	}
+	explicit MacroBindResult(idx_t function_idx) : function_idx(function_idx) {
+	}
+
+	optional_idx function_idx;
+	string error;
+};
 
 class MacroFunction {
 public:
@@ -28,7 +38,7 @@ public:
 	//! The positional parameters
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default parameters and their associated values
-	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> default_parameters;
 
 public:
 	virtual ~MacroFunction() {
@@ -38,12 +48,12 @@ public:
 
 	virtual unique_ptr<MacroFunction> Copy() const = 0;
 
-	static string ValidateArguments(MacroFunction &macro_function, const string &name,
-	                                FunctionExpression &function_expr,
-	                                vector<unique_ptr<ParsedExpression>> &positionals,
-	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
+	static MacroBindResult BindMacroFunction(const vector<unique_ptr<MacroFunction>> &macro_functions,
+	                                         const string &name, FunctionExpression &function_expr,
+	                                         vector<unique_ptr<ParsedExpression>> &positionals,
+	                                         unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 
-	virtual string ToSQL(const string &schema, const string &name) const;
+	virtual string ToSQL() const;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);

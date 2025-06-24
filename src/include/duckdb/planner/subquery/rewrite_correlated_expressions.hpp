@@ -27,21 +27,6 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:
-	//! Helper class used to recursively rewrite correlated expressions within nested subqueries.
-	class RewriteCorrelatedRecursive {
-	public:
-		RewriteCorrelatedRecursive(BoundSubqueryExpression &parent, ColumnBinding base_binding,
-		                           column_binding_map_t<idx_t> &correlated_map);
-		void RewriteJoinRefRecursive(BoundTableRef &ref);
-		void RewriteCorrelatedSubquery(BoundSubqueryExpression &expr);
-		void RewriteCorrelatedExpressions(Expression &child);
-
-		BoundSubqueryExpression &parent;
-		ColumnBinding base_binding;
-		column_binding_map_t<idx_t> &correlated_map;
-	};
-
-private:
 	ColumnBinding base_binding;
 	column_binding_map_t<idx_t> &correlated_map;
 	// To keep track of the number of dependent joins encountered

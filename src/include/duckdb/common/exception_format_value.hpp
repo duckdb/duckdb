@@ -19,7 +19,7 @@ namespace duckdb {
 // Escaping " and quoting the value with "
 class SQLIdentifier {
 public:
-	SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
+	explicit SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
 	}
 
 public:
@@ -30,7 +30,7 @@ public:
 // Escaping ' and quoting the value with '
 class SQLString {
 public:
-	SQLString(const string &raw_string) : raw_string(raw_string) {
+	explicit SQLString(const string &raw_string) : raw_string(raw_string) {
 	}
 
 public:
@@ -47,10 +47,11 @@ enum class ExceptionFormatValueType : uint8_t {
 };
 
 struct ExceptionFormatValue {
-	DUCKDB_API ExceptionFormatValue(double dbl_val);   // NOLINT
-	DUCKDB_API ExceptionFormatValue(int64_t int_val);  // NOLINT
-	DUCKDB_API ExceptionFormatValue(string str_val);   // NOLINT
-	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val); // NOLINT
+	DUCKDB_API ExceptionFormatValue(double dbl_val);     // NOLINT
+	DUCKDB_API ExceptionFormatValue(int64_t int_val);    // NOLINT
+	DUCKDB_API ExceptionFormatValue(string str_val);     // NOLINT
+	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val);   // NOLINT
+	DUCKDB_API ExceptionFormatValue(uhugeint_t uhg_val); // NOLINT
 
 	ExceptionFormatValueType type;
 
@@ -86,5 +87,7 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(hugeint_t value);
+template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(uhugeint_t value);
 
 } // namespace duckdb

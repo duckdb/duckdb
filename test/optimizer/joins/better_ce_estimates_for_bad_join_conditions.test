@@ -1,0 +1,18 @@
+# name: test/optimizer/joins/better_ce_estimates_for_bad_join_conditions.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+statement ok
+create table t1 as select range::Varchar id, (range%700)::VARCHAR name_ from range(2_000);
+
+statement ok
+create table t2 as select range::Varchar id, (range%700)::VARCHAR name_ from range(2_000);
+
+statement ok
+create table t3 as select (range%2_000)::Varchar t1_id_FK, (range%2_000)::Varchar t2_id_FK from range(8_000);
+
+
+query II
+explain select count(*) from t1, t2, t3 where t1.name_ != t2.name_ and t3.t1_id_FK = t1.id and t3.t2_id_FK = t2.id;
+----
+physical_plan	<!REGEX>:.*NESTED_LOOP_JOIN.*

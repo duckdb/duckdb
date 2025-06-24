@@ -38,6 +38,7 @@ SELECT i + 1 AS i, i + 1 AS b FROM integers ORDER BY b
 # we cannot refer to aliases that are defined LATER ON in the select clause
 statement error
 SELECT a + 1 AS b, i + 1 AS a FROM integers
+----
 
 # expressions with side effects are not supported yet
 statement error

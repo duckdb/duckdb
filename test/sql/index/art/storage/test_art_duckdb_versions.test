@@ -1,0 +1,224 @@
+# name: test/sql/index/art/storage/test_art_duckdb_versions.test
+# description: Test compatibility of ART indexes for different duckdb versions
+# group: [storage]
+
+# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
+require 64bit
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+# SQL to create index_0-9-1.db
+
+# CREATE TABLE pk_tbl (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE);
+# CREATE TABLE idx_tbl (i INTEGER, j INTEGER, k INTEGER);
+# CREATE TABLE fk_tbl (id INTEGER REFERENCES pk_tbl(id));
+# INSERT INTO pk_tbl VALUES (1, 'alice'), (2, 'eve'), (3, 'hedy');
+# INSERT INTO idx_tbl VALUES (10, 20, 30);
+# INSERT INTO idx_tbl VALUES (11, 22, 31);
+# INSERT INTO idx_tbl VALUES (110, 220, 310);
+# INSERT INTO fk_tbl VALUES (2), (3);
+# CREATE INDEX idx_1 ON idx_tbl(i, k);
+# CREATE INDEX idx_2 ON idx_tbl (i);
+
+load data/storage/index_0-9-1.db readonly
+
+# ensure that we read the catalog correctly
+
+query II
+SELECT table_name, index_count FROM duckdb_tables() ORDER BY table_name;
+----
+fk_tbl	1
+idx_tbl	2
+pk_tbl	2
+
+query II
+SELECT index_name, table_name FROM duckdb_indexes() ORDER BY index_name;
+----
+idx_1	idx_tbl
+idx_2	idx_tbl
+
+query II
+SELECT table_name, constraint_type FROM duckdb_constraints() ORDER BY ALL;
+----
+fk_tbl	FOREIGN KEY
+pk_tbl	NOT NULL
+pk_tbl	PRIMARY KEY
+pk_tbl	UNIQUE
+
+# ensure that we correctly load the data
+
+query II
+SELECT id, name FROM pk_tbl ORDER BY id;
+----
+1	alice
+2	eve
+3	hedy
+
+# some index lookups
+
+query I
+SELECT id FROM pk_tbl WHERE id = 2;
+----
+2
+
+query I
+SELECT i FROM idx_tbl WHERE i = 11
+----
+11
+
+# load the data into a new database to make it mutable
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_index_db' (FORMAT CSV)
+
+load __TEST_DIR__/test_art_import.db
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_index_db'
+
+# first, perform the same checks
+
+query II
+SELECT table_name, index_count FROM duckdb_tables() ORDER BY table_name;
+----
+fk_tbl	1
+idx_tbl	2
+pk_tbl	2
+
+query II
+SELECT index_name, table_name FROM duckdb_indexes() ORDER BY index_name;
+----
+idx_1	idx_tbl
+idx_2	idx_tbl
+
+query II
+SELECT table_name, constraint_type FROM duckdb_constraints() ORDER BY ALL;
+----
+fk_tbl	FOREIGN KEY
+pk_tbl	NOT NULL
+pk_tbl	PRIMARY KEY
+pk_tbl	UNIQUE
+
+query II
+SELECT id, name FROM pk_tbl ORDER BY id;
+----
+1	alice
+2	eve
+3	hedy
+
+query I
+SELECT id FROM pk_tbl WHERE id = 2;
+----
+2
+
+query I
+SELECT i FROM idx_tbl WHERE i = 11
+----
+11
+
+# now try to break it
+
+statement ok
+INSERT INTO idx_tbl SELECT range, range, range FROM range(300000);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT used_blocks > 2621440 / get_block_size('test_art_import') FROM pragma_database_size();
+----
+1
+
+statement ok
+CREATE INDEX ART_index ON idx_tbl(i);
+
+statement error
+CREATE INDEX idx_1 ON idx_tbl(i);
+----
+<REGEX>:Catalog Error.*Index with name "idx_1" already exists.*
+
+# now try to use it again
+
+query III
+SELECT i, j, k FROM idx_tbl WHERE i = 110 ORDER BY ALL;
+----
+110	110	110
+110	220	310
+
+statement ok
+CHECKPOINT
+
+restart
+
+query II
+SELECT table_name, index_count FROM duckdb_tables() ORDER BY table_name;
+----
+fk_tbl	1
+idx_tbl	3
+pk_tbl	2
+
+query II
+SELECT index_name, table_name FROM duckdb_indexes() ORDER BY index_name;
+----
+ART_index	idx_tbl
+idx_1	idx_tbl
+idx_2	idx_tbl
+
+query II
+SELECT table_name, constraint_type FROM duckdb_constraints() ORDER BY ALL;
+----
+fk_tbl	FOREIGN KEY
+pk_tbl	NOT NULL
+pk_tbl	PRIMARY KEY
+pk_tbl	UNIQUE
+
+query II
+SELECT id, name FROM pk_tbl ORDER BY id;
+----
+1	alice
+2	eve
+3	hedy
+
+query I
+SELECT id FROM pk_tbl WHERE id = 2;
+----
+2
+
+query I
+SELECT i FROM idx_tbl WHERE i = 11
+----
+11
+11
+
+query III
+SELECT i, j, k FROM idx_tbl WHERE i = 110 ORDER BY ALL;
+----
+110	110	110
+110	220	310
+
+statement ok
+DROP INDEX idx_1;
+
+statement ok
+DROP INDEX idx_2;
+
+statement ok
+DROP INDEX ART_index;
+
+statement ok
+DROP TABLE fk_tbl;
+
+statement ok
+DROP TABLE idx_tbl;
+
+statement ok
+DROP TABLE pk_tbl;
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1

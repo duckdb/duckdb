@@ -6,6 +6,7 @@
 
 #include "duckdb/common/operator/comparison_operators.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -89,7 +90,7 @@ bool GreaterThanEquals::Operation(const double &left, const double &right) {
 struct ComparisonSelector {
 	template <typename OP>
 	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-	                    SelectionVector *false_sel) {
+	                    SelectionVector *false_sel, ValidityMask &null_mask) {
 		throw NotImplementedException("Unknown comparison operation!");
 	}
 };
@@ -97,44 +98,44 @@ struct ComparisonSelector {
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::Equals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                         idx_t count, SelectionVector *true_sel,
-                                                        SelectionVector *false_sel) {
-	return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+                                                        SelectionVector *false_sel, ValidityMask &null_mask) {
+	return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel, &null_mask);
 }
 
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                            idx_t count, SelectionVector *true_sel,
-                                                           SelectionVector *false_sel) {
-	return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+                                                           SelectionVector *false_sel, ValidityMask &null_mask) {
+	return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel, &null_mask);
 }
 
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::GreaterThan>(Vector &left, Vector &right, const SelectionVector *sel,
                                                              idx_t count, SelectionVector *true_sel,
-                                                             SelectionVector *false_sel) {
-	return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+                                                             SelectionVector *false_sel, ValidityMask &null_mask) {
+	return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel, &null_mask);
 }
 
 template <>
-inline idx_t ComparisonSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &right,
-                                                                   const SelectionVector *sel, idx_t count,
-                                                                   SelectionVector *true_sel,
-                                                                   SelectionVector *false_sel) {
-	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+inline idx_t
+ComparisonSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                      idx_t count, SelectionVector *true_sel,
+                                                      SelectionVector *false_sel, ValidityMask &null_mask) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel, &null_mask);
 }
 
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::LessThan>(Vector &left, Vector &right, const SelectionVector *sel,
                                                           idx_t count, SelectionVector *true_sel,
-                                                          SelectionVector *false_sel) {
-	return VectorOperations::GreaterThan(right, left, sel, count, true_sel, false_sel);
+                                                          SelectionVector *false_sel, ValidityMask &null_mask) {
+	return VectorOperations::GreaterThan(right, left, sel, count, true_sel, false_sel, &null_mask);
 }
 
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                                 idx_t count, SelectionVector *true_sel,
-                                                                SelectionVector *false_sel) {
-	return VectorOperations::GreaterThanEquals(right, left, sel, count, true_sel, false_sel);
+                                                                SelectionVector *false_sel, ValidityMask &null_mask) {
+	return VectorOperations::GreaterThanEquals(right, left, sel, count, true_sel, false_sel, &null_mask);
 }
 
 static void ComparesNotNull(UnifiedVectorFormat &ldata, UnifiedVectorFormat &rdata, ValidityMask &vresult,
@@ -163,8 +164,12 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	if (left_constant && right_constant) {
 		// both sides are constant, and neither is NULL so just compare one element.
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto &result_validity = ConstantVector::Validity(result);
 		SelectionVector true_sel(1);
-		auto match_count = ComparisonSelector::Select<OP>(left, right, nullptr, 1, &true_sel, nullptr);
+		auto match_count = ComparisonSelector::Select<OP>(left, right, nullptr, 1, &true_sel, nullptr, result_validity);
+		// since we are dealing with nested types where the values are not NULL, the result is always valid (i.e true or
+		// false)
+		result_validity.SetAllValid(1);
 		auto result_data = ConstantVector::GetData<bool>(result);
 		result_data[0] = match_count > 0;
 		return;
@@ -180,19 +185,31 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	if (!leftv.validity.AllValid() || !rightv.validity.AllValid()) {
 		ComparesNotNull(leftv, rightv, result_validity, count);
 	}
+	ValidityMask original_mask;
+	original_mask.SetAllValid(count);
+	original_mask.Copy(result_validity, count);
+
 	SelectionVector true_sel(count);
 	SelectionVector false_sel(count);
-	idx_t match_count = ComparisonSelector::Select<OP>(left, right, nullptr, count, &true_sel, &false_sel);
+	idx_t match_count =
+	    ComparisonSelector::Select<OP>(left, right, nullptr, count, &true_sel, &false_sel, result_validity);
 
 	for (idx_t i = 0; i < match_count; ++i) {
 		const auto idx = true_sel.get_index(i);
 		result_data[idx] = true;
+		// if the row was valid during the null check, set it to valid here as well
+		if (original_mask.RowIsValid(idx)) {
+			result_validity.SetValid(idx);
+		}
 	}
 
 	const idx_t no_match_count = count - match_count;
 	for (idx_t i = 0; i < no_match_count; ++i) {
 		const auto idx = false_sel.get_index(i);
 		result_data[idx] = false;
+		if (original_mask.RowIsValid(idx)) {
+			result_validity.SetValid(idx);
+		}
 	}
 }
 
@@ -206,7 +223,8 @@ private:
 public:
 	template <class OP>
 	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
+		D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
+		         result.GetType() == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
 		switch (left.GetType().InternalType()) {
 		case PhysicalType::BOOL:
@@ -237,6 +255,9 @@ public:
 		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
 			break;
+		case PhysicalType::UINT128:
+			TemplatedExecute<uhugeint_t, OP>(left, right, result, count);
+			break;
 		case PhysicalType::FLOAT:
 			TemplatedExecute<float, OP>(left, right, result, count);
 			break;
@@ -251,6 +272,7 @@ public:
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
 			NestedComparisonExecutor<OP>(left, right, result, count);
 			break;
 		default:

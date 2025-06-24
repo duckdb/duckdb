@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 #include "duckdb/parser/constraint.hpp"
 
@@ -16,6 +17,9 @@ ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string 
       owner_name(std::move(owner_name_p)) {
 }
 
+ChangeOwnershipInfo::ChangeOwnershipInfo() : AlterInfo(AlterType::CHANGE_OWNERSHIP) {
+}
+
 CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 	return entry_catalog_type;
 }
@@ -23,6 +27,58 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog, schema, name, owner_schema,
 	                                                      owner_name, if_not_found);
+}
+
+string ChangeOwnershipInfo::ToString() const {
+	string result = "";
+
+	result += "ALTER ";
+	result += TypeToString(entry_catalog_type);
+	result += " ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " OWNED BY ";
+	result += QualifierToString(catalog, owner_schema, owner_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetCommentInfo
+//===--------------------------------------------------------------------===//
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
+                               string entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
+                if_not_found),
+      entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
+}
+
+CatalogType SetCommentInfo::GetCatalogType() const {
+	return entry_catalog_type;
+}
+
+unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog, schema, name, comment_value,
+	                                                 if_not_found);
+}
+
+string SetCommentInfo::ToString() const {
+	string result = "";
+
+	result += "COMMENT ON ";
+	result += ParseInfo::TypeToString(entry_catalog_type);
+	result += " ";
+	result += QualifierToString(catalog, schema, name);
+	result += " IS ";
+	result += comment_value.ToSQLString();
+
+	result += ";";
+	return result;
+}
+
+SetCommentInfo::SetCommentInfo() : AlterInfo(AlterType::SET_COMMENT) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -60,6 +116,59 @@ unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
 }
 
+string RenameColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(old_name);
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// RenameFieldInfo
+//===--------------------------------------------------------------------===//
+RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<string> column_path_p, string new_name_p)
+    : AlterTableInfo(AlterTableType::RENAME_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      new_name(std::move(new_name_p)) {
+}
+
+RenameFieldInfo::RenameFieldInfo() : AlterTableInfo(AlterTableType::RENAME_FIELD) {
+}
+
+RenameFieldInfo::~RenameFieldInfo() {
+}
+
+unique_ptr<AlterInfo> RenameFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name);
+}
+
+string RenameFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME COLUMN ";
+	for (idx_t i = 0; i < column_path.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+	}
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
@@ -75,6 +184,19 @@ RenameTableInfo::~RenameTableInfo() {
 
 unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
+}
+
+string RenameTableInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_table_name);
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -96,6 +218,63 @@ unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists);
 }
 
+string AddColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD COLUMN";
+	if (if_column_not_exists) {
+		result += " IF NOT EXISTS";
+	}
+	throw NotImplementedException("FIXME: column definition to string");
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// AddFieldInfo
+//===--------------------------------------------------------------------===//
+AddFieldInfo::AddFieldInfo(ColumnDefinition new_field_p)
+    : AlterTableInfo(AlterTableType::ADD_FIELD), new_field(std::move(new_field_p)) {
+}
+
+AddFieldInfo::AddFieldInfo(AlterEntryData data, vector<string> column_path_p, ColumnDefinition new_field_p,
+                           bool if_field_not_exists)
+    : AlterTableInfo(AlterTableType::ADD_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      new_field(std::move(new_field_p)), if_field_not_exists(if_field_not_exists) {
+}
+
+AddFieldInfo::~AddFieldInfo() {
+}
+
+unique_ptr<AlterInfo> AddFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, AddFieldInfo>(GetAlterEntryData(), column_path, new_field.Copy(),
+	                                               if_field_not_exists);
+}
+
+string AddFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD COLUMN";
+	if (if_field_not_exists) {
+		result += " IF NOT EXISTS";
+	}
+	for (auto &path : column_path) {
+		result += KeywordHelper::WriteOptionallyQuoted(path);
+		result += ".";
+	}
+	throw NotImplementedException("FIXME: column definition to string");
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
@@ -111,6 +290,66 @@ RemoveColumnInfo::~RemoveColumnInfo() {
 
 unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column, if_column_exists, cascade);
+}
+
+string RemoveColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP COLUMN ";
+	if (if_column_exists) {
+		result += "IF EXISTS ";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(removed_column);
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// RemoveFieldInfo
+//===--------------------------------------------------------------------===//
+RemoveFieldInfo::RemoveFieldInfo() : AlterTableInfo(AlterTableType::REMOVE_FIELD) {
+}
+
+RemoveFieldInfo::RemoveFieldInfo(AlterEntryData data, vector<string> column_path_p, bool if_column_exists, bool cascade)
+    : AlterTableInfo(AlterTableType::REMOVE_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      if_column_exists(if_column_exists), cascade(cascade) {
+}
+RemoveFieldInfo::~RemoveFieldInfo() {
+}
+
+unique_ptr<AlterInfo> RemoveFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RemoveFieldInfo>(GetAlterEntryData(), column_path, if_column_exists, cascade);
+}
+
+string RemoveFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP COLUMN ";
+	if (if_column_exists) {
+		result += "IF EXISTS ";
+	}
+	for (idx_t i = 0; i < column_path.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+	}
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -132,6 +371,34 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 	                                                       expression->Copy());
 }
 
+string ChangeColumnTypeInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " TYPE ";
+	if (target_type.IsValid()) {
+		result += target_type.ToString();
+	}
+	auto extra_type_info = target_type.AuxInfo();
+	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+		if (!string_info.collation.empty()) {
+			result += " COLLATE " + string_info.collation;
+		}
+	}
+	if (expression) {
+		result += " USING ";
+		result += expression->ToString();
+	}
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
@@ -150,6 +417,25 @@ unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
 	                                                 expression ? expression->Copy() : nullptr);
 }
 
+string SetDefaultInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	if (expression) {
+		result += " SET DEFAULT ";
+		result += expression->ToString();
+	} else {
+		result += " DROP DEFAULT";
+	}
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
@@ -166,6 +452,20 @@ unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
 	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
+string SetNotNullInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " SET NOT NULL";
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
@@ -180,6 +480,20 @@ DropNotNullInfo::~DropNotNullInfo() {
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
 	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+}
+
+string DropNotNullInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " DROP NOT NULL";
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -201,6 +515,10 @@ AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
 	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table, pk_columns, fk_columns,
 	                                                      pk_keys, fk_keys, type);
+}
+
+string AlterForeignKeyInfo::ToString() const {
+	throw NotImplementedException("NOT PARSABLE CURRENTLY");
 }
 
 //===--------------------------------------------------------------------===//
@@ -234,6 +552,123 @@ RenameViewInfo::~RenameViewInfo() {
 
 unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
+}
+
+string RenameViewInfo::ToString() const {
+	string result = "";
+	result += "ALTER VIEW ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// AddConstraintInfo
+//===--------------------------------------------------------------------===//
+AddConstraintInfo::AddConstraintInfo() : AlterTableInfo(AlterTableType::ADD_CONSTRAINT) {
+}
+
+AddConstraintInfo::AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint_p)
+    : AlterTableInfo(AlterTableType::ADD_CONSTRAINT, std::move(data)), constraint(std::move(constraint_p)) {
+}
+
+AddConstraintInfo::~AddConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, AddConstraintInfo>(GetAlterEntryData(), constraint->Copy());
+}
+
+string AddConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD ";
+	result += constraint->ToString();
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetPartitionedByInfo
+//===--------------------------------------------------------------------===//
+SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {
+}
+
+SetPartitionedByInfo::SetPartitionedByInfo(AlterEntryData data, vector<unique_ptr<ParsedExpression>> partition_keys_p)
+    : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY, std::move(data)), partition_keys(std::move(partition_keys_p)) {
+}
+
+SetPartitionedByInfo::~SetPartitionedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
+	vector<unique_ptr<ParsedExpression>> copied_partition_keys;
+	for (auto &partition_key : partition_keys) {
+		copied_partition_keys.push_back(partition_key->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetPartitionedByInfo>(GetAlterEntryData(), std::move(copied_partition_keys));
+}
+
+string SetPartitionedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (partition_keys.empty()) {
+		result += " RESET PARTITIONED BY";
+	} else {
+		result += " SET PARTITIONED BY (";
+		for (idx_t i = 0; i < partition_keys.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += partition_keys[i]->ToString();
+		}
+		result += ")";
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetSortedByInfo
+//===--------------------------------------------------------------------===//
+SetSortedByInfo::SetSortedByInfo() : AlterTableInfo(AlterTableType::SET_SORTED_BY) {
+}
+
+SetSortedByInfo::SetSortedByInfo(AlterEntryData data, vector<OrderByNode> orders_p)
+    : AlterTableInfo(AlterTableType::SET_SORTED_BY, std::move(data)), orders(std::move(orders_p)) {
+}
+
+SetSortedByInfo::~SetSortedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
+	vector<OrderByNode> copied_orders;
+	for (auto &order_key : orders) {
+		copied_orders.emplace_back(order_key.type, order_key.null_order, order_key.expression->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetSortedByInfo>(GetAlterEntryData(), std::move(copied_orders));
+}
+
+string SetSortedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (orders.empty()) {
+		result += " RESET SORTED BY";
+	} else {
+		result += " SET SORTED BY (";
+		for (idx_t i = 0; i < orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += orders[i].ToString();
+		}
+		result += ")";
+	}
+	return result;
 }
 
 } // namespace duckdb

@@ -1,0 +1,33 @@
+# name: benchmark/micro/window/window_fill.benchmark
+# description: Measure the perfomance of FILL
+# group: [window]
+
+name FillPerformance
+group micro
+subgroup window
+
+argument sf 10
+argument errors 0.1
+argument keys 4
+
+load
+select setseed(0.8675309);
+create or replace table data as (
+	select
+		k::TINYINT as k,
+		(case when random() > ${errors} then m - 1704067200000 else null end) as v,
+		m,
+	from range(1704067200000, 1704067200000 + ${sf} * 1_000_000 * 10, 10) times(m)
+	cross join range(${keys}) keys(k)
+);
+
+run
+SELECT
+	m,
+	k,
+	fill(v) OVER (PARTITION BY k ORDER BY m) as v
+FROM
+	data
+qualify v <> m - 1704067200000;
+
+result III

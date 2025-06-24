@@ -440,7 +440,7 @@ PluralRules::getKeywordOther() const {
     return UnicodeString(TRUE, PLURAL_KEYWORD_OTHER, 5);
 }
 
-UBool
+bool
 PluralRules::operator==(const PluralRules& other) const  {
     const UnicodeString *ptrKeyword;
     UErrorCode status= U_ZERO_ERROR;

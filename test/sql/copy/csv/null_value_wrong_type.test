@@ -1,0 +1,15 @@
+# name: test/sql/copy/csv/null_value_wrong_type.test
+# description: Issue of not properly detecting a type in combination of null values
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIII
+describe from 'data/csv/null_mismatch.csv'
+----
+id	BIGINT	YES	NULL	NULL	NULL
+name	VARCHAR	YES	NULL	NULL	NULL
+url	VARCHAR	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+PartOfPlaceId	BIGINT	YES	NULL	NULL	NULL

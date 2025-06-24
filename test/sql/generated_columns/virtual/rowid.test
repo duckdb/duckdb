@@ -17,6 +17,7 @@ INSERT INTO unit VALUES (4,5)
 # Rowid as a system column is not supported
 statement error
 ALTER TABLE unit ADD COLUMN total_profit BIGINT GENERATED ALWAYS AS (price * rowid) VIRTUAL;
+----
 
 statement ok
 ALTER TABLE unit ADD COLUMN rowid INTEGER;
@@ -27,6 +28,7 @@ CREATE TABLE tbl (
 	price INTEGER,
 	rowid BIGINT GENERATED ALWAYS AS (rowid) VIRTUAL
 );
+----
 
 # Reference a standard column named 'rowid'
 statement ok

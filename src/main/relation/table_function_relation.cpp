@@ -17,12 +17,27 @@ void TableFunctionRelation::AddNamedParameter(const string &name, Value argument
 	named_parameters[name] = std::move(argument);
 }
 
+void TableFunctionRelation::RemoveNamedParameterIfExists(const string &name) {
+	if (named_parameters.find(name) != named_parameters.end()) {
+		named_parameters.erase(name);
+	}
+}
+
 void TableFunctionRelation::SetNamedParameters(named_parameter_map_t &&options) {
 	D_ASSERT(named_parameters.empty());
 	named_parameters = std::move(options);
 }
 
 TableFunctionRelation::TableFunctionRelation(const shared_ptr<ClientContext> &context, string name_p,
+                                             vector<Value> parameters_p, named_parameter_map_t named_parameters,
+                                             shared_ptr<Relation> input_relation_p, bool auto_init)
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
+      parameters(std::move(parameters_p)), named_parameters(std::move(named_parameters)),
+      input_relation(std::move(input_relation_p)), auto_initialize(auto_init) {
+	InitializeColumns();
+}
+
+TableFunctionRelation::TableFunctionRelation(const shared_ptr<RelationContextWrapper> &context, string name_p,
                                              vector<Value> parameters_p, named_parameter_map_t named_parameters,
                                              shared_ptr<Relation> input_relation_p, bool auto_init)
     : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
@@ -43,7 +58,7 @@ void TableFunctionRelation::InitializeColumns() {
 	if (!auto_initialize) {
 		return;
 	}
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {

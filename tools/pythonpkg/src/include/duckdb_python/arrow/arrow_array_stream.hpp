@@ -36,6 +36,7 @@ public:
 		return !py::none().is(object);
 	}
 };
+
 class Table : public py::object {
 public:
 	Table(const py::object &o) : py::object(o, borrowed_t {}) {
@@ -50,7 +51,16 @@ public:
 
 } // namespace pyarrow
 
-enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, Dataset };
+enum class PyArrowObjectType {
+	Invalid,
+	Table,
+	RecordBatchReader,
+	Scanner,
+	Dataset,
+	PyCapsule,
+	PyCapsuleInterface,
+	MessageReader
+};
 
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches);
 
@@ -58,8 +68,9 @@ PyArrowObjectType GetArrowType(const py::handle &obj);
 
 class PythonTableArrowArrayStreamFactory {
 public:
-	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, const ClientProperties &client_properties_p)
-	    : arrow_object(arrow_table), client_properties(client_properties_p) {};
+	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, const ClientProperties &client_properties_p,
+	                                            DBConfig &config)
+	    : arrow_object(arrow_table), client_properties(client_properties_p), config(config) {};
 
 	//! Produces an Arrow Scanner, should be only called once when initializing Scan States
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory, ArrowStreamParameters &parameters);
@@ -72,6 +83,7 @@ public:
 	PyObject *arrow_object;
 
 	const ClientProperties client_properties;
+	DBConfig &config;
 
 private:
 	//! We transform a TableFilterSet to an Arrow Expression Object
@@ -79,7 +91,7 @@ private:
 	                                  unordered_map<idx_t, idx_t> filter_to_col,
 	                                  const ClientProperties &client_properties, const ArrowTableType &arrow_table);
 
-	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
+	static py::object ProduceScanner(DBConfig &config, py::object &arrow_scanner, py::handle &arrow_obj_handle,
 	                                 ArrowStreamParameters &parameters, const ClientProperties &client_properties);
 };
 } // namespace duckdb

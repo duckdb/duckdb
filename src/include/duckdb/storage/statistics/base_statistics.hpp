@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -33,13 +33,14 @@ enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_AND_VALID_VALUES = 4
 };
 
-enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS };
+enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS, ARRAY_STATS };
 
 class BaseStatistics {
 	friend struct NumericStats;
 	friend struct StringStats;
 	friend struct StructStats;
 	friend struct ListStats;
+	friend struct ArrayStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();
@@ -76,12 +77,20 @@ public:
 	void Set(StatsInfo info);
 	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
 	void CopyValidity(BaseStatistics &stats);
-	inline void SetHasNull() {
+	//! Set that the CURRENT level can have null values
+	//! Note that this is not correct for nested types unless this information is propagated in a different manner
+	//! Use Set(StatsInfo::CAN_HAVE_NULL_VALUES) in the general case
+	inline void SetHasNullFast() {
 		has_null = true;
 	}
-	inline void SetHasNoNull() {
+	//! Set that the CURRENT level can have valiod values
+	//! Note that this is not correct for nested types unless this information is propagated in a different manner
+	//! Use Set(StatsInfo::CAN_HAVE_VALID_VALUES) in the general case
+	inline void SetHasNoNullFast() {
 		has_no_null = true;
 	}
+	void SetHasNull();
+	void SetHasNoNull();
 
 	void Merge(const BaseStatistics &other);
 
@@ -103,6 +112,12 @@ public:
 	idx_t GetDistinctCount();
 	static BaseStatistics FromConstant(const Value &input);
 
+	template <class T>
+	void UpdateNumericStats(T new_value) {
+		D_ASSERT(GetStatsType() == StatisticsType::NUMERIC_STATS);
+		NumericStats::Update(stats_union.numeric_data, new_value);
+	}
+
 private:
 	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);
@@ -123,7 +138,7 @@ private:
 	bool has_null;
 	//! Whether or not the segment can contain values that are not null
 	bool has_no_null;
-	// estimate that one may have even if distinct_stats==nullptr
+	//! estimate that one may have even if distinct_stats==nullptr
 	idx_t distinct_count;
 	//! Numeric and String stats
 	union {
@@ -135,5 +150,12 @@ private:
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;
 };
+
+template <>
+inline void BaseStatistics::UpdateNumericStats<interval_t>(interval_t new_value) {
+}
+template <>
+inline void BaseStatistics::UpdateNumericStats<list_entry_t>(list_entry_t new_value) {
+}
 
 } // namespace duckdb

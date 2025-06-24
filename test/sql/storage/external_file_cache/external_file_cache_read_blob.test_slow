@@ -1,0 +1,25 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_read_blob.test_slow
+# description: Test the external file cache for read_blob HTTPFS reads
+# group: [external_file_cache]
+
+require parquet
+
+require httpfs
+
+# first read_blob should do 1 GET
+query II
+explain analyze from read_blob('s3://duckdb-blobs/data/shakespeare.parquet');
+----
+analyzed_plan	<REGEX>:.*GET: 1.*
+
+# second one should do 0
+query II
+explain analyze from read_blob('s3://duckdb-blobs/data/shakespeare.parquet');
+----
+analyzed_plan	<REGEX>:.*GET: 0.*
+
+# although the read was cached using read_blob, the parquet reader can read from cache
+query II
+explain analyze from 's3://duckdb-blobs/data/shakespeare.parquet';
+----
+analyzed_plan	<REGEX>:.*GET: 0.*

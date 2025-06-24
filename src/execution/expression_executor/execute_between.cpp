@@ -1,3 +1,4 @@
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -6,6 +7,7 @@
 
 namespace duckdb {
 
+#ifndef DUCKDB_SMALLER_BINARY
 struct BothInclusiveBetweenOperator {
 	template <class T>
 	static inline bool Operation(T input, T lower, T upper) {
@@ -66,6 +68,9 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 	case PhysicalType::UINT64:
 		return TernaryExecutor::Select<uint64_t, uint64_t, uint64_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                 false_sel);
+	case PhysicalType::UINT128:
+		return TernaryExecutor::Select<uhugeint_t, uhugeint_t, uhugeint_t, OP>(input, lower, upper, sel, count,
+		                                                                       true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:
@@ -81,13 +86,15 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 		throw InvalidTypeException(input.GetType(), "Invalid type for BETWEEN");
 	}
 }
+#endif
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetweenExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
-	result->AddChild(expr.input.get());
-	result->AddChild(expr.lower.get());
-	result->AddChild(expr.upper.get());
+	result->AddChild(*expr.input);
+	result->AddChild(*expr.lower);
+	result->AddChild(*expr.upper);
+
 	result->Finalize();
 	return result;
 }
@@ -126,6 +133,9 @@ void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionS
 
 idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+#ifdef DUCKDB_SMALLER_BINARY
+	throw InternalException("ExpressionExecutor::Select not available with DUCKDB_SMALLER_BINARY");
+#else
 	// resolve the children
 	Vector input(state->intermediate_chunk.data[0]);
 	Vector lower(state->intermediate_chunk.data[1]);
@@ -147,6 +157,7 @@ idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionS
 	} else {
 		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}
+#endif
 }
 
 } // namespace duckdb

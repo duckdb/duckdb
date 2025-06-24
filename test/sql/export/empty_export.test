@@ -3,4 +3,7 @@
 # group: [export]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 EXPORT DATABASE '__TEST_DIR__/empty_export' (FORMAT CSV)

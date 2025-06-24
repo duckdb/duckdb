@@ -4,13 +4,14 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include <numeric>
 
 namespace duckdb {
 
 Value ConvertVectorToValue(vector<Value> set) {
 	if (set.empty()) {
-		return Value::EMPTYLIST(LogicalType::BOOLEAN);
+		return Value::LIST(LogicalType::BOOLEAN, std::move(set));
 	}
 	return Value::LIST(std::move(set));
 }
@@ -54,6 +55,9 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 			return result;
 		}
 		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
+	}
+	if (value.IsNull()) {
+		throw BinderException("\"%s\" expects a column list or * as parameter, it can't be a NULL value", loption);
 	}
 	auto &children = ListValue::GetChildren(value);
 	// accept '*' as single argument

@@ -1,0 +1,18 @@
+# name: test/sql/copy/parquet/corrupt_stats.test
+# description: Issue #14430: group by a timestamp column in a parquet file can cause the process to crash
+# group: [parquet]
+
+require parquet
+
+statement error
+SELECT a FROM 'data/parquet-testing/corrupt_stats.parquet' GROUP BY a;
+----
+This likely means that the statistics in your data source are corrupt
+
+statement ok
+PRAGMA disable_optimizer
+
+query I
+SELECT a FROM 'data/parquet-testing/corrupt_stats.parquet' GROUP BY a;
+----
+2021-01-01 12:00:00

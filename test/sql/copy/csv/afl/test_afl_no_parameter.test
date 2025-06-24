@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/afl/test_afl_no_parameter.test
+# description: Test AFL CSV Files work with null padding set
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+loop i 1 25
+
+statement maybe
+FROM 'data/csv/afl/no_parameter/${i}.csv'
+----
+
+endloop

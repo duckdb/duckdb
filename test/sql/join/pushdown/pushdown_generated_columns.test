@@ -1,0 +1,27 @@
+# name: test/sql/join/pushdown/pushdown_generated_columns.test
+# description: Join pushdown on generated columns
+# group: [pushdown]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit2(
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL,
+	also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL
+);
+
+statement ok
+INSERT INTO unit2 SELECT i, 20 FROM range(1000) t(i);
+
+query IIII
+SELECT * FROM unit2 JOIN (VALUES (2000)) t(total_profit) USING (total_profit);
+----
+100	20	2000	2000
+
+query IIIII
+SELECT * FROM unit2 JOIN (VALUES (2000)) t(total_profit) ON (t.total_profit = unit2.total_profit AND t.total_profit=unit2.also_total_profit);
+----
+100	20	2000	2000	2000

@@ -22,6 +22,7 @@ CREATE TABLE main_t1 (i INT);
 #
 statement error
 ALTER TABLE main_t1 ADD COLUMN j test_int;
+----
 
 #
 # main.<type> in test_schema.<table>

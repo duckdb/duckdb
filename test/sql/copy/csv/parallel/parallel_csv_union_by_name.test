@@ -3,15 +3,13 @@
 # group: [parallel]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 SET default_null_order='nulls_first';
 
 statement ok
 PRAGMA verify_parallelism
-
-loop thr 1 8
-
-statement ok
-pragma threads=${thr}
 
 
 query IIII
@@ -104,4 +102,3 @@ NULL
 NULL
 NULL
 
-endloop

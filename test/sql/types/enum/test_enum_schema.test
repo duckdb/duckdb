@@ -1,0 +1,123 @@
+# name: test/sql/types/enum/test_enum_schema.test
+# description: ENUM within schema
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TYPE s1.mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+select 'happy'::s1.mood;
+----
+happy
+
+statement ok
+DROP TYPE s1.mood
+
+statement error
+select 'happy'::s1.mood;
+----
+does not exist
+
+# This works in postgres
+statement ok
+CREATE SCHEMA foo;
+
+statement ok
+CREATE TYPE foo.bar AS ENUM ('a', 'b');
+
+statement ok
+CREATE TABLE foo.baz (
+	bar_col foo.bar NOT NULL
+);
+
+statement ok
+drop schema foo cascade;
+
+# this works in postgres
+statement ok
+CREATE SCHEMA "foo";
+
+statement ok
+CREATE TYPE "foo.bar" AS ENUM ('a', 'b');
+
+statement ok
+CREATE TABLE foo.baz (
+	bar_col "foo.bar" NOT NULL
+);
+
+statement ok
+drop type "foo.bar" cascade;
+
+statement ok
+drop schema "foo" cascade;
+
+statement ok
+CREATE SCHEMA "foo";
+
+statement ok
+CREATE TYPE foo.bar AS ENUM ('a', 'b');
+
+statement ok
+CREATE TABLE foo.baz (
+	bar_col foo.bar NOT NULL
+);
+
+statement ok
+drop schema "foo" cascade;
+
+# All of these do not work in postgres
+statement ok
+CREATE SCHEMA "foo";
+
+statement ok
+CREATE TYPE foo.bar AS ENUM ('a', 'b');
+
+statement error
+CREATE TABLE foo.baz (
+	bar_col "foo.bar" NOT NULL
+);
+----
+Type with name foo.bar does not exist!
+
+statement ok
+drop type foo.bar;
+
+statement ok
+drop schema "foo"
+
+statement ok
+CREATE SCHEMA "foo";
+
+statement ok
+CREATE TYPE "foo.bar" AS ENUM ('a', 'b');
+
+statement error
+CREATE TABLE foo.baz (
+	bar_col foo.bar NOT NULL
+);
+----
+Type with name bar does not exist!
+
+statement ok
+drop type "foo.bar";
+
+statement ok
+drop schema "foo"
+
+# This works in postgres
+statement ok
+CREATE SCHEMA "foo";
+
+statement ok
+CREATE TYPE "foo".bar AS ENUM ('a', 'b');
+
+statement ok
+CREATE TABLE foo.baz (
+	bar_col "foo".bar NOT NULL
+);

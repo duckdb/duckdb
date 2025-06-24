@@ -1,5 +1,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -21,15 +22,15 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	total_groups = (uint64_t)1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
-	layout.Initialize(std::move(aggregate_objects_p));
-	tuple_size = layout.GetRowWidth();
+	layout_ptr->Initialize(std::move(aggregate_objects_p));
+	tuple_size = layout_ptr->GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
+	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
+	group_is_set = make_unsafe_uniq_array_uninitialized<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
@@ -39,11 +40,12 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 		address_data[init_count] = uintptr_t(data) + (tuple_size * i);
 		init_count++;
 		if (init_count == STANDARD_VECTOR_SIZE) {
-			RowOperations::InitializeStates(layout, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
+			RowOperations::InitializeStates(*layout_ptr, addresses, *FlatVector::IncrementalSelectionVector(),
+			                                init_count);
 			init_count = 0;
 		}
 	}
-	RowOperations::InitializeStates(layout, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
+	RowOperations::InitializeStates(*layout_ptr, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
 }
 
 PerfectAggregateHashTable::~PerfectAggregateHashTable() {
@@ -64,7 +66,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 			// we only need to handle non-null values here
 			if (group_data.validity.RowIsValid(index)) {
 				D_ASSERT(data[index] >= min_val);
-				uintptr_t adjusted_value = (data[index] - min_val) + 1;
+				auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 				address_data[i] += adjusted_value << current_shift;
 			}
 		}
@@ -72,7 +74,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 		// no null values: we can directly compute the addresses
 		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
-			uintptr_t adjusted_value = (data[index] - min_val) + 1;
+			auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 			address_data[i] += adjusted_value << current_shift;
 		}
 	}
@@ -129,14 +131,19 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
 	for (idx_t i = 0; i < groups.size(); i++) {
 		const auto group = address_data[i];
-		D_ASSERT(group < total_groups);
+		if (group >= total_groups) {
+			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
+			                            "likely means that the statistics in your data source are corrupt.\n* PRAGMA "
+			                            "disable_optimizer to disable optimizations that rely on correct statistics",
+			                            group, total_groups);
+		}
 		group_is_set[group] = true;
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
-	auto &aggregates = layout.GetAggregates();
+	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperationsState row_state(*aggregate_allocator);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
@@ -149,7 +156,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
 	}
 }
 
@@ -176,14 +183,14 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 			target_addresses_ptr[combine_count] = target_ptr;
 			combine_count++;
 			if (combine_count == STANDARD_VECTOR_SIZE) {
-				RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
+				RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses, combine_count);
 				combine_count = 0;
 			}
 		}
 		source_ptr += tuple_size;
 		target_ptr += tuple_size;
 	}
-	RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
+	RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses, combine_count);
 
 	// FIXME: after moving the arena allocator, we currently have to ensure that the pointer is not nullptr, because the
 	// FIXME: Destroy()-function of the hash table expects an allocator in some cases (e.g., for sorted aggregates)
@@ -199,13 +206,14 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
-		auto group_index = (group_values[i] >> shift) & mask;
+		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
 			validity_mask.SetInvalid(i);
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = min_data + group_index - 1;
+			data[i] = UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
+			                               UnsafeNumericCast<int64_t>(group_index) - 1);
 		}
 	}
 }
@@ -254,7 +262,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		if (group_is_set[scan_position]) {
 			// this group is set: add it to the set of groups to extract
 			data_pointers[entry_count] = data + tuple_size * scan_position;
-			group_values[entry_count] = scan_position;
+			group_values[entry_count] = NumericCast<uint32_t>(scan_position);
 			entry_count++;
 			if (entry_count == STANDARD_VECTOR_SIZE) {
 				scan_position++;
@@ -275,13 +283,13 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	// then construct the payloads
 	result.SetCardinality(entry_count);
 	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::FinalizeStates(row_state, layout, addresses, result, grouping_columns);
+	RowOperations::FinalizeStates(row_state, *layout_ptr, addresses, result, grouping_columns);
 }
 
 void PerfectAggregateHashTable::Destroy() {
 	// check if there is any destructor to call
 	bool has_destructor = false;
-	for (auto &aggr : layout.GetAggregates()) {
+	for (auto &aggr : layout_ptr->GetAggregates()) {
 		if (aggr.function.destructor) {
 			has_destructor = true;
 		}
@@ -300,12 +308,12 @@ void PerfectAggregateHashTable::Destroy() {
 	for (idx_t i = 0; i < total_groups; i++) {
 		data_pointers[count++] = payload_ptr;
 		if (count == STANDARD_VECTOR_SIZE) {
-			RowOperations::DestroyStates(row_state, layout, addresses, count);
+			RowOperations::DestroyStates(row_state, *layout_ptr, addresses, count);
 			count = 0;
 		}
 		payload_ptr += tuple_size;
 	}
-	RowOperations::DestroyStates(row_state, layout, addresses, count);
+	RowOperations::DestroyStates(row_state, *layout_ptr, addresses, count);
 }
 
 } // namespace duckdb

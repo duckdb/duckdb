@@ -14,6 +14,14 @@ CREATE TABLE t0(c0 DOUBLE, c1 DOUBLE);;
 statement ok
 INSERT INTO t0 VALUES(0.0,-1570504255.0);
 
+statement error
+CREATE VIEW v0(c0, c1) AS SELECT 888938716, '' FROM t0 GROUP BY t0.rowid, t0.rowid, t0.c1 ORDER BY 0.9507538105182436 OFFSET 686929302;
+----
+ORDER BY non-integer literal has no effect
+
+statement ok
+SET order_by_non_integer_literal=true
+
 statement ok
 CREATE VIEW v0(c0, c1) AS SELECT 888938716, '' FROM t0 GROUP BY t0.rowid, t0.rowid, t0.c1 ORDER BY 0.9507538105182436 OFFSET 686929302;
 

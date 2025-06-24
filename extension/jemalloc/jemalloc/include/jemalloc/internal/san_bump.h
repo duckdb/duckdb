@@ -1,11 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_SAN_BUMP_H
 #define JEMALLOC_INTERNAL_SAN_BUMP_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/edata.h"
 #include "jemalloc/internal/exp_grow.h"
 #include "jemalloc/internal/mutex.h"
-
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/witness.h"
 
 #define SBA_RETAINED_ALLOC_SIZE ((size_t)4 << 20)
 
@@ -22,7 +22,7 @@ struct san_bump_alloc_s {
 };
 
 static inline bool
-san_bump_enabled() {
+san_bump_enabled(void) {
 	/*
 	 * We enable san_bump allocator only when it's possible to break up a
 	 * mapping and unmap a part of it (maps_coalesce). This is needed to
@@ -50,7 +50,5 @@ san_bump_alloc_init(san_bump_alloc_t* sba) {
 edata_t *
 san_bump_alloc(tsdn_t *tsdn, san_bump_alloc_t* sba, pac_t *pac, ehooks_t *ehooks,
     size_t size, bool zero);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SAN_BUMP_H */

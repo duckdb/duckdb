@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/operator/join/physical_join.hpp"
 
 namespace duckdb {
@@ -21,8 +20,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BLOCKWISE_NL_JOIN;
 
 public:
-	PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                        unique_ptr<Expression> condition, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalBlockwiseNLJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	                        PhysicalOperator &right, unique_ptr<Expression> condition, JoinType join_type,
+	                        idx_t estimated_cardinality);
 
 	unique_ptr<Expression> condition;
 
@@ -47,7 +47,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return PropagatesBuildSide(join_type);
 	}
 	bool ParallelSource() const override {
 		return true;
@@ -69,7 +69,7 @@ public:
 	}
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

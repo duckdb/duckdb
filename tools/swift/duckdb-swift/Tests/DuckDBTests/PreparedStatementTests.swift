@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -116,6 +116,15 @@ final class PreparedStatementTests: XCTestCase {
       expected: [IntHuge.min, .max, nil],
       bind: { statement, item in try statement.bind(item, at: 1) },
       cast: { $0.cast(to: IntHuge.self) }
+    )
+  }
+  
+  func test_uhugeint_round_trip() throws {
+    try roundTripTest(
+      dataType: "UHUGEINT",
+      expected: [UIntHuge.min, .max, nil],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: UIntHuge.self) }
     )
   }
   

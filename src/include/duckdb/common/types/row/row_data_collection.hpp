@@ -17,12 +17,15 @@ namespace duckdb {
 
 struct RowDataBlock {
 public:
-	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
+	RowDataBlock(MemoryTag tag, BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
-		idx_t size = MaxValue<idx_t>(Storage::BLOCK_SIZE, capacity * entry_size);
-		buffer_manager.Allocate(size, false, &block);
-		D_ASSERT(BufferManager::GetAllocSize(size) == block->GetMemoryUsage());
+		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
+		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
+		block = buffer_handle.GetBlockHandle();
+		D_ASSERT(BufferManager::GetAllocSize(size + block->block_manager.GetBlockHeaderSize()) ==
+		         block->GetMemoryUsage());
 	}
+
 	explicit RowDataBlock(idx_t entry_size) : entry_size(entry_size) {
 	}
 	//! The buffer block handle
@@ -109,13 +112,15 @@ public:
 	void VerifyBlockSizes() const {
 #ifdef DEBUG
 		for (auto &block : blocks) {
-			D_ASSERT(block->block->GetMemoryUsage() == BufferManager::GetAllocSize(block->capacity * entry_size));
+			D_ASSERT(block->block->GetMemoryUsage() ==
+			         BufferManager::GetAllocSize(block->capacity * entry_size +
+			                                     buffer_manager.GetTemporaryBlockHeaderSize()));
 		}
 #endif
 	}
 
-	static inline idx_t EntriesPerBlock(idx_t width) {
-		return Storage::BLOCK_SIZE / width;
+	static inline idx_t EntriesPerBlock(const idx_t width, const idx_t block_size) {
+		return block_size / width;
 	}
 
 private:

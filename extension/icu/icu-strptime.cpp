@@ -1,5 +1,6 @@
 #include "include/icu-strptime.hpp"
 #include "include/icu-datefunc.hpp"
+#include "include/icu-helpers.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -11,14 +12,34 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
 
+TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, icu::Calendar *calendar) {
+	// Get the parts in the given time zone
+	uint64_t micros = ICUDateFunc::SetTime(calendar, timestamp_t(ts.value));
+
+	TimestampComponents ts_data;
+	ts_data.year = ICUDateFunc::ExtractField(calendar, UCAL_EXTENDED_YEAR);
+	ts_data.month = ICUDateFunc::ExtractField(calendar, UCAL_MONTH) + 1;
+	ts_data.day = ICUDateFunc::ExtractField(calendar, UCAL_DATE);
+
+	ts_data.hour = ICUDateFunc::ExtractField(calendar, UCAL_HOUR_OF_DAY);
+	ts_data.minute = ICUDateFunc::ExtractField(calendar, UCAL_MINUTE);
+	ts_data.second = ICUDateFunc::ExtractField(calendar, UCAL_SECOND);
+	ts_data.microsecond = UnsafeNumericCast<int32_t>(
+	    ICUDateFunc::ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros);
+	return ts_data;
+}
+
+timestamp_t ICUHelpers::ToTimestamp(TimestampComponents data) {
+	date_t date_val = Date::FromDate(data.year, data.month, data.day);
+	dtime_t time_val = Time::FromTime(data.hour, data.minute, data.second, data.microsecond);
+	return Timestamp::FromDatetime(date_val, time_val);
+}
 struct ICUStrptime : public ICUDateFunc {
 	using ParseResult = StrpTimeFormat::ParseResult;
 
@@ -60,28 +81,21 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static uint64_t ToMicros(icu::Calendar *calendar, const ParseResult &parsed, const StrpTimeFormat &format) {
-		// Set TZ first, if any.
-		// Note that empty TZ names are not allowed,
-		// but unknown names will map to GMT.
-		if (!parsed.tz.empty()) {
-			SetTimeZone(calendar, parsed.tz);
-		}
-
-		// Now get the parts in the given time zone
-		uint64_t micros = 0;
+		// Get the parts in the current time zone
+		uint64_t micros = parsed.GetMicros();
 		calendar->set(UCAL_EXTENDED_YEAR, parsed.data[0]); // strptime doesn't understand eras
 		calendar->set(UCAL_MONTH, parsed.data[1] - 1);
 		calendar->set(UCAL_DATE, parsed.data[2]);
 		calendar->set(UCAL_HOUR_OF_DAY, parsed.data[3]);
 		calendar->set(UCAL_MINUTE, parsed.data[4]);
 		calendar->set(UCAL_SECOND, parsed.data[5]);
-		calendar->set(UCAL_MILLISECOND, parsed.data[6] / Interval::MICROS_PER_MSEC);
-		micros = parsed.data[6] % Interval::MICROS_PER_MSEC;
+		calendar->set(UCAL_MILLISECOND, UnsafeNumericCast<int32_t>(micros / Interval::MICROS_PER_MSEC));
+		micros %= Interval::MICROS_PER_MSEC;
 
 		// This overrides the TZ setting, so only use it if an offset was parsed.
 		// Note that we don't bother/worry about the DST setting because the two just combine.
 		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
-			calendar->set(UCAL_ZONE_OFFSET, parsed.data[7] * Interval::MSECS_PER_SEC * Interval::SECS_PER_MINUTE);
+			calendar->set(UCAL_ZONE_OFFSET, UnsafeNumericCast<int32_t>(parsed.data[7] * Interval::MSECS_PER_SEC));
 		}
 
 		return micros;
@@ -107,7 +121,16 @@ struct ICUStrptime : public ICUDateFunc {
 				ParseResult parsed;
 				for (auto &format : info.formats) {
 					if (format.Parse(input, parsed)) {
-						return GetTime(calendar, ToMicros(calendar, parsed, format));
+						if (parsed.is_special) {
+							return parsed.ToTimestamp();
+						} else {
+							// Set TZ first, if any.
+							if (!parsed.tz.empty()) {
+								SetTimeZone(calendar, parsed.tz);
+							}
+
+							return GetTime(calendar, ToMicros(calendar, parsed, format));
+						}
 					}
 				}
 
@@ -137,9 +160,13 @@ struct ICUStrptime : public ICUDateFunc {
 				    ParseResult parsed;
 				    for (auto &format : info.formats) {
 					    if (format.Parse(input, parsed)) {
-						    timestamp_t result;
-						    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
-							    return result;
+						    if (parsed.is_special) {
+							    return parsed.ToTimestamp();
+						    } else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
+							    timestamp_t result;
+							    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
+								    return result;
+							    }
 						    }
 					    }
 				    }
@@ -150,7 +177,7 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 	}
 
-	static bind_scalar_function_t bind_strptime;
+	static bind_scalar_function_t bind_strptime; // NOLINT
 
 	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
 	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
@@ -186,7 +213,7 @@ struct ICUStrptime : public ICUDateFunc {
 				throw InvalidInputException("strptime format list must not be empty");
 			}
 			vector<StrpTimeFormat> formats;
-			bool has_tz = true;
+			bool has_tz = false;
 			for (const auto &child : children) {
 				format_string = child.ToString();
 				format.format_specifier = format_string;
@@ -210,9 +237,9 @@ struct ICUStrptime : public ICUDateFunc {
 		return bind_strptime(context, bound_function, arguments);
 	}
 
-	static void TailPatch(const string &name, DatabaseInstance &db, const vector<LogicalType> &types) {
+	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
 		// Find the old function
-		auto &scalar_function = ExtensionUtil::GetFunction(db, name);
+		auto &scalar_function = loader.GetFunction(name);
 		auto &functions = scalar_function.functions.functions;
 		optional_idx best_index;
 		for (idx_t i = 0; i < functions.size(); i++) {
@@ -230,15 +257,15 @@ struct ICUStrptime : public ICUDateFunc {
 		bound_function.bind = StrpTimeBindFunction;
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
+	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
-		TailPatch(name, db, types);
+		TailPatch(name, loader, types);
 
 		types[1] = LogicalType::LIST(LogicalType::VARCHAR);
-		TailPatch(name, db, types);
+		TailPatch(name, loader, types);
 	}
 
-	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	static bool VarcharToTimestampTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->clone());
@@ -250,9 +277,15 @@ struct ICUStrptime : public ICUDateFunc {
 			    const auto len = input.GetSize();
 			    string_t tz(nullptr, 0);
 			    bool has_offset = false;
-			    if (!Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz)) {
-				    auto msg = Timestamp::ConversionError(string(str, len));
-				    HandleCastError::AssignError(msg, parameters.error_message);
+			    auto success = Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz);
+			    if (success != TimestampCastResult::SUCCESS) {
+				    string msg;
+				    if (success == TimestampCastResult::ERROR_RANGE) {
+					    msg = Timestamp::RangeError(string(str, len));
+				    } else {
+					    msg = Timestamp::FormatError(string(str, len));
+				    }
+				    HandleCastError::AssignError(msg, parameters);
 				    mask.SetInvalid(idx);
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
@@ -260,7 +293,12 @@ struct ICUStrptime : public ICUDateFunc {
 
 				    // Change TZ if one was provided.
 				    if (tz.GetSize()) {
-					    SetTimeZone(calendar, tz);
+					    string error_msg;
+					    SetTimeZone(calendar, tz, &error_msg);
+					    if (!error_msg.empty()) {
+						    HandleCastError::AssignError(error_msg, parameters);
+						    mask.SetInvalid(idx);
+					    }
 				    }
 
 				    // Now get the parts in the given time zone
@@ -272,26 +310,65 @@ struct ICUStrptime : public ICUDateFunc {
 		return true;
 	}
 
+	static bool VarcharToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr cal(info.calendar->clone());
+
+		UnaryExecutor::ExecuteWithNulls<string_t, dtime_tz_t>(
+		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+			    dtime_tz_t result;
+			    const auto str = input.GetData();
+			    const auto len = input.GetSize();
+			    bool has_offset = false;
+			    idx_t pos = 0;
+			    if (!Time::TryConvertTimeTZ(str, len, pos, result, has_offset, false)) {
+				    auto msg = Time::ConversionError(string(str, len));
+				    HandleCastError::AssignError(msg, parameters);
+				    mask.SetInvalid(idx);
+			    } else if (!has_offset) {
+				    // Convert parts to a TZ (default or parsed) if no offset was provided
+				    auto calendar = cal.get();
+
+				    // Extract the offset from the calendar
+				    auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+				    offset += ExtractField(calendar, UCAL_DST_OFFSET);
+				    offset /= Interval::MSECS_PER_SEC;
+
+				    // Apply it to the offset +00 time we parsed.
+				    result = dtime_tz_t(result.time(), offset);
+			    }
+
+			    return result;
+		    });
+		return true;
+	}
+
 	static BoundCastInfo BindCastFromVarchar(BindCastInput &input, const LogicalType &source,
 	                                         const LogicalType &target) {
 		if (!input.context) {
-			throw InternalException("Missing context for VARCHAR to TIMESTAMPTZ cast.");
+			throw InternalException("Missing context for VARCHAR to TIME/TIMESTAMPTZ cast.");
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
-		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
+		switch (target.id()) {
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return BoundCastInfo(VarcharToTimestampTZ, std::move(cast_data));
+		case LogicalTypeId::TIME_TZ:
+			return BoundCastInfo(VarcharToTimeTZ, std::move(cast_data));
+		default:
+			throw InternalException("Unsupported type for VARCHAR to TIME/TIMESTAMPTZ cast.");
+		}
 	}
 
-	static void AddCasts(DatabaseInstance &db) {
-		auto &config = DBConfig::GetConfig(db);
-		auto &casts = config.GetCastFunctions();
-
-		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+	static void AddCasts(ExtensionLoader &loader) {
+		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIME_TZ, BindCastFromVarchar);
 	}
 };
 
-bind_scalar_function_t ICUStrptime::bind_strptime = nullptr;
+bind_scalar_function_t ICUStrptime::bind_strptime = nullptr; // NOLINT
 
 struct ICUStrftime : public ICUDateFunc {
 	static void ParseFormatSpecifier(string_t &format_str, StrfTimeFormat &format) {
@@ -319,11 +396,11 @@ struct ICUStrftime : public ICUDateFunc {
 		data[3] = ExtractField(calendar, UCAL_HOUR_OF_DAY);
 		data[4] = ExtractField(calendar, UCAL_MINUTE);
 		data[5] = ExtractField(calendar, UCAL_SECOND);
-		data[6] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
+		data[6] =
+		    UnsafeNumericCast<int32_t>(ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros);
 
 		data[7] = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
 		data[7] /= Interval::MSECS_PER_SEC;
-		data[7] /= Interval::SECS_PER_MINUTE;
 
 		const auto date = Date::FromDate(data[0], data[1], data[2]);
 		const auto time = Time::FromTime(data[3], data[4], data[5], data[6]);
@@ -360,8 +437,7 @@ struct ICUStrftime : public ICUDateFunc {
 					    if (Timestamp::IsFinite(input)) {
 						    return Operation(calendar.get(), input, tz_name, format, result);
 					    } else {
-						    mask.SetInvalid(idx);
-						    return string_t();
+						    return StringVector::AddString(result, Timestamp::ToString(input));
 					    }
 				    });
 			}
@@ -375,18 +451,17 @@ struct ICUStrftime : public ICUDateFunc {
 
 					    return Operation(calendar.get(), input, tz_name, format, result);
 				    } else {
-					    mask.SetInvalid(idx);
-					    return string_t();
+					    return StringVector::AddString(result, Timestamp::ToString(input));
 				    }
 			    });
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
+	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		loader.RegisterFunction(set);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {
@@ -395,26 +470,15 @@ struct ICUStrftime : public ICUDateFunc {
 			return StringVector::AddString(result, Timestamp::ToString(input));
 		}
 
-		// Get the parts in the given time zone
-		uint64_t micros = SetTime(calendar, input);
-
-		int32_t date_units[3];
-		date_units[0] = ExtractField(calendar, UCAL_EXTENDED_YEAR); // strftime doesn't understand eras.
-		date_units[1] = ExtractField(calendar, UCAL_MONTH) + 1;
-		date_units[2] = ExtractField(calendar, UCAL_DATE);
-
-		int32_t time_units[4];
-		time_units[0] = ExtractField(calendar, UCAL_HOUR_OF_DAY);
-		time_units[1] = ExtractField(calendar, UCAL_MINUTE);
-		time_units[2] = ExtractField(calendar, UCAL_SECOND);
-		time_units[3] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
+		// decompose the timestamp
+		auto ts_data = ICUHelpers::GetComponents(timestamp_tz_t(input.value), calendar);
 
 		idx_t year_length;
 		bool add_bc;
-		const auto date_len = DateToStringCast::Length(date_units, year_length, add_bc);
+		const auto date_len = DateToStringCast::YearLength(ts_data.year, year_length, add_bc);
 
 		char micro_buffer[6];
-		const auto time_len = TimeToStringCast::Length(time_units, micro_buffer);
+		const auto time_len = TimeToStringCast::MicrosLength(ts_data.microsecond, micro_buffer);
 
 		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
 		offset /= Interval::MSECS_PER_SEC;
@@ -428,11 +492,12 @@ struct ICUStrftime : public ICUDateFunc {
 		string_t target = StringVector::EmptyString(result, len);
 		auto buffer = target.GetDataWriteable();
 
-		DateToStringCast::Format(buffer, date_units, year_length, add_bc);
+		DateToStringCast::Format(buffer, ts_data.year, ts_data.month, ts_data.day, year_length, add_bc);
 		buffer += date_len;
 		*buffer++ = ' ';
 
-		TimeToStringCast::Format(buffer, time_len, time_units, micro_buffer);
+		TimeToStringCast::Format(buffer, time_len, ts_data.hour, ts_data.minute, ts_data.second, ts_data.microsecond,
+		                         micro_buffer);
 		buffer += time_len;
 
 		memcpy(buffer, offset_str.c_str(), offset_len);
@@ -465,23 +530,20 @@ struct ICUStrftime : public ICUDateFunc {
 		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}
 
-	static void AddCasts(DatabaseInstance &db) {
-		auto &config = DBConfig::GetConfig(db);
-		auto &casts = config.GetCastFunctions();
-
-		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
+	static void AddCasts(ExtensionLoader &loader) {
+		loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
 	}
 };
 
-void RegisterICUStrptimeFunctions(DatabaseInstance &db) {
-	ICUStrptime::AddBinaryTimestampFunction("strptime", db);
-	ICUStrptime::AddBinaryTimestampFunction("try_strptime", db);
+void RegisterICUStrptimeFunctions(ExtensionLoader &loader) {
+	ICUStrptime::AddBinaryTimestampFunction("strptime", loader);
+	ICUStrptime::AddBinaryTimestampFunction("try_strptime", loader);
 
-	ICUStrftime::AddBinaryTimestampFunction("strftime", db);
+	ICUStrftime::AddBinaryTimestampFunction("strftime", loader);
 
 	// Add string casts
-	ICUStrptime::AddCasts(db);
-	ICUStrftime::AddCasts(db);
+	ICUStrptime::AddCasts(loader);
+	ICUStrftime::AddCasts(loader);
 }
 
 } // namespace duckdb

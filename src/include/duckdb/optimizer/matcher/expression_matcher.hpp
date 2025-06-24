@@ -40,7 +40,7 @@ public:
 //! The ExpressionEqualityMatcher matches on equality with another (given) expression
 class ExpressionEqualityMatcher : public ExpressionMatcher {
 public:
-	explicit ExpressionEqualityMatcher(Expression &expr)
+	explicit ExpressionEqualityMatcher(const Expression &expr)
 	    : ExpressionMatcher(ExpressionClass::INVALID), expression(expr) {
 	}
 
@@ -61,7 +61,7 @@ public:
 	CaseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CASE) {
 	}
 
-	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 class ComparisonExpressionMatcher : public ExpressionMatcher {
@@ -74,7 +74,7 @@ public:
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
-	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 class CastExpressionMatcher : public ExpressionMatcher {
@@ -84,7 +84,7 @@ public:
 	//! The matcher for the child expressions
 	unique_ptr<ExpressionMatcher> matcher;
 
-	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 class InClauseExpressionMatcher : public ExpressionMatcher {
@@ -96,7 +96,7 @@ public:
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
-	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
@@ -109,7 +109,7 @@ public:
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
-	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 class FunctionExpressionMatcher : public ExpressionMatcher {
@@ -123,7 +123,21 @@ public:
 	//! The function name to match
 	unique_ptr<FunctionMatcher> function;
 
-	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
+};
+
+class AggregateExpressionMatcher : public ExpressionMatcher {
+public:
+	AggregateExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_AGGREGATE) {
+	}
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+	//! The function name to match
+	unique_ptr<FunctionMatcher> function;
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 //! The FoldableConstant matcher matches any expression that is foldable into a constant by the ExpressionExecutor (i.e.
@@ -131,6 +145,15 @@ public:
 class FoldableConstantMatcher : public ExpressionMatcher {
 public:
 	FoldableConstantMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
+	}
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
+};
+
+//! The stable expression matcher matches only stable expressions (non-volatile)
+class StableExpressionMatcher : public ExpressionMatcher {
+public:
+	StableExpressionMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
 	}
 
 	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;

@@ -9,6 +9,7 @@
 #include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 		auto row = ptrs[row_idx];
 		auto col_idx = col_sel.get_index(i);
 		data[col_idx] = Load<T>(row + col_offset);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
@@ -66,7 +67,7 @@ static void GatherVarchar(Vector &rows, const SelectionVector &row_sel, Vector &
 		auto col_idx = col_sel.get_index(i);
 		auto col_ptr = row + col_offset;
 		data[col_idx] = Load<string_t>(col_ptr);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
@@ -95,8 +96,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	// Build the gather locations
-	auto data_locations = make_unsafe_uniq_array<data_ptr_t>(count);
-	auto mask_locations = make_unsafe_uniq_array<data_ptr_t>(count);
+	auto data_locations = make_unsafe_uniq_array_uninitialized<data_ptr_t>(count);
+	auto mask_locations = make_unsafe_uniq_array_uninitialized<data_ptr_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_idx = row_sel.get_index(i);
 		auto row = ptrs[row_idx];
@@ -112,7 +113,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	}
 
 	// Deserialise into the selected locations
-	RowOperations::HeapGather(col, count, col_sel, col_no, data_locations.get(), mask_locations.get());
+	NestedValidity parent_validity(mask_locations.get(), col_no);
+	RowOperations::HeapGather(col, count, col_sel, data_locations.get(), &parent_validity);
 }
 
 void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
@@ -134,6 +136,9 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		break;
 	case PhysicalType::UINT64:
 		TemplatedGatherLoop<uint64_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedGatherLoop<uhugeint_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -165,66 +170,11 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		GatherNestedVector(rows, row_sel, col, col_sel, count, layout, col_no, heap_ptr);
 		break;
 	default:
 		throw InternalException("Unimplemented type for RowOperations::Gather");
-	}
-}
-
-template <class T>
-static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t col_offset, idx_t col_no) {
-	// Precompute mask indexes
-	idx_t entry_idx;
-	idx_t idx_in_entry;
-	ValidityBytes::GetEntryIndex(col_no, entry_idx, idx_in_entry);
-
-	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
-	auto data = FlatVector::GetData<T>(col);
-	//	auto &col_mask = FlatVector::Validity(col);
-
-	for (idx_t i = 0; i < count; i++) {
-		auto row = ptrs[i];
-		data[i] = Load<T>(row + col_offset);
-		ValidityBytes row_mask(row);
-		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
-			throw InternalException("Null value comparisons not implemented for perfect hash table yet");
-			//			col_mask.SetInvalid(i);
-		}
-	}
-}
-
-void RowOperations::FullScanColumn(const TupleDataLayout &layout, Vector &rows, Vector &col, idx_t count,
-                                   idx_t col_no) {
-	const auto col_offset = layout.GetOffsets()[col_no];
-	col.SetVectorType(VectorType::FLAT_VECTOR);
-	switch (col.GetType().InternalType()) {
-	case PhysicalType::UINT8:
-		TemplatedFullScanLoop<uint8_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedFullScanLoop<uint16_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedFullScanLoop<uint32_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedFullScanLoop<uint64_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::INT8:
-		TemplatedFullScanLoop<int8_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::INT16:
-		TemplatedFullScanLoop<int16_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::INT32:
-		TemplatedFullScanLoop<int32_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::INT64:
-		TemplatedFullScanLoop<int64_t>(rows, col, count, col_offset, col_no);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for RowOperations::FullScanColumn");
 	}
 }
 

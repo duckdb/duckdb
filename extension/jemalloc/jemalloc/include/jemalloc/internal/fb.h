@@ -1,7 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_FB_H
 #define JEMALLOC_INTERNAL_FB_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/assert.h"
+#include "jemalloc/internal/bit_util.h"
 
 /*
  * The flat bitmap module.  This has a larger API relative to the bitmap module
@@ -371,7 +373,5 @@ fb_bit_not(fb_group_t *dst, fb_group_t *src, size_t nbits) {
 		dst[i] = ~src[i];
 	}
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_FB_H */

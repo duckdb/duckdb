@@ -1,0 +1,33 @@
+# name: test/sql/catalog/dependencies/add_column_to_table_referenced_by_fk.test
+# group: [dependencies]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl(a varchar primary key);
+
+statement ok
+create table tbl2(
+	a varchar,
+	foreign key (a) references tbl(a)
+)
+
+statement ok
+insert into tbl values('abc');
+
+statement ok
+insert into tbl2 values ('abc');
+
+statement ok
+alter table tbl add column b integer default 5;
+
+query II
+select * from tbl;
+----
+abc	5
+
+query I
+select * from tbl2;
+----
+abc

@@ -17,6 +17,6 @@ select count(*) from '__TEST_DIR__/t1.csv'
 3000
 
 query I
-select count(*) from read_csv('data/csv/empty.csv', columns=STRUCT_PACK(d := 'BIGINT'), header=0)
+select count(*) from read_csv('data/csv/empty.csv', columns=STRUCT_PACK(d := 'BIGINT'), header=0, auto_detect = false)
 ----
 0

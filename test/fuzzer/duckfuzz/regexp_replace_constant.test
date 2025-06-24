@@ -13,4 +13,4 @@ must not be NULL
 statement error
 SELECT regexp_extract('foobarbaz', 'B..', 0, 42);
 ----
-must be a string
+No function matches

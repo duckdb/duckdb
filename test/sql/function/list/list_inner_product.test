@@ -1,6 +1,11 @@
 # name: test/sql/function/list/list_inner_product.test
 # group: [list]
 
+query I
+SELECT list_inner_product([], []);
+----
+0.0
+
 foreach type FLOAT DOUBLE
 
 query I
@@ -37,7 +42,11 @@ right argument can not contain NULL values
 statement error
 SELECT list_inner_product([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
 ----
-list dimensions must be equal, got left length 3 and right length 4
+Invalid Input Error: list_inner_product: list dimensions must be equal, got left length '3' and right length '4'
 
+query I
+SELECT list_negative_inner_product([1,2,3]::${type}[], [1,2,3]::${type}[]) = -list_inner_product([1,2,3]::${type}[], [1,2,3]::${type}[]);
+----
+true
 
 endloop

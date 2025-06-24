@@ -19,7 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
 
 public:
-	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperatorType type, JoinType join_type,
+	             idx_t estimated_cardinality);
 
 	JoinType join_type;
 
@@ -33,7 +34,8 @@ public:
 	                                    bool has_null);
 
 public:
-	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines, PhysicalOperator &op);
+	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
+	                               bool build_rhs = true);
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
 

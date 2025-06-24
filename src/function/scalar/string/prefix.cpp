@@ -65,8 +65,4 @@ ScalarFunction PrefixFun::GetFunction() {
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
 }
 
-void PrefixFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
-}
-
 } // namespace duckdb

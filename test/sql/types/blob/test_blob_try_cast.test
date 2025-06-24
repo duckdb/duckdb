@@ -42,21 +42,27 @@ SELECT TRY_CAST('\x12' AS BLOB)
 
 statement error
 SELECT '\\'::BLOB
+----
 
 statement error
 SELECT '\\x3'::BLOB
+----
 
 statement error
 SELECT '\\b12'::BLOB
+----
 
 statement error
 SELECT '\\xx2'::BLOB
+----
 
 statement error
 SELECT '\\x2x'::BLOB
+----
 
 statement error
 SELECT 'ü'::BLOB
+----
 
 query I
 SELECT CAST('\x12' AS BLOB)

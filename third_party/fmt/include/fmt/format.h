@@ -34,6 +34,7 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/original/std/memory.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -43,6 +44,12 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+
+#ifndef DUCKDB_BASE_STD
+namespace duckdb_base_std {
+	using ::std::unique_ptr;
+}
+#endif
 
 #ifdef __clang__
 #  define FMT_CLANG_VERSION (__clang_major__ * 100 + __clang_minor__)
@@ -73,6 +80,8 @@
 #if FMT_HAS_CPP_ATTRIBUTE(fallthrough) && \
     (__cplusplus >= 201703 || FMT_GCC_VERSION != 0)
 #  define FMT_FALLTHROUGH [[fallthrough]]
+#elif defined(DUCKDB_EXPLICIT_FALLTHROUGH)
+#  define FMT_FALLTHROUGH DUCKDB_EXPLICIT_FALLTHROUGH
 #else
 #  define FMT_FALLTHROUGH
 #endif
@@ -980,6 +989,7 @@ struct float_specs {
   int precision;
   float_format format : 8;
   sign_t sign : 8;
+  char thousand_sep : 8;
   bool upper : 1;
   bool locale : 1;
   bool percent : 1;
@@ -1036,8 +1046,33 @@ template <typename Char> class float_writer {
     }
     if (num_digits_ <= full_exp) {
       // 1234e7 -> 12340000000[.0+]
-      it = copy_str<Char>(digits_, digits_ + num_digits_, it);
-      it = std::fill_n(it, full_exp - num_digits_, static_cast<Char>('0'));
+      if (specs_.thousand_sep != '\0' && full_exp > 3) {
+        // thousand separator
+        // we need to print the thousand separator every 3 digits
+        // the loop is essentially write 3 digits, write the thousand separator
+        // the exception is the first batch of digits which are 1-3 digits
+        int digit_count = full_exp % 3 == 0 ? 3 : full_exp % 3;
+        for(int i = 0; i < full_exp; i += digit_count, digit_count = 3) {
+          if (i > 0) {
+            *it++ = specs_.thousand_sep;
+          }
+          if (i < num_digits_) {
+            // we still need to write digits
+            int write_count = std::min<int>(num_digits_ - i, digit_count);
+            it = copy_str<Char>(digits_ + i, digits_ + i + write_count, it);
+            if (write_count < digit_count) {
+              // write any trailing zeros that belong to this batch
+              it = std::fill_n(it, digit_count - write_count, static_cast<Char>('0'));
+            }
+          } else {
+            // we only need to write trailing zeros
+            it = std::fill_n(it, digit_count, static_cast<Char>('0'));
+          }
+        }
+      } else {
+        it = copy_str<Char>(digits_, digits_ + num_digits_, it);
+        it = std::fill_n(it, full_exp - num_digits_, static_cast<Char>('0'));
+      }
       if (specs_.trailing_zeros) {
         *it++ = decimal_point_;
         int num_zeros = specs_.precision - full_exp;
@@ -1054,7 +1089,21 @@ template <typename Char> class float_writer {
       }
     } else if (full_exp > 0) {
       // 1234e-2 -> 12.34[0+]
-      it = copy_str<Char>(digits_, digits_ + full_exp, it);
+      if (specs_.thousand_sep != '\0' && full_exp > 3) {
+        // thousand separator
+        // we need to print the thousand separator every 3 digits
+        // the loop is essentially write 3 digits, write the thousand separator
+        // the exception is the first batch of digits which are 1-3 digits
+        int digit_count = full_exp % 3 == 0 ? 3 : full_exp % 3;
+        for(int i = 0; i < full_exp; i += digit_count, digit_count = 3) {
+          if (i > 0) {
+            *it++ = specs_.thousand_sep;
+          }
+          it = copy_str<Char>(digits_ + i, digits_ + i + digit_count, it);
+        }
+      } else {
+        it = copy_str<Char>(digits_, digits_ + full_exp, it);
+      }
       if (!specs_.trailing_zeros) {
         // Remove trailing zeros.
         int num_digits = num_digits_;
@@ -1074,7 +1123,7 @@ template <typename Char> class float_writer {
       // 1234e-6 -> 0.001234
       *it++ = static_cast<Char>('0');
       int num_zeros = -full_exp;
-      if (specs_.precision >= 0 && specs_.precision < num_zeros)
+      if (num_digits_ == 0 && specs_.precision >= 0 && specs_.precision < num_zeros)
         num_zeros = specs_.precision;
       int num_digits = num_digits_;
       if (!specs_.trailing_zeros)
@@ -1163,10 +1212,7 @@ FMT_CONSTEXPR float_specs parse_float_type_spec(
     const basic_format_specs<Char>& specs, ErrorHandler&& eh = {}) {
 
   auto result = float_specs();
-    if (specs.thousands != '\0') {
-      eh.on_error("Thousand separators are not supported for floating point numbers");
-      return result;
-    }
+  result.thousand_sep = specs.thousands;
   result.trailing_zeros = specs.alt;
   switch (specs.type) {
   case 0:
@@ -1533,7 +1579,7 @@ template <typename Range> class basic_writer {
     }
 
     FMT_NORETURN void on_error(std::string error) {
-      FMT_THROW(duckdb::Exception(error));
+      FMT_THROW(duckdb::InvalidInputException(error));
     }
   };
 
@@ -1662,8 +1708,15 @@ template <typename Range> class basic_writer {
       --exp;  // Adjust decimal place position.
     }
     fspecs.precision = precision;
-    char_type point = fspecs.locale ? decimal_point<char_type>(locale_)
-                                    : static_cast<char_type>('.');
+    char_type point;
+    if (fspecs.locale) {
+      point = decimal_point<char_type>(locale_);
+    } else if (fspecs.thousand_sep == '.') {
+      // if the thousand separator is a point, we automatically switch the decimal separator to comma
+      point =static_cast<char_type>(',');
+    } else {
+      point = static_cast<char_type>('.');
+    }
     write_padded(specs, float_writer<char_type>(buffer.data(),
                                                 static_cast<int>(buffer.size()),
                                                 exp, fspecs, point));
@@ -1766,7 +1819,7 @@ class arg_formatter_base {
 
   void write(const char_type* value) {
     if (!value) {
-      FMT_THROW(duckdb::Exception("string pointer is null"));
+      FMT_THROW(duckdb::InternalException("string pointer is null"));
     } else {
       auto length = std::char_traits<char_type>::length(value);
       basic_string_view<char_type> sv(value, length);
@@ -3006,7 +3059,7 @@ typename Context::iterator vformat_to(
 // Example:
 //   auto s = format("{}", ptr(p));
 template <typename T> inline const void* ptr(const T* p) { return p; }
-template <typename T> inline const void* ptr(const std::unique_ptr<T>& p) {
+template <typename T> inline const void* ptr(const duckdb_base_std::unique_ptr<T>& p) {
   return p.get();
 }
 template <typename T> inline const void* ptr(const std::shared_ptr<T>& p) {

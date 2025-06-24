@@ -1,0 +1,36 @@
+# name: test/sql/json/issues/issue11804.test
+# description: Test issue 11804 - json_type(...) with path does not return "NULL"
+# group: [issues]
+
+require json
+
+query I
+select json_type(JSON 'null') = 'NULL';
+----
+true
+
+query I
+select json_type(JSON '{"a": null}', '/a') = 'NULL';
+----
+true
+
+query I
+select json_type(JSON '{"a": null}', '$.a') = 'NULL';
+----
+true
+
+# Test issue 13436 - JSON_TYPE function produces wrong result if path is a column expression
+query II
+SELECT
+  json_type (json '{"a":1,"b":null}', p),
+  json_type (json '{"a":1,"b":null}', 'b')
+FROM (VALUES ('b')) AS t (p);
+----
+NULL	NULL
+
+# let's also test the extract many functionality
+query I
+select unnest(json_type(JSON '{"a": null}', ['$.a', '$.a'])) = 'NULL';
+----
+true
+true

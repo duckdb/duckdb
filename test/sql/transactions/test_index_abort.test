@@ -37,6 +37,7 @@ COMMIT
 
 statement error con2
 COMMIT
+----
 
 # verify that the data is (1, 1), (...), (4, 4)
 query II con1
@@ -50,4 +51,5 @@ SELECT * FROM integers ORDER BY i
 # table test should not exist
 statement error con1
 SELECT * FROM test
+----
 

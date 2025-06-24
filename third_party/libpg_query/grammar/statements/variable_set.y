@@ -31,6 +31,12 @@ VariableSetStmt:
 					n->scope = VAR_SET_SCOPE_GLOBAL;
 					$$ = (PGNode *) n;
 				}
+			| SET VARIABLE_P set_rest
+				{
+					PGVariableSetStmt *n = $3;
+					n->scope = VAR_SET_SCOPE_VARIABLE;
+					$$ = (PGNode *) n;
+				}
 		;
 
 
@@ -83,27 +89,11 @@ generic_set:
 					n->args = $3;
 					$$ = n;
 				}
-			| var_name TO DEFAULT
-				{
-					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
-					n->kind = VAR_SET_DEFAULT;
-					n->name = $1;
-					$$ = n;
-				}
-			| var_name '=' DEFAULT
-				{
-					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
-					n->kind = VAR_SET_DEFAULT;
-					n->name = $1;
-					$$ = n;
-				}
 		;
 
 
-var_value:	opt_boolean_or_string
-				{ $$ = makeStringConst($1, @1); }
-			| NumericOnly
-				{ $$ = makeAConst($1, @1); }
+var_value:	a_expr
+				{ $$ = $1; }
 		;
 
 

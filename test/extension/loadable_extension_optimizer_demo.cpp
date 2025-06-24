@@ -1,4 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
@@ -68,12 +67,13 @@ public:
 		}
 	}
 
-	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
-	                                   duckdb::unique_ptr<LogicalOperator> &plan) {
+	static void WaggleOptimizeFunction(OptimizerExtensionInput &input, duckdb::unique_ptr<LogicalOperator> &plan) {
 		if (!HasParquetScan(*plan)) {
 			return;
 		}
 		// rpc
+
+		auto &context = input.context;
 
 		Value host, port;
 		if (!context.TryGetCurrentSetting("waggle_location_host", host) ||
@@ -100,7 +100,8 @@ public:
 			throw IOException("Failed to connect socket %s", string(strerror(errno)));
 		}
 
-		MemoryStream stream;
+		Allocator allocator;
+		MemoryStream stream(allocator);
 		BinarySerializer serializer(stream);
 		serializer.Begin();
 		plan->Serialize(serializer);
@@ -149,7 +150,9 @@ public:
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
-DUCKDB_EXTENSION_API void loadable_extension_optimizer_demo_init(duckdb::DatabaseInstance &db) {
+
+DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_optimizer_demo, loader) {
+	auto &db = loader.GetDatabaseInstance();
 	Connection con(db);
 
 	// add a parser extension
@@ -157,9 +160,5 @@ DUCKDB_EXTENSION_API void loadable_extension_optimizer_demo_init(duckdb::Databas
 	config.optimizer_extensions.push_back(WaggleExtension());
 	config.AddExtensionOption("waggle_location_host", "host for remote callback", LogicalType::VARCHAR);
 	config.AddExtensionOption("waggle_location_port", "port for remote callback", LogicalType::INTEGER);
-}
-
-DUCKDB_EXTENSION_API const char *loadable_extension_optimizer_demo_version() {
-	return DuckDB::LibraryVersion();
 }
 }

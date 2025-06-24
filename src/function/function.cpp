@@ -2,11 +2,13 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
 
@@ -34,6 +36,10 @@ bool TableFunctionData::Equals(const FunctionData &other) const {
 	return false;
 }
 
+bool FunctionData::SupportStatementCache() const {
+	return true;
+}
+
 Function::Function(string name_p) : name(std::move(name_p)) {
 }
 Function::~Function() {
@@ -47,7 +53,7 @@ SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(name, arguments);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs);
 }
 
 bool SimpleFunction::HasVarArgs() const {
@@ -63,7 +69,7 @@ SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
 
 string SimpleNamedParameterFunction::ToString() const {
-	return Function::CallToString(name, arguments, named_parameters);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, named_parameters);
 }
 
 bool SimpleNamedParameterFunction::HasNamedParameters() const {
@@ -71,17 +77,18 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       FunctionSideEffects side_effects, LogicalType varargs_p,
-                                       FunctionNullHandling null_handling)
+                                       FunctionStability stability, LogicalType varargs_p,
+                                       FunctionNullHandling null_handling, FunctionErrors errors)
     : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), side_effects(side_effects), null_handling(null_handling) {
+      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling), errors(errors),
+      collation_handling(FunctionCollationHandling::PROPAGATE_COLLATIONS) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {
 }
 
 string BaseScalarFunction::ToString() const {
-	return Function::CallToString(name, arguments, return_type);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
 }
 
 // add your initializer for new functions here
@@ -92,22 +99,14 @@ void BuiltinFunctions::Initialize() {
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
 
-	RegisterDistributiveAggregates();
-
-	RegisterCompressedMaterializationFunctions();
-
-	RegisterGenericFunctions();
-	RegisterOperators();
-	RegisterSequenceFunctions();
-	RegisterStringFunctions();
-	RegisterNestedFunctions();
-
 	RegisterPragmaFunctions();
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
-	AddCollation("noaccent", StripAccentsFun::GetFunction());
+	AddCollation("noaccent", StripAccentsFun::GetFunction(), true);
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
+
+	RegisterExtensionOverloads();
 }
 
 hash_t BaseScalarFunction::Hash() const {
@@ -118,21 +117,39 @@ hash_t BaseScalarFunction::Hash() const {
 	return hash;
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments) {
-	string result = name + "(";
-	result += StringUtil::Join(arguments, arguments.size(), ", ",
-	                           [](const LogicalType &argument) { return argument.ToString(); });
+static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
+	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
+	       schema_name != DEFAULT_SCHEMA;
+}
+
+string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+                              const vector<LogicalType> &arguments, const LogicalType &varargs) {
+	string result;
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+		result += catalog_name + "." + schema_name + ".";
+	}
+	result += name + "(";
+	vector<string> string_arguments;
+	for (auto &arg : arguments) {
+		string_arguments.push_back(arg.ToString());
+	}
+	if (varargs.IsValid()) {
+		string_arguments.push_back("[" + varargs.ToString() + "...]");
+	}
+	result += StringUtil::Join(string_arguments, ", ");
 	return result + ")";
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+                              const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
-	string result = CallToString(name, arguments);
+	string result = CallToString(catalog_name, schema_name, name, arguments, varargs);
 	result += " -> " + return_type.ToString();
 	return result;
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+                              const vector<LogicalType> &arguments,
                               const named_parameter_type_map_t &named_parameters) {
 	vector<string> input_arguments;
 	input_arguments.reserve(arguments.size() + named_parameters.size());
@@ -142,7 +159,11 @@ string Function::CallToString(const string &name, const vector<LogicalType> &arg
 	for (auto &kv : named_parameters) {
 		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
 	}
-	return StringUtil::Format("%s(%s)", name, StringUtil::Join(input_arguments, ", "));
+	string prefix = "";
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+		prefix = StringUtil::Format("%s.%s.", catalog_name, schema_name);
+	}
+	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
 }
 
 void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
@@ -152,8 +173,8 @@ void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<E
 	}
 	D_ASSERT(arguments.size() == bound_function.arguments.size());
 	D_ASSERT(argument_index < arguments.size());
-	arguments.erase(arguments.begin() + argument_index);
-	bound_function.arguments.erase(bound_function.arguments.begin() + argument_index);
+	arguments.erase_at(argument_index);
+	bound_function.arguments.erase_at(argument_index);
 }
 
 } // namespace duckdb

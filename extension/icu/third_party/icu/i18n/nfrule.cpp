@@ -631,7 +631,7 @@ util_equalSubstitutions(const NFSubstitution* sub1, const NFSubstitution* sub2)
 * @param that The rule to compare this one against
 * @return True is the two rules are functionally equivalent
 */
-UBool
+bool
 NFRule::operator==(const NFRule& rhs) const
 {
     return baseValue == rhs.baseValue

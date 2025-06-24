@@ -71,6 +71,26 @@ SELECT * FROM integers WHERE i>4978321 LIMIT 5 OFFSET 1000000;
 5978325
 5978326
 
+# insertion order preservation with window functions
+query II
+SELECT i, lead(i, 1) over () FROM integers LIMIT 5 OFFSET 4978321;
+----
+4978321	4978322
+4978322	4978323
+4978323	4978324
+4978324	4978325
+4978325	4978326
+
+# large lead
+query II
+SELECT i, lead(i, 100000) over () FROM integers LIMIT 5 OFFSET 4978321;
+----
+4978321	5078321
+4978322	5078322
+4978323	5078323
+4978324	5078324
+4978325	5078325
+
 # IN-clause (semi join)
 query I sort
 SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)

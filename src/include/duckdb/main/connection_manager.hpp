@@ -16,45 +16,32 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
+class Connection;
 
 class ConnectionManager {
 public:
-	ConnectionManager() {
+	ConnectionManager();
+
+	void AddConnection(ClientContext &context);
+	void RemoveConnection(ClientContext &context);
+
+	vector<shared_ptr<ClientContext>> GetConnectionList();
+	const reference_map_t<ClientContext, weak_ptr<ClientContext>> &GetConnectionListReference() const {
+		return connections;
 	}
+	idx_t GetConnectionCount() const;
 
-	void AddConnection(ClientContext &context) {
-		lock_guard<mutex> lock(connections_lock);
-		connections.insert(make_pair(&context, weak_ptr<ClientContext>(context.shared_from_this())));
-	}
-
-	void RemoveConnection(ClientContext &context) {
-		lock_guard<mutex> lock(connections_lock);
-		connections.erase(&context);
-	}
-
-	vector<shared_ptr<ClientContext>> GetConnectionList() {
-		vector<shared_ptr<ClientContext>> result;
-		for (auto &it : connections) {
-			auto connection = it.second.lock();
-			if (!connection) {
-				connections.erase(it.first);
-				continue;
-			} else {
-				result.push_back(std::move(connection));
-			}
-		}
-
-		return result;
-	}
-
-	ClientContext *GetConnection(DatabaseInstance *db);
+	void AssignConnectionId(Connection &connection);
 
 	static ConnectionManager &Get(DatabaseInstance &db);
 	static ConnectionManager &Get(ClientContext &context);
 
-public:
+private:
 	mutex connections_lock;
-	unordered_map<ClientContext *, weak_ptr<ClientContext>> connections;
+	reference_map_t<ClientContext, weak_ptr<ClientContext>> connections;
+	atomic<idx_t> connection_count;
+
+	atomic<connection_t> current_connection_id;
 };
 
 } // namespace duckdb

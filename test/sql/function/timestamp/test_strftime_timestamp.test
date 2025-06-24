@@ -47,6 +47,16 @@ NULL
 0
 1
 
+# %u - ISO Weekday as a decimal number.
+query I
+SELECT strftime(d, '%u') FROM timestamps ORDER BY d;
+----
+NULL
+3
+6
+7
+1
+
 # %d - Day of the month as a zero-padded decimal.
 query I
 SELECT strftime(d, '%d') FROM timestamps ORDER BY d;
@@ -145,6 +155,16 @@ SELECT strftime(DATE '2001-01-01', '%-y')
 # %Y - Year with century as a decimal number.
 query I
 SELECT strftime(d, '%Y') FROM timestamps ORDER BY d;
+----
+NULL
+1992
+1993
+2020
+2020
+
+# %G - ISO Year with century as a decimal number.
+query I
+SELECT strftime(d, '%G') FROM timestamps ORDER BY d;
 ----
 NULL
 1992
@@ -336,6 +356,16 @@ NULL
 11
 31
 32
+
+# %V - ISO Week number of the year (Week 1 contains Jan 4).
+query I
+SELECT strftime(d, '%V') FROM timestamps ORDER BY d;
+----
+NULL
+01
+11
+32
+33
 
 # %c - Locale’s appropriate date and time representation.
 query I

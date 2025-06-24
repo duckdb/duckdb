@@ -14,26 +14,35 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/catalog/catalog_entry_map.hpp"
 
 namespace duckdb {
+
+struct ExportEntries {
+	vector<reference<CatalogEntry>> schemas;
+	vector<reference<CatalogEntry>> custom_types;
+	vector<reference<CatalogEntry>> sequences;
+	vector<reference<CatalogEntry>> tables;
+	vector<reference<CatalogEntry>> views;
+	vector<reference<CatalogEntry>> indexes;
+	vector<reference<CatalogEntry>> macros;
+};
+
 //! Parse a file from disk using a specified copy function and return the set of chunks retrieved from the file
 class PhysicalExport : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPORT;
 
 public:
-	PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
-	               idx_t estimated_cardinality, BoundExportData exported_tables)
-	    : PhysicalOperator(PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
-	      function(std::move(function)), info(std::move(info)), exported_tables(std::move(exported_tables)) {
-	}
+	PhysicalExport(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
+	               unique_ptr<CopyInfo> info, idx_t estimated_cardinality, unique_ptr<BoundExportData> exported_tables);
 
 	//! The copy function to use to read the file
 	CopyFunction function;
 	//! The binding info containing the set of options for reading the file
 	unique_ptr<CopyInfo> info;
 	//! The table info for each table that will be exported
-	BoundExportData exported_tables;
+	unique_ptr<BoundExportData> exported_tables;
 
 public:
 	// Source interface
@@ -43,6 +52,10 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
+	static void ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schemas,
+	                           ExportEntries &result);
+	static catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, Catalog &catalog);
 
 public:
 	// Sink interface

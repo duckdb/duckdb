@@ -34,8 +34,15 @@ static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, T
 	names.emplace_back("free_list");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::BIGINT));
 
-	string db_name =
-	    input.inputs.empty() ? DatabaseManager::GetDefaultDatabase(context) : StringValue::Get(input.inputs[0]);
+	string db_name;
+	if (input.inputs.empty()) {
+		db_name = DatabaseManager::GetDefaultDatabase(context);
+	} else {
+		if (input.inputs[0].IsNull()) {
+			throw BinderException("Database argument for pragma_metadata_info cannot be NULL");
+		}
+		db_name = StringValue::Get(input.inputs[0]);
+	}
 	auto &catalog = Catalog::GetCatalog(context, db_name);
 	auto result = make_uniq<PragmaMetadataFunctionData>();
 	result->metadata_info = catalog.GetMetadataInfo(context);
@@ -57,13 +64,13 @@ static void PragmaMetadataInfoFunction(ClientContext &context, TableFunctionInpu
 		// block_id
 		output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
 		// total_blocks
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.total_blocks));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.total_blocks)));
 		// free_blocks
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.free_list.size()));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.free_list.size())));
 		// free_list
 		vector<Value> list_values;
 		for (auto &free_id : entry.free_list) {
-			list_values.push_back(Value::BIGINT(free_id));
+			list_values.push_back(Value::BIGINT(NumericCast<int64_t>(free_id)));
 		}
 		output.SetValue(col_idx++, count, Value::LIST(LogicalType::BIGINT, std::move(list_values)));
 		count++;

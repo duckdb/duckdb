@@ -96,8 +96,21 @@
         "id": 202,
         "name": "right",
         "type": "QueryNode*"
+      },
+      {
+        "id": 203,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "children",
+        "type": "vector<QueryNode*>",
+        "serialize_property": "SerializeChildNodes()"
       }
-    ]
+    ],
+    "constructor": ["setop_type", "left", "right", "children", "setop_all"]
   },
   {
     "class": "RecursiveCTENode",
@@ -130,6 +143,11 @@
         "id": 204,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },
@@ -158,6 +176,12 @@
         "id": 203,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 204,
+        "name": "materialized",
+        "type": "CTEMaterialize",
+        "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
     ]
   }

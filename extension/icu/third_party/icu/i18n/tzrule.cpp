@@ -53,7 +53,7 @@ TimeZoneRule::operator=(const TimeZoneRule& right) {
     return *this;
 }
 
-UBool
+bool
 TimeZoneRule::operator==(const TimeZoneRule& that) const {
     return ((this == &that) ||
             (typeid(*this) == typeid(that) &&
@@ -62,7 +62,7 @@ TimeZoneRule::operator==(const TimeZoneRule& that) const {
             fDSTSavings == that.fDSTSavings));
 }
 
-UBool
+bool
 TimeZoneRule::operator!=(const TimeZoneRule& that) const {
     return !operator==(that);
 }
@@ -120,14 +120,14 @@ InitialTimeZoneRule::operator=(const InitialTimeZoneRule& right) {
     return *this;
 }
 
-UBool
+bool
 InitialTimeZoneRule::operator==(const TimeZoneRule& that) const {
     return ((this == &that) ||
             (typeid(*this) == typeid(that) &&
             TimeZoneRule::operator==(that)));
 }
 
-UBool
+bool
 InitialTimeZoneRule::operator!=(const TimeZoneRule& that) const {
     return !operator==(that);
 }
@@ -226,7 +226,7 @@ AnnualTimeZoneRule::operator=(const AnnualTimeZoneRule& right) {
     return *this;
 }
 
-UBool
+bool
 AnnualTimeZoneRule::operator==(const TimeZoneRule& that) const {
     if (this == &that) {
         return TRUE;
@@ -240,7 +240,7 @@ AnnualTimeZoneRule::operator==(const TimeZoneRule& that) const {
             fEndYear == atzr->fEndYear);
 }
 
-UBool
+bool
 AnnualTimeZoneRule::operator!=(const TimeZoneRule& that) const {
     return !operator==(that);
 }
@@ -445,7 +445,7 @@ TimeArrayTimeZoneRule::operator=(const TimeArrayTimeZoneRule& right) {
     return *this;
 }
 
-UBool
+bool
 TimeArrayTimeZoneRule::operator==(const TimeZoneRule& that) const {
     if (this == &that) {
         return TRUE;
@@ -469,7 +469,7 @@ TimeArrayTimeZoneRule::operator==(const TimeZoneRule& that) const {
     return res;
 }
 
-UBool
+bool
 TimeArrayTimeZoneRule::operator!=(const TimeZoneRule& that) const {
     return !operator==(that);
 }

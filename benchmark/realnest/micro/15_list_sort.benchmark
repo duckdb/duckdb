@@ -1,0 +1,27 @@
+# name: benchmark/realnest/micro/15_list_sort.benchmark
+# description: Benchmarks list_sort function
+# group: [micro]
+
+name list_sort
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT list_sort(Jet, 'ASC'),
+    list_sort(Muon, 'DESC'),
+    list_sort(Muon, 'ASC', 'NULLS FIRST'),
+    list_sort(Muon, 'ASC', 'NULLS LAST'),
+    list_sort(Photon, 'ASC'),
+    list_sort(Photon, 'DESC', 'NULLS FIRST'),
+    list_sort(Photon, 'DESC', 'NULLS LAST'),
+    list_sort(Tau, 'DESC'),
+    list_sort(Tau, 'ASC', 'NULLS FIRST'),
+    list_sort(Tau, 'ASC', 'NULLS LAST')
+FROM single_mu_lists;

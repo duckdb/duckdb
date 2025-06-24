@@ -12,7 +12,7 @@ statement ok
 PRAGMA verify_parallelism
 
 statement ok
-CREATE TABLE test AS (SELECT string_agg(range, '🦆 ') AS s, mod(range, 10000) xx FROM range(50000) GROUP BY xx)
+CREATE TABLE test AS (SELECT string_agg(range::VARCHAR, '🦆 ') AS s, mod(range, 10000) xx FROM range(50000) GROUP BY xx)
 
 statement ok
 CREATE TABLE test2 AS (SELECT unnest(string_split(s, ' ')) FROM test)

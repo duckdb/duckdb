@@ -21,7 +21,9 @@ enum class TableScanType : uint8_t {
 	TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES = 2,
 	//! Scan all rows, excluding any permanently deleted rows.
 	//! Permanently deleted rows are rows which no transaction will ever need again.
-	TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED = 3
+	TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED = 3,
+	//! Scan the latest committed rows
+	TABLE_SCAN_LATEST_COMMITTED_ROWS = 4
 };
 
 } // namespace duckdb

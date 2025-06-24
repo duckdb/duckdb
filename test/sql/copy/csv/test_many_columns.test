@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE t AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/manycolumns.csv');
+CREATE TABLE t AS SELECT * FROM read_csv_auto('data/csv/manycolumns.csv');
 
 statement ok
-PRAGMA SHOW('t');
+SHOW t

@@ -111,7 +111,7 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
 		int32_t year, month, day;
-		int32_t hour, minute, second, milisecond;
+		int32_t hour, minute, second, millisecond;
 
 		auto date = row.GetValue<date_t>(0);
 		auto time = row.GetValue<dtime_t>(1);
@@ -121,15 +121,15 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 		REQUIRE(month == 1);
 		REQUIRE(day == 1);
 
-		Time::Convert(time, hour, minute, second, milisecond);
+		Time::Convert(time, hour, minute, second, millisecond);
 		REQUIRE(hour == 13);
 		REQUIRE(minute == 0);
 		REQUIRE(second == 17);
-		REQUIRE(milisecond == 0);
+		REQUIRE(millisecond == 0);
 
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
-		Time::Convert(time, hour, minute, second, milisecond);
+		Time::Convert(time, hour, minute, second, millisecond);
 
 		REQUIRE(year == 1993);
 		REQUIRE(month == 1);
@@ -137,7 +137,7 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 		REQUIRE(hour == 14);
 		REQUIRE(minute == 0);
 		REQUIRE(second == 17);
-		REQUIRE(milisecond == 0);
+		REQUIRE(millisecond == 0);
 
 		row_count++;
 	}
@@ -158,16 +158,7 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 
 	// now create a streaming result
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
-	REQUIRE_NO_FAIL(*result);
-	// initial query does not fail!
-	auto chunk = result->Fetch();
-	REQUIRE(chunk);
-	// but subsequent query fails!
-	chunk = result->Fetch();
-	REQUIRE(!chunk);
-	REQUIRE(result->HasError());
-	auto str = result->ToString();
-	REQUIRE(!str.empty());
+	REQUIRE_FAIL(result);
 }
 
 TEST_CASE("Test UUID", "[api][uuid]") {
@@ -201,4 +192,34 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 	auto result = con.Query("select a, array_agg(c ORDER BY b) from t2 GROUP BY a");
 	REQUIRE(!result->HasError());
 	REQUIRE(result->names[1] == "array_agg(c ORDER BY b)");
+}
+
+TEST_CASE("Issue #9417", "[api][.]") {
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+
+	DuckDB db(TestCreatePath("issue_replication.db"), &config);
+	Connection con(db);
+	auto result = con.SendQuery("with max_period as ("
+	                            "            select max(reporting_date) as max_record\n"
+	                            "            from \"data/parquet-testing/issue9417.parquet\"\n"
+	                            "        )\n"
+	                            "        select\n"
+	                            "            *\n"
+	                            "        from \"data/parquet-testing/issue9417.parquet\" e\n"
+	                            "            inner join max_period\n"
+	                            "            on e.reporting_date = max_period.max_record\n"
+	                            "         where e.record_date between '2012-01-31' and '2023-06-30'");
+	idx_t count = 0;
+	while (true) {
+		auto chunk = result->Fetch();
+		if (chunk) {
+			REQUIRE(count + chunk->size() <= 46);
+			count += chunk->size();
+		} else {
+			break;
+		}
+	}
+
+	REQUIRE(count == 46);
 }

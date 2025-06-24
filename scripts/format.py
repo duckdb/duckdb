@@ -9,14 +9,19 @@ import inspect
 import subprocess
 import difflib
 import re
+import tempfile
+import uuid
+import concurrent.futures
+import argparse
 from python_helpers import open_utf8
-from importlib import import_module
-from importlib.metadata import version
 
 try:
-    import_module('black')
-except ImportError as e:
-    print('you need to run `pip install black`', e)
+    ver = subprocess.check_output(('black', '--version'), text=True)
+    if int(ver.split(' ')[1].split('.')[0]) < 24:
+        print('you need to run `pip install "black>=24"`', ver)
+        exit(-1)
+except Exception as e:
+    print('you need to run `pip install "black>=24"`', e)
     exit(-1)
 
 try:
@@ -39,6 +44,7 @@ except Exception as e:
 
 extensions = [
     '.cpp',
+    '.ipp',
     '.c',
     '.hpp',
     '.h',
@@ -84,6 +90,7 @@ ignored_files = [
     'yyjson.cpp',
     'yyjson.hpp',
     'duckdb_pdqsort.hpp',
+    'pdqsort.h',
     'stubdata.cpp',
     'nf_calendar.cpp',
     'nf_calendar.h',
@@ -93,6 +100,7 @@ ignored_files = [
     'nf_zformat.h',
     'expr.cc',
     'function_list.cpp',
+    'inlined_grammar.hpp',
 ]
 ignored_directories = [
     '.eggs',
@@ -104,52 +112,40 @@ ignored_directories = [
     os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
     os.path.join('extension', 'tpcds', 'dsdgen'),
     os.path.join('extension', 'jemalloc', 'jemalloc'),
-    os.path.join('extension', 'json', 'yyjson'),
     os.path.join('extension', 'icu', 'third_party'),
-    os.path.join('src', 'include', 'duckdb', 'core_functions', 'aggregate'),
-    os.path.join('src', 'include', 'duckdb', 'core_functions', 'scalar'),
     os.path.join('tools', 'nodejs', 'src', 'duckdb'),
 ]
 format_all = False
 check_only = True
 confirm = True
 silent = False
+force = False
 
 
-def print_usage():
-    print("Usage: python scripts/format.py [revision|--all] [--check|--fix]")
-    print(
-        "   [revision]     is an optional revision number, all files that changed since that revision will be formatted (default=HEAD)"
-    )
-    print("                  if [revision] is set to --all, all files will be formatted")
-    print("   --check only prints differences, --fix also fixes the files (--check is default)")
+parser = argparse.ArgumentParser(prog='python scripts/format.py', description='Format source directory files')
+parser.add_argument(
+    'revision', nargs='?', default='HEAD', help='Revision number or --all to format all files (default: HEAD)'
+)
+parser.add_argument('--check', action='store_true', help='Only print differences (default)')
+parser.add_argument('--fix', action='store_true', help='Fix the files')
+parser.add_argument('-a', '--all', action='store_true', help='Format all files')
+parser.add_argument('-d', '--directories', nargs='*', default=[], help='Format specified directories')
+parser.add_argument('-y', '--noconfirm', action='store_true', help='Skip confirmation prompt')
+parser.add_argument('-q', '--silent', action='store_true', help='Suppress output')
+parser.add_argument('-f', '--force', action='store_true', help='Force formatting')
+args = parser.parse_args()
+
+revision = args.revision
+if args.check and args.fix:
+    parser.print_usage()
     exit(1)
-
-
-if len(sys.argv) == 1:
-    revision = "HEAD"
-elif len(sys.argv) >= 2:
-    revision = sys.argv[1]
-else:
-    print_usage()
-
-if len(sys.argv) > 2:
-    for arg in sys.argv[2:]:
-        if arg == '--check':
-            check_only = True
-        elif arg == '--fix':
-            check_only = False
-        elif arg == '--noconfirm':
-            confirm = False
-        elif arg == '--confirm':
-            confirm = True
-        elif arg == '--silent':
-            silent = True
-        else:
-            print_usage()
-
-if revision == '--all':
-    format_all = True
+check_only = not args.fix
+confirm = not args.noconfirm
+silent = args.silent
+force = args.force
+format_all = args.all
+if args.directories:
+    formatted_directories = args.directories
 
 
 def file_is_ignored(full_path):
@@ -167,9 +163,6 @@ def can_format_file(full_path):
     if not os.path.isfile(full_path):
         return False
     fname = full_path.split(os.path.sep)[-1]
-    # check ignored files
-    if file_is_ignored(full_path):
-        return False
     found = False
     # check file extension
     for ext in extensions:
@@ -177,6 +170,9 @@ def can_format_file(full_path):
             found = True
             break
     if not found:
+        return False
+    # check ignored files
+    if file_is_ignored(full_path):
         return False
     # now check file directory
     for dname in formatted_directories:
@@ -238,6 +234,7 @@ if confirm and not check_only:
 
 format_commands = {
     '.cpp': cpp_format_command,
+    '.ipp': cpp_format_command,
     '.c': cpp_format_command,
     '.hpp': cpp_format_command,
     '.h': cpp_format_command,
@@ -259,8 +256,13 @@ base_dir = os.path.join(os.getcwd(), 'src/include')
 
 def get_formatted_text(f, full_path, directory, ext):
     if not can_format_file(full_path):
-        print("Eek, cannot format file " + full_path + " but attempted to format anyway")
-        exit(1)
+        if not force:
+            print(
+                "File "
+                + full_path
+                + " is not normally formatted - but attempted to format anyway. Use --force if formatting is desirable"
+            )
+            exit(1)
     if f == 'list.hpp':
         # fill in list file
         file_list = [
@@ -377,27 +379,36 @@ def format_file(f, full_path, directory, ext):
             print(total_diff)
             difference_files.append(full_path)
     else:
-        tmpfile = full_path + ".tmp"
+        tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         with open_utf8(tmpfile, 'w+') as f:
             f.write(new_text)
         os.rename(tmpfile, full_path)
 
 
+class ToFormatFile:
+    def __init__(self, filename, full_path, directory):
+        self.filename = filename
+        self.full_path = full_path
+        self.directory = directory
+        self.ext = '.' + filename.split('.')[-1]
+
+
 def format_directory(directory):
     files = os.listdir(directory)
     files.sort()
+    result = []
     for f in files:
         full_path = os.path.join(directory, f)
         if os.path.isdir(full_path):
             if f in ignored_directories or full_path in ignored_directories:
                 continue
-            if not silent:
-                print(full_path)
-            format_directory(full_path)
+            result += format_directory(full_path)
         elif can_format_file(full_path):
-            format_file(f, full_path, directory, '.' + f.split('.')[-1])
+            result += [ToFormatFile(f, full_path, directory)]
+    return result
 
 
+files = []
 if format_all:
     try:
         os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
@@ -405,15 +416,31 @@ if format_all:
         pass
 
     for direct in formatted_directories:
-        format_directory(direct)
+        files += format_directory(direct)
 
 else:
     for full_path in changed_files:
         splits = full_path.split(os.path.sep)
         fname = splits[-1]
         dirname = os.path.sep.join(splits[:-1])
-        ext = '.' + full_path.split('.')[-1]
-        format_file(fname, full_path, dirname, ext)
+        files.append(ToFormatFile(fname, full_path, dirname))
+
+
+def process_file(f):
+    if not silent:
+        print(f.full_path)
+    format_file(f.filename, f.full_path, f.directory, f.ext)
+
+
+# Create thread for each file
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    try:
+        threads = [executor.submit(process_file, f) for f in files]
+        # Wait for all tasks to complete
+        concurrent.futures.wait(threads)
+    except KeyboardInterrupt:
+        executor.shutdown(wait=True, cancel_futures=True)
+        raise
 
 if check_only:
     if len(difference_files) > 0:

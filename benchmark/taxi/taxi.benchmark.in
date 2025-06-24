@@ -1,0 +1,15 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [taxi]
+
+name Q${QUERY_NUMBER_PADDED}
+group taxi
+
+cache taxi.duckdb
+
+load benchmark/taxi/load.sql
+
+run
+${RESULT_QUERY}
+
+result benchmark/taxi/result/q${QUERY_NUMBER_PADDED}.csv

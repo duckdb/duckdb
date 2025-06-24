@@ -29,7 +29,7 @@ BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global
 }
 
 void BoundParameterExpression::Invalidate(Expression &expr) {
-	if (expr.type != ExpressionType::VALUE_PARAMETER) {
+	if (expr.GetExpressionType() != ExpressionType::VALUE_PARAMETER) {
 		throw InternalException("BoundParameterExpression::Invalidate requires a parameter as input");
 	}
 	auto &bound_parameter = expr.Cast<BoundParameterExpression>();
@@ -38,7 +38,7 @@ void BoundParameterExpression::Invalidate(Expression &expr) {
 }
 
 void BoundParameterExpression::InvalidateRecursive(Expression &expr) {
-	if (expr.type == ExpressionType::VALUE_PARAMETER) {
+	if (expr.GetExpressionType() == ExpressionType::VALUE_PARAMETER) {
 		Invalidate(expr);
 		return;
 	}
@@ -73,7 +73,7 @@ hash_t BoundParameterExpression::Hash() const {
 	return result;
 }
 
-unique_ptr<Expression> BoundParameterExpression::Copy() {
+unique_ptr<Expression> BoundParameterExpression::Copy() const {
 	auto result = make_uniq<BoundParameterExpression>(identifier);
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;

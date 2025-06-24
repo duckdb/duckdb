@@ -31,7 +31,7 @@ SELECT '1e-100'::DECIMAL
 
 # large negative exponent
 query I
-SELECT '1e-99999999'::DECIMAL
+SELECT '1e-9999'::DECIMAL
 ----
 0
 
@@ -58,41 +58,65 @@ SELECT '1e37'::DECIMAL(38,0)
 
 statement error
 SELECT '1e4'::DECIMAL(4,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '1e9'::DECIMAL(9,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '1e18'::DECIMAL(18,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '1e38'::DECIMAL(38,0)
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # overflow
 statement error
 SELECT '1e100'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # multiple exponents
 statement error
 SELECT '1e100e100'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # fractional exponent
 statement error
 SELECT '1e100.2'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # very large exponents
 statement error
 SELECT '1e9999999999'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '1e-9999999999'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '1e-99999999999999999999999999999999'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # not an exponent
 statement error
 SELECT '.1f3'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '1f3'::DECIMAL
+----
+<REGEX>:Conversion Error.*Could not convert string.*

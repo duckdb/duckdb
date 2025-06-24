@@ -89,7 +89,7 @@ static char alpha_num[65] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMN
 char *getenv PROTO((const char *name));
 #endif
 void usage();
-void permute_dist(distribution *d, seed_t *seed);
+void permute_dist(distribution *d, seed_t *seed, DBGenContext *ctx);
 
 /*
  * tpch_env_config: look for a environmental variable setting and return its
@@ -302,7 +302,6 @@ void read_dist(const char *path, const char *name, distribution *target) {
 		fprintf(stderr, "Read error on dist '%s'\n", name);
 		exit(1);
 	}
-	target->permute = (long *)NULL;
 	return;
 }
 
@@ -310,16 +309,16 @@ void read_dist(const char *path, const char *name, distribution *target) {
  * agg_str(set, count) build an aggregated string from count unique
  * selections taken from set
  */
-void agg_str(distribution *set, long count, seed_t *seed, char *dest) {
+void agg_str(distribution *set, long count, seed_t *seed, char *dest, DBGenContext *ctx) {
 	distribution *d;
 	int i;
 
 	d = set;
 	*dest = '\0';
 
-	permute_dist(d, seed);
+	permute_dist(d, seed, ctx);
 	for (i = 0; i < count; i++) {
-		strcat(dest, DIST_MEMBER(set, DIST_PERMUTE(d, i)));
+		strcat(dest, DIST_MEMBER(set, ctx->permute[i]));
 		strcat(dest, " ");
 	}
 	*(dest + (int)strlen(dest) - 1) = '\0';

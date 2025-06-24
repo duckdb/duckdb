@@ -1,0 +1,101 @@
+{
+    "group": "profiling_info",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_get_profiling_info",
+            "return_type": "duckdb_profiling_info",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                }
+            ],
+            "comment": {
+                "description": "Returns the root node of the profiling information. Returns nullptr, if profiling is not enabled.\n\n",
+                "param_comments": {
+                    "connection": "A connection object."
+                },
+                "return_value": "A profiling information object."
+            }
+        },
+        {
+            "name": "duckdb_profiling_info_get_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_profiling_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "key"
+                }
+            ],
+            "comment": {
+                "description": "Returns the value of the metric of the current profiling info node. Returns nullptr, if the metric does\n not exist or is not enabled. Currently, the value holds a string, and you can retrieve the string\n by calling the corresponding function: char *duckdb_get_varchar(duckdb_value value).\n\n",
+                "param_comments": {
+                    "info": "A profiling information object.",
+                    "key": "The name of the requested metric."
+                },
+                "return_value": "The value of the metric. Must be freed with `duckdb_destroy_value`"
+            }
+        },
+        {
+            "name": "duckdb_profiling_info_get_metrics",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_profiling_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the key-value metric map of this profiling node as a MAP duckdb_value.\nThe individual elements are accessible via the duckdb_value MAP functions.\n\n",
+                "param_comments": {
+                    "info": "A profiling information object."
+                },
+                "return_value": "The key-value metric map as a MAP duckdb_value."
+            }
+        },
+        {
+            "name": "duckdb_profiling_info_get_child_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_profiling_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of children in the current profiling info node.\n\n",
+                "param_comments": {
+                    "info": "A profiling information object."
+                },
+                "return_value": "The number of children in the current node."
+            }
+        },
+        {
+            "name": "duckdb_profiling_info_get_child",
+            "return_type": "duckdb_profiling_info",
+            "params": [
+                {
+                    "type": "duckdb_profiling_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the child node at the specified index.\n\n",
+                "param_comments": {
+                    "info": "A profiling information object.",
+                    "index": "The index of the child node."
+                },
+                "return_value": "The child node at the specified index."
+            }
+        }
+    ]
+}

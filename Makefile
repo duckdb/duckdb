@@ -40,7 +40,7 @@ ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_UBSAN}, 1)
-	DISABLE_SANITIZER_FLAG=-DENABLE_UBSAN=0
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
@@ -55,13 +55,33 @@ ifeq (${STATIC_LIBCPP}, 1)
 	STATIC_LIBCPP=-DSTATIC_LIBCPP=TRUE
 endif
 
-CMAKE_VARS ?=
+COMMON_CMAKE_VARS ?=
 CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
+CORE_EXTENSIONS ?=
+UNSAFE_NUMERIC_CAST ?=
+ifdef OVERRIDE_GIT_DESCRIBE
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
+else
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE=""
+endif
+
+ifdef DUCKDB_EXPLICIT_VERSION
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_EXPLICIT_VERSION}"
+else
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION=""
+endif
+
+ifneq (${CXX_STANDARD}, )
+        CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_CXX_STANDARD="${CXX_STANDARD}"
+endif
 ifneq (${DUCKDB_EXTENSIONS}, )
 	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
+endif
+ifneq (${CORE_EXTENSIONS}, )
+	CORE_EXTENSIONS:=${CORE_EXTENSIONS}
 endif
 ifeq (${DISABLE_PARQUET}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};parquet
@@ -72,8 +92,14 @@ endif
 ifeq (${EXTENSION_STATIC_BUILD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
 endif
+ifeq (${EXTENSION_STATIC_BUILD}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
+endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
+endif
+ifeq (${GENERATE_EXTENSION_ENTRIES}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DGENERATE_EXTENSION_ENTRIES=1
 endif
 ifneq (${ENABLE_EXTENSION_AUTOLOADING}, "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOLOADING=${ENABLE_EXTENSION_AUTOLOADING}
@@ -81,7 +107,9 @@ endif
 ifneq (${ENABLE_EXTENSION_AUTOINSTALL}, "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
-
+ifneq (${UNSAFE_NUMERIC_CAST}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DUNSAFE_NUMERIC_CAST=1
+endif
 ifeq (${BUILD_EXTENSIONS_ONLY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS_ONLY=1
 endif
@@ -104,23 +132,14 @@ endif
 ifeq (${BUILD_FTS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};fts
 endif
-ifeq (${BUILD_VISUALIZER}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};visualizer
-endif
 ifeq (${BUILD_HTTPFS}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};httpfs
+	CORE_EXTENSIONS:=${CORE_EXTENSIONS};httpfs
 endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
 endif
 ifeq (${BUILD_JEMALLOC}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
-endif
-ifeq (${BUILD_EXCEL}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};excel
-endif
-ifeq (${BUILD_INET}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake"
@@ -132,29 +151,20 @@ endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
 endif
-ifeq (${BUILD_SQLSMITH}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};sqlsmith
-endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_JDBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DJDBC_DRIVER=1
-endif
-ifneq ($(OVERRIDE_JDBC_OS_ARCH),)
-	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
-endif
-ifeq (${BUILD_ODBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_ODBC_DRIVER=1
-endif
-ifneq ($(ODBC_CONFIG),)
-	CMAKE_VARS:=${CMAKE_VARS} -DODBC_CONFIG=${ODBC_CONFIG}
 endif
 ifeq (${BUILD_PYTHON}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"
 endif
 ifeq (${PYTHON_USER_SPACE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DUSER_SPACE=1
+endif
+ifeq (${PYTHON_EDITABLE_BUILD}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DPYTHON_EDITABLE_BUILD=1
+endif
+ifeq (${PYTHON_DEV}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DPYTHON_DEV=1
 endif
 ifeq (${CONFIGURE_R}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DCONFIGURE_R=1
@@ -165,11 +175,20 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+ifneq ($(TIDY_CHECKS),)
+        TIDY_PERFORM_CHECKS := '-checks=${TIDY_CHECKS}'
+endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
+endif
+ifneq ($(CORE_EXTENSIONS),)
+	CMAKE_VARS:=${CMAKE_VARS} -DCORE_EXTENSIONS="$(CORE_EXTENSIONS)"
+endif
+ifeq ($(SHADOW_FORBIDDEN_FUNCTIONS),1)
+	CMAKE_VARS:=${CMAKE_VARS} -DSHADOW_FORBIDDEN_FUNCTIONS=1
 endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
@@ -184,7 +203,13 @@ ifneq ($(EXTRA_CMAKE_VARIABLES),)
 	CMAKE_VARS:=${CMAKE_VARS} ${EXTRA_CMAKE_VARIABLES}
 endif
 ifeq (${CRASH_ON_ASSERT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DASSERT_EXCEPTION=0
+	CMAKE_VARS:=${CMAKE_VARS} -DCRASH_ON_ASSERT=1
+endif
+ifeq (${FORCE_ASSERT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASSERT=1
+endif
+ifeq (${SMALLER_BINARY}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1
@@ -201,24 +226,46 @@ endif
 ifeq (${FORCE_ASYNC_SINK_SOURCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASYNC_SINK_SOURCE=1
 endif
+ifeq (${RUN_SLOW_VERIFIERS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DRUN_SLOW_VERIFIERS=1
+endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
+ifeq (${PREFETCH_ALL_PARQUET_FILES}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DPREFETCH_ALL_PARQUET_FILES=1
+endif
+ifeq (${DISABLE_POINTER_SALT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_POINTER_SALT=1
+endif
+ifeq (${LATEST_STORAGE}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
+endif
+ifeq (${BLOCK_VERIFICATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
+endif
+ifneq (${DISABLE_CPP_UNITTESTS}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_UNITTEST_CPP_TESTS=0
+endif
 ifeq (${DEBUG_MOVE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_MOVE=1
+endif
+ifeq (${DEBUG_ALLOCATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_ALLOCATION=1
 endif
 ifeq (${DEBUG_STACKTRACE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
 endif
 ifeq (${DISABLE_CORE_FUNCTIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_CORE_FUNCTIONS_EXTENSION=0
+	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};core_functions
 endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
 endif
-ifneq (${LOCAL_EXTENSION_REPO},)
-	CMAKE_VARS:=${CMAKE_VARS} -DLOCAL_EXTENSION_REPO="${LOCAL_EXTENSION_REPO}"
+ifeq (${DISABLE_SHELL}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_SHELL=0
 endif
+CMAKE_VARS:=${CMAKE_VARS} -DLOCAL_EXTENSION_REPO="${LOCAL_EXTENSION_REPO}"
 ifneq (${OSX_BUILD_ARCH}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_ARCH=${OSX_BUILD_ARCH}
 endif
@@ -227,6 +274,32 @@ ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 endif
 ifneq ("${CUSTOM_LINKER}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
+endif
+ifdef SKIP_PLATFORM_UTIL
+	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
+endif
+ifdef DEBUG_STACKTRACE
+	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
+endif
+ifeq (${NATIVE_ARCH}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
+endif
+ifeq (${OVERRIDE_NEW_DELETE}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
+endif
+ifeq (${MAIN_BRANCH_VERSIONING}, 0)
+        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
+endif
+ifeq (${MAIN_BRANCH_VERSIONING}, 1)
+        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
+endif
+
+# Optional overrides
+ifneq (${STANDARD_VECTOR_SIZE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DSTANDARD_VECTOR_SIZE=${STANDARD_VECTOR_SIZE}
+endif
+ifneq (${BLOCK_ALLOC_SIZE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}
 endif
 
 # Enable VCPKG for this build
@@ -243,8 +316,19 @@ endif
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
 endif
+ifeq (${EXPORT_DYNAMIC_SYMBOLS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXPORT_DYNAMIC_SYMBOLS=1
+endif
 ifneq ("${CMAKE_LLVM_PATH}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
+endif
+
+CMAKE_VARS:=${CMAKE_VARS} ${COMMON_CMAKE_VARS}
+
+ifdef DUCKDB_PLATFORM
+	ifneq ("${DUCKDB_PLATFORM}", "")
+		CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXPLICIT_PLATFORM='${DUCKDB_PLATFORM}'
+	endif
 endif
 
 clean:
@@ -256,7 +340,6 @@ clean-python:
 debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
 	cd build/debug && \
-	echo ${DUCKDB_EXTENSION_SUBSTRAIT_PATH} && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
@@ -268,15 +351,18 @@ release: ${EXTENSION_CONFIG_STEP}
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" && \
-	emmake make -j8 -Cbuild/wasm_mvp && \
-	cd build/wasm_mvp && bash ../../scripts/link-wasm-extensions.sh
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emmake make -j8 -Cbuild/wasm_mvp
 
 wasm_eh: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" && \
-	emmake make -j8 -Cbuild/wasm_eh && \
-	cd build/wasm_eh && bash ../../scripts/link-wasm-extensions.sh
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emmake make -j8 -Cbuild/wasm_eh
+
+wasm_threads: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/wasm_threads && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -pthread" -DDUCKDB_EXPLICIT_PLATFORM="wasm_threads" ${COMMON_CMAKE_VARS} -DUSE_WASM_THREADS=1 -DCMAKE_C_FLAGS="-pthread" ${TOOLCHAIN_FLAGS} && \
+	emmake make -j8 -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
@@ -305,8 +391,12 @@ unittest: debug
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
+unittest_release: release
+	build/release/test/unittest
+	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
 unittestci:
-	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
@@ -352,7 +442,14 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
+	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+
+tidy-check-diff:
+	mkdir -p ./build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
+	cd ../../ && \
+	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
@@ -382,8 +479,11 @@ format-changes:
 format-main:
 	python3 scripts/format.py main --fix --noconfirm
 
+format-feature:
+	python3 scripts/format.py feature --fix --noconfirm
+
 third_party/sqllogictest:
-	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
@@ -396,7 +496,7 @@ sqlsmith: debug
 # works both on executable, libraries (-> .duckdb_extension) and on WebAssembly
 bloaty/bloaty:
 	git clone https://github.com/google/bloaty.git
-	cd bloaty && git submodule update --init --recursive && cmake -B build -G Ninja -S . && cmake --build build
+	cd bloaty && git submodule update --init --recursive && cmake -Bm build -G Ninja -S . && cmake --build build
 	mv bloaty/build/bloaty bloaty/bloaty
 
 bloaty: reldebug bloaty/bloaty
@@ -411,6 +511,43 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files:
+	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
+	python3 scripts/generate_settings.py
 	python3 scripts/generate_serialization.py
+	python3 scripts/generate_storage_info.py
 	python3 scripts/generate_enum_util.py
+	python3 scripts/generate_metric_enums.py
+	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
+# Run the formatter again after (re)generating the files
+	$(MAKE) format-main
+
+bundle-setup:
+	cd build/release && \
+	rm -rf bundle && \
+	mkdir -p bundle && \
+	cp src/libduckdb_static.a bundle/. && \
+	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/*/lib*_extension.a bundle/. && \
+	cd bundle && \
+	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
+	find . -name '*.a' -execdir ${AR} -x {} \;
+
+bundle-library-o: bundle-setup
+	cd build/release/bundle && \
+	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
+
+bundle-library-obj: bundle-setup
+	cd build/release/bundle && \
+	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
+
+bundle-library: release
+	make bundle-library-o
+
+gather-libs: release
+	cd build/release && \
+	rm -rf libs && \
+	mkdir -p libs && \
+	cp src/libduckdb_static.a libs/. && \
+	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/*/lib*_extension.a libs/.

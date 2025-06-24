@@ -2,8 +2,6 @@
 # description: Temporary tables are not written to disk
 # group: [catalog]
 
-require skip_reload
-
 # load the DB from disk
 load __TEST_DIR__/test_store_temporary.db
 
@@ -27,6 +25,7 @@ DELETE FROM temp.a
 # check schema
 statement error
 DELETE FROM asdf.a
+----
 
 # temporary sequences
 statement ok
@@ -77,6 +76,7 @@ SELECT * FROM persistent
 # temporary table is gone
 statement error
 SELECT * FROM a
+----
 
 statement ok
 CREATE TEMPORARY TABLE a (i INTEGER)

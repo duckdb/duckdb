@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -58,11 +58,19 @@ public:
 	//! Run tasks until `max_tasks` have been completed, or until there are no more tasks available
 	void ExecuteTasks(idx_t max_tasks);
 
-	//! Sets the amount of active threads executing tasks for the system; n-1 background threads will be launched.
-	//! The main thread will also be used for execution
-	void SetThreads(int32_t n);
+	//! Sets the amount of background threads to be used for execution, based on the number of total threads
+	//! and the number of external threads. External threads, e.g. the main thread, will also be used for execution.
+	//! Launches `total_threads - external_threads` background worker threads.
+	void SetThreads(idx_t total_threads, idx_t external_threads);
+
+	void RelaunchThreads();
+
 	//! Returns the number of threads
 	DUCKDB_API int32_t NumberOfThreads();
+
+	idx_t GetNumberOfTasks() const;
+	idx_t GetProducerCount() const;
+	idx_t GetTaskCountForProducer(ProducerToken &token) const;
 
 	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
 	void Signal(idx_t n);
@@ -72,9 +80,16 @@ public:
 
 	//! Set the allocator flush threshold
 	void SetAllocatorFlushTreshold(idx_t threshold);
+	//! Sets the allocator background thread
+	void SetAllocatorBackgroundThreads(bool enable);
+
+	//! Get the number of the CPU on which the calling thread is currently executing.
+	//! Fallback to calling thread id if CPU number is not available.
+	//! Result do not need to be exact 'return 0' is a valid fallback strategy
+	static idx_t GetEstimatedCPUId();
 
 private:
-	void SetThreadsInternal(int32_t n);
+	void RelaunchThreadsInternal(int32_t n);
 
 private:
 	DatabaseInstance &db;
@@ -88,6 +103,12 @@ private:
 	vector<unique_ptr<atomic<bool>>> markers;
 	//! The threshold after which to flush the allocator after completing a task
 	atomic<idx_t> allocator_flush_threshold;
+	//! Whether allocator background threads are enabled
+	atomic<bool> allocator_background_threads;
+	//! Requested thread count (set by the 'threads' setting)
+	atomic<int32_t> requested_thread_count;
+	//! The amount of threads currently running
+	atomic<int32_t> current_thread_count;
 };
 
 } // namespace duckdb

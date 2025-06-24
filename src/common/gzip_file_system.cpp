@@ -1,6 +1,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include "miniz.hpp"
 #include "miniz_wrapper.hpp"
@@ -68,7 +69,7 @@ struct MiniZStreamWrapper : public StreamWrapper {
 	~MiniZStreamWrapper() override;
 
 	CompressedFile *file = nullptr;
-	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
+	unique_ptr<duckdb_miniz::mz_stream> mz_stream_ptr;
 	bool writing = false;
 	duckdb_miniz::mz_ulong crc;
 	idx_t total_size;
@@ -81,7 +82,7 @@ public:
 
 	void Close() override;
 
-	void FlushStream();
+	void FlushStream() const;
 };
 
 MiniZStreamWrapper::~MiniZStreamWrapper() {
@@ -91,15 +92,15 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 	}
 	try {
 		MiniZStreamWrapper::Close();
-	} catch (...) {
+	} catch (...) { // NOLINT - cannot throw in exception
 	}
 }
 
 void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	Close();
 	this->file = &file;
-	mz_stream_ptr = new duckdb_miniz::mz_stream();
-	memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
+	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
 	this->writing = write;
 
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
@@ -111,7 +112,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		MiniZStream::InitializeGZIPHeader(gzip_hdr);
 		file.child_handle->Write(gzip_hdr, GZIP_HEADER_MINSIZE);
 
-		auto ret = mz_deflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED,
+		auto ret = mz_deflateInit2(mz_stream_ptr.get(), duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED,
 		                           -MZ_DEFAULT_WINDOW_BITS, 1, 0);
 		if (ret != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
@@ -119,13 +120,13 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	} else {
 		idx_t data_start = GZIP_HEADER_MINSIZE;
 		auto read_count = file.child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
-		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, read_count);
+		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, NumericCast<idx_t>(read_count), &file);
 		// Skip over the extra field if necessary
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			uint8_t gzip_xlen[2];
 			file.child_handle->Seek(data_start);
 			file.child_handle->Read(gzip_xlen, 2);
-			idx_t xlen = (uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8;
+			auto xlen = NumericCast<idx_t>((uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8);
 			data_start += xlen + 2;
 		}
 		// Skip over the file name if necessary
@@ -135,7 +136,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		}
 		file.child_handle->Seek(data_start);
 		// stream is now set to beginning of payload data
-		auto ret = duckdb_miniz::mz_inflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+		auto ret = duckdb_miniz::mz_inflateInit2(mz_stream_ptr.get(), -MZ_DEFAULT_WINDOW_BITS);
 		if (ret != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
 		}
@@ -145,7 +146,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// Handling for the concatenated files
 	if (sd.refresh) {
-		auto available = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
+		auto available = static_cast<uint32_t>(sd.in_buff_end - sd.in_buff_start);
 		if (available <= GZIP_FOOTER_SIZE) {
 			// Only footer is available so we just close and return finished
 			Close();
@@ -156,10 +157,10 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		auto body_ptr = sd.in_buff_start + GZIP_FOOTER_SIZE;
 		uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 		memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
-		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE, nullptr);
 		body_ptr += GZIP_HEADER_MINSIZE;
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
-			idx_t xlen = (uint8_t)*body_ptr | (uint8_t) * (body_ptr + 1) << 8;
+			auto xlen = NumericCast<idx_t>((uint8_t)*body_ptr | (uint8_t) * (body_ptr + 1) << 8);
 			body_ptr += xlen + 2;
 			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 + xlen >= GZIP_HEADER_MAXSIZE) {
 				throw InternalException("Extra field resulting in GZIP header larger than defined maximum (%d)",
@@ -169,10 +170,10 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 			char c;
 			do {
-				c = *body_ptr;
+				c = UnsafeNumericCast<char>(*body_ptr);
 				body_ptr++;
 			} while (c != '\0' && body_ptr < sd.in_buff_end);
-			if ((idx_t)(body_ptr - sd.in_buff_start) >= GZIP_HEADER_MAXSIZE) {
+			if (static_cast<idx_t>(body_ptr - sd.in_buff_start) >= GZIP_HEADER_MAXSIZE) {
 				throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
 				                        GZIP_HEADER_MAXSIZE);
 			}
@@ -182,8 +183,8 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 			Close();
 			return true;
 		}
-		duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
-		auto sta = duckdb_miniz::mz_inflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+		duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
+		auto sta = duckdb_miniz::mz_inflateInit2(mz_stream_ptr.get(), -MZ_DEFAULT_WINDOW_BITS);
 		if (sta != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
 		}
@@ -192,10 +193,10 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// actually decompress
 	mz_stream_ptr->next_in = sd.in_buff_start;
 	D_ASSERT(sd.in_buff_end - sd.in_buff_start < NumericLimits<int32_t>::Maximum());
-	mz_stream_ptr->avail_in = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
+	mz_stream_ptr->avail_in = static_cast<uint32_t>(sd.in_buff_end - sd.in_buff_start);
 	mz_stream_ptr->next_out = data_ptr_cast(sd.out_buff_end);
-	mz_stream_ptr->avail_out = (uint32_t)((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_end);
-	auto ret = duckdb_miniz::mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+	mz_stream_ptr->avail_out = static_cast<uint32_t>((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_end);
+	auto ret = duckdb_miniz::mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 	if (ret != duckdb_miniz::MZ_OK && ret != duckdb_miniz::MZ_STREAM_END) {
 		throw IOException("Failed to decode gzip stream: %s", duckdb_miniz::mz_error(ret));
 	}
@@ -216,19 +217,20 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t uncompressed_data,
                                int64_t uncompressed_size) {
 	// update the src and the total size
-	crc = duckdb_miniz::mz_crc32(crc, reinterpret_cast<const unsigned char *>(uncompressed_data), uncompressed_size);
-	total_size += uncompressed_size;
+	crc = duckdb_miniz::mz_crc32(crc, reinterpret_cast<const unsigned char *>(uncompressed_data),
+	                             UnsafeNumericCast<size_t>(uncompressed_size));
+	total_size += UnsafeNumericCast<idx_t>(uncompressed_size);
 
 	auto remaining = uncompressed_size;
 	while (remaining > 0) {
-		idx_t output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
+		auto output_remaining = UnsafeNumericCast<idx_t>((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start);
 
 		mz_stream_ptr->next_in = reinterpret_cast<const unsigned char *>(uncompressed_data);
-		mz_stream_ptr->avail_in = remaining;
+		mz_stream_ptr->avail_in = NumericCast<unsigned int>(remaining);
 		mz_stream_ptr->next_out = sd.out_buff_start;
-		mz_stream_ptr->avail_out = output_remaining;
+		mz_stream_ptr->avail_out = NumericCast<unsigned int>(output_remaining);
 
-		auto res = mz_deflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (res != duckdb_miniz::MZ_OK) {
 			D_ASSERT(res != duckdb_miniz::MZ_STREAM_END);
 			throw InternalException("Failed to compress GZIP block");
@@ -236,28 +238,30 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 		sd.out_buff_start += output_remaining - mz_stream_ptr->avail_out;
 		if (mz_stream_ptr->avail_out == 0) {
 			// no more output buffer available: flush
-			file.child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file.child_handle->Write(sd.out_buff.get(),
+			                         UnsafeNumericCast<idx_t>(sd.out_buff_start - sd.out_buff.get()));
 			sd.out_buff_start = sd.out_buff.get();
 		}
-		idx_t written = remaining - mz_stream_ptr->avail_in;
+		auto written = UnsafeNumericCast<idx_t>(remaining - mz_stream_ptr->avail_in);
 		uncompressed_data += written;
 		remaining = mz_stream_ptr->avail_in;
 	}
 }
 
-void MiniZStreamWrapper::FlushStream() {
+void MiniZStreamWrapper::FlushStream() const {
 	auto &sd = file->stream_data;
 	mz_stream_ptr->next_in = nullptr;
 	mz_stream_ptr->avail_in = 0;
 	while (true) {
 		auto output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
 		mz_stream_ptr->next_out = sd.out_buff_start;
-		mz_stream_ptr->avail_out = output_remaining;
+		mz_stream_ptr->avail_out = NumericCast<unsigned int>(output_remaining);
 
-		auto res = mz_deflate(mz_stream_ptr, duckdb_miniz::MZ_FINISH);
+		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_FINISH);
 		sd.out_buff_start += (output_remaining - mz_stream_ptr->avail_out);
 		if (sd.out_buff_start > sd.out_buff.get()) {
-			file->child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file->child_handle->Write(sd.out_buff.get(),
+			                          UnsafeNumericCast<idx_t>(sd.out_buff_start - sd.out_buff.get()));
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		if (res == duckdb_miniz::MZ_STREAM_END) {
@@ -282,11 +286,10 @@ void MiniZStreamWrapper::Close() {
 		MiniZStream::InitializeGZIPFooter(gzip_footer, crc, total_size);
 		file->child_handle->Write(gzip_footer, MiniZStream::GZIP_FOOTER_SIZE);
 
-		duckdb_miniz::mz_deflateEnd(mz_stream_ptr);
+		duckdb_miniz::mz_deflateEnd(mz_stream_ptr.get());
 	} else {
-		duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+		duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
 	}
-	delete mz_stream_ptr;
 	mz_stream_ptr = nullptr;
 	file = nullptr;
 }
@@ -297,44 +300,70 @@ public:
 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
 		Initialize(write);
 	}
-
+	FileCompressionType GetFileCompressionType() override {
+		return FileCompressionType::GZIP;
+	}
 	GZipFileSystem gzip_fs;
 };
 
-void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count) {
+void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count, optional_ptr<CompressedFile> source_file) {
+	// include the filename in the error message if known
+	string file_info = source_file ? ": " + source_file->path : "";
+
 	// check for incorrectly formatted files
 	if (read_count != GZIP_HEADER_MINSIZE) {
-		throw IOException("Input is not a GZIP stream");
+		throw IOException("Input is not a GZIP stream" + file_info);
 	}
 	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
-		throw IOException("Input is not a GZIP stream");
+		throw IOException("Input is not a GZIP stream" + file_info);
 	}
 	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
-		throw IOException("Unsupported GZIP compression method");
+		throw IOException("Unsupported GZIP compression method" + file_info);
 	}
 	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-		throw IOException("Unsupported GZIP archive");
+		throw IOException("Unsupported GZIP archive" + file_info);
 	}
 }
 
-string GZipFileSystem::UncompressGZIPString(const string &in) {
-	// decompress file
-	auto body_ptr = in.data();
+bool GZipFileSystem::CheckIsZip(const char *data, duckdb::idx_t size) {
+	if (size < GZIP_HEADER_MINSIZE) {
+		return false;
+	}
 
-	auto mz_stream_ptr = new duckdb_miniz::mz_stream();
-	memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+	auto data_ptr = reinterpret_cast<const uint8_t *>(data);
+	if (data_ptr[0] != 0x1F || data_ptr[1] != 0x8B) {
+		return false;
+	}
+
+	if (data_ptr[2] != GZIP_COMPRESSION_DEFLATE) {
+		return false;
+	}
+
+	return true;
+}
+
+string GZipFileSystem::UncompressGZIPString(const string &in) {
+	return UncompressGZIPString(in.data(), in.size());
+}
+
+string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
+	// decompress file
+	auto body_ptr = data;
+
+	auto mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
+	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
 
 	uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 
 	// check for incorrectly formatted files
 
 	// TODO this is mostly the same as gzip_file_system.cpp
-	if (in.size() < GZIP_HEADER_MINSIZE) {
+	if (size < GZIP_HEADER_MINSIZE) {
 		throw IOException("Input is not a GZIP stream");
 	}
 	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
 	body_ptr += GZIP_HEADER_MINSIZE;
-	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE, nullptr);
 
 	if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 		throw IOException("Extra field in a GZIP stream unsupported");
@@ -345,32 +374,33 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 		do {
 			c = *body_ptr;
 			body_ptr++;
-		} while (c != '\0' && (idx_t)(body_ptr - in.data()) < in.size());
+		} while (c != '\0' && static_cast<idx_t>(body_ptr - data) < size);
 	}
 
 	// stream is now set to beginning of payload data
-	auto status = duckdb_miniz::mz_inflateInit2(mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	auto status = duckdb_miniz::mz_inflateInit2(mz_stream_ptr.get(), -MZ_DEFAULT_WINDOW_BITS);
 	if (status != duckdb_miniz::MZ_OK) {
 		throw InternalException("Failed to initialize miniz");
 	}
 
-	auto bytes_remaining = in.size() - (body_ptr - in.data());
+	auto bytes_remaining = size - NumericCast<idx_t>(body_ptr - data);
 	mz_stream_ptr->next_in = const_uchar_ptr_cast(body_ptr);
-	mz_stream_ptr->avail_in = bytes_remaining;
+	mz_stream_ptr->avail_in = NumericCast<unsigned int>(bytes_remaining);
 
-	unsigned char decompress_buffer[BUFSIZ];
 	string decompressed;
 
 	while (status == duckdb_miniz::MZ_OK) {
+		unsigned char decompress_buffer[BUFSIZ];
 		mz_stream_ptr->next_out = decompress_buffer;
 		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
-		status = mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+		status = mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
 			throw IOException("Failed to uncompress");
 		}
 		decompressed.append(char_ptr_cast(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
 	}
-	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+	duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
+
 	if (decompressed.empty()) {
 		throw IOException("Failed to uncompress");
 	}

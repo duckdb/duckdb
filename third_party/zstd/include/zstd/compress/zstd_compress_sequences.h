@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020, Yann Collet, Facebook, Inc.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  * All rights reserved.
  *
  * This source code is licensed under both the BSD-style license (found in the
@@ -54,6 +54,6 @@ size_t ZSTD_fseBitCost(
 size_t ZSTD_crossEntropyCost(short const* norm, unsigned accuracyLog,
                              unsigned const* count, unsigned const max);
 
-}
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_COMPRESS_SEQUENCES_H */

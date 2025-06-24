@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 
 #include "util/util.h"
 
@@ -33,44 +34,39 @@
 #define CHECK_EQ(x, y)	CHECK((x) == (y))
 #define CHECK_NE(x, y)	CHECK((x) != (y))
 
-#define LOG_INFO LogMessage(__FILE__, __LINE__)
-#define LOG_WARNING LogMessage(__FILE__, __LINE__)
-#define LOG_ERROR LogMessage(__FILE__, __LINE__)
-#define LOG_FATAL LogMessageFatal(__FILE__, __LINE__)
-#define LOG_QFATAL LOG_FATAL
+#define RE2_LOG_INFO LogMessage(__FILE__, __LINE__)
+#define RE2_LOG_WARNING LogMessage(__FILE__, __LINE__)
+#define RE2_LOG_ERROR LogMessage(__FILE__, __LINE__)
+#define RE2_LOG_FATAL LogMessageFatal(__FILE__, __LINE__)
+#define RE2_LOG_QFATAL RE2_LOG_FATAL
 
 // It seems that one of the Windows header files defines ERROR as 0.
 #ifdef _WIN32
-#define LOG_0 LOG_INFO
+#define LOG_0 RE2_LOG_INFO
 #endif
 
 #ifdef NDEBUG
-#define LOG_DFATAL LOG_ERROR
+#define RE2_LOG_DFATAL RE2_LOG_ERROR
 #else
-#define LOG_DFATAL LOG_FATAL
+#define RE2_LOG_DFATAL RE2_LOG_FATAL
 #endif
 
-#define LOG(severity) LOG_ ## severity.stream()
+#define LOG(severity) RE2_LOG_ ## severity.stream()
 
-#define VLOG(x) if((x)>0){}else LOG_INFO.stream()
-
-namespace duckdb_re2 {
-
+#define VLOG(x) if((x)>0){}else RE2_LOG_INFO.stream()
 
 class LogMessage {
  public:
   LogMessage(const char* file, int line)
       : flushed_(false) {
-    stream() << file << ":" << line << ": ";
+//    stream() << file << ":" << line << ": ";
   }
   void Flush() {
-    stream() << "\n";
-	/*// R does not allow us to have a reference to stderr even if we are not using it
-    std::string s = str_.str();
-    size_t n = s.size();
-    if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
-    */
-    flushed_ = true;
+//    stream() << "\n";
+//    std::string s = str_.str();
+//    size_t n = s.size();
+//    if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
+//    flushed_ = true;
   }
   ~LogMessage() {
     if (!flushed_) {
@@ -90,26 +86,26 @@ class LogMessage {
 // Silence "destructor never returns" warning for ~LogMessageFatal().
 // Since this is a header file, push and then pop to limit the scope.
 #ifdef _MSC_VER
-//#pragma warning(push)
-//#pragma warning(disable: 4722)
+#pragma warning(push)
+#pragma warning(disable: 4722)
 #endif
 
 class LogMessageFatal : public LogMessage {
  public:
   LogMessageFatal(const char* file, int line)
-      : LogMessage(file, line) {}
-  ATTRIBUTE_NORETURN ~LogMessageFatal() {
+      : LogMessage(file, line) {
+	  throw std::runtime_error("RE2 Fatal Error");
+  }
+  ~LogMessageFatal() {
     Flush();
-    abort();
   }
  private:
   LogMessageFatal(const LogMessageFatal&) = delete;
   LogMessageFatal& operator=(const LogMessageFatal&) = delete;
 };
-} // namespace
 
 #ifdef _MSC_VER
-//#pragma warning(pop)
+#pragma warning(pop)
 #endif
 
 #endif  // UTIL_LOGGING_H_

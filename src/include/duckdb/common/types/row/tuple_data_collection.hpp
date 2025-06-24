@@ -33,7 +33,7 @@ struct TupleDataScatterFunction {
 
 typedef void (*tuple_data_gather_function_t)(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                              const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                             const SelectionVector &target_sel, Vector &list_vector,
+                                             const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                              const vector<TupleDataGatherFunction> &child_functions);
 
 struct TupleDataGatherFunction {
@@ -49,15 +49,18 @@ class TupleDataCollection {
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
-	TupleDataCollection(BufferManager &buffer_manager, const TupleDataLayout &layout);
-	//! Constructs a TupleDataCollection with the same (shared) allocator
-	explicit TupleDataCollection(shared_ptr<TupleDataAllocator> allocator);
+	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr);
 
 	~TupleDataCollection();
+
+	//! Create a TupleDataCollection with the same layout
+	unique_ptr<TupleDataCollection> CreateUnique() const;
 
 public:
 	//! The layout of the stored rows
 	const TupleDataLayout &GetLayout() const;
+	//! How many tuples fit per block
+	idx_t TuplesPerBlock() const;
 	//! The number of rows stored in the tuple data collection
 	const idx_t &Count() const;
 	//! The number of chunks stored in the tuple data collection
@@ -66,11 +69,22 @@ public:
 	idx_t SizeInBytes() const;
 	//! Unpins all held pins
 	void Unpin();
+	//! Sets the partition index of this tuple data collection
+	void SetPartitionIndex(idx_t index);
+	//! Gets the pointers to the start of every block
+	vector<data_ptr_t> GetRowBlockPointers() const;
+	//! Destroy the blocks corresponding to the chunk indices
+	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 
 	//! Gets the scatter function for the given type
-	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_list = false);
+	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
 	//! Gets the gather function for the given type
-	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type, bool within_list = false);
+	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
+
+	//! Gets the scatter function for the given sort key type
+	static TupleDataScatterFunction GetSortKeyScatterFunction(const LogicalType &type, SortKeyType sort_key_type);
+	//! Gets the gather function for the given sort key type
+	static TupleDataGatherFunction GetSortKeyGatherFunction(const LogicalType &type, SortKeyType sort_key_type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
@@ -114,9 +128,15 @@ public:
 	static void ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk);
 	//! Gets the UnifiedVectorFormat from the Chunk state as an array
 	static void GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]);
+	//! Resets the cached cache vectors (used for ARRAY/LIST casts)
+	static void ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids);
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
+	//! Computes the heap sizes for a SortKey layout
+	static void SortKeyComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
+	                                    const SelectionVector &append_sel, const idx_t append_count,
+	                                    const SortKeyType sort_key_type);
 
 	//! Builds out the buffer space for the specified Chunk state
 	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const idx_t append_offset,
@@ -130,6 +150,8 @@ public:
 	//! Copy rows from input to the built Chunk state
 	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
 	              const idx_t append_count) const;
+	//! Finds the heap pointers of the rows in the given Chunk state
+	void FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const;
 
 	//! Finalizes the Pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment);
@@ -145,6 +167,8 @@ public:
 
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan
 	void InitializeChunk(DataChunk &chunk) const;
+	//! Initializes a chunk with the correct types that can be used to call Append/Scan for the given columns
+	void InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -159,6 +183,8 @@ public:
 	//! Initialize a parallel scan over the tuple data collection over a subset of the columns
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Grab the chunk state for the given segment and chunk index, returns the count of the chunk
+	idx_t FetchChunk(TupleDataScanState &state, idx_t segment_idx, idx_t chunk_idx, bool init_heap);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
@@ -168,15 +194,16 @@ public:
 
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,
-	            const SelectionVector &target_sel) const;
+	            const SelectionVector &target_sel, vector<unique_ptr<Vector>> &cached_cast_vectors) const;
 	//! Gathers a DataChunk (only the columns given by column_ids) from the TupleDataCollection,
 	//! given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
-	            const vector<column_t> &column_ids, DataChunk &result, const SelectionVector &target_sel) const;
+	            const vector<column_t> &column_ids, DataChunk &result, const SelectionVector &target_sel,
+	            vector<unique_ptr<Vector>> &cached_cast_vectors) const;
 	//! Gathers a Vector (from the given column id) from the TupleDataCollection
 	//! given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, const column_t column_id,
-	            Vector &result, const SelectionVector &target_sel) const;
+	            Vector &result, const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector) const;
 
 	//! Converts this TupleDataCollection to a string representation
 	string ToString();
@@ -198,27 +225,30 @@ private:
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for the specific Vector that will be appended (within a list)
-	static void WithinListHeapComputeSizes(Vector &heap_sizes_v, const Vector &source_v,
-	                                       TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
-	                                       const idx_t append_count, const UnifiedVectorFormat &list_data);
+	static void WithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                             TupleDataVectorFormat &source_format,
+	                                             const SelectionVector &append_sel, const idx_t append_count,
+	                                             const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the fixed-size type Vector that will be appended (within a list)
-	static void ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-	                                            TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
-	                                            const idx_t append_count, const UnifiedVectorFormat &list_data);
+	static void ComputeFixedWithinCollectionHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                                  TupleDataVectorFormat &source_format,
+	                                                  const SelectionVector &append_sel, const idx_t append_count,
+	                                                  const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the string Vector that will be appended (within a list)
-	static void StringWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-	                                             TupleDataVectorFormat &source_format,
-	                                             const SelectionVector &append_sel, const idx_t append_count,
-	                                             const UnifiedVectorFormat &list_data);
+	static void StringWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                                   TupleDataVectorFormat &source_format,
+	                                                   const SelectionVector &append_sel, const idx_t append_count,
+	                                                   const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the struct Vector that will be appended (within a list)
-	static void StructWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-	                                             TupleDataVectorFormat &source_format,
-	                                             const SelectionVector &append_sel, const idx_t append_count,
-	                                             const UnifiedVectorFormat &list_data);
+	static void StructWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                                   TupleDataVectorFormat &source_format,
+	                                                   const SelectionVector &append_sel, const idx_t append_count,
+	                                                   const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the list Vector that will be appended (within a list)
-	static void ListWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-	                                           TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
-	                                           const idx_t append_count, const UnifiedVectorFormat &list_data);
+	static void CollectionWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                                       TupleDataVectorFormat &source_format,
+	                                                       const SelectionVector &append_sel, const idx_t append_count,
+	                                                       const UnifiedVectorFormat &list_data);
 
 	//! Get the next segment/chunk index for the scan
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index);
@@ -231,7 +261,8 @@ private:
 
 private:
 	//! The layout of the TupleDataCollection
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	//! The TupleDataAllocator
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
@@ -244,6 +275,8 @@ private:
 	vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
 	vector<TupleDataGatherFunction> gather_functions;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 } // namespace duckdb

@@ -11,17 +11,22 @@ add_library_unity(
   OBJECT
   arena_allocator.cpp
   buffer_manager.cpp
+  caching_file_system.cpp
   checkpoint_manager.cpp
+  temporary_memory_manager.cpp
   block.cpp
   data_pointer.cpp
   data_table.cpp
+  external_file_cache.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp
   storage_manager.cpp
   standard_buffer_manager.cpp
+  temporary_file_manager.cpp
   table_index_list.cpp
   write_ahead_log.cpp
+  open_file_storage_extension.cpp
   optimistic_data_writer.cpp
   partial_block_manager.cpp
   single_file_block_manager.cpp

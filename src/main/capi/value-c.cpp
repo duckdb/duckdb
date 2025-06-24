@@ -3,6 +3,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 #include "duckdb/main/capi/cast/generic.hpp"
 
@@ -17,6 +18,7 @@ using duckdb::interval_t;
 using duckdb::StringCast;
 using duckdb::timestamp_t;
 using duckdb::ToCStringCastWrapper;
+using duckdb::uhugeint_t;
 using duckdb::UnsafeFetch;
 
 bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
@@ -63,6 +65,14 @@ duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row)
 duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row) {
 	duckdb_hugeint result_value;
 	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);
+	result_value.lower = internal_value.lower;
+	result_value.upper = internal_value.upper;
+	return result_value;
+}
+
+duckdb_uhugeint duckdb_value_uhugeint(duckdb_result *result, idx_t col, idx_t row) {
+	duckdb_uhugeint result_value;
+	auto internal_value = GetInternalCValue<uhugeint_t>(result, col, row);
 	result_value.lower = internal_value.lower;
 	result_value.upper = internal_value.upper;
 	return result_value;
@@ -148,7 +158,7 @@ duckdb_string duckdb_value_string_internal(duckdb_result *result, idx_t col, idx
 }
 
 duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
-	if (CanFetchValue(result, col, row) && result->__deprecated_columns[col].__deprecated_type == DUCKDB_TYPE_BLOB) {
+	if (CanFetchValue(result, col, row) && result->deprecated_columns[col].deprecated_type == DUCKDB_TYPE_BLOB) {
 		auto internal_result = UnsafeFetch<duckdb_blob>(result, col, row);
 
 		duckdb_blob result_blob;
@@ -164,5 +174,5 @@ bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanUseDeprecatedFetch(result, col, row)) {
 		return false;
 	}
-	return result->__deprecated_columns[col].__deprecated_nullmask[row];
+	return result->deprecated_columns[col].deprecated_nullmask[row];
 }

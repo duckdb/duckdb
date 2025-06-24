@@ -1,0 +1,31 @@
+# name: test/sql/function/generic/can_cast_implicitly.test
+# description: Test the can cast implicitly function
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM range(10) tbl(i)
+
+# can cast bigint -> bigint implicitly
+query I
+SELECT can_cast_implicitly(i, NULL::BIGINT) FROM tbl LIMIT 1
+----
+true
+
+query I
+SELECT can_cast_implicitly(i, NULL::HUGEINT) FROM tbl LIMIT 1
+----
+true
+
+# cannot cast bigint -> int implicitly
+query I
+SELECT can_cast_implicitly(i, NULL::INTEGER) FROM tbl LIMIT 1
+----
+false
+
+query I
+SELECT can_cast_implicitly(i, NULL::VARCHAR) FROM tbl LIMIT 1
+----
+false

@@ -129,7 +129,6 @@ SELECT set_bit('011'::BIT, -1, 0)
 ----
 Out of Range Error: bit index -1 out of valid range
 
-
 # **** BIT_COUNT ****
 query I
 SELECT bit_count('10101'::BIT)

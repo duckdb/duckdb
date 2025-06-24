@@ -1,0 +1,68 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_planner.test_slow
+# description: Test profiling the physical planner.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"PLANNER": "true", "PHYSICAL_PLANNER": "true"}';
+
+loop i 0 8
+
+statement ok
+CREATE TABLE t${i}(a int);
+
+statement ok
+INSERT INTO t${i} VALUES (1);
+
+endloop
+
+statement ok
+SELECT t1.a FROM t1
+JOIN t2 ON t1.a = t2.a
+JOIN t3 ON t2.a = t3.a
+JOIN t4 ON t3.a = t4.a
+JOIN t5 ON t4.a = t5.a
+JOIN t6 ON t5.a = t6.a
+JOIN t7 ON t6.a = t7.a;
+
+statement ok
+PRAGMA disable_profiling;
+
+query I rowsort
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
+) ORDER BY ALL
+----
+"PHYSICAL_PLANNER": "true"
+"PLANNER": "true"
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+query I
+SELECT 
+	CASE WHEN physical_planner > 0 THEN 'true'
+    ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+query I
+SELECT 
+	CASE WHEN planner > 0 THEN 'true'
+    ELSE 'false' END
+FROM metrics_output;
+----
+true

@@ -10,6 +10,7 @@ PRAGMA enable_verification
 # Exception on missing file
 statement error
 SELECT * FROM parquet_scan('does_not_exist')
+----
 
 # alltypes_plain.parquet
 query ITIIIIRRTTT
@@ -245,3 +246,4 @@ SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS 
 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/broken-arrow.parquet')
+----

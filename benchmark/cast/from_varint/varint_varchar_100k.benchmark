@@ -1,0 +1,12 @@
+# name: benchmark/cast/from_varint/varint_varchar_100k.benchmark
+# description: Casting of a varint with 100k digits to varchar
+# group: [from_varint]
+
+name Casting of a varint with 100k digits to varchar
+group csv
+
+load
+CREATE TABLE t1 AS select concat('1', repeat('0', 100000))::varint  as a;
+
+run
+SELECT a::varchar from t1

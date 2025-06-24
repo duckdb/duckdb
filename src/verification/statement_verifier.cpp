@@ -1,6 +1,6 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
@@ -10,38 +10,45 @@
 #include "duckdb/verification/prepared_statement_verifier.hpp"
 #include "duckdb/verification/unoptimized_statement_verifier.hpp"
 #include "duckdb/verification/no_operator_caching_verifier.hpp"
+#include "duckdb/verification/fetch_row_verifier.hpp"
 
 namespace duckdb {
 
-StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
+StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
+                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters_p)
     : type(type), name(std::move(name)),
-      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
+      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))), parameters(parameters_p),
       select_list(statement->node->GetSelectList()) {
 }
 
-StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::ORIGINAL, "Original", std::move(statement_p)) {
+StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p,
+                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
+    : StatementVerifier(VerificationType::ORIGINAL, "Original", std::move(statement_p), parameters) {
 }
 
 StatementVerifier::~StatementVerifier() noexcept {
 }
 
-unique_ptr<StatementVerifier> StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p) {
+unique_ptr<StatementVerifier>
+StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p,
+                          optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	switch (type) {
 	case VerificationType::COPIED:
-		return CopiedStatementVerifier::Create(statement_p);
+		return CopiedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::DESERIALIZED:
-		return DeserializedStatementVerifier::Create(statement_p);
+		return DeserializedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::PARSED:
-		return ParsedStatementVerifier::Create(statement_p);
+		return ParsedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::UNOPTIMIZED:
-		return UnoptimizedStatementVerifier::Create(statement_p);
+		return UnoptimizedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::NO_OPERATOR_CACHING:
-		return NoOperatorCachingVerifier::Create(statement_p);
+		return NoOperatorCachingVerifier::Create(statement_p, parameters);
 	case VerificationType::PREPARED:
-		return PreparedStatementVerifier::Create(statement_p);
+		return PreparedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::EXTERNAL:
-		return ExternalStatementVerifier::Create(statement_p);
+		return ExternalStatementVerifier::Create(statement_p, parameters);
+	case VerificationType::FETCH_ROW_AS_SCAN:
+		return FetchRowVerifier::Create(statement_p, parameters);
 	case VerificationType::INVALID:
 	default:
 		throw InternalException("Invalid statement verification type!");
@@ -101,25 +108,24 @@ void StatementVerifier::CheckExpressions() const {
 
 bool StatementVerifier::Run(
     ClientContext &context, const string &query,
-    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>)> &run) {
+    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>,
+                                                optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
 	bool failed = false;
 
 	context.interrupted = false;
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.enable_caching_operators = !DisableOperatorCaching();
 	context.config.force_external = ForceExternal();
+	context.config.force_fetch_row = ForceFetchRow();
 	try {
-		auto result = run(query, std::move(statement));
+		auto result = run(query, std::move(statement), parameters);
 		if (result->HasError()) {
 			failed = true;
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-	} catch (const Exception &ex) {
-		failed = true;
-		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		failed = true;
-		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(ErrorData(ex));
 	}
 	context.interrupted = false;
 

@@ -26,10 +26,12 @@ DEALLOCATE s3
 # can't run a query with a param without PREPARE
 statement error
 SELECT * FROM a WHERE i=$1
+----
 
 # also can't run a query with a param when casting
 statement error
 SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)
+----
 
 # issue that swallows an UNKNOWN type, if not explicitly setting the rebind-flag
 

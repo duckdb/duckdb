@@ -40,16 +40,16 @@ public:
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
-		auto op = ExpressionTypeToOperator(entry.type);
+		auto op = ExpressionTypeToOperator(entry.GetExpressionType());
 		if (!op.empty()) {
 			// use the operator string to represent the operator
 			D_ASSERT(entry.children.size() == 2);
 			return entry.children[0]->ToString() + " " + op + " " + entry.children[1]->ToString();
 		}
-		switch (entry.type) {
+		switch (entry.GetExpressionType()) {
 		case ExpressionType::COMPARE_IN:
 		case ExpressionType::COMPARE_NOT_IN: {
-			string op_type = entry.type == ExpressionType::COMPARE_IN ? " IN " : " NOT IN ";
+			string op_type = entry.GetExpressionType() == ExpressionType::COMPARE_IN ? " IN " : " NOT IN ";
 			string in_child = entry.children[0]->ToString();
 			string child_list = "(";
 			for (idx_t i = 1; i < entry.children.size(); i++) {
@@ -61,9 +61,15 @@ public:
 			child_list += ")";
 			return "(" + in_child + op_type + child_list + ")";
 		}
+		case ExpressionType::OPERATOR_UNPACK: {
+			return StringUtil::Format("UNPACK(%s)", entry.children[0]->ToString());
+		}
+		case ExpressionType::OPERATOR_TRY: {
+			return StringUtil::Format("TRY(%s)", entry.children[0]->ToString());
+		}
 		case ExpressionType::OPERATOR_NOT: {
 			string result = "(";
-			result += ExpressionTypeToString(entry.type);
+			result += ExpressionTypeToString(entry.GetExpressionType());
 			result += " ";
 			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
 			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
@@ -72,7 +78,7 @@ public:
 		}
 		case ExpressionType::GROUPING_FUNCTION:
 		case ExpressionType::OPERATOR_COALESCE: {
-			string result = ExpressionTypeToString(entry.type);
+			string result = ExpressionTypeToString(entry.GetExpressionType());
 			result += "(";
 			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
 			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
@@ -105,7 +111,7 @@ public:
 			return entry.children[0]->ToString() + "[" + begin + ":" + end + "]";
 		}
 		case ExpressionType::STRUCT_EXTRACT: {
-			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {
+			if (entry.children[1]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 				return string();
 			}
 			auto child_string = entry.children[1]->ToString();

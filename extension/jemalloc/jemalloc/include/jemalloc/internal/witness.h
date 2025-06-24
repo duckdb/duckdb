@@ -1,9 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_WITNESS_H
 #define JEMALLOC_INTERNAL_WITNESS_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/ql.h"
-
-namespace duckdb_jemalloc {
 
 /******************************************************************************/
 /* LOCK RANKS */
@@ -64,9 +64,10 @@ enum witness_rank_e {
 	WITNESS_RANK_BASE,
 	WITNESS_RANK_ARENA_LARGE,
 	WITNESS_RANK_HOOK,
+	WITNESS_RANK_BIN,
 
 	WITNESS_RANK_LEAF=0x1000,
-	WITNESS_RANK_BIN = WITNESS_RANK_LEAF,
+	WITNESS_RANK_BATCHER=WITNESS_RANK_LEAF,
 	WITNESS_RANK_ARENA_STATS = WITNESS_RANK_LEAF,
 	WITNESS_RANK_COUNTER_ACCUM = WITNESS_RANK_LEAF,
 	WITNESS_RANK_DSS = WITNESS_RANK_LEAF,
@@ -343,6 +344,9 @@ witness_lock(witness_tsdn_t *witness_tsdn, witness_t *witness) {
 		witness_lock_error(witnesses, witness);
 	}
 
+	/* Suppress spurious warning from static analysis */
+	assert(ql_empty(witnesses) ||
+	    qr_prev(ql_first(witnesses), link) != NULL);
 	ql_elm_new(witness, link);
 	ql_tail_insert(witnesses, witness, link);
 }
@@ -376,7 +380,5 @@ witness_unlock(witness_tsdn_t *witness_tsdn, witness_t *witness) {
 		witness_assert_owner(witness_tsdn, witness);
 	}
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_WITNESS_H */

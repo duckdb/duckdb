@@ -31,7 +31,7 @@ bool BoundConjunctionExpression::PropagatesNullValues() const {
 	return false;
 }
 
-unique_ptr<Expression> BoundConjunctionExpression::Copy() {
+unique_ptr<Expression> BoundConjunctionExpression::Copy() const {
 	auto copy = make_uniq<BoundConjunctionExpression>(type);
 	for (auto &expr : children) {
 		copy->children.push_back(expr->Copy());

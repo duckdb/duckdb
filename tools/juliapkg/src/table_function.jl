@@ -245,7 +245,7 @@ mutable struct TableFunction
         result = new(handle, bind_func, init_func, init_local_func, main_func, extra_data, Set(), ReentrantLock())
         finalizer(_destroy_table_function, result)
 
-        duckdb_table_function_set_extra_info(handle, pointer_from_objref(result))
+        duckdb_table_function_set_extra_info(handle, pointer_from_objref(result), C_NULL)
         duckdb_table_function_set_bind(handle, @cfunction(_table_bind_function, Cvoid, (duckdb_bind_info,)))
         duckdb_table_function_set_init(handle, @cfunction(_table_init_function, Cvoid, (duckdb_init_info,)))
         duckdb_table_function_set_local_init(handle, @cfunction(_table_local_init_function, Cvoid, (duckdb_init_info,)))

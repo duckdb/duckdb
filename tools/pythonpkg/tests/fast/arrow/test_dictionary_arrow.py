@@ -4,6 +4,7 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
+ds = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
 import datetime
@@ -153,6 +154,29 @@ class TestArrowDictionary(object):
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 10000
         assert rel.execute().fetchall() == result
+
+    def test_dictionary_lifetime(self, duckdb_cursor):
+        tables = []
+        expected = ''
+        for i in range(100):
+            if i % 3 == 0:
+                input = 'ABCD' * 17000
+            elif i % 3 == 1:
+                input = 'FOOO' * 17000
+            else:
+                input = 'BARR' * 17000
+            expected += input
+            array = pa.array(
+                input,
+                type=pa.dictionary(pa.int16(), pa.string()),
+            )
+            tables.append(pa.table([array], names=["x"]))
+        # All of the tables with different dictionaries are getting merged into one dataset
+        # This is testing that our cache is being evicted correctly
+        x = ds.dataset(tables)
+        res = duckdb_cursor.sql("select * from x").fetchall()
+        expected = [(x,) for x in expected]
+        assert res == expected
 
     def test_dictionary_batches_parallel(self, duckdb_cursor):
         duckdb_cursor.execute("PRAGMA threads=4")

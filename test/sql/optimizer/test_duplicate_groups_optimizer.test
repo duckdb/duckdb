@@ -1,0 +1,121 @@
+# name: test/sql/optimizer/test_duplicate_groups_optimizer.test
+# description: Test Duplicate Groups optimizer
+# group: [optimizer]
+
+statement ok
+create table t1(col1 int, col2 int);
+
+statement ok
+create table t2(col3 int);
+
+statement ok
+insert into t1 values (1, 1);
+
+statement ok
+insert into t2 values (1);
+
+statement ok
+pragma enable_verification;
+
+query III
+select
+	col1,
+	col2,
+	col3
+from t1
+	join t2
+	on t1.col1 = t2.col3
+group by rollup(col1, col2, col3) order by 1, 2 ,3;
+----
+1	1	1
+1	1	NULL
+1	NULL	NULL
+NULL	NULL	NULL
+
+
+query III
+select
+	col1,
+	col2,
+	col3
+from t1
+	join t2
+	on t1.col1 = t2.col3
+group by cube(col1, col2, col3) order by 1, 2 ,3;
+----
+1	1	1
+1	1	NULL
+1	NULL	1
+1	NULL	NULL
+NULL	1	1
+NULL	1	NULL
+NULL	NULL	1
+NULL	NULL	NULL
+
+
+query III
+select
+      col1,
+      col2,
+      col3
+  from t1
+      join t2
+      on t1.col1 = t2.col3
+  group by grouping sets (col1, col2, col3), (col1, col2), (col1) order by 1, 2 ,3;
+----
+1	1	1
+1	1	NULL
+1	1	NULL
+
+statement ok
+pragma explain_output='optimized_only';
+
+statement ok
+pragma disable_verification;
+
+# make sure there is only one group and unused columns/duplicate groups still
+# works.
+# if unused columns/duplicate groups combo breaks, each group will be on a separate line
+query II
+explain select
+	col1,
+	col3
+from t1
+	join t2
+	on t1.col1 = t2.col3
+group by col1, col3;
+----
+logical_opt	<REGEX>:.*Groups: col1.*
+
+
+statement ok
+create table t3 (a int, b int, c int);
+
+statement ok
+insert into t3 values
+(1, 1, 1),
+(1, 2, 2),
+(1, 1, 1),
+(1, 2, 1);
+
+query III
+select * from t3 group by cube(a, b, c) order by all;
+----
+1	1	1
+1	1	NULL
+1	2	1
+1	2	2
+1	2	NULL
+1	NULL	1
+1	NULL	2
+1	NULL	NULL
+NULL	1	1
+NULL	1	NULL
+NULL	2	1
+NULL	2	2
+NULL	2	NULL
+NULL	NULL	1
+NULL	NULL	2
+NULL	NULL	NULL
+
+

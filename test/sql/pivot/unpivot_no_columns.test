@@ -1,0 +1,14 @@
+# name: test/sql/pivot/unpivot_no_columns.test
+# description: Test UNPIVOT without columns
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers(i integer);
+
+statement error
+unpivot integers on columns(* exclude (i));
+----
+UNPIVOT clause must unpivot on at least one column

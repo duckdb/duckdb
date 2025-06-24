@@ -2,8 +2,6 @@
 # description: Test views in an attached database
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -46,7 +44,7 @@ SELECT * FROM ${prefix}.v1
 
 # reference tables from different databases in view
 statement ok
-CREATE OR REPLACE VIEW ${prefix}.v1 AS SELECT * FROM ${prefix}.t1 UNION ALL FROM t1 ORDER BY ALL
+CREATE OR REPLACE VIEW ${prefix}.v1 AS SELECT * FROM ${prefix}.t1 UNION ALL FROM memory.t1 ORDER BY ALL
 
 query I
 SELECT * FROM ${prefix}.v1

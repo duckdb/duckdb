@@ -11,6 +11,8 @@ WITH RECURSIVE cte AS MATERIALIZED (SELECT 42) SELECT * FROM cte;
 # we only support recursive ctes with union or union all
 statement error
 with recursive t as MATERIALIZED (select 1 as x intersect select x+1 from t where x < 3) select * from t order by x
+----
 
 statement error
 with recursive t as MATERIALIZED (select 1 as x except select x+1 from t where x < 3) select * from t order by x
+----

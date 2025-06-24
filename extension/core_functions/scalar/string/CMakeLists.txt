@@ -1,0 +1,30 @@
+add_library_unity(
+  duckdb_core_functions_string
+  OBJECT
+  starts_with.cpp
+  jaccard.cpp
+  levenshtein.cpp
+  damerau_levenshtein.cpp
+  bar.cpp
+  printf.cpp
+  replace.cpp
+  hamming.cpp
+  instr.cpp
+  ascii.cpp
+  reverse.cpp
+  url_encode.cpp
+  parse_path.cpp
+  left_right.cpp
+  to_base.cpp
+  pad.cpp
+  trim.cpp
+  format_bytes.cpp
+  hex.cpp
+  repeat.cpp
+  translate.cpp
+  chr.cpp
+  unicode.cpp
+  jaro_winkler.cpp)
+set(CORE_FUNCTION_FILES
+    ${CORE_FUNCTION_FILES} $<TARGET_OBJECTS:duckdb_core_functions_string>
+    PARENT_SCOPE)

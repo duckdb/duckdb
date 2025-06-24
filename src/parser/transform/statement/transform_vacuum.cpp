@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-VacuumOptions ParseOptions(int options) {
+VacuumOptions ParseOptions(const int32_t options) {
 	VacuumOptions result;
 	if (options & duckdb_libpgquery::PGVacuumOption::PG_VACOPT_VACUUM) {
 		result.vacuum = true;
@@ -43,8 +43,8 @@ unique_ptr<SQLStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGVacuu
 	if (stmt.va_cols) {
 		D_ASSERT(result->info->has_table);
 		for (auto col_node = stmt.va_cols->head; col_node != nullptr; col_node = col_node->next) {
-			result->info->columns.emplace_back(
-			    reinterpret_cast<duckdb_libpgquery::PGValue *>(col_node->data.ptr_value)->val.str);
+			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(col_node->data.ptr_value);
+			result->info->columns.emplace_back(value->val.str);
 		}
 	}
 	return std::move(result);

@@ -4,7 +4,7 @@
 
 require skip_reload
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: Test disable loading from local file system"
 
 statement ok
 PRAGMA enable_verification

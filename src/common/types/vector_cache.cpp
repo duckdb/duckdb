@@ -18,7 +18,15 @@ public:
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, false, false);
-			auxiliary = make_shared<VectorListBuffer>(std::move(child_vector));
+			auxiliary = make_shared_ptr<VectorListBuffer>(std::move(child_vector));
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &child_type = ArrayType::GetChildType(type);
+			auto array_size = ArrayType::GetSize(type);
+			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, array_size * capacity));
+			auto child_vector = make_uniq<Vector>(child_type, true, false, array_size * capacity);
+			auxiliary = make_shared_ptr<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -26,7 +34,7 @@ public:
 			for (auto &child_type : child_types) {
 				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second, capacity));
 			}
-			auto struct_buffer = make_shared<VectorStructBuffer>(type);
+			auto struct_buffer = make_shared_ptr<VectorStructBuffer>(type);
 			auxiliary = std::move(struct_buffer);
 			break;
 		}
@@ -41,7 +49,7 @@ public:
 		auto internal_type = type.InternalType();
 		result.vector_type = VectorType::FLAT_VECTOR;
 		AssignSharedPointer(result.buffer, buffer);
-		result.validity.Reset();
+		result.validity.Reset(capacity);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			result.data = owned_data.get();
@@ -56,6 +64,19 @@ public:
 
 			auto &list_child = list_buffer.GetChild();
 			child_cache.ResetFromCache(list_child, child_caches[0]);
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			// fixed size list does not have own data
+			result.data = nullptr;
+			// reinitialize the VectorArrayBuffer
+			// auxiliary->SetAuxiliaryData(nullptr);
+			AssignSharedPointer(result.auxiliary, auxiliary);
+
+			// propagate through child
+			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
+			auto &array_child = result.auxiliary->Cast<VectorArrayBuffer>().GetChild();
+			child_cache.ResetFromCache(array_child, child_caches[0]);
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -97,19 +118,25 @@ private:
 	idx_t capacity;
 };
 
-VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, idx_t capacity_p) {
+VectorCache::VectorCache() : buffer(nullptr) {
+}
+
+VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, const idx_t capacity_p) {
 	buffer = make_buffer<VectorCacheBuffer>(allocator, type_p, capacity_p);
 }
 
 void VectorCache::ResetFromCache(Vector &result) const {
-	D_ASSERT(buffer);
-	auto &vcache = buffer->Cast<VectorCacheBuffer>();
-	vcache.ResetFromCache(result, buffer);
+	if (!buffer) {
+		return;
+	}
+	auto &vector_cache = buffer->Cast<VectorCacheBuffer>();
+	vector_cache.ResetFromCache(result, buffer);
 }
 
 const LogicalType &VectorCache::GetType() const {
-	auto &vcache = buffer->Cast<VectorCacheBuffer>();
-	return vcache.GetType();
+	D_ASSERT(buffer);
+	auto &vector_cache = buffer->Cast<VectorCacheBuffer>();
+	return vector_cache.GetType();
 }
 
 } // namespace duckdb

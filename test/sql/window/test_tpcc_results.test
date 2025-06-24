@@ -1,0 +1,419 @@
+# name: test/sql/window/test_tpcc_results.test
+# description: Framed secondary ordering test from Vogelsgesang et al. §2.4
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+# Version 5 Results   As of 23-Dec-2024 at 7:54 PM  [GMT]
+# https://www.tpc.org/tpcc/results/tpcc_results5.asp
+query IIIIIIIII
+select
+    submission_date,
+    dbsystem,
+    tps,
+    count(distinct dbsystem) over w AS competing,
+    rank(order by tps desc) over w AS new_rank,
+    first_value(tps order by tps desc) over w AS best_performance,
+    first_value(dbsystem order by tps desc) over w AS best_system,
+    lead(tps order by tps desc) over w AS second_performance,
+    lead(dbsystem order by tps desc) over w AS second_system,
+from 'data/csv/tpcc_results.csv'
+window w as (
+    order by submission_date
+    range between unbounded preceding and current row
+)
+ORDER BY submission_date;
+----
+2000-06-21	Sybase Adaptive Server Enterprise 12.0	60366.82	1	1	60366.82	Sybase Adaptive Server Enterprise 12.0	NULL	NULL
+2001-03-19	Microsoft SQL Server 2000	30231.37	3	4	163775.8	IBM DB2 for AS/400 V4 R5	30231.37	Microsoft SQL Server 2000
+2001-03-19	Microsoft SQL Server 2000	20320.7	3	9	163775.8	IBM DB2 for AS/400 V4 R5	NULL	NULL
+2001-03-19	Microsoft SQL Server 2000	24925.43	3	6	163775.8	IBM DB2 for AS/400 V4 R5	24925.43	Microsoft SQL Server 2000
+2001-03-19	Microsoft SQL Server 2000	24925.43	3	6	163775.8	IBM DB2 for AS/400 V4 R5	20331.91	Microsoft SQL Server 2000
+2001-03-19	Microsoft SQL Server 2000	20331.91	3	8	163775.8	IBM DB2 for AS/400 V4 R5	20320.7	Microsoft SQL Server 2000
+2001-03-19	Microsoft SQL Server 2000	30231.37	3	4	163775.8	IBM DB2 for AS/400 V4 R5	24925.43	Microsoft SQL Server 2000
+2001-03-19	IBM DB2 for AS/400 V4 R5	163775.8	3	1	163775.8	IBM DB2 for AS/400 V4 R5	152346.25	IBM DB2 for AS/400 V4 R5
+2001-03-19	IBM DB2 for AS/400 V4 R5	152346.25	3	2	163775.8	IBM DB2 for AS/400 V4 R5	60366.82	Sybase Adaptive Server Enterprise 12.0
+2001-03-20	Oracle 8 Enterprise Edition v8.1.7.1	66750.27	4	3	163775.8	IBM DB2 for AS/400 V4 R5	60366.82	Sybase Adaptive Server Enterprise 12.0
+2001-03-27	Microsoft SQL Server 2000	37383.57	4	5	163775.8	IBM DB2 for AS/400 V4 R5	30231.37	Microsoft SQL Server 2000
+2001-03-30	Microsoft SQL Server 2000	16262.9	4	12	163775.8	IBM DB2 for AS/400 V4 R5	NULL	NULL
+2001-04-02	Microsoft SQL Server 2000	57014.93	4	5	163775.8	IBM DB2 for AS/400 V4 R5	37383.57	Microsoft SQL Server 2000
+2001-04-03	Oracle 8i Enterprise Edition v. 8.1.7	155179.25	6	2	163775.8	IBM DB2 for AS/400 V4 R5	152346.25	IBM DB2 for AS/400 V4 R5
+2001-04-03	Oracle 8 Enterprise Edition v8.1.7.1	71863.02	6	4	163775.8	IBM DB2 for AS/400 V4 R5	66750.27	Oracle 8 Enterprise Edition v8.1.7.1
+2001-04-03	Sybase Adaptive Server Enterprise 12.0.0.3	37274.0	6	9	163775.8	IBM DB2 for AS/400 V4 R5	37274.0	Sybase Adaptive Server Enterprise 12.0.0.3
+2001-04-03	Sybase Adaptive Server Enterprise 12.0.0.3	37274.0	6	9	163775.8	IBM DB2 for AS/400 V4 R5	30231.37	Microsoft SQL Server 2000
+2001-04-05	Sybase Adaptive Server Enterprise 11.9.3	22422.5	7	18	163775.8	IBM DB2 for AS/400 V4 R5	20331.91	Microsoft SQL Server 2000
+2001-04-05	Sybase Adaptive Server Enterprise 11.9.3	49308.0	7	9	163775.8	IBM DB2 for AS/400 V4 R5	37383.57	Microsoft SQL Server 2000
+2001-04-05	Sybase Adaptive Server Enterprise 12.0	60366.82	7	6	163775.8	IBM DB2 for AS/400 V4 R5	57014.93	Microsoft SQL Server 2000
+2001-04-05	Sybase Adaptive Server Enterprise 12.0	34288.77	7	13	163775.8	IBM DB2 for AS/400 V4 R5	30231.37	Microsoft SQL Server 2000
+2001-04-10	Microsoft SQL Server 2000	688220.9	7	1	688220.9	Microsoft SQL Server 2000	163775.8	IBM DB2 for AS/400 V4 R5
+2001-04-10	Microsoft SQL Server 2000	121319.23	7	5	688220.9	Microsoft SQL Server 2000	71863.02	Oracle 8 Enterprise Edition v8.1.7.1
+2001-04-11	IBM DB2 UDB 7.1	440879.95	8	3	688220.9	Microsoft SQL Server 2000	440879.95	IBM DB2 UDB 7.1
+2001-04-11	Microsoft SQL Server 2000	363129.75	8	5	688220.9	Microsoft SQL Server 2000	163775.8	IBM DB2 for AS/400 V4 R5
+2001-04-11	Microsoft SQL Server 2000	688220.9	8	1	688220.9	Microsoft SQL Server 2000	440879.95	IBM DB2 UDB 7.1
+2001-04-11	IBM DB2 UDB 7.1	440879.95	8	3	688220.9	Microsoft SQL Server 2000	363129.75	Microsoft SQL Server 2000
+2001-04-12	Microsoft SQL Server 2000 Enterprise Edition	34264.9	9	20	688220.9	Microsoft SQL Server 2000	32377.17	Microsoft SQL Server 2000
+2001-04-12	Microsoft SQL Server 2000	32377.17	9	21	688220.9	Microsoft SQL Server 2000	30231.37	Microsoft SQL Server 2000
+2001-04-13	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0	222772.33	10	6	688220.9	Microsoft SQL Server 2000	163775.8	IBM DB2 for AS/400 V4 R5
+2001-04-23	Oracle Database 9i Enterprise Edition v.9.0.1	57346.93	11	15	688220.9	Microsoft SQL Server 2000	57014.93	Microsoft SQL Server 2000
+2001-04-24	Microsoft SQL Server 2000	136766.67	11	10	688220.9	Microsoft SQL Server 2000	121319.23	Microsoft SQL Server 2000
+2001-05-22	Microsoft SQL Server 2000 Enterprise Edition	52671.3	11	18	688220.9	Microsoft SQL Server 2000	49308.0	Sybase Adaptive Server Enterprise 11.9.3
+2001-05-28	Oracle 8i Enterprise Edition v. 8.1.7	66750.27	11	14	688220.9	Microsoft SQL Server 2000	60366.82	Sybase Adaptive Server Enterprise 12.0
+2001-05-28	Oracle 8i Enterprise Edition v. 8.1.7	220807.27	11	7	688220.9	Microsoft SQL Server 2000	163775.8	IBM DB2 for AS/400 V4 R5
+2001-06-18	Oracle Database 9i Enterprise Edition	230533.0	12	6	688220.9	Microsoft SQL Server 2000	222772.33	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2001-06-22	Oracle 8i Enterprise Edition v. 8.1.7	66750.27	12	16	688220.9	Microsoft SQL Server 2000	60366.82	Sybase Adaptive Server Enterprise 12.0
+2001-06-22	Oracle 8i Enterprise Edition v. 8.1.7	220807.27	12	8	688220.9	Microsoft SQL Server 2000	163775.8	IBM DB2 for AS/400 V4 R5
+2001-07-03	Oracle Database 9i Enterprise Edition v.9i.0.1	57346.93	13	21	688220.9	Microsoft SQL Server 2000	57014.93	Microsoft SQL Server 2000
+2001-07-27	Microsoft SQL Server 2000	20207.2	13	39	688220.9	Microsoft SQL Server 2000	16262.9	Microsoft SQL Server 2000
+2001-08-22	Microsoft SQL Server 2000 Enterprise Edition	69901.74	13	16	688220.9	Microsoft SQL Server 2000	66750.27	Oracle 8 Enterprise Edition v8.1.7.1
+2001-08-23	Microsoft SQL Server 2000 Enterprise Edition	37596.34	13	28	688220.9	Microsoft SQL Server 2000	37383.57	Microsoft SQL Server 2000
+2001-08-23	Microsoft SQL Server 2000 Enterprise Edition	43046.55	13	27	688220.9	Microsoft SQL Server 2000	37596.34	Microsoft SQL Server 2000 Enterprise Edition
+2001-08-28	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0	455818.2	13	3	688220.9	Microsoft SQL Server 2000	440879.95	IBM DB2 UDB 7.1
+2001-09-10	Oracle Database 9i Enterprise Edition v.9i.0.1	105025.02	13	17	688220.9	Microsoft SQL Server 2000	71863.02	Oracle 8 Enterprise Edition v8.1.7.1
+2001-09-10	Microsoft SQL Server 2000 Enterprise Edition	141138.44	13	14	688220.9	Microsoft SQL Server 2000	136766.67	Microsoft SQL Server 2000
+2001-09-19	Microsoft SQL Server 2000 Enterprise Edition	410769.88	13	8	709220.08	Microsoft SQL Server 2000 Enterprise Edition	363129.75	Microsoft SQL Server 2000
+2001-09-19	Microsoft SQL Server 2000 Enterprise Edition	567882.56	13	4	709220.08	Microsoft SQL Server 2000 Enterprise Edition	455818.2	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2001-09-19	Microsoft SQL Server 2000 Enterprise Edition	709220.08	13	1	709220.08	Microsoft SQL Server 2000 Enterprise Edition	688220.9	Microsoft SQL Server 2000
+2001-09-25	Microsoft SQL Server 2000	9347.24	13	51	709220.08	Microsoft SQL Server 2000 Enterprise Edition	NULL	NULL
+2001-09-25	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0	67102.53	13	23	709220.08	Microsoft SQL Server 2000 Enterprise Edition	66750.27	Oracle 8 Enterprise Edition v8.1.7.1
+2001-09-26	Oracle Database 9i Enterprise Edition v.9i.0.1	105025.02	13	20	709220.08	Microsoft SQL Server 2000 Enterprise Edition	71863.02	Oracle 8 Enterprise Edition v8.1.7.1
+2001-09-26	Microsoft SQL Server 2000 Enterprise Edition	17335.75	13	51	709220.08	Microsoft SQL Server 2000 Enterprise Edition	16262.9	Microsoft SQL Server 2000
+2001-09-27	Microsoft SQL Server 2000 Enterprise Edition	39158.09	13	36	709220.08	Microsoft SQL Server 2000 Enterprise Edition	37596.34	Microsoft SQL Server 2000 Enterprise Edition
+2001-10-01	Microsoft SQL Server 2000	20422.01	13	49	709220.08	Microsoft SQL Server 2000 Enterprise Edition	20331.91	Microsoft SQL Server 2000
+2001-10-16	Microsoft SQL Server 2000 Standard Edition	9112.91	14	56	709220.08	Microsoft SQL Server 2000 Enterprise Edition	NULL	NULL
+2001-10-25	Microsoft SQL Server 2000 Enterprise Edition	22007.12	14	49	709220.08	Microsoft SQL Server 2000 Enterprise Edition	20422.01	Microsoft SQL Server 2000
+2001-10-31	Microsoft SQL Server 2000 Standard Edition	11320.02	14	56	709220.08	Microsoft SQL Server 2000 Enterprise Edition	9347.24	Microsoft SQL Server 2000
+2001-11-05	Microsoft SQL Server 2000 Standard Edition	15533.72	14	56	709220.08	Microsoft SQL Server 2000 Enterprise Edition	11320.02	Microsoft SQL Server 2000 Standard Edition
+2001-11-11	Microsoft SQL Server 2000 Enterprise Edition	165218.71	14	14	709220.08	Microsoft SQL Server 2000 Enterprise Edition	165218.71	Microsoft SQL Server 2000 Enterprise Edition
+2001-11-11	Microsoft SQL Server 2000 Enterprise Edition	165218.71	14	14	709220.08	Microsoft SQL Server 2000 Enterprise Edition	163775.8	IBM DB2 for AS/400 V4 R5
+2001-11-12	Microsoft SQL Server 2000 Enterprise Edition	37100.52	14	43	709220.08	Microsoft SQL Server 2000 Enterprise Edition	34288.77	Sybase Adaptive Server Enterprise 12.0
+2001-12-14	Microsoft SQL Server 2000 Standard Edition	11314.11	14	61	709220.08	Microsoft SQL Server 2000 Enterprise Edition	9347.24	Microsoft SQL Server 2000
+2001-12-21	Oracle 8 Enterprise Edition v8.1.7.1	197024.17	15	15	709220.08	Microsoft SQL Server 2000 Enterprise Edition	165218.71	Microsoft SQL Server 2000 Enterprise Edition
+2001-12-21	Sybase Adaptive Server Enterprise v12.5	140239.97	15	22	709220.08	Microsoft SQL Server 2000 Enterprise Edition	136766.67	Microsoft SQL Server 2000
+2001-12-21	Oracle Database 9i Enterprise Edition	389434.4	15	9	709220.08	Microsoft SQL Server 2000 Enterprise Edition	363129.75	Microsoft SQL Server 2000
+2002-01-28	Oracle Database 9i R2 Enterprise Edition for Tru64 Unix	50117.0	16	39	709220.08	Microsoft SQL Server 2000 Enterprise Edition	49308.0	Sybase Adaptive Server Enterprise 11.9.3
+2002-02-08	Microsoft SQL Server 2000 Enterprise Edition	29860.12	16	53	709220.08	Microsoft SQL Server 2000 Enterprise Edition	24925.43	Microsoft SQL Server 2000
+2002-02-13	Microsoft SQL Server 2000 Standard Edition	17078.88	16	63	709220.08	Microsoft SQL Server 2000 Enterprise Edition	16262.9	Microsoft SQL Server 2000
+2002-02-25	Microsoft SQL Server 2000 Enterprise Edition	33768.41	16	51	709220.08	Microsoft SQL Server 2000 Enterprise Edition	32377.17	Microsoft SQL Server 2000
+2002-02-25	Microsoft SQL Server 2000 Enterprise Edition	69169.61	16	29	709220.08	Microsoft SQL Server 2000 Enterprise Edition	67102.53	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2002-03-11	Microsoft SQL Server 2000 Enterprise Edition	55138.6	16	39	709220.08	Microsoft SQL Server 2000 Enterprise Edition	52671.3	Microsoft SQL Server 2000 Enterprise Edition
+2002-03-11	Microsoft SQL Server 2000 Standard Edition	23027.66	16	59	709220.08	Microsoft SQL Server 2000 Enterprise Edition	22422.5	Sybase Adaptive Server Enterprise 11.9.3
+2002-03-12	Microsoft SQL Server 2000 Standard Edition	11537.02	16	72	709220.08	Microsoft SQL Server 2000 Enterprise Edition	11537.02	Microsoft SQL Server 2000 Standard Edition
+2002-03-12	Microsoft SQL Server 2000 Standard Edition	11537.02	16	72	709220.08	Microsoft SQL Server 2000 Enterprise Edition	11320.02	Microsoft SQL Server 2000 Standard Edition
+2002-03-12	Microsoft SQL Server 2000 Enterprise Edition	48906.18	16	44	709220.08	Microsoft SQL Server 2000 Enterprise Edition	43046.55	Microsoft SQL Server 2000 Enterprise Edition
+2002-03-12	Sybase Adaptive Server Enterprise v12.5	112286.46	16	25	709220.08	Microsoft SQL Server 2000 Enterprise Edition	105025.02	Oracle Database 9i Enterprise Edition v.9i.0.1
+2002-04-23	Microsoft SQL Server 2000 Enterprise Edition	34473.15	16	52	709220.08	Microsoft SQL Server 2000 Enterprise Edition	34473.15	Microsoft SQL Server 2000 Enterprise Edition
+2002-04-23	Microsoft SQL Server 2000 Enterprise Edition	34473.15	16	52	709220.08	Microsoft SQL Server 2000 Enterprise Edition	34288.77	Sybase Adaptive Server Enterprise 12.0
+2002-05-17	Microsoft SQL Server 2000 Enterprise Edition	48911.83	16	44	709220.08	Microsoft SQL Server 2000 Enterprise Edition	48906.18	Microsoft SQL Server 2000 Enterprise Edition
+2002-05-24	Microsoft SQL Server 2000 Enterprise Edition	48906.18	16	45	709220.08	Microsoft SQL Server 2000 Enterprise Edition	43046.55	Microsoft SQL Server 2000 Enterprise Edition
+2002-06-01	Microsoft SQL Server 2000 Enterprise Edition	34819.03	16	55	709220.08	Microsoft SQL Server 2000 Enterprise Edition	34473.15	Microsoft SQL Server 2000 Enterprise Edition
+2002-06-01	Microsoft SQL Server 2000 Enterprise Edition	34914.92	16	54	709220.08	Microsoft SQL Server 2000 Enterprise Edition	34819.03	Microsoft SQL Server 2000 Enterprise Edition
+2002-06-03	Oracle Database 9i R2 Enterprise Edition	403255.46	17	9	709220.08	Microsoft SQL Server 2000 Enterprise Edition	389434.4	Oracle Database 9i Enterprise Edition
+2002-06-03	Microsoft SQL Server 2000 Standard Edition	12009.46	17	79	709220.08	Microsoft SQL Server 2000 Enterprise Edition	11537.02	Microsoft SQL Server 2000 Standard Edition
+2002-06-04	Oracle Database 9i R2 Enterprise Edition	137260.89	17	24	709220.08	Microsoft SQL Server 2000 Enterprise Edition	136766.67	Microsoft SQL Server 2000
+2002-06-20	Microsoft SQL Server 2000 Enterprise Edition	48150.72	17	49	709220.08	Microsoft SQL Server 2000 Enterprise Edition	48150.72	Microsoft SQL Server 2000 Enterprise Edition
+2002-06-20	Microsoft SQL Server 2000 Enterprise Edition	48150.72	17	49	709220.08	Microsoft SQL Server 2000 Enterprise Edition	43046.55	Microsoft SQL Server 2000 Enterprise Edition
+2002-06-26	Microsoft SQL Server 2000 Standard Edition	12579.04	17	82	709220.08	Microsoft SQL Server 2000 Enterprise Edition	12009.46	Microsoft SQL Server 2000 Standard Edition
+2002-07-08	Microsoft SQL Server 2000 Enterprise Edition 64bit	78454.76	18	30	709220.08	Microsoft SQL Server 2000 Enterprise Edition	71863.02	Oracle 8 Enterprise Edition v8.1.7.1
+2002-07-08	Microsoft SQL Server 2000 Enterprise Edition 64bit	40621.26	18	53	709220.08	Microsoft SQL Server 2000 Enterprise Edition	39158.09	Microsoft SQL Server 2000 Enterprise Edition
+2002-07-17	Microsoft SQL Server 2000 Enterprise Edition	45230.03	18	52	709220.08	Microsoft SQL Server 2000 Enterprise Edition	43046.55	Microsoft SQL Server 2000 Enterprise Edition
+2002-07-22	Microsoft SQL Server 2000 Enterprise Edition	92398.49	18	30	709220.08	Microsoft SQL Server 2000 Enterprise Edition	78454.76	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2002-07-25	Microsoft SQL Server 2000 Standard Edition	17659.53	18	82	709220.08	Microsoft SQL Server 2000 Enterprise Edition	17335.75	Microsoft SQL Server 2000 Enterprise Edition
+2002-07-26	Microsoft SQL Server 2000 Enterprise Edition SP2	33768.41	19	68	709220.08	Microsoft SQL Server 2000 Enterprise Edition	32377.17	Microsoft SQL Server 2000
+2002-08-05	Sybase Adaptive Server Enterprise v12.5	56375.0	19	44	709220.08	Microsoft SQL Server 2000 Enterprise Edition	55138.6	Microsoft SQL Server 2000 Enterprise Edition
+2002-08-13	Microsoft SQL Server 2000 Standard Edition SP3	10089.76	20	95	709220.08	Microsoft SQL Server 2000 Enterprise Edition	9347.24	Microsoft SQL Server 2000
+2002-08-15	Oracle Database 9i R2 Enterprise Edition	403255.46	20	9	709220.08	Microsoft SQL Server 2000 Enterprise Edition	389434.4	Oracle Database 9i Enterprise Edition
+2002-08-16	Microsoft SQL Server 2000 Standard Edition SP3	17559.31	20	86	709220.08	Microsoft SQL Server 2000 Enterprise Edition	17335.75	Microsoft SQL Server 2000 Enterprise Edition
+2002-08-20	Microsoft SQL Server 2000 Enterprise Edition SP2	61168.83	20	40	709220.08	Microsoft SQL Server 2000 Enterprise Edition	60366.82	Sybase Adaptive Server Enterprise 12.0
+2002-08-23	Microsoft SQL Server 2000 Enterprise Edition	61564.5	20	40	709220.08	Microsoft SQL Server 2000 Enterprise Edition	61168.83	Microsoft SQL Server 2000 Enterprise Edition SP2
+2002-08-26	Oracle Database 9i Enterprise Server v.9.2.0.1	423414.41	21	8	709220.08	Microsoft SQL Server 2000 Enterprise Edition	410769.88	Microsoft SQL Server 2000 Enterprise Edition
+2002-09-11	Microsoft SQL Server 2000 Enterprise Edition	16756.52	21	92	709220.08	Microsoft SQL Server 2000 Enterprise Edition	16262.9	Microsoft SQL Server 2000
+2002-09-16	Oracle Database 9i R2 Enterprise Edition	138362.03	21	26	709220.08	Microsoft SQL Server 2000 Enterprise Edition	137260.89	Oracle Database 9i R2 Enterprise Edition
+2002-10-07	Microsoft SQL Server 2000 Enterprise Edition SP3	84598.42	22	34	709220.08	Microsoft SQL Server 2000 Enterprise Edition	78454.76	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2002-10-30	Microsoft SQL Server 2000 Enterprise Edition	51069.87	22	53	709220.08	Microsoft SQL Server 2000 Enterprise Edition	50117.0	Oracle Database 9i R2 Enterprise Edition for Tru64 Unix
+2002-11-04	Microsoft SQL Server 2000 Enterprise Edition SP3	68264.47	22	44	709220.08	Microsoft SQL Server 2000 Enterprise Edition	67102.53	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2002-11-04	Microsoft SQL Server 2000 Enterprise Edition SP3	111805.22	22	32	709220.08	Microsoft SQL Server 2000 Enterprise Edition	111024.39	Microsoft SQL Server 2000 Enterprise Edition SP3
+2002-11-04	Microsoft SQL Server 2000 Enterprise Edition SP3	68739.22	22	43	709220.08	Microsoft SQL Server 2000 Enterprise Edition	68264.47	Microsoft SQL Server 2000 Enterprise Edition SP3
+2002-11-04	Microsoft SQL Server 2000 Enterprise Edition SP3	74206.27	22	39	709220.08	Microsoft SQL Server 2000 Enterprise Edition	71863.02	Oracle 8 Enterprise Edition v8.1.7.1
+2002-11-04	Microsoft SQL Server 2000 Enterprise Edition SP3	111024.39	22	33	709220.08	Microsoft SQL Server 2000 Enterprise Edition	105025.02	Oracle Database 9i Enterprise Edition v.9i.0.1
+2002-11-04	Microsoft SQL Server 2000 Enterprise Edition	203518.03	22	18	709220.08	Microsoft SQL Server 2000 Enterprise Edition	197024.17	Oracle 8 Enterprise Edition v8.1.7.1
+2002-11-08	Microsoft SQL Server 2000 Enterprise Edition SP3	112740.87	22	31	709220.08	Microsoft SQL Server 2000 Enterprise Edition	112286.46	Sybase Adaptive Server Enterprise v12.5
+2002-11-12	Oracle Database 10i Standard Edition	80494.98	23	39	709220.08	Microsoft SQL Server 2000 Enterprise Edition	78454.76	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2002-11-13	Oracle Database 10i Standard Edition	80570.81	23	39	709220.08	Microsoft SQL Server 2000 Enterprise Edition	80494.98	Oracle Database 10i Standard Edition
+2002-11-19	Microsoft SQL Server 2000 Enterprise Edition SP3	77905.18	23	42	709220.08	Microsoft SQL Server 2000 Enterprise Edition	74206.27	Microsoft SQL Server 2000 Enterprise Edition SP3
+2002-11-19	Microsoft SQL Server 2000 Standard Edition SP3	18051.65	23	101	709220.08	Microsoft SQL Server 2000 Enterprise Edition	17659.53	Microsoft SQL Server 2000 Standard Edition
+2002-12-04	Microsoft SQL Server 2000 Standard Edition SP3	18077.98	23	101	709220.08	Microsoft SQL Server 2000 Enterprise Edition	18051.65	Microsoft SQL Server 2000 Standard Edition SP3
+2002-12-06	Microsoft SQL Server 2000 Enterprise Edition SP3	115025.75	23	31	709220.08	Microsoft SQL Server 2000 Enterprise Edition	112740.87	Microsoft SQL Server 2000 Enterprise Edition SP3
+2002-12-09	Microsoft SQL Server 2000 Enterprise Edition	234325.1	23	14	709220.08	Microsoft SQL Server 2000 Enterprise Edition	230533.0	Oracle Database 9i Enterprise Edition
+2002-12-12	Microsoft SQL Server 2000 Enterprise Edition 64bit	342746.25	23	14	709220.08	Microsoft SQL Server 2000 Enterprise Edition	234325.1	Microsoft SQL Server 2000 Enterprise Edition
+2002-12-16	Microsoft SQL Server 2000 Enterprise Edition 64bit	87741.0	23	41	709220.08	Microsoft SQL Server 2000 Enterprise Edition	84598.42	Microsoft SQL Server 2000 Enterprise Edition SP3
+2002-12-26	Oracle Database 9i Enterprise Server v.9.2.0.1	427760.83	23	8	709220.08	Microsoft SQL Server 2000 Enterprise Edition	423414.41	Oracle Database 9i Enterprise Server v.9.2.0.1
+2003-01-06	Microsoft SQL Server 2000 Enterprise Edition SP3	71313.19	23	51	709220.08	Microsoft SQL Server 2000 Enterprise Edition	69901.74	Microsoft SQL Server 2000 Enterprise Edition
+2003-01-06	Microsoft SQL Server 2000 Enterprise Edition SP3	71586.49	23	50	709220.08	Microsoft SQL Server 2000 Enterprise Edition	71313.19	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-01-08	Microsoft SQL Server 2000 Enterprise Edition SP3	26725.34	23	100	709220.08	Microsoft SQL Server 2000 Enterprise Edition	26725.34	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-01-08	Microsoft SQL Server 2000 Enterprise Edition SP3	38386.24	23	82	709220.08	Microsoft SQL Server 2000 Enterprise Edition	37596.34	Microsoft SQL Server 2000 Enterprise Edition
+2003-01-08	Microsoft SQL Server 2000 Enterprise Edition SP3	26725.34	23	100	709220.08	Microsoft SQL Server 2000 Enterprise Edition	24925.43	Microsoft SQL Server 2000
+2003-01-22	Microsoft SQL Server 2000 Enterprise Edition SP3	68264.47	23	56	709220.08	Microsoft SQL Server 2000 Enterprise Edition	67102.53	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2003-01-22	Microsoft SQL Server 2000 Enterprise Edition SP3	84598.42	23	43	709220.08	Microsoft SQL Server 2000 Enterprise Edition	80570.81	Oracle Database 10i Standard Edition
+2003-02-20	Microsoft SQL Server 2000 Enterprise Edition 64bit	433107.77	23	8	709220.08	Microsoft SQL Server 2000 Enterprise Edition	427760.83	Oracle Database 9i Enterprise Server v.9.2.0.1
+2003-02-28	Microsoft SQL Server 2000 Enterprise Edition SP3	52587.46	23	73	709220.08	Microsoft SQL Server 2000 Enterprise Edition	51069.87	Microsoft SQL Server 2000 Enterprise Edition
+2003-02-28	Microsoft SQL Server 2000 Enterprise Edition SP3	50666.11	23	75	709220.08	Microsoft SQL Server 2000 Enterprise Edition	50117.0	Oracle Database 9i R2 Enterprise Edition for Tru64 Unix
+2003-03-26	Microsoft SQL Server 2000 Enterprise Edition SP3	151744.13	23	29	709220.08	Microsoft SQL Server 2000 Enterprise Edition	151744.13	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-03-26	Microsoft SQL Server 2000 Enterprise Edition SP3	151744.13	23	29	709220.08	Microsoft SQL Server 2000 Enterprise Edition	141138.44	Microsoft SQL Server 2000 Enterprise Edition
+2003-04-04	Microsoft SQL Server 2000 Enterprise Edition SP3	119115.16	23	37	709220.08	Microsoft SQL Server 2000 Enterprise Edition	118381.38	Microsoft SQL Server 2000 Enterprise Edition
+2003-04-04	Microsoft SQL Server 2000 Enterprise Edition	118381.38	23	38	709220.08	Microsoft SQL Server 2000 Enterprise Edition	115025.75	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-04-09	Microsoft SQL Server 2000 Enterprise Edition	70653.01	23	58	709220.08	Microsoft SQL Server 2000 Enterprise Edition	69901.74	Microsoft SQL Server 2000 Enterprise Edition
+2003-04-21	Microsoft SQL Server 2000 Enterprise Edition SP3	78116.87	23	53	709220.08	Microsoft SQL Server 2000 Enterprise Edition	77905.18	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-04-23	Microsoft SQL Server 2000 Enterprise Edition 64bit	514034.72	23	5	709220.08	Microsoft SQL Server 2000 Enterprise Edition	455818.2	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2003-04-24	Microsoft SQL Server 2000 Enterprise Edition 64bit	121065.13	23	40	709220.08	Microsoft SQL Server 2000 Enterprise Edition	119115.16	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-04-24	Microsoft SQL Server 2000 Enterprise Edition 64bit	658277.74	23	4	709220.08	Microsoft SQL Server 2000 Enterprise Edition	658277.74	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-04-24	Microsoft SQL Server 2000 Enterprise Edition 64bit	658277.74	23	4	709220.08	Microsoft SQL Server 2000 Enterprise Edition	567882.56	Microsoft SQL Server 2000 Enterprise Edition
+2003-05-02	Microsoft SQL Server 2000 Enterprise Edition	181280.45	23	27	709220.08	Microsoft SQL Server 2000 Enterprise Edition	165218.71	Microsoft SQL Server 2000 Enterprise Edition
+2003-05-09	IBM DB2 UDB 8.1	680613.12	24	4	709220.08	Microsoft SQL Server 2000 Enterprise Edition	658277.74	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-05-12	Microsoft SQL Server 2000	19526.27	24	129	709220.08	Microsoft SQL Server 2000 Enterprise Edition	18077.98	Microsoft SQL Server 2000 Standard Edition SP3
+2003-05-12	Microsoft SQL Server 2000 Enterprise Edition SP3	39006.54	24	99	709220.08	Microsoft SQL Server 2000 Enterprise Edition	38386.24	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-05-16	Microsoft SQL Server 2000 Enterprise Edition 64bit	707102.32	24	2	709220.08	Microsoft SQL Server 2000 Enterprise Edition	688220.9	Microsoft SQL Server 2000
+2003-05-16	Microsoft SQL Server 2000 Enterprise Edition	161542.04	24	33	709220.08	Microsoft SQL Server 2000 Enterprise Edition	155179.25	Oracle 8i Enterprise Edition v. 8.1.7
+2003-05-20	Microsoft SQL Server 2000 Enterprise Edition 64bit	707102.0	24	3	709220.08	Microsoft SQL Server 2000 Enterprise Edition	688220.9	Microsoft SQL Server 2000
+2003-05-29	Microsoft SQL Server 2000 Standard Edition SP3	19140.72	24	135	709220.08	Microsoft SQL Server 2000 Enterprise Edition	18818.46	Microsoft SQL Server 2000 Standard Edition SP3
+2003-05-29	Microsoft SQL Server 2000 Enterprise Edition SP3	44942.92	24	99	709220.08	Microsoft SQL Server 2000 Enterprise Edition	43230.66	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-05-29	Microsoft SQL Server 2000 Enterprise Edition SP3	43230.66	24	100	709220.08	Microsoft SQL Server 2000 Enterprise Edition	43046.55	Microsoft SQL Server 2000 Enterprise Edition
+2003-05-29	Microsoft SQL Server 2000 Standard Edition SP3	18818.46	24	136	709220.08	Microsoft SQL Server 2000 Enterprise Edition	18077.98	Microsoft SQL Server 2000 Standard Edition SP3
+2003-06-27	Microsoft SQL Server 2000 Enterprise Edition	252920.49	24	23	709220.08	Microsoft SQL Server 2000 Enterprise Edition	234325.1	Microsoft SQL Server 2000 Enterprise Edition
+2003-06-30	Microsoft SQL Server 2000 Enterprise Edition SP3	84595.22	24	62	763898.39	IBM DB2 UDB 8.1	80570.81	Oracle Database 10i Standard Edition
+2003-06-30	Microsoft SQL Server 2000 Enterprise Edition SP3	139153.98	24	43	763898.39	IBM DB2 UDB 8.1	138362.03	Oracle Database 9i R2 Enterprise Edition
+2003-06-30	IBM DB2 UDB 8.1	763898.39	24	1	763898.39	IBM DB2 UDB 8.1	709220.08	Microsoft SQL Server 2000 Enterprise Edition
+2003-07-08	Microsoft SQL Server 2000 Enterprise Edition SP3	82226.46	24	63	763898.39	IBM DB2 UDB 8.1	80570.81	Oracle Database 10i Standard Edition
+2003-07-10	Microsoft SQL Server 2000 Enterprise Edition	18936.05	24	141	763898.39	IBM DB2 UDB 8.1	18818.46	Microsoft SQL Server 2000 Standard Edition SP3
+2003-07-14	Microsoft SQL Server 2000 Standard Edition	20108.79	24	139	763898.39	IBM DB2 UDB 8.1	19526.27	Microsoft SQL Server 2000
+2003-07-15	Microsoft SQL Server 2000 Standard Edition SP3	19718.01	24	141	763898.39	IBM DB2 UDB 8.1	19526.27	Microsoft SQL Server 2000
+2003-07-15	Microsoft SQL Server 2000 Enterprise Edition SP3	52468.48	24	94	763898.39	IBM DB2 UDB 8.1	51069.87	Microsoft SQL Server 2000 Enterprise Edition
+2003-07-18	Microsoft SQL Server 2000 Enterprise Edition SP3	190510.02	24	32	763898.39	IBM DB2 UDB 8.1	181280.45	Microsoft SQL Server 2000 Enterprise Edition
+2003-07-30	Oracle Database 10g Standard Edition	131639.8	26	50	824164.53	Oracle Database 10g Enterprise Edition	121319.23	Microsoft SQL Server 2000
+2003-07-30	Oracle Database 10g Enterprise Edition	824164.53	26	1	824164.53	Oracle Database 10g Enterprise Edition	763898.39	IBM DB2 UDB 8.1
+2003-07-30	Oracle Database 10g Enterprise Edition	541673.76	26	12	824164.53	Oracle Database 10g Enterprise Edition	514034.72	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-08-11	Microsoft SQL Server 2000 Enterprise Edition SP3	53691.33	26	96	824164.53	Oracle Database 10g Enterprise Edition	52671.3	Microsoft SQL Server 2000 Enterprise Edition
+2003-08-27	Microsoft SQL Server 2000 Enterprise Edition 64bit	786646.0	26	2	824164.53	Oracle Database 10g Enterprise Edition	763898.39	IBM DB2 UDB 8.1
+2003-09-05	Oracle Database 10g Standard Edition	136110.98	26	51	824164.53	Oracle Database 10g Enterprise Edition	131639.8	Oracle Database 10g Standard Edition
+2003-09-08	Microsoft SQL Server 2000 Enterprise Edition SP3	84712.94	26	67	824164.53	Oracle Database 10g Enterprise Edition	84598.42	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-09-08	Oracle Database 10g Enterprise Edition	521440.53	26	14	824164.53	Oracle Database 10g Enterprise Edition	514034.72	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-09-08	Microsoft SQL Server 2000 Standard Edition SP3	20477.37	26	145	824164.53	Oracle Database 10g Enterprise Edition	20422.01	Microsoft SQL Server 2000
+2003-09-12	Oracle Database 10g Enterprise Edition	768839.4	26	3	824164.53	Oracle Database 10g Enterprise Edition	763898.39	IBM DB2 UDB 8.1
+2003-09-21	Microsoft SQL Server 2000 Enterprise Edition SP3	36027.71	26	127	824164.53	Oracle Database 10g Enterprise Edition	34914.92	Microsoft SQL Server 2000 Enterprise Edition
+2003-10-09	Microsoft SQL Server 2000 Enterprise Edition 64bit	577530.77	26	13	824164.53	Oracle Database 10g Enterprise Edition	567882.56	Microsoft SQL Server 2000 Enterprise Edition
+2003-10-13	Microsoft SQL Server 2000 Enterprise Edition SP3	54096.56	26	102	824164.53	Oracle Database 10g Enterprise Edition	53691.33	Microsoft SQL Server 2000 Enterprise Edition SP3
+2003-10-17	Microsoft SQL Server 2000 Enterprise Edition SP3	90271.76	26	68	824164.53	Oracle Database 10g Enterprise Edition	87741.0	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-10-20	Oracle Database 10g Enterprise Edition	291410.61	26	30	824164.53	Oracle Database 10g Enterprise Edition	252920.49	Microsoft SQL Server 2000 Enterprise Edition
+2003-10-22	Microsoft SQL Server 2000 Enterprise Edition SP3	51226.96	26	109	824164.53	Oracle Database 10g Enterprise Edition	51069.87	Microsoft SQL Server 2000 Enterprise Edition
+2003-10-31	Oracle Database 10g Enterprise Edition	595702.31	26	13	824164.53	Oracle Database 10g Enterprise Edition	577530.77	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-11-03	Microsoft SQL Server 2000 Enterprise Edition SP3	58161.52	26	100	824164.53	Oracle Database 10g Enterprise Edition	57346.93	Oracle Database 9i Enterprise Edition v.9.0.1
+2003-11-04	Oracle Database 10g Enterprise Edition	1008144.49	26	1	1008144.49	Oracle Database 10g Enterprise Edition	824164.53	Oracle Database 10g Enterprise Edition
+2003-11-24	Microsoft SQL Server 2000 Standard Edition SP3	19814.35	26	161	1008144.49	Oracle Database 10g Enterprise Edition	19718.01	Microsoft SQL Server 2000 Standard Edition SP3
+2003-12-03	Microsoft SQL Server 2000 Enterprise Edition SP3	31910.24	26	145	1008144.49	Oracle Database 10g Enterprise Edition	30231.37	Microsoft SQL Server 2000
+2003-12-08	Oracle Database 10g Enterprise Edition	1184893.38	26	1	1184893.38	Oracle Database 10g Enterprise Edition	1008144.49	Oracle Database 10g Enterprise Edition
+2003-12-08	Microsoft SQL Server 2000 Enterprise Edition SP3	89616.32	26	73	1184893.38	Oracle Database 10g Enterprise Edition	87741.0	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2003-12-17	Microsoft SQL Server 2000 Enterprise Edition SP3	33873.83	26	144	1184893.38	Oracle Database 10g Enterprise Edition	33768.41	Microsoft SQL Server 2000 Enterprise Edition
+2003-12-17	Microsoft SQL Server 2000 Standard Edition SP3	17192.4	26	176	1184893.38	Oracle Database 10g Enterprise Edition	17078.88	Microsoft SQL Server 2000 Standard Edition
+2003-12-18	Microsoft SQL Server 2000 Enterprise Edition 64bit	301225.0	26	33	1184893.38	Oracle Database 10g Enterprise Edition	291410.61	Oracle Database 10g Enterprise Edition
+2004-01-20	Microsoft SQL Server 2000 Enterprise Edition	309036.53	26	33	1184893.38	Oracle Database 10g Enterprise Edition	301225.0	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2004-02-17	IBM DB2 UDB 8.1	1025486.07	26	2	1184893.38	Oracle Database 10g Enterprise Edition	1008144.49	Oracle Database 10g Enterprise Edition
+2004-02-18	Microsoft SQL Server 2000 Standard Edition	22052.0	26	162	1184893.38	Oracle Database 10g Enterprise Edition	22007.12	Microsoft SQL Server 2000 Enterprise Edition
+2004-02-18	Microsoft SQL Server 2000 Standard Edition	22052.81	26	161	1184893.38	Oracle Database 10g Enterprise Edition	22052.0	Microsoft SQL Server 2000 Standard Edition
+2004-02-23	Microsoft SQL Server 2000 Enterprise Edition	32185.33	26	151	1184893.38	Oracle Database 10g Enterprise Edition	31910.24	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-03-01	Microsoft SQL Server 2000 Enterprise Edition	95163.0	26	76	1184893.38	Oracle Database 10g Enterprise Edition	92398.49	Microsoft SQL Server 2000 Enterprise Edition
+2004-03-01	Microsoft SQL Server 2000 Enterprise Edition	102667.42	26	75	1184893.38	Oracle Database 10g Enterprise Edition	95163.0	Microsoft SQL Server 2000 Enterprise Edition
+2004-03-01	Microsoft SQL Server 2000 Enterprise Edition	156105.72	26	51	1184893.38	Oracle Database 10g Enterprise Edition	155179.25	Oracle 8i Enterprise Edition v. 8.1.7
+2004-03-02	Microsoft SQL Server 2000 Enterprise Edition	28711.0	26	161	1184893.38	Oracle Database 10g Enterprise Edition	26725.34	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-03-02	Microsoft SQL Server 2000 Enterprise Edition	35030.0	26	145	1184893.38	Oracle Database 10g Enterprise Edition	34914.92	Microsoft SQL Server 2000 Enterprise Edition
+2004-03-02	Microsoft SQL Server 2000 Enterprise Edition	60364.0	26	109	1184893.38	Oracle Database 10g Enterprise Edition	58161.52	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-03-26	Microsoft SQL Server 2000 Enterprise Edition SP3	215485.89	26	43	1184893.38	Oracle Database 10g Enterprise Edition	203518.03	Microsoft SQL Server 2000 Enterprise Edition
+2004-04-06	Oracle Database 10g Enterprise Edition	609467.0	26	16	1184893.38	Oracle Database 10g Enterprise Edition	595702.31	Oracle Database 10g Enterprise Edition
+2004-04-14	IBM DB2 UDB Express Edition v8.1	18318.24	27	185	1184893.38	Oracle Database 10g Enterprise Edition	18077.98	Microsoft SQL Server 2000 Standard Edition SP3
+2004-04-28	Microsoft SQL Server 2000 Enterprise Edition	304148.5	27	36	1184893.38	Oracle Database 10g Enterprise Edition	301225.0	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2004-05-03	Microsoft SQL Server 2000 Enterprise Edition SP3	105687.0	27	77	1184893.38	Oracle Database 10g Enterprise Edition	105025.02	Oracle Database 9i Enterprise Edition v.9i.0.1
+2004-05-03	Microsoft SQL Server 2000 Enterprise Edition SP3	123027.0	27	67	1184893.38	Oracle Database 10g Enterprise Edition	121319.23	Microsoft SQL Server 2000
+2004-05-11	Microsoft SQL Server 2000 Enterprise Edition SP3	21197.0	27	177	1184893.38	Oracle Database 10g Enterprise Edition	20477.37	Microsoft SQL Server 2000 Standard Edition SP3
+2004-05-11	Oracle Database 10g Enterprise Edition	291413.0	27	38	1184893.38	Oracle Database 10g Enterprise Edition	291410.61	Oracle Database 10g Enterprise Edition
+2004-05-27	Microsoft SQL Server 2000 Enterprise Edition SP3	94172.0	27	83	1184893.38	Oracle Database 10g Enterprise Edition	92398.49	Microsoft SQL Server 2000 Enterprise Edition
+2004-06-14	Microsoft SQL Server 2000 Enterprise Edition	237869.0	27	41	1184893.38	Oracle Database 10g Enterprise Edition	234325.1	Microsoft SQL Server 2000 Enterprise Edition
+2004-06-14	Microsoft SQL Server 2000 Enterprise Edition	212511.0	27	48	1184893.38	Oracle Database 10g Enterprise Edition	203518.03	Microsoft SQL Server 2000 Enterprise Edition
+2004-06-28	Oracle Database 10g Enterprise Edition	683575.0	27	13	1184893.38	Oracle Database 10g Enterprise Edition	680613.12	IBM DB2 UDB 8.1
+2004-06-30	Microsoft SQL Server 2000 Enterprise Edition 64bit	175366.24	27	54	1184893.38	Oracle Database 10g Enterprise Edition	165218.71	Microsoft SQL Server 2000 Enterprise Edition
+2004-07-12	Oracle Database 10g	194391.43	28	54	1184893.38	Oracle Database 10g Enterprise Edition	190510.02	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-07-12	IBM DB2 UDB 8.1	809144.09	28	5	1184893.38	Oracle Database 10g Enterprise Edition	786646.0	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2004-07-12	Oracle Database 10g	371044.22	28	35	1184893.38	Oracle Database 10g Enterprise Edition	363129.75	Microsoft SQL Server 2000
+2004-07-16	IBM DB2 UDB Express Edition v8.1	18661.0	28	198	1184893.38	Oracle Database 10g Enterprise Edition	18318.24	IBM DB2 UDB Express Edition v8.1
+2004-07-20	Microsoft SQL Server 2000 Enterprise Edition SP3	85554.0	28	95	1184893.38	Oracle Database 10g Enterprise Edition	84712.94	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-08-13	Microsoft SQL Server 2000 Enterprise Edition SP3	34349.0	28	165	1184893.38	Oracle Database 10g Enterprise Edition	34288.77	Sybase Adaptive Server Enterprise 12.0
+2004-08-31	IBM DB2 UDB 8.1	429899.7	28	29	1184893.38	Oracle Database 10g Enterprise Edition	427760.83	Oracle Database 9i Enterprise Server v.9.2.0.1
+2004-09-29	Oracle Database 10g Standard Edition	51506.4	28	137	1184893.38	Oracle Database 10g Enterprise Edition	51226.96	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-10-15	Microsoft SQL Server 2000 Enterprise Edition SP3	115110.0	28	81	1184893.38	Oracle Database 10g Enterprise Edition	115025.75	Microsoft SQL Server 2000 Enterprise Edition SP3
+2004-10-15	Microsoft SQL Server 2000 Enterprise Edition SP3	32464.0	28	174	1184893.38	Oracle Database 10g Enterprise Edition	32377.17	Microsoft SQL Server 2000
+2004-10-19	Microsoft SQL Server 2000 Standard Edition SP3	17810.0	28	208	1184893.38	Oracle Database 10g Enterprise Edition	17659.53	Microsoft SQL Server 2000 Standard Edition
+2004-11-01	Microsoft SQL Server 2000 Enterprise Edition SP3	68010.0	28	118	1184893.38	Oracle Database 10g Enterprise Edition	67102.53	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2004-11-07	Microsoft SQL Server 2000 Enterprise Edition SP3	123027.0	28	76	1184893.38	Oracle Database 10g Enterprise Edition	121319.23	Microsoft SQL Server 2000
+2004-11-08	Oracle Database 10g Standard Edition	161217.4	28	63	1184893.38	Oracle Database 10g Enterprise Edition	156105.72	Microsoft SQL Server 2000 Enterprise Edition
+2004-11-18	IBM DB2 UDB 8.2	3210540.63	29	1	3210540.63	IBM DB2 UDB 8.2	1184893.38	Oracle Database 10g Enterprise Edition
+2004-12-10	Microsoft SQL Server 2000 Enterprise Edition	26410.0	29	189	3210540.63	IBM DB2 UDB 8.2	24925.43	Microsoft SQL Server 2000
+2004-12-10	Microsoft SQL Server 2000 Enterprise Edition SP3	143367.0	29	70	3210540.63	IBM DB2 UDB 8.2	141138.44	Microsoft SQL Server 2000 Enterprise Edition
+2005-01-25	IBM DB2 UDB 8.2	247650.0	29	46	3210540.63	IBM DB2 UDB 8.2	247650.0	IBM DB2 UDB 8.2
+2005-01-25	IBM DB2 UDB 8.2	247650.0	29	46	3210540.63	IBM DB2 UDB 8.2	237869.0	Microsoft SQL Server 2000 Enterprise Edition
+2005-02-11	Microsoft SQL Server 2000 Enterprise Edition SP3	74298.0	30	115	3210540.63	IBM DB2 UDB 8.2	74206.27	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-02-11	Microsoft SQL Server 2000 Enterprise Edition SP3	71413.0	30	119	3210540.63	IBM DB2 UDB 8.2	71313.19	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-02-11	Microsoft SQL Server 2000 Enterprise Edition QFE	130623.0	30	81	3210540.63	IBM DB2 UDB 8.2	123027.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-02-14	Microsoft SQL Server 2000 Enterprise Edition SP3	67754.0	30	128	3210540.63	IBM DB2 UDB 8.2	67102.53	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2005-02-24	Microsoft SQL Server 2000 Workgroup Edition	28122.0	31	193	3210540.63	IBM DB2 UDB 8.2	26725.34	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-03-28	Microsoft SQL Server 2000 Enterprise Edition SP3	42432.0	31	164	3210540.63	IBM DB2 UDB 8.2	40621.26	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2005-04-20	Oracle Database 10g Enterprise Edition	1601784.98	31	2	3210540.63	IBM DB2 UDB 8.2	1184893.38	Oracle Database 10g Enterprise Edition
+2005-04-21	Microsoft SQL Server 2000 Enterprise Edition SP4	187296.0	33	61	3210540.63	IBM DB2 UDB 8.2	181280.45	Microsoft SQL Server 2000 Enterprise Edition
+2005-04-21	IBM DB2 UDB 8.2	150704.0	33	74	3210540.63	IBM DB2 UDB 8.2	143367.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-04-21	Microsoft SQL Server 2000 Enterprise Edition (SP3 w/QFE)	141504.0	33	76	3210540.63	IBM DB2 UDB 8.2	141138.44	Microsoft SQL Server 2000 Enterprise Edition
+2005-05-10	Microsoft SQL Server 2000 Enterprise Edition SP3	63646.0	33	137	3210540.63	IBM DB2 UDB 8.2	61564.5	Microsoft SQL Server 2000 Enterprise Edition
+2005-05-31	IBM DB2 UDB 8.2	250975.0	33	47	3210540.63	IBM DB2 UDB 8.2	247650.0	IBM DB2 UDB 8.2
+2005-06-07	Microsoft SQL Server 2005 Enterprise Edition 64bit	1082203.0	34	4	3210540.63	IBM DB2 UDB 8.2	1025486.07	IBM DB2 UDB 8.1
+2005-06-24	Microsoft SQL Server 2000 Enterprise Edition SP3	65453.0	34	141	3210540.63	IBM DB2 UDB 8.2	63646.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-06-24	Microsoft SQL Server 2000 Enterprise Edition SP3	108574.0	34	101	3210540.63	IBM DB2 UDB 8.2	105687.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-06-24	Oracle Database 10g Enterprise Edition	322805.0	34	42	3210540.63	IBM DB2 UDB 8.2	309036.53	Microsoft SQL Server 2000 Enterprise Edition
+2005-06-28	Microsoft SQL Server 2000 Enterprise Edition SP3	31253.0	34	200	3210540.63	IBM DB2 UDB 8.2	30231.37	Microsoft SQL Server 2000
+2005-07-01	Oracle Database 10g Enterprise Edition	327829.0	34	42	3210540.63	IBM DB2 UDB 8.2	322805.0	Oracle Database 10g Enterprise Edition
+2005-07-15	Microsoft SQL Server 2000 Enterprise Edition 64bit	332265.87	34	42	3210540.63	IBM DB2 UDB 8.2	327829.0	Oracle Database 10g Enterprise Edition
+2005-08-08	IBM DB2 UDB 8.2	197669.0	34	63	3210540.63	IBM DB2 UDB 8.2	197024.17	Oracle 8 Enterprise Edition v8.1.7.1
+2005-08-29	Microsoft SQL Server 2000 Enterprise Edition SP3	52742.0	34	159	3210540.63	IBM DB2 UDB 8.2	52671.3	Microsoft SQL Server 2000 Enterprise Edition
+2005-09-14	Microsoft SQL Server 2005 Enterprise Edition 64bit	241300.0	34	54	3210540.63	IBM DB2 UDB 8.2	237869.0	Microsoft SQL Server 2000 Enterprise Edition
+2005-09-26	Microsoft SQL Server 2005 Standard Edition x64	38622.0	35	183	3210540.63	IBM DB2 UDB 8.2	38386.24	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-09-30	Microsoft SQL Server 2005 Enterprise Edition	202551.0	36	64	3210540.63	IBM DB2 UDB 8.2	197669.0	IBM DB2 UDB 8.2
+2005-09-30	Microsoft SQL Server 2005 Enterprise Edition	109633.0	36	107	3210540.63	IBM DB2 UDB 8.2	108574.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-09-30	Microsoft SQL Server 2005 Enterprise Edition	107010.0	36	109	3210540.63	IBM DB2 UDB 8.2	105687.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-09-30	Microsoft SQL Server 2005 Enterprise Edition	138845.0	36	88	3210540.63	IBM DB2 UDB 8.2	138362.03	Oracle Database 9i R2 Enterprise Edition
+2005-09-30	Microsoft SQL Server 2005 Enterprise Edition	76214.0	36	131	3210540.63	IBM DB2 UDB 8.2	74298.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-10-17	Oracle Database 10g Enterprise Edition	203439.87	36	64	3210540.63	IBM DB2 UDB 8.2	202551.0	Microsoft SQL Server 2005 Enterprise Edition
+2005-10-24	Microsoft SQL Server 2005 Enterprise Edition x64	376045.0	37	39	3210540.63	IBM DB2 UDB 8.2	371044.22	Oracle Database 10g
+2005-10-28	Microsoft SQL Server 2000 Enterprise Edition SP4	188761.0	37	71	3210540.63	IBM DB2 UDB 8.2	187296.0	Microsoft SQL Server 2000 Enterprise Edition SP4
+2005-10-31	IBM DB2 UDB 8.2	221017.0	37	60	3210540.63	IBM DB2 UDB 8.2	220807.27	Oracle 8i Enterprise Edition v. 8.1.7
+2005-11-04	Microsoft SQL Server 2005 Enterprise Edition x64	206181.0	37	65	3210540.63	IBM DB2 UDB 8.2	203518.03	Microsoft SQL Server 2000 Enterprise Edition
+2005-11-07	Microsoft SQL Server 2005 Enterprise Edition x64	251691.0	37	52	3210540.63	IBM DB2 UDB 8.2	250975.0	IBM DB2 UDB 8.2
+2005-11-22	Microsoft SQL Server 2005 Enterprise Edition	492307.0	37	28	3210540.63	IBM DB2 UDB 8.2	455818.2	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2005-11-28	Microsoft SQL Server 2005 Enterprise Edition SP1	1231433.0	38	3	3210540.63	IBM DB2 UDB 8.2	1184893.38	Oracle Database 10g Enterprise Edition
+2005-12-01	Microsoft SQL Server 2005 Enterprise Edition	85858.0	38	128	3210540.63	IBM DB2 UDB 8.2	85554.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2005-12-05	IBM DB2 UDB 8.2	236054.0	38	60	3210540.63	IBM DB2 UDB 8.2	234325.1	Microsoft SQL Server 2000 Enterprise Edition
+2006-01-12	Microsoft SQL Server 2000 Enterprise Edition SP3	66543.0	38	160	3210540.63	IBM DB2 UDB 8.2	65453.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2006-01-18	Oracle Database 10g Enterprise Edition	254471.0	38	53	3210540.63	IBM DB2 UDB 8.2	252920.49	Microsoft SQL Server 2000 Enterprise Edition
+2006-02-09	Microsoft SQL Server 2005 Workgroup Edition	28244.0	39	228	3210540.63	IBM DB2 UDB 8.2	28122.0	Microsoft SQL Server 2000 Workgroup Edition
+2006-02-14	IBM DB2 UDB 8.2	1025169.69	39	7	3210540.63	IBM DB2 UDB 8.2	1008144.49	Oracle Database 10g Enterprise Edition
+2006-02-22	Microsoft SQL Server 2005 Enterprise Edition x64	347854.0	39	45	3210540.63	IBM DB2 UDB 8.2	342746.25	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2006-03-07	IBM DB2 UDB 8.2	273520.0	39	55	3210540.63	IBM DB2 UDB 8.2	254471.0	Oracle Database 10g Enterprise Edition
+2006-03-09	Oracle Database 10g Enterprise Edition	200829.0	39	77	3210540.63	IBM DB2 UDB 8.2	197669.0	IBM DB2 UDB 8.2
+2006-03-20	Microsoft SQL Server 2005 Enterprise Edition x86 SP1	113628.0	40	118	3210540.63	IBM DB2 UDB 8.2	112740.87	Microsoft SQL Server 2000 Enterprise Edition SP3
+2006-03-20	Microsoft SQL Server 2005 Enterprise Edition	213986.0	40	72	3210540.63	IBM DB2 UDB 8.2	212511.0	Microsoft SQL Server 2000 Enterprise Edition
+2006-03-21	Microsoft SQL Server 2005 Enterprise Edition x64	492307.0	40	30	3210540.63	IBM DB2 UDB 8.2	455818.2	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2006-03-27	Microsoft SQL Server 2005 Enterprise Edition Itanium	290644.0	41	56	3210540.63	IBM DB2 UDB 8.2	273520.0	IBM DB2 UDB 8.2
+2006-04-12	Microsoft SQL Server 2005 Standard Edition	57552.0	42	178	3210540.63	IBM DB2 UDB 8.2	57346.93	Oracle Database 9i Enterprise Edition v.9.0.1
+2006-04-26	Oracle Database 10g Enterprise Edition	792101.96	42	11	3210540.63	IBM DB2 UDB 8.2	786646.0	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2006-05-01	Microsoft SQL Server 2005 Enterprise Edition x64	125954.0	42	113	3210540.63	IBM DB2 UDB 8.2	123027.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2006-05-04	Microsoft SQL Server 2005 Enterprise Edition x86 SP1	110615.0	42	127	3210540.63	IBM DB2 UDB 8.2	109633.0	Microsoft SQL Server 2005 Enterprise Edition
+2006-05-08	Microsoft SQL Server 2005 Enterprise Edition x64	749839.0	42	15	3210540.63	IBM DB2 UDB 8.2	709220.08	Microsoft SQL Server 2000 Enterprise Edition
+2006-05-22	Microsoft SQL Server 2005 Enterprise Edition x64	169360.0	42	91	3210540.63	IBM DB2 UDB 8.2	165218.71	Microsoft SQL Server 2000 Enterprise Edition
+2006-06-12	Microsoft SQL Server 2005 Enterprise Edition x64	340243.0	42	50	3210540.63	IBM DB2 UDB 8.2	332265.87	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2006-06-23	Sybase Adaptive Server Enterprise v.12.5.4	81439.3	43	151	3210540.63	IBM DB2 UDB 8.2	80570.81	Oracle Database 10i Standard Edition
+2006-06-26	Microsoft SQL Server 2005 Enterprise Edition x64	140246.0	43	107	3210540.63	IBM DB2 UDB 8.2	140239.97	Sybase Adaptive Server Enterprise v12.5
+2006-06-30	Microsoft SQL Server 2005 Standard Edition	65833.0	43	178	3210540.63	IBM DB2 UDB 8.2	65453.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2006-07-18	Microsoft SQL Server 2005 Enterprise Edition Itanium	344928.0	43	49	3210540.63	IBM DB2 UDB 8.2	342746.25	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2006-07-24	IBM DB2 9	4016222.19	44	1	4016222.19	IBM DB2 9	3210540.63	IBM DB2 UDB 8.2
+2006-08-01	Oracle Database 10g Enterprise Edition	230569.0	44	73	4016222.19	IBM DB2 9	230533.0	Oracle Database 9i Enterprise Edition
+2006-09-13	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	147293.0	45	107	4016222.19	IBM DB2 9	143367.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2006-09-19	IBM DB2 9	314468.0	45	56	4016222.19	IBM DB2 9	309036.53	Microsoft SQL Server 2000 Enterprise Edition
+2006-09-25	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	262989.0	45	64	4016222.19	IBM DB2 9	254471.0	Oracle Database 10g Enterprise Edition
+2006-10-19	Microsoft SQL Server 2005 Enterprise Edition	318407.0	45	56	4016222.19	IBM DB2 9	314468.0	IBM DB2 9
+2006-10-26	Oracle Database 10g R2 Enterprise Edition	359440.0	46	49	4016222.19	IBM DB2 9	347854.0	Microsoft SQL Server 2005 Enterprise Edition x64
+2006-11-09	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	139693.0	46	117	4016222.19	IBM DB2 9	139153.98	Microsoft SQL Server 2000 Enterprise Edition SP3
+2006-11-13	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	240737.0	46	74	4016222.19	IBM DB2 9	237869.0	Microsoft SQL Server 2000 Enterprise Edition
+2006-11-14	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	222117.0	46	81	4016222.19	IBM DB2 9	221017.0	IBM DB2 UDB 8.2
+2006-11-30	Oracle Database 10g Enterprise Edition	1238579.0	46	4	4016222.19	IBM DB2 9	1231433.0	Microsoft SQL Server 2005 Enterprise Edition SP1
+2006-12-15	IBM DB2 9	331087.0	46	56	4016222.19	IBM DB2 9	327829.0	Oracle Database 10g Enterprise Edition
+2007-01-22	IBM DB2 9	4033378.0	46	1	4033378.0	IBM DB2 9	4016222.19	IBM DB2 9
+2007-02-13	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	138979.0	46	124	4033378.0	IBM DB2 9	138845.0	Microsoft SQL Server 2005 Enterprise Edition
+2007-02-27	Oracle Database 10g R2 Enterprise Edition w/Partitioning	4092799.0	47	1	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	4033378.0	IBM DB2 9
+2007-02-28	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	510822.0	47	36	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	492307.0	Microsoft SQL Server 2005 Enterprise Edition
+2007-03-09	Microsoft SQL Server 2005 Standard Edition	69564.0	47	184	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	69169.61	Microsoft SQL Server 2000 Enterprise Edition
+2007-03-23	Microsoft SQL Server 2005 Enterprise Edition	520467.0	47	35	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	514034.72	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2007-03-25	IBM DB2 9	511342.0	47	37	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	510822.0	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1
+2007-03-27	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1	82774.0	47	170	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	82226.46	Microsoft SQL Server 2000 Enterprise Edition SP3
+2007-04-26	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	145180.0	48	121	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	143367.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2007-05-21	IBM DB2 Enterprise 9	1616162.0	49	5	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	1601784.98	Oracle Database 10g Enterprise Edition
+2007-06-08	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	126371.0	50	138	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	125954.0	Microsoft SQL Server 2005 Enterprise Edition x64
+2007-06-08	Oracle Database 10g Standard Edition One	100926.0	50	161	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	95163.0	Microsoft SQL Server 2000 Enterprise Edition
+2007-06-11	Microsoft SQL Server 2005 Enterprise Edition Itanium	372140.0	50	54	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	371044.22	Oracle Database 10g
+2007-08-06	Oracle Database 10g Enterprise Edition	404462.0	50	50	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	403255.46	Oracle Database 9i R2 Enterprise Edition
+2007-09-05	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	251300.0	50	81	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	250975.0	IBM DB2 UDB 8.2
+2007-09-05	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	407079.0	50	50	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	404462.0	Oracle Database 10g Enterprise Edition
+2007-09-12	Oracle Database 11g Standard Edition One	102454.0	51	165	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	100926.0	Oracle Database 10g Standard Edition One
+2007-10-04	Oracle Database 10g R2 Enterprise Edition	236271.0	51	88	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	236054.0	IBM DB2 UDB 8.2
+2007-10-15	IBM DB2 9.5 Enterprise Edition	516752.0	52	37	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	514034.72	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2007-10-23	Microsoft SQL Server 2005 Enterprise Edition x64	841809.0	52	14	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	824164.53	Oracle Database 10g Enterprise Edition
+2007-10-30	Oracle Database 10g R2 Enterprise Edition w/Partitioning	2196268.0	52	5	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	1616162.0	IBM DB2 Enterprise 9
+2007-11-09	Oracle Database 10g Standard Edition One	273666.0	52	79	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	273520.0	IBM DB2 UDB 8.2
+2007-12-17	IBM DB2 9.1	1616162.0	53	6	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	1601784.98	Oracle Database 10g Enterprise Edition
+2007-12-17	Oracle Database 10g Enterprise Edition	404462.0	53	55	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	403255.46	Oracle Database 9i R2 Enterprise Edition
+2008-01-07	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	275149.0	53	81	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	273666.0	Oracle Database 10g Standard Edition One
+2008-01-21	Oracle Database 10g R2 Enterprise Edition w/Partitioning	1245516.0	53	9	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	1238579.0	Oracle Database 10g Enterprise Edition
+2008-03-20	IBM DB2 9.5 Enterprise Edition	629159.0	53	34	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	609467.0	Oracle Database 10g Enterprise Edition
+2008-03-31	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	402234.0	53	61	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning	389434.4	Oracle Database 9i Enterprise Edition
+2008-06-10	IBM DB2 9.5	6085166.0	54	1	6085166.0	IBM DB2 9.5	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2008-06-11	IBM DB2 9.5 Enterprise Edition	629159.0	54	35	6085166.0	IBM DB2 9.5	609467.0	Oracle Database 10g Enterprise Edition
+2008-06-15	IBM DB2 9.5	6085166.0	54	1	6085166.0	IBM DB2 9.5	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2008-06-16	Oracle Database 11g Standard Edition One	97083.0	55	182	6085166.0	IBM DB2 9.5	95163.0	Microsoft SQL Server 2000 Enterprise Edition
+2008-06-16	Sybase Adaptive Server Enterprise 15.0.3	276383.0	55	87	6085166.0	IBM DB2 9.5	275149.0	Microsoft SQL Server 2005 Enterprise Edition x64 SP2
+2008-07-14	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	471883.0	55	51	6085166.0	IBM DB2 9.5	455818.2	Fujitsu SymfoWARE Server Enterp. Ed. VLM 3.0
+2008-07-29	Sybase SQL Anywhere 11.0	20705.0	56	306	6085166.0	IBM DB2 9.5	20477.37	Microsoft SQL Server 2000 Standard Edition SP3
+2008-08-19	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	634825.0	57	37	6085166.0	IBM DB2 9.5	629159.0	IBM DB2 9.5 Enterprise Edition
+2008-08-19	IBM DB2 ESE 9.5	1200632.0	57	14	6085166.0	IBM DB2 9.5	1184893.38	Oracle Database 10g Enterprise Edition
+2008-09-15	Microsoft SQL Server 2005 Enterprise Edition x64	684508.0	57	33	6085166.0	IBM DB2 9.5	683575.0	Oracle Database 10g Enterprise Edition
+2008-11-17	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	579814.0	57	43	6085166.0	IBM DB2 9.5	577530.77	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2008-11-22	Oracle Database 10g R2 Enterprise Edition	1354086.0	57	11	6085166.0	IBM DB2 9.5	1245516.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2008-12-04	Oracle Database 10g R2 Enterprise Edition w/Partitioning	2382032.0	57	7	6085166.0	IBM DB2 9.5	2196268.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2009-01-16	Oracle Database 11g Standard Edition	639253.0	58	40	6085166.0	IBM DB2 9.5	634825.0	Microsoft SQL Server 2005 Enterprise Edition x64 SP2
+2009-02-20	Oracle Database 11g Standard Edition One	104492.0	58	187	6085166.0	IBM DB2 9.5	102667.42	Microsoft SQL Server 2000 Enterprise Edition
+2009-03-30	Oracle Database 11g Standard Edition One	631766.0	58	42	6085166.0	IBM DB2 9.5	629159.0	IBM DB2 9.5 Enterprise Edition
+2009-05-21	Oracle Database 11g Standard Edition One	232002.0	58	114	6085166.0	IBM DB2 9.5	230569.0	Oracle Database 10g Enterprise Edition
+2009-11-04	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	7646486.0	59	1	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	6085166.0	IBM DB2 9.5
+2009-11-18	Oracle Database 11g Standard Edition One	239392.0	59	111	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	237869.0	Microsoft SQL Server 2000 Enterprise Edition
+2010-02-01	Microsoft SQL Server 2005 Enterprise Edition x64 SP2	661475.0	59	39	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	658277.74	Microsoft SQL Server 2000 Enterprise Edition 64bit
+2010-04-08	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	705652.0	60	34	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	688220.9	Microsoft SQL Server 2000
+2010-04-13	IBM DB2 9.5	1200011.0	60	18	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	1184893.38	Oracle Database 10g Enterprise Edition
+2010-05-11	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	803068.0	60	27	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	792101.96	Oracle Database 10g Enterprise Edition
+2010-06-22	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	1193472.0	60	19	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning	1184893.38	Oracle Database 10g Enterprise Edition
+2010-08-17	Oracle Database 11g Release 2 Standard Ed One	290040.0	62	103	10366254.0	IBM DB2 9.7	276383.0	Sybase Adaptive Server Enterprise 15.0.3
+2010-08-17	IBM DB2 9.7	10366254.0	62	1	10366254.0	IBM DB2 9.7	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning
+2010-08-30	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	1807347.0	62	11	10366254.0	IBM DB2 9.7	1616162.0	IBM DB2 Enterprise 9
+2010-11-16	IBM DB2 ESE 9.7	2308099.0	63	10	10366254.0	IBM DB2 9.7	2196268.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2010-12-02	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	30249688.0	64	1	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	10366254.0	IBM DB2 9.7
+2011-05-05	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	1024380.0	64	28	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1008144.49	Oracle Database 10g Enterprise Edition
+2011-05-23	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	1263599.0	64	18	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1245516.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2011-07-11	IBM DB2 ESE 9.7	3014684.0	64	10	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	2382032.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2011-11-15	Microsoft SQL Server 2005 Enterprise Edition x64 SP3	1207982.0	64	23	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1200632.0	IBM DB2 ESE 9.5
+2011-12-08	Oracle Database 11g Release 2 Standard Ed One	1053100.32	64	29	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1025486.07	IBM DB2 UDB 8.1
+2012-01-18	Oracle Database 11g R2 Enterprise Edition	4803718.0	65	6	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	4092799.0	Oracle Database 10g R2 Enterprise Edition w/Partitioning
+2012-04-11	IBM DB2 ESE 9.7	1503544.0	65	19	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1354086.0	Oracle Database 10g R2 Enterprise Edition
+2012-06-20	Oracle Database 11g R2 Enterprise Edition w/Partitioning	5055888.0	66	6	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	4803718.0	Oracle Database 11g R2 Enterprise Edition
+2012-09-26	Oracle Database 11g Standard Edition One	1609186.39	66	19	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1601784.98	Oracle Database 10g Enterprise Edition
+2013-02-22	IBM DB2 ESE 9.7	1320082.0	66	23	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	1263599.0	Microsoft SQL Server 2005 Enterprise Edition x64 SP3
+2013-03-26	Oracle 11g Release 2 Enterprise Edition with Oracle Partitioning	8552523.0	67	3	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	7646486.0	Oracle Database 11g Enterprise Edition w/RAC w/Partitioning
+2014-11-25	SQL Anywhere 16	112890.0	68	201	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	112740.87	Microsoft SQL Server 2000 Enterprise Edition SP3
+2017-05-08	SunjeSoft Goldilocks v3.1 Standard Edition	139909.0	69	180	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	139693.0	Microsoft SQL Server 2005 Enterprise  Edition x64 SP1
+2018-11-19	SunjeSoft Goldilocks v3.1 Standard Edition	152330.0	69	170	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	151744.13	Microsoft SQL Server 2000 Enterprise Edition SP3
+2018-11-26	SunjeSoft Goldilocks v3.1 Standard Edition	76172.0	69	241	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	76168.0	SunjeSoft Goldilocks v3.1 Standard Edition
+2018-11-26	SunjeSoft Goldilocks v3.1 Standard Edition	76168.0	69	242	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning	74298.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2019-10-01	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	60880800.0	70	1	60880800.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	30249688.0	Oracle Database 11g R2 Enterprise Edition w/RAC w/Partitioning
+2019-10-14	SunjeSoft Goldilocks v3.1 Standard Edition	76168.0	70	244	60880800.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	74298.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2019-10-14	SunjeSoft Goldilocks v3.1 Standard Edition	114245.0	70	203	60880800.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	113628.0	Microsoft SQL Server 2005 Enterprise Edition x86 SP1
+2019-11-03	SunjeSoft Goldilocks v3.1 Standard Edition	152328.0	70	172	60880800.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	151744.13	Microsoft SQL Server 2000 Enterprise Edition SP3
+2020-05-19	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	707351007.0	70	1	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	60880800.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression
+2020-08-17	SunjeSoft Goldilocks v3.1 Standard Edition	380475.0	70	98	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	376045.0	Microsoft SQL Server 2005 Enterprise Edition x64
+2020-11-23	SunjeSoft Goldilocks v3.1 Standard Edition	76174.0	70	246	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	76172.0	SunjeSoft Goldilocks v3.1 Standard Edition
+2021-09-29	SunjeSoft Goldilocks v3.1 Standard Edition	144714.0	70	180	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	143367.0	Microsoft SQL Server 2000 Enterprise Edition SP3
+2021-12-20	SunjeSoft Goldilocks v3.1 Standard Edition	101550.0	70	224	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	100926.0	Oracle Database 10g Standard Edition One
+2022-06-30	SunjeSoft Goldilocks v3.1 Standard Edition	190443.0	70	160	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	188761.0	Microsoft SQL Server 2000 Enterprise Edition SP4
+2022-09-07	SunjeSoft Goldilocks v3.1 Standard Edition	507802.0	70	80	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression	492307.0	Microsoft SQL Server 2005 Enterprise Edition
+2023-03-24	Tencent TDSQL v10.3  Enterprise Pro Edition with  Partitioning and Physical  Replication	814854791.0	71	1	814854791.0	Tencent TDSQL v10.3  Enterprise Pro Edition with  Partitioning and Physical  Replication	707351007.0	OceanBase v2.2 Enterprise Edition with Partitioning, Horizontal Scalability and Advanced Compression
+2023-10-02	IBM DB2 11.5.8 Advanced Edition	279185.0	72	123	814854791.0	Tencent TDSQL v10.3  Enterprise Pro Edition with  Partitioning and Physical  Replication	276383.0	Sybase Adaptive Server Enterprise 15.0.3
+2024-02-26	SunjeSoft Goldilocks v3.1 Standard Edition	50768.0	72	300	814854791.0	Tencent TDSQL v10.3  Enterprise Pro Edition with  Partitioning and Physical  Replication	50666.11	Microsoft SQL Server 2000 Enterprise Edition SP3

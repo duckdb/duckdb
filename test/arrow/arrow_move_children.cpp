@@ -27,9 +27,10 @@ void AssertExpectedResult(ArrowSchema *schema, ArrowArrayWrapper &array, T expec
 	struct_array.children[0] = &array.arrow_array;
 	struct_array.length = array.arrow_array.length;
 	struct_array.release = EmptyRelease;
+	struct_array.offset = 0;
 
-	duckdb_adbc::AdbcError unused;
-	(void)BatchToArrayStream(&struct_array, schema, &stream, &unused);
+	AdbcError unused;
+	(void)duckdb_adbc::BatchToArrayStream(&struct_array, schema, &stream, &unused);
 
 	DuckDB db(nullptr);
 	Connection conn(db);
@@ -105,8 +106,8 @@ TEST_CASE("Test move children", "[arrow]") {
 	auto res_properties = initial_result->client_properties;
 
 	// Create a test factory and produce a stream from it
-	auto factory =
-	    ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false, client_properties);
+	auto factory = ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false,
+	                                client_properties, *conn.context);
 	auto stream = ArrowTestFactory::CreateStream((uintptr_t)&factory, parameters);
 
 	// For every array, extract the children and scan them

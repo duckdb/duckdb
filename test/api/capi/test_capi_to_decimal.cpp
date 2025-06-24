@@ -41,6 +41,8 @@ TEST_CASE("Test CAPI duckdb_decimal_as_properties", "[capi]") {
 	TestFetchAsDecimal(tester, "SELECT CAST(123.45678 AS %s)", "FLOAT");
 	//! From HUGEINT
 	TestFetchAsDecimal(tester, "SELECT CAST(123124 AS %s)", "HUGEINT");
+	//! From UHUGEINT
+	TestFetchAsDecimal(tester, "SELECT CAST(123124 AS %s)", "UHUGEINT");
 	//! From BIGINT
 	TestFetchAsDecimal(tester, "SELECT CAST(123124 AS %s)", "BIGINT");
 	//! From UBIGINT

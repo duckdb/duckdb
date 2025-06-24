@@ -1,0 +1,56 @@
+# name: test/sql/aggregate/quantile_fun.test
+# description: Test pg_sequence function
+# group: [aggregate]
+
+require tpch
+
+# scalar quantiles
+statement ok
+create table quantiles as select range r, random() FROM range(100) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+statement ok
+CALL dbgen(sf=0.001);
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA verify_external;
+
+statement ok
+SELECT quantile_disc(0.1::decimal(4,1), [0.1, 0.5, 0.9]);
+
+statement ok
+SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "l_extendedprice") FROM lineitem;
+
+statement ok
+SET default_null_order='nulls_first';
+
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
+
+query I
+SELECT quantile_disc(r::${type}, 0.1) FROM quantiles
+----
+9.0
+
+query I
+SELECT quantile_disc(r::${type}, [0.1, 0.5, 0.9]) FROM quantiles
+----
+[9.0, 49.0, 89.0]
+
+query I
+SELECT quantile_cont(r::${type}, 0.15) FROM quantiles
+----
+14.8
+
+query I
+SELECT quantile_cont(r::${type}, [0.15, 0.5, 0.9]) FROM quantiles
+----
+[14.8, 49.5, 89.1]
+
+endloop
+
+statement error
+SELECT quantile_cont(NULL, CAST(NULL AS DOUBLE[]))
+----
+not be NULL

@@ -22,7 +22,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
 
 public:
-	BoundExpression(unique_ptr<Expression> expr);
+	explicit BoundExpression(unique_ptr<Expression> expr);
 
 	unique_ptr<Expression> expr;
 

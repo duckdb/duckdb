@@ -1,0 +1,117 @@
+# name: test/sql/collate/test_collate_orderby_column_number.test
+# description: Test collation on ORDER BY with column number
+# group: [collate]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 'a' AS c1 ORDER BY 1 COLLATE NOCASE;
+----
+a
+
+query I
+SELECT 'a' ORDER BY 1 COLLATE NOCASE;
+----
+a
+
+query II
+SELECT 'A', 'B' ORDER BY 2 COLLATE NOCASE;
+----
+A	B
+
+query I
+SELECT 999::VARCHAR ORDER BY 1 COLLATE NOCASE;
+----
+999
+
+statement error
+SELECT 999 FROM ORDER BY 1 COLLATE NOCASE;
+----
+
+statement error
+SELECT 'a' FROM ORDER BY -1 COLLATE NOCASE;
+----
+
+statement error
+SELECT 'a' FROM ORDER BY 0 COLLATE NOCASE;
+----
+
+statement error
+SELECT 'a' FROM ORDER BY -0 COLLATE NOCASE;
+----
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR);
+
+statement ok
+INSERT INTO collate_test VALUES ('ã'),('B'),('a'),('A');
+
+query I
+SELECT s FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+A
+B
+ã
+
+query I
+SELECT s FROM collate_test ORDER BY s COLLATE NOCASE;
+----
+a
+A
+B
+ã
+
+query I
+SELECT CONCAT(s, s) FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+aa
+AA
+BB
+ãã
+
+query II
+SELECT CONCAT(s, s) AS concat, concat FROM collate_test ORDER BY 2 COLLATE NOCASE;
+----
+aa	aa
+AA	AA
+BB	BB
+ãã	ãã
+
+query I
+SELECT collate_test.s FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+A
+B
+ã
+
+query I
+SELECT CASE WHEN s[1]='a' THEN s ELSE NULL END FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+NULL
+NULL
+NULL
+
+
+query I
+SELECT (SELECT s) FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+A
+B
+ã
+
+statement error
+SELECT (SELECT s) AS c1 FROM collate_test ORDER BY c11 COLLATE NOCASE;
+----
+
+query I
+SELECT concat('a', (SELECT s)) FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+aa
+aA
+aB
+aã

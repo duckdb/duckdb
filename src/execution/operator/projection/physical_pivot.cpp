@@ -1,13 +1,16 @@
 #include "duckdb/execution/operator/projection/physical_pivot.hpp"
+
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
-PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOperator> child,
+PhysicalPivot::PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> types_p, PhysicalOperator &child,
                              BoundPivotInfo bound_pivot_p)
-    : PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child->estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
       bound_pivot(std::move(bound_pivot_p)) {
-	children.push_back(std::move(child));
+
+	children.push_back(child);
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
 		auto entry = pivot_map.find(bound_pivot.pivot_values[p]);
 		if (entry != pivot_map.end()) {
@@ -16,15 +19,14 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
 		pivot_map[bound_pivot.pivot_values[p]] = bound_pivot.group_count + p;
 	}
 	// extract the empty aggregate expressions
-	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	for (auto &aggr_expr : bound_pivot.aggregates) {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
-		auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
-		aggr.function.initialize(state.get());
+		auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size(aggr.function));
+		aggr.function.initialize(aggr.function, state.get());
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())));
 		Vector result_vector(aggr_expr->return_type);
-		AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggr.bind_info.get(), physical_plan.ArenaRef());
 		aggr.function.finalize(state_vector, aggr_input_data, result_vector, 1, 0);
 		empty_aggregates.push_back(result_vector.GetValue(0));
 	}
@@ -33,6 +35,7 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
 OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                           GlobalOperatorState &gstate, OperatorState &state) const {
 	// copy the groups as-is
+	input.Flatten();
 	for (idx_t i = 0; i < bound_pivot.group_count; i++) {
 		chunk.data[i].Reference(input.data[i]);
 	}
@@ -68,10 +71,10 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 			for (idx_t aggr = 0; aggr < empty_aggregates.size(); aggr++) {
 				auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count + aggr]);
 				auto &pivot_value_child = ListVector::GetEntry(input.data[bound_pivot.group_count + aggr]);
-				if (list.offset != pivot_value_lists[r].offset || list.length != pivot_value_lists[r].length) {
+				if (list.length != pivot_value_lists[r].length) {
 					throw InternalException("Pivot - unaligned lists between values and columns!?");
 				}
-				chunk.data[column_idx + aggr].SetValue(r, pivot_value_child.GetValue(list.offset + l));
+				chunk.data[column_idx + aggr].SetValue(r, pivot_value_child.GetValue(pivot_value_lists[r].offset + l));
 			}
 		}
 	}

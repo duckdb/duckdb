@@ -87,9 +87,12 @@ vector<string> SQLLogicParser::ExtractExpectedResult() {
 	return result;
 }
 
-string SQLLogicParser::ExtractExpectedError(bool expect_ok) {
+string SQLLogicParser::ExtractExpectedError(bool expect_ok, bool original_sqlite_test) {
 	// check if there is an expected error at all
 	if (current_line >= lines.size() || lines[current_line] != "----") {
+		if (!expect_ok && !original_sqlite_test) {
+			Fail("Failed to parse statement: statement error needs to have an expected error message");
+		}
 		return string();
 	}
 	if (expect_ok) {
@@ -152,6 +155,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_HALT:
 	case SQLLogicTokenType::SQLLOGIC_MODE:
 	case SQLLogicTokenType::SQLLOGIC_SET:
+	case SQLLogicTokenType::SQLLOGIC_RESET:
 	case SQLLogicTokenType::SQLLOGIC_LOOP:
 	case SQLLogicTokenType::SQLLOGIC_FOREACH:
 	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
@@ -162,6 +166,8 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
+	case SQLLogicTokenType::SQLLOGIC_SLEEP:
+	case SQLLogicTokenType::SQLLOGIC_UNZIP:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -193,6 +199,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_MODE;
 	} else if (token == "set") {
 		return SQLLogicTokenType::SQLLOGIC_SET;
+	} else if (token == "reset") {
+		return SQLLogicTokenType::SQLLOGIC_RESET;
 	} else if (token == "loop") {
 		return SQLLogicTokenType::SQLLOGIC_LOOP;
 	} else if (token == "concurrentloop") {
@@ -213,6 +221,10 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_RESTART;
 	} else if (token == "reconnect") {
 		return SQLLogicTokenType::SQLLOGIC_RECONNECT;
+	} else if (token == "sleep") {
+		return SQLLogicTokenType::SQLLOGIC_SLEEP;
+	} else if (token == "unzip") {
+		return SQLLogicTokenType::SQLLOGIC_UNZIP;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

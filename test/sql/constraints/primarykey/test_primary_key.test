@@ -8,6 +8,7 @@ CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
 # insert two conflicting pairs at the same time
 statement error
 INSERT INTO integers VALUES (3, 4), (3, 5)
+----
 
 # insert unique values
 statement ok
@@ -22,6 +23,7 @@ SELECT * FROM integers
 # insert a duplicate value as part of a chain of values
 statement error
 INSERT INTO integers VALUES (6, 6), (3, 4);
+----
 
 # now insert just the first value
 statement ok
@@ -37,10 +39,12 @@ SELECT * FROM integers
 # insert NULL value in PRIMARY KEY is not allowed
 statement error
 INSERT INTO integers VALUES (NULL, 4);
+----
 
 # update NULL is also not allowed
 statement error
 UPDATE integers SET i=NULL;
+----
 
 # insert the same value from multiple connections
 # NOTE: this tests current behavior
@@ -66,4 +70,5 @@ COMMIT
 # but the second transaction results in a conflict
 statement error con2
 COMMIT
+----
 

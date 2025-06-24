@@ -29,7 +29,8 @@ enum class VectorBufferType : uint8_t {
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
+	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
+	ARRAY_BUFFER         // array buffer, holds a single flatvector child
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
@@ -71,10 +72,10 @@ public:
 	}
 	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
 		if (data_size > 0) {
-			data = make_unsafe_uniq_array<data_t>(data_size);
+			data = Allocator::DefaultAllocator().Allocate(data_size);
 		}
 	}
-	explicit VectorBuffer(unsafe_unique_array<data_t> data_p)
+	explicit VectorBuffer(AllocatedData &&data_p)
 	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
@@ -87,7 +88,7 @@ public:
 		return data.get();
 	}
 
-	void SetData(unsafe_unique_array<data_t> new_data) {
+	void SetData(AllocatedData &&new_data) {
 		data = std::move(new_data);
 	}
 
@@ -120,17 +121,17 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	unsafe_unique_array<data_t> data;
+	AllocatedData data;
 
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -158,9 +159,24 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
+	void SetDictionarySize(idx_t dict_size) {
+		dictionary_size = dict_size;
+	}
+	optional_idx GetDictionarySize() const {
+		return dictionary_size;
+	}
+	void SetDictionaryId(string id) {
+		dictionary_id = std::move(id);
+	}
+	const string &GetDictionaryId() const {
+		return dictionary_id;
+	}
 
 private:
 	SelectionVector sel_vector;
+	optional_idx dictionary_size;
+	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent
+	string dictionary_id;
 };
 
 class VectorStringBuffer : public VectorBuffer {
@@ -182,6 +198,25 @@ public:
 		return heap.EmptyString(len);
 	}
 
+	//! Allocate a buffer to store up to "len" bytes for a string
+	//! This can be turned into a proper string by using FinalizeBuffer afterwards
+	//! Note that alloc_len only has to be an upper bound, the final string may be smaller
+	data_ptr_t AllocateShrinkableBuffer(idx_t alloc_len) {
+		auto &allocator = heap.GetAllocator();
+		return allocator.Allocate(alloc_len);
+	}
+	//! Finalize a buffer allocated with AllocateShrinkableBuffer into a string of size str_len
+	//! str_len must be <= alloc_len
+	string_t FinalizeShrinkableBuffer(data_ptr_t buffer, idx_t alloc_len, idx_t str_len) {
+		auto &allocator = heap.GetAllocator();
+		D_ASSERT(str_len <= alloc_len);
+		D_ASSERT(buffer == allocator.GetHead()->data.get() + allocator.GetHead()->current_position - alloc_len);
+		bool is_not_inlined = str_len > string_t::INLINE_LENGTH;
+		idx_t shrink_count = alloc_len - (str_len * is_not_inlined);
+		allocator.ShrinkHead(shrink_count);
+		return string_t(const_char_ptr_cast(buffer), UnsafeNumericCast<uint32_t>(str_len));
+	}
+
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
 		references.push_back(std::move(heap));
 	}
@@ -189,7 +224,7 @@ public:
 private:
 	//! The string heap of this buffer
 	StringHeap heap;
-	// References to additional vector buffers referenced by this string buffer
+	//! References to additional vector buffers referenced by this string buffer
 	vector<buffer_ptr<VectorBuffer>> references;
 };
 
@@ -198,11 +233,15 @@ public:
 	VectorFSSTStringBuffer();
 
 public:
-	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p) {
+	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
 		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
+		decompress_buffer.resize(string_block_limit + 1);
 	}
 	void *GetDecoder() {
 		return duckdb_fsst_decoder.get();
+	}
+	vector<unsigned char> &GetDecompressBuffer() {
+		return decompress_buffer;
 	}
 	void SetCount(idx_t count) {
 		total_string_count = count;
@@ -214,6 +253,7 @@ public:
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
+	vector<unsigned char> decompress_buffer;
 };
 
 class VectorStructBuffer : public VectorBuffer {
@@ -268,6 +308,26 @@ private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;
+	idx_t size = 0;
+};
+
+class VectorArrayBuffer : public VectorBuffer {
+public:
+	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity);
+	explicit VectorArrayBuffer(const LogicalType &array, idx_t initial = STANDARD_VECTOR_SIZE);
+	~VectorArrayBuffer() override;
+
+public:
+	Vector &GetChild();
+	idx_t GetArraySize();
+	idx_t GetChildSize();
+
+private:
+	unique_ptr<Vector> child;
+	// The size of each array in this buffer
+	idx_t array_size = 0;
+	// How many arrays are currently stored in this buffer
+	// The child vector has size (array_size * size)
 	idx_t size = 0;
 };
 

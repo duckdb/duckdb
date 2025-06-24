@@ -22,9 +22,9 @@ class TestDateTimeDate(object):
         # positive infinity
         con.execute("select $1, $1 = 'infinity'::DATE", [datetime.date.max])
         res = con.fetchall()
-        assert res == [(datetime.date.max, True)]
+        assert res == [(datetime.date.max, False)]
 
         # negative infinity
         con.execute("select $1, $1 = '-infinity'::DATE", [datetime.date.min])
         res = con.fetchall()
-        assert res == [(datetime.date.min, True)]
+        assert res == [(datetime.date.min, False)]

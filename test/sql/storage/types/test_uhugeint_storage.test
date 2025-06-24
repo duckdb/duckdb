@@ -1,0 +1,38 @@
+# name: test/sql/storage/types/test_uhugeint_storage.test
+# description: Test UHUGEINT with persistent storage
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/uhugeint_storage_test.db
+
+# create a table with uhugeints
+statement ok
+CREATE TABLE uhugeints (h UHUGEINT);
+
+statement ok
+INSERT INTO uhugeints VALUES (0), (42), (NULL), ('340282366920938463463374607431768211455'::UHUGEINT);
+
+# reload the database from disk a few times, and check that the data is still there
+loop i 0 2
+
+restart
+
+query I
+SELECT * FROM uhugeints
+----
+0
+42
+NULL
+340282366920938463463374607431768211455
+
+query I
+SELECT * FROM uhugeints WHERE h = 42
+----
+42
+
+query I
+SELECT h FROM uhugeints WHERE h < 10 ORDER BY 1;
+----
+0
+
+endloop

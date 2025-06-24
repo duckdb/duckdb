@@ -40,18 +40,23 @@ protected:
 public:
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
-	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
-	virtual void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer);
+	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
+	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);
+	virtual PersistentColumnData ToPersistentData();
+
+	PartialBlockManager &GetPartialBlockManager() {
+		return partial_block_manager;
+	}
 
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

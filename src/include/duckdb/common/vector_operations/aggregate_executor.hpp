@@ -17,6 +17,8 @@ namespace duckdb {
 
 // structs
 struct AggregateInputData;
+
+// The bounds of a window frame
 struct FrameBounds {
 	FrameBounds() : start(0), end(0) {};
 	FrameBounds(idx_t start, idx_t end) : start(start), end(end) {};
@@ -24,8 +26,12 @@ struct FrameBounds {
 	idx_t end = 0;
 };
 
+// A set of window subframes for windowed EXCLUDE
+using SubFrames = vector<FrameBounds>;
+
 class AggregateExecutor {
 private:
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class OP>
 	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
 	                                   idx_t count) {
@@ -33,6 +39,7 @@ private:
 			OP::template Operation<STATE_TYPE, OP>(*states[i], aggr_input_data, i);
 		}
 	}
+#endif
 
 	template <class STATE_TYPE, class OP>
 	static inline void NullaryScatterLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
@@ -44,6 +51,7 @@ private:
 		}
 	}
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
@@ -83,6 +91,7 @@ private:
 			}
 		}
 	}
+#endif
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
@@ -109,6 +118,7 @@ private:
 		}
 	}
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
@@ -139,6 +149,7 @@ private:
 			}
 		}
 	}
+#endif
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
@@ -225,9 +236,11 @@ public:
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
+#ifndef DUCKDB_SMALLER_BINARY
 		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
+#endif
 		} else {
 			UnifiedVectorFormat sdata;
 			states.ToUnifiedFormat(count, sdata);
@@ -253,12 +266,14 @@ public:
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, *idata, input_data, count);
+#ifndef DUCKDB_SMALLER_BINARY
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input),
 			                                          count);
+#endif
 		} else {
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
@@ -282,12 +297,14 @@ public:
 			                                                           input_data, count);
 			break;
 		}
+#ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, (STATE_TYPE *)state, count,
 			                                                FlatVector::Validity(input));
 			break;
 		}
+#endif
 		default: {
 			UnifiedVectorFormat idata;
 			input.ToUnifiedFormat(count, idata);
@@ -382,15 +399,63 @@ public:
 		}
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev, Vector &result,
-	                        idx_t rid, idx_t bias) {
+	template <typename OP>
+	static void IntersectFrames(const SubFrames &lefts, const SubFrames &rights, OP &op) {
+		const auto cover_start = MinValue(rights[0].start, lefts[0].start);
+		const auto cover_end = MaxValue(rights.back().end, lefts.back().end);
+		const FrameBounds last(cover_end, cover_end);
 
-		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
-		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(
-		    idata, ifilter, ivalid, aggr_input_data, *reinterpret_cast<STATE *>(state), frame, prev, result, rid, bias);
+		//	Subframe indices
+		idx_t l = 0;
+		idx_t r = 0;
+		for (auto i = cover_start; i < cover_end;) {
+			uint8_t overlap = 0;
+
+			// Are we in the previous frame?
+			auto left = &last;
+			if (l < lefts.size()) {
+				left = &lefts[l];
+				overlap |= uint8_t(left->start <= i && i < left->end) << 0;
+			}
+
+			// Are we in the current frame?
+			auto right = &last;
+			if (r < rights.size()) {
+				right = &rights[r];
+				overlap |= uint8_t(right->start <= i && i < right->end) << 1;
+			}
+
+			auto limit = i;
+			switch (overlap) {
+			case 0x00:
+				// i ∉ F U P
+				limit = MinValue(right->start, left->start);
+				op.Neither(i, limit);
+				break;
+			case 0x01:
+				// i ∈ P \ F
+				limit = MinValue(left->end, right->start);
+				op.Left(i, limit);
+				break;
+			case 0x02:
+				// i ∈ F \ P
+				limit = MinValue(right->end, left->start);
+				op.Right(i, limit);
+				break;
+			case 0x03:
+			default:
+				D_ASSERT(overlap == 0x03);
+				// i ∈ F ∩ P
+				limit = MinValue(right->end, left->end);
+				op.Both(i, limit);
+				break;
+			}
+
+			// Advance  the subframe indices
+			i = limit;
+			l += (i == left->end);
+			r += (i == right->end);
+		}
 	}
 
 	template <class STATE_TYPE, class OP>

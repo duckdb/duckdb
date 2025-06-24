@@ -1,0 +1,57 @@
+# name: test/sql/sample/table_samples/table_sample_converts_to_block_sample.test
+# description: Test sampling of larger relations
+# group: [table_samples]
+
+mode skip
+
+# required when testing table samples. See basic_sample_test.test
+require vector_size 2048
+
+# table samples first collect only 1% of the table, until the table has a cardinality of 2048.
+# then the sample stays at a fixed 2048 values.
+
+load __TEST_DIR__/test_sample_converts_after_load.db
+
+statement ok
+create table materialized_range as select 1 a from range(102400);
+
+# only 1% of 102400
+query I
+select count(*) from duckdb_table_sample('materialized_range');
+----
+1024
+
+restart
+
+statement ok
+insert into materialized_range select 2 a from range(102400);
+
+# collect another 1% of 102400
+query I
+select count(*) from duckdb_table_sample('materialized_range');
+----
+2048
+
+query II
+select a, count(*) from duckdb_table_sample('materialized_range') group by all order by a;
+----
+1	1024
+2	1024
+
+# insert another
+statement ok
+insert into materialized_range select 3 a from range(102400);
+
+# sample remains at 2048 values
+query I
+select count(*) from duckdb_table_sample('materialized_range');
+----
+2048
+
+# 2048 / 3 = 682. so each value should have at least >650
+query II
+select a, count(*) > 650 from duckdb_table_sample('materialized_range') group by all order by a;
+----
+1	1
+2	1
+3	1

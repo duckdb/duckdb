@@ -1,0 +1,159 @@
+# name: test/sql/copy/partitioned/partitioned_group_by.test
+# description: Test partitioned aggregates
+# group: [partitioned]
+
+require no_vector_verification # query plans are not robust against VERIFY_VECTOR operator
+
+require parquet
+
+statement ok
+CREATE TABLE partitioned_tbl AS SELECT i%2 AS partition, i col1, i // 7 col2, (i%3)::VARCHAR col3 FROM range(10000) t(i)
+
+statement ok
+COPY partitioned_tbl TO '__TEST_DIR__/partition_group_by' (FORMAT parquet, PARTITION_BY (partition))
+
+statement ok
+DROP TABLE partitioned_tbl
+
+statement ok
+CREATE VIEW partitioned_tbl AS FROM '__TEST_DIR__/partition_group_by/**/*.parquet'
+
+query II
+SELECT partition, SUM(col1)
+FROM partitioned_tbl
+GROUP BY partition
+ORDER BY ALL
+----
+0	24995000
+1	25000000
+
+# make sure the partitioned aggregate is used
+# all of these are identical, i.e. this gets folded into a single count aggregate
+query II
+EXPLAIN SELECT partition, SUM(col1)
+FROM partitioned_tbl
+GROUP BY partition
+ORDER BY ALL
+----
+physical_plan	<REGEX>:.*PARTITIONED_AGGREGATE.*
+
+# distinct aggregate
+query II
+SELECT partition, COUNT(DISTINCT col2)
+FROM partitioned_tbl
+GROUP BY partition
+ORDER BY ALL
+----
+0	1429
+1	1429
+
+# grouping sets
+query II
+SELECT partition, SUM(col1)
+FROM partitioned_tbl
+GROUP BY GROUPING SETS ((), (partition))
+ORDER BY ALL
+----
+0	24995000
+1	25000000
+NULL	49995000
+
+# filtered aggregate
+query II
+SELECT partition, SUM(col1) FILTER (col2%7>2)
+FROM partitioned_tbl
+GROUP BY partition
+ORDER BY ALL
+----
+0	14302848
+1	14302848
+
+query II
+SELECT SUM(col1), partition
+FROM partitioned_tbl
+GROUP BY partition
+ORDER BY ALL
+----
+24995000	0
+25000000	1
+
+# filter
+query II
+SELECT partition, SUM(col1)
+FROM partitioned_tbl
+WHERE col2 > 100
+GROUP BY partition
+ORDER BY ALL
+----
+0	24870038
+1	24875391
+
+# partition on multiple columns
+statement ok
+CREATE TABLE partitioned_tbl2 AS SELECT i%2 AS partition1, i%3 AS partition2, i col1, i + 1 col2 FROM range(10000) t(i)
+
+statement ok
+COPY partitioned_tbl2 TO '__TEST_DIR__/partition_group_by_multiple' (FORMAT parquet, PARTITION_BY (partition1, partition2))
+
+statement ok
+DROP TABLE partitioned_tbl2
+
+statement ok
+CREATE VIEW partitioned_tbl2 AS FROM '__TEST_DIR__/partition_group_by_multiple/**/*.parquet'
+
+query III
+SELECT partition1, partition2, SUM(col1)
+FROM partitioned_tbl2
+GROUP BY partition1, partition2
+ORDER BY ALL
+----
+0	0	8331666
+0	1	8328334
+0	2	8335000
+1	0	8336667
+1	1	8333333
+1	2	8330000
+
+# partition on a subset of the columns
+query II
+SELECT partition1, SUM(col1)
+FROM partitioned_tbl2
+GROUP BY partition1
+ORDER BY ALL
+----
+0	24995000
+1	25000000
+
+query II
+SELECT partition2, SUM(col1)
+FROM partitioned_tbl2
+GROUP BY partition2
+ORDER BY ALL
+----
+0	16668333
+1	16661667
+2	16665000
+
+# with a filter
+query II
+SELECT partition1, SUM(col1)
+FROM partitioned_tbl2
+WHERE partition2=0
+GROUP BY partition1
+ORDER BY ALL
+----
+0	8331666
+1	8336667
+
+# grouping sets
+query III
+SELECT partition1, partition2, SUM(col1)
+FROM partitioned_tbl2
+GROUP BY GROUPING SETS ((partition1), (partition2))
+ORDER BY ALL
+----
+0	NULL	24995000
+1	NULL	25000000
+NULL	0	16668333
+NULL	1	16661667
+NULL	2	16665000

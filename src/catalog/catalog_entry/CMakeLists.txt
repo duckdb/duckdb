@@ -1,3 +1,5 @@
+add_subdirectory(dependency)
+
 add_library_unity(
   duckdb_catalog_entries
   OBJECT

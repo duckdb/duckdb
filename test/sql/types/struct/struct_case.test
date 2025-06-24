@@ -94,11 +94,16 @@ SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': NULL} END FROM range(6)
 
 # different types on child lists
 query II
-SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': ['hello']} END FROM range(6) tbl(i)
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1::INT,2::INT,3::INT]} ELSE {'i': [0::UBIGINT]} END FROM range(6) tbl(i)
 ----
 0	{'i': [1, 2, 3]}
-1	{'i': [hello]}
+1	{'i': [0]}
 2	{'i': [1, 2, 3]}
-3	{'i': [hello]}
+3	{'i': [0]}
 4	{'i': [1, 2, 3]}
-5	{'i': [hello]}
+5	{'i': [0]}
+
+statement error
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': ['hello']} END FROM range(6) tbl(i)
+----
+an explicit cast is required

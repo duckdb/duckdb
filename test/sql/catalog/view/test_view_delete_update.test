@@ -19,8 +19,10 @@ CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43
 # try to delete from the view
 statement error
 DELETE FROM v1;
+----
 
 # try to update the view
 statement error
 UPDATE v1 SET j=1;
+----
 

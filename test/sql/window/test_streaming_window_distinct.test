@@ -1,0 +1,87 @@
+# name: test/sql/window/test_streaming_window_distinct.test
+# description: Test streaming window support for DISTINCT (+FILTER)
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# DISTINCT only
+query TT
+explain 
+SELECT i,
+	SUM(DISTINCT i % 3) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM range(10) tbl(i)
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i,
+	SUM(DISTINCT i % 3) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM range(10) tbl(i)
+----
+0	0
+1	1
+2	3
+3	3
+4	3
+5	3
+6	3
+7	3
+8	3
+9	3
+
+# DISTINCT LISTs
+query TT
+EXPLAIN
+SELECT
+   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
+FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+SELECT
+   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
+FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))
+----
+[{'key': A}]
+[{'key': A}, {'key': B}]
+[{'key': A}, {'key': B}]
+
+# DISTINCT + FILTER
+query TT
+explain 
+SELECT i,
+	SUM(DISTINCT i % 5) FILTER (i % 3 = 0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM range(20) tbl(i)
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i,
+	SUM(DISTINCT i % 5) FILTER (i % 3 = 0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM range(20) tbl(i)
+----
+0	0
+1	0
+2	0
+3	3
+4	3
+5	3
+6	4
+7	4
+8	4
+9	8
+10	8
+11	8
+12	10
+13	10
+14	10
+15	10
+16	10
+17	10
+18	10
+19	10

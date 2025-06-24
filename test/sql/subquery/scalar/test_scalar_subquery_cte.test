@@ -57,6 +57,7 @@ SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a);
 # too many aliases: fails
 statement error
 SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a, b, c);
+----
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
@@ -71,10 +72,19 @@ statement ok
 INSERT INTO test VALUES (13, 22)
 
 # select single tuple only in scalar subquery
-query I
+statement error
 SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte)
 ----
-462
+More than one row returned by a subquery
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+# the result is non-deterministic, so any of the values can be returned
+query I
+SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte) IN (462, 504, 546)
+----
+true
 
 # operations on subquery
 query I
@@ -106,7 +116,7 @@ SELECT CASE WHEN c>(WITH cte AS (SELECT sum(c)/count(*) FROM t1) SELECT * FROM c
 214
 
 # temporary solution until decorrelation of materialized CTEs is implemented
-require noalternativeverify
+require no_alternative_verify
 
 # correlated subqueries
 query IR
@@ -123,12 +133,14 @@ SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN 22 ELSE NULL END) SELECT
 12	NULL
 13	NULL
 
-query II
-SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) SELECT * FROM cte) FROM test ORDER BY a
-----
-11	22
-12	NULL
-13	NULL
+# This test case is broken with PR #17459. Without CTE inlining, the result is arbitrary due to the materialization of the CTE.
+# Previously no_alternative_verify prevented that, but now it does not suffice anymore.
+# query II
+# SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) SELECT * FROM cte) FROM test ORDER BY a
+# ----
+# 11	22
+# 12	NULL
+# 13	NULL
 
 query II
 SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) SELECT * FROM cte) FROM test ORDER BY a

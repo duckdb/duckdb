@@ -15,7 +15,7 @@ class PartialBlockManager;
 
 class OptimisticDataWriter {
 public:
-	OptimisticDataWriter(DataTable &table);
+	explicit OptimisticDataWriter(DataTable &table);
 	OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent);
 	~OptimisticDataWriter();
 
@@ -26,7 +26,7 @@ public:
 	//! Final flush of the optimistic writer - fully flushes the partial block manager
 	void FinalFlush();
 	//! Flushes a specific row group to disk
-	void FlushToDisk(RowGroup *row_group);
+	void FlushToDisk(RowGroup &row_group);
 	//! Merge the partially written blocks from one optimistic writer into another
 	void Merge(OptimisticDataWriter &other);
 	//! Rollback
@@ -39,7 +39,7 @@ private:
 private:
 	//! The table
 	DataTable &table;
-	//! The partial block manager (if we created one yet)
+	//! The partial block manager, if any was created.
 	unique_ptr<PartialBlockManager> partial_manager;
 };
 

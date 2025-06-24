@@ -25,7 +25,8 @@ test_files = [
     "test_threading.jl",
     "test_tpch.jl",
     "test_tpch_multithread.jl",
-    "test_stream_data_chunk.jl"
+    "test_stream_data_chunk.jl",
+    "test_scalar_udf.jl"
 ]
 
 if length(ARGS) > 0 && !isempty(ARGS[1])

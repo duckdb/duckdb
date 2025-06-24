@@ -1,0 +1,20 @@
+# name: test/sql/catalog/information_schema_read_only.test
+# description: Test that information schema/pg_catalog are read only
+# group: [catalog]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+CREATE TABLE system.information_schema.tbl(i INT)
+----
+Cannot create entry in system catalog
+
+statement error
+CREATE TABLE information_schema.tbl(i INT)
+----
+
+statement error
+CREATE TABLE pg_catalog.tbl(i INT)
+----
+Cannot create entry in system catalog

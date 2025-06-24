@@ -13,7 +13,6 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -45,8 +44,12 @@ struct PositionFunctor {
 		return 0;
 	}
 	static inline int32_t UpdateResultEntries(idx_t child_idx) {
-		return child_idx + 1;
+		return UnsafeNumericCast<int32_t>(child_idx + 1);
 	}
+};
+
+struct MapUtil {
+	static void ReinterpretMap(Vector &target, Vector &other, idx_t count);
 };
 
 struct VariableReturnBindData : public FunctionData {
@@ -79,33 +82,8 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-struct ListExtractFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListConcatFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListContainsFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListPositionFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListResizeFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StructExtractFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
+ScalarFunction GetKeyExtractFunction();
+ScalarFunction GetIndexExtractFunction();
+ScalarFunction GetExtractAtFunction();
 
 } // namespace duckdb

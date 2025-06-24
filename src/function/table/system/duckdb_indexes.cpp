@@ -1,13 +1,10 @@
-#include "duckdb/function/table/system_functions.hpp"
-
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 
@@ -45,6 +42,12 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 	names.emplace_back("table_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("is_unique");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -63,13 +66,27 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBIndexesData>();
 
-	// scan all the schemas for tables and collect them and collect them
+	// scan all the schemas for tables and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::INDEX_ENTRY,
 		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
 	return std::move(result);
+}
+
+Value GetIndexExpressions(IndexCatalogEntry &index) {
+	auto create_info = index.GetInfo();
+	auto &create_index_info = create_info->Cast<CreateIndexInfo>();
+
+	auto vec = create_index_info.ExpressionsToList();
+
+	vector<Value> content;
+	content.reserve(vec.size());
+	for (auto &item : vec) {
+		content.push_back(Value(item));
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(content));
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -91,33 +108,32 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// database_name, VARCHAR
 		output.SetValue(col++, count, index.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(index.catalog.GetOid())));
 		// schema_name, VARCHAR
 		output.SetValue(col++, count, Value(index.schema.name));
 		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(index.schema.oid)));
 		// index_name, VARCHAR
 		output.SetValue(col++, count, Value(index.name));
 		// index_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(index.oid)));
 		// find the table in the catalog
 		auto &table_entry =
 		    index.schema.catalog.GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
 		// table_name, VARCHAR
 		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
-		if (index.index) {
-			// is_unique, BOOLEAN
-			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));
-			// is_primary, BOOLEAN
-			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsPrimary()));
-		} else {
-			output.SetValue(col++, count, Value());
-			output.SetValue(col++, count, Value());
-		}
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table_entry.oid)));
+		// comment, VARCHAR
+		output.SetValue(col++, count, Value(index.comment));
+		// tags, MAP
+		output.SetValue(col++, count, Value::MAP(index.tags));
+		// is_unique, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(index.IsUnique()));
+		// is_primary, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(index.IsPrimary()));
 		// expressions, VARCHAR
-		output.SetValue(col++, count, Value());
+		output.SetValue(col++, count, GetIndexExpressions(index).ToString());
 		// sql, VARCHAR
 		auto sql = index.ToSQL();
 		output.SetValue(col++, count, sql.empty() ? Value() : Value(std::move(sql)));

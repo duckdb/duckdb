@@ -1,0 +1,9 @@
+{
+  "version": "unstable_instance_cache",
+  "description": "Exposing the instance cache",
+  "entries": [
+    "duckdb_create_instance_cache",
+    "duckdb_get_or_create_from_cache",
+    "duckdb_destroy_instance_cache"
+  ]
+}

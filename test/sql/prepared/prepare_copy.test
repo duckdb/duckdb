@@ -9,8 +9,7 @@ PREPARE q1 AS
 	COPY (
 		select $1 as 'col'
 	) to '__TEST_DIR__/res.csv' (
-		FORMAT csv,
-		header true
+		FORMAT csv
 	);
 
 statement ok
@@ -28,8 +27,7 @@ PREPARE q2 AS
 	COPY (
 		select 42 as 'col'
 	) to $1 (
-		FORMAT csv,
-		header true
+		FORMAT csv
 	);
 ----
 Parser Error: syntax error at or near "$1"

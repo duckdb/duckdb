@@ -49,6 +49,9 @@ static void allocate_new(parser_state *state, size_t n) {
 	if (state->malloc_ptr_idx >= state->malloc_ptr_size) {
 		size_t new_size = state->malloc_ptr_size * 2;
 		auto new_malloc_ptrs = (char **) malloc(sizeof(char *) * new_size);
+		if (!new_malloc_ptrs) {
+			throw std::bad_alloc();
+		}
 		memset(new_malloc_ptrs, 0, sizeof(char*) * new_size);
 		memcpy(new_malloc_ptrs, state->malloc_ptrs, state->malloc_ptr_size * sizeof(char*));
 		free(state->malloc_ptrs);
@@ -58,9 +61,9 @@ static void allocate_new(parser_state *state, size_t n) {
 	if (n < PG_MALLOC_SIZE) {
 		n = PG_MALLOC_SIZE;
 	}
-	char *base_ptr = (char *)malloc(n);
+	auto base_ptr = (char *)malloc(n);
 	if (!base_ptr) {
-		throw std::runtime_error("Memory allocation failure");
+		throw std::bad_alloc();
 	}
 	state->malloc_ptrs[state->malloc_ptr_idx] = base_ptr;
 	state->malloc_ptr_idx++;
@@ -90,7 +93,11 @@ void pg_parser_init() {
 	pg_parser_state.pg_err_msg[0] = '\0';
 
 	pg_parser_state.malloc_ptr_size = 4;
-	pg_parser_state.malloc_ptrs = (char **) malloc(sizeof(char *) * pg_parser_state.malloc_ptr_size);
+	auto new_malloc_ptrs = (char **) malloc(sizeof(char *) * pg_parser_state.malloc_ptr_size);
+	if (!new_malloc_ptrs) {
+		throw std::bad_alloc();
+	}
+	pg_parser_state.malloc_ptrs = new_malloc_ptrs;
 	memset(pg_parser_state.malloc_ptrs, 0, sizeof(char*) * pg_parser_state.malloc_ptr_size);
 	pg_parser_state.malloc_ptr_idx = 0;
 	allocate_new(&pg_parser_state, 1);
@@ -104,9 +111,8 @@ void pg_parser_parse(const char *query, parse_result *res) {
 	} catch (std::exception &ex) {
 		res->success = false;
 		res->error_message = ex.what();
+		res->error_location = pg_parser_state.pg_err_pos;
 	}
-	res->error_message = pg_parser_state.pg_err_msg;
-	res->error_location = pg_parser_state.pg_err_pos;
 }
 
 void pg_parser_cleanup() {
@@ -121,8 +127,7 @@ void pg_parser_cleanup() {
 }
 
 int ereport(int code, ...) {
-	std::string err = "parser error : " + std::string(pg_parser_state.pg_err_msg);
-	throw std::runtime_error(err);
+	throw std::runtime_error(pg_parser_state.pg_err_msg);
 }
 void elog(int code, const char *fmt, ...) {
 	throw std::runtime_error("elog NOT IMPLEMENTED");
@@ -166,7 +171,7 @@ char *psprintf(const char *fmt, ...) {
 	}
 
 	// attempt two, malloc
-	char *mbuf = (char *)palloc(newlen);
+	auto mbuf = (char *)palloc(newlen);
 	va_start(args, fmt);
 	vsnprintf(mbuf, newlen, fmt, args);
 	va_end(args);
@@ -174,7 +179,7 @@ char *psprintf(const char *fmt, ...) {
 }
 
 char *pstrdup(const char *in) {
-	char *new_str = (char *)palloc(strlen(in) + 1);
+	auto new_str = (char*) palloc(strlen(in) + 1);
 	memcpy(new_str, in, strlen(in));
 	return new_str;
 }
@@ -191,7 +196,7 @@ void *repalloc(void *ptr, size_t n) {
 	char *old_len_ptr = (char *) ptr - sizeof(size_t);
 	memcpy((void *) &old_len, old_len_ptr, sizeof(size_t));
 	// re-allocate and copy the data
-	void *new_buf = palloc(n);
+	auto new_buf = palloc(n);
 	memcpy(new_buf, ptr, old_len);
 	return new_buf;
 }

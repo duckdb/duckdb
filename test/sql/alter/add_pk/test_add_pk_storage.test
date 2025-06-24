@@ -1,0 +1,29 @@
+# name: test/sql/alter/add_pk/test_add_pk_storage.test
+# description: Test adding and persisting a PRIMARY KEY.
+# group: [add_pk]
+
+load __TEST_DIR__/test_add_pk.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+restart
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (i)
+----
+<REGEX>:Catalog Error.*table "test" can have only one primary key.*
+
+statement error
+INSERT INTO test VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*Duplicate key "j: 1" violates primary key constraint.*

@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/zstd/zstd.test
+# description: Test zstd storage
+# group: [zstd]
+
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
+# load the DB from disk
+load __TEST_DIR__/test_zstd_storage.db
+
+statement ok
+PRAGMA force_compression = 'zstd'
+
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('11'), ('11'), ('12'), (NULL);
+
+statement ok
+checkpoint;
+
+query I
+SELECT * FROM test;
+----
+11
+11
+12
+NULL
+

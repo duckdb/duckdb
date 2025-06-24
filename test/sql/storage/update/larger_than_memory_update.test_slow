@@ -1,0 +1,51 @@
+# name: test/sql/storage/update/larger_than_memory_update.test_slow
+# description: Test larger than memory updates
+# group: [update]
+
+load __TEST_DIR__/larger_than_memory_update.db
+
+statement ok
+CREATE TABLE integers AS FROM range(10000000) t(i);
+
+statement ok
+SET threads=1
+
+# 10M bigints is ~75MB uncompressed
+statement ok
+SET memory_limit='8MB';
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+10000000	49999995000000
+
+query I
+UPDATE integers SET i=i+1;
+----
+10000000
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+10000000	50000005000000
+
+query I
+UPDATE integers SET i=i+1 WHERE i%2=0;
+----
+5000000
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+10000000	50000010000000
+
+statement ok
+BEGIN
+
+query I
+UPDATE integers SET i=i+1;
+----
+10000000
+
+statement ok
+ROLLBACK

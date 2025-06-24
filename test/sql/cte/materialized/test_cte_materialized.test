@@ -45,13 +45,12 @@ with cte1 as MATERIALIZED (select i as j from a), cte2 as MATERIALIZED (select r
 # duplicate CTE alias
 statement error
 with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
+----
 
 # reference to CTE before its actually defined
-query I
+statement error
 with cte3 as MATERIALIZED (select ref2.j as i from cte1 as ref2), cte1 as MATERIALIZED (Select i as j from a), cte2 as MATERIALIZED (select ref.j+1 as k from cte1 as ref) select * from cte2 union all select * FROM cte3;
 ----
-43
-42
 
 # multiple uses of same CTE
 query II

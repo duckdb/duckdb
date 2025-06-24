@@ -62,6 +62,6 @@ extern const int num_posix_groups;
 extern const UGroup perl_groups[];
 extern const int num_perl_groups;
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // RE2_UNICODE_GROUPS_H_

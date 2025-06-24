@@ -244,7 +244,7 @@ INSERT INTO tbl_s_null VALUES ({x: 1}, {x: 0}), ({x: 1}, {x: 1}), ({x: 1}, NULL)
 query II
 SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
 ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
-ORDER BY x.col1, y.col1;
+ORDER BY x.col1, y.col1 NULLS LAST;
 ----
 {'x': 0}	{'x': 1}
 {'x': 0}	{'x': NULL}
@@ -262,23 +262,23 @@ NULL	{'x': NULL}
 query II
 SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
 ON x.col0 = y.col0 AND x.col1 != y.col1
-ORDER BY x.col1;
+ORDER BY x.col1.x, y.col1.x NULLS LAST;
 ----
-{'x': 0}	{'x': NULL}
 {'x': 0}	{'x': 1}
-{'x': 1}	{'x': NULL}
+{'x': 0}	{'x': NULL}
 {'x': 1}	{'x': 0}
-{'x': NULL}	{'x': 1}
+{'x': 1}	{'x': NULL}
 {'x': NULL}	{'x': 0}
+{'x': NULL}	{'x': 1}
 
 query II
 SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
 ON x.col0 = y.col0 AND x.col1 > y.col1
-ORDER BY x.col1;
+ORDER BY x.col1.x, y.col1.x NULLS LAST;
 ----
 {'x': 1}	{'x': 0}
-{'x': NULL}	{'x': 1}
 {'x': NULL}	{'x': 0}
+{'x': NULL}	{'x': 1}
 
 query II
 SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
@@ -328,14 +328,14 @@ NULL	[NULL]
 query II
 SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y
 ON x.col0 = y.col0 AND x.col1 != y.col1
-ORDER BY x.col1;
+ORDER BY x.col1, y.col1 NULLS LAST;
 ----
-[0]	[NULL]
 [0]	[1]
-[1]	[NULL]
+[0]	[NULL]
 [1]	[0]
-[NULL]	[1]
+[1]	[NULL]
 [NULL]	[0]
+[NULL]	[1]
 
 query II
 SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y

@@ -1,0 +1,25 @@
+# name: test/sql/copy/partitioned/hive_partition_compression.test
+# description: Test we can round-trip partitioned compressed Parquet files
+# group: [partitioned]
+
+statement ok
+PRAGMA enable_verification
+
+require parquet
+
+statement ok
+CREATE TABLE test AS VALUES ('a', 'foo', 1), ('a', 'foo', 2), ('a', 'bar', 1), ('b', 'bar', 1);
+
+statement ok
+COPY (FROM test) TO '__TEST_DIR__/hive_partition_compress' (FORMAT parquet, COMPRESSION 'gzip', PARTITION_BY ('col0', 'col1'));
+
+# Specify Compression
+query III
+FROM read_parquet('__TEST_DIR__/hive_partition_compress/*/*/*.parquet')
+ORDER BY ALL
+----
+1	a	bar
+1	a	foo
+1	b	bar
+2	a	foo
+

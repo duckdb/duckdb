@@ -2,6 +2,7 @@ add_library(
   duckdb_verification OBJECT
   copied_statement_verifier.cpp
   external_statement_verifier.cpp
+  fetch_row_verifier.cpp
   prepared_statement_verifier.cpp
   deserialized_statement_verifier.cpp
   statement_verifier.cpp

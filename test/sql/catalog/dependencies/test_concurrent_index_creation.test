@@ -1,0 +1,34 @@
+# name: test/sql/catalog/dependencies/test_concurrent_index_creation.test
+# description: Test concurrent alter and rename of tables
+# group: [dependencies]
+
+mode skip
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_index_creation.db' AS source;
+
+concurrentloop i 0 10
+
+statement maybe
+CREATE TABLE IF NOT EXISTS source.tbl (i INT);
+----
+
+# Create an index on the table.
+statement maybe
+CREATE INDEX index${i} ON source.tbl (i);
+----
+
+# Drop the table and its indexes.
+statement maybe
+DROP TABLE source.tbl;
+----
+
+endloop
+
+statement ok
+DETACH source;
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_index_creation.db' AS source;

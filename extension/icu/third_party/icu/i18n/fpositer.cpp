@@ -45,7 +45,7 @@ FieldPositionIterator::FieldPositionIterator(const FieldPositionIterator &rhs)
   }
 }
 
-UBool FieldPositionIterator::operator==(const FieldPositionIterator &rhs) const {
+bool FieldPositionIterator::operator==(const FieldPositionIterator &rhs) const {
   if (&rhs == this) {
     return TRUE;
   }

@@ -755,7 +755,7 @@ uprv_strCompare(const UChar *s1, int32_t length1,
             length2=u_strlen(s2);
         }
 
-        /* limit1=start1+min(lenght1, length2) */
+        /* limit1=start1+min(length1, length2) */
         if(length1<length2) {
             lengthResult=-1;
             limit1=start1+length1;

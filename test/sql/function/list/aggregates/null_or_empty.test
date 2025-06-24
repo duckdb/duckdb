@@ -52,6 +52,16 @@ NULL
 
 endloop
 
+# select * from NULL list
+foreach func_name avg favg approx_count_distinct bit_and bit_or bit_xor bool_or bool_and count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+
+query I
+select * from (SELECT list_aggr(NULL, '${func_name}'))
+----
+NULL
+
+endloop
+
 # empty list with 0 result
 foreach func_name approx_count_distinct count entropy
 

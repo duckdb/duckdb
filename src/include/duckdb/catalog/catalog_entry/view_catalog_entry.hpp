@@ -36,6 +36,10 @@ public:
 	vector<string> aliases;
 	//! The returned types of the view
 	vector<LogicalType> types;
+	//! The returned names of the view
+	vector<string> names;
+	//! The comments on the columns of the view: can be empty if there are no comments
+	vector<Value> column_comments;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -43,6 +47,13 @@ public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+
+	virtual const SelectStatement &GetQuery();
+
+	virtual bool HasTypes() const {
+		// Whether or not the view has types/names defined
+		return true;
+	}
 
 	string ToSQL() const override;
 

@@ -1,0 +1,98 @@
+# name: test/common/test_local_file_urls.test
+# group: [common]
+
+# Note: __WORKING_DIRECTORY__ will be replaced with the full path to the working dir of the tests (root of duckdb repo)
+
+statement ok
+SET VARIABLE work_dir_no_host='file:/' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
+
+statement ok
+SET VARIABLE work_dir_triple_slash='file:///' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
+
+statement ok
+SET VARIABLE work_dir_localhost='file://localhost/' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
+
+# testing file:/some/path/to/duckdb/repo
+query II
+SELECT * FROM read_csv_auto(getvariable('work_dir_no_host') || '/data/csv/normalize.csv');
+----
+John	ipsum
+
+# testing file:///some/path/to/duckdb/repo
+query II
+SELECT * FROM read_csv_auto(getvariable('work_dir_triple_slash') || '/data/csv/normalize.csv');
+----
+John	ipsum
+
+# testing file://localhost/some/path/to/duckdb/repo
+query II
+SELECT * FROM read_csv_auto(getvariable('work_dir_localhost') || '/data/csv/normalize.csv');
+----
+John	ipsum
+
+# Test glob with file:/some/path
+query II
+SELECT file[:6], parse_filename(file) FROM glob(getvariable('work_dir_no_host') || '/data/*/bad_date_timestamp_mix.csv')
+----
+file:/	bad_date_timestamp_mix.csv
+
+# Test glob with file:///some/path
+query II
+SELECT file[:8], parse_filename(file) FROM glob(getvariable('work_dir_triple_slash') || '/data/*/bad_date_timestamp_mix.csv')
+----
+file:///	bad_date_timestamp_mix.csv
+
+# Test glob with file://localhost/some/path/to/duckdb/repo
+query II
+SELECT file[:17], parse_filename(file) FROM glob(getvariable('work_dir_localhost') || '/data/*/bad_date_timestamp_mix.csv')
+----
+file://localhost/	bad_date_timestamp_mix.csv
+
+# Test scanning multiple files using glob with file:/some/path
+query III
+SELECT id, filename[:6], parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_no_host') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
+----
+1	file:/	test.csv
+2	file:/	test.csv
+
+# Test scanning multiple files using glob with file:///some/path
+query III
+SELECT id, filename[:8], parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_triple_slash') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
+----
+1	file:///	test.csv
+2	file:///	test.csv
+
+# Test scanning multiple files using glob with file://localhost/some/path
+query III
+SELECT id, filename[:17], parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_localhost') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
+----
+1	file://localhost/	test.csv
+2	file://localhost/	test.csv
+
+require noforcestorage
+
+# Ensure secrets work correctly using the file://
+statement ok
+create secret secret_file_url_tripleslash (TYPE HTTP, scope 'file:///');
+
+statement ok
+create secret secret_file_url_localhost (TYPE HTTP, scope 'file://localhost/');
+
+statement ok
+create secret secret_without_file_path (TYPE HTTP);
+
+query I
+SELECT name FROM which_secret(getvariable('work_dir_triple_slash') || '/data/csv/hive-partitioning/simple/*/*/test.csv', 'http')
+----
+secret_file_url_tripleslash
+
+query I
+SELECT name FROM which_secret(getvariable('work_dir_localhost') || '/data/csv/hive-partitioning/simple/*/*/test.csv', 'http')
+----
+secret_file_url_localhost
+
+# raw paths now do not match
+query I
+SELECT name FROM which_secret('__WORKING_DIRECTORY__/data/csv/hive-partitioning/simple/*/*/test.csv', 'http')
+----
+secret_without_file_path

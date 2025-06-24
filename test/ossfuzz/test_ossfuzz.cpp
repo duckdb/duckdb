@@ -20,7 +20,7 @@ static void test_runner() {
 	DuckDB db(nullptr);
 	Connection con(db);
 	std::ifstream t(file_name);
-	std::stringstream buffer;
+	duckdb::stringstream buffer;
 	buffer << t.rdbuf();
 	auto query = buffer.str();
 	result = con.Query(query.c_str());
@@ -29,7 +29,7 @@ static void test_runner() {
 	if (result->HasError()) {
 		if (TestIsInternalError(internal_error_messages, result->GetError())) {
 			result->Print();
-			REQUIRE(!result->GetErrorObject());
+			REQUIRE(!result->GetErrorObject().HasError());
 		}
 	}
 

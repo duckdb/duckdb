@@ -1,0 +1,71 @@
+# name: test/sql/storage/unzip.test
+# description: Support gzipped files in the test runner
+# group: [storage]
+
+# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
+require 64bit
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification
+
+# unzip to specific path
+unzip data/storage/test.db.gz __TEST_DIR__/test.db
+
+load  __TEST_DIR__/test.db readonly
+
+query I
+SELECT a+1 FROM tbl;
+----
+6
+
+# unzip a 1.8M file into the default extraction path -> __TEST_DIR__/
+unzip data/storage/index_0-9-1.db.gz
+
+load __TEST_DIR__/index_0-9-1.db readonly
+
+query II
+SELECT table_name, index_count FROM duckdb_tables() ORDER BY table_name;
+----
+fk_tbl	1
+idx_tbl	2
+pk_tbl	2
+
+# unzip to default extraction path from NULL input
+unzip data/storage/test.db.gz NULL
+
+load __TEST_DIR__/test.db readonly
+
+query I
+SELECT a+2 FROM tbl;
+----
+7
+
+## test invalid use
+# unzip
+
+## not gzipped database
+# unzip data/storage/test.db
+
+## not gzipped database
+# unzip data/storage/test.db
+
+## test NULL input paths
+# unzip NULL
+# unzip NULL NULL
+# unzip NULL data/storage/test.db
+
+## invalid input path
+# unzip path/to/nowhere data/storage/not_existed.db
+
+## invalid extraction path
+# unzip data/storage/test.db.gz path/to/nowhere
+
+## already existed database file in the extraction - warning: this will overwrite existed wal_test_092.db
+# unzip data/storage/test.db.gz data/storage/wal_test_092.db
+
+## extraction path to directory
+# unzip data/storage/test.db.gz __TEST_DIR__/
+# unzip data/storage/test.db.gz __TEST_DIR__

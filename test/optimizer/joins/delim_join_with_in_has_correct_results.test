@@ -1,0 +1,24 @@
+# name: test/optimizer/joins/delim_join_with_in_has_correct_results.test
+# description: An IN expression should return false when the IN list is empty
+# group: [joins]
+
+statement ok
+create table t as FROM  VALUES (4), (NULL)  t(t0);
+
+statement ok
+create table u as FROM VALUES (NULL), (NULL) t(u0);
+
+query II
+SELECT
+	t0,
+	t0 IN (
+		SELECT
+			u0
+		FROM u
+		WHERE
+			t0 = 4
+	)
+FROM t;
+----
+4	NULL
+NULL	false

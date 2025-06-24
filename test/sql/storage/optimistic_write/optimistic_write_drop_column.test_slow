@@ -2,7 +2,6 @@
 # description: Test optimistic write with drop column in transaction-local storage
 # group: [optimistic_write]
 
-# load the DB from disk
 load __TEST_DIR__/optimistic_write_drop.db
 
 statement ok
@@ -12,7 +11,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO test SELECT i, i+1, i+2 FROM range(1000000) tbl(i)
+INSERT INTO test SELECT i, i + 1, i + 2 FROM range(1000000) tbl(i)
 
 statement ok
 ALTER TABLE test DROP COLUMN c
@@ -49,12 +48,14 @@ SELECT SUM(a), SUM(b) FROM test
 ----
 499999500000	500000500000
 
-# temp table
+# Ensure that we reclaim space correctly.
+
 require skip_reload
 
-# ensure the drop column does not lead to leaking blocks
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop.
+# Therefore, we compare to a range of total block counts.
 statement ok
-CREATE TEMPORARY TABLE blocks AS SELECT total_blocks FROM pragma_database_size();
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
 loop i 0 10
 
@@ -68,7 +69,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO test SELECT i, i+1, i+2 FROM range(1000000) tbl(i)
+INSERT INTO test SELECT i, i + 1, i + 2 FROM range(1000000) tbl(i)
 
 statement ok
 ALTER TABLE test DROP COLUMN c
@@ -81,22 +82,26 @@ SELECT SUM(a), SUM(b) FROM test
 ----
 499999500000	500000500000
 
-statement ok
-CREATE TEMPORARY TABLE new_blocks AS SELECT total_blocks FROM pragma_database_size();
+# Ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2.
 
 query I
-SELECT new_blocks.total_blocks - blocks.total_blocks < 20 FROM blocks, new_blocks
+SELECT CASE WHEN ${i} = 0 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
-true
+1
+
+# Adjust total_blocks_tbl once to the count after the first iteration.
 
 statement ok
-DROP TABLE blocks;
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
 
 statement ok
-CREATE TEMPORARY TABLE blocks AS SELECT * FROM new_blocks;
-
-statement ok
-DROP TABLE new_blocks
+CHECKPOINT;
 
 statement ok
 CHECKPOINT;

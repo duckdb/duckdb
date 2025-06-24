@@ -1,0 +1,74 @@
+# name: test/sql/types/nested/array/array_simple.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+query I
+SELECT array_value(1, 2, 3);
+----
+[1, 2, 3]
+
+query I
+SELECT array_value(i -1, i, i + 1)
+FROM range(1,4) as r(i);
+----
+[0, 1, 2]
+[1, 2, 3]
+[2, 3, 4]
+
+# Storage
+statement ok
+CREATE TABLE t1 (c INT[2])
+
+statement ok
+INSERT INTO t1 VALUES (array_value(1, 2))
+
+query I
+SELECT * FROM t1
+----
+[1, 2]
+
+statement ok
+INSERT INTO t1 VALUES (array_value(3, 4))
+
+query I
+SELECT * FROM t1 ORDER BY c DESC
+----
+[3, 4]
+[1, 2]
+
+# Sorting
+statement ok
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM  (VALUES (array_value(6, NULL)), (array_value(1, 2)), (array_value(NULL,NULL)), (array_value(NULL, 3)));
+
+query I
+SELECT * FROM t1 ORDER BY 1 DESC;
+----
+[NULL, NULL]
+[NULL, 3]
+[6, NULL]
+[1, 2]
+
+query I
+SELECT * FROM t1 ORDER BY 1 ASC;
+----
+[1, 2]
+[6, NULL]
+[NULL, 3]
+[NULL, NULL]
+
+
+# Aggregates
+statement ok
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM VALUES 
+	(array_value(1,2), 1),
+	(array_value(3,4), 2) as t(a, i);
+
+query II
+SELECT MAX(i), arg_max(a, i) FROM t1;
+----
+2	[3, 4]

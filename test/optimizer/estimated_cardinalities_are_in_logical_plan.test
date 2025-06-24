@@ -1,0 +1,22 @@
+# name: test/optimizer/estimated_cardinalities_are_in_logical_plan.test
+# description: Make sure estimated cardinalities are respected
+# group: [optimizer]
+
+require notwindows
+
+statement ok
+CREATE TABLE t1 AS SELECT range a FROM range(100000);
+
+statement ok
+CREATE TABLE t2 AS SELECT range b FROM range(500, 100000);
+
+statement ok
+CREATE TABLE t3 AS SELECT range c FROM range(10000, 1000000);
+
+statement ok
+PRAGMA explain_output=OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT * FROM t1, t2, t3 WHERE a = b AND b = c;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*a = b.*~[0-9]+.*

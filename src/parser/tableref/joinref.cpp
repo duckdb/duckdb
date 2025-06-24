@@ -43,7 +43,7 @@ string JoinRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += using_columns[i];
+			result += KeywordHelper::WriteOptionallyQuoted(using_columns[i]);
 		}
 		result += ")";
 	}
@@ -78,6 +78,10 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->ref_type = ref_type;
 	copy->alias = alias;
 	copy->using_columns = using_columns;
+	copy->delim_flipped = delim_flipped;
+	for (auto &col : duplicate_eliminated_columns) {
+		copy->duplicate_eliminated_columns.emplace_back(col->Copy());
+	}
 	return std::move(copy);
 }
 

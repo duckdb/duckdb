@@ -1,0 +1,24 @@
+# name: test/sql/copy/csv/unquoted_escape/32k_rows.test_slow
+# description: Test large number of rows with unquoted escape characters
+# group: [unquoted_escape]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE pseudorandom_fields AS SELECT i, list_select(
+    [E'\\', E'\t', E'\n', E'\\\\', E'\\\t', E'\\\n', E'\t\\', E'\t\t', E'\t\n', E'\n\\', E'\n\t', E'\n\n', '',  'a', 'b', 'c'],
+    list_transform([hash(i), hash(i * 7 + 251), hash(i * i + 4093)], lambda x: (x % 16 + 1)::int)
+) AS s FROM range(32 << 10) t(i);
+
+statement ok
+COPY (SELECT concat_ws(E'\t', s1, i, s2, s3) FROM (
+    SELECT i, replace(replace(replace(columns(* exclude (i)), '\', '\\'), E'\t', E'\\\t'), E'\n', E'\\\n')
+    FROM (SELECT i, s[1] s1, s[2] s2, s[3] s3 FROM pseudorandom_fields)
+)) TO '__TEST_DIR__/pseudorandom_fields.tsv' (HEADER false, QUOTE '', ESCAPE '');
+
+query II
+SELECT log2(count(*))::int, bool_and(s[1] = f1 AND s[2] = f2 AND s[3] = f3)::int
+FROM pseudorandom_fields JOIN read_csv('__TEST_DIR__/pseudorandom_fields.tsv', quote = '', sep = '\t', escape = '\', header = false, strict_mode = false) t(f1, j, f2, f3) ON i = j;
+----
+15	1

@@ -7,13 +7,21 @@ PRAGMA enable_verification
 
 # Incorrect result for MIN() on expression involving rowid
 statement ok
-CREATE TABLE t0(c0 INT, c1 INT);
+CREATE TABLE t0(
+	c0 INT,
+	c1 INT
+);
 
 statement ok
-INSERT INTO t0(c0) VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0),  (0), (0), (0), (0), (0), (0), (NULL), (NULL);
+INSERT INTO t0(c0) SELECT 0 from range(22);
 
 statement ok
-CREATE INDEX b ON t0(c1);
+INSERT INTO t0(c0) SELECT NULL from range(2);
+
+statement ok
+CREATE INDEX b ON t0(
+	c1
+);
 
 statement ok
 UPDATE t0 SET c1 = NULL;

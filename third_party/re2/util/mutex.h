@@ -10,24 +10,39 @@
  * You should assume the locks are *not* re-entrant.
  */
 
-#if !defined(_WIN32)
+#ifdef RE2_NO_THREADS
+#include <assert.h>
+#define MUTEX_IS_LOCK_COUNTER
+#else
+#ifdef _WIN32
+// Requires Windows Vista or Windows Server 2008 at minimum.
+#include <windows.h>
+#if defined(WINVER) && WINVER >= 0x0600
+#define MUTEX_IS_WIN32_SRWLOCK
+#endif
+#else
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include <unistd.h>
-//#if defined(_POSIX_READER_WRITER_LOCKS) && _POSIX_READER_WRITER_LOCKS > 0
-//#define MUTEX_IS_PTHREAD_RWLOCK
-//#endif
+#if defined(_POSIX_READER_WRITER_LOCKS) && _POSIX_READER_WRITER_LOCKS > 0
+#define MUTEX_IS_PTHREAD_RWLOCK
+#endif
+#endif
 #endif
 
-#if defined(MUTEX_IS_PTHREAD_RWLOCK)
-#error We really dont want to include pthread
+#if defined(MUTEX_IS_LOCK_COUNTER)
+typedef int MutexType;
+#elif defined(MUTEX_IS_WIN32_SRWLOCK)
+typedef SRWLOCK MutexType;
+#elif defined(MUTEX_IS_PTHREAD_RWLOCK)
+#include <stdexcept>
 #include <pthread.h>
 #include <stdlib.h>
 typedef pthread_rwlock_t MutexType;
 #else
-#include <mutex>
-typedef std::mutex MutexType;
+#include <shared_mutex>
+typedef std::shared_mutex MutexType;
 #endif
 
 namespace duckdb_re2 {
@@ -57,15 +72,33 @@ class Mutex {
   Mutex& operator=(const Mutex&) = delete;
 };
 
-#if defined(MUTEX_IS_PTHREAD_RWLOCK)
+#if defined(MUTEX_IS_LOCK_COUNTER)
+
+Mutex::Mutex()             : mutex_(0) { }
+Mutex::~Mutex()            { assert(mutex_ == 0); }
+void Mutex::Lock()         { assert(--mutex_ == -1); }
+void Mutex::Unlock()       { assert(mutex_++ == -1); }
+void Mutex::ReaderLock()   { assert(++mutex_ > 0); }
+void Mutex::ReaderUnlock() { assert(mutex_-- > 0); }
+
+#elif defined(MUTEX_IS_WIN32_SRWLOCK)
+
+Mutex::Mutex()             : mutex_(SRWLOCK_INIT) { }
+Mutex::~Mutex()            { }
+void Mutex::Lock()         { AcquireSRWLockExclusive(&mutex_); }
+void Mutex::Unlock()       { ReleaseSRWLockExclusive(&mutex_); }
+void Mutex::ReaderLock()   { AcquireSRWLockShared(&mutex_); }
+void Mutex::ReaderUnlock() { ReleaseSRWLockShared(&mutex_); }
+
+#elif defined(MUTEX_IS_PTHREAD_RWLOCK)
 
 #define SAFE_PTHREAD(fncall)    \
   do {                          \
-    if ((fncall) != 0) abort(); \
-  } while (0)
+    if ((fncall) != 0) throw std::runtime_error("RE2 pthread failure"); \
+  } while (0);
 
 Mutex::Mutex()             { SAFE_PTHREAD(pthread_rwlock_init(&mutex_, NULL)); }
-Mutex::~Mutex()            { SAFE_PTHREAD(pthread_rwlock_destroy(&mutex_)); }
+Mutex::~Mutex()            { pthread_rwlock_destroy(&mutex_); }
 void Mutex::Lock()         { SAFE_PTHREAD(pthread_rwlock_wrlock(&mutex_)); }
 void Mutex::Unlock()       { SAFE_PTHREAD(pthread_rwlock_unlock(&mutex_)); }
 void Mutex::ReaderLock()   { SAFE_PTHREAD(pthread_rwlock_rdlock(&mutex_)); }
@@ -79,8 +112,8 @@ Mutex::Mutex()             { }
 Mutex::~Mutex()            { }
 void Mutex::Lock()         { mutex_.lock(); }
 void Mutex::Unlock()       { mutex_.unlock(); }
-void Mutex::ReaderLock()   { Lock(); }  // C++11 doesn't have std::shared_mutex.
-void Mutex::ReaderUnlock() { Unlock(); }
+void Mutex::ReaderLock()   { mutex_.lock_shared(); }
+void Mutex::ReaderUnlock() { mutex_.unlock_shared(); }
 
 #endif
 
@@ -127,6 +160,6 @@ class WriterMutexLock {
 #define ReaderMutexLock(x) static_assert(false, "ReaderMutexLock declaration missing variable name")
 #define WriterMutexLock(x) static_assert(false, "WriterMutexLock declaration missing variable name")
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // UTIL_MUTEX_H_

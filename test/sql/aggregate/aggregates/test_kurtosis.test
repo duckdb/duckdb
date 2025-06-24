@@ -8,6 +8,7 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select kurtosis()
+----
 
 query I
 select kurtosis(NULL)
@@ -21,6 +22,7 @@ NULL
 
 statement error
 select kurtosis(*)
+----
 
 query I
 select kurtosis(i) from (values (0), (0), (0), (0), (0), (0)) tbl(i)
@@ -30,6 +32,7 @@ NULL
 # out of range
 statement error
 select kurtosis(i) from (values (2e304), (2e305), (2e306), (2e307)) tbl(i)
+----
 
 # Constant Value (This should be an error)
 query I
@@ -64,6 +67,16 @@ query III
 select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
 ----
 11.000000	-1.961428	-1.445120
+
+query III
+select kurtosis_pop(k), kurtosis_pop(v), kurtosis_pop(v2) from aggr;
+----
+6.100000	-1.676857	-1.358688
+
+query I
+with onetwo as (select range::float as v from range(1,3)) select kurtosis_pop(v) from onetwo;
+----
+-2.0
 
 query I
 select  kurtosis(v2) from aggr group by v ORDER BY ALL;

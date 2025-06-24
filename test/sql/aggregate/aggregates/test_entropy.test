@@ -11,6 +11,7 @@ PRAGMA verify_external
 #Corner cases
 statement error
 select entropy()
+----
 
 query I
 select entropy(NULL)
@@ -24,6 +25,7 @@ select entropy(1)
 
 statement error
 select entropy(*)
+----
 
 statement ok
 create table aggr(k int);
@@ -55,6 +57,24 @@ insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),(
 
 query I
 select entropy(name) from names;
+----
+1.459148
+
+# arrays
+statement ok
+create table array_names as select case when name is null then null else [name] end l from names
+
+query I
+select entropy(l) from array_names;
+----
+1.459148
+
+# array of structs
+statement ok
+create table array_of_structs as select case when name is null then null else [{'name': name}] end l from names
+
+query I
+select entropy(l) from array_of_structs;
 ----
 1.459148
 

@@ -249,9 +249,10 @@ class TestArrowFetchRecordBatch(object):
     def test_record_batch_query_error(self):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select 'foo' as a;")
-        query = duckdb_cursor.execute("SELECT cast(a as double) FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
-        with pytest.raises(OSError, match='Conversion Error'):
+        with pytest.raises(duckdb.ConversionException, match='Conversion Error'):
+            # 'execute' materializes the result, causing the error directly
+            query = duckdb_cursor.execute("SELECT cast(a as double) FROM t")
+            record_batch_reader = query.fetch_record_batch(1024)
             record_batch_reader.read_next_batch()
 
     def test_many_list_batches(self):

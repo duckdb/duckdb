@@ -1,0 +1,52 @@
+# name: test/sql/copy/parquet/parquet_metadata_blob.test
+# description: Test parquet metadata function with blobs
+# group: [parquet]
+
+require parquet
+
+statement ok
+copy (select * from values ('\x0An\xC3\xB5'::blob), ('\xFFXl\x9D'::blob) tbl(b)) to '__TEST_DIR__/blobs.parquet'
+
+# blob should be converted properly
+query I
+select stats_min_value from parquet_metadata('__TEST_DIR__/blobs.parquet')
+----
+\x0An\xC3\xB5
+
+query I
+select min(b) from '__TEST_DIR__/blobs.parquet'
+----
+\x0An\xC3\xB5
+
+query I
+select stats_max_value from parquet_metadata('__TEST_DIR__/blobs.parquet')
+----
+\xFFXl\x9D
+
+query I
+select max(b) from '__TEST_DIR__/blobs.parquet'
+----
+\xFFXl\x9D
+
+# also test cast to hex - should be same
+# note that we need to cast to BLOB for this to be the same
+# stats_{min,max}_value is VARCHAR
+query I
+select hex(stats_min_value::BLOB) from parquet_metadata('__TEST_DIR__/blobs.parquet')
+----
+0A6EC3B5
+
+query I
+select hex(min(b)) from '__TEST_DIR__/blobs.parquet'
+----
+0A6EC3B5
+
+query I
+select hex(stats_max_value::BLOB) from parquet_metadata('__TEST_DIR__/blobs.parquet')
+----
+FF586C9D
+
+query I
+select hex(max(b)) from '__TEST_DIR__/blobs.parquet'
+----
+FF586C9D

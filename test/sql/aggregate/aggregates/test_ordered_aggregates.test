@@ -113,57 +113,71 @@ statement error
 SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median_delay"
 FROM "flights"
 GROUP BY "dest"
+----
 
 # Unknown ordered aggregate "duck".
 statement error
 SELECT "dest", duck(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "duck_delay"
 FROM "flights"
 GROUP BY "dest"
+----
 
 # Wrong number of arguments for PERCENTILE_DISC
 statement error
 select percentile_disc() within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 statement error
 select percentile_disc(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 # Wrong number of arguments for PERCENTILE_CONT
 statement error
 select percentile_cont() within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 statement error
 select percentile_cont(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 # NaN is not allowed
 statement error
 SELECT percentile_disc(CAST('NaN' AS REAL)) WITHIN GROUP (ORDER BY 1);
+----
 
 # Empty list is also not allowed
 statement error
 SELECT percentile_disc([]) WITHIN GROUP (ORDER BY LAST);
+----
 
 # Wrong number of arguments for MODE
 statement error
 select mode(0.25) within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 # No function matches the given name and argument types 'quantile_disc(BIGINT, VARCHAR)'
 statement error
 select percentile_disc('duck') within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 # No function matches the given name and argument types 'quantile_cont(BIGINT, VARCHAR)'
 statement error
 select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);
+----
 
 # aggregate function calls cannot be nested
 statement error
 SELECT percentile_disc(sum(1)) WITHIN GROUP (ORDER BY 1 DESC);
+----
 
 # NULL fractions with DESC should not be inverted
 statement error
 SELECT percentile_disc(strftime(DATE '1-11-25',NULL)) WITHIN GROUP (ORDER BY 1 DESC);
+----
 
 statement error
 SELECT percentile_cont(CASE 1 WHEN 2 THEN 3 END) WITHIN GROUP (ORDER BY 1 DESC);
+----
 
 # Negative fractions are not allowed
 
@@ -172,9 +186,11 @@ foreach sense ASC DESC
 statement error
 SELECT percentile_disc(-.5) WITHIN GROUP (order by col ${sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
 
 statement error
 SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col ${sense}) 
 FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
 
 endloop

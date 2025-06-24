@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 COPY (FROM range(100000) tbl(i)) TO '__TEST_DIR__/mix_batches_small.parquet' (ROW_GROUP_SIZE 5000)
 
 statement ok
@@ -125,7 +128,7 @@ COPY v4 TO '__TEST_DIR__/mixed_batches_v4.csv' (HEADER)
 0
 
 query I
-CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM read_csv_auto('__TEST_DIR__/mixed_batches_v4.csv', header=True)
+CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM read_csv_auto('__TEST_DIR__/mixed_batches_v4.csv')
 ----
 0
 
@@ -153,6 +156,15 @@ DROP TABLE mixed_batches_v3
 
 statement ok
 DROP TABLE mixed_batches_v4
+
+statement ok
+drop view if exists v2;
+
+statement ok
+drop view if exists v3;
+
+statement ok
+drop view if exists v4;
 
 # create views that read the batches using unions
 statement ok

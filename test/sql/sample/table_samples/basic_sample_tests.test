@@ -1,0 +1,88 @@
+# name: test/sql/sample/table_samples/basic_sample_tests.test
+# group: [table_samples]
+
+mode skip
+
+# currently require fixed vector size since the "randomness" of the sample depends on
+# the vector size. If the vector size decreases, the randomness of the sample decreases
+# This is especially noticeable for small tables and their samples
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification
+
+load __TEST_DIR__/test_samples_basic.db
+
+query I
+select count(*) from range(100000) using sample (10000);
+----
+10000
+
+query I
+select count(*) from range(100) using sample (10);
+----
+10
+
+query I
+select count(*) from range(205000) using sample (10000);
+----
+10000
+
+statement ok
+create table t1 as select range a from range(204800);
+
+statement ok
+select * from duckdb_table_sample('t1');
+
+statement ok
+create or replace table t1 as select range a from range(1000);
+
+query II
+select avg(a) > 200, avg(a) < 800 from duckdb_table_sample('t1');
+----
+true	true
+
+statement ok
+create or replace table t1 as select range a from range(204800);
+
+# average is not skewed
+query II
+select avg(a) > (0.2*204800), avg(a) < (0.8*204800) from duckdb_table_sample('t1');
+----
+true	true
+
+# about half the samples are below 102400 and half above
+query I
+select count(*) from duckdb_table_sample('t1') where a < 102400;
+----
+1069
+
+query I
+select count(*) from duckdb_table_sample('t1') where a > 102400;
+----
+979
+
+query I
+select count(*) from t1 using sample (200000);
+----
+200000
+
+statement ok
+create or replace table materialized_range as select * from range(100);
+
+statement ok
+create or replace table integers_1 as (select range b from materialized_range);
+
+query I
+select count(b) from duckdb_table_sample('integers_1') where b in (select * from materialized_range);
+----
+1
+
+# sample exists after restart
+restart
+
+query I
+select count(b) from duckdb_table_sample('integers_1') where b in (select * from materialized_range);
+----
+1
+

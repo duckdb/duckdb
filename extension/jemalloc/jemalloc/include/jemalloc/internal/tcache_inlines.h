@@ -1,46 +1,90 @@
 #ifndef JEMALLOC_INTERNAL_TCACHE_INLINES_H
 #define JEMALLOC_INTERNAL_TCACHE_INLINES_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/arena_externs.h"
 #include "jemalloc/internal/bin.h"
+#include "jemalloc/internal/jemalloc_internal_inlines_b.h"
 #include "jemalloc/internal/jemalloc_internal_types.h"
+#include "jemalloc/internal/large_externs.h"
 #include "jemalloc/internal/san.h"
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/sz.h"
+#include "jemalloc/internal/tcache_externs.h"
 #include "jemalloc/internal/util.h"
-
-namespace duckdb_jemalloc {
 
 static inline bool
 tcache_enabled_get(tsd_t *tsd) {
 	return tsd_tcache_enabled_get(tsd);
 }
 
-static inline void
-tcache_enabled_set(tsd_t *tsd, bool enabled) {
-	bool was_enabled = tsd_tcache_enabled_get(tsd);
+static inline unsigned
+tcache_nbins_get(tcache_slow_t *tcache_slow) {
+	assert(tcache_slow != NULL);
+	unsigned nbins = tcache_slow->tcache_nbins;
+	assert(nbins <= TCACHE_NBINS_MAX);
+	return nbins;
+}
 
-	if (!was_enabled && enabled) {
-		tsd_tcache_data_init(tsd);
-	} else if (was_enabled && !enabled) {
-		tcache_cleanup(tsd);
+static inline size_t
+tcache_max_get(tcache_slow_t *tcache_slow) {
+	assert(tcache_slow != NULL);
+	size_t tcache_max = sz_index2size(tcache_nbins_get(tcache_slow) - 1);
+	assert(tcache_max <= TCACHE_MAXCLASS_LIMIT);
+	return tcache_max;
+}
+
+static inline void
+tcache_max_set(tcache_slow_t *tcache_slow, size_t tcache_max) {
+	assert(tcache_slow != NULL);
+	assert(tcache_max <= TCACHE_MAXCLASS_LIMIT);
+	tcache_slow->tcache_nbins = sz_size2index(tcache_max) + 1;
+}
+
+static inline void
+tcache_bin_settings_backup(tcache_t *tcache,
+    cache_bin_info_t tcache_bin_info[TCACHE_NBINS_MAX]) {
+	for (unsigned i = 0; i < TCACHE_NBINS_MAX; i++) {
+		cache_bin_info_init(&tcache_bin_info[i],
+		    cache_bin_ncached_max_get_unsafe(&tcache->bins[i]));
 	}
-	/* Commit the state last.  Above calls check current state. */
-	tsd_tcache_enabled_set(tsd, enabled);
-	tsd_slow_update(tsd);
 }
 
 JEMALLOC_ALWAYS_INLINE bool
-tcache_small_bin_disabled(szind_t ind, cache_bin_t *bin) {
-	assert(ind < SC_NBINS);
-	bool ret = (cache_bin_info_ncached_max(&tcache_bin_info[ind]) == 0);
-	if (ret && bin != NULL) {
-		/* small size class but cache bin disabled. */
-		assert(ind >= nhbins);
-		assert((uintptr_t)(*bin->stack_head) ==
-		    cache_bin_preceding_junk);
+tcache_bin_disabled(szind_t ind, cache_bin_t *bin,
+    tcache_slow_t *tcache_slow) {
+	assert(bin != NULL);
+	assert(ind < TCACHE_NBINS_MAX);
+	bool disabled = cache_bin_disabled(bin);
+
+	/*
+	 * If a bin's ind >= nbins or ncached_max == 0, it must be disabled.
+	 * However, when ind < nbins, it could be either enabled
+	 * (ncached_max > 0) or disabled (ncached_max == 0). Similarly, when
+	 * ncached_max > 0, it could be either enabled (ind < nbins) or
+	 * disabled (ind >= nbins).  Thus, if a bin is disabled, it has either
+	 * ind >= nbins or ncached_max == 0.  If a bin is enabled, it has
+	 * ind < nbins and ncached_max > 0.
+	 */
+	unsigned nbins = tcache_nbins_get(tcache_slow);
+	cache_bin_sz_t ncached_max = cache_bin_ncached_max_get_unsafe(bin);
+	if (ind >= nbins) {
+		assert(disabled);
+	} else {
+		assert(!disabled || ncached_max == 0);
+	}
+	if (ncached_max == 0) {
+		assert(disabled);
+	} else {
+		assert(!disabled || ind >= nbins);
+	}
+	if (disabled) {
+		assert(ind >= nbins || ncached_max == 0);
+	} else {
+		assert(ind < nbins && ncached_max > 0);
 	}
 
-	return ret;
+	return disabled;
 }
 
 JEMALLOC_ALWAYS_INLINE void *
@@ -59,10 +103,11 @@ tcache_alloc_small(tsd_t *tsd, arena_t *arena, tcache_t *tcache,
 		if (unlikely(arena == NULL)) {
 			return NULL;
 		}
-		if (unlikely(tcache_small_bin_disabled(binind, bin))) {
+		if (unlikely(tcache_bin_disabled(binind, bin,
+		    tcache->tcache_slow))) {
 			/* stats and zero are handled directly by the arena. */
 			return arena_malloc_hard(tsd_tsdn(tsd), arena, size,
-			    binind, zero);
+			    binind, zero, /* slab */ true);
 		}
 		tcache_bin_flush_stashed(tsd, tcache, bin, binind,
 		    /* is_small */ true);
@@ -92,8 +137,9 @@ tcache_alloc_large(tsd_t *tsd, arena_t *arena, tcache_t *tcache, size_t size,
 	void *ret;
 	bool tcache_success;
 
-	assert(binind >= SC_NBINS && binind < nhbins);
 	cache_bin_t *bin = &tcache->bins[binind];
+	assert(binind >= SC_NBINS &&
+	    !tcache_bin_disabled(binind, bin, tcache->tcache_slow));
 	ret = cache_bin_alloc(bin, &tcache_success);
 	assert(tcache_success == (ret != NULL));
 	if (unlikely(!tcache_success)) {
@@ -115,7 +161,7 @@ tcache_alloc_large(tsd_t *tsd, arena_t *arena, tcache_t *tcache, size_t size,
 	} else {
 		if (unlikely(zero)) {
 			size_t usize = sz_index2size(binind);
-			assert(usize <= tcache_maxclass);
+			assert(usize <= tcache_max_get(tcache->tcache_slow));
 			memset(ret, 0, usize);
 		}
 
@@ -149,12 +195,12 @@ tcache_dalloc_small(tsd_t *tsd, tcache_t *tcache, void *ptr, szind_t binind,
 	}
 
 	if (unlikely(!cache_bin_dalloc_easy(bin, ptr))) {
-		if (unlikely(tcache_small_bin_disabled(binind, bin))) {
+		if (unlikely(tcache_bin_disabled(binind, bin,
+		    tcache->tcache_slow))) {
 			arena_dalloc_small(tsd_tsdn(tsd), ptr);
 			return;
 		}
-		cache_bin_sz_t max = cache_bin_info_ncached_max(
-		    &tcache_bin_info[binind]);
+		cache_bin_sz_t max = cache_bin_ncached_max_get(bin);
 		unsigned remain = max >> opt_lg_tcache_flush_small_div;
 		tcache_bin_flush_small(tsd, tcache, bin, binind, remain);
 		bool ret = cache_bin_dalloc_easy(bin, ptr);
@@ -166,14 +212,16 @@ JEMALLOC_ALWAYS_INLINE void
 tcache_dalloc_large(tsd_t *tsd, tcache_t *tcache, void *ptr, szind_t binind,
     bool slow_path) {
 
-	assert(tcache_salloc(tsd_tsdn(tsd), ptr)
-	    > SC_SMALL_MAXCLASS);
-	assert(tcache_salloc(tsd_tsdn(tsd), ptr) <= tcache_maxclass);
+	assert(tcache_salloc(tsd_tsdn(tsd), ptr) > SC_SMALL_MAXCLASS);
+	assert(tcache_salloc(tsd_tsdn(tsd), ptr) <=
+	    tcache_max_get(tcache->tcache_slow));
+	assert(!tcache_bin_disabled(binind, &tcache->bins[binind],
+	    tcache->tcache_slow));
 
 	cache_bin_t *bin = &tcache->bins[binind];
 	if (unlikely(!cache_bin_dalloc_easy(bin, ptr))) {
-		unsigned remain = cache_bin_info_ncached_max(
-		    &tcache_bin_info[binind]) >> opt_lg_tcache_flush_large_div;
+		unsigned remain = cache_bin_ncached_max_get(bin) >>
+		    opt_lg_tcache_flush_large_div;
 		tcache_bin_flush_large(tsd, tcache, bin, binind, remain);
 		bool ret = cache_bin_dalloc_easy(bin, ptr);
 		assert(ret);
@@ -185,13 +233,11 @@ tcaches_get(tsd_t *tsd, unsigned ind) {
 	tcaches_t *elm = &tcaches[ind];
 	if (unlikely(elm->tcache == NULL)) {
 		malloc_printf("<jemalloc>: invalid tcache id (%u).\n", ind);
-		jemalloc_abort();
+		abort();
 	} else if (unlikely(elm->tcache == TCACHES_ELM_NEED_REINIT)) {
 		elm->tcache = tcache_create_explicit(tsd);
 	}
 	return elm->tcache;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TCACHE_INLINES_H */

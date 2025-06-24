@@ -1,10 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_EMAP_H
 #define JEMALLOC_INTERNAL_EMAP_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/base.h"
 #include "jemalloc/internal/rtree.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * Note: Ends without at semicolon, so that
@@ -187,13 +186,13 @@ emap_edata_is_acquired(tsdn_t *tsdn, emap_t *emap, edata_t *edata) {
 	 */
 	EMAP_DECLARE_RTREE_CTX;
 	rtree_leaf_elm_t *elm = rtree_leaf_elm_lookup(tsdn, &emap->rtree,
-	    rtree_ctx, (uintptr_t)edata_base_get(edata), /* dependent */ true,
+	    rtree_ctx, (uintptr_t)edata_base_get(edata), /* dependent */ false,
 	    /* init_missing */ false);
 	if (elm == NULL) {
 		return true;
 	}
 	rtree_contents_t contents = rtree_leaf_elm_read(tsdn, &emap->rtree, elm,
-	    /* dependent */ true);
+	    /* dependent */ false);
 	if (contents.edata == NULL ||
 	    contents.metadata.state == extent_state_active ||
 	    edata_state_in_transition(contents.metadata.state)) {
@@ -355,7 +354,5 @@ emap_edata_lookup_batch(tsd_t *tsd, emap_t *emap, size_t nptrs,
 		metadata_visitor(metadata_visitor_ctx, &alloc_ctx);
 	}
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EMAP_H */

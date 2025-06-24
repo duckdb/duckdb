@@ -43,6 +43,8 @@ DUCKDB_API string ConvertToString::Operation(uint64_t input);
 template <>
 DUCKDB_API string ConvertToString::Operation(hugeint_t input);
 template <>
+DUCKDB_API string ConvertToString::Operation(uhugeint_t input);
+template <>
 DUCKDB_API string ConvertToString::Operation(float input);
 template <>
 DUCKDB_API string ConvertToString::Operation(double input);

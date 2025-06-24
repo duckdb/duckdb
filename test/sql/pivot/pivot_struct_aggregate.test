@@ -1,0 +1,23 @@
+# name: test/sql/pivot/pivot_struct_aggregate.test
+# description: Issue #12328: Segmentation fault during PIVOTING table (CLI) using struct field
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table donnees_csv as select {'year': i::varchar, 'month': i::varchar} AS donnee, i%5 as variable_id, i%10 id_niv from range(1000) t(i);
+
+query IIIIII
+pivot donnees_csv on variable_id using first(donnee) group by id_niv order by all;
+----
+0	{'year': 0, 'month': 0}	NULL	NULL	NULL	NULL
+1	NULL	{'year': 1, 'month': 1}	NULL	NULL	NULL
+2	NULL	NULL	{'year': 2, 'month': 2}	NULL	NULL
+3	NULL	NULL	NULL	{'year': 3, 'month': 3}	NULL
+4	NULL	NULL	NULL	NULL	{'year': 4, 'month': 4}
+5	{'year': 5, 'month': 5}	NULL	NULL	NULL	NULL
+6	NULL	{'year': 6, 'month': 6}	NULL	NULL	NULL
+7	NULL	NULL	{'year': 7, 'month': 7}	NULL	NULL
+8	NULL	NULL	NULL	{'year': 8, 'month': 8}	NULL
+9	NULL	NULL	NULL	NULL	{'year': 9, 'month': 9}

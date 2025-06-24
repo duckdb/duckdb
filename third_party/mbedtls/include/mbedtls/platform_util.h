@@ -6,19 +6,7 @@
  */
 /*
  *  Copyright The Mbed TLS Contributors
- *  SPDX-License-Identifier: Apache-2.0
- *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  */
 #ifndef MBEDTLS_PLATFORM_UTIL_H
 #define MBEDTLS_PLATFORM_UTIL_H
@@ -35,24 +23,20 @@
 extern "C" {
 #endif
 
-/* Internal macros meant to be called only from within the library. */
-#define MBEDTLS_INTERNAL_VALIDATE_RET( cond, ret )  do { } while( 0 )
-#define MBEDTLS_INTERNAL_VALIDATE( cond )           do { } while( 0 )
-
 /* Internal helper macros for deprecating API constants. */
 #if !defined(MBEDTLS_DEPRECATED_REMOVED)
 #if defined(MBEDTLS_DEPRECATED_WARNING)
 #define MBEDTLS_DEPRECATED __attribute__((deprecated))
-MBEDTLS_DEPRECATED typedef char const * mbedtls_deprecated_string_constant_t;
-#define MBEDTLS_DEPRECATED_STRING_CONSTANT( VAL )       \
-    ( (mbedtls_deprecated_string_constant_t) ( VAL ) )
+MBEDTLS_DEPRECATED typedef char const *mbedtls_deprecated_string_constant_t;
+#define MBEDTLS_DEPRECATED_STRING_CONSTANT(VAL)       \
+    ((mbedtls_deprecated_string_constant_t) (VAL))
 MBEDTLS_DEPRECATED typedef int mbedtls_deprecated_numeric_constant_t;
-#define MBEDTLS_DEPRECATED_NUMERIC_CONSTANT( VAL )       \
-    ( (mbedtls_deprecated_numeric_constant_t) ( VAL ) )
+#define MBEDTLS_DEPRECATED_NUMERIC_CONSTANT(VAL)       \
+    ((mbedtls_deprecated_numeric_constant_t) (VAL))
 #else /* MBEDTLS_DEPRECATED_WARNING */
 #define MBEDTLS_DEPRECATED
-#define MBEDTLS_DEPRECATED_STRING_CONSTANT( VAL ) VAL
-#define MBEDTLS_DEPRECATED_NUMERIC_CONSTANT( VAL ) VAL
+#define MBEDTLS_DEPRECATED_STRING_CONSTANT(VAL) VAL
+#define MBEDTLS_DEPRECATED_NUMERIC_CONSTANT(VAL) VAL
 #endif /* MBEDTLS_DEPRECATED_WARNING */
 #endif /* MBEDTLS_DEPRECATED_REMOVED */
 
@@ -122,7 +106,7 @@ MBEDTLS_DEPRECATED typedef int mbedtls_deprecated_numeric_constant_t;
  *
  * This macro has an empty expansion. It exists for documentation purposes:
  * a #MBEDTLS_CHECK_RETURN_OPTIONAL annotation indicates that the function
- * has been analyzed for return-check usefuless, whereas the lack of
+ * has been analyzed for return-check usefulness, whereas the lack of
  * an annotation indicates that the function has not been analyzed and its
  * return-check usefulness is unknown.
  */
@@ -142,9 +126,14 @@ MBEDTLS_DEPRECATED typedef int mbedtls_deprecated_numeric_constant_t;
  * https://stackoverflow.com/questions/40576003/ignoring-warning-wunused-result
  * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66425#c34
  */
-#define MBEDTLS_IGNORE_RETURN(result) ( (void) !( result ) )
+#define MBEDTLS_IGNORE_RETURN(result) ((void) !(result))
 #endif
 
+/* If the following macro is defined, the library is being built by the test
+ * framework, and the framework is going to provide a replacement
+ * mbedtls_platform_zeroize() using a preprocessor macro, so the function
+ * declaration should be omitted.  */
+#if !defined(MBEDTLS_TEST_DEFINES_ZEROIZE) //no-check-names
 /**
  * \brief       Securely zeroize a buffer
  *
@@ -167,7 +156,8 @@ MBEDTLS_DEPRECATED typedef int mbedtls_deprecated_numeric_constant_t;
  * \param len   Length of the buffer in bytes
  *
  */
-void mbedtls_platform_zeroize( void *buf, size_t len );
+void mbedtls_platform_zeroize(void *buf, size_t len);
+#endif
 
 #if defined(MBEDTLS_HAVE_TIME_DATE)
 /**
@@ -196,8 +186,8 @@ void mbedtls_platform_zeroize( void *buf, size_t len );
  * \return      Pointer to an object of type struct tm on success, otherwise
  *              NULL
  */
-struct tm *mbedtls_platform_gmtime_r( const mbedtls_time_t *tt,
-                                      struct tm *tm_buf );
+struct tm *mbedtls_platform_gmtime_r(const mbedtls_time_t *tt,
+                                     struct tm *tm_buf);
 #endif /* MBEDTLS_HAVE_TIME_DATE */
 
 #ifdef __cplusplus

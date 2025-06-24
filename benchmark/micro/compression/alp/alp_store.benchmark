@@ -1,0 +1,27 @@
+# name: benchmark/micro/compression/alp/alp_store.benchmark
+# description: Scanning a large amount of doubles
+# group: [alp]
+
+name Alp Insert
+group alp
+storage persistent
+require_reinit
+require parquet
+require httpfs
+
+load
+PRAGMA force_compression='uncompressed';
+DROP TABLE IF EXISTS temperatures_uncompressed;
+CREATE TABLE temperatures_uncompressed (
+	temperature DOUBLE
+);
+INSERT INTO temperatures_uncompressed SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(28);
+CREATE TABLE temperatures_alp (
+	temperature DOUBLE
+);
+PRAGMA force_compression='alp';
+checkpoint;
+
+run
+INSERT INTO temperatures_alp SELECT * FROM temperatures_uncompressed;
+checkpoint;

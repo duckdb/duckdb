@@ -53,7 +53,7 @@ prefix-1	0	9
 
 # Test partitioning by all
 statement ok
-COPY test TO '__TEST_DIR__/partitioned3' (FORMAT PARQUET, PARTITION_BY '*');
+COPY test TO '__TEST_DIR__/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', WRITE_PARTITION_COLUMNS);
 
 query I
 SELECT min(value2_col) as min_val
@@ -90,7 +90,7 @@ SELECT part_col, value_col, value2_col FROM parquet_scan('__TEST_DIR__/partition
 statement error
 COPY test TO '__TEST_DIR__/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 ----
-IO Error: Directory
+Directory
 
 # Trailing slash ist auch gut!
 statement ok
@@ -120,7 +120,7 @@ Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY
 
 # partitioning csv files is also a thing
 statement ok
-COPY test TO '__TEST_DIR__/partitioned7' (FORMAT CSV, HEADER TRUE, PARTITION_BY part_col);
+COPY test TO '__TEST_DIR__/partitioned7' (FORMAT CSV, PARTITION_BY part_col);
 
 query III
 SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned7/part_col=0/*.csv' ORDER BY value2_col;

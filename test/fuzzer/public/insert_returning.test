@@ -1,0 +1,17 @@
+# name: test/fuzzer/public/insert_returning.test
+# description: Test INSERT OR REPLACE with DEFAULT VALUES
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE v00 (c01 INT, c02 STRING);
+
+statement ok
+INSERT INTO v00 (c01, c02) VALUES (0, 'abc');
+
+query I
+INSERT INTO v00 FROM v00 ORDER BY ALL DESC RETURNING 'abc';
+----
+abc

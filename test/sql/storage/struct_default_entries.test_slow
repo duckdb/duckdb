@@ -1,0 +1,31 @@
+# name: test/sql/storage/struct_default_entries.test_slow
+# description: Test struct with many default entries
+# group: [storage]
+
+statement ok
+CREATE TABLE test_table (
+	  "id" VARCHAR,
+	  "str" STRUCT(
+		  a VARCHAR
+	  )
+  );
+
+statement ok
+INSERT INTO test_table(
+  "id"
+)
+(
+  SELECT
+	  "id",
+  FROM
+	  range(2000000) t(id)
+  QUALIFY
+	  ROW_NUMBER() OVER (
+		  PARTITION BY id
+	  ) = 1
+);
+
+query IIII
+SELECT COUNT(DISTINCT id), COUNT(*), COUNT("str"), COUNT("str".a) FROM test_table
+----
+2000000	2000000	0	0

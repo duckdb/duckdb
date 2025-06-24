@@ -28,18 +28,13 @@ public:
 	//! Name of the PRAGMA statement
 	string name;
 	//! Parameter list (if any)
-	vector<Value> parameters;
+	vector<unique_ptr<ParsedExpression>> parameters;
 	//! Named parameter list (if any)
-	named_parameter_map_t named_parameters;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> named_parameters;
 
 public:
-	unique_ptr<PragmaInfo> Copy() const {
-		auto result = make_uniq<PragmaInfo>();
-		result->name = name;
-		result->parameters = parameters;
-		result->named_parameters = named_parameters;
-		return result;
-	}
+	unique_ptr<PragmaInfo> Copy() const;
+	string ToString() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

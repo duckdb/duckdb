@@ -13,21 +13,19 @@ statement ok
 CREATE SEQUENCE t1;
 
 statement ok
-CREATE TABLE t1 (c1 INT, CHECK(nextval('t1')));
+CREATE TABLE t1 (
+	c1 INT,
+	CHECK(nextval('t1'))
+);
 
 statement ok
 CREATE TEMP SEQUENCE t1;
 
-statement error
+statement ok
 ALTER TABLE t1 ADD c0 INT;
-----
-Cross catalog dependencies are not supported
 
 statement ok
 DROP SEQUENCE temp.t1
-
-statement ok
-ALTER TABLE t1 ADD c0 INT;
 
 reconnect
 

@@ -9,23 +9,78 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
-struct dtime_t;
-struct date_t;
-struct timestamp_t;
+struct dtime_t;     // NOLINT: literal casing
+struct date_t;      // NOLINT: literal casing
+struct dtime_tz_t;  // NOLINT: literal casing
+struct timestamp_t; // NOLINT: literal casing
+struct TimestampComponents;
 
 class Serializer;
 class Deserializer;
 
-struct interval_t {
+struct interval_t { // NOLINT
 	int32_t months;
 	int32_t days;
 	int64_t micros;
 
-	inline bool operator==(const interval_t &rhs) const {
-		return this->days == rhs.days && this->months == rhs.months && this->micros == rhs.micros;
+	inline void Normalize(int64_t &months, int64_t &days, int64_t &micros) const;
+
+	// Normalize to interval bounds.
+	inline static void Borrow(const int64_t msf, int64_t &lsf, int32_t &f, const int64_t scale);
+	inline interval_t Normalize() const;
+
+	inline bool operator==(const interval_t &right) const {
+		//	Quick equality check
+		const auto &left = *this;
+		if (left.months == right.months && left.days == right.days && left.micros == right.micros) {
+			return true;
+		}
+
+		int64_t lmonths, ldays, lmicros;
+		int64_t rmonths, rdays, rmicros;
+		left.Normalize(lmonths, ldays, lmicros);
+		right.Normalize(rmonths, rdays, rmicros);
+
+		return lmonths == rmonths && ldays == rdays && lmicros == rmicros;
+	}
+	inline bool operator!=(const interval_t &right) const {
+		return !(*this == right);
+	}
+
+	inline bool operator>(const interval_t &right) const {
+		const auto &left = *this;
+		int64_t lmonths, ldays, lmicros;
+		int64_t rmonths, rdays, rmicros;
+		left.Normalize(lmonths, ldays, lmicros);
+		right.Normalize(rmonths, rdays, rmicros);
+
+		if (lmonths > rmonths) {
+			return true;
+		} else if (lmonths < rmonths) {
+			return false;
+		}
+		if (ldays > rdays) {
+			return true;
+		} else if (ldays < rdays) {
+			return false;
+		}
+		return lmicros > rmicros;
+	}
+
+	inline bool operator<(const interval_t &right) const {
+		return right > *this;
+	}
+
+	inline bool operator<=(const interval_t &right) const {
+		return !(*this > right);
+	}
+
+	inline bool operator>=(const interval_t &right) const {
+		return !(*this < right);
 	}
 
 	// Serialization
@@ -85,13 +140,16 @@ public:
 	static int64_t GetMilli(const interval_t &val);
 
 	//! Get Interval in microseconds
+	static bool TryGetMicro(const interval_t &val, int64_t &micros);
 	static int64_t GetMicro(const interval_t &val);
 
 	//! Get Interval in Nanoseconds
 	static int64_t GetNanoseconds(const interval_t &val);
 
-	//! Returns the age between two timestamps (including 30 day months)
+	//! Returns the age between two timestamps (including months)
 	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
+	//! Returns the age between two timestamp components
+	static interval_t GetAge(TimestampComponents ts1, TimestampComponents ts2, bool is_negative);
 
 	//! Returns the exact difference between two timestamps (days and seconds)
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
@@ -106,46 +164,72 @@ public:
 	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
 	//! For example if we go from 23:00 to 02:00, we add a day to the date
 	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
+	static dtime_tz_t Add(dtime_tz_t left, interval_t right, date_t &date);
 
 	//! Comparison operators
-	inline static bool Equals(const interval_t &left, const interval_t &right);
-	inline static bool GreaterThan(const interval_t &left, const interval_t &right);
+	inline static bool Equals(const interval_t &left, const interval_t &right) {
+		return left == right;
+	}
+	inline static bool GreaterThan(const interval_t &left, const interval_t &right) {
+		return left > right;
+	}
 };
-static void NormalizeIntervalEntries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {
-	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
-	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
-	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
-	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
 
-	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;
-	input.micros -= extra_days_micros * Interval::MICROS_PER_DAY;
+void interval_t::Normalize(int64_t &months, int64_t &days, int64_t &micros) const {
+	auto &input = *this;
 
-	months = input.months + extra_months_d + extra_months_micros;
-	days = input.days + extra_days_micros;
+	//  Carry left
 	micros = input.micros;
+	int64_t carry_days = micros / Interval::MICROS_PER_DAY;
+	micros -= carry_days * Interval::MICROS_PER_DAY;
+
+	days = input.days;
+	days += carry_days;
+	int64_t carry_months = days / Interval::DAYS_PER_MONTH;
+	days -= carry_months * Interval::DAYS_PER_MONTH;
+
+	months = input.months;
+	months += carry_months;
 }
 
-bool Interval::Equals(const interval_t &left, const interval_t &right) {
-	return left.months == right.months && left.days == right.days && left.micros == right.micros;
+void interval_t::Borrow(const int64_t msf, int64_t &lsf, int32_t &f, const int64_t scale) {
+	if (msf > NumericLimits<int32_t>::Maximum()) {
+		f = NumericLimits<int32_t>::Maximum();
+		lsf += (msf - f) * scale;
+	} else if (msf < NumericLimits<int32_t>::Minimum()) {
+		f = NumericLimits<int32_t>::Minimum();
+		lsf += (msf - f) * scale;
+	} else {
+		f = UnsafeNumericCast<int32_t>(msf);
+	}
 }
 
-bool Interval::GreaterThan(const interval_t &left, const interval_t &right) {
-	int64_t lmonths, ldays, lmicros;
-	int64_t rmonths, rdays, rmicros;
-	NormalizeIntervalEntries(left, lmonths, ldays, lmicros);
-	NormalizeIntervalEntries(right, rmonths, rdays, rmicros);
+interval_t interval_t::Normalize() const {
+	interval_t result;
 
-	if (lmonths > rmonths) {
-		return true;
-	} else if (lmonths < rmonths) {
-		return false;
-	}
-	if (ldays > rdays) {
-		return true;
-	} else if (ldays < rdays) {
-		return false;
-	}
-	return lmicros > rmicros;
+	int64_t mm;
+	int64_t dd;
+	Normalize(mm, dd, result.micros);
+
+	//  Borrow right on overflow
+	Borrow(mm, dd, result.months, Interval::DAYS_PER_MONTH);
+	Borrow(dd, result.micros, result.days, Interval::MICROS_PER_DAY);
+
+	return result;
 }
 
 } // namespace duckdb
+
+namespace std {
+template <>
+struct hash<duckdb::interval_t> {
+	size_t operator()(const duckdb::interval_t &val) const {
+		int64_t months, days, micros;
+		val.Normalize(months, days, micros);
+		using std::hash;
+
+		return hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(days)) ^
+		       hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(months)) ^ hash<int64_t> {}(micros);
+	}
+};
+} // namespace std

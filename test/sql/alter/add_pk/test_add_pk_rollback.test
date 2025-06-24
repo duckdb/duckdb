@@ -1,0 +1,57 @@
+# name: test/sql/alter/add_pk/test_add_pk_rollback.test
+# description: Test invalidating the constraint with uncommitted changes.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (1, 1);
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (j);
+
+statement ok
+INSERT INTO test VALUES (2, 1);
+
+# Throw a constraint violation on the transaction-local storage.
+
+statement error
+COMMIT
+----
+<REGEX>:TransactionContext Error.*Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key "1".*
+
+# Inserting duplicate values must work after rolling back.
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 1), (2, NULL);
+
+# Invalidate the transaction with a constraint violation.
+
+statement ok
+CREATE TABLE other (i INTEGER, j INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO other VALUES (1, 1), (2, 1);
+
+statement ok
+ALTER TABLE other ADD PRIMARY KEY (j);
+
+statement error
+COMMIT
+----
+<REGEX>:TransactionContext Error.*Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key "1".*
+
+# Inserting duplicate values must work after rolling back.
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 1), (2, NULL);

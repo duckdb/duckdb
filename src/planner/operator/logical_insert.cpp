@@ -8,13 +8,15 @@ namespace duckdb {
 
 LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
     : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index), return_chunk(false),
-      action_type(OnConflictAction::THROW) {
+      action_type(OnConflictAction::THROW), update_is_del_and_insert(false) {
 }
 
 LogicalInsert::LogicalInsert(ClientContext &context, const unique_ptr<CreateInfo> table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT),
       table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
-                                                 dynamic_cast<CreateTableInfo &>(*table_info).table)) {
+                                                 table_info->Cast<CreateTableInfo>().table)) {
+	auto binder = Binder::CreateBinder(context);
+	bound_constraints = binder->BindConstraints(table);
 }
 
 idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {

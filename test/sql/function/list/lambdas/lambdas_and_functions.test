@@ -1,0 +1,38 @@
+# name: test/sql/function/list/lambdas/lambdas_and_functions.test
+# description: Test mixing lambdas and functions
+# group: [lambdas]
+
+require json
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), lambda x: z) AS row
+);
+
+query I
+FROM demo(3, 0);
+----
+[0, 0, 0]
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), lambda x: 0 + z) AS row
+);
+
+query I
+FROM demo(3, 0);
+----
+[0, 0, 0]
+
+statement ok
+CREATE OR REPLACE function demo(n, z) AS TABLE (
+  SELECT list_transform(range(0, n), lambda x: (z -> 'a')) AS row
+);
+
+query I
+FROM demo(3, {'a': 2});
+----
+[2, 2, 2]

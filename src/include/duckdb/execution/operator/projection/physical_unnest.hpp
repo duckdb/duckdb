@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNNEST;
 
 public:
-	PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
-	               PhysicalOperatorType type = PhysicalOperatorType::UNNEST);
+	PhysicalUnnest(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+	               idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::UNNEST);
 
 	//! The projection list of the UNNEST
 	//! E.g. SELECT 1, UNNEST([1]), UNNEST([2, 3]); has two UNNESTs in its select_list

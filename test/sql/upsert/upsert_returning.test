@@ -1,0 +1,83 @@
+# name: test/sql/upsert/upsert_returning.test
+# group: [upsert]
+
+require vector_size 2048
+
+statement ok
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY,
+    username TEXT UNIQUE,
+    email TEXT
+);
+
+query III
+INSERT INTO users (id, username, email) VALUES
+	(1, 'john_doe', 'john@example.com')
+ON CONFLICT (username) DO NOTHING
+RETURNING *;
+----
+1	john_doe	john@example.com
+
+query III
+INSERT INTO users (id, username, email) VALUES
+	(1, 'john_doe', 'john@example.com')
+ON CONFLICT (username) DO NOTHING
+RETURNING *;
+----
+
+# We create a conflict, with a where clause that filters out this conflict
+# Because the where clause filters it out, the DO UPDATE becomes a DO NOTHING for this row instead
+# So it does not get added to the returning clause.
+query III
+INSERT INTO users (id, username, email)
+VALUES (1, 'john_doe', 'john_new@example.com')
+ON CONFLICT (id) DO
+    UPDATE SET email = EXCLUDED.email
+    WHERE EXCLUDED.email != 'john_new@example.com'
+RETURNING *;
+----
+
+# Verify that the *other* tuple does get added to the returning clause
+query III
+INSERT INTO users (id, username, email)
+VALUES
+	(1, 'john_doe', 'john_new@example.com'),
+	(2, 'not_john_doe', 'not_john_new@example.com')
+ON CONFLICT (id) DO
+    UPDATE SET email = EXCLUDED.email
+    WHERE EXCLUDED.email != 'john_new@example.com'
+RETURNING *;
+----
+2	not_john_doe	not_john_new@example.com
+
+
+# FIXME: not consistent
+mode skip
+
+# Here we have conflicts within the inserted data
+# Only the last occurrence of this conflict should be present in the returning clause.
+query III
+INSERT INTO users (id, username, email)
+VALUES
+	(3, 'inner_conflict', 'test'),
+	(4, 'a', ''),
+	(5, 'b', ''),
+	(6, 'c', ''),
+	(3, 'inner_conflict2', 'other_test'),
+	(7, 'd', ''),
+	(8, 'e', ''),
+	(9, 'f', ''),
+	(3, 'inner_conflict3', 'yet_another_test')
+ON CONFLICT (id) DO
+    UPDATE SET email = EXCLUDED.email
+    WHERE EXCLUDED.email != 'test'
+RETURNING *;
+----
+3	inner_conflict	test
+4	a	(empty)
+5	b	(empty)
+6	c	(empty)
+7	d	(empty)
+8	e	(empty)
+9	f	(empty)
+3	inner_conflict3	yet_another_test

@@ -1,0 +1,53 @@
+# name: test/sql/function/array/array_cosine_distance.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+# The distance between a vector and itself should be 0
+query I
+SELECT array_cosine_distance([1, 2, 3]::${type}[3], [1, 2, 3]::${type}[3]);
+----
+0.0
+
+# Opposite vectors should have a distance of 2
+query I
+SELECT array_cosine_distance([2, 2, 2]::${type}[3], [-2, -2, -2]::${type}[3]);
+----
+2.0
+
+statement ok
+CREATE OR REPLACE TABLE arrays (l ${type}[3]);
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), ([4, 5, 6]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+
+query I
+SELECT array_cosine_distance(l, [1, 2, 3]::${type}[3]) FROM arrays;
+----
+0.0
+0.02536815
+0.04058805
+2.0
+NULL
+
+statement error
+SELECT array_cosine_distance([1, NULL, 3]::${type}[3], [1, 2, 3]::${type}[3]);
+----
+left argument can not contain NULL values
+
+statement error
+SELECT array_cosine_distance([1, 2, 3]::${type}[3], [1, NULL, 3]::${type}[3]);
+----
+right argument can not contain NULL values
+
+statement error
+SELECT array_cosine_distance([1, 2, 3]::${type}[3], [1, 2, 3, 4]::${type}[4]);
+----
+array_cosine_distance: Array arguments must be of the same size
+
+
+
+endloop

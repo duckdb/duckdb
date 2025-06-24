@@ -1,0 +1,24 @@
+# name: test/sql/types/nested/array/array_roundtrip_csv.test
+# group: [array]
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE arrays2 (a INTEGER[3])
+
+statement ok
+COPY (SELECT [range, range + 1, range + 2] a FROM range(3)) TO '__TEST_DIR__/arrays_csv_test.csv'
+
+statement ok
+COPY arrays2 FROM '__TEST_DIR__/arrays_csv_test.csv'
+
+query I
+SELECT * FROM arrays2
+----
+[0, 1, 2]
+[1, 2, 3]
+[2, 3, 4]

@@ -17,7 +17,7 @@ def normalize_path(path):
         normed = map(lambda p: normalize(p), path)
         return list(normed)
 
-    if (isinstance, str):
+    if isinstance(path, str):
         return normalize(path)
 
     raise Exception("Can only be called with a str or list argument")

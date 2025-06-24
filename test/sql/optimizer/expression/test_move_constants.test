@@ -8,7 +8,7 @@ PRAGMA enable_verification
 # move constants with signed value extremes
 
 # tinyint
-foreach type,min,max tinyint,-128,127 smallint,-32768,32767 integer,-2147483648,2147483647 bigint,-9223372036854775808,9223372036854775807 hugeint,-170141183460469231731687303715884105727,170141183460469231731687303715884105727
+foreach type,min,max tinyint,-128,127 smallint,-32768,32767 integer,-2147483648,2147483647 bigint,-9223372036854775808,9223372036854775807 hugeint,-170141183460469231731687303715884105728,170141183460469231731687303715884105727
 
 statement ok
 CREATE OR REPLACE TABLE vals(v ${type});
@@ -62,6 +62,10 @@ NULL
 # negative numbers
 query I
 SELECT * FROM vals WHERE v*(-1)::${type}=(${min})::${type};
+----
+
+query I
+SELECT * FROM vals WHERE v*(-2)::${type}=(${min})::${type};
 ----
 
 endloop

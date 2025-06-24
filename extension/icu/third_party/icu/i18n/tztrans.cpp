@@ -63,7 +63,7 @@ TimeZoneTransition::operator=(const TimeZoneTransition& right) {
     return *this;
 }
 
-UBool
+bool
 TimeZoneTransition::operator==(const TimeZoneTransition& that) const {
     if (this == &that) {
         return TRUE;
@@ -84,7 +84,7 @@ TimeZoneTransition::operator==(const TimeZoneTransition& that) const {
     return FALSE;
 }
 
-UBool
+bool
 TimeZoneTransition::operator!=(const TimeZoneTransition& that) const {
     return !operator==(that);
 }

@@ -13,3 +13,4 @@
 %type <node> copy_generic_opt_arg_list_item
 %type <str> copy_file_name
 %type <list> copy_generic_opt_list
+%type <conststr> copy_database_flag

@@ -1,0 +1,143 @@
+# name: test/sql/catalog/function/test_table_macro_copy.test
+# description: Test SELECTMacro
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+load __TEST_DIR__/table_macro.db
+
+statement ok
+CREATE TABLE test_tbl (id INT, name string);
+
+statement ok
+CREATE TABLE test2_tbl (id INT, name string);
+
+statement ok
+CREATE TABLE greek_tbl (id INT, name string);
+
+statement ok
+INSERT INTO test_tbl VALUES (1,'tom'), (2,'dick'),(3,'harry'), (4,'mary'), (5,'mungo'), (6,'midge');  
+
+statement ok
+INSERT INTO test_tbl VALUES (20,'andrew'), (21,'boris'),(22,'Caleb'), (23,'david'), (24,'evan');
+
+statement ok
+INSERT INTO  greek_tbl VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma'), (4, 'delta'), (5, 'epsilon'),(6, 'zeta'), (7, 'eta') , (8, 'theta'), (9, 'iota') , (10, 'kappa'); 
+
+statement ok
+CREATE  MACRO xt(a,_name) as TABLE SELECT * FROM test_tbl WHERE(id>=a or name=_name);
+
+statement ok
+CREATE  MACRO xt2(a,_name) as TABLE SELECT * FROM test_tbl WHERE(id>=a or name like _name);
+
+statement ok
+CREATE  MACRO sgreek(a,b,c) as TABLE SELECT a,b FROM greek_tbl WHERE(id >= c);
+
+query II
+( SELECT* FROM xt(1, 'tom') UNION SELECT* FROM  xt2(1, '%%%') ) INTERSECT SELECT* FROM xt(100,'midge');
+----
+6	midge
+
+query II
+(SELECT* FROM xt(1, 'tom') EXCEPT SELECT* FROM xt(20,'tom' )) INTERSECT SELECT* FROM xt(100,'harry');
+----
+3	harry
+
+query II
+SELECT	* FROM  xt(200,'andrew');
+----
+20	andrew
+
+query II
+SELECT * FROM xt2(100,'m%');
+----
+4	mary
+5	mungo
+6	midge
+
+
+# check similar to
+statement ok
+CREATE  MACRO xtm(cmp_str) as TABLE SELECT id, name FROM test_tbl  WHERE( name similar to cmp_str);
+
+statement ok
+SELECT * FROM xtm('m.*');
+
+# check regexp_matches
+statement ok
+CREATE  MACRO  xt_reg(cmp) as TABLE SELECT * FROM test_tbl WHERE regexp_matches(name ,cmp );
+
+statement ok
+SELECT * FROM xt_reg('^m');
+
+# use regular macro for comparison
+statement ok
+CREATE MACRO   cmp(a,m) as regexp_matches(a,m) or a similar to m;
+
+statement ok
+CREATE  MACRO gm(m) as TABLE SELECT * FROM  greek_tbl WHERE cmp(name,m);
+
+statement ok
+SELECT * FROM  gm('^m');
+
+# create a scalar macro with same name as table macro
+statement ok
+CREATE MACRO xt(a,b) as a+b;
+
+# drop table macro
+statement ok  
+DROP MACRO TABLE xt;
+
+# use column identifer as a macro parameter
+statement ok
+CREATE MACRO xt(id, imax) as TABLE SELECT id,name FROM test_tbl WHERE id<=imax;
+
+query II
+SELECT * FROM xt(id,1);
+----
+1	tom
+
+# try to create table macro with pre-existing table name "range"
+statement ok
+CREATE  MACRO range(a,b) as TABLE select a,b from test_tbl;
+
+# use table macro as a scalar macro
+query II
+SELECT * FROM test_tbl where id>=(SELECT max(id) FROM xt(id,30));
+----
+24	evan
+
+# use table macro as a scalar macro
+query II
+SELECT * FROM greek_tbl where id<=(SELECT min(id) FROM xt(id,30));
+----
+1	alpha
+
+
+# check that table macros are present in  duckdb_functions() -
+# nb they have the function_type 'table_macro'
+query IIIIIIIII
+SELECT schema_name, function_name, function_type, description, return_type, parameters, parameter_types, varargs, macro_definition FROM duckdb_functions() WHERE function_type = 'table_macro' AND
+ ( function_name = 'sgreek' or  function_name = 'xt') order by function_name;
+----
+main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	SELECT a, b FROM greek_tbl WHERE (id >= c)
+main	xt	table_macro	NULL	NULL	[id, imax]	[NULL, NULL]	NULL	SELECT id, "name" FROM test_tbl WHERE (id <= imax)
+
+statement ok
+ATTACH '__TEST_DIR__/table_macro2.db'
+
+statement ok
+COPY FROM DATABASE table_macro TO table_macro2
+
+# check that table macros are present in  duckdb_functions() -
+# nb they have the function_type 'table_macro'
+query IIIIIIIIII
+SELECT database_name, schema_name, function_name, function_type, description, return_type, parameters, parameter_types, varargs, macro_definition FROM duckdb_functions() WHERE function_type = 'table_macro' AND
+ ( function_name = 'sgreek' or  function_name = 'xt') order by database_name, function_name;
+----
+table_macro	main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	SELECT a, b FROM greek_tbl WHERE (id >= c)
+table_macro	main	xt	table_macro	NULL	NULL	[id, imax]	[NULL, NULL]	NULL	SELECT id, "name" FROM test_tbl WHERE (id <= imax)
+table_macro2	main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	SELECT a, b FROM greek_tbl WHERE (id >= c)
+table_macro2	main	xt	table_macro	NULL	NULL	[id, imax]	[NULL, NULL]	NULL	SELECT id, "name" FROM test_tbl WHERE (id <= imax)
+

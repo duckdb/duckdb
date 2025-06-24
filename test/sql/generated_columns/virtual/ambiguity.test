@@ -20,6 +20,7 @@ CREATE TABLE unit2 (
 	total_profit AS (price / amount_sold),
 	profit_total AS (unit2.price * unit2.amount_sold)
 );
+----
 
 statement ok
 CREATE TABLE unit2 (
@@ -35,6 +36,7 @@ INSERT INTO unit VALUES (5,4)
 # Ambiguous, both have 'total_profit'
 statement error
 SELECT total_profit FROM unit, unit2
+----
 
 statement ok
 INSERT INTO unit2 VALUES (100, 4)

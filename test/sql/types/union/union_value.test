@@ -11,13 +11,16 @@ INSERT INTO tbl VALUES (union_value(num := 1));
 # union_value must take exactly one argument
 statement error
 INSERT INTO tbl VALUES (union_value());
+----
 
 statement error
 INSERT INTO tbl VALUES (union_value(num := 1, other := 2))
+----
 
 # unions can only be cast to eachother if their member sets overlap
 statement error
 INSERT INTO tbl VALUES (union_value(key := 1))
+----
 
 statement ok
 INSERT INTO tbl VALUES (union_value(num := 1)), (1), (union_value(str := 'hello')), (2), ('world');

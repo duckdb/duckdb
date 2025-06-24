@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 

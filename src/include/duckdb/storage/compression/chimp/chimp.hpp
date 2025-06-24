@@ -25,12 +25,12 @@ struct ChimpType {};
 
 template <>
 struct ChimpType<double> {
-	typedef uint64_t type;
+	using TYPE = uint64_t;
 };
 
 template <>
 struct ChimpType<float> {
-	typedef uint32_t type;
+	using TYPE = uint32_t;
 };
 
 class ChimpPrimitives {
@@ -46,7 +46,7 @@ public:
 template <class T, bool EMPTY>
 struct ChimpState {
 public:
-	using CHIMP_TYPE = typename ChimpType<T>::type;
+	using CHIMP_TYPE = typename ChimpType<T>::TYPE;
 
 	ChimpState() : chimp() {
 	}

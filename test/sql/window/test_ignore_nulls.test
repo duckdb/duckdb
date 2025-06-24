@@ -303,20 +303,52 @@ ORDER BY id
 ----
 40000 values hashing to c302c8b0f3c10c1e5cc7211c4af7a8d6
 
+# Independent INGORE/RESPECT NULLS with shared input.
+query III
+SELECT 
+	v, 
+	lead(v) OVER (ORDER BY id), 
+	lead(v IGNORE NULLS) OVER (ORDER BY id) 
+FROM (VALUES 
+	(1, 1), 
+	(2, NULL), 
+	(3, 2), 
+	(4, NULL), 
+	(5, 3), 
+	(6, NULL)
+) tbl(id, v);
+----
+1	NULL	2
+NULL	2	2
+2	NULL	3
+NULL	3	3
+3	NULL	NULL
+NULL	NULL	NULL
+
 #
 # Unsupported
 #
 
+foreach modifier IGNORE RESPECT
+
 # Regular function
 statement error
-SELECT ABS(x IGNORE NULLS) FROM range(10) tbl(x)
+SELECT ABS(x ${modifier} NULLS) FROM range(10) tbl(x)
+----
+Parser Error: RESPECT/IGNORE NULLS is not supported for non-window functions
 
 # Aggregate function
 statement error
-SELECT SUM(x IGNORE NULLS)
+SELECT SUM(x ${modifier} NULLS)
 FROM range(10) tbl(x)
+----
+Parser Error: RESPECT/IGNORE NULLS is not supported for non-window functions
 
 # Windowed aggregate
 statement error
-SELECT SUM(x IGNORE NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
+SELECT SUM(x ${modifier} NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
 FROM range(10) tbl(x)
+----
+Parser Error: RESPECT/IGNORE NULLS is not supported for windowed aggregates
+
+endloop

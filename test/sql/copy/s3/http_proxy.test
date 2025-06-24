@@ -1,0 +1,155 @@
+# name: test/sql/copy/s3/http_proxy.test
+# description: Test http proxy
+# group: [s3]
+
+require parquet
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+require-env HTTP_PROXY_PUBLIC
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT 'value-1' as value) TO 's3://test-bucket/proxy-test/test.parquet';
+
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+# Lets try a faulty proxy first
+statement ok
+set http_proxy='blabla:1337'
+
+statement ok
+set http_proxy_username='xxx'
+
+statement ok
+set http_proxy_password='yyy'
+
+statement error
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+Could not establish connection
+
+# Now a working one
+statement ok
+set http_proxy='${HTTP_PROXY_PUBLIC}'
+
+statement ok
+RESET http_proxy_username
+
+statement ok
+RESET http_proxy_password
+
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+# And try the working one with an 'http://' prefix.
+statement ok
+set http_proxy='http://${HTTP_PROXY_PUBLIC}'
+
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+# Now we revert to the failing one
+statement ok
+set http_proxy='blabla:1337'
+
+# But we create a HTTP secret with the proxy
+statement ok
+CREATE SECRET http1 (
+    TYPE HTTP, 
+    http_proxy '${HTTP_PROXY_PUBLIC}'
+);
+
+# This works now, because it uses the secret
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+statement ok
+DROP SECRET http1
+
+require-env HTTP_PROXY
+
+statement error
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+Could not establish connection
+
+statement ok
+CREATE SECRET http1 (
+    TYPE HTTP, 
+    PROVIDER env
+);
+
+# This works now, because it uses the secret
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+statement ok
+DROP SECRET http1
+
+require-env HTTP_PROXY_PRIVATE
+
+require-env HTTP_PROXY_PRIVATE_USERNAME
+
+require-env HTTP_PROXY_PRIVATE_PASSWORD
+
+# Let's try the private proxy
+statement ok
+CREATE SECRET http2 (
+    TYPE HTTP, 
+    http_proxy '${HTTP_PROXY_PRIVATE}',
+    http_proxy_username '${HTTP_PROXY_PRIVATE_USERNAME}',
+    http_proxy_password '${HTTP_PROXY_PRIVATE_PASSWORD}'
+);
+
+# Correct auth means it works!
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+statement ok
+DROP SECRET http2
+
+# Now lets try incorrect auth
+statement ok
+CREATE SECRET http3 (
+    TYPE HTTP, 
+    http_proxy '${HTTP_PROXY_PRIVATE}',
+    http_proxy_username 'malicious',
+    http_proxy_password 'intruder'
+);
+
+# We get a tasty HTTP 407
+statement error
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+HTTP GET error on 'http://test-bucket.duckdb-minio.com:9000/proxy-test/test.parquet' (HTTP 407)

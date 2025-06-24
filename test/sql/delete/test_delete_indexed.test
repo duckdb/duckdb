@@ -1,0 +1,161 @@
+# name: test/sql/delete/test_delete_indexed.test
+# description: Test deletions on tables with indexes
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t (id INT PRIMARY KEY, s TEXT, j BIGINT);
+
+statement ok
+CREATE INDEX idx ON t(j);
+
+statement ok
+INSERT INTO t VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30);
+
+# verify initial state
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+2	b	20
+3	c	30
+
+# delete using primary key
+statement ok
+DELETE FROM t WHERE id = 2;
+
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+3	c	30
+
+# delete using indexed column
+statement ok
+DELETE FROM t WHERE j = 30;
+
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+
+# insert more data
+statement ok
+INSERT INTO t VALUES (4, 'd', 40), (5, 'e', 50);
+
+# test transaction rollback
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM t WHERE j > 10;
+
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+
+statement ok
+ROLLBACK
+
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+4	d	40
+5	e	50
+
+# delete everything
+statement ok
+DELETE FROM t;
+
+query I
+SELECT COUNT(*) FROM t;
+----
+0
+
+# test delete and insert in same transaction with overlapping values
+statement ok
+INSERT INTO t VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30);
+
+statement ok
+BEGIN TRANSACTION;
+
+# delete rows with j=20,30
+statement ok
+DELETE FROM t WHERE j >= 20;
+
+# insert new rows with same ids and j values
+statement ok
+INSERT INTO t VALUES (2, 'new_20', 20), (3, 'new_30', 30);
+
+# verify index lookup during transaction
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	new_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	new_30	30
+
+statement ok
+COMMIT;
+
+# verify index lookups after commit
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	new_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	new_30	30
+
+# test rollback with overlapping values
+statement ok
+BEGIN TRANSACTION;
+
+# delete rows with j=20,30
+statement ok
+DELETE FROM t WHERE j >= 20;
+
+# insert rows with same ids and j values again
+statement ok
+INSERT INTO t VALUES (2, 'tmp_20', 20), (3, 'tmp_30', 30);
+
+# verify index lookup during transaction
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	tmp_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	tmp_30	30
+
+statement ok
+ROLLBACK;
+
+# verify index lookups after rollback
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	new_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	new_30	30
+
+# verify range queries on index
+query III
+SELECT * FROM t WHERE j >= 20 ORDER BY j;
+----
+2	new_20	20
+3	new_30	30

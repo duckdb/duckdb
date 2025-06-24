@@ -14,3 +14,11 @@ benchmark/tpch/csv/lineitem_csv_auto_detect.benchmark
 benchmark/tpch/parquet/write_lineitem_parquet.benchmark
 benchmark/tpch/pivot/lineitem_pivot_returnflag.benchmark
 benchmark/tpch/pivot/lineitem_pivot_shipdate.benchmark
+benchmark/micro/logger/disabled/logging_disabled_global.benchmark
+benchmark/micro/logger/disabled/logging_disabled_client_context.benchmark
+benchmark/micro/logger/disabled/logging_disabled_reference.benchmark
+benchmark/micro/logger/disabled/logging_disabled_file_opener.benchmark
+benchmark/micro/logger/enabled/logging_enabled_client_context.benchmark
+benchmark/micro/logger/enabled/logging_enabled_global.benchmark
+benchmark/micro/logger/enabled/logging_enabled_file_opener.benchmark
+benchmark/micro/logger/enabled/logging_enabled_global.benchmark

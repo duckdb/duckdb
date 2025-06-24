@@ -1,0 +1,8 @@
+# name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_store_sales.benchmark
+# description: benchmark ingestion of store_sales
+# group: [native]
+
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
+table_name=store_sales
+format=native
+

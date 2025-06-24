@@ -2,6 +2,14 @@
 # description: Correlated SetOp type mismatches
 # group: [pedro]
 
+statement error
+SELECT '\x1E' FROM (SELECT 1) t1(c0) ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
+----
+More than one row returned by a subquery
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 statement ok
 SELECT '\x1E' FROM (SELECT 1) t1(c0) ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
 
@@ -12,7 +20,17 @@ statement ok
 INSERT INTO t1 (c1) VALUES (1);
 
 query I
-SELECT ((SELECT 0) UNION (SELECT t1.c0) OFFSET 1) FROM t1;
+SELECT ((SELECT 0) UNION (SELECT t1.c0) OFFSET 2) FROM t1;
+----
+NULL
+
+query I
+SELECT ((SELECT 0) UNION (SELECT t1.c0) ORDER BY 1 NULLS FIRST OFFSET 1) FROM t1;
+----
+0
+
+query I
+SELECT ((SELECT 0) UNION (SELECT t1.c0) ORDER BY 1 NULLS LAST OFFSET 1) FROM t1;
 ----
 NULL
 

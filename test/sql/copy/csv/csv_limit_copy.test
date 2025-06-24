@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/csv_limit_copy.test
+# description: CSV limit copy
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+
+statement ok
+CREATE TABLE integers AS FROM range(1000000) t(i);
+
+statement ok
+COPY (FROM integers LIMIT 30000) TO '__TEST_DIR__/limit_copy.csv'
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/limit_copy.csv'
+----
+30000

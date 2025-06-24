@@ -1,0 +1,265 @@
+# name: test/sql/cte/materialized/test_correlated_recursive_cte_materialized.test
+# description: Test Materialized Correlated Recursive Common Table Expressions (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+# Correlation in the initialization query
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT _.x
+    UNION ALL
+  SELECT y + 1
+  FROM   t
+  WHERE y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	2
+1	3
+2	2
+2	3
+3	3
+4	4
+
+# Correlation in the recursive query
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT 1
+    UNION ALL
+  SELECT y + _.x
+  FROM   t
+  WHERE y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	2
+1	3
+2	1
+2	3
+3	1
+3	4
+4	1
+4	5
+
+# Correlation in the initialization and recursive query
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT _.x
+    UNION ALL
+  SELECT y + _.x
+  FROM   t
+  WHERE y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	2
+1	3
+2	2
+2	4
+3	3
+4	4
+
+# Correlation with multiple recursive anchors
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT _.x
+    UNION ALL
+  SELECT t1.y + t2.y + _.x
+  FROM   t AS t1, t AS t2
+  WHERE t1.y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	3
+2	2
+2	6
+3	3
+4	4
+
+# Test correlation in SELECT clause
+query III rowsort
+SELECT x, y, (WITH RECURSIVE t(z) AS MATERIALIZED (
+  SELECT x + y
+    UNION ALL
+  SELECT z + 1
+  FROM   t
+  WHERE z < 3
+) SELECT sum(z) FROM t) AS z
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
+----
+1	1	5
+1	2	3
+2	1	3
+2	2	4
+
+
+# Complex nested recursive query
+query III rowsort
+SELECT x, y, (WITH RECURSIVE t(z) AS MATERIALIZED (
+  SELECT x + y
+    UNION ALL
+  SELECT z + 1
+  FROM   (WITH RECURSIVE g(a) AS MATERIALIZED (
+          SELECT t.z
+          FROM   t
+            UNION ALL
+          SELECT g.a + (x + y) / 2
+          FROM   g
+          WHERE  g.a < 3)
+          SELECT * FROM g) AS t(z)
+  WHERE z < 5
+) SELECT sum(z) FROM t) AS z
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
+----
+1	1	23
+1	2	12
+2	1	12
+2	2	9
+
+# UNION semantics
+
+# Correlation in the initialization query
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT _.x
+    UNION
+  SELECT y + 1
+  FROM   t
+  WHERE y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	2
+1	3
+2	2
+2	3
+3	3
+4	4
+
+# Correlation in the recursive query
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT 1
+    UNION
+  SELECT y + _.x
+  FROM   t
+  WHERE y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	2
+1	3
+2	1
+2	3
+3	1
+3	4
+4	1
+4	5
+
+# Correlation in the initialization and recursive query
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT _.x
+    UNION
+  SELECT y + _.x
+  FROM   t
+  WHERE y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	2
+1	3
+2	2
+2	4
+3	3
+4	4
+
+# Correlation with multiple recursive anchors
+query II
+SELECT x, y
+FROM   generate_series(1,4) AS _(x), LATERAL
+(WITH RECURSIVE t(y) AS MATERIALIZED (
+  SELECT _.x
+    UNION
+  SELECT t1.y + t2.y + _.x
+  FROM   t AS t1, t AS t2
+  WHERE t1.y < 3
+)
+SELECT * FROM t) AS t
+ORDER BY x, y;
+----
+1	1
+1	3
+2	2
+2	6
+3	3
+4	4
+
+# Test correlation in SELECT clause
+query III rowsort
+SELECT x, y, (WITH RECURSIVE t(z) AS MATERIALIZED (
+  SELECT x + y
+    UNION
+  SELECT z + 1
+  FROM   t
+  WHERE z < 3
+) SELECT sum(z) FROM t) AS z
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
+----
+1	1	5
+1	2	3
+2	1	3
+2	2	4
+
+# Complex nested recursive query
+query III rowsort
+SELECT x, y, (WITH RECURSIVE t(z) AS MATERIALIZED (
+  SELECT x + y
+    UNION
+  SELECT z + 1
+  FROM   (WITH RECURSIVE g(a) AS MATERIALIZED (
+          SELECT t.z
+          FROM   t
+            UNION
+          SELECT g.a + (x + y) / 2
+          FROM   g
+          WHERE  g.a < 3)
+          SELECT * FROM g) AS t(z)
+  WHERE z < 5
+) SELECT sum(z) FROM t) AS z
+FROM   generate_series(1,2) AS _(x), generate_series(1,2) AS __(y) order by all;
+----
+1	1	14
+1	2	12
+2	1	12
+2	2	9

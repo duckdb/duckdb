@@ -1,0 +1,14 @@
+# name: test/fuzzer/public/insert_by_name_default.test
+# description: Insert by name + default values
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t0(i INT)
+
+statement error
+INSERT INTO t0 BY NAME DEFAULT VALUES;
+----
+INSERT BY NAME cannot be combined with with DEFAULT VALUES

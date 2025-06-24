@@ -14,6 +14,9 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -31,14 +34,13 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, const string &alias, vector<LogicalType> types, vector<string> names,
-	        idx_t index);
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
 	virtual ~Binding() = default;
 
 	//! The type of Binding
 	BindingType binding_type;
 	//! The alias of the binding
-	string alias;
+	BindingAlias alias;
 	//! The table index of the binding
 	idx_t index;
 	//! The types of the bound columns
@@ -52,9 +54,13 @@ public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
 	column_t GetBindingIndex(const string &column_name);
 	bool HasMatchingBinding(const string &column_name);
-	virtual string ColumnNotFoundError(const string &column_name) const;
+	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
+	string GetAlias() const;
+
+	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
+	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
 
 public:
 	template <class TARGET>
@@ -95,28 +101,30 @@ public:
 
 public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
-	             bool add_row_id = false);
+	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
+	             virtual_column_map_t virtual_columns);
 
 	//! A reference to the set of bound column ids
-	vector<column_t> &bound_column_ids;
+	vector<ColumnIndex> &bound_column_ids;
 	//! The underlying catalog entry (if any)
 	optional_ptr<StandardEntry> entry;
+	//! Virtual columns
+	virtual_column_map_t virtual_columns;
 
 public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
-	string ColumnNotFoundError(const string &column_name) const override;
+	ErrorData ColumnNotFoundError(const string &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
-	const vector<column_t> &GetBoundColumnIds() const;
+	const vector<ColumnIndex> &GetBoundColumnIds() const;
 
 protected:
 	ColumnBinding GetColumnBinding(column_t column_index);
 };
 
-//! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
-//! parameters.
+//! DummyBinding is like the Binding, except the alias and index are set by default.
+//! Used for binding lambdas and macro parameters.
 struct DummyBinding : public Binding {
 public:
 	static constexpr const BindingType TYPE = BindingType::DUMMY;
@@ -124,19 +132,21 @@ public:
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
+	DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name);
 
-	//! Arguments
+	//! Arguments (for macros)
 	vector<unique_ptr<ParsedExpression>> *arguments;
 	//! The name of the dummy binding
 	string dummy_name;
 
 public:
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	BindResult Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth);
+	//! Binding macros
+	BindResult Bind(ColumnRefExpression &col_ref, idx_t depth) override;
+	//! Binding lambdas
+	BindResult Bind(LambdaRefExpression &lambda_ref, idx_t depth);
 
-	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
-	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
+	//! Returns a copy of the col_ref parameter as a parsed expression
+	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
 };
 
 } // namespace duckdb

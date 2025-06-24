@@ -13,6 +13,10 @@ select min(file_row_number), max(file_row_number), avg(file_row_number),  count(
 ----
 0	9999	4999.5	10000
 
+query I
+select l_orderkey from parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1) where file_row_number=42;
+----
+35
 
 query III
 select sum(row_number_lag), min(row_number_lag), max(row_number_lag)  from (select file_row_number - LAG(file_row_number) OVER (ORDER BY file_row_number) as row_number_lag from parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1));

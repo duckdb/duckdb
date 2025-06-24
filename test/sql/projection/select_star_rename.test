@@ -1,0 +1,93 @@
+# name: test/sql/projection/select_star_rename.test
+# description: SELECT * RENAME
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 2, 3);
+
+# basic rename
+query I
+SELECT renamed_col FROM (SELECT * RENAME i AS renamed_col FROM integers)
+----
+1
+
+# rename with COLUMNS
+query I
+SELECT renamed_col FROM (SELECT COLUMNS(* RENAME i AS renamed_col) FROM integers)
+----
+1
+
+# qualified
+query I
+SELECT renamed_col FROM (SELECT * RENAME integers.i AS renamed_col FROM integers)
+----
+1
+
+# qualified star
+query I
+SELECT renamed_col FROM (SELECT integers.* RENAME integers.i AS renamed_col FROM integers)
+----
+1
+
+# multiple renames
+query II
+SELECT r1, r2 FROM (SELECT * RENAME (integers.i AS r1, j AS r2) FROM integers)
+----
+1	2
+
+# trailing comma
+query II
+SELECT r1, r2 FROM (SELECT * RENAME (integers.i AS r1, j AS r2,) FROM integers)
+----
+1	2
+
+# exclude and rename to that same column
+query I
+SELECT i FROM (SELECT * EXCLUDE (i) RENAME (j AS i) FROM integers)
+----
+2
+
+# struct
+query I
+SELECT r FROM (SELECT struct.* RENAME (i AS r) FROM (SELECT {'i': 42} AS struct))
+----
+42
+
+# using
+query I
+SELECT new_col FROM (SELECT * RENAME (i AS new_col) FROM integers i1 JOIN integers i2 USING (i))
+----
+1
+
+query II
+SELECT new_col, new_col2 FROM (SELECT * RENAME (i1.i AS new_col, i1.j AS new_col2) FROM integers i1 JOIN integers i2 USING (i))
+----
+1	2
+
+query I
+SELECT new_col FROM (SELECT * RENAME (i AS new_col) FROM integers i1 LEFT JOIN integers i2 USING (i))
+----
+1
+
+query I
+SELECT new_col FROM (SELECT * RENAME (i1.i AS new_col) FROM integers i1 FULL OUTER JOIN integers i2 USING (i))
+----
+1
+
+# conflict with exclude
+statement error
+SELECT * EXCLUDE (i) RENAME (i AS renamed_col) FROM integers
+----
+Column "i" cannot occur in both EXCLUDE and RENAME list
+
+# conflict with replace
+statement error
+SELECT * REPLACE (i + 1 AS i) RENAME (i AS renamed_col) FROM integers
+----
+cannot occur in both REPLACE and RENAME list

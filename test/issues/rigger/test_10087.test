@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_10087.test
+# description: SQLancer bug that detected an issue with the column lifetime analyzer
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+INSERT INTO t0(c1) VALUES (1);
+
+statement ok
+CREATE VIEW v0(c0, c1, c2) AS SELECT '1', true, t0.c1 FROM t0 ORDER BY -1-2 LIMIT 2;
+
+statement ok
+SELECT v0.c2 FROM v0 WHERE (NOT (v0.c1 IS NOT NULL));

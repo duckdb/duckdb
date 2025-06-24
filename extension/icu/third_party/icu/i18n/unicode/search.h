@@ -272,7 +272,7 @@
 //      *         attributes. FALSE otherwise.
 //      * @stable ICU 2.0
 //      */
-//     virtual UBool operator==(const SearchIterator &that) const;
+//     virtual bool operator==(const SearchIterator &that) const;
 
 //     /**
 //      * Not-equal operator.
@@ -280,7 +280,7 @@
 //      * @return FALSE if operator== returns TRUE, and vice versa.
 //      * @stable ICU 2.0
 //      */
-//     UBool operator!=(const SearchIterator &that) const;
+//     bool operator!=(const SearchIterator &that) const;
 
 //     // public methods ----------------------------------------------------
 

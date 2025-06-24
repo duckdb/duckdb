@@ -1,0 +1,22 @@
+# name: test/sql/json/issues/internal_issue3146.test
+# description: Test internal issue 3146 - JSON parsing exception: Arrow datatype Map(Field ... ) not supported by Polars
+# group: [issues]
+
+# https://github.com/duckdblabs/duckdb-internal/issues/3146#issuecomment-2396148122
+
+require json
+
+statement ok
+COPY (SELECT '{}') TO '__TEST_DIR__/empty_object.json' (FORMAT CSV, HEADER FALSE)
+
+# for empty JSON objects we default to MAP(VARCHAR, JSON) as this is generic enough to fit any object
+query I
+SELECT typeof(json) FROM '__TEST_DIR__/empty_object.json'
+----
+MAP(VARCHAR, JSON)
+
+# we can disable it with the map_inference_threshold parameter
+query I
+SELECT typeof(json) FROM read_json('__TEST_DIR__/empty_object.json', map_inference_threshold=-1)
+----
+JSON

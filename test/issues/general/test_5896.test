@@ -33,3 +33,29 @@ statement error
 select my_sqrt(distinct range) from range(5);
 ----
 Invalid Input Error: Function "my_sqrt" is a Macro Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+
+statement error
+select list_value(distinct([42]));
+----
+Invalid Input Error: Function "list_value" is a Scalar Function. "DISTINCT", "FILTER", and "ORDER BY" are only applicable to aggregate functions.
+
+statement error
+SELECT unnest(distinct([42, 42]));
+----
+Invalid Input Error: "DISTINCT", "FILTER", and "ORDER BY" are not applicable to "UNNEST"
+
+statement error
+SELECT unnest(distinct [42, 42]);
+----
+Invalid Input Error: "DISTINCT", "FILTER", and "ORDER BY" are not applicable to "UNNEST"
+
+statement error
+SELECT unnest([42, 42] ORDER BY x);
+----
+Invalid Input Error: "DISTINCT", "FILTER", and "ORDER BY" are not applicable to "UNNEST"
+
+
+statement error
+SELECT unnest([42, 42]) FILTER (WHERE (x > 3));
+----
+Invalid Input Error: "DISTINCT", "FILTER", and "ORDER BY" are not applicable to "UNNEST"

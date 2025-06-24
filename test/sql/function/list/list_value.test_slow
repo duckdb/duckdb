@@ -1,0 +1,30 @@
+# name: test/sql/function/list/list_value.test_slow
+# description: Test the list_value function
+# group: [list]
+
+# test very large table with nested lists
+statement ok
+CREATE TABLE large_list_table(a INTEGER[], b INTEGER[], c INTEGER[]);
+
+statement ok
+INSERT INTO large_list_table SELECT [i, i, i], [i + 1, i + 1], [i + 2] FROM range(10000) tbl(i);
+
+statement ok
+SELECT LIST_VALUE(a, b, c) FROM large_list_table;
+
+# test very large table with structs
+statement ok
+CREATE TABLE large_struct_table(a ROW(a INTEGER, b INTEGER), b ROW(a INTEGER, b INTEGER), c ROW(a INTEGER, b INTEGER));
+
+statement ok
+INSERT INTO large_struct_table SELECT ROW(i - 5, i - 4), ROW(i - 3, i - 2), ROW(i - 1, i) FROM range(1000000) tbl(i);
+
+statement ok
+SELECT LIST_VALUE(a, b, c) FROM large_struct_table;
+
+# test very large table with fixed size arrays
+statement ok
+CREATE TABLE large_fixed_array_table(a INTEGER[3], b INTEGER[3], c INTEGER[3]);
+
+statement ok
+INSERT INTO large_fixed_array_table SELECT [i, i, i], [i + 1, i + 1, i + 1], [i + 2, i + 2, i + 2] FROM range(1000000) tbl(i);

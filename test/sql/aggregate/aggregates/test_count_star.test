@@ -20,4 +20,3 @@ SELECT i, COUNT() FROM integers GROUP BY i ORDER BY i
 ----
 2	1
 3	2
-

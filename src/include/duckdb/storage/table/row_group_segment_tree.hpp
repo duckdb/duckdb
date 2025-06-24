@@ -18,7 +18,7 @@ class MetadataReader;
 
 class RowGroupSegmentTree : public SegmentTree<RowGroup, true> {
 public:
-	RowGroupSegmentTree(RowGroupCollection &collection);
+	explicit RowGroupSegmentTree(RowGroupCollection &collection);
 	~RowGroupSegmentTree() override;
 
 	void Initialize(PersistentTableData &data);

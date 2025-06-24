@@ -49,6 +49,8 @@ public:
 	JoinRelationSet &Union(JoinRelationSet &left, JoinRelationSet &right);
 	// //! Create the set difference of left \ right (i.e. all elements in left that are not in right)
 	// JoinRelationSet *Difference(JoinRelationSet *left, JoinRelationSet *right);
+	string ToString() const;
+	void Print();
 
 private:
 	JoinRelationTreeNode root;

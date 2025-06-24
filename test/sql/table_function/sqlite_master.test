@@ -36,7 +36,7 @@ create table tconstraint1(i integer primary key default(3), j blob not null);
 query IIIII
 SELECT * FROM sqlite_master WHERE name='tconstraint1';
 ----
-table	tconstraint1	tconstraint1	0	CREATE TABLE tconstraint1(i INTEGER PRIMARY KEY DEFAULT(3), j BLOB NOT NULL);
+table	tconstraint1	tconstraint1	0	CREATE TABLE tconstraint1(i INTEGER DEFAULT(3) PRIMARY KEY, j BLOB NOT NULL);
 
 statement ok
 create table tconstraint2(i integer, j integer, k integer, l integer unique, primary key(i, j, k));
@@ -50,7 +50,7 @@ statement ok
 CREATE INDEX i_index ON integers(i);
 
 query IIIII
-SELECT * FROM sqlite_master WHERE name='i_index';
+SELECT * REPLACE (trim(sql, chr(10)) as sql) FROM sqlite_master WHERE name='i_index';
 ----
 index	i_index	integers	0	CREATE INDEX i_index ON integers(i);
 

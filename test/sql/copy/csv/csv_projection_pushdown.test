@@ -12,7 +12,7 @@ statement ok
 INSERT INTO tbl VALUES (42, 'hello world', NULL),  (NULL, NULL, DATE '1992-01-01'), (100, 'thisisalongstring', DATE '2000-01-01');
 
 statement ok
-COPY tbl TO '__TEST_DIR__/projection_pushdown.csv' (FORMAT CSV, HEADER 1);
+COPY tbl TO '__TEST_DIR__/projection_pushdown.csv' (FORMAT CSV);
 
 statement ok
 CREATE VIEW v1 AS FROM read_csv_auto('__TEST_DIR__/projection_pushdown.csv', filename=True)

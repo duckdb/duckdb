@@ -1,0 +1,44 @@
+# name: test/sql/storage/compression/alp/alp_simple_float.test
+# description: Test storage of alp, but simple
+# group: [alp]
+
+# load the DB from disk
+load __TEST_DIR__/test_alp.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# Create a table with random floats of limited precision compressed as Uncompressed
+# This data should achieve x6 compression ratio
+statement ok
+create table random_float as select round(random(), 6)::FLOAT as data from range(1024) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_float') WHERE segment_type == 'float' AND compression != 'Uncompressed';
+----
+
+# Now create a duplicate of this table, compressed with ALP instead
+statement ok
+PRAGMA force_compression='alp'
+
+statement ok
+create table random_alp_float as select * from random_float;
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_alp_float') WHERE segment_type == 'float' AND compression != 'ALP';
+----
+
+# Assert that the data was not corrupted by compressing to ALP
+query I sort r1
+select * from random_float;
+----
+
+query I sort r1
+select * from random_alp_float;
+----

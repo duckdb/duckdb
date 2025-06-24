@@ -1,0 +1,42 @@
+# name: test/sql/types/nested/list/internal_issue_2457.test
+# description: Internal issue 2457 - Empty lists don't partition properly when ordering by another column
+# group: [list]
+
+# this is just so the results always show up in the same order
+statement ok
+set threads=1
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE t1 (i INT, l INT[]);
+
+statement ok
+INSERT INTO t1 VALUES (1, []), (2, []), (3, [1,2]), (4, []), (5, [1,2]);
+
+query III
+SELECT i, l, row_number() OVER (PARTITION BY l ORDER BY i) as rid 
+FROM t1
+ORDER BY l, i
+----
+1	[]	1
+2	[]	2
+4	[]	3
+3	[1, 2]	1
+5	[1, 2]	2
+
+statement ok
+INSERT INTO t1 VALUES (6, NULL)
+
+query III
+SELECT i, l, row_number() OVER (PARTITION BY l ORDER BY i) as rid 
+FROM t1
+ORDER BY l NULLS FIRST, i
+----
+6	NULL	1
+1	[]	1
+2	[]	2
+4	[]	3
+3	[1, 2]	1
+5	[1, 2]	2

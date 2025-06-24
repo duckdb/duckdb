@@ -1,0 +1,32 @@
+# name: test/sql/attach/attach_enable_external_access.test
+# description: enable_external_access with attached  databases
+# group: [attach]
+
+# attach multiple different databases
+statement ok
+ATTACH '__TEST_DIR__/attach_access1.db' AS a1
+
+statement ok
+ATTACH '__TEST_DIR__/attach_access2.db' AS a2
+
+statement ok
+SET enable_external_access=false
+
+# we can modify any database that was attached prior to
+statement ok
+CREATE TABLE a1.test (a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+CHECKPOINT a1
+
+# however, we cannot attach new database files
+statement ok
+CREATE TABLE a2.test (a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+CHECKPOINT a2
+
+statement error
+ATTACH '__TEST_DIR__/attach_access3.db' AS a2
+----
+Permission Error

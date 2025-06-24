@@ -3,13 +3,16 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE people(id INTEGER, name VARCHAR);
 
 statement ok
 INSERT INTO people VALUES (1, 'Mark'), (2, 'Hannes');
 
 statement ok
-COPY people TO '__TEST_DIR__/test.tsv' WITH (HEADER 1, DELIMITER '\t');
+COPY people TO '__TEST_DIR__/test.tsv' WITH (DELIMITER '\t');
 
 query II
 SELECT * FROM '__TEST_DIR__/test.tsv'
@@ -18,7 +21,7 @@ SELECT * FROM '__TEST_DIR__/test.tsv'
 2	Hannes
 
 query II
-SELECT * FROM read_csv('__TEST_DIR__/test.tsv', sep='\t', columns={'id': 'INTEGER', 'name': 'VARCHAR'}, header=1)
+SELECT * FROM read_csv('__TEST_DIR__/test.tsv', sep='\t', columns={'id': 'INTEGER', 'name': 'VARCHAR'})
 ----
 1	Mark
 2	Hannes

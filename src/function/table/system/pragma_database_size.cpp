@@ -76,10 +76,10 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 		idx_t col = 0;
 		output.data[col++].SetValue(row, Value(db.GetName()));
 		output.data[col++].SetValue(row, Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
-		output.data[col++].SetValue(row, Value::BIGINT(ds.block_size));
-		output.data[col++].SetValue(row, Value::BIGINT(ds.total_blocks));
-		output.data[col++].SetValue(row, Value::BIGINT(ds.used_blocks));
-		output.data[col++].SetValue(row, Value::BIGINT(ds.free_blocks));
+		output.data[col++].SetValue(row, Value::BIGINT(NumericCast<int64_t>(ds.block_size)));
+		output.data[col++].SetValue(row, Value::BIGINT(NumericCast<int64_t>(ds.total_blocks)));
+		output.data[col++].SetValue(row, Value::BIGINT(NumericCast<int64_t>(ds.used_blocks)));
+		output.data[col++].SetValue(row, Value::BIGINT(NumericCast<int64_t>(ds.free_blocks)));
 		output.data[col++].SetValue(
 		    row, ds.wal_size == idx_t(-1) ? Value() : Value(StringUtil::BytesToHumanReadableString(ds.wal_size)));
 		output.data[col++].SetValue(row, data.memory_usage);

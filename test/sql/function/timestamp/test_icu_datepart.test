@@ -700,25 +700,30 @@ statement error
 SELECT DATE_PART(['duck', 'minute', 'microsecond', 'timezone'], ts), ts
 FROM timestamps
 ORDER BY 2
+----
 
 # Duplicate parts
 statement error
 SELECT DATE_PART(['era', 'year', 'month', 'era'], ts), ts
 FROM timestamps
 ORDER BY 2
+----
 
 # Empty parts
 statement error
 SELECT DATE_PART([], ts) FROM timestamps;
+----
 
 # Null parts
 statement error
 SELECT DATE_PART(['year', NULL, 'month'], ts) FROM timestamps;
+----
 
 # Non-constant parts
 statement error
 WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))
 SELECT DATE_PART(p, ts) FROM parts, timestamps;
+----
 
 #  last_day
 statement ok

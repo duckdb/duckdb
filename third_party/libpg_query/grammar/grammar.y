@@ -51,12 +51,15 @@
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGIgnoreNulls          ignorenulls;
 	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
 	PGInsertColumnOrder bynameorposition;
+	PGLoadInstallType loadinstalltype;
+	PGTransactionStmtType transactiontype;
 }
 
 %type <node> stmt
@@ -75,7 +78,7 @@
  */
 %token <str>	IDENT FCONST SCONST BCONST XCONST Op
 %token <ival>	ICONST PARAM
-%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER INTEGER_DIVISION POWER_OF LAMBDA_ARROW DOUBLE_ARROW
+%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER INTEGER_DIVISION POWER_OF SINGLE_ARROW DOUBLE_ARROW SINGLE_COLON
 %token			LESS_EQUALS GREATER_EQUALS NOT_EQUALS
 
 /*
@@ -102,10 +105,11 @@
 
 
 /* Precedence: lowest to highest */
+%left	SINGLE_COLON
 %nonassoc	SET				/* see */
 %left		UNION EXCEPT
 %left		INTERSECT
-%left		LAMBDA_ARROW DOUBLE_ARROW
+%left		SINGLE_ARROW DOUBLE_ARROW
 %left		OR
 %left		AND
 %right		NOT
@@ -141,7 +145,7 @@
  * blame any funny behavior of UNBOUNDED on the SQL standard, though.
  */
 %nonassoc	UNBOUNDED		/* ideally should have same precedence as IDENT */
-%nonassoc	IDENT GENERATED NULL_P PARTITION RANGE ROWS PRECEDING FOLLOWING CUBE ROLLUP ENUM_P
+%nonassoc	IDENT GENERATED NULL_P PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING CUBE ROLLUP ENUM_P
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
 %left		'*' '/' '%' INTEGER_DIVISION

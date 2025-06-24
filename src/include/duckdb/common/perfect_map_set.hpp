@@ -9,20 +9,19 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
 struct PerfectHash {
-	inline std::size_t operator()(const idx_t &h) const {
+	std::size_t operator()(const idx_t &h) const {
 		return h;
 	}
 };
 
 struct PerfectEquality {
-	inline bool operator()(const idx_t &a, const idx_t &b) const {
+	bool operator()(const idx_t &a, const idx_t &b) const {
 		return a == b;
 	}
 };

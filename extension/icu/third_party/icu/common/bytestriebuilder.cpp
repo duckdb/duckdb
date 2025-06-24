@@ -343,7 +343,7 @@ BytesTrieBuilder::BTLinearMatchNode::BTLinearMatchNode(const char *bytes, int32_
         static_cast<uint32_t>(hash)*37u + static_cast<uint32_t>(ustr_hashCharsN(bytes, len)));
 }
 
-UBool
+bool
 BytesTrieBuilder::BTLinearMatchNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;

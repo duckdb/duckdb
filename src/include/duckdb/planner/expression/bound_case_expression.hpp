@@ -25,7 +25,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CASE;
 
 public:
-	BoundCaseExpression(LogicalType type);
+	explicit BoundCaseExpression(LogicalType type);
 	BoundCaseExpression(unique_ptr<Expression> when_expr, unique_ptr<Expression> then_expr,
 	                    unique_ptr<Expression> else_expr);
 
@@ -37,7 +37,7 @@ public:
 
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);

@@ -1,0 +1,31 @@
+# name: test/optimizer/pushdown/pushdown_unnest_into_cte.test
+# description: Parquet filter of IN with 1 argument can be converted to =
+# group: [pushdown]
+
+statement ok
+CREATE TABLE tbl2 as SELECT i as id1, [i-3, i+1, i+2] as somelist FROM generate_series(1, 10_000) s(i);
+
+statement ok
+pragma explain_output='OPTIMIZED_ONLY';
+
+query II
+EXPLAIN SELECT id1, element
+FROM (
+      SELECT id1, UNNEST(somelist) AS element
+      FROM tbl2
+    ) tmp
+WHERE id1=10;
+----
+logical_opt	<REGEX>:.*UNNEST.*SEQ_SCAN.*Filters.*
+
+
+query II
+EXPLAIN WITH tmp AS (
+      SELECT id1, generate_subscripts(somelist, 1) AS index, UNNEST(somelist) AS element
+      FROM tbl2
+)
+SELECT id1, index, element
+FROM tmp
+WHERE id1=10;
+----
+logical_opt	<REGEX>:.*UNNEST.*SEQ_SCAN.*Filters.*

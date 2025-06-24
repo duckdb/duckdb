@@ -2,9 +2,6 @@
 # description: Test ALTER TABLE RENAME COLUMN and dependencies
 # group: [rename_col]
 
-require skip_reload
-
-
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 
@@ -24,6 +21,7 @@ ALTER TABLE test RENAME COLUMN i TO k
 # v1 does not work anymore: "i" does not exist
 statement error
 EXECUTE v1
+----
 
 # v2 still works
 statement ok

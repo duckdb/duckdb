@@ -1,7 +1,6 @@
 #include "duckdb/main/connection.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -19,8 +18,12 @@
 
 namespace duckdb {
 
-Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientContext>(database.shared_from_this())) {
-	ConnectionManager::Get(database).AddConnection(*context);
+Connection::Connection(DatabaseInstance &database)
+    : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
+	auto &connection_manager = ConnectionManager::Get(database);
+	connection_manager.AddConnection(*context);
+	connection_manager.AssignConnectionId(*this);
+
 #ifdef DEBUG
 	EnableProfiling();
 	context->config.emit_profiler_output = false;
@@ -28,23 +31,51 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+	// Initialization of warning_cb happens in the other constructor
+}
+
+Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
+	std::swap(context, other.context);
+	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
+}
+
+Connection &Connection::operator=(Connection &&other) noexcept {
+	std::swap(context, other.context);
+	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
+	return *this;
 }
 
 Connection::~Connection() {
+	if (!context) {
+		return;
+	}
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
 }
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	auto &profiler = QueryProfiler::Get(*context);
-	if (format == ProfilerPrintFormat::JSON) {
-		return profiler.ToJSON();
-	} else {
-		return profiler.QueryTreeToString();
+	return profiler.ToString(format);
+}
+
+optional_ptr<ProfilingNode> Connection::GetProfilingTree() {
+	auto &client_config = ClientConfig::GetConfig(*context);
+	auto enable_profiler = client_config.enable_profiler;
+
+	if (!enable_profiler) {
+		throw Exception(ExceptionType::SETTINGS, "Profiling is not enabled for this connection");
 	}
+	auto &profiler = QueryProfiler::Get(*context);
+	return profiler.GetRoot();
 }
 
 void Connection::Interrupt() {
 	context->Interrupt();
+}
+
+double Connection::GetQueryProgress() {
+	return context->GetQueryProgress().GetPercentage();
 }
 
 void Connection::EnableProfiling() {
@@ -77,34 +108,6 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
-DUCKDB_API string Connection::GetSubstrait(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstrait(const string &proto) {
-	vector<Value> params;
-	params.emplace_back(Value::BLOB_RAW(proto));
-	return TableFunction("from_substrait", params)->Execute();
-}
-
-DUCKDB_API string Connection::GetSubstraitJSON(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait_json", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstraitJSON(const string &json) {
-	vector<Value> params;
-	params.emplace_back(json);
-	return TableFunction("from_substrait_json", params)->Execute();
-}
-
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
 	auto result = context->Query(std::move(statement), false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
@@ -119,6 +122,39 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 	return context->PendingQuery(std::move(statement), allow_stream_result);
 }
 
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
+                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        bool allow_stream_result) {
+	return context->PendingQuery(query, named_values, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        bool allow_stream_result) {
+	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
+}
+
+static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	for (idx_t i = 0; i < param_list.size(); i++) {
+		auto &val = param_list[i];
+		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+	}
+	return named_values;
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values,
+                                                        bool allow_stream_result) {
+	auto named_params = ConvertParamListToMap(values);
+	return context->PendingQuery(query, named_params, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
+                                                        bool allow_stream_result) {
+	auto named_params = ConvertParamListToMap(values);
+	return context->PendingQuery(std::move(statement), named_params, allow_stream_result);
+}
+
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
 	return context->Prepare(query);
 }
@@ -128,19 +164,25 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 }
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
-	auto statement = Prepare(query);
-	if (statement->HasError()) {
-		return make_uniq<MaterializedQueryResult>(statement->error);
+	auto named_params = ConvertParamListToMap(values);
+	auto pending = PendingQuery(query, named_params, false);
+	if (pending->HasError()) {
+		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
-	return statement->Execute(values, false);
+	return pending->Execute();
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
-	return TableInfo(INVALID_SCHEMA, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
+                                                   const string &table_name) {
+	return context->TableInfo(database_name, schema_name, table_name);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return context->TableInfo(schema_name, table_name);
+	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+}
+
+unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
+	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
@@ -169,11 +211,32 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 }
 
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
-	auto table_info = TableInfo(schema_name, table_name);
+	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
 	if (!table_info) {
-		throw CatalogException("Table '%s' does not exist!", table_name);
+		throw CatalogException("Table %s does not exist!", ParseInfo::QualifierToString("", schema_name, table_name));
 	}
-	return make_shared<TableRelation>(context, std::move(table_info));
+	return make_shared_ptr<TableRelation>(context, std::move(table_info));
+}
+
+shared_ptr<Relation> Connection::Table(const string &catalog_name, const string &schema_name,
+                                       const string &table_name) {
+	unique_ptr<TableDescription> table_info;
+	do {
+		table_info = TableInfo(catalog_name, schema_name, table_name);
+		if (table_info) {
+			break;
+		}
+
+		if (catalog_name.empty() && !schema_name.empty()) {
+			table_info = TableInfo(schema_name, DEFAULT_SCHEMA, table_name);
+		}
+	} while (false);
+
+	if (!table_info) {
+		throw CatalogException("Table %s does not exist!",
+		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
+	}
+	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
 
 shared_ptr<Relation> Connection::View(const string &tname) {
@@ -181,7 +244,7 @@ shared_ptr<Relation> Connection::View(const string &tname) {
 }
 
 shared_ptr<Relation> Connection::View(const string &schema_name, const string &table_name) {
-	return make_shared<ViewRelation>(context, schema_name, table_name);
+	return make_shared_ptr<ViewRelation>(context, schema_name, table_name);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
@@ -192,11 +255,11 @@ shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
                                                const named_parameter_map_t &named_parameters) {
-	return make_shared<TableFunctionRelation>(context, fname, values, named_parameters);
+	return make_shared_ptr<TableFunctionRelation>(context, fname, values, named_parameters);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
-	return make_shared<TableFunctionRelation>(context, fname, values);
+	return make_shared_ptr<TableFunctionRelation>(context, fname, values);
 }
 
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
@@ -204,9 +267,14 @@ shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
 	return Values(values, column_names);
 }
 
+shared_ptr<Relation> Connection::Values(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
+	vector<string> column_names;
+	return make_shared_ptr<ValueRelation>(context, std::move(expressions), column_names);
+}
+
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values, const vector<string> &column_names,
                                         const string &alias) {
-	return make_shared<ValueRelation>(context, values, column_names, alias);
+	return make_shared_ptr<ValueRelation>(context, values, column_names, alias);
 }
 
 shared_ptr<Relation> Connection::Values(const string &values) {
@@ -215,7 +283,7 @@ shared_ptr<Relation> Connection::Values(const string &values) {
 }
 
 shared_ptr<Relation> Connection::Values(const string &values, const vector<string> &column_names, const string &alias) {
-	return make_shared<ValueRelation>(context, values, column_names, alias);
+	return make_shared_ptr<ValueRelation>(context, values, column_names, alias);
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
@@ -223,21 +291,29 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	return ReadCSV(csv_file, std::move(options));
 }
 
-shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, named_parameter_map_t &&options) {
-	return make_shared<ReadCSVRelation>(context, csv_file, std::move(options));
+shared_ptr<Relation> Connection::ReadCSV(const vector<string> &csv_input, named_parameter_map_t &&options) {
+	return make_shared_ptr<ReadCSVRelation>(context, csv_input, std::move(options));
+}
+
+shared_ptr<Relation> Connection::ReadCSV(const string &csv_input, named_parameter_map_t &&options) {
+	vector<string> csv_files = {csv_input};
+	return ReadCSV(csv_files, std::move(options));
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<string> &columns) {
 	// parse columns
-	vector<ColumnDefinition> column_list;
+	named_parameter_map_t options;
+	child_list_t<Value> column_list;
 	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}
-		column_list.push_back(std::move(col_list.GetColumnMutable(LogicalIndex(0))));
+		auto &col_def = col_list.GetColumnMutable(LogicalIndex(0));
+		column_list.push_back({col_def.GetName(), col_def.GetType().ToString()});
 	}
-	return make_shared<ReadCSVRelation>(context, csv_file, std::move(column_list));
+	vector<string> files {csv_file};
+	return make_shared_ptr<ReadCSVRelation>(context, files, std::move(options));
 }
 
 shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool binary_as_string) {
@@ -247,16 +323,17 @@ shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool bi
 	return TableFunction("parquet_scan", params, named_parameters)->Alias(parquet_file);
 }
 
-unordered_set<string> Connection::GetTableNames(const string &query) {
-	return context->GetTableNames(query);
+unordered_set<string> Connection::GetTableNames(const string &query, const bool qualified) {
+	return context->GetTableNames(query, qualified);
 }
 
 shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias, const string &error) {
 	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), alias);
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias) {
-	return make_shared<QueryRelation>(context, std::move(select_stmt), alias);
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias,
+                                                   const string &query_p) {
+	return make_shared_ptr<QueryRelation>(context, std::move(select_stmt), alias, query_p);
 }
 
 void Connection::BeginTransaction() {

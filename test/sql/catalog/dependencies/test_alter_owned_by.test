@@ -1,0 +1,54 @@
+# name: test/sql/catalog/dependencies/test_alter_owned_by.test
+# group: [dependencies]
+
+require skip_reload
+
+statement ok
+PRAGMA verify_serializer
+
+##TEST: If the table is dropped, then the sequence is also droppped
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE SEQUENCE sequence2;
+
+statement ok
+CREATE TABLE tbl1 (
+    colname integer
+);
+
+statement ok
+CREATE TABLE tbl2 (
+	colname integer
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tbl1;
+
+# sequence1 can not be the owner of an entry, sequence1 is already owned
+statement error
+ALTER SEQUENCE sequence2 OWNED BY sequence1;
+----
+sequence1 can not become the owner, it is already owned by tbl1
+
+# sequence1 is already owned by another entry
+statement error
+ALTER SEQUENCE sequence1 OWNED BY tbl2;
+----
+Dependency Error: sequence1 is already owned by tbl1
+
+statement ok
+create sequence sequence3;
+
+statement error
+alter sequence sequence3 owned by sequence1
+----
+sequence1 can not become the owner, it is already owned by tbl1
+
+statement ok
+DROP TABLE tbl1;
+
+statement error
+SELECT nextval('sequence1');
+----

@@ -1,7 +1,9 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -45,6 +47,16 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	}
 }
 
+ColumnDataAllocator::~ColumnDataAllocator() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return;
+	}
+	for (auto &block : blocks) {
+		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	}
+	blocks.clear();
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	shared_ptr<BlockHandle> handle;
@@ -61,12 +73,17 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
-	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
+	auto max_size = MaxValue<idx_t>(size, GetBufferManager().GetBlockSize());
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = block_size;
-	auto pin = alloc.buffer_manager->Allocate(block_size, false, &data.handle);
+	data.capacity = NumericCast<uint32_t>(max_size);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
+	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
+	if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+		blocks.back().handle->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+	}
+	allocated_size += max_size;
 	return pin;
 }
 
@@ -74,15 +91,16 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	auto allocation_amount = MaxValue<idx_t>(NextPowerOfTwo(size), 4096);
 	if (!blocks.empty()) {
 		idx_t last_capacity = blocks.back().capacity;
-		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::BLOCK_SIZE);
+		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::DEFAULT_BLOCK_SIZE);
 		allocation_amount = MaxValue<idx_t>(next_capacity, allocation_amount);
 	}
 	D_ASSERT(type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = allocation_amount;
+	data.capacity = NumericCast<uint32_t>(allocation_amount);
 	data.handle = nullptr;
 	blocks.push_back(std::move(data));
+	allocated_size += allocation_amount;
 }
 
 void ColumnDataAllocator::AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer) {
@@ -110,7 +128,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
-	block_id = blocks.size() - 1;
+	block_id = NumericCast<uint32_t>(blocks.size() - 1);
 	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
 		// not guaranteed to be pinned already by this thread (if shared allocator)
 		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
@@ -177,54 +195,61 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
-                                            uint32_t block_id, uint32_t offset) {
+void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result,
+                                            SwizzleMetaData &swizzle_segment, const VectorMetaData &string_heap_segment,
+                                            const idx_t &v_offset, const bool &copied) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	lock_guard<mutex> guard(lock);
-
-	auto &validity = FlatVector::Validity(result);
-	auto strings = FlatVector::GetData<string_t>(result);
-
-	// find first non-inlined string
-	uint32_t i = v_offset;
-	const uint32_t end = v_offset + count;
-	for (; i < end; i++) {
-		if (!validity.RowIsValid(i)) {
-			continue;
-		}
-		if (!strings[i].IsInlined()) {
-			break;
-		}
-	}
-	// at least one string must be non-inlined, otherwise this function should not be called
-	D_ASSERT(i < end);
-
-	auto base_ptr = char_ptr_cast(GetDataPointer(state, block_id, offset));
-	if (strings[i].GetData() == base_ptr) {
-		// pointers are still valid
-		return;
+	const auto old_base_ptr = char_ptr_cast(swizzle_segment.ptr);
+	const auto new_base_ptr =
+	    char_ptr_cast(GetDataPointer(state, string_heap_segment.block_id, string_heap_segment.offset));
+	if (old_base_ptr == new_base_ptr) {
+		return; // pointers are still valid
 	}
 
-	// pointer mismatch! pointers are invalid, set them correctly
-	for (; i < end; i++) {
-		if (!validity.RowIsValid(i)) {
+	const auto &validity = FlatVector::Validity(result);
+	const auto strings = FlatVector::GetData<string_t>(result);
+
+	// recompute pointers
+	const auto start = NumericCast<idx_t>(v_offset + swizzle_segment.offset);
+	const auto end = start + NumericCast<idx_t>(swizzle_segment.count);
+	for (idx_t i = start; i < end; i++) {
+		auto &str = strings[i];
+		if (!validity.RowIsValid(i) || str.IsInlined()) {
 			continue;
 		}
-		if (strings[i].IsInlined()) {
-			continue;
+		const auto str_offset = str.GetPointer() - old_base_ptr;
+		D_ASSERT(str_offset >= 0);
+		str.SetPointer(new_base_ptr + str_offset);
+#ifdef D_ASSERT_IS_ENABLED
+		if (result.GetType() == LogicalType::VARCHAR) {
+			str.Verify();
 		}
-		strings[i].SetPointer(base_ptr);
-		base_ptr += strings[i].GetSize();
+#endif
+	}
+
+	if (!copied) {
+		// if the data was not copied, we modified data on the blocks. store the new base ptr
+		swizzle_segment.ptr = data_ptr_cast(new_base_ptr);
 	}
 }
 
-void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
-	blocks[block_id].handle->SetCanDestroy(true);
+void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
+	blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {
-	return type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ? *alloc.allocator
-	                                                            : alloc.buffer_manager->GetBufferAllocator();
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return *alloc.allocator;
+	}
+	return alloc.buffer_manager->GetBufferAllocator();
+}
+
+BufferManager &ColumnDataAllocator::GetBufferManager() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		throw InternalException("cannot obtain the buffer manager for in memory allocations");
+	}
+	return *alloc.buffer_manager;
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
@@ -237,7 +262,7 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 	do {
 		found_handle = false;
 		for (auto it = state.handles.begin(); it != state.handles.end(); it++) {
-			if (chunk.block_ids.find(it->first) != chunk.block_ids.end()) {
+			if (chunk.block_ids.find(NumericCast<uint32_t>(it->first)) != chunk.block_ids.end()) {
 				// still required: do not release
 				continue;
 			}

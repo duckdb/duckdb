@@ -1,0 +1,15 @@
+# name: test/fuzzer/public/positional_join_correlated_subquery.test
+# description: Test positional join in correlated subqueries
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE v00 (c01 INT, c02 STRING);
+
+statement error
+SELECT (SELECT 42 FROM (SELECT c01) POSITIONAL JOIN (SELECT c02))
+FROM v00;
+----
+not (yet) supported

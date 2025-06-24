@@ -10,6 +10,7 @@ SELECT list_aggr([NULL, 1, 2], 'any_value')
 # incorrect usage
 statement error
 SELECT list_any_value()
+----
 
 # different types
 

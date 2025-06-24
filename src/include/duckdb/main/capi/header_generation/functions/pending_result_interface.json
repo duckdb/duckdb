@@ -1,0 +1,157 @@
+{
+    "group": "pending_result_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_pending_prepared",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "duckdb_pending_result *",
+                    "name": "out_result"
+                }
+            ],
+            "comment": {
+                "description": "Executes the prepared statement with the given bound parameters, and returns a pending result.\nThe pending result represents an intermediate structure for a query that is not yet fully executed.\nThe pending result can be used to incrementally execute a query, returning control to the client between tasks.\n\nNote that after calling `duckdb_pending_prepared`, the pending result should always be destroyed using\n`duckdb_destroy_pending`, even if this function returns DuckDBError.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to execute.",
+                    "out_result": "The pending query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_pending_prepared_streaming",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "duckdb_pending_result *",
+                    "name": "out_result"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nExecutes the prepared statement with the given bound parameters, and returns a pending result.\nThis pending result will create a streaming duckdb_result when executed.\nThe pending result represents an intermediate structure for a query that is not yet fully executed.\n\nNote that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using\n`duckdb_destroy_pending`, even if this function returns DuckDBError.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to execute.",
+                    "out_result": "The pending query result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_destroy_pending",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_pending_result *",
+                    "name": "pending_result"
+                }
+            ],
+            "comment": {
+                "description": "Closes the pending result and de-allocates all memory allocated for the result.\n\n",
+                "param_comments": {
+                    "pending_result": "The pending result to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_pending_error",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_pending_result",
+                    "name": "pending_result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error message contained within the pending result.\n\nThe result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.\n\n",
+                "param_comments": {
+                    "pending_result": "The pending result to fetch the error from."
+                },
+                "return_value": "The error of the pending result."
+            }
+        },
+        {
+            "name": "duckdb_pending_execute_task",
+            "return_type": "duckdb_pending_state",
+            "params": [
+                {
+                    "type": "duckdb_pending_result",
+                    "name": "pending_result"
+                }
+            ],
+            "comment": {
+                "description": "Executes a single task within the query, returning whether or not the query is ready.\n\nIf this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.\nIf this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_task function should be called again.\nIf this returns DUCKDB_PENDING_ERROR, an error occurred during execution.\n\nThe error message can be obtained by calling duckdb_pending_error on the pending_result.\n\n",
+                "param_comments": {
+                    "pending_result": "The pending result to execute a task within."
+                },
+                "return_value": "The state of the pending result after the execution."
+            }
+        },
+        {
+            "name": "duckdb_pending_execute_check_state",
+            "return_type": "duckdb_pending_state",
+            "params": [
+                {
+                    "type": "duckdb_pending_result",
+                    "name": "pending_result"
+                }
+            ],
+            "comment": {
+                "description": "If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.\nIf this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.\nIf this returns DUCKDB_PENDING_ERROR, an error occurred during execution.\n\nThe error message can be obtained by calling duckdb_pending_error on the pending_result.\n\n",
+                "param_comments": {
+                    "pending_result": "The pending result."
+                },
+                "return_value": "The state of the pending result."
+            }
+        },
+        {
+            "name": "duckdb_execute_pending",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_pending_result",
+                    "name": "pending_result"
+                },
+                {
+                    "type": "duckdb_result *",
+                    "name": "out_result"
+                }
+            ],
+            "comment": {
+                "description": "Fully execute a pending query result, returning the final query result.\n\nIf duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.\nOtherwise, all remaining tasks must be executed first.\n\nNote that the result must be freed with `duckdb_destroy_result`.\n\n",
+                "param_comments": {
+                    "pending_result": "The pending result to execute.",
+                    "out_result": "The result object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_pending_execution_is_finished",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_pending_state",
+                    "name": "pending_state"
+                }
+            ],
+            "comment": {
+                "description": "Returns whether a duckdb_pending_state is finished executing. For example if `pending_state` is\nDUCKDB_PENDING_RESULT_READY, this function will return true.\n\n",
+                "param_comments": {
+                    "pending_state": "The pending state on which to decide whether to finish execution."
+                },
+                "return_value": "Boolean indicating pending execution should be considered finished."
+            }
+        }
+    ]
+}

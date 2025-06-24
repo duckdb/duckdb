@@ -27,8 +27,7 @@ def test_5547():
     expected = tbl.to_pandas()
     result = con.execute(
         """
-    SELECT *
-    FROM tbl
+		SELECT * FROM tbl
     """
     ).df()
 

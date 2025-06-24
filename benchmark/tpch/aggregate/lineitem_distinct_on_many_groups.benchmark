@@ -1,0 +1,20 @@
+# name: benchmark/tpch/aggregate/lineitem_distinct_on_many_groups.benchmark
+# description: DISTINCT ON over Lineitem
+# group: [aggregate]
+
+include benchmark/tpch/tpch_load.benchmark.in
+
+name Lineitem Distinct On (Many Groups)
+group aggregate
+subgroup tpch
+
+run
+SELECT AVG(l_orderkey), AVG(l_extendedprice)
+FROM (
+  SELECT DISTINCT ON (l_orderkey) l_orderkey, l_extendedprice
+  FROM lineitem
+  ORDER BY l_orderkey, l_extendedprice DESC
+) l;
+
+result II sf=1
+2999991.5	59874.92

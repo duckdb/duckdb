@@ -1,0 +1,37 @@
+# name: test/sql/types/nested/array/array_compression.test_slow
+# description: Test array compression and storage
+# group: [array]
+
+# load the DB from disk
+load __TEST_DIR__/array_compression.db
+
+statement ok
+PRAGMA enable_verification
+
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE tbl1 AS SELECT array_value(1,NULL,3)
+
+loop i 0 12
+
+statement ok
+INSERT INTO tbl1 SELECT * FROM tbl1;
+
+endloop
+
+query I nosort r1
+SELECT * FROM tbl1;
+
+restart
+
+query I nosort r1
+SELECT * FROM tbl1;
+
+statement ok
+DROP TABLE tbl1;
+
+endloop

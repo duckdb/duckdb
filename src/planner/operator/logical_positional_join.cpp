@@ -4,6 +4,7 @@ namespace duckdb {
 
 LogicalPositionalJoin::LogicalPositionalJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)
     : LogicalUnconditionalJoin(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN, std::move(left), std::move(right)) {
+	SetEstimatedCardinality(MaxValue(children[0]->estimated_cardinality, children[1]->estimated_cardinality));
 }
 
 unique_ptr<LogicalOperator> LogicalPositionalJoin::Create(unique_ptr<LogicalOperator> left,

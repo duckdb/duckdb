@@ -1,0 +1,52 @@
+# name: test/sql/storage/relocate_metadata.test_slow
+# description: Verify that metadata is relocated to allow the database to free up space
+# group: [storage]
+
+load __TEST_DIR__/relocate_metadata.db
+
+statement ok
+CREATE TABLE test (x INT, y AS (x + 100));
+
+statement ok
+INSERT INTO test SELECT range FROM range(100000000);
+
+statement ok
+DELETE FROM test WHERE x % 10 = 7;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 6;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 5;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 4;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 3;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 2;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 1;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 0;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 8;
+
+statement ok
+DELETE FROM test WHERE x % 10 = 9;
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT MAX(block_id) < 5 * (2621440 / get_block_size('relocate_metadata')) FROM pragma_metadata_info();
+----
+true

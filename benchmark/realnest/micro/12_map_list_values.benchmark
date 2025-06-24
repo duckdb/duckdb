@@ -1,0 +1,22 @@
+# name: benchmark/realnest/micro/12_map_list_values.benchmark
+# description: Map list values
+# group: [micro]
+
+name map_list_values
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT map(tau_pt, tau_eta),
+    map(jet_pt, jet_eta),
+    map(muon_pt, muon_eta),
+    map(ph_pt, ph_eta)
+FROM singleMu
+ORDER BY ALL DESC;

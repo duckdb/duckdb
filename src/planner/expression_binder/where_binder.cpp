@@ -10,15 +10,15 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context, optional_ptr<Co
 }
 
 BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
+
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError() || !column_alias_binder) {
 		return result;
 	}
 
-	BindResult alias_result = column_alias_binder->BindAlias(*this, expr, depth, root_expression);
-	// This code path cannot be exercised at thispoint. #1547 might change that.
-	if (!alias_result.HasError()) {
+	BindResult alias_result;
+	auto found_alias = column_alias_binder->BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
+	if (found_alias) {
 		return alias_result;
 	}
 
@@ -29,9 +29,9 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("WHERE clause cannot contain DEFAULT clause");
+		return BindUnsupportedExpression(expr, depth, "WHERE clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult("WHERE clause cannot contain window functions!");
+		return BindUnsupportedExpression(expr, depth, "WHERE clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
@@ -41,6 +41,13 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 
 string WhereBinder::UnsupportedAggregateMessage() {
 	return "WHERE clause cannot contain aggregates!";
+}
+
+bool WhereBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	if (column_alias_binder) {
+		return column_alias_binder->QualifyColumnAlias(colref);
+	}
+	return false;
 }
 
 } // namespace duckdb

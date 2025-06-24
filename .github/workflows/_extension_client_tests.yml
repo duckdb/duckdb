@@ -21,7 +21,7 @@ jobs:
           sudo apt-get update -y -qq
           sudo apt-get install -y -qq ninja-build
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: 'true'
@@ -31,9 +31,9 @@ jobs:
           cd duckdb
           git checkout ${{ inputs.duckdb_version }}
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.12'
 
       - name: Build DuckDB Python client
         run: make debug_python

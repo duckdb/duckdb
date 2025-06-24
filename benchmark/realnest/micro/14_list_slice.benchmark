@@ -1,0 +1,25 @@
+# name: benchmark/realnest/micro/14_list_slice.benchmark
+# description: Benchmark the list_slice function
+# group: [micro]
+
+name list_slice
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT list_slice(Jet, 2, 9),
+    list_slice(Jet, 1, 6)[:3:-1],
+    list_slice(Muon, 1, 5),
+    list_slice(Muon, 2, 3)[:-4:-1],
+    list_slice(Photon, 1, 3),
+    list_slice(Photon, 1, 6)[:6:-1],
+    list_slice(Tau, 5, 9),
+    list_slice(Tau, 2, 9)[:-8:-1]
+FROM single_mu_lists;

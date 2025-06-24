@@ -4,6 +4,13 @@
 
 require httpfs
 
+statement ok
+PRAGMA enable_verification
+
+
+#FIXME this test fails: file is nonexistent
+mode skip
+
 query IIIIII rowsort
 SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
@@ -66,11 +73,11 @@ SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41
 2021	UE 27	UE 27	21.894190365821018	193930.95399999994	885764.4460000001
 
 query IIIIII rowsort res
-SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
 
 
 query IIIIII rowsort res
-SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
 
 
 # Give it a try to a request that returns length 0

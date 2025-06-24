@@ -1,0 +1,9 @@
+# name: test/optimizer/filter_pushdown/filter_pushdown_into_subquery.test
+# description: When Aggregate and Group By operators contain a mark join index, Mark join -> Semi join cannot happen.
+# group: [filter_pushdown]
+
+statement ok
+SET order_by_non_integer_literal=true;
+
+statement ok
+SELECT DISTINCT ON ( 'string' ) 'string', GROUP BY CUBE ( 'string', ), 'string' IN ( SELECT 'string' ), HAVING 'string' IN ( SELECT 'string');

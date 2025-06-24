@@ -79,6 +79,7 @@ PREPARE v5 AS SELECT printf('%s', ?)
 
 statement error
 EXECUTE v5(4)
+----
 
 query I
 EXECUTE v5('hello')
@@ -95,6 +96,7 @@ EXECUTE v6(4)
 
 statement error
 EXECUTE v6('hello')
+----
 
 # lists and structs
 statement ok
@@ -176,7 +178,7 @@ PREPARE v11 AS SELECT ROW(?, ?)
 query I
 EXECUTE v11(11, 'hello')
 ----
-{'': 11, '': hello}
+(11, hello)
 
 statement ok
 PREPARE v12 AS SELECT ? IS NULL
@@ -283,6 +285,7 @@ false
 
 statement error
 EXECUTE v18([1])
+----
 
 statement ok
 PREPARE v19 AS SELECT ARRAY_CONTAINS(?, 1)
@@ -294,3 +297,4 @@ true
 
 statement error
 EXECUTE v19(0)
+----

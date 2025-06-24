@@ -1,0 +1,105 @@
+# name: test/sql/attach/attach_default_table.test
+# description: Test ATTACH of a database with a default table
+# group: [attach]
+
+require parquet
+
+statement ok
+attach '__TEST_DIR__/test.db' as ddb (default_table 'my_table')
+
+statement error
+FROM ddb
+----
+Catalog Error: Table with name ddb does not exist!
+
+# Now we create the default table
+statement ok
+CREATE OR REPLACE TABLE ddb.my_table AS (SELECT 1337 as value);
+
+# We can query the table by the catalog name
+query I
+from ddb
+----
+1337
+
+# We can query the table using the catalog name plus the table name
+query I
+from ddb.my_table
+----
+1337
+
+# We can query the table using the catalog name, default schema name and table name
+query I
+from ddb.main.my_table
+----
+1337
+
+# Now we create a different table that is actually called my_table in the default catalog
+statement ok
+create table ddb as select 42 as value
+
+# This creates ambiguity: however we can provide the solution to the user in the error message
+statement error
+from ddb
+----
+Catalog Error: Ambiguity detected for 'ddb': this could either refer to the 'Table' 'ddb', or the attached catalog 'ddb' which has a default table. To avoid this error, either detach the catalog and reattach under a different name, or use a fully qualified name for the 'Table': 'memory.main.ddb' or for the Catalog Default Table: 'ddb.main.my_table'.
+
+# Ambiguous no more!
+query I
+from memory.main.ddb
+----
+42
+
+# Join the two tables
+query II
+SELECT
+    t1.value,
+    t2.value
+FROM
+    memory.main.ddb as t1
+JOIN
+    ddb.main.my_table as t2
+ON
+    t1.value != t2.value
+----
+42	1337
+
+statement ok
+use ddb
+
+# We can still query the delta catalog default table by its name
+query I
+from ddb
+----
+1337
+
+# Or by the default delta table name (`delta_table`)
+query I
+from my_table
+----
+1337
+
+# Or by specifying the default schema
+query I
+from main.my_table
+----
+1337
+
+# Swith back to main catalog
+statement ok
+use memory
+
+statement ok
+DROP TABLE memory.main.ddb
+
+statement ok
+CREATE VIEW ddb as SELECT 1
+
+statement error
+FROM ddb
+----
+Catalog Error: Ambiguity detected for 'ddb': this could either refer to the 'View' 'ddb', or the attached catalog 'ddb' which has a default table. To avoid this error, either detach the catalog and reattach under a different name, or use a fully qualified name for the 'View': 'memory.main.ddb' or for the Catalog Default Table: 'ddb.main.my_table'.
+
+# view can be dropped using only the name because the default table is a table not a view
+statement ok
+DROP VIEW ddb;

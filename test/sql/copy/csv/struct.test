@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/struct.test
+# description: Verify that we can sniff a struct string properly
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+FROM 'data/csv/struct.csv'
+----
+{'a': 1, 'b': 2}

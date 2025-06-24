@@ -12,11 +12,11 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2, v3;
+	duckdb::shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2, v3;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (1), (2), (3)"));
 
 	// simple projection
 	REQUIRE_NOTHROW(tbl = con.Table("integers"));
@@ -101,8 +101,8 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 
 	// filters can also contain conjunctions
-	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 4, 4}));
 
 	// alias
 	REQUIRE_NOTHROW(result = proj->Project("a + 1")->Alias("bla")->Execute());
@@ -110,9 +110,9 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 4, 2, 2}));
 	REQUIRE_NOTHROW(result = proj->Order(duckdb::vector<string> {"a DESC", "a ASC"})->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 4, 2, 2}));
 
 	// top n
 	REQUIRE_NOTHROW(result = proj->Order("a")->Limit(1)->Execute());
@@ -122,24 +122,24 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// test set operations
 	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
 	REQUIRE_NOTHROW(result = tbl->Except(tbl)->Order("i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE_NOTHROW(result = tbl->Intersect(tbl)->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
 	REQUIRE_NOTHROW(result = tbl->Except(tbl->Filter("i=2"))->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 3, 3}));
 	REQUIRE_NOTHROW(result = tbl->Intersect(tbl->Filter("i=2"))->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
 
 	// set operations with projections
 	REQUIRE_NOTHROW(proj = tbl->Project("i::TINYINT AS i, i::SMALLINT, i::BIGINT, i::VARCHAR"));
 	REQUIRE_NOTHROW(proj2 = tbl->Project("(i+10)::TINYINT, (i+10)::SMALLINT, (i+10)::BIGINT, (i+10)::VARCHAR"));
 	REQUIRE_NOTHROW(result = proj->Union(proj2)->Order("i")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 11, 12, 13}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 11, 12, 13}));
-	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 11, 12, 13}));
-	REQUIRE(CHECK_COLUMN(result, 3, {"1", "2", "3", "11", "12", "13"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3, 11, 11, 12, 12, 13, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 2, 2, 3, 3, 11, 11, 12, 12, 13, 13}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 1, 2, 2, 3, 3, 11, 11, 12, 12, 13, 13}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"1", "1", "2", "2", "3", "3", "11", "11", "12", "12", "13", "13"}));
 
 	// distinct
 	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Order("1")->Execute());
@@ -149,7 +149,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{1, 27}, {2, 8}, {3, 20}}, {"id", "k"}, "v2"));
 	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
@@ -158,7 +158,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	// asof join
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {6, 5}, {8, 4}, {10, 23}, {12, 12}, {15, 14}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{4, 27}, {8, 8}, {14, 20}}, {"id", "k"}, "v2"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 8, 10, 12, 15}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 4, 23, 12, 14}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 8, 8, 8, 14}));
@@ -169,23 +169,24 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
 
 	// projection after a join
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {37, 13, 24}));
 
 	// chain multiple joins
 	auto multi_join = v1->Join(v2, "v1.id=v2.id")->Join(v3, "v1.id=v3.id");
-	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 9}));
 
 	// multiple joins followed by a filter and a projection
-	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// multiple joins followed by multiple filters
 	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")
 	                             ->Filter("v2.id < 3")
 	                             ->Filter("v3.id=2")
 	                             ->Project("v1.id+v2.id+v3.id")
+	                             ->Order("1")
 	                             ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
@@ -215,7 +216,7 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> values, v1, v2, v3;
+	duckdb::shared_ptr<Relation> values, v1, v2, v3;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
 
@@ -260,8 +261,8 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 	REQUIRE_NOTHROW(result = vunion->Intersect(vunion)->Order("1")->Execute());
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 5, 5, 4, 4}));
 	REQUIRE_NOTHROW(result = vunion->Except(vunion)->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
@@ -282,7 +283,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> values, vjoin;
+	duckdb::shared_ptr<Relation> values, vjoin;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
 
@@ -370,7 +371,7 @@ TEST_CASE("Test crossproduct relation", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> values, vcross;
+	duckdb::shared_ptr<Relation> values, vcross;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}), "v1");
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}), "v2");
@@ -380,7 +381,7 @@ TEST_CASE("Test crossproduct relation", "[relation_api]") {
 
 	// run cross product
 	vcross = v1->CrossProduct(v2);
-	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
+	REQUIRE_NOTHROW(result = vcross->Order("v1.i, v2.i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 10, 5, 5, 5, 4, 4, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));
@@ -401,7 +402,7 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl, filter, proj, proj2;
+	duckdb::shared_ptr<Relation> tbl, filter, proj, proj2;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -478,7 +479,7 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> values;
+	duckdb::shared_ptr<Relation> values;
 
 	// create a table from a Values statement
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
@@ -502,6 +503,81 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+}
+
+TEST_CASE("Test table creations with on_create_conflict using the relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::shared_ptr<Relation> values, values1, proj;
+
+	// create a table from a Values statement
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1 = con.Values({{4, 14}, {5, 15}, {6, 16}}, {"i", "j"}));
+	REQUIRE_THROWS(values1->Create("integers"));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_THROWS(values1->Create("integers", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::IGNORE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {14, 15, 16}));
+}
+
+TEST_CASE("Test table create from query with on_create_conflict using the relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::shared_ptr<Relation> values, values1, proj;
+
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 20}, {3, 30}, {4, 40}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 20, 30, 40}));
+
+	REQUIRE_NOTHROW(con.Table("integers")
+	                    ->Filter("i BETWEEN 2 AND 3")
+	                    ->Project("i + 100 AS k, 'hello' AS l")
+	                    ->Create("new_values"));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	REQUIRE_NOTHROW(proj = con.Table("integers")->Filter("i BETWEEN 1 AND 2")->Project("i + 200 AS k, 'hi' AS l"));
+	REQUIRE_THROWS(proj->Create("new_values"));
+	REQUIRE_THROWS(proj->Create("new_values", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::IGNORE_ON_CONFLICT));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {201, 202}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hi", "hi"}));
 }
 
 TEST_CASE("Test table deletions and updates", "[relation_api]") {
@@ -845,6 +921,25 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	REQUIRE_THROWS(con.TableFunction("blabla"));
 }
 
+TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	named_parameter_map_t options;
+	options["union_by_name"] = Value(true);
+	duckdb::vector<string> paths {"data/csv/sample-0.csv", "data/csv/sample-0.csv"};
+	auto csv_scan = con.ReadCSV(paths, std::move(options));
+	auto result = csv_scan->Execute();
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2024, 1, 2), Value::DATE(2024, 1, 2), Value::DATE(2024, 1, 2)}));
+
+	options["union_by_name"] = Value(true);
+	paths = {"data/csv/union-by-name/ubn1.csv", "data/csv/union-by-name/ubn2.csv"};
+	csv_scan = con.ReadCSV(paths, std::move(options));
+	result = csv_scan->Execute();
+	REQUIRE(!result->HasError());
+}
+
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -873,12 +968,23 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER, j INTEGER"}));
 }
 
+TEST_CASE("Test CSV reading from weather.csv", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+
+	auto auto_csv_scan = con.ReadCSV("data/csv/weather.csv")->Limit(1);
+	result = auto_csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"2016-01-01"}));
+}
+
 TEST_CASE("Test query relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl;
+	duckdb::shared_ptr<Relation> tbl;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -905,7 +1011,7 @@ TEST_CASE("Test TopK relation", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	duckdb::unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl;
+	duckdb::shared_ptr<Relation> tbl;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (i integer,j VARCHAR, k varchar )"));
 	REQUIRE_NO_FAIL(con.Query("insert into test values (10,'a','a'), (20,'a','b')"));

@@ -253,7 +253,7 @@
 //      * same class, have the same behavior, and iterate over the same text.
 //      *  @stable ICU 2.0
 //      */
-//     virtual UBool operator==(const BreakIterator& that) const;
+//     virtual bool operator==(const BreakIterator& that) const;
 
 //     /**
 //      * Not-equal operator.  If operator== returns TRUE, this returns FALSE,
@@ -262,7 +262,7 @@
 //      * @return TRUE if both BreakIterators are not same.
 //      *  @stable ICU 2.0
 //      */
-//     inline UBool operator!=(const BreakIterator& that) const;
+//     inline bool operator!=(const BreakIterator& that) const;
 
 //     /**
 //      * Returns a newly-constructed RuleBasedBreakIterator with the same

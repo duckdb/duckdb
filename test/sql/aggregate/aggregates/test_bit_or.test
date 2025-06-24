@@ -2,8 +2,6 @@
 # description: Test BIT_OR operator
 # group: [aggregates]
 
-require skip_reload
-
 # test on scalar values
 query II
 SELECT BIT_OR(3), BIT_OR(NULL)
@@ -49,12 +47,15 @@ NULL
 # test incorrect usage
 statement error
 SELECT BIT_OR()
+----
 
 statement error
 SELECT BIT_OR(1, 2, 3)
+----
 
 statement error
 SELECT BIT_OR(BIT_AND(1))
+----
 
 #test on bit types
 statement ok

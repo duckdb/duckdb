@@ -25,19 +25,24 @@ SELECT #1 FROM (SELECT * FROM range(1)) tbl
 # positional references only consider the inner-most table
 statement error
 select (select #1) from range(1);
+----
 
 # out of range
 statement error
 SELECT #2 FROM range(1)
+----
 
 # no from clause
 statement error
 SELECT #1
+----
 
 # zero always fails
 statement error
 SELECT #0 FROM range(1)
+----
 
 # as do negative numbers
 statement error
 SELECT #-1 FROM range(1)
+----

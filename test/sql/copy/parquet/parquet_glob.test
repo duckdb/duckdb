@@ -68,10 +68,12 @@ FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet');
 
 statement error
 select count(*) from parquet_scan('')
+----
 
 # schema mismatch in parquet glob
 statement error
 select * from parquet_scan('data/parquet-testing/*.parquet')
+----
 
 # parquet glob with COPY FROM
 statement ok
@@ -92,3 +94,4 @@ CREATE TABLE vals2 (i INTEGER, j INTEGER)
 
 statement error
 COPY vals2 FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
+----

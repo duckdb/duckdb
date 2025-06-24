@@ -1,8 +1,4 @@
 /* include/jemalloc/jemalloc_defs.h.  Generated from jemalloc_defs.h.in by configure.  */
-#pragma once
-
-#include <climits>
-
 /* Defined if __attribute__((...)) syntax is supported. */
 #define JEMALLOC_HAVE_ATTR 
 
@@ -24,12 +20,16 @@
 /* Defined if cold attribute is supported. */
 #define JEMALLOC_HAVE_ATTR_COLD 
 
+/* Defined if deprecated attribute is supported. */
+// #define JEMALLOC_HAVE_ATTR_DEPRECATED
+
 /*
  * Define overrides for non-standard allocator-related functions if they are
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE_MEMALIGN */
 #define JEMALLOC_OVERRIDE_VALLOC 
+/* #undef JEMALLOC_OVERRIDE_PVALLOC */
 
 /*
  * At least Linux omits the "const" in:
@@ -56,6 +56,7 @@
 #endif
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
+#include <limits.h>
 #ifdef _MSC_VER
 #  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
 #elif INTPTR_MAX == INT64_MAX

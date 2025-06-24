@@ -5,10 +5,11 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -32,16 +33,29 @@ bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastPara
 	return true;
 }
 
-static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
-	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
+void HandleCastError::AssignError(const string &error_message, CastParameters &parameters) {
+	AssignError(error_message, parameters.error_message, parameters.cast_source, parameters.query_location);
+}
+
+void HandleCastError::AssignError(const string &error_message, string *error_message_ptr,
+                                  optional_ptr<const Expression> cast_source, optional_idx error_location) {
+	string column;
+	if (cast_source && cast_source->HasAlias()) {
+		column = " when casting from source column " + cast_source->alias;
+	}
+	if (!error_message_ptr) {
+		throw ConversionException(error_location, error_message + column);
+	}
+	if (error_message_ptr->empty()) {
+		*error_message_ptr = error_message + column;
+	}
 }
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
 	if (VectorOperations::HasNotNull(source, count)) {
-		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()),
-		                             parameters.error_message);
+		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -91,6 +105,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -137,6 +152,10 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return UnionCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
+	case LogicalTypeId::ARRAY:
+		return ArrayCastSwitch(input, source, target);
+	case LogicalTypeId::VARINT:
+		return VarintCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

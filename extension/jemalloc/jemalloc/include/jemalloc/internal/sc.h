@@ -1,8 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_SC_H
 #define JEMALLOC_INTERNAL_SC_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_types.h"
-#include "jemalloc/internal/jemalloc_internal_defs.h"
 
 /*
  * Size class computations:
@@ -169,7 +169,7 @@
 /*
  * Size class N + (1 << SC_LG_NGROUP) twice the size of size class N.
  */
-#define SC_LG_NGROUP   2
+#define SC_LG_NGROUP 2
 #define SC_LG_TINY_MIN 3
 
 #if SC_LG_TINY_MIN == 0
@@ -181,11 +181,11 @@
  * The definitions below are all determined by the above settings and system
  * characteristics.
  */
-#define SC_NGROUP                (1ULL << SC_LG_NGROUP)
-#define SC_PTR_BITS              ((1ULL << LG_SIZEOF_PTR) * 8)
-#define SC_NTINY                 (LG_QUANTUM - SC_LG_TINY_MIN)
-#define SC_LG_TINY_MAXCLASS      (LG_QUANTUM > SC_LG_TINY_MIN ? LG_QUANTUM - 1 : -1)
-#define SC_NPSEUDO               SC_NGROUP
+#define SC_NGROUP (1ULL << SC_LG_NGROUP)
+#define SC_PTR_BITS ((1ULL << LG_SIZEOF_PTR) * 8)
+#define SC_NTINY (LG_QUANTUM - SC_LG_TINY_MIN)
+#define SC_LG_TINY_MAXCLASS (LG_QUANTUM > SC_LG_TINY_MIN ? LG_QUANTUM - 1 : -1)
+#define SC_NPSEUDO SC_NGROUP
 #define SC_LG_FIRST_REGULAR_BASE (LG_QUANTUM + SC_LG_NGROUP)
 /*
  * We cap allocations to be less than 2 ** (ptr_bits - 1), so the highest base
@@ -194,14 +194,15 @@
  * We could probably save some space in arenas by capping this at LG_VADDR size.
  */
 #define SC_LG_BASE_MAX (SC_PTR_BITS - 2)
-#define SC_NREGULAR    (SC_NGROUP * (SC_LG_BASE_MAX - SC_LG_FIRST_REGULAR_BASE + 1) - 1)
-#define SC_NSIZES      (SC_NTINY + SC_NPSEUDO + SC_NREGULAR)
+#define SC_NREGULAR (SC_NGROUP * 					\
+    (SC_LG_BASE_MAX - SC_LG_FIRST_REGULAR_BASE + 1) - 1)
+#define SC_NSIZES (SC_NTINY + SC_NPSEUDO + SC_NREGULAR)
 
 /*
  * The number of size classes that are a multiple of the page size.
  *
  * Here are the first few bases that have a page-sized SC.
- *SC_NSIZES
+ *
  *      lg(base) |     base | highest SC | page-multiple SCs
  * --------------|------------------------------------------
  *   LG_PAGE - 1 | PAGE / 2 |       PAGE | 1
@@ -221,49 +222,54 @@
  *
  * This gives us the quantity we seek.
  */
-#define SC_NPSIZES (SC_NGROUP + (SC_LG_BASE_MAX - (LG_PAGE + SC_LG_NGROUP)) * SC_NGROUP + SC_NGROUP - 1)
+#define SC_NPSIZES (							\
+    SC_NGROUP								\
+    + (SC_LG_BASE_MAX - (LG_PAGE + SC_LG_NGROUP)) * SC_NGROUP		\
+    + SC_NGROUP - 1)
 
 /*
  * We declare a size class is binnable if size < page size * group. Or, in other
  * words, lg(size) < lg(page size) + lg(group size).
  */
-#define SC_NBINS                                                                                                       \
-	(                      /* Sub-regular size classes. */                                                             \
-	 SC_NTINY + SC_NPSEUDO /* Groups with lg_regular_min_base <= lg_base <= lg_base_max */                             \
-	 + SC_NGROUP * (LG_PAGE + SC_LG_NGROUP -                                                                           \
-	                SC_LG_FIRST_REGULAR_BASE) /* Last SC of the last group hits the bound exactly; exclude it. */      \
-	 - 1)
+#define SC_NBINS (							\
+    /* Sub-regular size classes. */					\
+    SC_NTINY + SC_NPSEUDO						\
+    /* Groups with lg_regular_min_base <= lg_base <= lg_base_max */	\
+    + SC_NGROUP * (LG_PAGE + SC_LG_NGROUP - SC_LG_FIRST_REGULAR_BASE)	\
+    /* Last SC of the last group hits the bound exactly; exclude it. */	\
+    - 1)
 
 /*
  * The size2index_tab lookup table uses uint8_t to encode each bin index, so we
  * cannot support more than 256 small size classes.
  */
 #if (SC_NBINS > 256)
-#error "Too many small size classes"
+#  error "Too many small size classes"
 #endif
 
 /* The largest size class in the lookup table, and its binary log. */
-#define SC_LG_MAX_LOOKUP   12
+#define SC_LG_MAX_LOOKUP 12
 #define SC_LOOKUP_MAXCLASS (1 << SC_LG_MAX_LOOKUP)
 
 /* Internal, only used for the definition of SC_SMALL_MAXCLASS. */
-#define SC_SMALL_MAX_BASE  (1 << (LG_PAGE + SC_LG_NGROUP - 1))
+#define SC_SMALL_MAX_BASE (1 << (LG_PAGE + SC_LG_NGROUP - 1))
 #define SC_SMALL_MAX_DELTA (1 << (LG_PAGE - 1))
 
 /* The largest size class allocated out of a slab. */
-#define SC_SMALL_MAXCLASS (SC_SMALL_MAX_BASE + (SC_NGROUP - 1) * SC_SMALL_MAX_DELTA)
+#define SC_SMALL_MAXCLASS (SC_SMALL_MAX_BASE				\
+    + (SC_NGROUP - 1) * SC_SMALL_MAX_DELTA)
 
 /* The fastpath assumes all lookup-able sizes are small. */
 #if (SC_SMALL_MAXCLASS < SC_LOOKUP_MAXCLASS)
-#error "Lookup table sizes must be small"
+#  error "Lookup table sizes must be small"
 #endif
 
 /* The smallest size class not allocated out of a slab. */
-#define SC_LARGE_MINCLASS    ((size_t)1ULL << (LG_PAGE + SC_LG_NGROUP))
+#define SC_LARGE_MINCLASS ((size_t)1ULL << (LG_PAGE + SC_LG_NGROUP))
 #define SC_LG_LARGE_MINCLASS (LG_PAGE + SC_LG_NGROUP)
 
 /* Internal; only used for the definition of SC_LARGE_MAXCLASS. */
-#define SC_MAX_BASE  ((size_t)1 << (SC_PTR_BITS - 2))
+#define SC_MAX_BASE ((size_t)1 << (SC_PTR_BITS - 2))
 #define SC_MAX_DELTA ((size_t)1 << (SC_PTR_BITS - 2 - SC_LG_NGROUP))
 
 /* The largest size class supported. */
@@ -271,18 +277,16 @@
 
 /* Maximum number of regions in one slab. */
 #ifndef CONFIG_LG_SLAB_MAXREGS
-#define SC_LG_SLAB_MAXREGS (LG_PAGE - SC_LG_TINY_MIN)
+#  define SC_LG_SLAB_MAXREGS (LG_PAGE - SC_LG_TINY_MIN)
 #else
-#if CONFIG_LG_SLAB_MAXREGS < (LG_PAGE - SC_LG_TINY_MIN)
-#error "Unsupported SC_LG_SLAB_MAXREGS"
-#else
-#define SC_LG_SLAB_MAXREGS CONFIG_LG_SLAB_MAXREGS
-#endif
+#  if CONFIG_LG_SLAB_MAXREGS < (LG_PAGE - SC_LG_TINY_MIN)
+#    error "Unsupported SC_LG_SLAB_MAXREGS"
+#  else
+#    define SC_LG_SLAB_MAXREGS CONFIG_LG_SLAB_MAXREGS
+#  endif
 #endif
 
 #define SC_SLAB_MAXREGS (1U << SC_LG_SLAB_MAXREGS)
-
-namespace duckdb_jemalloc {
 
 typedef struct sc_s sc_t;
 struct sc_s {
@@ -347,9 +351,8 @@ void sc_data_init(sc_data_t *data);
  * Updates slab sizes in [begin, end] to be pgs pages in length, if possible.
  * Otherwise, does its best to accommodate the request.
  */
-void sc_data_update_slab_size(sc_data_t *data, size_t begin, size_t end, int pgs);
+void sc_data_update_slab_size(sc_data_t *data, size_t begin, size_t end,
+    int pgs);
 void sc_boot(sc_data_t *data);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SC_H */

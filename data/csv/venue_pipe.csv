@@ -1,0 +1,203 @@
+venueid|venuename|venuecity|venuestate|venueseats
+1|Toyota Park|Bridgeview|IL|0
+2|Columbus Crew Stadium|Columbus|OH|0
+3|RFK Stadium|Washington|DC|0
+4|CommunityAmerica Ballpark|Kansas City|KS|0
+5|Gillette Stadium|Foxborough|MA|68756
+6|New York Giants Stadium|East Rutherford|NJ|80242
+7|BMO Field|Toronto|ON|0
+8|The Home Depot Center|Carson|CA|0
+9|Dick's Sporting Goods Park|Commerce City|CO|0
+10|Pizza Hut Park|Frisco|TX|0
+11|Robertson Stadium|Houston|TX|0
+13|Rice-Eccles Stadium|Salt Lake City|UT|0
+14|Buck Shaw Stadium|Santa Clara|CA|0
+15|McAfee Coliseum|Oakland|CA|63026
+16|TD Banknorth Garden|Boston|MA|0
+17|Izod Center|East Rutherford|NJ|0
+18|Madison Square Garden|New York City|NY|20000
+19|Wachovia Center|Philadelphia|PA|0
+20|Air Canada Centre|Toronto|ON|0
+21|United Center|Chicago|IL|0
+22|Quicken Loans Arena|Cleveland|OH|0
+23|The Palace of Auburn Hills|Auburn Hills|MI|0
+24|Conseco Fieldhouse|Indianapolis|IN|0
+25|Bradley Center|Milwaukee|WI|0
+26|Philips Arena|Atlanta|GA|0
+27|Time Warner Cable Arena|Charlotte|NC|0
+28|American Airlines Arena|Miami|FL|0
+29|Amway Arena|Orlando|FL|0
+30|Verizon Center|Washington|DC|0
+31|Pepsi Center|Denver|CO|0
+32|Target Center|Minneapolis|MN|0
+33|Ford Center|Oklahoma City|OK|0
+34|Rose Garden|Portland|OR|0
+35|EnergySolutions Arena|Salt Lake City|UT|0
+36|Oracle Arena|Oakland|CA|0
+37|Staples Center|Los Angeles|CA|0
+38|US Airways Center|Phoenix|AZ|0
+39|ARCO Arena|Sacramento|CA|0
+40|American Airlines Center|Dallas|TX|0
+41|Toyota Center|Houston|TX|0
+42|FedExForum|Memphis|TN|0
+43|New Orleans Arena|New Orleans|LA|0
+44|AT&T Center|San Antonio|TX|0
+45|Prudential Center|Newark|NJ|0
+46|Nassau Veterans Memorial Coliseum|Uniondale|NY|0
+47|Mellon Arena|Pittsburgh|PA|0
+48|HSBC Arena|Buffalo|NY|0
+49|Bell Centre|Montreal|QC|0
+50|Scotiabank Place|Ottawa|ON|0
+52|RBC Center|Raleigh|NC|0
+53|BankAtlantic Center|Sunrise|FL|0
+54|St. Pete Times Forum|Tampa|FL|0
+55|Nationwide Arena|Columbus|OH|0
+56|Joe Louis Arena|Detroit|MI|0
+57|Sommet Center|Nashville|TN|0
+58|Scottrade Center|St. Louis|MO|0
+59|Pengrowth Saddledome|Calgary|AB|0
+60|Rexall Place|Edmonton|AB|0
+61|Xcel Energy Center|St. Paul|MN|0
+62|General Motors Place|Vancouver|BC|0
+63|Honda Center|Anaheim|CA|0
+65|Jobing.com Arena|Glendale|AZ|0
+66|HP Pavilion at San Jose|San Jose|CA|0
+67|Ralph Wilson Stadium|Orchard Park|NY|73967
+68|Rogers Centre|Toronto|ON|50516
+69|Dolphin Stadium|Miami Gardens|FL|74916
+70|M&T Bank Stadium|Baltimore|MD|70107
+71|Paul Brown Stadium|Cincinnati|OH|65535
+72|Cleveland Browns Stadium|Cleveland|OH|73200
+73|Heinz Field|Pittsburgh|PA|65050
+74|Reliant Stadium|Houston|TX|72000
+75|Lucas Oil Stadium|Indianapolis|IN|63000
+76|Jacksonville Municipal Stadium|Jacksonville|FL|73800
+77|LP Field|Nashville|TN|68804
+78|INVESCO Field|Denver|CO|76125
+79|Arrowhead Stadium|Kansas City|MO|79451
+80|Qualcomm Stadium|San Diego|CA|70561
+81|Texas Stadium|Irving|TX|65595
+82|Lincoln Financial Field|Philadelphia|PA|68532
+83|FedExField|Landover|MD|91704
+84|Soldier Field|Chicago|IL|63000
+85|Ford Field|Detroit|MI|65000
+86|Lambeau Field|Green Bay|WI|72922
+87|Hubert H. Humphrey Metrodome|Minneapolis|MN|64035
+88|Georgia Dome|Atlanta|GA|71149
+89|Bank of America Stadium|Charlotte|NC|73298
+90|Louisiana Superdome|New Orleans|LA|72000
+91|Raymond James Stadium|Tampa|FL|65647
+92|University of Phoenix Stadium|Glendale|AZ|0
+93|Edward Jones Dome|St. Louis|MO|66965
+94|Monster Park|San Francisco|CA|69843
+95|Qwest Field|Seattle|WA|67000
+96|Oriole Park at Camden Yards|Baltimore|MD|48876
+97|Fenway Park|Boston|MA|39928
+98|Yankee Stadium|New York City|NY|52325
+99|Tropicana Field|St. Petersburg|FL|36048
+100|U.S. Cellular Field|Chicago|IL|40615
+101|Progressive Field|Cleveland|OH|43345
+102|Comerica Park|Detroit|MI|41782
+103|Kauffman Stadium|Kansas City|MO|40793
+104|Angel Stadium of Anaheim|Anaheim|CA|45050
+105|Safeco Field|Seattle|WA|47116
+106|Rangers BallPark in Arlington|Arlington|TX|49115
+107|Turner Field|Atlanta|GA|50091
+108|Shea Stadium|New York City|NY|0
+109|Citizens Bank Park|Philadelphia|PA|43647
+110|Nationals Park|Washington|DC|41888
+111|Wrigley Field|Chicago|IL|41118
+112|Great American Ball Park|Cincinnati|OH|42059
+113|Minute Maid Park|Houston|TX|40950
+114|Miller Park|Milwaukee|WI|42200
+115|PNC Park|Pittsburgh|PA|38496
+116|Busch Stadium|St. Louis|MO|49660
+117|Chase Field|Phoenix|AZ|0
+118|Coors Field|Denver|CO|50445
+119|Dodger Stadium|Los Angeles|CA|56000
+120|PETCO Park|San Diego|CA|42445
+121|AT&T Park|San Francisco|CA|41503
+122|Saratoga Springs Performing Arts Center|Saratoga Springs|NY|0
+123|Fox Theatre|Redwood City|CA|0
+124|Mountain Winery|Saratoga|CA|0
+125|Villa Montalvo|Saratoga|CA|0
+126|Shoreline Amphitheatre|Mountain View|CA|22000
+127|Superpages.com Center|Dallas|TX|0
+128|E.J. Nutter Center|Dayton|OH|0
+129|Hersheypark Stadium|Hershey|PA|0
+130|North Charleston Coliseum|Charleston|SC|0
+200|Al Hirschfeld Theatre|New York City|NY|0
+201|Ambassador Theatre|New York City|NY|0
+202|American Airlines Theatre|New York City|NY|0
+203|August Wilson Theatre|New York City|NY|0
+204|Brooks Atkinson Theatre|New York City|NY|0
+205|Ethel Barrymore Theatre|New York City|NY|0
+206|Belasco Theatre|New York City|NY|0
+207|Bernard B. Jacobs Theatre|New York City|NY|0
+208|Biltmore Theatre|New York City|NY|0
+209|Booth Theatre|New York City|NY|0
+210|Broadhurst Theatre|New York City|NY|0
+211|The Broadway Theatre|New York City|NY|0
+212|Circle in the Square Theatre|New York City|NY|0
+213|Cort Theatre|New York City|NY|0
+214|George Gershwin Theatre|New York City|NY|0
+215|John Golden Theatre|New York City|NY|0
+216|Helen Hayes Theatre|New York City|NY|0
+217|Hilton Theatre|New York City|NY|0
+218|Imperial Theatre|New York City|NY|0
+219|Longacre Theatre|New York City|NY|0
+220|Lunt-Fontanne Theatre|New York City|NY|0
+221|Lyceum Theatre|New York City|NY|0
+222|Majestic Theatre|New York City|NY|0
+223|Marquis Theatre|New York City|NY|0
+224|Minskoff Theatre|New York City|NY|0
+225|Music Box Theatre|New York City|NY|0
+226|Nederlander Theatre|New York City|NY|0
+227|New Amsterdam Theatre|New York City|NY|0
+228|Eugene O'Neill Theatre|New York City|NY|0
+229|Palace Theatre|New York City|NY|0
+230|Richard Rodgers Theatre|New York City|NY|0
+231|Gerald Schoenfeld Theatre|New York City|NY|0
+232|Shubert Theatre|New York City|NY|0
+233|Neil Simon Theatre|New York City|NY|0
+234|St. James Theatre|New York City|NY|0
+235|Studio 54|New York City|NY|0
+236|Vivian Beaumont Theatre|New York City|NY|0
+237|Walter Kerr Theatre|New York City|NY|0
+238|Winter Garden Theatre|New York City|NY|0
+239|Greek Theatre|Los Angeles|CA|0
+240|San Jose Repertory Theatre|San Jose|CA|0
+241|Curran Theatre|San Francisco|CA|0
+242|Geffen Playhouse|Los Angeles|CA|0
+243|Pasadena Playhouse|Pasadena|CA|0
+244|Royce Hall|Los Angeles|CA|0
+245|The Guthrie Theater|Minneapolis|MN|0
+246|Carnegie Hall|New York City|NY|0
+247|Lincoln Center for the Performing Arts|New York City|NY|0
+248|Charles Playhouse|Boston|MA|0
+249|Paramount Theatre|Seattle|WA|0
+250|Sahara Hotel|Las Vegas|NV|\N
+251|Paris Hotel|Las Vegas|NV|\N
+252|Hilton Hotel|Las Vegas|NV|\N
+253|Mirage Hotel|Las Vegas|NV|\N
+254|Caesars Palace|Las Vegas|NV|\N
+255|Venetian Hotel|Las Vegas|NV|\N
+256|Paris MGM Grand|Las Vegas|NV|\N
+257|Luxor Hotel|Las Vegas|NV|\N
+258|Tropicana Hotel|Las Vegas|NV|\N
+259|Harrahs Hotel|Las Vegas|NV|\N
+260|Ballys Hotel|Las Vegas|NV|\N
+261|Wynn Hotel|Las Vegas|NV|\N
+262|Mandalay Bay Hotel|Las Vegas|NV|\N
+263|Bellagio Hotel|Las Vegas|NV|\N
+264|New York New York|Las Vegas|NV|\N
+300|Kennedy Center Opera House|Washington|DC|0
+301|Ellie Caulkins Opera House|Denver|CO|0
+302|Detroit Opera House|Detroit|MI|0
+303|Grand 1894 Opera House|Galveston|TX|0
+304|War Memorial Opera House|San Francisco|CA|0
+305|Lyric Opera House|Chicago|IL|0
+306|Lyric Opera House|Baltimore|MD|0
+307|San Francisco Opera|San Francisco|CA|0
+308|Metropolitan Opera|New York City|NY|0
+309|Los Angeles Opera|Los Angeles|CA|0

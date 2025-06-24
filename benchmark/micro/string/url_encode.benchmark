@@ -1,0 +1,16 @@
+# name: benchmark/micro/string/url_encode.benchmark
+# description: URL Encode
+# group: [string]
+
+name URL Encode
+group string
+
+load
+CREATE TABLE strings(s VARCHAR);
+INSERT INTO strings SELECT concat('this is a string with encodings /\% - ', i) FROM range(100000000) t(i);
+
+run
+SELECT MIN(url_decode(url_encode(s))) FROM strings
+
+result I
+this is a string with encodings /\% - 0

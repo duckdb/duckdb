@@ -1,0 +1,17 @@
+# name: test/sql/table_function/duckdb_memory_convert_to_persistent.test
+# group: [table_function]
+
+load __TEST_DIR__/convert_to_persistent.duckdb
+
+# create a persistent table
+# this first allocates memory with the tag 'IN_MEMORY_TABLE'
+# the memory is converted to persistent data after the query is done
+# so all of the memory should be 'BASE_TABLE', no longer 'IN_MEMORY_TABLE'
+statement ok
+create table test as select range i from range(1_000_000);
+
+# this is
+query I
+select memory_usage_bytes from duckdb_memory() where tag = 'IN_MEMORY_TABLE'
+----
+0

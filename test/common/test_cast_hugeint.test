@@ -36,6 +36,8 @@ loop i 0 2
 
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET ${i}) t1
+----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*INT128.*
 
 endloop
 
@@ -71,6 +73,8 @@ loop i 0 4
 
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_doubles ORDER BY f LIMIT 1 OFFSET ${i}) t1
+----
+<REGEX>:Conversion Error.*DOUBLE.*is out of range for.*INT128.*
 
 endloop
 
@@ -80,7 +84,7 @@ CREATE TABLE working_strings(f VARCHAR);
 CREATE TABLE broken_strings(f VARCHAR);
 
 statement ok
-INSERT INTO working_strings VALUES ('10'), ('-10'), ('-1329227995784915872903807060280344576'), ('170141183460469231731687303715884105727'), ('-170141183460469231731687303715884105727'), ('1.3'), ('-9223372036854775807.1293813'), ('1e18'), ('1e+18'), ('1.'), ('.1'), ('0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'), ('1000e-40'), ('10000e-3');
+INSERT INTO working_strings VALUES ('10'), ('-10'), ('-1329227995784915872903807060280344576'), ('170141183460469231731687303715884105727'), ('-170141183460469231731687303715884105728'), ('1.3'), ('-9223372036854775807.1293813'), ('1e18'), ('1e+18'), ('1.'), ('.1'), ('0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'), ('1000e-40'), ('10000e-3');
 
 statement ok
 INSERT INTO broken_strings VALUES ('170141183460469231731687303715884105728'), ('-170141183460469231731687303715884105729'), ('10000000000000000000000000000000000000000000000000000000000000'), ('aaaa'), ('19A'), (''), ('1.A'), ('1.2382398723A'), ('1e++1'), ('1e+1+1'), ('1e+1-1'), ('+'), ('.'), ('.   '), ('10000000000e37');
@@ -92,7 +96,7 @@ SELECT f::HUGEINT FROM working_strings
 -10
 -1329227995784915872903807060280344576
 170141183460469231731687303715884105727
--170141183460469231731687303715884105727
+-170141183460469231731687303715884105728
 1.3
 -9223372036854775807.1293813
 1e18
@@ -107,6 +111,8 @@ loop i 0 14
 
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_strings ORDER BY f LIMIT 1 OFFSET ${i}) t1
+----
+<REGEX>:Conversion Error.*string.*INT128.*
 
 endloop
 
@@ -327,9 +333,13 @@ select '255'::HUGEINT::UINT8
 
 statement error
 select '-1'::hugeint::uint8
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT8.*
 
 statement error
 select '256'::hugeint::uint8
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT8.*
 
 # uint16
 query I
@@ -339,9 +349,13 @@ select '65535'::HUGEINT::UINT16
 
 statement error
 select '-1'::hugeint::uint16
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT16.*
 
 statement error
 select '65536'::hugeint::uint16
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT16.*
 
 # uint32
 query I
@@ -351,9 +365,13 @@ select '4294967295'::HUGEINT::UINT32
 
 statement error
 select '-1'::hugeint::uint32
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT32.*
 
 statement error
 select '4294967296'::hugeint::uint32
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT32.*
 
 # UINT64
 query I
@@ -363,9 +381,13 @@ select '18446744073709551615'::HUGEINT::UINT64
 
 statement error
 select '-1'::hugeint::UINT64
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT64.*
 
 statement error
 select '18446744073709551616'::hugeint::UINT64
+----
+<REGEX>:Conversion Error.*INT128.*is out of range for.*UINT64.*
 
 # uint -> hugeint
 query I

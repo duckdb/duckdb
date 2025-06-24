@@ -235,44 +235,58 @@ SELECT SUM(ue) FROM (SELECT UNNEST(le) ue FROM (SELECT g, LIST(e) le from list_d
 # this is technically equivalent but is not supported
 statement error
 SELECT SUM(UNNEST(le)) FROM ( SELECT g, LIST(e) le from list_data  GROUP BY g ORDER BY g) xx
+----
 
 # you're holding it wrong
 statement error
 SELECT LIST(LIST(42))
+----
 
 statement error
 SELECT UNNEST(UNNEST(LIST(42))
+----
 
 statement error
 SELECT LIST()
+----
 
 statement error
 SELECT LIST() FROM list_data
+----
 
 statement error
 SELECT LIST(e, g) FROM list_data
+----
 
 statement error
 SELECT g, UNNEST(l+1) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
+----
 
 statement error
 SELECT g, UNNEST(g) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
+----
 
 statement error
 SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
+----
 
 statement error
 SELECT UNNEST(42)
+----
 
 statement error
 SELECT UNNEST()
+----
 
 statement error
 SELECT UNNEST(42) from list_data
+----
 
 statement error
 SELECT UNNEST() from list_data
+----
 
 statement error
 SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42
+----
 

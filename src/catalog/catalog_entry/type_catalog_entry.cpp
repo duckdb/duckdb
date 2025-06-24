@@ -10,9 +10,20 @@
 namespace duckdb {
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type),
+      bind_function(info.bind_function) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
+	this->comment = info.comment;
+	this->tags = info.tags;
+}
+
+unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTypeInfo>();
+	auto result = make_uniq<TypeCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
@@ -21,32 +32,27 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
+	result->dependencies = dependencies;
+	result->comment = comment;
+	result->tags = tags;
+	result->bind_function = bind_function;
 	return std::move(result);
 }
 
 string TypeCatalogEntry::ToSQL() const {
-	std::stringstream ss;
-	switch (user_type.id()) {
-	case (LogicalTypeId::ENUM): {
-		auto &values_insert_order = EnumType::GetValuesInsertOrder(user_type);
-		idx_t size = EnumType::GetSize(user_type);
-		ss << "CREATE TYPE ";
-		ss << KeywordHelper::WriteOptionallyQuoted(name);
-		ss << " AS ENUM ( ";
+	duckdb::stringstream ss;
+	ss << "CREATE TYPE ";
+	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << " AS ";
 
-		for (idx_t i = 0; i < size; i++) {
-			ss << "'" << values_insert_order.GetValue(i).ToString() << "'";
-			if (i != size - 1) {
-				ss << ", ";
-			}
-		}
-		ss << ");";
-		break;
-	}
-	default:
-		throw InternalException("Logical Type can't be used as a User Defined Type");
-	}
+	auto user_type_copy = user_type;
 
+	// Strip off the potential alias so ToString doesn't just output the alias
+	user_type_copy.SetAlias("");
+	D_ASSERT(user_type_copy.GetAlias().empty());
+
+	ss << user_type_copy.ToString();
+	ss << ";";
 	return ss.str();
 }
 

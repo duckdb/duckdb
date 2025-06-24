@@ -25,8 +25,8 @@ T UnsafeFetchFromPtr(void *pointer) {
 
 template <class T>
 void *UnsafeFetchPtr(duckdb_result *result, idx_t col, idx_t row) {
-	D_ASSERT(row < result->__deprecated_row_count);
-	return (void *)&(((T *)result->__deprecated_columns[col].__deprecated_data)[row]);
+	D_ASSERT(row < result->deprecated_row_count);
+	return (void *)&(((T *)result->deprecated_columns[col].deprecated_data)[row]);
 }
 
 template <class T>

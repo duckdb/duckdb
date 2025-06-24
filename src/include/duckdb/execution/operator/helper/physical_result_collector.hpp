@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
@@ -20,7 +21,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RESULT_COLLECTOR;
 
 public:
-	explicit PhysicalResultCollector(PreparedStatementData &data);
+	PhysicalResultCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 	StatementType statement_type;
 	StatementProperties properties;
@@ -28,7 +29,7 @@ public:
 	vector<string> names;
 
 public:
-	static unique_ptr<PhysicalResultCollector> GetResultCollector(ClientContext &context, PreparedStatementData &data);
+	static PhysicalOperator &GetResultCollector(ClientContext &context, PreparedStatementData &data);
 
 public:
 	//! The final method used to fetch the query result from this operator
@@ -44,6 +45,12 @@ public:
 
 	bool IsSource() const override {
 		return true;
+	}
+
+public:
+	//! Whether this is a streaming result collector
+	virtual bool IsStreaming() const {
+		return false;
 	}
 };
 

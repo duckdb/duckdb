@@ -151,7 +151,7 @@ idx_t DistinctAggregateCollectionInfo::CreateTableIndexMap() {
 		    std::find_if(table_inputs.begin(), table_inputs.end(), FindMatchingAggregate(std::ref(aggregate)));
 		if (matching_inputs != table_inputs.end()) {
 			//! Assign the existing table to the aggregate
-			idx_t found_idx = std::distance(table_inputs.begin(), matching_inputs);
+			auto found_idx = NumericCast<idx_t>(std::distance(table_inputs.begin(), matching_inputs));
 			table_map[agg_idx] = found_idx;
 			continue;
 		}

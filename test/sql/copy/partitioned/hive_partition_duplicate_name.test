@@ -1,0 +1,15 @@
+# name: test/sql/copy/partitioned/hive_partition_duplicate_name.test
+# description: Test partitioning names with duplicate keys
+# group: [partitioned]
+
+require parquet
+
+# we just use the first partitioning key by default
+query III
+select *
+from parquet_scan('data/parquet-testing/hive-partitioning/duplicate_names/**/*.parquet')
+ORDER BY ALL
+----
+1	value1	1
+2	value2	2
+

@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
-
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
@@ -52,26 +51,36 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	PushFilters();
 
 	//! We generate the table filters that will be executed during the table scan
-	//! Right now this only executes simple AND filters
-	get.table_filters = combiner.GenerateTableScanFilters(get.column_ids);
-
-	// //! For more complex filters if all filters to a column are constants we generate a min max boundary used to
-	// check
-	// //! the zonemaps.
-	// auto zonemap_checks = combiner.GenerateZonemapChecks(get.column_ids, get.table_filters);
-
-	// for (auto &f : get.table_filters) {
-	// 	f.column_index = get.column_ids[f.column_index];
-	// }
-
-	// //! Use zonemap checks as table filters for pre-processing
-	// for (auto &zonemap_check : zonemap_checks) {
-	// 	if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID) {
-	// 		get.table_filters.push_back(zonemap_check);
-	// 	}
-	// }
+	vector<FilterPushdownResult> pushdown_results;
+	get.table_filters = combiner.GenerateTableScanFilters(get.GetColumnIds(), pushdown_results);
 
 	GenerateFilters();
+
+	for (idx_t i = pushdown_results.size(); i < filters.size(); ++i) {
+		// any generated filters have not been pushed down yet
+		pushdown_results.push_back(FilterPushdownResult::NO_PUSHDOWN);
+	}
+	// for any filters we did not manage to push into specialized table filters - try to push them as a generic
+	// expression
+	for (idx_t i = 0; i < filters.size(); ++i) {
+		// get the previous pushdown result
+		auto pushdown_result = pushdown_results[i];
+		if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
+			// this has already been (partially) pushed down - skip
+			continue;
+		}
+		auto &expr = *filters[i]->filter;
+		if (expr.IsVolatile() || expr.CanThrow()) {
+			// we cannot push down volatile or throwing expressions
+			continue;
+		}
+		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);
+		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
+			filters.erase_at(i);
+			pushdown_results.erase_at(i);
+			i--;
+		}
+	}
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return FinishPushdown(std::move(op));

@@ -35,6 +35,7 @@ NULL	hello
 
 statement error
 CREATE TABLE test (a INTEGER, b STRING);
+----
 
 statement ok
 CREATE TABLE IF NOT EXISTS test (a INTEGER, b STRING);

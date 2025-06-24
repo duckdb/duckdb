@@ -5,6 +5,7 @@
 #Corner cases
 statement error
 select product()
+----
 
 query I
 select product(NULL)
@@ -18,6 +19,7 @@ select product(1)
 
 statement error
 select product(*)
+----
 
 statement ok
 CREATE TABLE integers(i INTEGER);

@@ -3,8 +3,6 @@
 # group: [pg_catalog]
 
 # avoid loading a storage database because it changes the initial database name
-require noforcestorage
-
 query I
 SELECT CURRENT_USER
 ----
@@ -17,6 +15,11 @@ memory
 
 query I
 SELECT CURRENT_DATABASE()
+----
+memory
+
+query I
+SELECT pg_catalog.CURRENT_DATABASE()
 ----
 memory
 
@@ -37,6 +40,11 @@ query I
 SELECT current_query();
 ----
 SELECT current_query();
+
+query I
+SELECT pg_catalog.current_query();
+----
+SELECT pg_catalog.current_query();
 
 query IIII
 SELECT 1, 2, 3, current_query();
@@ -83,3 +91,8 @@ query I
 select pg_typeof(1);
 ----
 integer
+
+statement error
+SELECT temp.current_user()
+----
+main.current_user

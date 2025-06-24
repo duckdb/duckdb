@@ -71,10 +71,10 @@ SELECT f FROM floats WHERE f<>'nan'::${type}
 # >
 # for postgres compatibility, nan is bigger than everything
 query I
-SELECT f FROM floats WHERE f>0
+SELECT f FROM floats WHERE f > 0 ORDER BY ALL;
 ----
-nan
 1
+nan
 
 query I
 SELECT f FROM floats WHERE f>'nan'::${type}
@@ -82,10 +82,10 @@ SELECT f FROM floats WHERE f>'nan'::${type}
 
 # >=
 query I
-SELECT f FROM floats WHERE f>=1
+SELECT f FROM floats WHERE f >= 1 ORDER BY ALL;
 ----
-nan
 1
+nan
 
 query I
 SELECT f FROM floats WHERE f>='nan'::${type}
@@ -109,10 +109,10 @@ SELECT f FROM floats WHERE f<=1
 1
 
 query I
-SELECT f FROM floats WHERE f<='nan'::${type}
+SELECT f FROM floats WHERE f <= 'nan'::${type} ORDER BY ALL;
 ----
-nan
 1
+nan
 
 statement ok
 DROP TABLE floats

@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -9,6 +10,9 @@ using duckdb::Timestamp;
 
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::timestamp_ms_t;
+using duckdb::timestamp_ns_t;
+using duckdb::timestamp_sec_t;
 using duckdb::timestamp_t;
 
 duckdb_date_struct duckdb_from_date(duckdb_date date) {
@@ -17,8 +21,8 @@ duckdb_date_struct duckdb_from_date(duckdb_date date) {
 
 	duckdb_date_struct result;
 	result.year = year;
-	result.month = month;
-	result.day = day;
+	result.month = duckdb::UnsafeNumericCast<int8_t>(month);
+	result.day = duckdb::UnsafeNumericCast<int8_t>(day);
 	return result;
 }
 
@@ -28,16 +32,39 @@ duckdb_date duckdb_to_date(duckdb_date_struct date) {
 	return result;
 }
 
+bool duckdb_is_finite_date(duckdb_date date) {
+	return Date::IsFinite(date_t(date.days));
+}
+
 duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	int32_t hour, minute, second, micros;
 	Time::Convert(dtime_t(time.micros), hour, minute, second, micros);
 
 	duckdb_time_struct result;
-	result.hour = hour;
-	result.min = minute;
-	result.sec = second;
+	result.hour = duckdb::UnsafeNumericCast<int8_t>(hour);
+	result.min = duckdb::UnsafeNumericCast<int8_t>(minute);
+	result.sec = duckdb::UnsafeNumericCast<int8_t>(second);
 	result.micros = micros;
 	return result;
+}
+
+duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz input) {
+	duckdb_time_tz_struct result;
+	duckdb_time time;
+
+	duckdb::dtime_tz_t time_tz(input.bits);
+
+	time.micros = time_tz.time().micros;
+
+	result.time = duckdb_from_time(time);
+	result.offset = time_tz.offset();
+	return result;
+}
+
+duckdb_time_tz duckdb_create_time_tz(int64_t micros, int32_t offset) {
+	duckdb_time_tz time;
+	time.bits = duckdb::dtime_tz_t(duckdb::dtime_t(micros), offset).bits;
+	return time;
 }
 
 duckdb_time duckdb_to_time(duckdb_time_struct time) {
@@ -70,4 +97,20 @@ duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts) {
 	duckdb_timestamp result;
 	result.micros = Timestamp::FromDatetime(date, time).value;
 	return result;
+}
+
+bool duckdb_is_finite_timestamp(duckdb_timestamp ts) {
+	return Timestamp::IsFinite(timestamp_t(ts.micros));
+}
+
+bool duckdb_is_finite_timestamp_s(duckdb_timestamp_s ts) {
+	return Timestamp::IsFinite(timestamp_sec_t(ts.seconds));
+}
+
+bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts) {
+	return Timestamp::IsFinite(timestamp_ms_t(ts.millis));
+}
+
+bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts) {
+	return Timestamp::IsFinite(timestamp_ns_t(ts.nanos));
 }

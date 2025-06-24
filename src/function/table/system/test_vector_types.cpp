@@ -78,6 +78,14 @@ struct TestVectorFlat {
 			break;
 		}
 		case PhysicalType::LIST: {
+			if (type.id() == LogicalTypeId::MAP) {
+				auto &child_type = ListType::GetChildType(type);
+				auto child_values = GenerateValues(info, child_type);
+				result.push_back(Value::MAP(child_type, {child_values[0]}));
+				result.push_back(Value(type));
+				result.push_back(Value::MAP(child_type, {child_values[1]}));
+				break;
+			}
 			auto &child_type = ListType::GetChildType(type);
 			auto child_values = GenerateValues(info, child_type);
 
@@ -157,6 +165,9 @@ struct TestVectorSequence {
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
 			result.Sequence(3, 2, 3);
+#if STANDARD_VECTOR_SIZE <= 2
+			result.Flatten(3);
+#endif
 			return;
 		default:
 			break;
@@ -170,6 +181,7 @@ struct TestVectorSequence {
 			break;
 		}
 		case PhysicalType::LIST: {
+			D_ASSERT(type.id() != LogicalTypeId::MAP);
 			auto data = FlatVector::GetData<list_entry_t>(result);
 			data[0].offset = 0;
 			data[0].length = 2;
@@ -196,15 +208,33 @@ struct TestVectorSequence {
 	}
 
 	static void Generate(TestVectorInfo &info) {
-#if STANDARD_VECTOR_SIZE > 2
+		static constexpr const idx_t SEQ_CARDINALITY = 3;
+
 		auto result = make_uniq<DataChunk>();
-		result->Initialize(Allocator::DefaultAllocator(), info.types);
+		result->Initialize(Allocator::DefaultAllocator(), info.types,
+		                   MaxValue<idx_t>(SEQ_CARDINALITY, STANDARD_VECTOR_SIZE));
 
 		for (idx_t c = 0; c < info.types.size(); c++) {
+			if (info.types[c].id() == LogicalTypeId::MAP) {
+				// FIXME: we don't support MAP in the TestVectorSequence
+				return;
+			}
 			GenerateVector(info, info.types[c], result->data[c]);
 		}
-		result->SetCardinality(3);
+		result->SetCardinality(SEQ_CARDINALITY);
+#if STANDARD_VECTOR_SIZE > 2
 		info.entries.push_back(std::move(result));
+#else
+		// vsize = 2, split into two smaller data chunks
+		for (idx_t offset = 0; offset < SEQ_CARDINALITY; offset += STANDARD_VECTOR_SIZE) {
+			auto new_result = make_uniq<DataChunk>();
+			new_result->Initialize(Allocator::DefaultAllocator(), info.types);
+
+			idx_t copy_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, SEQ_CARDINALITY - offset);
+			result->Copy(*new_result, *FlatVector::IncrementalSelectionVector(), offset + copy_count, offset);
+
+			info.entries.push_back(std::move(new_result));
+		}
 #endif
 	}
 };

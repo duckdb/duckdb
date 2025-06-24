@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_6933.test
-# description: Issue #6933: Segfault when using enable_object_cache alongside union_by_name for parquet files
+# description: Issue #6933: Segfault when using parquet_metadata_cache alongside union_by_name for parquet files
 # group: [parquet]
 
 require parquet
@@ -37,7 +37,7 @@ statement ok
 COPY table2 TO '__TEST_DIR__/output2.parquet' (FORMAT PARQUET);
 
 statement ok
-PRAGMA enable_object_cache;
+set parquet_metadata_cache=true;
 
 query II
 SELECT name, number FROM read_parquet(['__TEST_DIR__/output*.parquet'], union_by_name=True) ORDER BY name, number

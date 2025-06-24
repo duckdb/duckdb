@@ -2,8 +2,8 @@
 # description: Read a CSV with dtypes and UNION BY NAME
 # group: [csv]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE ubn1(a BIGINT);
@@ -24,13 +24,13 @@ statement ok
 INSERT INTO ubn3 VALUES (100,101), (102, 103);
 
 statement ok
-COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
+COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (DELIMITER ',');
 
 statement ok
-COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
+COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH ( DELIMITER ',');
 
 statement ok
-COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
+COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (DELIMITER ',');
 
 query III
 SELECT typeof(a), typeof(b), typeof(c)

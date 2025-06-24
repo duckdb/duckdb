@@ -24,6 +24,7 @@ SELECT * FROM integers ORDER BY 1
 # appending the same value again fails
 statement error
 INSERT INTO integers VALUES (1, 2)
+----
 
 statement ok
 ROLLBACK
@@ -46,6 +47,7 @@ SELECT * FROM integers ORDER BY 1
 # updating also fails if there is a conflict
 statement error
 UPDATE integers SET i=1 WHERE i=2
+----
 
 statement ok
 ROLLBACK

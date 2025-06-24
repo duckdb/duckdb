@@ -1,0 +1,10 @@
+# name: test/fuzzer/duckfuzz/array_serialization_flattening.test
+# group: [duckfuzz]
+
+# Internal Issue #1409
+# Caused by accidentally flattening during serialization/verification of array vectors
+statement ok
+CREATE TABLE test(c2 BOOL, c48 STRUCT(a INTEGER[3], b VARCHAR[3]));;
+
+statement ok
+INSERT INTO test VALUES(false, '{''a'': [NULL, 2, 3], ''b'': [a, NULL, c]}');

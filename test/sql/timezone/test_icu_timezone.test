@@ -9,14 +9,16 @@ SET Calendar = 'gregorian';
 
 statement error
 SET TimeZone = 'Europe/Duck';
+----
+Unknown TimeZone
 
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
-query IIII
+query IIIII
 SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
 ----
-TimeZone	America/Los_Angeles	The current time zone	VARCHAR
+TimeZone	America/Los_Angeles	The current time zone	VARCHAR	LOCAL
 
 #
 # AT TIME ZONE
@@ -28,22 +30,33 @@ SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'America/Denver';
 ----
 2001-02-16 19:38:40-08
 
+# case insensitive
+query I
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'america/denver';
+----
+2001-02-16 19:38:40-08
+
+# recommendation
+statement error
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'America/Donver';
+----
+America/Denver
+
 query I
 SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'America/Denver';
 ----
 2001-02-16 18:38:40
 
 # Invalid time zone
-# (ICU treats thesed as UTC.)
-query I
+statement error
 SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'Europe/Duck';
 ----
-2001-02-16 12:38:40-08
+Unknown TimeZone
 
-query I
+statement error
 SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'Europe/Duck';
 ----
-2001-02-17 01:38:40
+Unknown TimeZone
 
 # Infinities
 foreach datatype TIMESTAMP TIMESTAMPTZ
@@ -58,15 +71,15 @@ SELECT '-infinity'::${datatype} AT TIME ZONE 'America/Denver';
 ----
 -infinity
 
-query I
+statement error
 SELECT 'infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
 ----
-infinity
+Unknown TimeZone
 
-query I
+statement error
 SELECT '-infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
 ----
--infinity
+Unknown TimeZone
 
 endloop
 
@@ -91,60 +104,97 @@ SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE NULL;
 ----
 NULL
 
+# Normalise to TZ, add interval, then set offset
+query I
+select '12:15:37.123456-08'::TIMETZ AT TIME ZONE 'America/Phoenix';
+----
+13:15:37.123456-07
+
+query I
+select timezone('America/Phoenix', '12:15:37.123456-08'::TIMETZ);
+----
+13:15:37.123456-07
+
+# Date => TIMESTAMPTZ
+query I
+SELECT '2020-01-01'::DATE::TIMESTAMPTZ AS dttz;
+----
+2020-01-01 00:00:00-08
+
+query I
+SELECT 'infinity'::DATE::TIMESTAMPTZ AS dttz;
+----
+infinity
+
+query I
+SELECT '-infinity'::DATE::TIMESTAMPTZ AS dttz;
+----
+-infinity
+
+statement error
+select '5877642-06-25 (BC)'::DATE::TIMESTAMPTZ AS dttz;
+----
+Invalid Input Error
+
+statement error
+select '5881580-07-10'::DATE::TIMESTAMPTZ AS dttz;
+----
+Invalid Input Error
+
 # Table
 statement ok
-CREATE TABLE attimezone (ts TIMESTAMP, tstz TIMESTAMPTZ, tz VARCHAR);
+CREATE TABLE attimezone (ts TIMESTAMP, tstz TIMESTAMPTZ, ttz TIMETZ, tz VARCHAR);
 
 statement ok
 INSERT INTO attimezone (VALUES
-	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', 'America/Denver'),
-	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', 'America/Denver'),
-	('infinity', 'infinity', 'America/Denver'),
-	('-infinity', '-infinity', 'America/Denver'),
-	(NULL, NULL, 'America/Denver'),
-	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', 'Europe/Duck'),
-	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', 'Europe/Duck'),
-	('infinity', 'infinity', 'Europe/Duck'),
-	('-infinity', '-infinity', 'Europe/Duck'),
-	(NULL, NULL, 'Europe/Duck'),
-	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', NULL),
-	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', NULL),
-	('infinity', 'infinity', NULL),
-	('-infinity', '-infinity', NULL),
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', '19:38:40-08', 'America/Phoenix'),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', '20:38:40-05', 'America/Phoenix'),
+	('infinity', 'infinity', '19:38:40-08', 'America/Phoenix'),
+	('-infinity', '-infinity', '20:38:40-05', 'America/Phoenix'),
+	(NULL, NULL, NULL, 'America/Phoenix'),
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', '19:38:40+08', 'UTC'),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', '20:38:40+15:59', 'UTC'),
+	('infinity', 'infinity', '12:15:37.123456-08', 'UTC'),
+	('-infinity', '-infinity', '20:38:40-15:59', 'UTC'),
+	(NULL, NULL, NULL, 'UTC'),
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', '19:38:40-08', NULL),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', '20:38:40-05', NULL),
+	('infinity', 'infinity', '12:15:37.123456-08', NULL),
+	('-infinity', '-infinity', '20:38:40-15:59', NULL),
 );
 
 # By Row
-query II
-SELECT ts AT TIME ZONE tz, tstz AT TIME ZONE tz
+query III
+SELECT ts AT TIME ZONE tz, tstz AT TIME ZONE tz, ttz AT TIME ZONE tz
 FROM attimezone
 ----
-2001-02-16 19:38:40-08	2001-02-16 20:38:40
-2001-02-16 17:38:40-08	2001-02-16 18:38:40
-infinity	infinity
--infinity	-infinity
-NULL	NULL
-2001-02-16 12:38:40-08	2001-02-17 03:38:40
-2001-02-16 10:38:40-08	2001-02-17 01:38:40
-infinity	infinity
--infinity	-infinity
-NULL	NULL
-NULL	NULL
-NULL	NULL
-NULL	NULL
-NULL	NULL
+2001-02-16 19:38:40-08	2001-02-16 20:38:40	20:38:40-07
+2001-02-16 17:38:40-08	2001-02-16 18:38:40	18:38:40-07
+infinity	infinity	20:38:40-07
+-infinity	-infinity	18:38:40-07
+NULL	NULL	NULL
+2001-02-16 12:38:40-08	2001-02-17 03:38:40	11:38:40+00
+2001-02-16 10:38:40-08	2001-02-17 01:38:40	04:39:40+00
+infinity	infinity	20:15:37.123456+00
+-infinity	-infinity	12:37:40+00
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
 
 # Filtered
-query II
-SELECT ts AT TIME ZONE tz, tstz AT TIME ZONE tz
+query III
+SELECT ts AT TIME ZONE tz, tstz AT TIME ZONE tz, ttz AT TIME ZONE tz
 FROM attimezone
 WHERE ts > '2001-02-16 18:38:40'::TIMESTAMP
 ----
-2001-02-16 19:38:40-08	2001-02-16 20:38:40
-infinity	infinity
-2001-02-16 12:38:40-08	2001-02-17 03:38:40
-infinity	infinity
-NULL	NULL
-NULL	NULL
+2001-02-16 19:38:40-08	2001-02-16 20:38:40	20:38:40-07
+infinity	infinity	20:38:40-07
+2001-02-16 12:38:40-08	2001-02-17 03:38:40	11:38:40+00
+infinity	infinity	20:15:37.123456+00
+NULL	NULL	NULL
+NULL	NULL	NULL
 
 #
 # Verify local time functions are implemented.
@@ -246,7 +296,7 @@ America/Argentina/Tucuman	America/Argentina/Tucuman
 America/Argentina/Ushuaia	America/Argentina/Ushuaia
 America/Aruba	PRT
 America/Asuncion	America/Asuncion
-America/Atikokan	America/Atikokan
+America/Atikokan	EST
 America/Atka	America/Atka
 America/Bahia	America/Bahia
 America/Bahia_Banderas	America/Bahia_Banderas
@@ -264,14 +314,15 @@ America/Cancun	America/Cancun
 America/Caracas	America/Caracas
 America/Catamarca	America/Catamarca
 America/Cayenne	America/Cayenne
-America/Cayman	America/Cayman
+America/Cayman	EST
 America/Chicago	CST
 America/Chihuahua	America/Chihuahua
 America/Ciudad_Juarez	America/Ciudad_Juarez
-America/Coral_Harbour	America/Coral_Harbour
+America/Coral_Harbour	EST
 America/Cordoba	America/Cordoba
 America/Costa_Rica	America/Costa_Rica
-America/Creston	PNT
+America/Coyhaique	America/Coyhaique
+America/Creston	MST
 America/Cuiaba	America/Cuiaba
 America/Curacao	PRT
 America/Danmarkshavn	America/Danmarkshavn
@@ -341,7 +392,7 @@ America/Montevideo	America/Montevideo
 America/Montreal	America/Montreal
 America/Montserrat	PRT
 America/Nassau	America/Nassau
-America/New_York	America/New_York
+America/New_York	EST5EDT
 America/Nipigon	America/Nipigon
 America/Nome	America/Nome
 America/Noronha	America/Noronha
@@ -350,10 +401,10 @@ America/North_Dakota/Center	America/North_Dakota/Center
 America/North_Dakota/New_Salem	America/North_Dakota/New_Salem
 America/Nuuk	America/Nuuk
 America/Ojinaga	America/Ojinaga
-America/Panama	America/Panama
+America/Panama	EST
 America/Pangnirtung	America/Pangnirtung
 America/Paramaribo	America/Paramaribo
-America/Phoenix	PNT
+America/Phoenix	MST
 America/Port-au-Prince	America/Port-au-Prince
 America/Port_of_Spain	PRT
 America/Porto_Acre	America/Porto_Acre
@@ -551,7 +602,7 @@ CAT	CAT
 CET	CET
 CNT	CNT
 CST	CST
-CST6CDT	CST6CDT
+CST6CDT	CST
 CTT	CTT
 Canada/Atlantic	Canada/Atlantic
 Canada/Central	Canada/Central
@@ -607,15 +658,15 @@ Etc/UCT	UCT
 Etc/UTC	UCT
 Etc/Universal	UCT
 Etc/Zulu	UCT
-Europe/Amsterdam	Europe/Amsterdam
+Europe/Amsterdam	CET
 Europe/Andorra	Europe/Andorra
 Europe/Astrakhan	Europe/Astrakhan
-Europe/Athens	Europe/Athens
+Europe/Athens	EET
 Europe/Belfast	GB
 Europe/Belgrade	Europe/Belgrade
 Europe/Berlin	Europe/Berlin
 Europe/Bratislava	Europe/Bratislava
-Europe/Brussels	Europe/Brussels
+Europe/Brussels	CET
 Europe/Bucharest	Europe/Bucharest
 Europe/Budapest	Europe/Budapest
 Europe/Busingen	Europe/Busingen
@@ -632,10 +683,10 @@ Europe/Kaliningrad	Europe/Kaliningrad
 Europe/Kiev	Europe/Kiev
 Europe/Kirov	Europe/Kirov
 Europe/Kyiv	Europe/Kyiv
-Europe/Lisbon	Portugal
+Europe/Lisbon	WET
 Europe/Ljubljana	Europe/Ljubljana
 Europe/London	GB
-Europe/Luxembourg	Europe/Luxembourg
+Europe/Luxembourg	CET
 Europe/Madrid	Europe/Madrid
 Europe/Malta	Europe/Malta
 Europe/Mariehamn	Europe/Mariehamn
@@ -702,10 +753,10 @@ Jamaica	Jamaica
 Japan	JST
 Kwajalein	Kwajalein
 Libya	Libya
-MET	MET
+MET	CET
 MIT	MIT
 MST	MST
-MST7MDT	MST7MDT
+MST7MDT	Navajo
 Mexico/BajaNorte	Mexico/BajaNorte
 Mexico/BajaSur	Mexico/BajaSur
 Mexico/General	Mexico/General
@@ -715,11 +766,11 @@ NZ	NZ
 NZ-CHAT	NZ-CHAT
 Navajo	Navajo
 PLT	PLT
-PNT	PNT
+PNT	MST
 PRC	CTT
 PRT	PRT
 PST	PST
-PST8PDT	PST8PDT
+PST8PDT	PST
 Pacific/Apia	MIT
 Pacific/Auckland	NZ
 Pacific/Bougainville	Pacific/Bougainville
@@ -735,8 +786,8 @@ Pacific/Galapagos	Pacific/Galapagos
 Pacific/Gambier	Pacific/Gambier
 Pacific/Guadalcanal	SST
 Pacific/Guam	Pacific/Guam
-Pacific/Honolulu	Pacific/Honolulu
-Pacific/Johnston	Pacific/Johnston
+Pacific/Honolulu	HST
+Pacific/Johnston	HST
 Pacific/Kanton	Pacific/Kanton
 Pacific/Kiritimati	Pacific/Kiritimati
 Pacific/Kosrae	Pacific/Kosrae
@@ -765,7 +816,7 @@ Pacific/Wake	Pacific/Wake
 Pacific/Wallis	Pacific/Wallis
 Pacific/Yap	Pacific/Yap
 Poland	Poland
-Portugal	Portugal
+Portugal	WET
 ROC	ROC
 ROK	ROK
 SST	SST
@@ -787,11 +838,11 @@ Turkey	Turkey
 UCT	UCT
 US/Alaska	AST
 US/Aleutian	US/Aleutian
-US/Arizona	PNT
+US/Arizona	MST
 US/Central	CST
 US/East-Indiana	IET
-US/Eastern	US/Eastern
-US/Hawaii	US/Hawaii
+US/Eastern	EST5EDT
+US/Hawaii	HST
 US/Indiana-Starke	US/Indiana-Starke
 US/Michigan	US/Michigan
 US/Mountain	Navajo
@@ -878,3 +929,74 @@ query II
 SELECT '2022-10-30 03:00:00-07'::TIMESTAMPTZ, '2023-10-30 02:00:00-07'::TIMESTAMPTZ;
 ----
 2022-10-30 07:00:00-03	2023-10-30 07:00:00-02
+
+# 2023d
+# Ittoqqortoormiit, Greenland changes time zones on 2024-03-31
+# from -01/+00 to -02/-01 at the same moment as the spring-forward transition.
+statement ok
+SET TimeZone = 'America/Scoresbysund';
+
+query II
+SELECT '2024-03-31 00:59:00-01'::TIMESTAMPTZ, '2024-03-31 01:00:00-01'::TIMESTAMPTZ;
+----
+2024-03-31 00:59:00-01	2024-03-31 01:00:00-01
+
+
+# 2024a
+# Kazakhstan unifies on UTC+5 beginning 2024-03-01.
+statement ok
+SET TimeZone = 'Asia/Almaty';
+
+query II
+select '2024-02-29 00:00:00+06'::TIMESTAMPTZ, '2024-03-01 01:00:00+06'::TIMESTAMPTZ;
+----
+2024-02-29 00:00:00+06	2024-03-01 00:00:00+05
+
+# 2024b
+# In particular, the Azores and Madeira did not observe DST from 1977 to 1981.
+statement ok
+SET TimeZone = 'Atlantic/Azores';
+
+# Last DST error
+query I
+select '1981-09-27 01:00:00+00'::TIMESTAMPTZ;
+----
+1981-09-27 00:00:00-01
+
+# 2025a
+# Paraguay will stop changing its clocks after the spring-forward
+# transition on 2024-10-06, so it is now permanently at -03.
+statement ok
+set timezone='America/Asuncion';
+
+query I
+select '2025-03-23'::timestamptz;
+----
+2025-03-23 00:00:00-03
+
+query II
+select utc_offset, is_dst
+from pg_timezone_names() 
+where name = 'America/Asuncion'
+----
+-03:00:00	false
+
+# 2025b
+#  Chile's Aysén Region moves from -04/-03 to -03 year-round, joining
+#  Magallanes Region.  The region will not change its clocks on
+#  2025-04-05 at 24:00, diverging from America/Santiago and creating a
+#  new zone America/Coyhaique
+statement ok
+set timezone='America/Coyhaique';
+
+query I
+select '2025-04-05'::timestamptz;
+----
+2025-04-05 00:00:00-03
+
+query II
+select utc_offset, is_dst
+from pg_timezone_names() 
+where name = 'America/Coyhaique'
+----
+-03:00:00	false

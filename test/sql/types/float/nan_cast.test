@@ -18,6 +18,7 @@ SELECT '${val}'::${source_type}
 # cannot cast nan, inf or -inf to these types
 statement error
 SELECT '${val}'::${source_type}::${target_type}
+----
 
 endloop
 

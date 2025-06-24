@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/test_null_padding_union.test
+# description: Test CSV with null padding and union by name
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+create view v as
+SELECT a, b, c, d
+FROM  read_csv('data/csv/union-by-name/null_padding/*.csv', UNION_BY_NAME=TRUE, sample_size = 1, null_padding = 1)
+ORDER BY a,b,c,d
+
+query IIII
+select * from v limit 10;
+----
+NULL	NULL	NULL	1
+1	NULL	NULL	NULL
+1	2	NULL	NULL
+1	2	3	NULL
+1	2	3	NULL
+1	2	3	NULL
+1	2	3	NULL
+1	2	3	NULL
+1	2	3	NULL
+1	2	3	NULL
+
+query I
+select count(*) from v where a is null
+----
+1
+
+query I
+select count(*) from v where b is null
+----
+3
+
+query I
+select count(*) from v where c is null
+----
+2906
+
+query I
+select count(*) from v where d is null
+----
+2904

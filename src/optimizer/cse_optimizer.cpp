@@ -2,7 +2,6 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -13,9 +12,9 @@ namespace duckdb {
 //! underlying projection
 struct CSENode {
 	idx_t count;
-	idx_t column_index;
+	optional_idx column_index;
 
-	CSENode() : count(1), column_index(DConstants::INVALID_INDEX) {
+	CSENode() : count(1), column_index() {
 	}
 };
 
@@ -31,6 +30,8 @@ struct CSEReplacementState {
 	vector<unique_ptr<Expression>> expressions;
 	//! Cached expressions that are kept around so the expression_map always contains valid expressions
 	vector<unique_ptr<Expression>> cached_expressions;
+	//! Short circuit argument tracking
+	bool short_circuited = false;
 };
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
@@ -47,35 +48,53 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 
 void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplacementState &state) {
 	// we only consider expressions with children for CSE elimination
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
-	// skip conjunctions and case, since short-circuiting might be incorrectly disabled otherwise
-	case ExpressionClass::BOUND_CONJUNCTION:
-	case ExpressionClass::BOUND_CASE:
 		return;
 	default:
 		break;
 	}
-	if (expr.expression_class != ExpressionClass::BOUND_AGGREGATE && !expr.HasSideEffects()) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE && !expr.IsVolatile()) {
 		// we can't move aggregates to a projection, so we only consider the children of the aggregate
 		auto node = state.expression_count.find(expr);
 		if (node == state.expression_count.end()) {
 			// first time we encounter this expression, insert this node with [count = 1]
-			state.expression_count[expr] = CSENode();
+			// but only if it is not an interior argument of a short circuit sensitive expression.
+			if (!state.short_circuited) {
+				state.expression_count[expr] = CSENode();
+			}
 		} else {
 			// we encountered this expression before, increment the occurrence count
 			node->second.count++;
 		}
 	}
-	// recursively count the children
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+
+	// If we have a function that uses short circuiting, then we can only extract CSEs from the leftmost
+	// side of the argument tree (child_no == 0)
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_CONJUNCTION:
+	case ExpressionClass::BOUND_CASE: {
+		// Save the short circuit reference
+		const auto save_short_circuit = state.short_circuited;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			CountExpressions(child, state);
+			state.short_circuited = true;
+		});
+		state.short_circuited = save_short_circuit;
+		break;
+	}
+	default:
+		// recursively count the children
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+		break;
+	}
 }
 
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> &expr_ptr, CSEReplacementState &state) {
 	Expression &expr = *expr_ptr;
-	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
 		auto column_entry = state.column_map.find(bound_column_ref.binding);
@@ -84,7 +103,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			idx_t new_column_index = state.expressions.size();
 			state.column_map[bound_column_ref.binding] = new_column_index;
 			state.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    bound_column_ref.alias, bound_column_ref.return_type, bound_column_ref.binding));
+			    bound_column_ref.GetAlias(), bound_column_ref.return_type, bound_column_ref.binding));
 			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
 		} else {
 			// else: just update the column binding!
@@ -93,16 +112,14 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		return;
 	}
 	// check if this child is eligible for CSE elimination
-	bool can_cse = expr.expression_class != ExpressionClass::BOUND_CONJUNCTION &&
-	               expr.expression_class != ExpressionClass::BOUND_CASE;
-	if (can_cse && state.expression_count.find(expr) != state.expression_count.end()) {
+	if (state.expression_count.find(expr) != state.expression_count.end()) {
 		auto &node = state.expression_count[expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
-			auto alias = expr.alias;
+			auto alias = expr.GetAlias();
 			auto type = expr.return_type;
-			if (node.column_index == DConstants::INVALID_INDEX) {
+			if (!node.column_index.IsValid()) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
 				state.expressions.push_back(std::move(expr_ptr));
@@ -110,8 +127,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 				state.cached_expressions.push_back(std::move(expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
-			                                               ColumnBinding(state.projection_index, node.column_index));
+			expr_ptr = make_uniq<BoundColumnRefExpression>(
+			    alias, type, ColumnBinding(state.projection_index, node.column_index.GetIndex()));
 			return;
 		}
 	}
@@ -149,6 +166,9 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	D_ASSERT(state.expressions.size() > 0);
 	// create a projection node as the child of this node
 	auto projection = make_uniq<LogicalProjection>(state.projection_index, std::move(state.expressions));
+	if (op.children[0]->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(op.children[0]->estimated_cardinality);
+	}
 	projection->children.push_back(std::move(op.children[0]));
 	op.children[0] = std::move(projection);
 }

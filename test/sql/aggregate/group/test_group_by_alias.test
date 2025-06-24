@@ -37,6 +37,7 @@ SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%
 # constant out of range
 statement error
 SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 42 HAVING i%2>0;
+----
 
 # entry in GROUP BY should refer to base column
 # ...BUT the alias in ORDER BY should refer to the alias from the select list
@@ -71,6 +72,7 @@ NULL	NULL	NULL
 # cannot use GROUP BY column in an aggregation...
 statement error
 SELECT i % 2 AS k, SUM(k) FROM integers GROUP BY k
+----
 
 # ...unless it is one of the base columns
 query IR
@@ -87,6 +89,7 @@ NULL	NULL
 # aggregate
 statement error
 SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;
+----
 
 # we can manually get this behavior by pushing FIRST
 query IR

@@ -1,0 +1,19 @@
+
+PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? GroupByClause?
+
+PivotOn <- 'ON' PivotColumnList
+PivotUsing <- 'USING' TargetList
+
+PivotColumnList <- List(Expression)
+
+PivotKeyword <- 'PIVOT'i / 'PIVOT_WIDER'i
+UnpivotKeyword <- 'UNPIVOT'i / 'PIVOT_LONGER'i
+
+UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
+
+IntoNameValues <- 'INTO' 'NAME' Identifier ValueOrValues List(Identifier)
+
+ValueOrValues <- 'VALUE' / 'VALUES'
+
+IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
+UnpivotHeader <- Identifier / Parens(List(Identifier))

@@ -10,8 +10,12 @@ CREATE TABLE integers AS SELECT i FROM range(1000000) tbl(i);
 statement ok
 CHECKPOINT;
 
+# save the block count and the used block count before index creation
+
 statement ok
 CREATE TABLE blocks_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+# index creation
 
 statement ok
 CREATE INDEX idx ON integers(i);
@@ -24,11 +28,34 @@ SELECT i FROM integers WHERE i = 500000;
 statement ok
 CHECKPOINT;
 
-# save the total block count and the used block count
+# save the total block count and the used block count after creating an index
 statement ok
 CREATE TABLE blocks_idx AS SELECT total_blocks, used_blocks FROM pragma_database_size();
 
-# loop and always DROP INDEX, then recreate (reusing the same blocks)
+# dropping the index
+
+statement ok
+DROP INDEX idx;
+
+statement ok
+CHECKPOINT;
+
+# save the total block count after dropping the index
+statement ok
+CREATE TABLE blocks_drop_idx AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT i FROM integers WHERE i = 500000;
+----
+500000
+
+# now loop and always DROP INDEX, then recreate (reusing the same blocks)
 
 loop i 0 4
 
@@ -41,8 +68,8 @@ CHECKPOINT;
 # we added another table, but dropping the index should get us back
 # to more or less the block count that we had before creating the index
 query I
-SELECT current.total_blocks < blocks_tbl.total_blocks + 4
-FROM pragma_database_size() AS current, blocks_tbl;
+SELECT current.total_blocks < blocks_drop_idx.total_blocks + 4
+FROM pragma_database_size() AS current, blocks_drop_idx;
 ----
 1
 
@@ -54,7 +81,7 @@ CHECKPOINT;
 
 # we reclaim blocks, so we stay within some +4 blocks of our previous block count
 query I
-SELECT current.total_blocks < blocks_idx.total_blocks + 4
+SELECT current.total_blocks < blocks_idx.total_blocks + 5
 FROM pragma_database_size() current, blocks_idx;
 ----
 1

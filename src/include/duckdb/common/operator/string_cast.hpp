@@ -46,6 +46,8 @@ DUCKDB_API duckdb::string_t StringCast::Operation(uint64_t input, Vector &result
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(hugeint_t input, Vector &result);
 template <>
+DUCKDB_API duckdb::string_t StringCast::Operation(uhugeint_t input, Vector &result);
+template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(double input, Vector &result);
@@ -59,6 +61,8 @@ template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(dtime_t input, Vector &result);
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(timestamp_t input, Vector &result);
+template <>
+DUCKDB_API duckdb::string_t StringCast::Operation(timestamp_ns_t input, Vector &result);
 
 //! Temporary casting for Time Zone types. TODO: turn casting into functions.
 struct StringCastTZ {

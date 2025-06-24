@@ -12,6 +12,7 @@ BoundStatement Binder::Bind(ExtensionStatement &stmt) {
 	auto parse_result =
 	    stmt.extension.plan_function(stmt.extension.parser_info.get(), context, std::move(stmt.parse_data));
 
+	auto &properties = GetStatementProperties();
 	properties.modified_databases = parse_result.modified_databases;
 	properties.requires_valid_transaction = parse_result.requires_valid_transaction;
 	properties.return_type = parse_result.return_type;
@@ -22,9 +23,9 @@ BoundStatement Binder::Bind(ExtensionStatement &stmt) {
 	auto &get = result.plan->Cast<LogicalGet>();
 	result.names = get.names;
 	result.types = get.returned_types;
-	get.column_ids.clear();
+	get.ClearColumnIds();
 	for (idx_t i = 0; i < get.returned_types.size(); i++) {
-		get.column_ids.push_back(i);
+		get.AddColumnId(i);
 	}
 	return result;
 }

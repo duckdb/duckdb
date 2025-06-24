@@ -23,6 +23,15 @@ SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], recursive := true)
 5
 
 query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], RECURSIVE := true)
+----
+1
+2
+3
+4
+5
+
+query I
 SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], max_depth := 1)
 ----
 [[[[1, 2], [3, 4]], [[5]]], [[[]]]]

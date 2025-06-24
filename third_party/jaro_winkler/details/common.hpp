@@ -91,7 +91,7 @@ struct BitvectorHashmap {
     void insert_mask(CharT key, uint64_t mask)
     {
         uint64_t i = lookup(static_cast<uint64_t>(key));
-        m_map[i].key = key;
+        m_map[i].key = static_cast<uint64_t>(key);
         m_map[i].value |= mask;
     }
 
@@ -150,7 +150,7 @@ struct PatternMatchVector {
         for (int64_t i = 0; i < std::distance(first, last); ++i) {
             auto key = first[i];
             if (key >= 0 && key <= 255) {
-                m_extendedAscii[key] |= mask;
+                m_extendedAscii[static_cast<size_t>(key)] |= mask;
             }
             else {
                 m_map.insert_mask(key, mask);
@@ -175,7 +175,7 @@ struct PatternMatchVector {
     uint64_t get(CharT key) const
     {
         if (key >= 0 && key <= 255) {
-            return m_extendedAscii[key];
+            return m_extendedAscii[static_cast<size_t>(key)];
         }
         else {
             return m_map.get(key);
@@ -215,10 +215,10 @@ struct BlockPatternMatchVector {
 
         assert(block < m_block_count);
         if (key >= 0 && key <= 255) {
-            m_extendedAscii[key * m_block_count + block] |= mask;
+            m_extendedAscii[static_cast<size_t>(key * m_block_count + block)] |= mask;
         }
         else {
-            m_map[block].insert_mask(key, mask);
+            m_map[static_cast<size_t>(block)].insert_mask(key, mask);
         }
     }
 
@@ -227,13 +227,13 @@ struct BlockPatternMatchVector {
     {
         int64_t len = std::distance(first, last);
         m_block_count = ceildiv(len, 64);
-        m_map.resize(m_block_count);
-        m_extendedAscii.resize(m_block_count * 256);
+        m_map.resize(static_cast<size_t>(m_block_count));
+        m_extendedAscii.resize(static_cast<size_t>(m_block_count * 256));
 
         for (int64_t i = 0; i < len; ++i) {
             int64_t block = i / 64;
             int64_t pos = i % 64;
-            insert(block, first[i], pos);
+            insert(block, first[i], static_cast<int>(pos));
         }
     }
 
@@ -251,10 +251,10 @@ struct BlockPatternMatchVector {
     {
         assert(block < m_block_count);
         if (key >= 0 && key <= 255) {
-            return m_extendedAscii[key * m_block_count + block];
+            return m_extendedAscii[static_cast<size_t>(key * m_block_count + block)];
         }
         else {
-            return m_map[block].get(key);
+            return m_map[static_cast<size_t>(block)].get(key);
         }
     }
 

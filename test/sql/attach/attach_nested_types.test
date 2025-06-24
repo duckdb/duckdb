@@ -2,8 +2,6 @@
 # description: Test attach with nested types
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -49,7 +47,7 @@ SELECT "table" FROM database.schema.table
 {'col': {'field': 42}}
 
 statement ok
-USE "database.schema"
+USE database.schema
 
 query I
 SELECT "table" FROM "table"

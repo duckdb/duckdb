@@ -34,7 +34,15 @@ duckdb_path = os.getcwd()
 os.system('git fetch upstream --tags')
 
 proc = subprocess.Popen(['git', 'show-ref', '--tags'], stdout=subprocess.PIPE)
-tags = [x for x in proc.stdout.read().decode('utf8').split('\n') if len(x) > 0]
+tags = [x for x in proc.stdout.read().decode('utf8').split('\n') if len(x) > 0 and 'master-builds' not in x]
+
+
+def extract_tag(x):
+    keys = x.split('refs/tags/')[1].lstrip('v').split('.')
+    return int(keys[0]) * 10000000 + int(keys[1]) * 10000 + int(keys[2])
+
+
+tags.sort(key=extract_tag)
 
 # latest tag
 splits = tags[-1].split(' ')
@@ -49,8 +57,8 @@ print(f'Creating a Julia release from the latest tag {tag} with commit hash {has
 print('> Creating a PR to the Yggdrassil repository (https://github.com/JuliaPackaging/Yggdrasil)')
 
 os.chdir(args.yggdrassil)
-run_syscall('git checkout main')
-run_syscall('git pull upstream main')
+run_syscall('git checkout master')
+run_syscall('git pull upstream master')
 run_syscall(f'git branch -D {tag}', True)
 run_syscall(f'git checkout -b {tag}')
 tarball_build = os.path.join('D', 'DuckDB', 'build_tarballs.jl')

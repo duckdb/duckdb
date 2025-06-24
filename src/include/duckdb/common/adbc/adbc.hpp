@@ -33,8 +33,8 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error);
 
-AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
-                                 struct ArrowArrayStream *out, struct AdbcError *error);
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes,
+                                 size_t info_codes_length, struct ArrowArrayStream *out, struct AdbcError *error);
 
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
@@ -84,10 +84,10 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
                                           struct AdbcPartitions *partitions, int64_t *rows_affected,
                                           struct AdbcError *error);
 
-//! This method should only be called when the string is guaranteed to not be NULL
-void SetError(struct AdbcError *error, const std::string &message);
-void SetError(struct AdbcError *error, const char *message);
-
 void InitializeADBCError(AdbcError *error);
 
 } // namespace duckdb_adbc
+
+//! This method should only be called when the string is guaranteed to not be NULL
+void SetError(struct AdbcError *error, const std::string &message);
+// void SetError(struct AdbcError *error, const char *message);

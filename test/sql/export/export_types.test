@@ -1,0 +1,61 @@
+# name: test/sql/export/export_types.test
+# description: Test export of macro's
+# group: [export]
+
+# Because of ordering issues in EXPORT DATABASE we can't IMPORT this database
+mode skip
+
+statement ok
+BEGIN TRANSACTION
+
+# Populate the database
+
+# Create a type alias
+statement ok
+CREATE TYPE mood AS ENUM ('happy', 'sad', 'curious');
+
+# Create an alias on 'mood', creating a dependency on 'mood'
+statement ok
+CREATE TYPE doom as mood;
+
+# Create tables that use mood and doom
+statement ok
+create table tbl1 (a mood, b doom);
+
+statement ok
+create table tbl2 (my_struct STRUCT(a mood, b doom));
+
+# Create an alias on STRUCT containing mood and doom
+statement ok
+CREATE TYPE doom_mood as STRUCT(a mood, b doom);
+
+# Create an alias on LIST of mood
+statement ok
+CREATE TYPE mood_list as mood[];
+
+# Create an alias on a UNION containing mood and doom
+statement ok
+CREATE TYPE my_union as UNION(a doom, b mood);
+
+# Create an alias on a MAP with mood as key and doom as value
+statement ok
+CREATE TYPE mood_map as MAP(doom, mood);
+
+# Create an alias on a regular type, VARCHAR in this case
+statement ok
+CREATE TYPE my_special_type as VARCHAR;
+
+# Create a table containing the doom_mood type
+statement ok
+CREATE TABLE tbl3 (my_struct doom_mood);
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_types' (FORMAT CSV);
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_types'
+
+# Verify that the database was imported properly

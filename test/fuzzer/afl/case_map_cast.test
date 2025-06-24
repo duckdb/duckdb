@@ -1,0 +1,7 @@
+# name: test/fuzzer/afl/case_map_cast.test
+# description: Test case with map
+# group: [afl]
+
+query I
+SELECT TRUE WHERE CASE MAP { } WHEN 'abc' [ ('any_string' IN (NULL::VARCHAR)): ] THEN TRUE END ;
+----

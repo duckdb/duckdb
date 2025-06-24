@@ -1,0 +1,36 @@
+# name: test/sql/copy/csv/auto/test_sniffer_blob.test
+# description: Test reading a blob with the sniffer
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+
+# This is the only way to try to trick the sniffer into checking blobs and it is not valid
+statement error
+select count(*) from read_csv('data/csv/test/blob.csv',auto_type_candidates=['blob'])
+----
+Auto Type Candidate of type BLOB is not accepted as a valid input
+
+# All this is cool and should work.
+
+query I
+select count(*) from read_csv('data/csv/test/blob.csv',types=['blob'], header = 0)
+----
+1
+
+query I
+select count(*) from read_csv('data/csv/test/blob.csv',columns={'col1': 'BLOB'})
+----
+1
+
+statement ok
+create table t ( a blob)
+
+statement ok
+COPY t FROM 'data/csv/test/blob.csv';
+
+query I
+select count(*) from read_csv('data/csv/test/blob.csv',columns={'col1': 'BLOB'})
+----
+1

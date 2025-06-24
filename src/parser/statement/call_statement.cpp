@@ -12,4 +12,12 @@ unique_ptr<SQLStatement> CallStatement::Copy() const {
 	return unique_ptr<CallStatement>(new CallStatement(*this));
 }
 
+string CallStatement::ToString() const {
+	string result = "";
+	result += "CALL";
+	result += " " + function->ToString();
+	result += ";";
+	return result;
+}
+
 } // namespace duckdb

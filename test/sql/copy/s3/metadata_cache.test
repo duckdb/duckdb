@@ -23,6 +23,12 @@ require-env DUCKDB_S3_USE_SSL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+# this test was written before we implemented the external file cache
+# when it is enabled, the request counts are different
+# we disable it so this test still makes sense
+statement ok
+set enable_external_file_cache=false;
+
 statement ok
 CREATE TABLE test as SELECT * FROM range(0,10) tbl(i);
 
@@ -44,13 +50,13 @@ analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 0.*PUT\: 1.*\#POST\: 2.*
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 1.*PUT\: 0.*\#POST\: 0.*
 
 # Redoing query should still result in same request count
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 1.*PUT\: 0.*\#POST\: 0.*
 
 # Now enable the global metadata cache to store the results of the head requests, saving 1 HEAD per file
 statement ok
@@ -59,13 +65,13 @@ SET enable_http_metadata_cache=true;
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 1.*PUT\: 0.*\#POST\: 0.*
 
 # Now with global metadata cache, we dont need to do the head request again. noice.
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 1.*PUT\: 0.*\#POST\: 0.*
 
 # Now when we write a file to a cached url, this would break so the cache entry should be invalidated
 statement ok
@@ -75,10 +81,10 @@ COPY (SELECT * from range(0,100) tbl(i)) TO 's3://test-bucket-public/root-dir/me
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 1.*PUT\: 0.*\#POST\: 0.*
 
 # but now its cached again
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 1.*PUT\: 0.*\#POST\: 0.*

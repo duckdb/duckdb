@@ -1,0 +1,65 @@
+# name: test/optimizer/limit_pushdown.test
+# description: Test Limit Pushdown optimization
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+INSERT INTO integers VALUES (1,1), (2,2), (3, 3), (4,4)
+
+# project + limit becomes limit + project
+query II
+EXPLAIN SELECT i FROM integers LIMIT 4
+----
+logical_opt	<REGEX>:.*PROJECTION.*LIMIT.*
+
+# verify result for project + limit to limit + project
+query I
+SELECT i FROM integers LIMIT 4
+----
+1
+2
+3
+4
+
+# recursive limit pushdown
+query II
+EXPLAIN SELECT i FROM (SELECT i, i+1 FROM integers) LIMIT 4
+----
+logical_opt	<REGEX>:.*PROJECTION.*PROJECTION.*LIMIT.*
+
+# verify result for recursive limit pushdown and offset
+query I
+SELECT i FROM (SELECT i, i+1 FROM integers) LIMIT 4 OFFSET 2
+----
+3
+4
+
+# only offset: no pushdown
+query II
+EXPLAIN SELECT i FROM integers OFFSET 4
+----
+logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
+
+# limit and offset
+query II
+EXPLAIN SELECT i FROM integers LIMIT 4 OFFSET 2
+----
+logical_opt	<REGEX>:.*PROJECTION.*LIMIT.*
+
+# verify result for limit and offset
+query I
+SELECT i FROM integers LIMIT 4 OFFSET 2
+----
+3
+4
+
+# limit value > 8192: no pushdown
+query II
+EXPLAIN SELECT i FROM integers LIMIT 8192
+----
+logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*

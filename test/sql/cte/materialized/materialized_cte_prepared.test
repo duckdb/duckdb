@@ -1,0 +1,51 @@
+# name: test/sql/cte/materialized/materialized_cte_prepared.test
+# description: Test DML statements with materialized Common Table Expressions (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+require no_alternative_verify
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (1), (2), (3), (NULL), (42), (84);
+
+# prepare in materialized cte
+statement ok
+PREPARE v1 AS WITH t(x) AS MATERIALIZED (VALUES ($1))
+DELETE FROM a WHERE i IN (FROM t);
+
+query I
+EXECUTE v1(42)
+----
+1
+
+query I
+FROM a ORDER BY 1
+----
+1
+2
+3
+84
+NULL
+
+# prepare in both materialized cte and delete
+statement ok
+PREPARE v2 AS WITH t(x) AS MATERIALIZED (VALUES ($1))
+DELETE FROM a WHERE (i + $2) IN (FROM t);
+
+query I
+EXECUTE v2(5, 2)
+----
+1
+
+query I
+FROM a ORDER BY 1
+----
+1
+2
+84
+NULL

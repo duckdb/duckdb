@@ -1,0 +1,14 @@
+# name: benchmark/csv/multiple_small_files_union_by_name.benchmark
+# description: Run CSV scan over multiple small (2048 rows) values
+# group: [csv]
+
+name CSV Read Benchmark over multiple small files (union by name)
+group csv
+
+load
+CREATE TABLE t1 AS select i,i,i,i,i,i,i,i,i,i from range(0,2048) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/small_csv.csv' (FORMAT CSV, HEADER 1);
+
+run
+SELECT * from
+read_csv(repeat(['${BENCHMARK_DIR}/small_csv.csv'], 1000),delim= ',',  header = 0, union_by_name=true)

@@ -1,0 +1,36 @@
+# name: test/sql/copy/csv/test_big_compressed.test_slow
+# description: Test scan over multiple compressed big csv files
+# group: [csv]
+
+# This test is way too slow to run on CI, generating a SF100 TPC-H lineitem file takes a LOT of time.
+# Still useful to check for problems locally.
+mode skip
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+
+statement ok
+CALL dbgen(sf=100);
+
+statement ok
+copy lineitem to '__TEST_DIR__/lineitem_100.csv.gz';
+
+statement ok
+SET temp_directory=''
+
+# load the DB from disk (Avoids OOM when generating ze table)
+load __TEST_DIR__/lineitem_100_compressed.db
+
+statement ok
+CREATE TABLE lineitem_2(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO lineitem_2 FROM '__TEST_DIR__/lineitem_100.csv.gz';
+
+query I
+select count(*) from lineitem_2
+----
+600037902

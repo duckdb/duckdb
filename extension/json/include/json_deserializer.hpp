@@ -6,12 +6,9 @@ namespace duckdb {
 
 class JsonDeserializer : public Deserializer {
 public:
-	JsonDeserializer(yyjson_val *val, yyjson_doc *doc) : doc(doc) {
+	JsonDeserializer(yyjson_val *val, const yyjson_doc_ptr &doc) : doc(doc.get()) {
 		deserialize_enum_from_string = true;
 		stack.emplace_back(val);
-	}
-	~JsonDeserializer() {
-		yyjson_doc_free(doc);
 	}
 
 private:
@@ -78,6 +75,7 @@ private:
 	double ReadDouble() final;
 	string ReadString() final;
 	hugeint_t ReadHugeInt() final;
+	uhugeint_t ReadUhugeInt() final;
 	void ReadDataPtr(data_ptr_t &ptr, idx_t count) final;
 };
 

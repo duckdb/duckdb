@@ -4,6 +4,8 @@
 
 require icu
 
+require no_extension_autoloading "FIXME: ICU is not autoloaded on '-(TIMESTAMP WITH TIME ZONE, INTERVAL)"
+
 statement ok
 PRAGMA enable_verification
 
@@ -23,6 +25,7 @@ false
 
 statement error
 EXECUTE v1(1, 2)
+----
 
 statement ok
 PREPARE v2 AS SELECT 1 WHERE ? BETWEEN now() - INTERVAL '1 minute' AND now() + INTERVAL '1 minute';

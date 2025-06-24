@@ -526,14 +526,14 @@ class TestRAPIWindows:
             .fetchall()
         )
         expected = [
-            (1, {'key': [1], 'value': [1]}),
-            (1, {'key': [1], 'value': [2]}),
-            (1, {'key': [1, 2], 'value': [2, 1]}),
-            (2, {'key': [11], 'value': [1]}),
-            (2, {'key': [10, 11], 'value': [1, 1]}),
-            (3, {'key': [5], 'value': [1]}),
-            (3, {'key': [-1, 5], 'value': [1, 1]}),
-            (3, {'key': [-1, 5], 'value': [1, 1]}),
+            (1, {1: 1}),
+            (1, {1: 2}),
+            (1, {1: 2, 2: 1}),
+            (2, {11: 1}),
+            (2, {10: 1, 11: 1}),
+            (3, {5: 1}),
+            (3, {-1: 1, 5: 1}),
+            (3, {-1: 1, 5: 1}),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])

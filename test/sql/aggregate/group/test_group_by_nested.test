@@ -2,6 +2,8 @@
 # description: GROUP BY nested types (STRUCTs, LISTs)
 # group: [group]
 
+require notmusl
+
 statement ok
 SET default_null_order='nulls_first';
 
@@ -92,7 +94,7 @@ SELECT k, SUM(v) FROM structs GROUP BY k ORDER BY 2
 ----
 {'x': 13, 'y': Somateria mollissima}	NULL
 {'x': 1, 'y': a}	21
-{'x': 0, 'y': }	23
+{'x': 0, 'y': ''}	23
 {'x': NULL, 'y': NULL}	54
 {'x': 2, 'y': c}	58
 
@@ -102,7 +104,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
 ----
 {'x': 13, 'y': Somateria mollissima}	21	NULL
 {'x': 1, 'y': a}	21	21
-{'x': 0, 'y': }	21	23
+{'x': 0, 'y': ''}	21	23
 {'x': NULL, 'y': NULL}	21	54
 {'x': 2, 'y': c}	21	58
 

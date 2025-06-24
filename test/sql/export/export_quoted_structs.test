@@ -5,6 +5,9 @@
 # create a bunch of tables with data and views
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 BEGIN TRANSACTION
 
 # 'end' is a keyword, this has to be quoted
@@ -45,7 +48,7 @@ ROLLBACK
 statement ok
 IMPORT DATABASE '__TEST_DIR__/export_test'
 
-# Verify that the import was succesful
+# Verify that the import was successful
 query I
 select * from a
 ----

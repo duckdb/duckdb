@@ -13,6 +13,8 @@
 
 namespace duckdb_hll {
 
+// NOLINTBEGIN
+
 /* Error codes */
 #define HLL_C_OK  0
 #define HLL_C_ERR -1
@@ -37,8 +39,16 @@ int hll_count(robj *o, size_t *result);
 robj *hll_merge(robj **hlls, size_t hll_count);
 //! Get size (in bytes) of the HLL
 uint64_t get_size();
+//! Get the number of registers
+uint64_t num_registers();
+//! The maximum number of trailing zeros
+uint8_t maximum_zeros();
+//! Get the count of the register
+uint8_t get_register(robj *o, size_t index);
+//! Set the count of the register
+void set_register(robj *o, size_t index, uint8_t count);
 
-uint64_t MurmurHash64A(const void *key, int len, unsigned int seed);
+// NOLINTEND
 
 } // namespace duckdb_hll
 

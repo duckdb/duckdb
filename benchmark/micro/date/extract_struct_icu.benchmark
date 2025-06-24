@@ -15,4 +15,4 @@ run
 SELECT MIN(DATE_PART(['year', 'month', 'day', 'decade', 'century'], d)['year']) FROM dates
 
 result I
-1991
+1992

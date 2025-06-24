@@ -33,7 +33,7 @@ bool BoundUnnestExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundUnnestExpression::Copy() {
+unique_ptr<Expression> BoundUnnestExpression::Copy() const {
 	auto copy = make_uniq<BoundUnnestExpression>(return_type);
 	copy->child = child->Copy();
 	return std::move(copy);

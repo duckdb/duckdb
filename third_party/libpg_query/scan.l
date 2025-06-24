@@ -331,7 +331,8 @@ identifier		{ident_start}{ident_cont}*
 typecast		"::"
 dot_dot			\.\.
 colon_equals	":="
-lambda_arrow	"->"
+single_arrow	"->"
+single_colon	":"
 double_arrow    "->>"
 power_of        "**"
 integer_div     "//"
@@ -376,10 +377,10 @@ operator		{op_chars}+
  * backup when the {real} rule fails to match completely.
  */
 
-integer			{digit}+
-decimal			(({digit}*\.{digit}+)|({digit}+\.{digit}*))
-decimalfail		{digit}+\.\.
-real			({integer}|{decimal})[Ee][-+]?{digit}+
+integer			{digit}("_"?{digit})*
+decimal			({integer}\.{integer}?)|({integer}?\.{integer})
+decimalfail		{integer}+\.\.
+real			({integer}|{decimal})[Ee][-+]?{integer}
 realfail1		({integer}|{decimal})[Ee]
 realfail2		({integer}|{decimal})[Ee][-+]
 
@@ -821,9 +822,14 @@ other			.
 					return COLON_EQUALS;
 				}
 
-{lambda_arrow}	{
+{single_arrow}	{
 					SET_YYLLOC();
-					return LAMBDA_ARROW;
+					return SINGLE_ARROW;
+				}
+
+{single_colon}	{
+					SET_YYLLOC();
+					return SINGLE_COLON;
 				}
 
 {double_arrow}  {
@@ -1285,6 +1291,28 @@ litbufdup(core_yyscan_t yyscanner)
 static int
 process_integer_literal(const char *token, YYSTYPE *lval)
 {
+	int underscores = 0;
+	int len = 0;
+	for(char* cursor = (char*)token; *cursor != '\0'; cursor++)
+	{
+		len++;
+		if(*cursor == '_')
+			underscores++;
+	}
+
+	if(underscores != 0)
+	{
+		char* new_token = (char*)palloc(len - underscores + 1);
+		char* cursor = new_token;
+		for(char* old_cursor = (char*)token; *old_cursor != '\0'; old_cursor++)
+		{
+			if(*old_cursor != '_')
+				*cursor++ = *old_cursor;
+		}
+		*cursor = '\0';
+		token = new_token;
+	}
+
 	long		val;
 	char	   *endptr;
 

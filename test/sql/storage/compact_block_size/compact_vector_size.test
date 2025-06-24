@@ -1,0 +1,19 @@
+# name: test/sql/storage/compact_block_size/compact_vector_size.test
+# description: Various tests with a compact vector size of 512
+# group: [compact_block_size]
+
+require exact_vector_size 512
+
+# The vector size of this file is 2048.
+statement error
+ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
+----
+Cannot read database file
+
+statement ok
+ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY);
+
+query I
+SELECT * FROM vector_size_512.tbl;
+----
+42

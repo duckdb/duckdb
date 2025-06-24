@@ -1,0 +1,37 @@
+# name: test/sql/types/nested/array/array_aggregate.test
+# description: Test array type with aggregate functions
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl1 (a INT[3]);
+
+statement ok
+INSERT INTO tbl1 VALUES ([1, 2, 3]), ([4, NULL, 6]), ([7, 8, 9]), (NULL), ([10, 11, 12])
+
+query II
+SELECT FIRST(a ORDER BY ALL), LAST(a ORDER BY ALL) FROM tbl1;
+----
+[1, 2, 3]	NULL
+
+query II rowsort
+SELECT COUNT(*), max(a) FROM tbl1 GROUP BY list_sum(a::INT[]) % 2 == 0;
+----
+1	NULL
+1	[10, 11, 12]
+3	[7, 8, 9]
+
+
+query II rowsort
+SELECT COUNT(*), max(a) FROM tbl1 GROUP BY list_sum(a::INT[]) % 2 == 0 HAVING list_sum(a::INT[]) % 2 == 0 NOT NULL;
+----
+1	[10, 11, 12]
+3	[7, 8, 9]
+
+
+query II
+SELECT MAX(a), MIN(a) FROM tbl1;
+----
+[10, 11, 12]	[1, 2, 3]

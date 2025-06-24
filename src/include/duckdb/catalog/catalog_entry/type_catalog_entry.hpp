@@ -11,6 +11,7 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -26,8 +27,11 @@ public:
 
 	LogicalType user_type;
 
+	bind_logical_type_function_t bind_function;
+
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	string ToSQL() const override;
 };

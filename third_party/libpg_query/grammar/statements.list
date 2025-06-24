@@ -7,14 +7,17 @@ CallStmt
 CheckPointStmt
 CopyStmt
 CreateAsStmt
+CreateSecretStmt
 CreateTypeStmt
 CreateFunctionStmt
 CreateSchemaStmt
 CreateSeqStmt
 CreateStmt
+CommentOnStmt
 DeallocateStmt
 DeleteStmt
 DetachStmt
+DropSecretStmt
 DropStmt
 ExecuteStmt
 ExplainStmt
@@ -29,6 +32,7 @@ RenameStmt
 SelectStmt
 TransactionStmt
 UpdateStmt
+UpdateExtensionsStmt
 UseStmt
 VacuumStmt
 VariableResetStmt

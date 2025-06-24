@@ -2,8 +2,6 @@
 # description: The error messages that suggest possible alternative mixed with ATTACH
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
 
@@ -30,6 +28,18 @@ SELECT * FROM blablabla;
 ----
 Did you mean "db1.myschema.blablabla"
 
+statement ok
+SET catalog_error_max_schemas=0
+
+# did you mean... error is skipped if max schemas is set to 0
+statement error
+SELECT * FROM blablabla;
+----
+Table with name blablabla does not exist
+
+statement ok
+RESET catalog_error_max_schemas
+
 # what if we switch the default database?
 statement ok
 USE db1
@@ -55,7 +65,7 @@ SELECT * FROM memory.hello
 
 # what if we switch default database AND default schema?
 statement ok
-USE "db1.myschema"
+USE db1.myschema
 
 statement ok
 SELECT * FROM blablabla

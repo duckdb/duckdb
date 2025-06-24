@@ -2,8 +2,6 @@
 # description: Test storing nested structs in tables
 # group: [struct]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -79,9 +77,12 @@ SELECT (c).a FROM b
 # nested struct mismatch on insertion
 statement error
 INSERT INTO a VALUES (1)
+----
 
 statement error
 INSERT INTO a VALUES (ROW(1, 2))
+----
 
 statement error
 INSERT INTO a VALUES (ROW(ROW(1, 2, 3), 1))
+----

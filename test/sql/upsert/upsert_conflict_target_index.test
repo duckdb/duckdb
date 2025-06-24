@@ -18,6 +18,7 @@ create unique index other_index on index_tbl(i);
 
 statement error
 insert into index_tbl values (5, 5);
+----
 
 query II
 select * from index_tbl;

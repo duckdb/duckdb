@@ -15,10 +15,10 @@ statement ok
 INSERT INTO tracking values ('a', 0,0,0);
 
 statement ok
-create index nflid_idx on tracking (nflid)
+CREATE INDEX nflid_idx ON tracking (nflid)
 
 statement ok
-create unique index tracking_key_idx on tracking (gameId, playId, frameId, nflId)
+CREATE UNIQUE INDEX tracking_key_idx ON tracking (gameId, playId, frameId, nflId)
 
 statement ok
 EXPORT DATABASE '__TEST_DIR__/index';

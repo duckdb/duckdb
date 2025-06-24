@@ -27,12 +27,14 @@ SELECT * FROM test ORDER BY a
 
 statement error
 INSERT INTO test VALUES (11, 24)
+----
 
 statement ok
 INSERT INTO test VALUES (12, 24)
 
 statement error
 INSERT INTO test VALUES (12, 24)
+----
 
 query II
 SELECT * FROM test ORDER BY a
@@ -50,9 +52,11 @@ restart
 
 statement error
 INSERT INTO test VALUES (11, 24)
+----
 
 statement error
 INSERT INTO test VALUES (12, 24)
+----
 
 query II
 SELECT * FROM test ORDER BY a

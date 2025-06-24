@@ -54,6 +54,12 @@ SELECT format('{}', 120381902481294715712::HUGEINT)
 ----
 120381902481294715712
 
+# uhugeint
+query T
+SELECT format('{}', 120381902481294715712::UHUGEINT)
+----
+120381902481294715712
+
 # decimal
 query T
 SELECT format('{:.3f}', '1.234'::DECIMAL)
@@ -84,13 +90,25 @@ select format('{:b}', 123456789)
 ----
 111010110111100110100010101
 
+query I
+select format('{:.2}', 0.00023404094995959);
+----
+0.00023
+
+query I
+select format('{:.3}', 0.0);
+----
+0.00
+
 # incorrect number of parameters
 # too few parameters
 statement error
 SELECT format('{}')
+----
 
 statement error
 SELECT format('{} {}', 'hello')
+----
 
 # excess parameters are ignored
 query T
@@ -101,7 +119,9 @@ hello
 # incorrect types
 statement error
 SELECT format('{:s}', 42)
+----
 
 statement error
 SELECT format('{:d}', 'hello')
+----
 

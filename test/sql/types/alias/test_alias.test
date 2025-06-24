@@ -11,6 +11,8 @@ CREATE TYPE alias AS VARCHAR;
 #Enums with the same name shouldn't work
 statement error
 CREATE TYPE alias AS INTEGER;
+----
+<REGEX>:Catalog Error.*Type with name.*already exists!.*
 
 # Delete ALIASs
 statement ok
@@ -19,6 +21,8 @@ DROP TYPE alias;
 #This won't work because alias was already deleted
 statement error
 DROP TYPE alias;
+----
+<REGEX>:Catalog Error.*Type with name.*does not exist!.*
 
 # We can create alias again
 statement ok
@@ -42,3 +46,5 @@ DROP TYPE IF EXISTS alias;
 # create a type with a non-existant type as source
 statement error
 CREATE TYPE alias as BLOBL;
+----
+<REGEX>:Catalog Error.*Type with name.*does not exist!.*

@@ -43,7 +43,26 @@
         "id": 106,
         "name": "sql",
         "type": "string"
-      }
+      },
+      {
+        "id": 107,
+        "name": "comment",
+        "type": "Value",
+        "default": "Value()"
+      },
+	  {
+        "id": 108,
+        "name": "tags",
+        "type": "InsertionOrderPreservingMap<string>",
+        "default": "InsertionOrderPreservingMap<string>()"
+      },
+      {
+        "id": 109,
+        "name": "dependencies",
+        "type": "LogicalDependencyList",
+        "default": "LogicalDependencyList()",
+        "version": "v0.10.3"
+	  }
     ]
   },
   {
@@ -68,7 +87,8 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "IndexType"
+        "type": "DeprecatedIndexType",
+        "status": "deleted"
       },
       {
         "id": 203,
@@ -103,7 +123,8 @@
       {
         "id": 209,
         "name": "index_type_name",
-        "type": "string"
+        "type": "string",
+        "property": "index_type"
       }
     ]
   },
@@ -174,6 +195,17 @@
         "id": 203,
         "name": "query",
         "type": "SelectStatement*"
+      },
+      {
+        "id": 204,
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "column_comments",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
       }
     ]
   },
@@ -214,10 +246,17 @@
       {
         "id": 201,
         "name": "function",
+        "serialize_property": "macros[0]",
         "type": "MacroFunction*"
+      },
+      {
+        "id": 202,
+        "name": "extra_functions",
+        "type": "vector<MacroFunction*>",
+        "serialize_property": "GetAllButFirstFunction()"
       }
     ],
-    "constructor": ["$CatalogType"]
+    "constructor": ["$CatalogType", "function", "extra_functions"]
   },
   {
     "class": "CreateSequenceInfo",

@@ -82,7 +82,7 @@ FROM
     integral_values;
 CREATE VIEW test3.v2 AS
 SELECT
-    (i + 2) * 3
+    ((i + 2) * 3)::INT
 FROM
     integral_values;
 -- bigger tables

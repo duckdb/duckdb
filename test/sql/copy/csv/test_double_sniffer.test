@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/test_double_sniffer.test
+# description: Test CSV Sniffer correctly sniffs doubles with special decimal seperators
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT typeof(number) FROM read_csv('data/csv/double_trouble.csv', decimal_separator=',') limit 1;
+----
+DOUBLE
+
+# Lets try sniffing float
+query I
+SELECT typeof(number) FROM read_csv('data/csv/double_trouble.csv', decimal_separator=',', auto_type_candidates = ['FLOAT']) limit 1;
+----
+FLOAT
+
+query I
+SELECT typeof(number) FROM read_csv('data/csv/double_trouble.csv', decimal_separator=',', auto_type_candidates = ['FLOAT', 'DOUBLE']) limit 1;
+----
+FLOAT
+
+query I
+SELECT typeof(number) FROM read_csv('data/csv/double_trouble.csv', decimal_separator=',', auto_type_candidates = ['DOUBLE', 'FLOAT']) limit 1;
+----
+FLOAT
+
+# Lets try sniffing DECIMAL
+
+query I
+SELECT typeof(number) FROM read_csv('data/csv/double_trouble.csv', decimal_separator=',', auto_type_candidates = ['DECIMAL']) limit 1;
+----
+DECIMAL(18,3)
+

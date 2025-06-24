@@ -13,12 +13,12 @@ statement ok
 INSERT INTO t0(c0) VALUES (NULL);
 
 query T
-SELECT LEFT(t0.c0, -1) FROM t0;
+SELECT LEFT(t0.c0::VARCHAR, -1) FROM t0;
 ----
 NULL
 
 query T
-SELECT RIGHT(t0.c0, -1) FROM t0;
+SELECT RIGHT(t0.c0::VARCHAR, -1) FROM t0;
 ----
 NULL
 

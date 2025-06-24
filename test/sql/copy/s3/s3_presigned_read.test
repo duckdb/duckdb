@@ -28,7 +28,7 @@ require-env S3_SMALL_PARQUET_PRESIGNED_URL
 set ignore_error_messages
 
 query I
-SELECT phone FROM read_csv_auto('${S3_SMALL_CSV_PRESIGNED_URL}', header=1);
+SELECT phone FROM read_csv_auto('${S3_SMALL_CSV_PRESIGNED_URL}');
 ----
 +318855443322
 +552244331122

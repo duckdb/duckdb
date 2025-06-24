@@ -1,0 +1,47 @@
+# name: test/sql/window/test_value_orderby.test
+# description: Secondary orderings of XXX_VALUE functions.
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIII
+SELECT 
+	i,
+	(i * 29) % 11 AS outside,
+	first_value(i ORDER BY i DESC) OVER w,
+	last_value(i ORDER BY i DESC) OVER w,
+	nth_value(i, 2 ORDER BY i DESC) OVER w,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY (i * 29) % 11
+	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING
+)
+ORDER BY 2
+----
+0	0	8	0	5
+8	1	8	0	7
+5	2	8	0	7
+2	3	8	0	7
+7	5	9	1	8
+4	6	9	1	7
+1	7	9	1	7
+9	8	9	1	7
+6	9	9	1	6
+3	10	9	1	6
+
+# Frame larger than data
+query I
+with IDS as (
+    select * as idx from generate_series(1,4)
+),DATA as (
+    select *, (case when idx != 3 then idx * 1.0 else NULL end) as value from IDS
+)
+SELECT 
+ last(value ORDER BY idx IGNORE NULLS) OVER (ORDER BY idx ROWS BETWEEN UNBOUNDED PRECEDING AND 0 FOLLOWING)
+FROM DATA
+----
+1.0
+2.0
+2.0
+4.0

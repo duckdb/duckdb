@@ -1,0 +1,11 @@
+# name: test/fuzzer/duckfuzz/generate_null_timestamp.test
+# description: Generate Series NULL timestamp
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT NULL 
+FROM generate_series(CAST('294247-01-10 04:00:54.775806' AS TIMESTAMP), NULL, NULL) AS t3(c1, c2)
+----

@@ -70,7 +70,7 @@ class TestCategory(object):
         print(duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall())
         assert df_out['int'][0] == 1
         assert df_out['int'][1] == 2
-        assert numpy.isnan(df_out['int'][2])
+        assert pd.isna(df_out['int'][2])
 
     def test_category_string(self, duckdb_cursor):
         check_category_equal(['foo', 'bla', 'zoo', 'foo', 'foo', 'bla'])
@@ -103,6 +103,18 @@ class TestCategory(object):
         for i in range(10):
             category.append(str(i))
         check_create_table(category)
+
+    def test_empty_categorical(self, duckdb_cursor):
+        empty_categoric_df = pd.DataFrame({'category': pd.Series(dtype='category')})
+        duckdb_cursor.execute("CREATE TABLE test AS SELECT * FROM empty_categoric_df")
+        res = duckdb_cursor.table('test').fetchall()
+        assert res == []
+
+        with pytest.raises(duckdb.ConversionException, match="Could not convert string 'test' to UINT8"):
+            duckdb_cursor.execute("insert into test VALUES('test')")
+        duckdb_cursor.execute("insert into test VALUES(NULL)")
+        res = duckdb_cursor.table('test').fetchall()
+        assert res == [(None,)]
 
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()

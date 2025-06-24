@@ -1,0 +1,15 @@
+# name: benchmark/csv/ignore_errors.benchmark
+# description: Run CSV scan with many cast errors over ignored values
+# group: [csv]
+
+name CSV Read Benchmark with ignore errors failing on multiple lines
+group csv
+
+load
+CREATE TABLE t1 AS select 'Pedro', 'bla';
+insert into t1  values ('Pedro', '232');
+insert into t1  select 'Pedro', 'bla' from range(0,10000000) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/ignore_errors.csv' (FORMAT CSV, HEADER 0);
+
+run
+SELECT * from read_csv('${BENCHMARK_DIR}/ignore_errors.csv',delim= ',',  header = 0, types=['VARCHAR', 'INTEGER'], ignore_errors = true)

@@ -1,0 +1,53 @@
+[
+    {
+        "name": "finalize",
+        "parameters": "col0",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "combine",
+        "parameters": "col0,col1",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
+        "name": "write_log",
+        "parameters": "string",
+        "description": "Writes to the logger",
+        "example": "write_log('Hello')",
+        "type": "scalar_function_set",
+        "struct": "WriteLogFun"
+    },
+    {
+        "name": "current_connection_id",
+        "description": "Get the current connection_id",
+        "example": "current_connection_id()",
+        "type": "scalar_function",
+        "struct": "CurrentConnectionId"
+    },
+    {
+        "name": "current_transaction_id",
+        "description": "Get the current global transaction_id",
+        "example": "current_transaction_id()",
+        "type": "scalar_function",
+        "struct": "CurrentTransactionId"
+    },
+    {
+        "name": "current_query_id",
+        "description": "Get the current query_id",
+        "example": "current_query_id()",
+        "type": "scalar_function",
+        "struct": "CurrentQueryId"
+    },
+    {
+        "name": "parse_duckdb_log_message",
+        "parameters": "type,message",
+        "description": "Parse the message into the expected logical type",
+        "example": "parse_duckdb_log_message('FileSystem', log_message)",
+        "type": "scalar_function",
+        "struct": "ParseLogMessage"
+    }
+]

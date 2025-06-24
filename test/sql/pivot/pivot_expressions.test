@@ -49,6 +49,42 @@ PIVOT Cities ON (CASE WHEN Country='NL' THEN NULL ELSE Country END) USING SUM(Po
 2010	8783
 2020	9510
 
+# we allow expressions in the aggregate as well
+query IIII rowsort
+PIVOT Cities ON Country || '_' || Name USING COALESCE(SUM(Population), 0) GROUP BY Year;
+----
+2000	1005	8015	564
+2010	1065	8175	608
+2020	1158	8772	738
+
+# casts
+query IIII rowsort
+PIVOT Cities ON Country || '_' || Name USING SUM(Population)::VARCHAR GROUP BY Year;
+----
+2000	1005	8015	564
+2010	1065	8175	608
+2020	1158	8772	738
+
+# functions
+query IIII rowsort
+PIVOT Cities ON Country || '_' || Name USING SUM(Population) + 42 GROUP BY Year;
+----
+2000	1047	8057	606
+2010	1107	8217	650
+2020	1200	8814	780
+
+# we cannot have multiple aggregates
+statement error
+PIVOT Cities ON Country || '_' || Name USING SUM(Population) + COUNT(*) GROUP BY Year;
+----
+Pivot expression must contain exactly one aggregate
+
+# columns can only be referenced within the aggregate
+statement error
+PIVOT Cities ON Country || '_' || Name USING SUM(Population) + Population GROUP BY Year;
+----
+Columns can only be referenced within the aggregate of a PIVOT expression
+
 statement error
 PIVOT Cities ON min(Country) over () USING SUM(Population) GROUP BY Year;
 ----

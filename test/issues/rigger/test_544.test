@@ -15,8 +15,15 @@ INSERT INTO t0(c0) VALUES (0);
 statement ok
 CREATE VIEW v0(c0) AS SELECT 1 FROM t0;
 
+statement error
+SELECT * FROM v0 ORDER BY 'a';
+----
+ORDER BY non-integer literal has no effect
+
+statement ok
+SET order_by_non_integer_literal=true
+
 query I
 SELECT * FROM v0 ORDER BY 'a';
 ----
 1
-

@@ -2,10 +2,9 @@
 
 namespace duckdb {
 
-LogicalLimit::LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit,
-                           unique_ptr<Expression> offset)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(limit_val), offset_val(offset_val),
-      limit(std::move(limit)), offset(std::move(offset)) {
+LogicalLimit::LogicalLimit(BoundLimitNode limit_val, BoundLimitNode offset_val)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(std::move(limit_val)),
+      offset_val(std::move(offset_val)) {
 }
 
 vector<ColumnBinding> LogicalLimit::GetColumnBindings() {
@@ -14,8 +13,17 @@ vector<ColumnBinding> LogicalLimit::GetColumnBindings() {
 
 idx_t LogicalLimit::EstimateCardinality(ClientContext &context) {
 	auto child_cardinality = children[0]->EstimateCardinality(context);
-	if (limit_val >= 0 && idx_t(limit_val) < child_cardinality) {
-		child_cardinality = limit_val;
+	switch (limit_val.Type()) {
+	case LimitNodeType::CONSTANT_VALUE:
+		if (limit_val.GetConstantValue() < child_cardinality) {
+			child_cardinality = limit_val.GetConstantValue();
+		}
+		break;
+	case LimitNodeType::CONSTANT_PERCENTAGE:
+		child_cardinality = idx_t(double(child_cardinality) * limit_val.GetConstantPercentage());
+		break;
+	default:
+		break;
 	}
 	return child_cardinality;
 }

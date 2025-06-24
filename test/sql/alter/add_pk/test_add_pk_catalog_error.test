@@ -1,0 +1,45 @@
+# name: test/sql/alter/add_pk/test_add_pk_catalog_error.test
+# description: Test adding a PRIMARY KEY to an invalid table and column.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (i_do_not_exist)
+----
+<REGEX>:Catalog Error.*table "test" does not have a column named "i_do_not_exist".*
+
+statement error
+ALTER TABLE i_do_not_exist ADD PRIMARY KEY (i, j)
+----
+<REGEX>:Catalog Error.*Table with name i_do_not_exist does not exist!.*
+
+# Try to add it to a column that already has a UNIQUE index.
+
+statement ok
+CREATE TABLE uniq (i INTEGER UNIQUE, j INTEGER)
+
+statement ok
+INSERT INTO uniq VALUES (1, 10), (2, 20), (3, 30)
+
+statement error
+INSERT INTO uniq VALUES (1, 100)
+----
+<REGEX>:Constraint Error.*Duplicate key "i: 1" violates unique constraint.*
+
+statement ok
+ALTER TABLE uniq ADD PRIMARY KEY (i)
+
+statement error
+INSERT INTO uniq VALUES (1, 101)
+----
+<REGEX>:Constraint Error.*Duplicate key "i: 1" violates.*constraint.*
+
+statement error
+INSERT INTO uniq VALUES (NULL, 100)
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed: uniq.i.*

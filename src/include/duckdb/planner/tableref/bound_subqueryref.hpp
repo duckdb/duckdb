@@ -26,7 +26,7 @@ public:
 
 	//! The binder used to bind the subquery
 	shared_ptr<Binder> binder;
-	//! The bound subquery node
+	//! The bound subquery node (if any)
 	unique_ptr<BoundQueryNode> subquery;
 };
 } // namespace duckdb

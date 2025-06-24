@@ -1,0 +1,71 @@
+# name: test/sql/function/blob/test_blob_array_slice.test
+# description: Blob slicing test
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select array_slice(blob '\x00\x01\x02\x03\x04\x05', 2, 4)
+----
+\x01\x02\x03
+
+# zero-offset works fine, too
+query I
+select array_slice(blob '\x00\x01\x02\x03\x04\x05', 0, 2)
+----
+\x00\x01
+
+# other syntax works, too
+query I
+select (blob '\x00\x01\x02\x03\x04\x05'::BLOB)[2:4]
+----
+\x01\x02\x03
+
+# we can have offsets bigger than length
+query I
+select array_slice(blob '\x00\x01\x02\x03\x04\x05', 4, 10)
+----
+\x03\x04\x05
+
+# nonsensical offsets lead to empty BLOB
+query I
+select octet_length(array_slice(blob '\x00\x01\x02\x03\x04\x05', 4, 3))
+----
+0
+
+# we can have negative offsets from back, this is somehow consistent with strings
+query I
+select array_slice(blob  '\x00\x01\x02\x03\x04\x05', 2,-2)
+----
+\x01\x02\x03\x04
+
+# both can be negative
+# we can have negative offsets from back, this is somehow consistent with strings
+query I
+select array_slice(blob '\x00\x01\x02\x03\x04\x05', -4, -2)
+----
+\x02\x03\x04
+
+# we can subset utf characters when they're blobs
+query I
+select array_slice(blob '\x00\xF0\x9F\xA6\x86\x00', 2, 3)
+----
+\xF0\x9F
+
+# we can subset utf characters when they're blobs
+query I
+select array_slice(blob '\x00\xF0\x9F\xA6\x86\x00', 4, 6)
+----
+\xA6\x86\x00
+
+# we can slice blob NULL
+query I
+select array_slice(NULL::BLOB, 4, 6)
+----
+NULL
+
+statement error
+select array_slice('hello world', 1, 8, 2);
+----
+Slice with steps has not been implemented for string types

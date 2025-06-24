@@ -1,0 +1,24 @@
+# name: test/sql/function/list/aggregates/minmax_all_types.test_slow
+# description: Test the min/max functions on all types
+# group: [aggregates]
+
+statement ok
+pragma enable_verification
+
+# verify that min/max produces the same results as ORDER BY .. LIMIT 1 for all types
+statement ok
+CREATE TABLE all_types AS FROM test_all_types();
+
+foreach col <all_types_columns>
+
+query I
+SELECT MIN({'val': "${col}"}).val IS NOT DISTINCT FROM (SELECT "${col}" FROM all_types ORDER BY "${col}" LIMIT 1) FROM all_types WHERE bool IS NOT NULL
+----
+true
+
+query I
+SELECT MAX({'val': "${col}"}).val IS NOT DISTINCT FROM (SELECT "${col}" FROM all_types ORDER BY "${col}" DESC LIMIT 1) FROM all_types WHERE bool IS NOT NULL
+----
+true
+
+endloop

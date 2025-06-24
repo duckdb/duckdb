@@ -1,0 +1,16 @@
+# name: benchmark/micro/index/create/create_art_pk.benchmark
+# description: Create ART PK on 10M integers, 2.5M distinct values
+# group: [create]
+
+name Create ART PK
+group art
+
+load
+CREATE TABLE art AS SELECT range AS id, random() AS pos FROM range(10000000) ORDER BY pos;
+
+run
+ALTER TABLE art ADD PRIMARY KEY (id);
+
+cleanup
+DROP TABLE art;
+CREATE TABLE art AS SELECT range AS id, random() AS pos FROM range(10000000) ORDER BY pos;

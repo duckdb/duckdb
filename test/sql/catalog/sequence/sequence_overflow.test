@@ -63,12 +63,14 @@ create sequence seq3 INCREMENT BY 1 MINVALUE 9223372036854775800 MAXVALUE 922337
 
 statement error
 SELECT nextval('seq3') from generate_series(0,20);
+----
 
 statement ok
 create sequence seq4 INCREMENT BY -1 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800;
 
 statement error
 SELECT nextval('seq4') from generate_series(0,20);
+----
 
 statement ok
 create sequence seq5 INCREMENT BY 9223372036854775807 MINVALUE 9223372036854775800 MAXVALUE 9223372036854775807 CYCLE;
@@ -103,9 +105,11 @@ create sequence seq6 INCREMENT BY 9223372036854775807 MINVALUE 92233720368547758
 
 statement error
 SELECT nextval('seq6') from generate_series(0,20);
+----
 
 statement ok
 create sequence seq7 INCREMENT BY -9223372036854775808 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800;
 
 statement error
 SELECT nextval('seq7') from generate_series(0,20);
+----

@@ -10,10 +10,10 @@ SELECT LIST_EXTRACT(NULL, 1)
 ----
 NULL
 
-query I
+statement error
 SELECT LIST_EXTRACT(42, 1)
 ----
-4
+No function matches
 
 query I
 SELECT LIST_EXTRACT(LIST_VALUE(), 1)
@@ -134,6 +134,11 @@ SELECT LIST_EXTRACT(LIST_VALUE(42::HUGEINT), 1)
 42
 
 query I
+SELECT LIST_EXTRACT(LIST_VALUE(42::UHUGEINT), 1)
+----
+42
+
+query I
 SELECT LIST_EXTRACT(LIST_VALUE(42::FLOAT), 1)
 ----
 42
@@ -189,3 +194,40 @@ query I
 SELECT list_extract([1, 2, 3], -9223372036854775808);
 ----
 NULL
+
+statement ok
+CREATE TABLE list_array_table(a int[3][]);
+
+statement ok
+INSERT INTO list_array_table VALUES ([[1,2,3], NULL, [4,5,6]]);
+
+query I
+SELECT list_extract(a, 1) FROM list_array_table;
+----
+[1, 2, 3]
+
+query I
+SELECT list_extract(a, 2) FROM list_array_table;
+----
+NULL
+
+query I
+SELECT list_extract(a, 3) FROM list_array_table;
+----
+[4, 5, 6]
+
+query I
+SELECT list_extract(a, 4) FROM list_array_table;
+----
+NULL
+
+query I
+SELECT list_extract(a, -1) FROM list_array_table;
+----
+[4, 5, 6]
+
+query I
+SELECT list_extract(a, 0) FROM list_array_table;
+----
+NULL
+

@@ -1,0 +1,43 @@
+# name: test/sql/join/pushdown/pushdown_many_joins.test
+# description: Test join filter pushdown with many joins
+# group: [pushdown]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE bigtbl AS SELECT i%2 AS small_key, i%10 AS medium_key, i AS val FROM range(10000) t(i) ORDER BY small_key, medium_key
+
+statement ok
+CREATE TABLE smalltbl AS SELECT i small_key FROM range(2) t(i)
+
+statement ok
+CREATE TABLE mediumtbl AS SELECT i medium_key FROM range(10) t(i)
+
+query I
+SELECT COUNT(*) FROM bigtbl JOIN smalltbl USING (small_key) JOIN mediumtbl USING (medium_key)
+----
+10000
+
+# individual filters
+query I
+SELECT COUNT(*) FROM bigtbl JOIN (FROM smalltbl WHERE small_key=1) smalltbl USING (small_key) JOIN mediumtbl USING (medium_key)
+----
+5000
+
+query I
+SELECT COUNT(*) FROM bigtbl JOIN smalltbl USING (small_key) JOIN (FROM mediumtbl WHERE medium_key=1) mediumtbl USING (medium_key)
+----
+1000
+
+# double filter
+query I
+SELECT COUNT(*) FROM bigtbl JOIN (FROM smalltbl WHERE small_key=1) smalltbl USING (small_key) JOIN (FROM mediumtbl WHERE medium_key=1) mediumtbl USING (medium_key)
+----
+1000
+
+# double filter
+query I
+SELECT COUNT(*) FROM bigtbl JOIN (FROM smalltbl WHERE small_key=1) smalltbl USING (small_key) JOIN (FROM mediumtbl WHERE medium_key=1) mediumtbl ON (mediumtbl.medium_key=smalltbl.small_key)
+----
+5000

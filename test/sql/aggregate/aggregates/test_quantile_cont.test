@@ -17,6 +17,7 @@ create table quantile as select range r, random() from range(0,1000000,100) unio
 
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
+----
 
 query R
 SELECT quantile_cont(r, 0.5) FROM quantile
@@ -110,6 +111,7 @@ SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quant
 
 statement error
 SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
+----
 
 # WITH TIME ZONE
 query I
@@ -129,6 +131,16 @@ SELECT quantile_cont(r, -0.1) FROM quantile
 ----
 899910.0
 
+# ORDER BY ... DESC
+query II
+SELECT 
+    percentile_cont(0.8) WITHIN GROUP (ORDER BY x DESC),
+    quantile_cont(x, 0.8 ORDER BY x DESC),
+FROM 
+    (VALUES (2), (1)) _(x);
+----
+1.2	1.2
+
 # empty input
 query R
 SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
@@ -137,24 +149,31 @@ NULL
 
 statement error
 SELECT quantile_cont(r, -1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, 1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, "string") FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r::string, 0.5) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, 0.1, 50) FROM quantile
+----
 
 
 statement ok
@@ -301,3 +320,4 @@ SELECT quantile_cont(t, 0.5) FROM bigints;
 
 statement error
 SELECT quantile_cont(r, random()) FROM quantile
+----

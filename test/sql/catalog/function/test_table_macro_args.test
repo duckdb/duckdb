@@ -69,6 +69,7 @@ as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name
 # default args before positional args
 statement error
 SELECT * FROM  card_select_args(_name:='king',1, 13);
+----
 
 
 # correct arg order
@@ -142,12 +143,14 @@ CREATE MACRO card_no_tbl() as TABLE SELECT * FROM suit_tbl;
 
 statement error
 SELECT * FROM card_no_tbl();
+----
 
 
 # wrong arg order
 statement error
 CREATE MACRO card_select_args(_val_min, _name:='%', _suit:='%', _val_max)
 as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
+----
 
 
 # positional parameter repeated

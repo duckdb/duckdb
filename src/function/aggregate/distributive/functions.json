@@ -1,0 +1,52 @@
+[
+    {
+        "name": "count_star",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "aggregate_function"
+    },
+    {
+        "name": "count",
+        "parameters": "arg",
+        "description": "Returns the number of non-NULL values in arg.",
+        "example": "count(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "first",
+        "parameters": "arg",
+        "description": "Returns the first value (NULL or non-NULL) from arg. This function is affected by ordering.",
+        "example": "first(A)",
+        "type": "aggregate_function_set",
+        "aliases": ["arbitrary"]
+    },
+    {
+        "name": "last",
+        "parameters": "arg",
+        "description": "Returns the last value of a column. This function is affected by ordering.",
+        "example": "last(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "any_value",
+        "parameters": "arg",
+        "description": "Returns the first non-NULL value from arg. This function is affected by ordering.",
+        "example": "",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "min",
+        "parameters": "arg",
+        "description": "Returns the minimum value present in arg.",
+        "example": "min(A)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "max",
+        "parameters": "arg",
+        "description": "Returns the maximum value present in arg.",
+        "example": "max(A)",
+        "type": "aggregate_function_set"
+    }
+]

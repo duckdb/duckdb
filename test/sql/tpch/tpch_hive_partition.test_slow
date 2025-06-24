@@ -1,0 +1,65 @@
+# name: test/sql/tpch/tpch_hive_partition.test_slow
+# description: Test TPC-H SF1 over hive partitions
+# group: [tpch]
+
+require parquet
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem_aggregate_partitioned' (FORMAT parquet, PARTITION_BY (l_returnflag, l_linestatus));
+
+statement ok
+DROP TABLE lineitem
+
+statement ok
+CREATE VIEW lineitem AS FROM '__TEST_DIR__/lineitem_aggregate_partitioned/**/*.parquet'
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv
+
+query III
+SELECT COUNT(*), SUM(l_extendedprice), l_returnflag
+FROM lineitem
+GROUP BY ALL
+ORDER BY ALL
+----
+1478493	56586554400.73	A
+1478870	56568041380.90	R
+3043852	116422715119.57	N
+
+query III
+SELECT COUNT(*), SUM(l_extendedprice), l_returnflag
+FROM lineitem
+WHERE l_linestatus='O'
+GROUP BY ALL
+ORDER BY ALL
+----
+3004998	114935210409.19	N
+
+query III
+SELECT COUNT(*), SUM(l_extendedprice), l_linestatus
+FROM lineitem
+GROUP BY ALL
+ORDER BY ALL
+----
+2996217	114642100492.01	F
+3004998	114935210409.19	O
+
+statement ok
+SET parquet_metadata_cache=true
+
+query I
+select count(*) from lineitem
+----
+6001215
+
+query I
+select count(*) from lineitem
+----
+6001215

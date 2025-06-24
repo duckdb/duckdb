@@ -1,0 +1,53 @@
+# name: test/sql/join/semianti/10406-anti-on-ints-strings.test
+# description: github reported bug
+# group: [semianti]
+
+statement ok
+create table test_str(k varchar);
+
+statement ok
+create table test_str_del(pk varchar);
+
+statement ok
+create table test_int(k bigint);
+
+statement ok
+create table test_int_del(pk bigint);
+
+statement ok
+insert into test_str values('abc'), ('def');
+
+statement ok
+insert into test_int values(1), (2);
+
+query I rowsort
+select l.* from test_str l anti join test_str_del r on l.k = r.pk;
+----
+abc
+def
+
+query I rowsort
+select l.* from test_int l anti join test_int_del r on l.k = r.pk;
+----
+1
+2
+
+statement ok
+insert into test_int VALUES (NULL);
+
+query I rowsort
+select l.* from test_int l anti join test_int_del r on l.k is not distinct from r.pk;
+----
+1
+2
+NULL
+
+statement ok
+insert into test_int_del VALUES (NULL);
+
+# NULL is now not distinct from null
+query I rowsort
+select l.* from test_int l anti join test_int_del r on l.k is not distinct from r.pk;
+----
+1
+2

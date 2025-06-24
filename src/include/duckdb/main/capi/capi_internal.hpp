@@ -14,6 +14,9 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 
 #include <cstring>
 #include <cassert>
@@ -26,13 +29,22 @@
 
 namespace duckdb {
 
-struct DatabaseData {
-	unique_ptr<DuckDB> database;
+struct DBInstanceCacheWrapper {
+	unique_ptr<DBInstanceCache> instance_cache;
+};
+
+struct DatabaseWrapper {
+	shared_ptr<DuckDB> database;
+};
+
+struct CClientContextWrapper {
+	explicit CClientContextWrapper(ClientContext &context) : context(context) {};
+	ClientContext &context;
 };
 
 struct PreparedStatementWrapper {
 	//! Map of name -> values
-	case_insensitive_map_t<Value> values;
+	case_insensitive_map_t<BoundParameterData> values;
 	unique_ptr<PreparedStatement> statement;
 };
 
@@ -49,12 +61,20 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ClientProperties options;
 };
 
 struct AppenderWrapper {
 	unique_ptr<Appender> appender;
+	ErrorData error_data;
+};
+
+struct TableDescriptionWrapper {
+	unique_ptr<TableDescription> description;
 	string error;
+};
+
+struct ErrorDataWrapper {
+	ErrorData error_data;
 };
 
 enum class CAPIResultSetType : uint8_t {
@@ -72,10 +92,14 @@ struct DuckDBResultData {
 	CAPIResultSetType result_set_type;
 };
 
-duckdb_type ConvertCPPTypeToC(const LogicalType &type);
-LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
-idx_t GetCTypeSize(duckdb_type type);
-duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result, duckdb_result *out);
-bool deprecated_materialize_result(duckdb_result *result);
+duckdb_type LogicalTypeIdToC(const LogicalTypeId type);
+LogicalTypeId LogicalTypeIdFromC(const duckdb_type type);
+idx_t GetCTypeSize(const duckdb_type type);
+duckdb_statement_type StatementTypeToC(const StatementType type);
+duckdb_error_type ErrorTypeToC(const ExceptionType type);
+ExceptionType ErrorTypeFromC(const duckdb_error_type type);
+
+duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
+bool DeprecatedMaterializeResult(duckdb_result *result);
 
 } // namespace duckdb

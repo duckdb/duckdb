@@ -1,0 +1,8 @@
+# name: test/sql/types/map/map_empty.test
+# description: Test empty map
+# group: [map]
+
+statement error
+SELECT DISTINCT MAP { * : ? IN ( SELECT TRUE ) } ;
+----
+Invalid Input Error: Expected 1 parameters, but none were supplied

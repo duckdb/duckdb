@@ -33,7 +33,7 @@ struct Foo {
 	static unique_ptr<Foo> Deserialize(Deserializer &deserializer) {
 		auto result = make_uniq<Foo>();
 		deserializer.ReadProperty<int32_t>(1, "a", result->a);
-		deserializer.ReadPropertyWithDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
+		deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
 		deserializer.ReadProperty<int32_t>(3, "c", result->c);
 		return result;
 	}
@@ -47,8 +47,11 @@ TEST_CASE("Test default values", "[serialization]") {
 	foo_in.bar->b = 43;
 	foo_in.c = 44;
 
-	MemoryStream stream;
-	BinarySerializer::Serialize(foo_in, stream, false);
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	SerializationOptions options;
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(foo_in, stream, options);
 	auto pos1 = stream.GetPosition();
 	stream.Rewind();
 	auto foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(stream);
@@ -63,7 +66,8 @@ TEST_CASE("Test default values", "[serialization]") {
 
 	stream.Rewind();
 
-	BinarySerializer::Serialize(foo_in, stream, false);
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(foo_in, stream, options);
 	auto pos2 = stream.GetPosition();
 	stream.Rewind();
 
@@ -141,7 +145,7 @@ struct FooV2 {
 		serializer.WriteProperty<unique_ptr<Complex>>(4, "p4", p4);
 
 		// Because this is a new field, we have to provide a default value
-		// to try to preserve backwards compatability (in best case)
+		// to try to preserve backwards compatibility (in best case)
 		serializer.WritePropertyWithDefault<unique_ptr<Complex>>(5, "p5", p5);
 	}
 
@@ -163,9 +167,12 @@ TEST_CASE("Test deleted values", "[serialization]") {
 
 	FooV2 v2_in = {1, 3, make_uniq<Complex>(1, "foo"), nullptr};
 
-	MemoryStream stream;
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	SerializationOptions options;
+	options.serialize_default_values = false;
 	// First of, sanity check that foov1 <-> foov1 works
-	BinarySerializer::Serialize(v1_in, stream, false);
+	BinarySerializer::Serialize(v1_in, stream, options);
 	{
 		stream.Rewind();
 		auto v1_out_ptr = BinaryDeserializer::Deserialize<FooV1>(stream);
@@ -184,7 +191,8 @@ TEST_CASE("Test deleted values", "[serialization]") {
 	stream.Rewind();
 
 	// Also check that foov2 <-> foov2 works
-	BinarySerializer::Serialize(v2_in, stream, false);
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(v2_in, stream, options);
 	{
 		stream.Rewind();
 		auto v2_out_ptr = BinaryDeserializer::Deserialize<FooV2>(stream);
@@ -198,7 +206,8 @@ TEST_CASE("Test deleted values", "[serialization]") {
 
 	// Check that foov1 -> foov2 works (backwards compatible)
 	stream.Rewind();
-	BinarySerializer::Serialize(v1_in, stream, false);
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(v1_in, stream, options);
 	{
 		stream.Rewind();
 		auto v2_out_ptr = BinaryDeserializer::Deserialize<FooV2>(stream);
@@ -213,7 +222,8 @@ TEST_CASE("Test deleted values", "[serialization]") {
 	// Check that foov2 -> foov1 works (forwards compatible)
 	// This should be ok, since the property we deleted was optional (had a default value)
 	stream.Rewind();
-	BinarySerializer::Serialize(v2_in, stream, false);
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(v2_in, stream, options);
 	{
 		stream.Rewind();
 		auto v1_out_ptr = BinaryDeserializer::Deserialize<FooV1>(stream);
@@ -229,7 +239,8 @@ TEST_CASE("Test deleted values", "[serialization]") {
 	// But thats life. Tough shit.
 	stream.Rewind();
 	v2_in.p5 = make_uniq<Complex>(2, "foo");
-	BinarySerializer::Serialize(v2_in, stream, false);
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(v2_in, stream, options);
 	{
 		stream.Rewind();
 		REQUIRE_THROWS(BinaryDeserializer::Deserialize<FooV1>(stream));
@@ -237,7 +248,8 @@ TEST_CASE("Test deleted values", "[serialization]") {
 
 	// However, the new value should be read correctly!
 	stream.Rewind();
-	BinarySerializer::Serialize(v2_in, stream, false);
+	options.serialize_default_values = false;
+	BinarySerializer::Serialize(v2_in, stream, options);
 	{
 		stream.Rewind();
 		auto v2_out_ptr = BinaryDeserializer::Deserialize<FooV2>(stream);

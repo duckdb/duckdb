@@ -2,14 +2,8 @@
 # description: Test COUNT operator
 # group: [aggregates]
 
-mode skip
-
-# FIXME - prepared statements on COUNT DISTINCT run into an internal error
-
 statement ok
 PRAGMA enable_verification
-
-mode unskip
 
 # test counts on scalar values
 query IIIII
@@ -47,3 +41,4 @@ SELECT COUNT(1 ORDER BY 1)
 # cannot do DISTINCT *
 statement error
 SELECT COUNT(DISTINCT *) FROM integers
+----

@@ -16,19 +16,21 @@ if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
                        ../../extension/autocomplete/autocomplete_extension.cpp)
   add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
 endif()
-set(SQLITE_API_WRAPPER_FILES sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
+set(SQLITE_API_WRAPPER_FILES shell_extension.cpp sqlite3_api_wrapper.cpp
+                             ${ALL_OBJECT_FILES})
 
 add_library(sqlite3_api_wrapper_static STATIC ${SQLITE_API_WRAPPER_FILES})
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static)
 if(NOT AMALGAMATION_BUILD)
   target_link_libraries(sqlite3_api_wrapper_static duckdb_utf8proc)
 endif()
-link_threads(sqlite3_api_wrapper_static)
+link_threads(sqlite3_api_wrapper_static "")
 
 if(NOT WIN32 AND NOT ZOS)
   add_library(sqlite3_api_wrapper SHARED ${SQLITE_API_WRAPPER_FILES})
-  target_link_libraries(sqlite3_api_wrapper duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
-  link_threads(sqlite3_api_wrapper)
+  target_link_libraries(sqlite3_api_wrapper duckdb_static
+                        ${DUCKDB_EXTRA_LINK_FLAGS})
+  link_threads(sqlite3_api_wrapper "")
 endif()
 
 include_directories(../../third_party/catch)

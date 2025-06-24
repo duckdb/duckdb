@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
@@ -27,7 +27,7 @@ jobs:
           path: 'source-repo'
 
       - name: Checkout Target Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.TARGET_REPO }}
           ref: ${{ env.TARGET_REF }}
@@ -61,5 +61,10 @@ jobs:
           cd source-repo
           export TAG_NAME=`python3 -c "import sys, os; sys.path.append(os.path.join('scripts')); import package_build; print(package_build.git_dev_version())"`
           cd ..
-          git -C updated-repo tag -a $TAG_NAME -m "Release $TAG_NAME"
-          git -C updated-repo push origin $TAG_NAME
+          git -C updated-repo fetch --tags
+          if [[ $(git -C updated-repo tag -l $TAG_NAME) ]]; then
+            echo 'Tag '$TAG_NAME' already exists - skipping'
+          else
+            git -C updated-repo tag -a $TAG_NAME -m "Release $TAG_NAME"
+            git -C updated-repo push origin $TAG_NAME
+          fi

@@ -1,0 +1,15 @@
+# name: benchmark/micro/pushdown/or_varchar_pushdown.benchmark
+# description: Show the performance of OR pushed down on VARCHAR column
+# group: [pushdown]
+
+name OrVarcharPushdown
+group micro
+subgroup pushdown
+
+cache varchar_pushdown.duckdb
+
+load
+create table t1s as select printf('%08d', range) i from range(100e6::bigint);
+
+run
+select * from t1s where i = '00000042' or i = '00004242' or i = '00424242' or i = '42424242'

@@ -2,6 +2,9 @@
 # group: [function]
 
 statement ok
+set storage_compatibility_version='v0.10.2'
+
+statement ok
 pragma enable_verification;
 
 statement ok

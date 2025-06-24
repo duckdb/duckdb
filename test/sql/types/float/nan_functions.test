@@ -95,9 +95,11 @@ foreach unary_func sin sin cos tan asin acos cot
 
 statement error
 select ${unary_func}('inf'::${type})
+----
 
 statement error
 select ${unary_func}('-inf'::${type})
+----
 
 query I
 select ${unary_func}('nan'::${type})

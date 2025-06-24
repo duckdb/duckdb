@@ -1,0 +1,25 @@
+# name: test/sql/optimizer/expression/test_indistinct_aggregates.test
+# description: Test DISTINCT-insensitive aggregate rules
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT max(distinct x) from range(10) tbl(x);
+----
+9
+
+query II
+SELECT x, max(distinct x) over (order by x desc) from range(10) tbl(x);
+----
+9	9
+8	9
+7	9
+6	9
+5	9
+4	9
+3	9
+2	9
+1	9
+0	9

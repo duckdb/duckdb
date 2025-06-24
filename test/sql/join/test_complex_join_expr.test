@@ -19,7 +19,7 @@ statement ok
 CREATE TABLE test2 (b INTEGER, c INTEGER);
 
 statement ok
-INSERT INTO test2 VALUES (1, 2), (3, 0)
+INSERT INTO test2 VALUES (1, 2), (3, 0)	
 
 query IIII
 SELECT * FROM test JOIN test2 ON test.a+test2.c=test.b+test2.b

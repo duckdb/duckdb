@@ -1,0 +1,26 @@
+name: Check Issue for Code Formatting
+on:
+  issues:
+    types:
+      - opened
+
+env:
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  ISSUE_BODY: ${{ github.event.issue.body }}
+jobs:
+  check_code_formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check issue for code formatting
+        run: |
+          echo "$ISSUE_BODY" >> issue-text.md
+          if ! cat issue-text.md | python3 scripts/check-issue-for-code-formatting.py; then
+              gh issue comment ${{ github.event.issue.number }} --body-file .github/workflows/code-formatting-warning.md
+          fi

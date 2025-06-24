@@ -1,0 +1,22 @@
+# name: test/fuzzer/public/lateral_right_join.test
+# description: Lateral join followed by a right join
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE tbl (c01 INT, c02 VARCHAR);
+
+statement ok
+INSERT INTO tbl (c01, c02) VALUES (0, 'abc');
+
+query IIIIII
+SELECT * FROM tbl, LATERAL (SELECT tbl.c01 AS lat_c01) AS subq CROSS JOIN tbl AS t1 RIGHT JOIN tbl AS t2 USING (c02);
+----
+0	abc	0	0	abc	0
+
+query IIIII
+SELECT * FROM tbl, LATERAL (SELECT tbl.c01 AS lat_c01) AS subq CROSS JOIN tbl AS t1 RIGHT JOIN tbl AS t2 USING (c02, c01);
+----
+0	abc	0	0	abc

@@ -1,0 +1,91 @@
+# name: test/sql/catalog/function/test_macro_overloads.test
+# description: Test macro overloads
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+# simple overloaded macro
+statement ok
+CREATE MACRO multi_add
+	() AS 0,
+	(a) AS a,
+	(a, b) AS a + b,
+	(a, b, c) AS  a + b + c,
+	(a, b, c, d) AS  a + b + c + d,
+	(a, b, c, d, e) AS  a + b + c + d + e
+
+query IIIIII
+SELECT multi_add(),
+       multi_add(42),
+       multi_add(42, 1),
+       multi_add(42, 1, 1),
+       multi_add(42, 1, 1, 1),
+       multi_add(42, 1, 1, 1, 1)
+----
+0	42	43	44	45	46
+
+# overload not found
+statement error
+SELECT multi_add(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+----
+does not support 10 parameters
+
+# named parameters
+statement ok
+CREATE MACRO arithmetic
+	(a, b, mult := 1) AS (a + b) * mult,
+	(a, b, c, division := 1) AS  (a + b + c) / division
+
+query IIII
+SELECT arithmetic(42, 84), arithmetic(42, 84, mult := 10), arithmetic(100, 200, 300), arithmetic(100, 200, 300, division := 10)
+----
+126	1260	600	60
+
+# table macro overloads
+statement ok
+CREATE MACRO generate_numbers
+	(a, b) AS TABLE (SELECT * FROM range(a + b) t(i)),
+	(a, b, c, mult := 1) AS TABLE (SELECT * FROM range((a + b + c) * mult) t(i))
+
+query I
+SELECT COUNT(*) FROM generate_numbers(20, 10);
+----
+30
+
+query I
+SELECT COUNT(*) FROM generate_numbers(1, 2, 2, mult := 5);
+----
+25
+
+
+# view overloads in duckdb_functions
+query II
+SELECT function_name, parameters FROM duckdb_functions() WHERE function_name IN ('arithmetic', 'multi_add', 'generate_numbers') ORDER BY function_name, len(parameters)
+----
+arithmetic	[a, b, mult]
+arithmetic	[a, b, c, division]
+generate_numbers	[a, b]
+generate_numbers	[a, b, c, mult]
+multi_add	[]
+multi_add	[a]
+multi_add	[a, b]
+multi_add	[a, b, c]
+multi_add	[a, b, c, d]
+multi_add	[a, b, c, d, e]
+
+# ambiguity conflict between macros
+statement error
+CREATE MACRO ambiguous_macro
+	(a) AS a,
+	(a) AS a + 1
+----
+has multiple definitions with 1 parameters
+
+# error in macro overload definition
+statement error
+CREATE MACRO error_in_definition
+	(a) AS a,
+	(a, b) AS a + y
+----
+Referenced column "y" not found in FROM clause

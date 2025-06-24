@@ -1,3 +1,4 @@
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -15,26 +16,32 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
-	if (expr.children[0]->expression_class != ExpressionClass::BOUND_CAST) {
+	if (expr.children[0]->GetExpressionClass() != ExpressionClass::BOUND_CAST) {
 		return nullptr;
 	}
 	auto &cast_expression = expr.children[0]->Cast<BoundCastExpression>();
-	if (cast_expression.child->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+	if (cast_expression.child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
-	//! Here we check if we can apply the expression on the constant side
+	//! The goal here is to remove the cast from the probe expression
+	//! and apply a cast to the constant expressions. We can only do this
+	//! if the semantics do not change, which only happens when BOTH casts
+	//! are invertible.
 	auto target_type = cast_expression.source_type();
-	if (!BoundCastExpression::CastIsInvertible(cast_expression.return_type, target_type)) {
+	if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.return_type)) {
 		return nullptr;
 	}
 	vector<unique_ptr<BoundConstantExpression>> cast_list;
 	//! First check if we can cast all children
 	for (size_t i = 1; i < expr.children.size(); i++) {
-		if (expr.children[i]->expression_class != ExpressionClass::BOUND_CONSTANT) {
+		if (expr.children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 			return nullptr;
 		}
 		D_ASSERT(expr.children[i]->IsFoldable());
 		auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *expr.children[i]);
+		if (!BoundCastExpression::CastIsInvertible(constant_value.type(), target_type)) {
+			return nullptr;
+		}
 		auto new_constant = constant_value.DefaultTryCastAs(target_type);
 		if (!new_constant) {
 			return nullptr;

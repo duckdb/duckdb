@@ -6,8 +6,15 @@ require parquet
 
 require vector_size 1024
 
+# different vector sizes result in different numbers of rows
+require no_vector_verification
+
+statement ok
+SET preserve_insertion_order=false
+
 statement error
 copy (select 42) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES)
+----
 
 # we can use human-readable memory limits
 statement ok

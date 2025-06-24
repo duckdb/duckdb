@@ -4,6 +4,13 @@
 
 namespace duckdb {
 
+InsertionOrderPreservingMap<string> LogicalCTERef::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["CTE Index"] = StringUtil::Format("%llu", cte_index);
+	SetParamsEstimatedCardinality(result);
+	return result;
+}
+
 vector<idx_t> LogicalCTERef::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }

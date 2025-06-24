@@ -1,0 +1,54 @@
+# name: test/optimizer/joins/updating_the_join_node_hash_map_has_no_errors.test_slow
+# description: 
+# group: [joins]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.05);
+
+statement error
+SELECT NULL
+FROM main.supplier AS ref_0
+INNER JOIN main.nation
+INNER JOIN main.nation AS ref_2
+INNER JOIN main.customer AS ref_3
+INNER JOIN main.supplier AS ref_4 ON ((ref_3.c_phone = ref_4.s_name)) ON (
+                                                                            (SELECT NULL))
+INNER JOIN main.orders AS ref_5
+INNER JOIN main.orders AS ref_6 ON (ref_5.o_clerk like '%0000%') ON (1) ON (ref_3.c_mktsegment NOT NULL) ON ((ref_0.s_acctbal = ref_5.o_totalprice))
+INNER JOIN main.lineitem AS ref_7 ON ((ref_4.s_suppkey = ref_7.l_orderkey))
+INNER JOIN main.supplier
+INNER JOIN main.supplier AS ref_11
+INNER JOIN main.lineitem AS ref_12 ON (
+         (SELECT NULL)) ON ((
+         (SELECT ps_comment FROM main.partsupp) ~~* ref_12.l_linestatus)) ON
+            ((ref_7.l_linestatus ~~* (SELECT s_name FROM main.supplier)))
+INNER JOIN
+  (SELECT NULL) ON (ref_6.o_orderstatus NOT NULL);
+----
+More than one row returned by a subquery used as an expression
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+statement ok
+SELECT NULL
+FROM main.supplier AS ref_0
+INNER JOIN main.nation
+INNER JOIN main.nation AS ref_2
+INNER JOIN main.customer AS ref_3
+INNER JOIN main.supplier AS ref_4 ON ((ref_3.c_phone = ref_4.s_name)) ON (
+                                                                            (SELECT NULL))
+INNER JOIN main.orders AS ref_5
+INNER JOIN main.orders AS ref_6 ON (ref_5.o_clerk like '%0000%') ON (1) ON (ref_3.c_mktsegment NOT NULL) ON ((ref_0.s_acctbal = ref_5.o_totalprice))
+INNER JOIN main.lineitem AS ref_7 ON ((ref_4.s_suppkey = ref_7.l_orderkey))
+INNER JOIN main.supplier
+INNER JOIN main.supplier AS ref_11
+INNER JOIN main.lineitem AS ref_12 ON (
+         (SELECT NULL)) ON ((
+         (SELECT ps_comment FROM main.partsupp) ~~* ref_12.l_linestatus)) ON
+            ((ref_7.l_linestatus ~~* (SELECT s_name FROM main.supplier)))
+INNER JOIN
+  (SELECT NULL) ON (ref_6.o_orderstatus NOT NULL);
+

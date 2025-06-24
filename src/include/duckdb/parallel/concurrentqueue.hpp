@@ -42,24 +42,24 @@ struct ProducerToken {
 template <typename T>
 class ConcurrentQueue {
 private:
-	//! The queue
+	//! The standard library queue.
 	std::queue<T, std::deque<T>> q;
 
 public:
-	//! Constructor
+	//! Default constructor.
 	ConcurrentQueue() = default;
-	//! Constructor
+	//! Constructor reserving capacity.
 	explicit ConcurrentQueue(size_t capacity) {
 		q.reserve(capacity);
 	}
 
-	//! Enqueue item
+	//! Enqueue an item.
 	template <typename U>
 	bool enqueue(U &&item) {
 		q.push(std::forward<U>(item));
 		return true;
 	}
-	//! Try to dequeue an item
+	//! Try to dequeue an item.
 	bool try_dequeue(T &item) {
 		if (q.empty()) {
 			return false;
@@ -67,6 +67,22 @@ public:
 		item = std::move(q.front());
 		q.pop();
 		return true;
+	}
+	//! Get the size of the queue.
+	size_t size_approx() const {
+		return q.size();
+	}
+	//! Dequeues several elements from the queue.
+	//! Returns the number of elements dequeued.
+	template <typename It>
+	size_t try_dequeue_bulk(It itemFirst, size_t max) {
+		for (size_t i = 0; i < max; i++) {
+			if (!try_dequeue(*itemFirst)) {
+				return i;
+			}
+			itemFirst++;
+		}
+		return max;
 	}
 };
 

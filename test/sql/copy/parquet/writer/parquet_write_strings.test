@@ -26,7 +26,7 @@ COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
 query I
 SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-PLAIN, RLE_DICTIONARY
+RLE_DICTIONARY
 
 query I
 SELECT * FROM '__TEST_DIR__/strings.parquet'
@@ -174,7 +174,7 @@ COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
 query I
 SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-PLAIN
+RLE_DICTIONARY
 
 query I
 SELECT * FROM '__TEST_DIR__/strings.parquet'
@@ -213,7 +213,7 @@ SELECT * FROM '__TEST_DIR__/strings.parquet'
 query I
 SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-NULL
+30
 
 # non-dictionary table with null
 statement ok

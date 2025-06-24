@@ -10,6 +10,7 @@ SELECT list_aggr([1, 2], 'arbitrary')
 # incorrect usage
 statement error
 SELECT list_first()
+----
 
 # different types
 

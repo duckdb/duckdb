@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include "pg_simplified_token.hpp"
 
 /* Keyword categories --- should match lists in gram.y */
 #define UNRESERVED_KEYWORD		0

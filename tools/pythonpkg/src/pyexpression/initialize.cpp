@@ -15,7 +15,11 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// ColumnRef Expression
 	docs = "Create a column reference from the provided column name";
-	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
+	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, docs);
+
+	// Default Expression
+	docs = "";
+	m.def("DefaultExpression", &DuckDBPyExpression::DefaultExpression, docs);
 
 	// Case Expression
 	docs = "";
@@ -23,13 +27,25 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// Star Expression
 	docs = "";
-	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::list(), docs);
+	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::none(), docs);
 	m.def(
 	    "StarExpression", []() { return DuckDBPyExpression::StarExpression(); }, docs);
 
 	// Function Expression
 	docs = "";
 	m.def("FunctionExpression", &DuckDBPyExpression::FunctionExpression, py::arg("function_name"), docs);
+
+	// Coalesce Operator
+	docs = "";
+	m.def("CoalesceOperator", &DuckDBPyExpression::Coalesce, docs);
+
+	// Lambda Expression
+	docs = "";
+	m.def("LambdaExpression", &DuckDBPyExpression::LambdaExpression, py::arg("lhs"), py::arg("rhs"), docs);
+
+	// SQL Expression
+	docs = "";
+	m.def("SQLExpression", &DuckDBPyExpression::SQLExpression, docs, py::arg("expression"));
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
@@ -46,7 +62,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 	)";
 
 	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
-	m.def("__radd__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
+	m.def(
+	    "__radd__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Add(a); }, docs);
 
 	docs = R"(
 		Negate the expression.
@@ -66,7 +83,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '-' expr
 	)";
 	m.def("__sub__", &DuckDBPyExpression::Subtract, docs);
-	m.def("__rsub__", &DuckDBPyExpression::Subtract, docs);
+	m.def(
+	    "__rsub__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Subtract(a); }, docs);
 
 	docs = R"(
 		Multiply self by expr
@@ -78,7 +96,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '*' expr
 	)";
 	m.def("__mul__", &DuckDBPyExpression::Multiply, docs);
-	m.def("__rmul__", &DuckDBPyExpression::Multiply, docs);
+	m.def(
+	    "__rmul__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Multiply(a); }, docs);
 
 	docs = R"(
 		Divide self by expr
@@ -90,10 +109,12 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '/' expr
 	)";
 	m.def("__div__", &DuckDBPyExpression::Division, docs);
-	m.def("__rdiv__", &DuckDBPyExpression::Division, docs);
+	m.def(
+	    "__rdiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs);
 
 	m.def("__truediv__", &DuckDBPyExpression::Division, docs);
-	m.def("__rtruediv__", &DuckDBPyExpression::Division, docs);
+	m.def(
+	    "__rtruediv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs);
 
 	docs = R"(
 		(Floor) Divide self by expr
@@ -105,7 +126,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '//' expr
 	)";
 	m.def("__floordiv__", &DuckDBPyExpression::FloorDivision, docs);
-	m.def("__rfloordiv__", &DuckDBPyExpression::FloorDivision, docs);
+	m.def(
+	    "__rfloordiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.FloorDivision(a); },
+	    docs);
 
 	docs = R"(
 		Modulo self by expr
@@ -117,7 +140,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '%' expr
 	)";
 	m.def("__mod__", &DuckDBPyExpression::Modulo, docs);
-	m.def("__rmod__", &DuckDBPyExpression::Modulo, docs);
+	m.def(
+	    "__rmod__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Modulo(a); }, docs);
 
 	docs = R"(
 		Power self by expr
@@ -129,7 +153,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '**' expr
 	)";
 	m.def("__pow__", &DuckDBPyExpression::Power, docs);
-	m.def("__rpow__", &DuckDBPyExpression::Power, docs);
+	m.def(
+	    "__rpow__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Power(a); }, docs);
 
 	docs = R"(
 		Create an equality expression between two expressions
@@ -238,7 +263,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: expr '&' self
 	)";
-	m.def("__rand__", &DuckDBPyExpression::And, docs);
+	m.def(
+	    "__rand__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.And(a); }, docs);
 
 	docs = R"(
 		Binary-or self together with expr
@@ -249,11 +275,15 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: expr '|' self
 	)";
-	m.def("__ror__", &DuckDBPyExpression::Or, docs);
+	m.def(
+	    "__ror__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Or(a); }, docs);
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
-	m.def(py::init<>([](const string &name) { return DuckDBPyExpression::ColumnExpression(name); }));
+	m.def(py::init<>([](const string &name) {
+		auto names = py::make_tuple(py::str(name));
+		return DuckDBPyExpression::ColumnExpression(names);
+	}));
 	m.def(py::init<>([](const py::object &obj) {
 		auto val = TransformPythonValue(obj);
 		return DuckDBPyExpression::InternalConstantExpression(std::move(val));
@@ -298,7 +328,23 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	expression.def("nulls_last", &DuckDBPyExpression::NullsLast, docs);
 
 	docs = R"(
-		Return a IN expression comparing self to the input arguments.
+		Create a binary IS NULL expression from self
+
+		Returns:
+			DuckDBPyExpression: self IS NULL
+	)";
+	expression.def("isnull", &DuckDBPyExpression::IsNull, docs);
+
+	docs = R"(
+		Create a binary IS NOT NULL expression from self
+
+		Returns:
+			DuckDBPyExpression: self IS NOT NULL
+	)";
+	expression.def("isnotnull", &DuckDBPyExpression::IsNotNull, docs);
+
+	docs = R"(
+		Return an IN expression comparing self to the input arguments.
 
 		Returns:
 			DuckDBPyExpression: The compare IN expression
@@ -320,6 +366,8 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			str: The string representation.
 	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
+
+	expression.def("get_name", &DuckDBPyExpression::GetName, docs);
 
 	docs = R"(
 		Create a copy of this expression with the given alias.
@@ -365,6 +413,12 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			CastExpression: self::type
 	)";
 	expression.def("cast", &DuckDBPyExpression::Cast, py::arg("type"), docs);
+
+	docs = "";
+	expression.def("between", &DuckDBPyExpression::Between, py::arg("lower"), py::arg("upper"), docs);
+
+	docs = "";
+	expression.def("collate", &DuckDBPyExpression::Collate, py::arg("collation"), docs);
 }
 
 } // namespace duckdb

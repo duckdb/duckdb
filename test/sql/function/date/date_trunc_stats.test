@@ -14,3 +14,4 @@ SELECT date_trunc('DAY', A0) FROM T1
 # Statistics typing for DATE => TIMESTAMP
 statement error
 SELECT datetrunc('milliseconds', DATE '-2005205-7-28');
+----

@@ -2,9 +2,6 @@
 # description: Test abort of commit with persistent storage
 # group: [storage]
 
-require skip_reload
-
-
 # load the DB from disk
 load __TEST_DIR__/commit_abort.db
 
@@ -42,6 +39,7 @@ COMMIT
 
 statement error con2
 COMMIT
+----
 
 statement ok con1
 INSERT INTO test VALUES (15, NULL, NULL)

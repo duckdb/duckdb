@@ -14,13 +14,27 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
+using namespace duckdb_yyjson; // NOLINT
+
 namespace duckdb {
 
+class JSONAllocator;
+
+class JSONStringVectorBuffer : public VectorBuffer {
+public:
+	explicit JSONStringVectorBuffer(shared_ptr<JSONAllocator> allocator_p)
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), allocator(std::move(allocator_p)) {
+	}
+
+private:
+	shared_ptr<JSONAllocator> allocator;
+};
+
 //! JSON allocator is a custom allocator for yyjson that prevents many tiny allocations
-class JSONAllocator {
+class JSONAllocator : public enable_shared_from_this<JSONAllocator> {
 public:
 	explicit JSONAllocator(Allocator &allocator)
-	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, &arena_allocator}) {
+	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, this}) {
 	}
 
 	inline yyjson_alc *GetYYAlc() {
@@ -31,15 +45,26 @@ public:
 		arena_allocator.Reset();
 	}
 
+	void AddBuffer(Vector &vector) {
+		if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
+			StringVector::AddBuffer(vector, make_buffer<JSONStringVectorBuffer>(shared_from_this()));
+		}
+	}
+
+	static void AddBuffer(Vector &vector, yyjson_alc *alc) {
+		auto alloc = (JSONAllocator *)alc->ctx; // NOLINT
+		alloc->AddBuffer(vector);
+	}
+
 private:
 	static inline void *Allocate(void *ctx, size_t size) {
-		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->AllocateAligned(size);
+		auto alloc = (JSONAllocator *)ctx; // NOLINT
+		return alloc->arena_allocator.AllocateAligned(size);
 	}
 
 	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
-		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->ReallocateAligned(data_ptr_cast(ptr), old_size, size);
+		auto alloc = (JSONAllocator *)ctx; // NOLINT
+		return alloc->arena_allocator.ReallocateAligned(data_ptr_cast(ptr), old_size, size);
 	}
 
 	static inline void Free(void *ctx, void *ptr) {
@@ -86,22 +111,9 @@ using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 //! Common JSON functionality for most JSON functions
 struct JSONCommon {
 public:
-	//! The JSON logical type, registered when the extension is loaded
-	static constexpr auto JSON_TYPE_NAME = "JSON";
-
-	static const LogicalType JSONType() {
-		auto json_type = LogicalType(LogicalTypeId::VARCHAR);
-		json_type.SetAlias(JSON_TYPE_NAME);
-		return json_type;
-	}
-
-	static bool LogicalTypeIsJSON(const LogicalType &type) {
-		return type.id() == LogicalTypeId::VARCHAR && type.HasAlias() && type.GetAlias() == JSON_TYPE_NAME;
-	}
-
-public:
 	//! Read/Write flags
-	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
+	static constexpr auto READ_FLAG =
+	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
 	static constexpr auto READ_STOP_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
 	static constexpr auto READ_INSITU_FLAG = READ_STOP_FLAG | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
@@ -114,6 +126,7 @@ public:
 	static constexpr char const *TYPE_STRING_BIGINT = "BIGINT";
 	static constexpr char const *TYPE_STRING_UBIGINT = "UBIGINT";
 	static constexpr char const *TYPE_STRING_DOUBLE = "DOUBLE";
+	static constexpr char const *TYPE_STRING_HUGEINT = "HUGEINT";
 	static constexpr char const *TYPE_STRING_VARCHAR = "VARCHAR";
 	static constexpr char const *TYPE_STRING_ARRAY = "ARRAY";
 	static constexpr char const *TYPE_STRING_OBJECT = "OBJECT";
@@ -121,22 +134,24 @@ public:
 	static inline const char *ValTypeToString(yyjson_val *val) {
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_NULL;
+			return TYPE_STRING_NULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_VARCHAR;
+			return TYPE_STRING_VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_ARRAY;
+			return TYPE_STRING_ARRAY;
 		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_OBJECT;
+			return TYPE_STRING_OBJECT;
 		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
 		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
-			return JSONCommon::TYPE_STRING_BOOLEAN;
+			return TYPE_STRING_BOOLEAN;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-			return JSONCommon::TYPE_STRING_UBIGINT;
+			return TYPE_STRING_UBIGINT;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-			return JSONCommon::TYPE_STRING_BIGINT;
+			return TYPE_STRING_BIGINT;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-			return JSONCommon::TYPE_STRING_DOUBLE;
+		case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
+			return TYPE_STRING_DOUBLE;
 		default:
 			throw InternalException("Unexpected yyjson tag in ValTypeToString");
 		}
@@ -150,6 +165,7 @@ public:
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::SQLNULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -164,6 +180,7 @@ public:
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
 			return LogicalTypeId::BIGINT;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+		case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::DOUBLE;
 		default:
 			throw InternalException("Unexpected yyjson tag in ValTypeToLogicalTypeId");
@@ -211,12 +228,15 @@ public:
 
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
+		// Go to blob so we can have a better error message for weird strings
+		auto blob = Value::BLOB(string(data, length));
 		// Truncate, so we don't print megabytes worth of JSON
-		string input = length > 50 ? string(data, 47) + "..." : string(data, length);
+		string input = blob.ToString();
+		input = input.length() > 50 ? string(input.c_str(), 47) + "..." : input;
 		// Have to replace \r, otherwise output is unreadable
 		input = StringUtil::Replace(input, "\r", "\\r");
-		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: %s", error.pos, error.msg, extra,
-		                          input);
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: \"%s\"", error.pos, error.msg,
+		                          extra, input);
 	}
 	static void ThrowParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		throw InvalidInputException(FormatParseError(data, length, error, extra));
@@ -251,11 +271,15 @@ public:
 	};
 
 	//! Get JSON value using JSON path query (safe, checks the path query)
-	static inline yyjson_val *Get(yyjson_val *val, const string_t &path_str) {
+	static inline yyjson_val *Get(yyjson_val *val, const string_t &path_str, bool integral_argument) {
 		auto ptr = path_str.GetData();
 		auto len = path_str.GetSize();
 		if (len == 0) {
 			return GetUnsafe(val, ptr, len);
+		}
+		if (integral_argument) {
+			auto str = "$[" + path_str.GetString() + "]";
+			return GetUnsafe(val, str.c_str(), str.length());
 		}
 		switch (*ptr) {
 		case '/': {
@@ -270,16 +294,22 @@ public:
 			}
 			return GetUnsafe(val, ptr, len);
 		}
-		default:
-			auto str = "/" + string(ptr, len);
-			return GetUnsafe(val, str.c_str(), len + 1);
+		default: {
+			string path;
+			if (memchr(ptr, '"', len)) {
+				path = "/" + string(ptr, len);
+			} else {
+				path = "$.\"" + path_str.GetString() + "\"";
+			}
+			return GetUnsafe(val, path.c_str(), path.length());
+		}
 		}
 	}
 
 	//! Get JSON value using JSON path query (unsafe)
 	static inline yyjson_val *GetUnsafe(yyjson_val *val, const char *ptr, const idx_t &len) {
 		if (len == 0) {
-			return nullptr;
+			return val;
 		}
 		switch (*ptr) {
 		case '/':
@@ -297,10 +327,25 @@ public:
 	//! Validate JSON Path ($.field[index]... syntax), returns true if there are wildcards in the path
 	static JSONPathType ValidatePath(const char *ptr, const idx_t &len, const bool binder);
 
+public:
+	//! Same as BigQuery json_value
+	static inline string_t JSONValue(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &mask, idx_t idx) {
+		switch (yyjson_get_tag(val)) {
+		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+			mask.SetInvalid(idx);
+			return string_t {};
+		default:
+			return JSONCommon::WriteVal<yyjson_val>(val, alc);
+		}
+	}
+
 private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
-		return len == 1 ? val : unsafe_yyjson_get_pointer(val, ptr, len);
+		yyjson_ptr_err err;
+		return unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}
 	//! Get JSON path ($.field[index]... syntax)
 	static yyjson_val *GetPath(yyjson_val *val, const char *ptr, const idx_t &len);
@@ -314,5 +359,24 @@ template <>
 inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
 	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
+
+struct yyjson_doc_deleter {
+	void operator()(yyjson_doc *doc) {
+		if (doc) {
+			yyjson_doc_free(doc);
+		}
+	}
+};
+
+struct yyjson_mut_doc_deleter {
+	void operator()(yyjson_mut_doc *doc) {
+		if (doc) {
+			yyjson_mut_doc_free(doc);
+		}
+	}
+};
+
+using yyjson_doc_ptr = unique_ptr<yyjson_doc, yyjson_doc_deleter>;
+using yyjson_mut_doc_ptr = unique_ptr<yyjson_mut_doc, yyjson_mut_doc_deleter>;
 
 } // namespace duckdb

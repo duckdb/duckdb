@@ -1,0 +1,13 @@
+# name: test/fuzzer/nthvalue_indexing.test
+# description: Test partitions > chunk size
+# group: [fuzzer]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1);
+
+statement ok
+SELECT DISTINCT nth_value(NULL, (c2 IS NOT NULL)) OVER (PARTITION BY 1585 ROWS BETWEEN CURRENT ROW AND CURRENT ROW) 
+FROM part AS t10(c1, c2, c3, c4, c5, c6, c7, c8, c9) 
+ORDER BY * ASC NULLS LAST

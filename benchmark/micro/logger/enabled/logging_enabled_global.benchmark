@@ -1,0 +1,20 @@
+# name: benchmark/micro/logger/enabled/logging_enabled_global.benchmark
+# description: Benchmarking the Global Memory logger
+# group: [enabled]
+
+name Global Memory Logger
+group logger
+
+load
+set enable_logging=true;
+set logging_storage='memory';
+set logging_level='debug'
+
+run
+SELECT write_log('hello world', level := 'warn', scope := 'database', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,1000000);
+
+cleanup
+set enable_logging=false;
+set logging_storage='stdout';
+set logging_storage='memory';
+set enable_logging=true;

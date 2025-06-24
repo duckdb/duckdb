@@ -1,0 +1,124 @@
+# name: test/sql/types/varint/test_varchar_varint_unhappy.test
+# description: Test unhappy paths of varchar varint
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '-0'::VARINT
+----
+0
+
+query I
+select '+0'::VARINT
+----
+0
+
+statement error
+select '+-0'::VARINT
+----
+Conversion Error: Could not convert string '+-0'
+
+
+statement error
+select '-+0'::VARINT
+----
+Conversion Error: Could not convert string '-+0'
+
+
+statement error
+select '-'::VARINT
+----
+Could not convert string '-'
+
+query I
+select '-0010'::VARINT
+----
+-10
+
+query I
+select '-0010.'::VARINT
+----
+-10
+
+query I
+select '-0010.5'::VARINT
+----
+-10
+
+query I
+select '-0010.4999'::VARINT
+----
+-10
+
+query I
+select '0010.5'::VARINT
+----
+10
+
+query I
+select '0010.4999'::VARINT
+----
+10
+
+statement error
+select '00-0010'::VARINT
+----
+Conversion Error: Could not convert string '00-0010'
+
+query I
+select '-0010.2'::VARINT
+----
+-10
+
+query I
+select '-0010.9'::VARINT
+----
+-10
+
+query I
+select '0010.2'::VARINT
+----
+10
+
+query I
+select '0010.9'::VARINT
+----
+10
+
+statement error
+select ''::VARINT
+----
+Conversion Error: Could not convert string ''
+
+query I
+select (-0)::VARINT
+----
+0
+
+
+statement error
+select 'bla'::VARINT
+----
+Conversion Error: Could not convert string 'bla'
+
+statement error
+select '1000bla'::VARINT
+----
+Conversion Error: Could not convert string '1000bla'
+
+statement error
+select '1000.bla'::VARINT
+----
+Conversion Error: Could not convert string '1000.bla'
+
+statement error
+select '1000...'::VARINT
+----
+Conversion Error: Could not convert string '1000...'
+
+statement error
+select '1000.0.0'::VARINT
+----
+Could not convert string '1000.0.0'

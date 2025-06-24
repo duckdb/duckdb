@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/test_errors.test_slow
+# description: Test reading csv files with errors return correct error line
+# group: [csv]
+
+statement ok
+pragma enable_verification;
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+COPY (
+  SELECT * REPLACE (
+  CASE WHEN row_number() OVER ()=1234567 THEN 'thisisnotanumber'
+  ELSE l_orderkey::VARCHAR
+  END AS l_orderkey)
+  FROM lineitem) TO '__TEST_DIR__/lineitem_malformed.csv';
+
+# Should return 1234567 + 1 (Header)
+statement error
+COPY lineitem FROM '__TEST_DIR__/lineitem_malformed.csv';
+----
+CSV Error on Line: 1234568

@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -27,8 +28,7 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	for (; chunk.size() + input.size() <= STANDARD_VECTOR_SIZE && state.expression_index < expressions.size();
 	     state.expression_index++) {
 		state.temp_chunk.Reset();
-		EvaluateExpression(context.client, state.expression_index, &input, state.temp_chunk);
-		chunk.Append(state.temp_chunk);
+		EvaluateExpression(context.client, state.expression_index, &input, chunk, &state.temp_chunk);
 	}
 	if (state.expression_index < expressions.size()) {
 		return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -38,15 +38,30 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	}
 }
 
-void PhysicalExpressionScan::EvaluateExpression(ClientContext &context, idx_t expression_idx, DataChunk *child_chunk,
-                                                DataChunk &result) const {
+void PhysicalExpressionScan::EvaluateExpression(ClientContext &context, idx_t expression_idx,
+                                                optional_ptr<DataChunk> child_chunk, DataChunk &result,
+                                                optional_ptr<DataChunk> temp_chunk_ptr) const {
+	if (temp_chunk_ptr) {
+		EvaluateExpressionInternal(context, expression_idx, child_chunk, result, *temp_chunk_ptr);
+	} else {
+		DataChunk temp_chunk;
+		temp_chunk.Initialize(Allocator::Get(context), GetTypes());
+		EvaluateExpressionInternal(context, expression_idx, child_chunk, result, temp_chunk);
+	}
+}
+
+void PhysicalExpressionScan::EvaluateExpressionInternal(ClientContext &context, idx_t expression_idx,
+                                                        optional_ptr<DataChunk> child_chunk, DataChunk &result,
+                                                        DataChunk &temp_chunk) const {
 	ExpressionExecutor executor(context, expressions[expression_idx]);
 	if (child_chunk) {
 		child_chunk->Verify();
-		executor.Execute(*child_chunk, result);
+		executor.Execute(*child_chunk, temp_chunk);
 	} else {
-		executor.Execute(result);
+		executor.Execute(temp_chunk);
 	}
+	// Need to append because "executor" might be holding state (e.g., strings), which go out of scope here
+	result.Append(temp_chunk);
 }
 
 bool PhysicalExpressionScan::IsFoldable() const {

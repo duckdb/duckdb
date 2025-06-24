@@ -5,16 +5,23 @@
 #ifndef RE2_SET_H_
 #define RE2_SET_H_
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "re2/re2.h"
 
+#ifndef DUCKDB_BASE_STD
+namespace duckdb_base_std {
+	using ::std::unique_ptr;
+} // namespace duckdb_base_std
+#endif
+
 namespace duckdb_re2 {
 class Prog;
 class Regexp;
-}  // namespace duckdb_re2
+}  // namespace re2
 
 namespace duckdb_re2 {
 
@@ -35,6 +42,13 @@ class RE2::Set {
 
   Set(const RE2::Options& options, RE2::Anchor anchor);
   ~Set();
+
+  // Not copyable.
+  Set(const Set&) = delete;
+  Set& operator=(const Set&) = delete;
+  // Movable.
+  Set(Set&& other);
+  Set& operator=(Set&& other);
 
   // Adds pattern to the set using the options passed to the constructor.
   // Returns the index that will identify the regexp in the output of Match(),
@@ -67,14 +81,11 @@ class RE2::Set {
   RE2::Options options_;
   RE2::Anchor anchor_;
   std::vector<Elem> elem_;
-  duckdb_re2::Prog* prog_;
   bool compiled_;
   int size_;
-
-  Set(const Set&) = delete;
-  Set& operator=(const Set&) = delete;
+  duckdb_base_std::unique_ptr<duckdb_re2::Prog> prog_;
 };
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // RE2_SET_H_

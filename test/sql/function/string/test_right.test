@@ -115,3 +115,4 @@ SELECT "right"('a', -9223372036854775808);
 
 statement error
 SELECT right_grapheme('a', 9223372036854775808);
+----

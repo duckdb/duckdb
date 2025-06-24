@@ -1,0 +1,55 @@
+# name: test/sql/parallelism/interquery/concurrent_mix_operations.test_slow
+# description: Test concurrent mix of operations
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+# thread 1 is appending
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+INSERT INTO integers SELECT * FROM range(10000 + ${i} * 100, 10100 + ${i} * 100);
+
+endloop
+
+# thread 1-10 are deleting rows between 0..1000
+loop i 0 100
+
+onlyif threadid>=1&&threadid<=10
+statement ok
+DELETE FROM integers WHERE i=(${threadid}-1)*100+${i}
+
+endloop
+
+# thread 11-15 are updating rows between 1000..2000
+loop i 0 100
+
+onlyif threadid>=11&&threadid<=15
+statement ok
+UPDATE integers SET i=100000+i WHERE i=(${threadid}-1)*100+${i}
+
+endloop
+
+# thread 16-20 are reading
+loop i 0 100
+
+onlyif threadid>=16
+statement ok
+SELECT COUNT(*), SUM(i) FROM integers;
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+11000	121494500
+

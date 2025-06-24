@@ -1,6 +1,6 @@
 #include "duckdb/verification/prepared_statement_verifier.hpp"
 
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
@@ -9,12 +9,15 @@
 
 namespace duckdb {
 
-PreparedStatementVerifier::PreparedStatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::PREPARED, "Prepared", std::move(statement_p)) {
+PreparedStatementVerifier::PreparedStatementVerifier(
+    unique_ptr<SQLStatement> statement_p, optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters)
+    : StatementVerifier(VerificationType::PREPARED, "Prepared", std::move(statement_p), parameters) {
 }
 
-unique_ptr<StatementVerifier> PreparedStatementVerifier::Create(const SQLStatement &statement) {
-	return make_uniq<PreparedStatementVerifier>(statement.Copy());
+unique_ptr<StatementVerifier>
+PreparedStatementVerifier::Create(const SQLStatement &statement,
+                                  optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+	return make_uniq<PreparedStatementVerifier>(statement.Copy(), parameters);
 }
 
 void PreparedStatementVerifier::Extract() {
@@ -22,7 +25,6 @@ void PreparedStatementVerifier::Extract() {
 	// replace all the constants from the select statement and replace them with parameter expressions
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
-	statement->n_param = values.size();
 	for (auto &kv : values) {
 		statement->named_param_map[kv.first] = 0;
 	}
@@ -46,10 +48,10 @@ void PreparedStatementVerifier::Extract() {
 }
 
 void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &child) {
-	if (child->type == ExpressionType::VALUE_CONSTANT) {
+	if (child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		// constant: extract the constant value
-		auto alias = child->alias;
-		child->alias = string();
+		auto alias = child->GetAlias();
+		child->ClearAlias();
 		// check if the value already exists
 		idx_t index = values.size();
 		auto identifier = std::to_string(index + 1);
@@ -67,7 +69,7 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
 		parameter->identifier = identifier;
-		parameter->alias = alias;
+		parameter->SetAlias(alias);
 		child = std::move(parameter);
 		return;
 	}
@@ -77,32 +79,31 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 
 bool PreparedStatementVerifier::Run(
     ClientContext &context, const string &query,
-    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>)> &run) {
+    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>,
+                                                optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run) {
 	bool failed = false;
 	// verify that we can extract all constants from the query and run the query as a prepared statement
 	// create the PREPARE and EXECUTE statements
 	Extract();
 	// execute the prepared statements
 	try {
-		auto prepare_result = run(string(), std::move(prepare_statement));
+		auto prepare_result = run(string(), std::move(prepare_statement), parameters);
 		if (prepare_result->HasError()) {
 			prepare_result->ThrowError("Failed prepare during verify: ");
 		}
-		auto execute_result = run(string(), std::move(execute_statement));
+		auto execute_result = run(string(), std::move(execute_statement), parameters);
 		if (execute_result->HasError()) {
 			execute_result->ThrowError("Failed execute during verify: ");
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(execute_result));
-	} catch (const Exception &ex) {
-		if (ex.type != ExceptionType::PARAMETER_NOT_ALLOWED) {
-			materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
+	} catch (const std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::PARAMETER_NOT_ALLOWED) {
+			materialized_result = make_uniq<MaterializedQueryResult>(std::move(error));
 		}
 		failed = true;
-	} catch (std::exception &ex) {
-		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
-		failed = true;
 	}
-	run(string(), std::move(dealloc_statement));
+	run(string(), std::move(dealloc_statement), parameters);
 	context.interrupted = false;
 
 	return failed;

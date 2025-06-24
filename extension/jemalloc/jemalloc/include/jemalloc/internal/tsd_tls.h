@@ -3,7 +3,9 @@
 #endif
 #define JEMALLOC_INTERNAL_TSD_TLS_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/tsd_internals.h"
+#include "jemalloc/internal/tsd_types.h"
 
 #define JEMALLOC_TSD_TYPE_ATTR(type) __thread type JEMALLOC_TLS_MODEL
 
@@ -56,9 +58,7 @@ tsd_set(tsd_t *val) {
 	if (pthread_setspecific(tsd_tsd, (void *)(&tsd_tls)) != 0) {
 		malloc_write("<jemalloc>: Error setting tsd.\n");
 		if (opt_abort) {
-			jemalloc_abort();
+			abort();
 		}
 	}
 }
-
-} // namespace duckdb_jemalloc

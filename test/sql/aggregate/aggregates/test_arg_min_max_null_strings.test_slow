@@ -1,0 +1,126 @@
+# name: test/sql/aggregate/aggregates/test_arg_min_max_null_strings.test_slow
+# description: Test arg_min_null/arg_max_null with strings
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE tbl(
+	"DATE" DATE,
+	"TIMESTAMP" TIMESTAMP,
+	"INTEGER" INTEGER,
+	"BIGINT" BIGINT,
+	"DOUBLE" DOUBLE,
+	"VARCHAR" VARCHAR
+	);
+
+# fill up the table with some random gunk in the middle
+statement ok
+INSERT INTO tbl
+	SELECT
+		DATE '1992-01-02' + INTERVAL ((RANDOM() * 300)::INT) DAYS d,
+		TIMESTAMP '1992-01-02 23:20:11' + INTERVAL ((RANDOM() * 300)::INT) DAYS + INTERVAL ((RANDOM() * 60 * 60)::INT) SECONDS ts,
+		50 + (RANDOM() * 6000)::INT i,
+		10 + (RANDOM() * 899999999)::BIGINT bi,
+		1 + RANDOM() * 99 dbl,
+		concat(chr(98 + (RANDOM() * 24)::INT), chr(98 + (RANDOM() * 24)::INT), chr(98 + (RANDOM() * 24)::INT), chr(98 + (RANDOM() * 24)::INT), repeat(chr(98 + (RANDOM() * 24)::INT), 29)) str
+	FROM
+		range(10000);
+
+# insert non-NULL min and max values
+statement ok
+INSERT INTO tbl VALUES (
+	DATE '1992-01-01',
+	TIMESTAMP '1992-01-01 23:20:11',
+	42,
+	0,
+	0.5,
+	'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+)
+
+statement ok
+INSERT INTO tbl VALUES (
+	DATE '1993-01-01',
+	TIMESTAMP '1993-01-01 23:20:11',
+	8400,
+	999999999,
+	100.5,
+	'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'
+)
+
+foreach type DATE TIMESTAMP INTEGER BIGINT VARCHAR
+
+query I
+SELECT arg_min_null("VARCHAR", "${type}") FROM tbl
+----
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+query I
+SELECT arg_min_null("${type}", "VARCHAR") FROM tbl EXCEPT SELECT MIN("${type}") FROM tbl
+----
+
+query I
+SELECT arg_max_null("VARCHAR", "${type}") FROM tbl
+----
+zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+
+query I
+SELECT arg_max_null("${type}", "VARCHAR") FROM tbl EXCEPT SELECT MAX("${type}") FROM tbl
+----
+
+endloop
+
+# Now insert NULLs for min
+statement ok
+INSERT INTO tbl VALUES (
+	DATE '1991-01-01',
+	TIMESTAMP '1991-01-01 23:20:11',
+	41,
+	-1,
+	0.25,
+	NULL
+)
+
+foreach type DATE TIMESTAMP INTEGER BIGINT
+
+query I
+SELECT arg_min_null("VARCHAR", "${type}") FROM tbl
+----
+NULL
+
+query I
+SELECT arg_max_null("VARCHAR", "${type}") FROM tbl
+----
+zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+
+endloop
+
+# And insert NULLs for max
+statement ok
+INSERT INTO tbl VALUES (
+	DATE '1994-01-01',
+	TIMESTAMP '1994-01-01 23:20:11',
+	9400,
+	9999999999,
+	101.5,
+	NULL
+)
+
+foreach type DATE TIMESTAMP INTEGER BIGINT
+
+query I
+SELECT arg_min_null("VARCHAR", "${type}") FROM tbl
+----
+NULL
+
+query I
+SELECT arg_max_null("VARCHAR", "${type}") FROM tbl
+----
+NULL
+
+endloop
+

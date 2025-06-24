@@ -13,6 +13,8 @@ INSERT INTO t0 VALUES (42)
 
 statement error
 SELECT 0 FROM t0 WHERE ? IN (1);
+----
+<REGEX>:Invalid Input Error.*Expected 1 parameters, but none were supplied.*
 
 statement ok
 PREPARE v1 AS SELECT 0 FROM t0 WHERE ? IN (1);

@@ -39,3 +39,4 @@ create or replace table tbl (a integer unique, b integer unique);
 # When there is more than 1 index on the table, OR REPLACE is not supported, just like DO UPDATE
 statement error
 insert or replace into tbl values (1,2);
+----

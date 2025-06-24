@@ -46,16 +46,44 @@ select REPEAT(a, 4) FROM strings WHERE b IS NOT NULL
 HelloHelloHelloHello
 MotörHeadMotörHeadMotörHeadMotörHead
 
+# empty string
+query I
+SELECT repeat('', 99);
+----
+(empty)
+
+# no repeat
+query I
+SELECT repeat('hello world', 0);
+----
+(empty)
+
+# negative repeat
+query I
+SELECT repeat('hello world', -1);
+----
+(empty)
+
+# repeat blob
+query I
+SELECT repeat(blob '00', 2);
+----
+0000
+
 # test incorrect usage of reverse
 statement error
 select REPEAT()
+----
 
 statement error
 select REPEAT(1)
+----
 
 statement error
 select REPEAT('hello', 'world')
+----
 
 statement error
 select REPEAT('hello', 'world', 3)
+----
 

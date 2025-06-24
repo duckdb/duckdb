@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/fixed_size_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -30,20 +31,47 @@ public:
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
-	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
+	unsafe_vector<TupleDataPinState> partition_pin_states;
 	TupleDataChunkState chunk_state;
+
+	//! Utility Vector for when repartitioning and copying rows straight from one collection to another
+	unique_ptr<Vector> utility_vector;
+
+public:
+	template <bool fixed>
+	typename std::conditional<fixed, fixed_size_map_t<list_entry_t>, perfect_map_t<list_entry_t>>::type &GetMap() {
+		throw NotImplementedException("PartitionedTupleDataAppendState::GetMap for boolean value");
+	}
+
+	optional_idx GetPartitionIndexIfSinglePartition(const bool use_fixed_size_map) {
+		optional_idx result;
+		if (use_fixed_size_map) {
+			if (fixed_partition_entries.size() == 1) {
+				result = fixed_partition_entries.begin().GetKey();
+			}
+		} else {
+			if (partition_entries.size() == 1) {
+				result = partition_entries.begin()->first;
+			}
+		}
+		return result;
+	}
 };
+
+template <>
+inline perfect_map_t<list_entry_t> &PartitionedTupleDataAppendState::GetMap<false>() {
+	return partition_entries;
+}
+
+template <>
+inline fixed_size_map_t<list_entry_t> &PartitionedTupleDataAppendState::GetMap<true>() {
+	return fixed_partition_entries;
+}
 
 enum class PartitionedTupleDataType : uint8_t {
 	INVALID,
 	//! Radix partitioning on a hash column
 	RADIX
-};
-
-//! Shared allocators for parallel partitioning
-struct PartitionTupleDataAllocators {
-	mutex lock;
-	vector<shared_ptr<TupleDataAllocator>> allocators;
 };
 
 //! PartitionedTupleData represents partitioned row data, which serves as an interface for different types of
@@ -54,6 +82,7 @@ public:
 
 public:
 	//! Get the layout of this PartitionedTupleData
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	//! Get the partitioning type of this PartitionedTupleData
 	PartitionedTupleDataType GetType() const;
@@ -78,11 +107,11 @@ public:
 	//! Resets this PartitionedTupleData
 	void Reset();
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
-	void Repartition(PartitionedTupleData &new_partitioned_data);
+	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data);
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
-	vector<unique_ptr<TupleDataCollection>> &GetPartitions();
+	unsafe_vector<unique_ptr<TupleDataCollection>> &GetPartitions();
 	//! Get the data of this PartitionedTupleData as a single unpartitioned TupleDataCollection
 	unique_ptr<TupleDataCollection> GetUnpartitioned();
 	//! Get the count of this PartitionedTupleData
@@ -91,6 +120,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Get the number of partitions of this PartitionedTupleData
 	idx_t PartitionCount() const;
+	//! Get the count and size of the largest partition
+	void GetSizesAndCounts(vector<idx_t> &partition_sizes, vector<idx_t> &partition_counts) const;
 	//! Converts this PartitionedTupleData to a string representation
 	string ToString();
 	//! Prints the string representation of this PartitionedTupleData
@@ -107,11 +138,13 @@ protected:
 	//! Compute the partition indices for this type of partitioning for the input DataChunk and store them in the
 	//! `partition_data` of the local state. If this type creates partitions on the fly (for, e.g., hive), this
 	//! function is also in charge of creating new partitions and mapping the input data to a partition index
-	virtual void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {
+	virtual void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input,
+	                                     const SelectionVector &append_sel, const idx_t append_count) {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Compute partition indices from rows (similar to function above)
-	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices) const {
+	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices,
+	                                     unique_ptr<Vector> &utility_vector) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Maximum partition index (optional)
@@ -119,10 +152,6 @@ protected:
 		return DConstants::INVALID_INDEX;
 	}
 
-	//! Whether or not to iterate over the original partitions in reverse order when repartitioning (optional)
-	virtual bool RepartitionReverseOrder() const {
-		return false;
-	}
 	//! Finalize states while repartitioning - useful for unpinning blocks that are no longer needed (optional)
 	virtual void RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
 	                                       PartitionedTupleData &new_partitioned_data,
@@ -131,31 +160,26 @@ protected:
 
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
-	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager, const TupleDataLayout &layout);
+	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager,
+	                     shared_ptr<TupleDataLayout> &layout_ptr);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
-	//! Create a new shared allocator
-	void CreateAllocator();
-	//! Whether to use fixed size map or regular marp
+	//! Whether to use fixed size map or regular map
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-	                       const idx_t append_count);
-	template <class MAP_TYPE, class GETTER>
-	void BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
-	                       const SelectionVector &append_sel, const idx_t append_count);
+	                       const idx_t append_count) const;
+	template <bool fixed>
+	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
+	                              const idx_t append_count, const idx_t max_partition_idx);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
-	template <class MAP_TYPE, class GETTER>
-	void BuildBufferSpace(PartitionedTupleDataAppendState &state, const MAP_TYPE &partition_entries);
+	template <bool fixed>
+	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
-	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
-		if (allocators) {
-			return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
-		} else {
-			return make_uniq<TupleDataCollection>(buffer_manager, layout);
-		}
+	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) {
+		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;
@@ -163,23 +187,23 @@ protected:
 protected:
 	PartitionedTupleDataType type;
 	BufferManager &buffer_manager;
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	idx_t count;
 	idx_t data_size;
 
 	mutex lock;
-	shared_ptr<PartitionTupleDataAllocators> allocators;
-	vector<unique_ptr<TupleDataCollection>> partitions;
+	unsafe_vector<unique_ptr<TupleDataCollection>> partitions;
 
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

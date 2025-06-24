@@ -15,13 +15,15 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
 void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, unique_ptr<ParsedExpression> column,
-                                unique_ptr<QueryNode> subquery) {
+                                unique_ptr<QueryNode> subquery, bool has_parameters) {
 	if (parent) {
-		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column), std::move(subquery));
+		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column), std::move(subquery),
+		                      has_parameters);
 		return;
 	}
 	auto result = make_uniq<CreatePivotEntry>();
@@ -29,6 +31,7 @@ void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, u
 	result->base = std::move(base);
 	result->column = std::move(column);
 	result->subquery = std::move(subquery);
+	result->has_parameters = has_parameters;
 
 	pivot_entries.push_back(std::move(result));
 }
@@ -92,7 +95,7 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	}
 
 	auto select = make_uniq<SelectStatement>();
-	select->node = std::move(subselect);
+	select->node = TransformMaterializedCTE(std::move(subselect));
 	info->query = std::move(select);
 	info->type = LogicalType::INVALID;
 
@@ -113,6 +116,13 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStatement> statement) {
 	auto result = make_uniq<MultiStatement>();
 	for (auto &pivot : pivot_entries) {
+		if (pivot->has_parameters) {
+			throw ParserException(
+			    "PIVOT statements with pivot elements extracted from the data cannot have parameters in their source.\n"
+			    "In order to use parameters the PIVOT values must be manually specified, e.g.:\n"
+			    "PIVOT ... ON %s IN (val1, val2, ...)",
+			    pivot->column->ToString());
+		}
 		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
 	}
 	result->statements.push_back(std::move(statement));
@@ -125,14 +135,15 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 
 unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGSelectStmt &select) {
 	auto pivot = select.pivot;
+	auto current_param_count = ParamCount();
 	auto source = TransformTableRefNode(*pivot->source);
+	auto next_param_count = ParamCount();
+	bool has_parameters = next_param_count > current_param_count;
 
 	auto select_node = make_uniq<SelectNode>();
-	vector<unique_ptr<CTENode>> materialized_ctes;
 	// handle the CTEs
 	if (select.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map,
-		             materialized_ctes);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map);
 	}
 	if (!pivot->columns) {
 		// no pivot columns - not actually a pivot
@@ -152,12 +163,14 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (pivot->aggrs) {
 			TransformExpressionList(*pivot->aggrs, select_node->select_list);
 		}
+		// transform order by/limit modifiers
+		TransformModifiers(select, *select_node);
 		return std::move(select_node);
 	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
-	auto columns = TransformPivotList(*pivot->columns);
-	auto pivot_idx = PivotEntryCount();
+	bool is_pivot = !pivot->unpivots;
+	auto columns = TransformPivotList(*pivot->columns, is_pivot);
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
 		if (!col.pivot_enum.empty() || !col.entries.empty()) {
@@ -166,12 +179,13 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (col.pivot_expressions.size() != 1) {
 			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
 		}
-		auto enum_name = "__pivot_enum_" + std::to_string(pivot_idx) + "_" + std::to_string(c);
+		auto enum_name = "__pivot_enum_" + UUID::ToString(UUID::GenerateRandomUUID());
 
 		auto new_select = make_uniq<SelectNode>();
 		ExtractCTEsRecursive(new_select->cte_map);
 		new_select->from_table = source->Copy();
-		AddPivotEntry(enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(), std::move(col.subquery));
+		AddPivotEntry(enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(), std::move(col.subquery),
+		              has_parameters);
 		col.pivot_enum = enum_name;
 	}
 
@@ -196,13 +210,12 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		pivot_ref->groups = TransformStringList(pivot->groups);
 	}
 	pivot_ref->pivots = std::move(columns);
+	SetQueryLocation(*pivot_ref, pivot->location);
 	select_node->from_table = std::move(pivot_ref);
 	// transform order by/limit modifiers
 	TransformModifiers(select, *select_node);
 
-	auto node = Transformer::TransformMaterializedCTE(std::move(select_node), materialized_ctes);
-
-	return node;
+	return std::move(select_node);
 }
 
 } // namespace duckdb

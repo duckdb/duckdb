@@ -3,10 +3,13 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE nfcstrings (s STRING);
 
 query I
-COPY nfcstrings FROM 'test/sql/copy/csv/data/test/nfc.csv';
+COPY nfcstrings FROM 'data/csv/test/nfc.csv' (HEADER 0);
 ----
 2
 

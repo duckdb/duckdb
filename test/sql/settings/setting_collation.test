@@ -40,6 +40,8 @@ wozld
 
 statement error
 PRAGMA default_collation='unknown'
+----
+<REGEX>:Catalog Error.*Collation.*does not exist.*
 
 statement ok
 SET GLOBAL default_collation='NOCASE'

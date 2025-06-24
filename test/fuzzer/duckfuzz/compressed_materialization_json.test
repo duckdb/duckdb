@@ -1,0 +1,13 @@
+# name: test/fuzzer/duckfuzz/compressed_materialization_json.test
+# description: Compressed Materialization optimizer should respect extension types
+# group: [duckfuzz]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select distinct json_array();
+----
+[]

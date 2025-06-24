@@ -5,47 +5,36 @@
 load __TEST_DIR__/simple_external_aggregate.db
 
 statement ok
+create table random as select hash(range + 42) % 10_000_000 rand from range(10_000_000)
+
+statement ok
 pragma threads=4
 
 statement ok
 create table t1 (c0 bigint, c1 bigint, c2 bigint, c3 varchar)
 
-# materialized rows should be > 400MB (not including HT of ~50MB)
-# parallelize range using unions
+# materialized rows should be >1GB
 statement ok
-insert into t1 select range c0,
-                      range c1,
-                      range c2,
-                      concat(range::VARCHAR, repeat('0', 50)) c3
-from (
-    select * from (
-        select * from range(0, 1000000)
-        union all
-        select * from range(1000000, 2000000)
-        union all
-        select * from range(2000000, 3000000)
-        union all
-        select * from range(3000000, 4000000)
-    ) order by random()
-)
+insert into t1 select rand c0,
+                      rand c1,
+                      rand c2,
+                      concat(rand::VARCHAR, repeat('0', 50)) c3
+from random
 
 # we don't want to compress to smaller sizes,
 # otherwise the size estimates (and therefore this test) won't test what we want it to
 statement ok
 set disabled_optimizers to 'compressed_materialization'
 
-# fairly high memory limit for a 400MB data set, but the out-of-core aggregate has a base memory consumption per thread
-# we can aggregate much more than fits in memory, but at low memory limits this is a bit more tricky
-# however, a large data set will make this test much slower
 statement ok
-pragma memory_limit='300MB'
+pragma memory_limit='1.5GB'
 
 query I
 select count(*) from (select distinct * from t1)
 ----
-4000000
+6322366
 
-# add some strings that are longer than Storage::BLOCK_SIZE (another ~30MB, for a total of ~430MB)
+# add some strings that are longer than Storage::BLOCK_SIZE (+ ~30MB)
 statement ok
 insert into t1 select range c0,
                       range c1,
@@ -56,4 +45,4 @@ from range(100)
 query I
 select count(*) from (select distinct * from t1)
 ----
-4000100
+6322466

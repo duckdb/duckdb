@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 
 namespace duckdb {
@@ -16,7 +17,7 @@ class QueryGraphManager;
 
 class CostModel {
 public:
-	CostModel(QueryGraphManager &query_graph_manager);
+	explicit CostModel(QueryGraphManager &query_graph_manager);
 
 private:
 	//! query graph storing relation manager information
@@ -26,7 +27,7 @@ public:
 	void InitCostModel();
 
 	//! Compute cost of a join relation set
-	double ComputeCost(JoinNode &left, JoinNode &right);
+	double ComputeCost(DPJoinNode &left, DPJoinNode &right);
 
 	//! Cardinality Estimator used to calculate cost
 	CardinalityEstimator cardinality_estimator;

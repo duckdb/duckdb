@@ -37,7 +37,7 @@ UTF16CollationIterator::UTF16CollationIterator(const UTF16CollationIterator &oth
 
 UTF16CollationIterator::~UTF16CollationIterator() {}
 
-UBool
+bool
 UTF16CollationIterator::operator==(const CollationIterator &other) const {
     if(!CollationIterator::operator==(other)) { return FALSE; }
     const UTF16CollationIterator &o = static_cast<const UTF16CollationIterator &>(other);
@@ -171,7 +171,7 @@ FCDUTF16CollationIterator::FCDUTF16CollationIterator(const FCDUTF16CollationIter
 
 FCDUTF16CollationIterator::~FCDUTF16CollationIterator() {}
 
-UBool
+bool
 FCDUTF16CollationIterator::operator==(const CollationIterator &other) const {
     // Skip the UTF16CollationIterator and call its parent.
     if(!CollationIterator::operator==(other)) { return FALSE; }

@@ -1,0 +1,78 @@
+# name: test/optimizer/expression_rewriter/functions_that_error_are_not_reordered.test
+# description: Functions can error
+# group: [expression_rewriter]
+
+statement ok
+create table t1 as from range(-5000, 5000, 1) t1(a);
+
+# case expression must happen first, otherwise sqrt will throw an error
+query I
+select count(*)
+from t1
+where
+	case
+	when a >= 0 then true
+	When a > 5 then false
+	when a > 10 then true
+	when a < 0 then false
+	when a > 15 then true
+	else false END
+and sqrt(a) >= 0;
+----
+5000
+
+
+statement ok
+CREATE TABLE t2 AS
+SELECT
+	list_reduce([floor((random() * 2))::INT::VARCHAR for t, i in range(floor((random() * 20))::INT + 1)], lambda x, y: concat(x, y)) a,
+	list_reduce([floor((random() * 2))::INT::VARCHAR for t, i in range(floor((random() * 20))::INT + 1)], lambda x, y: concat(x, y)) b
+FROM range(10000);
+
+# len(a) = len(b) must happen first
+# otherwise xor function will throw an error
+statement ok
+select * from t2 where len(a) = len(b) and ((xor(a::BITSTRING, b::BITSTRING))::VARCHAR)[0] = '0';
+
+
+# fiter out high values with case, then another filter with multiple that will overflow
+# if vcalues are not filtered out
+statement ok
+create table t3 (a INT, b INT);
+
+statement ok
+insert into t3 (select -2147483645, 2147483647 from range(500000));
+
+statement ok
+insert into t3 (select range, range from range(32700));
+
+query I
+select count(*) from t3
+where
+	case
+	when (a < 0 and a > -3000) then false
+	when (a > -2147483645 and a < 0) then true
+	when (a >= 0 and a < 32700) then true
+	when a < 3270000 then false
+	when a < 2147483645 then true
+	else false END
+and (a * b)::INT < 2147483648;
+----
+32700
+
+statement ok
+create table t4 as select [2e304, 2e305, 2e306, 2e307] a from range(10000);
+
+statement ok
+insert into t4 select [range, range +1, range + 2, 2e50] from range(1000);
+
+# FIXME: this should not be required
+require vector_size 2048
+
+query I
+select count(*) from t4 where a[1] < 1001 and list_kurtosis(a) is NOT NULL;
+----
+1000
+
+
+

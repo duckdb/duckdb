@@ -9,14 +9,14 @@ PRAGMA enable_verification
 
 # \  and / are interchangeable on Windows
 query I
-SELECT * FROM 'test\sql/copy\csv/data\test/date.csv'
+SELECT * FROM 'data\csv/test/date.csv'
 ----
 2019-06-05
 
 query I
-SELECT * FROM glob('test\sql/copy\csv\data/test/*.csv') t(g) WHERE g LIKE '%date.csv'
+SELECT * FROM glob('data/csv\test/*.csv') t(g) WHERE g LIKE '%date.csv'
 ----
-test\sql\copy\csv\data\test\date.csv
+data\csv\test\date.csv
 
 # also for attach
 statement ok

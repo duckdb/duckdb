@@ -39,15 +39,20 @@ SELECT enum_range_boundary('orange'::rainbow, NULL)
 
 statement error
 SELECT enum_range_boundary('orange'::rainbow, 'brl'::currency)
+----
 
 statement error
 SELECT enum_range_boundary(NULL, NULL)
+----
 
 statement error
 SELECT enum_last('bla')
+----
 
 statement error
 SELECT enum_range_boundary('orange'::rainbow, 1)
+----
 
 statement error
 SELECT enum_range_boundary(1, 'orange'::rainbow)
+----

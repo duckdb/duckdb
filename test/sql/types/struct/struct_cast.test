@@ -2,8 +2,6 @@
 # description: Test struct cast
 # group: [struct]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -112,3 +110,60 @@ SELECT s::ROW(i BIGINT, j ROW(a BIGINT, b VARCHAR)) FROM nested_structs
 {'i': 1, 'j': {'a': 2, 'b': NULL}}
 {'i': 1, 'j': NULL}
 NULL
+
+# Issue #12939, NULL used to be case-sensitive
+# Testing all permutations for fun
+query I
+SELECT col::STRUCT(duck INT)
+FROM VALUES
+    ('{"duck": null}'),
+    ('{"duck": nulL}'),
+    ('{"duck": nuLl}'),
+    ('{"duck": nuLL}'),
+    ('{"duck": nUll}'),
+    ('{"duck": nUlL}'),
+    ('{"duck": nULl}'),
+    ('{"duck": nULL}'),
+    ('{"duck": Null}'),
+    ('{"duck": NulL}'),
+    ('{"duck": NuLl}'),
+    ('{"duck": NuLL}'),
+    ('{"duck": NUll}'),
+    ('{"duck": NUlL}'),
+    ('{"duck": NULl}'),
+    ('{"duck": NULL}'),
+AS tab(col)
+----
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+
+# Allow missing / additional STRUCT fields.
+
+query I
+SELECT {'i': 42, 'j': 84}::STRUCT(i INT) AS result;
+----
+{'i': 42}
+
+query I
+SELECT {'i': 42}::STRUCT(i INT, j INT) AS result;
+----
+{'i': 42, 'j': NULL}
+
+query I
+SELECT {'a': 7, 'i': 42, 'j': 84, 'k': 42}::STRUCT(m INT, k INT, l INT) AS result;
+----
+{'m': NULL, 'k': 42, 'l': NULL}

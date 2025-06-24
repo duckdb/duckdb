@@ -1,56 +1,53 @@
 #include "duckdb/common/sort/partition_state.hpp"
 
-#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/parallel/event.hpp"
-
-#include <numeric>
+#include "duckdb/parallel/executor_task.hpp"
 
 namespace duckdb {
 
-PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
+PartitionGlobalHashGroup::PartitionGlobalHashGroup(ClientContext &context, const Orders &partitions,
                                                    const Orders &orders, const Types &payload_types, bool external)
-    : count(0), batch_base(0) {
+    : count(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
-	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 	global_sort->external = external;
 
 	//	Set up a comparator for the partition subset
 	partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
 }
 
-int PartitionGlobalHashGroup::ComparePartitions(const SBIterator &left, const SBIterator &right) const {
-	int part_cmp = 0;
-	if (partition_layout.all_constant) {
-		part_cmp = FastMemcmp(left.entry_ptr, right.entry_ptr, partition_layout.comparison_size);
-	} else {
-		part_cmp = Comparators::CompareTuple(left.scan, right.scan, left.entry_ptr, right.entry_ptr, partition_layout,
-		                                     left.external);
-	}
-	return part_cmp;
-}
-
-void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask) {
+void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks) {
 	D_ASSERT(count > 0);
 
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 
 	partition_mask.SetValidUnsafe(0);
-	order_mask.SetValidUnsafe(0);
+	unordered_map<idx_t, SortLayout> prefixes;
+	for (auto &order_mask : order_masks) {
+		order_mask.second.SetValidUnsafe(0);
+		D_ASSERT(order_mask.first >= partition_layout.column_count);
+		prefixes[order_mask.first] = global_sort->sort_layout.GetPrefixComparisonLayout(order_mask.first);
+	}
+
 	for (++curr; curr.GetIndex() < count; ++curr) {
 		//	Compare the partition subset first because if that differs, then so does the full ordering
 		const auto part_cmp = ComparePartitions(prev, curr);
-		;
 
 		if (part_cmp) {
 			partition_mask.SetValidUnsafe(curr.GetIndex());
-			order_mask.SetValidUnsafe(curr.GetIndex());
-		} else if (prev.Compare(curr)) {
-			order_mask.SetValidUnsafe(curr.GetIndex());
+			for (auto &order_mask : order_masks) {
+				order_mask.second.SetValidUnsafe(curr.GetIndex());
+			}
+		} else {
+			for (auto &order_mask : order_masks) {
+				if (prev.Compare(curr, prefixes[order_mask.first])) {
+					order_mask.second.SetValidUnsafe(curr.GetIndex());
+				}
+			}
 		}
 		++prev;
 	}
@@ -92,24 +89,24 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
-	external = ClientConfig::GetConfig(context).force_external;
+	external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 
-	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * idx_t(Storage::BLOCK_ALLOC_SIZE)));
+	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
 		++max_bits;
 	}
 
+	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types.Initialize(payload_types);
-			auto new_group =
-			    make_uniq<PartitionGlobalHashGroup>(buffer_manager, partitions, orders, payload_types, external);
+			grouping_types_ptr->Initialize(payload_types);
+			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types.Initialize(types);
+			grouping_types_ptr->Initialize(types);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}
@@ -133,13 +130,14 @@ void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &
 	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	if (fixed_bits != old_bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, fixed_bits, hash_col_idx);
+		grouping_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, fixed_bits, hash_col_idx);
 	}
 }
 
 unique_ptr<RadixPartitionedTupleData> PartitionGlobalSinkState::CreatePartition(idx_t new_bits) const {
 	const auto hash_col_idx = payload_types.size();
-	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, new_bits, hash_col_idx);
 }
 
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
@@ -148,7 +146,7 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 		return;
 	}
 	//	Is the average partition size too large?
-	const idx_t partition_size = STANDARD_ROW_GROUPS_SIZE;
+	const idx_t partition_size = DEFAULT_ROW_GROUP_SIZE;
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	auto new_bits = bits ? bits : 4;
 	while (new_bits < max_bits && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
@@ -172,7 +170,7 @@ void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_parti
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(*new_partition);
+	local_partition->Repartition(context, *new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -316,9 +314,10 @@ void PartitionLocalSinkState::Sink(DataChunk &input_chunk) {
 		//	No sorts, so build paged row chunks
 		if (!rows) {
 			const auto entry_size = payload_layout.GetRowWidth();
-			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
+			const auto block_size = gstate.buffer_manager.GetBlockSize();
+			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, block_size / entry_size + 1);
 			rows = make_uniq<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
-			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, block_size, 1U, true);
 		}
 		const auto row_count = input_chunk.size();
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
@@ -401,13 +400,13 @@ void PartitionLocalSinkState::Combine() {
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data_p,
                                                      hash_t hash_bin)
-    : sink(sink), group_data(std::move(group_data_p)), memory_per_thread(sink.memory_per_thread),
-      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
-      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+    : sink(sink), group_data(std::move(group_data_p)), group_idx(sink.hash_groups.size()),
+      memory_per_thread(sink.memory_per_thread),
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
-	const auto group_idx = sink.hash_groups.size();
-	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
-	                                                     sink.payload_types, sink.external);
+	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.context, sink.partitions, sink.orders, sink.payload_types,
+	                                                     sink.external);
 	sink.hash_groups.emplace_back(std::move(new_group));
 
 	hash_group = sink.hash_groups[group_idx].get();
@@ -423,12 +422,11 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 }
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink)
-    : sink(sink), memory_per_thread(sink.memory_per_thread),
-      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
-      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+    : sink(sink), group_idx(0), memory_per_thread(sink.memory_per_thread),
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const hash_t hash_bin = 0;
-	const size_t group_idx = 0;
 	hash_group = sink.hash_groups[group_idx].get();
 	global_sort = sink.hash_groups[group_idx]->global_sort.get();
 
@@ -448,6 +446,10 @@ void PartitionLocalMergeState::Merge() {
 	merge_sorter.PerformInMergeRound();
 }
 
+void PartitionLocalMergeState::Sorted() {
+	merge_state->sink.OnSortedPartition(merge_state->group_idx);
+}
+
 void PartitionLocalMergeState::ExecuteTask() {
 	switch (stage) {
 	case PartitionSortStage::SCAN:
@@ -458,6 +460,9 @@ void PartitionLocalMergeState::ExecuteTask() {
 		break;
 	case PartitionSortStage::MERGE:
 		Merge();
+		break;
+	case PartitionSortStage::SORTED:
+		Sorted();
 		break;
 	default:
 		throw InternalException("Unexpected PartitionSortStage in ExecuteTask!");
@@ -470,7 +475,7 @@ void PartitionLocalMergeState::ExecuteTask() {
 bool PartitionGlobalMergeState::AssignTask(PartitionLocalMergeState &local_state) {
 	lock_guard<mutex> guard(lock);
 
-	if (tasks_assigned >= total_tasks) {
+	if (tasks_assigned >= total_tasks && !TryPrepareNextStage()) {
 		return false;
 	}
 
@@ -489,15 +494,13 @@ void PartitionGlobalMergeState::CompleteTask() {
 }
 
 bool PartitionGlobalMergeState::TryPrepareNextStage() {
-	lock_guard<mutex> guard(lock);
-
 	if (tasks_completed < total_tasks) {
 		return false;
 	}
 
 	tasks_assigned = tasks_completed = 0;
 
-	switch (stage) {
+	switch (stage.load()) {
 	case PartitionSortStage::INIT:
 		//	If the partitions are unordered, don't scan in parallel
 		//	because it produces non-deterministic orderings.
@@ -513,30 +516,36 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 		return true;
 
 	case PartitionSortStage::PREPARE:
-		total_tasks = global_sort->sorted_blocks.size() / 2;
-		if (!total_tasks) {
+		if (!(global_sort->sorted_blocks.size() / 2)) {
 			break;
 		}
 		stage = PartitionSortStage::MERGE;
 		global_sort->InitializeMergeRound();
+		total_tasks = num_threads;
 		return true;
 
 	case PartitionSortStage::MERGE:
 		global_sort->CompleteMergeRound(true);
-		total_tasks = global_sort->sorted_blocks.size() / 2;
-		if (!total_tasks) {
+		if (!(global_sort->sorted_blocks.size() / 2)) {
 			break;
 		}
 		global_sort->InitializeMergeRound();
+		total_tasks = num_threads;
 		return true;
 
 	case PartitionSortStage::SORTED:
-		break;
+		stage = PartitionSortStage::FINISHED;
+		total_tasks = 0;
+		return false;
+
+	case PartitionSortStage::FINISHED:
+		return false;
 	}
 
 	stage = PartitionSortStage::SORTED;
+	total_tasks = 1;
 
-	return false;
+	return true;
 }
 
 PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState &sink) {
@@ -559,16 +568,22 @@ PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState 
 		auto state = make_uniq<PartitionGlobalMergeState>(sink);
 		states.emplace_back(std::move(state));
 	}
+
+	sink.OnBeginMerge();
 }
 
 class PartitionMergeTask : public ExecutorTask {
 public:
 	PartitionMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, PartitionGlobalMergeStates &hash_groups_p,
-	                   PartitionGlobalSinkState &gstate)
-	    : ExecutorTask(context_p), event(std::move(event_p)), local_state(gstate), hash_groups(hash_groups_p) {
+	                   PartitionGlobalSinkState &gstate, const PhysicalOperator &op)
+	    : ExecutorTask(context_p, std::move(event_p), op), local_state(gstate), hash_groups(hash_groups_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+
+	string TaskType() const override {
+		return "PartitionMergeTask";
+	}
 
 private:
 	struct ExecutorCallback : public PartitionGlobalMergeStates::Callback {
@@ -582,7 +597,6 @@ private:
 		Executor &executor;
 	};
 
-	shared_ptr<Event> event;
 	PartitionLocalMergeState local_state;
 	PartitionGlobalMergeStates &hash_groups;
 };
@@ -603,7 +617,7 @@ bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_sta
 		// Thread is done with its assigned task, try to fetch new work
 		for (auto group = sorted; group < states.size(); ++group) {
 			auto &global_state = states[group];
-			if (global_state->IsSorted()) {
+			if (global_state->IsFinished()) {
 				// This hash group is done
 				// Update the high water mark of densely completed groups
 				if (sorted == group) {
@@ -613,23 +627,6 @@ bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_sta
 			}
 
 			// Try to assign work for this hash group to this thread
-			if (global_state->AssignTask(local_state)) {
-				// We assigned a task to this thread!
-				// Break out of this loop to re-enter the top-level loop and execute the task
-				break;
-			}
-
-			// Hash group global state couldn't assign a task to this thread
-			// Try to prepare the next stage
-			if (!global_state->TryPrepareNextStage()) {
-				// This current hash group is not yet done
-				// But we were not able to assign a task for it to this thread
-				// See if the next hash group is better
-				continue;
-			}
-
-			// We were able to prepare the next stage for this hash group!
-			// Try to assign a task once more
 			if (global_state->AssignTask(local_state)) {
 				// We assigned a task to this thread!
 				// Break out of this loop to re-enter the top-level loop and execute the task
@@ -662,11 +659,11 @@ void PartitionMergeEvent::Schedule() {
 
 	// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 	auto &ts = TaskScheduler::GetScheduler(context);
-	idx_t num_threads = ts.NumberOfThreads();
+	auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states, gstate));
+		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states, gstate, op));
 	}
 	SetTasks(std::move(merge_tasks));
 }

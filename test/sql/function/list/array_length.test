@@ -27,9 +27,11 @@ SELECT array_length(ARRAY[1, 2, 3], 1)
 
 statement error
 SELECT array_length(ARRAY[1, 2, 3], 2)
+----
 
 statement error
 SELECT array_length(ARRAY[1, 2, 3], 0)
+----
 
 query I
 SELECT len([1]) FROM range(3)

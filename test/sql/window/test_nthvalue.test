@@ -109,7 +109,7 @@ SELECT depname, empno,
 		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 		) fv
 FROM empno_nulls
-ORDER BY 1, 2
+ORDER BY 1, 2, 3
 ----
 develop	NULL	NULL
 develop	NULL	7
@@ -192,6 +192,7 @@ SELECT depname, empno,
 		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 		) fv
 FROM empsalary
+----
 
 statement error
 SELECT depname, empno,
@@ -200,3 +201,4 @@ SELECT depname, empno,
 		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 		) fv
 FROM empsalary
+----

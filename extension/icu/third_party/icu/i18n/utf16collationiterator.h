@@ -42,7 +42,7 @@ public:
 
     virtual ~UTF16CollationIterator();
 
-    virtual UBool operator==(const CollationIterator &other) const;
+    virtual bool operator==(const CollationIterator &other) const;
 
     virtual void resetToOffset(int32_t newOffset);
 
@@ -95,7 +95,7 @@ public:
 
     virtual ~FCDUTF16CollationIterator();
 
-    virtual UBool operator==(const CollationIterator &other) const;
+    virtual bool operator==(const CollationIterator &other) const;
 
     virtual void resetToOffset(int32_t newOffset);
 

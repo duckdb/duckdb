@@ -2,7 +2,8 @@
 # description: Test duckdb_columns function
 # group: [table_function]
 
-require noforcestorage
+statement ok
+set storage_compatibility_version='v0.10.2'
 
 statement ok
 PRAGMA enable_verification

@@ -23,7 +23,7 @@ a
 NULL
 
 statement ok
-COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t', HEADER 1);
+COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t');
 
 query I
 select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)

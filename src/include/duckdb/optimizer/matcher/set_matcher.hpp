@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
@@ -59,7 +60,7 @@ public:
 					return true;
 				} else {
 					// we did not find a match! remove any bindings we added in the call to Match()
-					bindings.erase(bindings.begin() + previous_binding_count, bindings.end());
+					bindings.erase(bindings.begin() + NumericCast<int64_t>(previous_binding_count), bindings.end());
 				}
 			}
 		}

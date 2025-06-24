@@ -10,6 +10,10 @@ MergeSorter::MergeSorter(GlobalSortState &state, BufferManager &buffer_manager)
 
 void MergeSorter::PerformInMergeRound() {
 	while (true) {
+		// Check for interrupts after merging a partition
+		if (state.context.interrupted) {
+			throw InterruptException();
+		}
 		{
 			lock_guard<mutex> pair_guard(state.lock);
 			if (state.pair_idx == state.num_pairs) {
@@ -516,9 +520,9 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					entry_size =
 					    l_smaller * Load<uint32_t>(l_heap_ptr_copy) + r_smaller * Load<uint32_t>(r_heap_ptr_copy);
 					D_ASSERT(entry_size >= sizeof(uint32_t));
-					D_ASSERT(l_heap_ptr_copy - l.BaseHeapPtr(l_data) + l_smaller * entry_size <=
+					D_ASSERT(NumericCast<idx_t>(l_heap_ptr_copy - l.BaseHeapPtr(l_data)) + l_smaller * entry_size <=
 					         l_data.heap_blocks[l.block_idx]->byte_offset);
-					D_ASSERT(r_heap_ptr_copy - r.BaseHeapPtr(r_data) + r_smaller * entry_size <=
+					D_ASSERT(NumericCast<idx_t>(r_heap_ptr_copy - r.BaseHeapPtr(r_data)) + r_smaller * entry_size <=
 					         r_data.heap_blocks[r.block_idx]->byte_offset);
 					l_heap_ptr_copy += l_smaller * entry_size;
 					r_heap_ptr_copy += r_smaller * entry_size;

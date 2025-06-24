@@ -1,0 +1,103 @@
+s_store_name|s_company_id|s_street_number|s_street_name|s_street_type|s_suite_number|s_city|s_county|s_state|s_zip|30 days|31-60 days|61-90 days|91-120 days|>120 days
+able|1|128|15th |RD|Suite T|Oakland|Luce County|MI|49843|224|175|159|154|322
+able|1|227|8th |Road|Suite 290|New Hope|Luce County|MI|49431|224|164|191|174|327
+able|1|228|Cherry |Avenue|Suite G|Centerville|Walker County|AL|30059|235|144|168|173|335
+able|1|255|Sycamore |Dr.|Suite 410|Midway|Ziebach County|SD|51904|240|139|166|172|339
+able|1|292|Walnut North|Circle|Suite Q|Pleasant Valley|Franklin Parish|LA|72477|201|154|153|179|327
+able|1|300|Forest |Lane|Suite 230|Riverside|Walker County|AL|39231|220|161|178|176|319
+able|1|302|Walnut Madison|Wy|Suite T|Oakland|Ziebach County|SD|59843|227|176|142|163|336
+able|1|441|11th |ST|Suite H|Union|Williamson County|TN|38721|249|163|162|159|313
+able|1|443|Hickory Sycamore|Street|Suite C|Fairview|Richland County|OH|45709|241|166|190|144|312
+able|1|479|Park First|Lane|Suite 20|Salem|Walker County|AL|38048|215|176|166|182|312
+able|1|49|Highland 1st|Drive|Suite 80|Greenwood|Ziebach County|SD|58828|225|148|170|133|300
+able|1|543|West Elm|Ln|Suite A|Pleasant Grove|Luce County|MI|44136|244|163|160|169|295
+able|1|545|Pine |ST|Suite D|Liberty|Richland County|OH|43451|203|145|148|192|321
+able|1|557|Elevnth 7th|Pkwy|Suite L|Oakland|Walker County|AL|39843|210|149|172|186|310
+able|1|605|Williams South|Ln|Suite D|Fairview|Richland County|OH|45709|219|151|167|150|314
+able|1|667|Ridge Maple|Pkwy|Suite X|Bethel|Ziebach County|SD|55281|209|154|173|145|316
+able|1|702|Cedar 6th|Blvd|Suite 370|Fairview|Richland County|OH|45709|236|153|170|167|319
+able|1|722|Railroad Spring|Ct.|Suite M|Pleasant Grove|Richland County|OH|44136|249|165|177|165|342
+able|1|738|Miller |Court|Suite R|New Hope|Luce County|MI|49431|229|171|158|149|305
+able|1|749|Railroad Maple|Drive|Suite 10|New Hope|Fairfield County|SC|29431|222|164|175|168|341
+able|1|822|Johnson Third|ST|Suite P|Midway|Richland County|OH|41904|221|202|182|134|327
+able|1|824|Valley |Cir.|Suite A|Fairview|Daviess County|MO|65709|225|174|182|147|280
+able|1|841|Mill Woodland|Pkwy|Suite S|Pleasant Grove|Luce County|MI|44136|217|127|174|153|334
+able|1|868|Main Park|Ct.|Suite 240|Bethel|Daviess County|MO|65281|204|175|162|154|305
+able|1|924|2nd Meadow|Way|Suite Y|Oak Grove|Fairfield County|SC|28370|229|156|168|181|321
+able|1|954|Walnut |Pkwy|Suite L|Oak Grove|Franklin Parish|LA|78370|211|144|155|160|313
+able|1|972|Chestnut |Wy|Suite S|Union|Walker County|AL|38721|245|161|179|159|312
+anti|1|192|5th Highland|Blvd|Suite N|Bethel|Williamson County|TN|35281|215|178|145|179|326
+anti|1|321|11th |Parkway|Suite G|Pleasant Hill|Franklin Parish|LA|73604|214|134|181|158|352
+anti|1|433|Cherry |Boulevard|Suite G|Riverside|Barrow County|GA|39231|218|158|153|164|320
+anti|1|536|5th |Drive|Suite E|Shady Grove|Walker County|AL|32812|232|154|180|155|311
+anti|1|630|Third Railroad|Ln|Suite D|Oakland|Walker County|AL|39843|237|163|173|168|356
+anti|1|720|2nd Sycamore|Drive|Suite J|Fairview|Williamson County|TN|35709|227|153|150|160|340
+anti|1|735|Walnut |Blvd|Suite 360|Pleasant Grove|Luce County|MI|44136|203|171|181|155|350
+anti|1|797|10th 14th|Cir.|Suite 470|Greenwood|Franklin Parish|LA|78828|221|153|187|174|294
+anti|1|818|Central Valley|RD|Suite 210|Fairview|Barrow County|GA|35709|217|178|156|156|315
+anti|1|897|Ash Oak|Circle|Suite T|Salem|Fairfield County|SC|28048|225|160|153|161|335
+anti|1|921|Walnut Lake|Ave|Suite 400|Bethel|Richland County|OH|45281|223|190|162|153|328
+anti|1|927|Main |Dr.|Suite 210|Bethel|Williamson County|TN|35281|233|142|144|148|331
+anti|1|984|Spring Railroad|Circle|Suite 300|Pleasant Grove|Ziebach County|SD|54136|238|166|145|170|354
+ation|1|11|Broadway |ST|Suite P|Fairview|Barrow County|GA|35709|205|173|162|146|328
+ation|1|17|3rd |Drive|Suite 20|Midway|Barrow County|GA|31904|198|168|195|180|345
+ation|1|19|Fourth |Boulevard|Suite N|Mount Pleasant|Luce County|MI|42739|234|169|164|154|320
+ation|1|213|8th |Road|Suite 490|Liberty|Daviess County|MO|63451|234|156|182|176|313
+ation|1|226|5th |Dr.|Suite 330|Liberty|Ziebach County|SD|53451|247|169|164|166|315
+ation|1|232|5th Washington|RD|Suite R|Centerville|Richland County|OH|40059|225|167|161|172|302
+ation|1|421|12th Center|Avenue|Suite J|Shady Grove|Daviess County|MO|62812|248|157|154|177|307
+ation|1|421|Adams Madison|Ln|Suite P|Riverside|Fairfield County|SC|29231|214|165|164|153|329
+ation|1|442|East 13th|Avenue|Suite 350|Pleasant Hill|Williamson County|TN|33604|195|162|153|162|353
+ation|1|489|Cedar |Cir.|Suite 450|Centerville|Ziebach County|SD|50059|211|148|180|184|362
+ation|1|544|Lake Second|Court|Suite T|Midway|Ziebach County|SD|51904|229|156|168|190|310
+ation|1|795|Oak |Pkwy|Suite A|Midway|Franklin Parish|LA|71904|225|171|162|160|315
+ation|1|8|Cedar Maple|ST|Suite 320|Salem|Daviess County|MO|68048|210|173|172|176|334
+ation|1|811|Lee |Circle|Suite T|Bethel|Richland County|OH|45281|247|175|189|162|332
+bar|1|107|Poplar Wilson|RD|Suite R|Pleasant Hill|Williamson County|TN|33604|241|179|183|162|325
+bar|1|126|2nd 12th|Circle|Suite 230|Pleasant Hill|Richland County|OH|43604|217|145|175|148|310
+bar|1|147|Highland |Ln|Suite 270|Oakland|Barrow County|GA|39843|221|170|156|186|297
+bar|1|174|Sycamore |Ln|Suite O|Fairview|Franklin Parish|LA|75709|222|168|157|177|297
+bar|1|175|4th |Court|Suite C|Bethel|Daviess County|MO|65281|212|171|164|162|281
+bar|1|200|Lake |RD|Suite 320|Liberty|Ziebach County|SD|53451|205|153|141|162|319
+bar|1|265|Park South|RD|Suite 430|Pleasant Grove|Richland County|OH|44136|233|178|159|175|342
+bar|1|33|Lincoln |Ct.|Suite 410|Fairview|Franklin Parish|LA|75709|210|181|155|171|324
+bar|1|363|Center |ST|Suite E|Fairview|Franklin Parish|LA|75709|232|186|166|146|324
+bar|1|365|Railroad Smith|Boulevard|Suite O|Pleasant Grove|Williamson County|TN|34136|221|161|151|151|319
+bar|1|377|Pine |Parkway|Suite 160|Midway|Luce County|MI|41904|218|156|191|155|331
+bar|1|41|Oak |Court|Suite 170|Oakland|Fairfield County|SC|29843|205|159|169|159|292
+bar|1|427|Jefferson |Road|Suite V|Fairview|Walker County|AL|35709|254|176|157|171|334
+bar|1|448|Poplar Johnson|Court|Suite G|Liberty|Richland County|OH|43451|189|159|166|167|324
+bar|1|540|Lakeview Center|Avenue|Suite C|Riverside|Fairfield County|SC|29231|203|157|168|168|302
+bar|1|543|Twelfth |Avenue|Suite L|Bethel|Barrow County|GA|35281|216|139|147|174|292
+bar|1|582|Oak Washington|Drive|Suite S|Greenwood|Walker County|AL|38828|218|168|185|168|302
+bar|1|599|Davis Poplar|Circle|Suite Q|New Hope|Ziebach County|SD|59431|223|139|182|138|307
+bar|1|664|Third |Drive|Suite 380|Liberty|Ziebach County|SD|53451|199|180|171|170|335
+bar|1|700|Third View|Road|Suite 420|Oak Grove|Daviess County|MO|68370|259|150|177|155|329
+bar|1|741|Hillcrest |Ave|Suite 20|Bethel|Fairfield County|SC|25281|192|132|158|185|314
+bar|1|766|6th |Circle|Suite 360|Union|Franklin Parish|LA|78721|228|155|168|165|326
+bar|1|818|1st Elm|Road|Suite 220|Pleasant Hill|Walker County|AL|33604|212|158|172|145|324
+bar|1|824|Second 2nd|Parkway|Suite 90|Riverside|Daviess County|MO|69231|233|185|156|184|342
+bar|1|829|Jefferson |Lane|Suite 110|Five Points|Williamson County|TN|36098|221|146|176|168|345
+bar|1|9|Third |Circle|Suite 110|Greenwood|Walker County|AL|38828|196|156|187|187|327
+bar|1|903|Sixth |Court|Suite Q|Pleasant Grove|Barrow County|GA|34136|223|145|152|169|289
+cally|1|123|Valley |Lane|Suite I|Liberty|Walker County|AL|33451|232|148|145|167|299
+cally|1|145|Davis 1st|Street|Suite 430|Oakland|Richland County|OH|49843|208|151|151|171|353
+cally|1|216|Laurel |Drive|Suite 490|Oak Grove|Franklin Parish|LA|78370|201|172|150|167|339
+cally|1|240|8th |Wy|Suite K|Fairview|Richland County|OH|45709|224|165|155|156|366
+cally|1|257|Cherry |Avenue|Suite 310|Five Points|Williamson County|TN|36098|241|180|174|145|310
+cally|1|317|Pine |Boulevard|Suite 130|Oakland|Williamson County|TN|39843|241|165|159|176|315
+cally|1|353|Third View|Drive|Suite 380|Midway|Daviess County|MO|61904|231|162|165|167|307
+cally|1|392|15th |Dr.|Suite W|Salem|Franklin Parish|LA|78048|228|174|157|174|330
+cally|1|409|4th 15th|Drive|Suite Q|Salem|Luce County|MI|48048|221|154|172|152|324
+cally|1|415|Church |Court|Suite 280|Pleasant Hill|Franklin Parish|LA|73604|240|158|169|164|338
+cally|1|482|Green |Ct.|Suite 280|Pleasant Valley|Fairfield County|SC|22477|219|155|163|138|344
+cally|1|496|3rd |Ct.|Suite E|Oakland|Fairfield County|SC|29843|200|184|147|188|303
+cally|1|552|Railroad |Wy|Suite F|Pleasant Grove|Walker County|AL|34136|213|176|150|157|354
+cally|1|561|1st |ST|Suite B|Greenwood|Richland County|OH|48828|217|186|154|170|323
+cally|1|588|River Thirteenth|Ct.|Suite A|Mount Pleasant|Luce County|MI|42739|225|152|153|179|338
+cally|1|588|View Mill|Court|Suite 160|Greenwood|Ziebach County|SD|58828|209|173|155|157|362
+cally|1|606|Lake Lincoln|Boulevard|Suite S|Greenwood|Williamson County|TN|38828|231|169|163|156|327
+cally|1|70|7th |RD|Suite 160|Pleasant Grove|Williamson County|TN|34136|208|146|161|163|315
+cally|1|701|Sunset Chestnut|RD|Suite P|Centerville|Fairfield County|SC|20059|223|153|162|174|320
+
+

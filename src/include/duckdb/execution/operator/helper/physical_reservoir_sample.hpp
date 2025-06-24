@@ -13,11 +13,15 @@
 
 namespace duckdb {
 
-//! PhysicalReservoirSample represents a sample taken using reservoir sampling, which is a blocking sampling method
+//! PhysicalReservoirSample represents a sample taken using reservoir sampling,
+//! which is a blocking sampling method
+
 class PhysicalReservoirSample : public PhysicalOperator {
 public:
-	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::RESERVOIR_SAMPLE, std::move(types), estimated_cardinality),
+	PhysicalReservoirSample(PhysicalPlan &physical_plan, vector<LogicalType> types, unique_ptr<SampleOptions> options,
+	                        idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESERVOIR_SAMPLE, std::move(types),
+	                       estimated_cardinality),
 	      options(std::move(options)) {
 	}
 
@@ -35,16 +39,18 @@ public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          OperatorSinkFinalizeInput &input) const override;
 	bool ParallelSink() const override {
-		return true;
+		return !options->repeatable;
 	}
 
 	bool IsSink() const override {
 		return true;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

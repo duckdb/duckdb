@@ -1,0 +1,30 @@
+# name: test/sql/copy_database/copy_database_multiple.test
+# description: Run the same COPY FROM DATABASE multiple times
+# group: [copy_database]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE TABLE db1.tbl1 AS FROM range(3) r(i);
+
+statement ok
+COPY FROM DATABASE db1 TO db2;
+
+statement error
+COPY FROM DATABASE db1 TO db2;
+----
+Table with name "tbl1" already exists!
+
+query I
+FROM db2.tbl1
+----
+0
+1
+2

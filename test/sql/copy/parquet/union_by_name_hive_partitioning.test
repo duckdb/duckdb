@@ -35,6 +35,18 @@ ORDER BY j
 ----
 NULL	128	33	2
 
+# join filter pushdown with union by name
+statement ok
+CREATE TABLE selected_values AS SELECT 2 x
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+WHERE x=(SELECT MAX(x) FROM selected_values)
+ORDER BY j
+----
+NULL	128	33	2
+
 query IIII
 SELECT i, j, k, x
 FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)

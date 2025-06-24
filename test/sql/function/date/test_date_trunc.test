@@ -273,6 +273,7 @@ FROM generate_series('2000-01-01'::TIMESTAMP, '2023-01-01'::TIMESTAMP, INTERVAL 
 # Unknown specifier should fail
 statement error
 SELECT date_trunc('duck', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
 
 # Statistics should propagate
 

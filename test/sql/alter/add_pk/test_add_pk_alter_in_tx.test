@@ -1,0 +1,36 @@
+# name: test/sql/alter/add_pk/test_add_pk_alter_in_tx.test
+# description: Test altering a different constraint in the transaction.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (j);
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE test ALTER COLUMN j SET NOT NULL;
+
+# Throw a constraint violation on the transaction-local storage.
+
+statement error
+INSERT INTO test VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement ok
+ROLLBACK
+
+statement error
+INSERT INTO test VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*

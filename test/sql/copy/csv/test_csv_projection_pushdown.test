@@ -2,11 +2,47 @@
 # description: Test CSV projection pushdown
 # group: [csv]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
+
+query II
+select l_returnflag, l_linenumber from read_csv('data/csv/real/lineitem_sample.csv', delim='|', header=False, columns={
+	'l_orderkey': 'INT',
+	'l_partkey': 'INT',
+	'l_suppkey': 'INT',
+	'l_linenumber': 'INT',
+	'l_quantity': 'INTEGER',
+	'l_extendedprice': 'DECIMAL(15,2)',
+	'l_discount': 'DECIMAL(15,2)',
+	'l_tax': 'DECIMAL(15,2)',
+	'l_returnflag': 'VARCHAR(1)',
+	'l_linestatus': 'VARCHAR(1)',
+	'l_shipdate': 'DATE',
+	'l_commitdate': 'DATE',
+	'l_receiptdate': 'DATE',
+	'l_shipinstruct': 'VARCHAR(25)',
+	'l_shipmode': 'VARCHAR(10)',
+	'l_comment': 'VARCHAR(44)'
+})
+----
+N	1
+N	2
+N	3
+N	4
+N	5
+N	6
+N	1
+R	1
+R	2
+A	3
+
+query I
+SELECT COUNT(*) FROM 'data/csv/real/lineitem_sample.csv'
+----
+10
 
 statement ok
-CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim='|', header=False, columns={
+CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', header=False, columns={
 	'l_orderkey': 'INT',
 	'l_partkey': 'INT',
 	'l_suppkey': 'INT',
@@ -26,7 +62,7 @@ CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/
 })
 
 statement ok
-CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', header=False) lineitem(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
+CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('data/csv/real/lineitem_sample.csv', header=False) lineitem(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
 
 foreach lineitem lineitem_csv lineitem_csv_auto
 
@@ -79,3 +115,39 @@ SELECT COUNT(*) FROM ${lineitem}
 
 endloop
 
+# Test Projection over multiple buffers
+query I
+select count(*) from read_csv('data/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
+----
+27
+
+query III
+select d,b,a from read_csv('data/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
+----
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"

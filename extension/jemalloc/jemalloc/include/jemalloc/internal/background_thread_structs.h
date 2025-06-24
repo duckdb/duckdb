@@ -1,7 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_BACKGROUND_THREAD_STRUCTS_H
 #define JEMALLOC_INTERNAL_BACKGROUND_THREAD_STRUCTS_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/mutex.h"
 
 /* This file really combines "structs" and "types", but only transitionally. */
 
@@ -64,7 +65,5 @@ struct background_thread_stats_s {
 	mutex_prof_data_t max_counter_per_bg_thd;
 };
 typedef struct background_thread_stats_s background_thread_stats_t;
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BACKGROUND_THREAD_STRUCTS_H */

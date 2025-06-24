@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
@@ -35,7 +36,6 @@ enum class StatementType : uint8_t {
 	DROP_STATEMENT,         // DROP statement type
 	EXPORT_STATEMENT,       // EXPORT statement type
 	PRAGMA_STATEMENT,       // PRAGMA statement type
-	SHOW_STATEMENT,         // SHOW statement type
 	VACUUM_STATEMENT,       // VACUUM statement type
 	CALL_STATEMENT,         // CALL statement type
 	SET_STATEMENT,          // SET statement type
@@ -45,8 +45,9 @@ enum class StatementType : uint8_t {
 	LOGICAL_PLAN_STATEMENT,
 	ATTACH_STATEMENT,
 	DETACH_STATEMENT,
-	MULTI_STATEMENT
-
+	MULTI_STATEMENT,
+	COPY_DATABASE_STATEMENT,
+	UPDATE_EXTENSIONS_STATEMENT,
 };
 
 DUCKDB_API string StatementTypeToString(StatementType type);
@@ -59,17 +60,35 @@ enum class StatementReturnType : uint8_t {
 
 string StatementReturnTypeToString(StatementReturnType type);
 
+class Catalog;
+class ClientContext;
+
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
 	    : requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
-	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0) {
+	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
+	struct CatalogIdentity {
+		idx_t catalog_oid;
+		optional_idx catalog_version;
+
+		bool operator==(const CatalogIdentity &rhs) const {
+			return catalog_oid == rhs.catalog_oid && catalog_version == rhs.catalog_version;
+		}
+
+		bool operator!=(const CatalogIdentity &rhs) const {
+			return !operator==(rhs);
+		}
+	};
+
+	//! The set of databases this statement will read from
+	unordered_map<string, CatalogIdentity> read_databases;
 	//! The set of databases this statement will modify
-	unordered_set<string> modified_databases;
+	unordered_map<string, CatalogIdentity> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
-	//! exception of
+	//! exception of ROLLBACK
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
 	bool allow_stream_result;
@@ -79,10 +98,16 @@ struct StatementProperties {
 	StatementReturnType return_type;
 	//! The number of prepared statement parameters
 	idx_t parameter_count;
+	//! Whether or not the statement ALWAYS requires a rebind
+	bool always_require_rebind;
 
 	bool IsReadOnly() {
 		return modified_databases.empty();
 	}
+
+	void RegisterDBRead(Catalog &catalog, ClientContext &context);
+
+	void RegisterDBModify(Catalog &catalog, ClientContext &context);
 };
 
 } // namespace duckdb

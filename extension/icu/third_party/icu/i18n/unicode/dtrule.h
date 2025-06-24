@@ -144,7 +144,7 @@ public:
      * @return  true if the given DateTimeRule objects are semantically equal.
      * @stable ICU 3.8
      */
-    UBool operator==(const DateTimeRule& that) const;
+    bool operator==(const DateTimeRule& that) const;
 
     /**
      * Return true if the given DateTimeRule objects are semantically unequal. Objects
@@ -153,7 +153,7 @@ public:
      * @return  true if the given DateTimeRule objects are semantically unequal.
      * @stable ICU 3.8
      */
-    UBool operator!=(const DateTimeRule& that) const;
+    bool operator!=(const DateTimeRule& that) const;
 
     /**
      * Gets the date rule type, such as <code>DOM</code>

@@ -1,5 +1,6 @@
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -11,13 +12,13 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 }
 
 template <idx_t LENGTH>
-static inline void TemplatedReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src) {
+static inline void TemplatedReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src) {
 	for (idx_t i = 0; i < LENGTH; i++) {
 		dest[i] = src[LENGTH - 1 - i];
 	}
 }
 
-static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src,
+static inline void ReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src,
                                  const idx_t &length) {
 	for (idx_t i = 0; i < length; i++) {
 		dest[i] = src[length - 1 - i];
@@ -39,7 +40,7 @@ static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 		ReverseMemCpy(result_ptr + remainder, data_ptr_cast(input.GetPointer()), input.GetSize());
 		memset(result_ptr, '\0', remainder);
 	}
-	result_ptr[0] = input.GetSize();
+	result_ptr[0] = UnsafeNumericCast<data_t>(input.GetSize());
 	return result;
 }
 
@@ -52,11 +53,11 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 template <class RESULT_TYPE>
 static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		return input.GetSize() + *const_data_ptr_cast(input.GetPrefix());
+		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPrefix()));
 	} else if (input.GetSize() == 0) {
 		return 0;
 	} else {
-		return input.GetSize() + *const_data_ptr_cast(input.GetPointer());
+		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPointer()));
 	}
 }
 
@@ -68,7 +69,13 @@ inline uint8_t StringCompress(const string_t &input) {
 
 template <class RESULT_TYPE>
 static void StringCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, RESULT_TYPE>(args.data[0], result, args.size(), StringCompress<RESULT_TYPE>);
+	UnaryExecutor::Execute<string_t, RESULT_TYPE>(
+	    args.data[0], result, args.size(), StringCompress<RESULT_TYPE>,
+#if defined(D_ASSERT_IS_ENABLED)
+	    FunctionErrors::CAN_THROW_RUNTIME_ERROR); // Can only throw a runtime error when assertions are enabled
+#else
+	    FunctionErrors::CANNOT_ERROR);
+#endif
 }
 
 template <class RESULT_TYPE>
@@ -161,9 +168,10 @@ template <class INPUT_TYPE>
 static void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<StringDecompressLocalState>().allocator;
 	allocator.Reset();
-	UnaryExecutor::Execute<INPUT_TYPE, string_t>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return StringDecompress<INPUT_TYPE>(input, allocator);
-	});
+	UnaryExecutor::Execute<INPUT_TYPE, string_t>(
+	    args.data[0], result, args.size(),
+	    [&](const INPUT_TYPE &input) { return StringDecompress<INPUT_TYPE>(input, allocator); },
+	    FunctionErrors::CANNOT_ERROR);
 }
 
 template <class INPUT_TYPE>
@@ -203,16 +211,10 @@ unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer,
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
 	ScalarFunction result(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
-	                      GetStringCompressFunctionSwitch(result_type), CompressedMaterializationFunctions::Bind);
+	                      GetStringCompressFunctionSwitch(result_type), CMUtils::Bind);
 	result.serialize = CMStringCompressSerialize;
 	result.deserialize = CMStringCompressDeserialize;
 	return result;
-}
-
-void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : CompressedMaterializationFunctions::StringTypes()) {
-		set.AddFunction(CMStringCompressFun::GetFunction(result_type));
-	}
 }
 
 static void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -223,13 +225,14 @@ static void CMStringDecompressSerialize(Serializer &serializer, const optional_p
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
+	function.return_type = deserializer.Get<const LogicalType &>();
 	return nullptr;
 }
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
-	                      GetStringDecompressFunctionSwitch(input_type), CompressedMaterializationFunctions::Bind,
-	                      nullptr, nullptr, StringDecompressLocalState::Init);
+	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr, nullptr,
+	                      StringDecompressLocalState::Init);
 	result.serialize = CMStringDecompressSerialize;
 	result.deserialize = CMStringDecompressDeserialize;
 	return result;
@@ -237,14 +240,34 @@ ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type)
 
 static ScalarFunctionSet GetStringDecompressFunctionSet() {
 	ScalarFunctionSet set(StringDecompressFunctionName());
-	for (const auto &input_type : CompressedMaterializationFunctions::StringTypes()) {
+	for (const auto &input_type : CMUtils::StringTypes()) {
 		set.AddFunction(CMStringDecompressFun::GetFunction(input_type));
 	}
 	return set;
 }
 
-void CMStringDecompressFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetStringDecompressFunctionSet());
+ScalarFunction InternalCompressStringUtinyintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UTINYINT));
+}
+
+ScalarFunction InternalCompressStringUsmallintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::USMALLINT));
+}
+
+ScalarFunction InternalCompressStringUintegerFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UINTEGER));
+}
+
+ScalarFunction InternalCompressStringUbigintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunction InternalCompressStringHugeintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::HUGEINT));
+}
+
+ScalarFunctionSet InternalDecompressStringFun::GetFunctions() {
+	return GetStringDecompressFunctionSet();
 }
 
 } // namespace duckdb

@@ -9,11 +9,11 @@ pandas = pytest.importorskip("pandas")
 class TestPandasNaN(object):
     def test_pandas_nan(self, duckdb_cursor):
         # create a DataFrame with some basic values
-        df = pandas.DataFrame([{"col1": "val1", "col2": 1.05}, {"col1": "val3", "col2": np.NaN}])
+        df = pandas.DataFrame([{"col1": "val1", "col2": 1.05}, {"col1": "val3", "col2": np.nan}])
         # create a new column (newcol1) that includes either NaN or values from col1
-        df["newcol1"] = np.where(df["col1"] == "val1", np.NaN, df["col1"])
+        df["newcol1"] = np.where(df["col1"] == "val1", np.nan, df["col1"])
         # now create a new column with the current time
-        # (FIXME: we replace the microseconds with 0 for now, because we only support milisecond resolution)
+        # (FIXME: we replace the microseconds with 0 for now, because we only support millisecond resolution)
         current_time = datetime.datetime.now().replace(microsecond=0)
         df['datetest'] = current_time
         # introduce a NaT (Not a Time value)

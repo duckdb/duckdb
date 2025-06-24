@@ -83,7 +83,7 @@ void UVector32::assign(const UVector32& other, UErrorCode &ec) {
 }
 
 
-UBool UVector32::operator==(const UVector32& other) {
+bool UVector32::operator==(const UVector32& other) {
     int32_t i;
     if (count != other.count) return FALSE;
     for (i=0; i<count; ++i) {

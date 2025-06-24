@@ -82,27 +82,27 @@ select histogram(name) from names;
 query I
 SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_S));
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 query I
 SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_MS));
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 query I
 SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_NS));
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 query I
 SELECT histogram(CAST('15:05:42' AS TIME));
 ----
-{15:05:42=1}
+{'15:05:42'=1}
 
 query I
 SELECT histogram(CAST('15:05:42+00' AS TIME WITH TIME ZONE));
 ----
-{15:05:42+00=1}
+{'15:05:42+00'=1}
 
 query I
 SELECT histogram(CAST('2022-01-02' AS DATE));
@@ -124,9 +124,11 @@ select g,histogram(g) over (partition by g%2)
 #Corner cases
 statement error
 select histogram()
+----
 
 statement error
 select histogram(*)
+----
 
 # enums
 statement ok
@@ -141,4 +143,4 @@ INSERT INTO enums VALUES ('happy'), ('ok')
 query I
 SELECT histogram(e) FROM enums
 ----
-{happy=1, ok=1}
+{ok=1, happy=1}

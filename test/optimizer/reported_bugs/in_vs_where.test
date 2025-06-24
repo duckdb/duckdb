@@ -1,0 +1,63 @@
+# name: test/optimizer/reported_bugs/in_vs_where.test
+# description: IN filter on join column
+# group: [reported_bugs]
+
+statement ok
+CREATE OR REPLACE TABLE AllOpportunities as select * FROM Values
+('0058b00000IIEQVAA7'),
+('0058b00000IIEQVAA6'),
+('0058b00000IIEQVAA5') t(owner_id);
+
+statement ok
+CREATE OR REPLACE TABLE persons as
+select * from VALUES
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA3'),
+('0058b00000IIEQVAA4'),
+('0058b00000IIEQVAA5'),
+('0058b00000IIEQVAA6'),
+('0058b00000IIEQVAA7') t(id);
+
+statement ok
+CREATE OR REPLACE TABLE role_hierarchy as select *
+FROM VALUES
+('0058b00000IIEQVAA5','0058b00000IIEQVAA5'),
+('0058b00000IIEQVAA6','0058b00000IIEQVAA6'),
+('0058b00000IIEQVAA7','0058b00000IIEQVAA7') t(root_person_id, descendent_person_id);
+
+
+query I
+with opp_stats as (
+	select persons.id from persons
+	join role_hierarchy on role_hierarchy.root_person_id = persons.id
+	left outer join AllOpportunities ON AllOpportunities.owner_id = role_hierarchy.descendent_person_id
+	where persons.id in ('0058b00000IIEQVAA5')
+	group by persons.id
+) select * from opp_stats;
+----
+0058b00000IIEQVAA5
+
+statement ok
+create or replace table t1 as select (range%2000)::VARCHAR a from range(20000);
+
+statement ok
+create or replace table t2 as select range::VARCHAR a from range(10);
+
+query I
+select count(t1.a) from t1, t2 where t1.a=t2.a and t1.a in ('7');
+----
+10

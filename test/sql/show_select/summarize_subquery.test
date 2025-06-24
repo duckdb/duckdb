@@ -1,0 +1,18 @@
+# name: test/sql/show_select/summarize_subquery.test
+# group: [show_select]
+
+statement ok
+pragma enable_verification;
+
+query II
+SELECT column_name, min FROM (SUMMARIZE SELECT 42 AS a);
+----
+a	42
+
+statement ok
+CREATE TABLE tbl AS SELECT 42 AS a
+
+query II
+SELECT column_name, min FROM (SUMMARIZE tbl);
+----
+a	42

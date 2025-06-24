@@ -1,0 +1,19 @@
+# name: test/sql/copy/csv/test_11840.test
+# description: Test CSV Sniffing detects correct typesfor issue 11840
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+FROM 'data/csv/date_specificity.csv'
+----
+0.00
+12/17/2019
+
+query I
+select d FROM 'data/csv/special_date.csv'
+----
+2000-01-01
+2002-02-02
+2004-12-13

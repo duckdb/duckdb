@@ -22,7 +22,10 @@ public:
 	void Append(DataChunk &chunk);
 
 	py::object ToArray(idx_t col_idx) {
-		return owned_data[col_idx].ToArray(count);
+		return owned_data[col_idx].ToArray();
+	}
+	bool ToPandas() const {
+		return pandas;
 	}
 
 private:
@@ -32,6 +35,7 @@ private:
 	vector<ArrayWrapper> owned_data;
 	idx_t count;
 	idx_t capacity;
+	bool pandas;
 };
 
 } // namespace duckdb

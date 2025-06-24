@@ -9,8 +9,12 @@ SET ${thread_type} TO '3'
 
 statement error
 SET ${thread_type} TO '-1'
+----
+<REGEX>:Syntax Error.*Must have at least 1 thread.*
 
 statement error
 SET ${thread_type} TO 'blabla'
+----
+<REGEX>:Invalid Input Error.*Failed to cast value.*
 
 endloop

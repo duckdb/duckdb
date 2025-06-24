@@ -3,141 +3,193 @@
 # group: [lambdas]
 
 statement ok
-PRAGMA enable_verification
+PRAGMA enable_verification;
 
 statement ok
-CREATE TABLE incorrect_test (i integer);
+CREATE TABLE incorrect_test (i INTEGER);
+
+foreach func_name list_transform list_filter list_reduce
+
+statement error
+SELECT ${func_name}();
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}([]);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}(1, 2, 3);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}(NULL, NULL);
+----
+<REGEX>:Binder Error.*Invalid lambda expression!.*
+
+statement error
+SELECT ${func_name}(NULL, x);
+----
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
+
+statement error
+SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
+----
+<REGEX>:Binder Error.*Invalid lambda parameters!.*
+
+statement error
+SELECT ${func_name}(NULL, i) FROM incorrect_test;
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}(NULL, x -> y);
+----
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
+
+statement error
+SELECT ${func_name}([1]);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}([1], NULL);
+----
+<REGEX>:Binder Error.*Invalid lambda expression!.*
+
+statement error
+SELECT ${func_name}([[1]], x -> x + 1);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}(1, 1);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+statement error
+SELECT ${func_name}(1, x -> x + 1);
+----
+Invalid LIST argument during lambda function binding!
+
+endloop
+
+# list_reduce accepts a third parameter, so shows a different error message
 
 foreach func_name list_transform list_filter
 
 statement error
-SELECT ${func_name}()
+SELECT ${func_name}([1], x -> x, 3);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
-SELECT ${func_name}([])
-
-statement error
-SELECT ${func_name}([1], x -> x, 3)
-
-statement error
-SELECT ${func_name}(1, 2, 3)
-
-statement error
-SELECT ${func_name}(NULL, NULL)
-
-statement error
-SELECT ${func_name}(NULL, x)
-
-statement error
-SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
-
-statement error
-SELECT ${func_name}(NULL, i) FROM incorrect_test
-
-statement error
-SELECT ${func_name}(NULL, x -> y)
-
-statement error
-SELECT ${func_name}([1])
-
-statement error
-SELECT ${func_name}([1], NULL)
-
-statement error
-SELECT ${func_name}(1, x -> x + 1)
-
-statement error
-SELECT ${func_name}([[1]], x -> x + 1)
-
-statement error
-SELECT ${func_name}(1, 1)
-
-statement error
-SELECT ${func_name}([True], x -> x, x -> x)
+SELECT ${func_name}([True], x -> x, x -> x);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 endloop
 
-# lambda parameter has the same name as a column
-statement ok
-CREATE TABLE l_test (l integer[])
+statement error
+SELECT list_reduce([1], x -> x, 3);
+----
+<REGEX>:Binder Error.*list_reduce expects a function with 2 or 3 arguments.*
 
 statement error
-SELECT l, list_transform(l, l -> l + 1) FROM l_test
+SELECT list_reduce([True], x -> x, x -> x);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
+
+# list_transform specific tests
+
+statement error
+SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+----
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
+----
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 # lambda cannot be the root of a plan
-statement error
-select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 
 statement error
-select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
+select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
+----
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+<REGEX>:Binder Error.*Invalid lambda parameters!.*
 
 statement error
-select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+SELECT list_apply(i, a.x -> x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
+----
+<REGEX>:Binder Error.*Invalid lambda parameters!.*
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
 
 statement ok
-CREATE TABLE l_filter_test (l integer[])
+CREATE TABLE l_filter_test (l integer[]);
 
 statement error
-SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
+SELECT list_transform([1, 2], (x, y, z) -> x + y + z);
+----
+<REGEX>:Binder Error.*This lambda function only supports up to two lambda parameters!.*
 
 statement error
-SELECT list_transform([1, 2], (x, y) -> x + y)
-
-statement error
-SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
-
-statement error
-SELECT list_filter([1, 2], (x, y) -> x >= y)
-
-statement error
-SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
+SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
+----
+<REGEX>:Binder Error.*This lambda function only supports up to two lambda parameters!.*
 
 # using lambdas in functions that do not support them
-statement error
-SELECT cos(x -> x + 1)
 
 statement error
-SELECT cos([1], x -> x + 1)
+SELECT cos(x -> x + 1);
+----
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
 
-# don't allow lambdas in check constraints
+statement error
+SELECT cos([1], x -> x + 1);
+----
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+
 # FIXME: support lambdas in CHECK constraints
 
 statement error
-create table lambda_check (i BIGINT[],
+CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_filter(i, x -> x % 2 = 0) == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 statement error
-create table lambda_check (i BIGINT[],
+CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_transform(i, x -> x % 2) == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 statement error
-create table lambda_check (i BIGINT[],
-    CHECK ([x + 1 for x in i if i > 0] == []));
+CREATE TABLE lambda_check (i BIGINT[],
+    CHECK ([x + 1 FOR x IN i IF x > 0] == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
 statement error
-create table lambda_check (
+CREATE TABLE lambda_check (
 	i BIGINT[],
 	j BIGINT[],
 	CHECK ((list_apply(i, x -> list_count(list_filter(j, y -> y%2=0)) + x)) == []));
 ----
-Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in CHECK constraints.*
 
-# don't allow lambdas in check constraints
 # FIXME: allow lambdas in generated columns
 
 statement error
@@ -146,4 +198,95 @@ CREATE TABLE unit2(
 	total_price INTEGER GENERATED ALWAYS AS (list_transform(price, x -> x + 1)) VIRTUAL
 );
 ----
-Not implemented Error: Lambda functions are currently not supported in generated columns.
+<REGEX>:Not implemented Error.*Lambda functions are currently not supported in generated columns.*
+
+# Issue 9732
+
+statement ok
+CREATE TABLE tbl AS SELECT {'a': 10} AS s;
+
+statement error
+SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
+----
+<REGEX>:Binder Error.*failed to bind function, either.*struct column can only be applied as the root element of a SELECT expression.*
+
+# UNNEST in lambdas is not supported
+
+statement ok
+CREATE TABLE nested_list(i INT[][], other INT[]);
+
+statement ok
+INSERT INTO nested_list VALUES ([[1, 2]], [3, 4]);
+
+statement error
+SELECT list_transform(i, x -> UNNEST(x)) FROM nested_list;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement error
+SELECT list_transform(i, x -> UNNEST(other)) FROM nested_list;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement ok
+CREATE TABLE map_tbl(m MAP(INTEGER, INTEGER));
+
+statement error
+SELECT [UNNEST([x.key FOR y IN range(x.value)]) FOR x IN map_entries(m)] FROM map_tbl;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement error
+SELECT list_transform(map_entries(m), x -> UNNEST(range(x.value))) FROM map_tbl;
+----
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement ok
+CREATE TABLE dummy_tbl (y INT);
+
+statement error
+SELECT list_transform([1], lambda x: lambda y: x + y) FROM dummy_tbl;
+----
+<REGEX>:Binder Error.*invalid lambda expression.*
+
+statement error
+SELECT list_transform([1], lambda x: 1 : hello) FROM dummy_tbl;
+----
+<REGEX>:Parser Error.*syntax error.*
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement error
+CREATE OR REPLACE function transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			lambda i: lst[i][j]
+		)
+	)
+);
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*
+
+statement error
+CREATE OR REPLACE FUNCTION transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*
+
+statement ok
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
+
+statement ok
+CREATE OR REPLACE FUNCTION transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);

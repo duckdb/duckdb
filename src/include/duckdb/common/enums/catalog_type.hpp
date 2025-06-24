@@ -37,10 +37,20 @@ enum class CatalogType : uint8_t {
 	TABLE_MACRO_ENTRY = 31,
 
 	// version info
-	UPDATED_ENTRY = 50,
 	DELETED_ENTRY = 51,
+	RENAMED_ENTRY = 52,
+
+	// secrets
+	SECRET_ENTRY = 71,
+	SECRET_TYPE_ENTRY = 72,
+	SECRET_FUNCTION_ENTRY = 73,
+
+	// dependency info
+	DEPENDENCY_ENTRY = 100
+
 };
 
 DUCKDB_API string CatalogTypeToString(CatalogType type);
+CatalogType CatalogTypeFromString(const string &type);
 
 } // namespace duckdb

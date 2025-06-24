@@ -1,0 +1,64 @@
+# name: test/sql/index/art/nodes/test_art_sparse_row_ids.test_slow
+# description: Test sparse row IDs for duplicate keys.
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+# We try to create sparse row IDs up to their 4'th byte.
+# The maximum value of 3 bytes is 16,777,215.
+
+statement ok
+CREATE TABLE tbl1 (i INT);
+
+statement ok
+CREATE TABLE tbl2 (i INT);
+
+# Inserting into the index chunk-at-a-time.
+statement ok
+CREATE INDEX idx2 ON tbl2(i);
+
+loop i 0 100
+
+statement ok
+INSERT INTO tbl1 SELECT range FROM range(50000);
+
+statement ok
+INSERT INTO tbl2 SELECT range FROM range(50000);
+
+query I
+SELECT COUNT(i) = ${i} + 1 FROM tbl2 WHERE i = 96;
+----
+1
+
+statement ok
+DELETE FROM tbl1 WHERE i > 270;
+
+statement ok
+DELETE FROM tbl2 WHERE i > 270;
+
+endloop
+
+# Parallel index construction.
+statement ok
+CREATE INDEX idx ON tbl1(i);
+
+query I
+SELECT COUNT(i) FROM tbl1 WHERE i = 49;
+----
+100
+
+query I
+SELECT COUNT(i) FROM tbl2 WHERE i = 49;
+----
+100
+
+query I
+SELECT COUNT(i) FROM tbl1 WHERE rowid = (SELECT MAX(rowid) FROM tbl1);
+----
+1
+
+query I
+SELECT COUNT(i) FROM tbl2 WHERE rowid = (SELECT MAX(rowid) FROM tbl1);
+----
+1

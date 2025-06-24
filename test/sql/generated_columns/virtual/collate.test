@@ -11,6 +11,7 @@ CREATE TABLE tbl (
 	price VARCHAR,
 	also_price VARCHAR AS (price) COLLATE NOCASE
 );
+----
 
 statement ok
 CREATE TABLE coll (

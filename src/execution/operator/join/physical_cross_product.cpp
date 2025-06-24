@@ -6,11 +6,12 @@
 
 namespace duckdb {
 
-PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-                                           unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, std::move(types), estimated_cardinality) {
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+PhysicalCrossProduct::PhysicalCrossProduct(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                           PhysicalOperator &left, PhysicalOperator &right, idx_t estimated_cardinality)
+    : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::CROSS_PRODUCT, std::move(types),
+                              estimated_cardinality) {
+	children.push_back(left);
+	children.push_back(right);
 }
 
 //===--------------------------------------------------------------------===//
@@ -19,7 +20,7 @@ PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr
 class CrossProductGlobalState : public GlobalSinkState {
 public:
 	explicit CrossProductGlobalState(ClientContext &context, const PhysicalCrossProduct &op)
-	    : rhs_materialized(context, op.children[1]->GetTypes()) {
+	    : rhs_materialized(context, op.children[1].get().GetTypes()) {
 		rhs_materialized.InitializeAppend(append_state);
 	}
 
@@ -140,7 +141,7 @@ void PhysicalCrossProduct::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCrossProduct::GetSources() const {
-	return children[0]->GetSources();
+	return children[0].get().GetSources();
 }
 
 } // namespace duckdb

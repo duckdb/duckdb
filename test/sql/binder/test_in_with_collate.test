@@ -1,0 +1,75 @@
+# name: test/sql/binder/test_in_with_collate.test
+# description: Test that we can use string collation in IN and NOT IN operator
+# group: [binder]
+
+# create table with collation
+statement ok
+create table tbl (str varchar);
+
+# insert data with nocase
+statement ok
+insert into tbl values ('ABCDE'), ('aBcDe');
+
+# insert data with noaccent
+statement ok
+insert into tbl values ('àbcdë');
+
+# insert data with noaccent and nocase
+statement ok
+insert into tbl values ('ÀbCdÈ');
+
+# query IN without collation
+query I
+select * from tbl where str in ('AbCdE');
+----
+
+# query IN with nocase collation
+query I
+select * from tbl where str collate nocase in ('abcde');
+----
+ABCDE
+aBcDe
+
+# query IN with noaccent collation
+query I
+select * from tbl where str collate noaccent in ('abcde');
+----
+àbcdë
+
+# query IN with nocase.noaccent collation
+query I
+select * from tbl where str collate nocase.noaccent in ('abcde');
+----
+ABCDE
+aBcDe
+àbcdë
+ÀbCdÈ
+
+# query NOT IN without collation
+query I
+select * from tbl where str not in ('abcde');
+----
+ABCDE
+aBcDe
+àbcdë
+ÀbCdÈ
+
+# query NOT IN with nocase collation
+query I
+select * from tbl where str collate nocase not in ('abcde');
+----
+àbcdë
+ÀbCdÈ
+
+# query NOT IN with noaccent collation
+query I
+select * from tbl where str collate noaccent not in ('abcde');
+----
+ABCDE
+aBcDe
+ÀbCdÈ
+
+# query NOT IN with nocase.noaccent collation
+query I
+select * from tbl where str collate nocase.noaccent not in ('abcde');
+----

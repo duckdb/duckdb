@@ -1,0 +1,52 @@
+[
+    {
+        "name": "random",
+        "description": "Returns a random number between 0 and 1",
+        "example": "random()",
+        "type": "scalar_function"
+    },
+    {
+        "name": "setseed",
+        "description": "Sets the seed to be used for the random function",
+        "example": "setseed(0.42)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "uuid",
+        "description": "Returns a random UUID v4 similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687",
+        "example": "uuid()",
+        "type": "scalar_function",
+        "struct": "UUIDFun",
+        "aliases": ["gen_random_uuid"]
+    },
+    {
+        "name": "uuidv4",
+        "description": "Returns a random UUIDv4 similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687",
+        "example": "uuidv4()",
+        "type": "scalar_function",
+        "struct": "UUIDv4Fun"
+    },
+    {
+        "name": "uuidv7",
+        "description": "Returns a random UUID v7 similar to this: 019482e4-1441-7aad-8127-eec99573b0a0",
+        "example": "uuidv7()",
+        "type": "scalar_function",
+        "struct": "UUIDv7Fun"
+    },
+    {
+        "name": "uuid_extract_version",
+        "parameters": "uuid",
+        "description": "Extract a version for the given UUID.",
+        "example": "uuid_extract_version('019482e4-1441-7aad-8127-eec99573b0a0')",
+        "type": "scalar_function",
+        "struct": "UUIDExtractVersionFun"
+    },
+    {
+        "name": "uuid_extract_timestamp",
+        "parameters": "uuid",
+        "description": "Extract the timestamp for the given UUID v7.",
+        "example": "uuid_extract_timestamp('019482e4-1441-7aad-8127-eec99573b0a0')",
+        "type": "scalar_function",
+        "struct": "UUIDExtractTimestampFun"
+    }
+]

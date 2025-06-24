@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
@@ -12,13 +13,10 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/expression_binder/returning_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
@@ -26,10 +24,11 @@
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
-static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,
+static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
                                            const char *tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
@@ -41,35 +40,102 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 }
 
 unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &column) {
-	if (column.DefaultValue()) {
-		return column.DefaultValue()->Copy();
+	if (column.HasDefaultValue()) {
+		return column.DefaultValue().Copy();
 	} else {
 		return make_uniq<ConstantExpression>(Value(column.Type()));
 	}
 }
 
 void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column) {
-	D_ASSERT(expr->type == ExpressionType::VALUE_DEFAULT);
+	D_ASSERT(expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT);
 	expr = ExpandDefaultExpression(column);
 }
 
-void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
-	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
-	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr->Cast<ColumnRefExpression>();
-		if (column_ref.IsQualified()) {
+void ExpressionBinder::DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
+                                                  vector<unordered_set<string>> &lambda_params) {
+
+	for (auto &child : function.children) {
+		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
+			DoUpdateSetQualify(child, table_name, lambda_params);
+			continue;
+		}
+
+		// Special-handling for LHS lambda parameters.
+		// We do not qualify them, and we add them to the lambda_params vector.
+		auto &lambda_expr = child->Cast<LambdaExpression>();
+		string error_message;
+		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
+
+		if (!error_message.empty()) {
+			// Possibly a JSON function, qualify both LHS and RHS.
+			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
+				DoUpdateSetQualify(child, table_name, lambda_params);
+			});
+			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
+				DoUpdateSetQualify(child, table_name, lambda_params);
+			});
+			continue;
+		}
+
+		// Push the lambda parameter names of this level.
+		lambda_params.emplace_back();
+		for (const auto &column_ref_expr : column_ref_expressions) {
+			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
+			lambda_params.back().emplace(column_ref.GetName());
+		}
+
+		// Only qualify in the RHS of the expression.
+		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
+			DoUpdateSetQualify(child, table_name, lambda_params);
+		});
+
+		lambda_params.pop_back();
+	}
+}
+
+void ExpressionBinder::DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
+                                          vector<unordered_set<string>> &lambda_params) {
+
+	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::COLUMN_REF: {
+		auto &col_ref = expr->Cast<ColumnRefExpression>();
+		if (col_ref.IsQualified()) {
 			return;
 		}
-		auto column_name = column_ref.GetColumnName();
-		expr = make_uniq<ColumnRefExpression>(column_name, table_name);
+
+		// Don't qualify lambda parameters.
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+			return;
+		}
+
+		// Qualify the column reference.
+		expr = make_uniq<ColumnRefExpression>(col_ref.GetColumnName(), table_name);
+		return;
 	}
+	case ExpressionClass::FUNCTION: {
+		// Special-handling for lambdas, which are inside function expressions.
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.IsLambdaFunction()) {
+			return DoUpdateSetQualifyInLambda(function, table_name, lambda_params);
+		}
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
+		throw BinderException("DO UPDATE SET clause cannot contain a subquery");
+	}
+	default:
+		break;
+	}
+
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(child, table_name); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 }
 
 // Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_columnref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_columnref.binding.table_index == source) {
 			bound_columnref.binding.table_index = dest;
@@ -82,7 +148,6 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
                                         TableCatalogEntry &table, TableStorageInfo &storage_info) {
 	D_ASSERT(insert.children.size() == 1);
-	D_ASSERT(insert.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
@@ -102,25 +167,29 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		    insert.set_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
+
+		if (!column.Type().SupportsRegularUpdate()) {
+			insert.update_is_del_and_insert = true;
+		}
+
 		insert.set_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
 		insert.set_types.push_back(column.Type());
 		column_names.push_back(colname);
-		if (expr->type == ExpressionType::VALUE_DEFAULT) {
+		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			expr = ExpandDefaultExpression(column);
 		}
-		UpdateBinder binder(*this, context);
-		binder.target_type = column.Type();
 
-		// Avoid ambiguity issues
-		QualifyColumnReferences(expr, table_alias);
+		// Qualify and bind the ON CONFLICT DO UPDATE SET expression.
+		UpdateBinder update_binder(*this, context);
+		update_binder.target_type = column.Type();
 
-		auto bound_expr = binder.Bind(expr);
+		// Avoid ambiguity between existing table columns and EXCLUDED columns.
+		vector<unordered_set<string>> lambda_params;
+		update_binder.DoUpdateSetQualify(expr, table_alias, lambda_params);
+
+		auto bound_expr = update_binder.Bind(expr);
 		D_ASSERT(bound_expr);
-		if (bound_expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-			throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
-		}
-
 		insert.expressions.push_back(std::move(bound_expr));
 	}
 
@@ -132,12 +201,13 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		}
 	}
 
-	// Verify that none of the columns that are targeted with a SET expression are indexed on
+	// If any column targeted by a SET expression has an index, then
+	// we need to rewrite this to an DELETE + INSERT.
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint",
-			                      column_names[i]);
+			insert.update_is_del_and_insert = true;
+			break;
 		}
 	}
 }
@@ -185,6 +255,15 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	return set_info;
 }
 
+vector<column_t> GetColumnsToFetch(const TableBinding &binding) {
+	auto &bound_columns = binding.GetBoundColumnIds();
+	vector<column_t> result;
+	for (auto &col : bound_columns) {
+		result.push_back(col.GetPrimaryIndex());
+	}
+	return result;
+}
+
 void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt) {
 	if (!stmt.on_conflict_info) {
 		insert.action_type = OnConflictAction::THROW;
@@ -229,7 +308,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			auto entry = specified_columns.find(col.Name());
 			if (entry != specified_columns.end()) {
 				// column was specified, set to the index
-				insert.on_conflict_filter.insert(col.Oid());
+				insert.on_conflict_filter.insert(col.Physical().index);
 			}
 		}
 		bool index_references_columns = false;
@@ -246,8 +325,8 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		if (!index_references_columns) {
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
 			// But since this makes no logical sense, it's probably better to throw an error
-			throw BinderException(
-			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT");
+			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
+			                      "CONSTRAINT or INDEX");
 		}
 	} else {
 		// When omitting the conflict target, the ON CONFLICT applies to every UNIQUE/PRIMARY KEY on the table
@@ -258,23 +337,27 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			if (!index.is_unique) {
 				continue;
 			}
-			// does this work with multi-column indexes?
 			auto &indexed_columns = index.column_set;
+			bool matches = false;
 			for (auto &column : table.GetColumns().Physical()) {
 				if (indexed_columns.count(column.Physical().index)) {
-					found_matching_indexes++;
+					matches = true;
+					break;
 				}
 			}
+			found_matching_indexes += matches;
 		}
+
 		if (!found_matching_indexes) {
 			throw BinderException(
 			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
-		}
-		if (insert.action_type != OnConflictAction::NOTHING && found_matching_indexes != 1) {
-			// When no conflict target is provided, and the action type is UPDATE,
-			// we only allow the operation when only a single Index exists
-			throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
-			                      "multiple UNIQUE/PRIMARY KEY constraints");
+		} else if (found_matching_indexes != 1) {
+			if (insert.action_type != OnConflictAction::NOTHING) {
+				// When no conflict target is provided, and the action type is UPDATE,
+				// we only allow the operation when only a single Index exists
+				throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
+				                      "multiple UNIQUE/PRIMARY KEY constraints");
+			}
 		}
 	}
 
@@ -283,54 +366,55 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// add a bind context entry for it
 	auto excluded_index = GenerateTableIndex();
 	insert.excluded_table_index = excluded_index;
-	auto table_column_names = columns.GetColumnNames();
-	auto table_column_types = columns.GetColumnTypes();
+	vector<string> table_column_names;
+	vector<LogicalType> table_column_types;
+	for (auto &col : columns.Physical()) {
+		table_column_names.push_back(col.Name());
+		table_column_types.push_back(col.Type());
+	}
 	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
 
 	if (on_conflict.condition) {
-		// Avoid ambiguity between <table_name> binding and 'excluded'
-		QualifyColumnReferences(on_conflict.condition, table_alias);
-		// Bind the ON CONFLICT ... WHERE clause
 		WhereBinder where_binder(*this, context);
+
+		// Avoid ambiguity between existing table columns and EXCLUDED columns.
+		vector<unordered_set<string>> lambda_params;
+		where_binder.DoUpdateSetQualify(on_conflict.condition, table_alias, lambda_params);
+
+		// Bind the ON CONFLICT ... WHERE clause.
 		auto condition = where_binder.Bind(on_conflict.condition);
-		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-			throw BinderException("conflict_target WHERE clause can not be a subquery");
-		}
 		insert.on_conflict_condition = std::move(condition);
 	}
 
-	auto bindings = insert.children[0]->GetColumnBindings();
-	idx_t projection_index = DConstants::INVALID_INDEX;
-	vector<unique_ptr<LogicalOperator>> *insert_child_operators;
-	insert_child_operators = &insert.children;
-	while (projection_index == DConstants::INVALID_INDEX) {
-		if (insert_child_operators->empty()) {
+	optional_idx projection_index;
+	reference<vector<unique_ptr<LogicalOperator>>> insert_child_operators = insert.children;
+	while (!projection_index.IsValid()) {
+		if (insert_child_operators.get().empty()) {
 			// No further children to visit
 			break;
 		}
-		D_ASSERT(insert_child_operators->size() >= 1);
-		auto &current_child = (*insert_child_operators)[0];
+		auto &current_child = insert_child_operators.get()[0];
 		auto table_indices = current_child->GetTableIndex();
 		if (table_indices.empty()) {
 			// This operator does not have a table index to refer to, we have to visit its children
-			insert_child_operators = &current_child->children;
+			insert_child_operators = current_child->children;
 			continue;
 		}
 		projection_index = table_indices[0];
 	}
-	if (projection_index == DConstants::INVALID_INDEX) {
+	if (!projection_index.IsValid()) {
 		throw InternalException("Could not locate a table_index from the children of the insert");
 	}
 
-	string unused;
+	ErrorData unused;
 	auto original_binding = bind_context.GetBinding(table_alias, unused);
-	D_ASSERT(original_binding);
+	D_ASSERT(original_binding && !unused.HasError());
 
 	auto table_index = original_binding->index;
 
 	// Replace any column bindings to refer to the projection table_index, rather than the source table
 	if (insert.on_conflict_condition) {
-		ReplaceColumnBindings(*insert.on_conflict_condition, table_index, projection_index);
+		ReplaceColumnBindings(*insert.on_conflict_condition, table_index, projection_index.GetIndex());
 	}
 
 	if (insert.action_type == OnConflictAction::REPLACE) {
@@ -351,7 +435,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		// of the original table, to execute the expressions
 		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 		auto &table_binding = original_binding->Cast<TableBinding>();
-		insert.columns_to_fetch = table_binding.GetBoundColumnIds();
+		insert.columns_to_fetch = GetColumnsToFetch(table_binding);
 		return;
 	}
 
@@ -360,14 +444,14 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
 	if (set_info.condition) {
-		// Avoid ambiguity between <table_name> binding and 'excluded'
-		QualifyColumnReferences(set_info.condition, table_alias);
-		// Bind the SET ... WHERE clause
 		WhereBinder where_binder(*this, context);
+
+		// Avoid ambiguity between existing table columns and EXCLUDED columns.
+		vector<unordered_set<string>> lambda_params;
+		where_binder.DoUpdateSetQualify(set_info.condition, table_alias, lambda_params);
+
+		// Bind the SET ... WHERE clause.
 		auto condition = where_binder.Bind(set_info.condition);
-		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-			throw BinderException("conflict_target WHERE clause can not be a subquery");
-		}
 		insert.do_update_condition = std::move(condition);
 	}
 
@@ -377,16 +461,16 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 	auto &table_binding = original_binding->Cast<TableBinding>();
-	insert.columns_to_fetch = table_binding.GetBoundColumnIds();
+	insert.columns_to_fetch = GetColumnsToFetch(table_binding);
 
 	// Replace the column bindings to refer to the child operator
 	for (auto &expr : insert.expressions) {
 		// Change the non-excluded column references to refer to the projection index
-		ReplaceColumnBindings(*expr, table_index, projection_index);
+		ReplaceColumnBindings(*expr, table_index, projection_index.GetIndex());
 	}
 	// Do the same for the (optional) DO UPDATE condition
 	if (insert.do_update_condition) {
-		ReplaceColumnBindings(*insert.do_update_condition, table_index, projection_index);
+		ReplaceColumnBindings(*insert.do_update_condition, table_index, projection_index.GetIndex());
 	}
 }
 
@@ -399,7 +483,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		properties.modified_databases.insert(table.catalog.GetName());
+		auto &properties = GetStatementProperties();
+		properties.RegisterDBModify(table.catalog, context);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
@@ -413,6 +498,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (stmt.column_order == InsertColumnOrder::INSERT_BY_NAME) {
 		if (values_list) {
 			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
+		}
+		if (stmt.default_values) {
+			throw BinderException("INSERT BY NAME cannot be combined with with DEFAULT VALUES");
 		}
 		if (!stmt.columns.empty()) {
 			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
@@ -437,7 +525,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (!entry.second) {
 				throw BinderException("Duplicate column name \"%s\" in INSERT", stmt.columns[i]);
 			}
-			column_name_map[stmt.columns[i]] = i;
 			auto column_index = table.GetColumnIndex(stmt.columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
@@ -469,7 +556,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// bind the default values
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name);
+	insert->bound_constraints = BindConstraints(table);
 	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);
 		return result;
@@ -483,7 +573,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		expr_list.expected_types.resize(expected_columns);
 		expr_list.expected_names.resize(expected_columns);
 
-		D_ASSERT(expr_list.values.size() > 0);
+		D_ASSERT(!expr_list.values.empty());
 		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
 		                               table.name.c_str());
 
@@ -499,7 +589,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-				if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
+				if (expr_list.values[list_idx][col_idx]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 					// DEFAULT value! replace the entry
 					ReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
 				}
@@ -541,6 +631,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(insert);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

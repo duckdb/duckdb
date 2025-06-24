@@ -32,24 +32,46 @@ INSERT INTO strings VALUES
 
 # ORDER + FILTER + DISTINCT
 query II
-SELECT g, STRING_AGG(DISTINCT y, ',' ORDER BY x DESC) FILTER (WHERE g < 4)
+SELECT g, STRING_AGG(DISTINCT y, ',' ORDER BY y DESC) FILTER (WHERE g < 4)
 FROM strings
 GROUP BY g
 ORDER BY 1
 ----
-1	-,/
-2	-,+,/
+1	/,-
+2	/,-,+
 3	/
 4	NULL
 
 # ORDER + FILTER + DISTINCT
 query IIII
-SELECT g, count(y), STRING_AGG(DISTINCT y, ',' ORDER BY x DESC) FILTER (WHERE g < 4), sum(1)
+SELECT g, count(y), STRING_AGG(DISTINCT y, ',' ORDER BY y DESC) FILTER (WHERE g < 4), sum(1)
 FROM strings
 GROUP BY g
 ORDER BY 1
 ----
-1	2	-,/	2
-2	3	-,+,/	3
+1	2	/,-	2
+2	3	/,-,+	3
 3	1	/	1
 4	3	NULL	3
+
+statement error
+SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+ORDER BY non-integer literal has no effect
+
+statement ok
+SET order_by_non_integer_literal=true
+
+query II
+SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+1	-,/
+2	+,-,/
+3	/
+4	NULL

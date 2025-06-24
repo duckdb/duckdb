@@ -36,7 +36,16 @@ right argument can not contain NULL values
 statement error
 SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
 ----
-list dimensions must be equal, got left length 3 and right length 4
+list dimensions must be equal, got left length '3' and right length '4'
 
+query I
+SELECT list_cosine_similarity([], []);
+----
+NULL
+
+query I
+SELECT list_cosine_distance([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]) = 1 - list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]);
+----
+true
 
 endloop

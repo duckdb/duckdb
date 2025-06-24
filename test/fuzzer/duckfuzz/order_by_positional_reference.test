@@ -1,0 +1,14 @@
+# name: test/fuzzer/duckfuzz/order_by_positional_reference.test
+# description: Mix GROUP BY ALL and positional references
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers(c1 int, c2 int);
+
+statement error
+SELECT c1, c2, NULL FROM integers ORDER BY #10
+----
+term out of range

@@ -23,7 +23,7 @@ static bool SuffixFunction(const string_t &str, const string_t &suffix) {
 
 	auto suffix_data = suffix.GetData();
 	auto str_data = str.GetData();
-	int32_t suf_idx = suffix_size - 1;
+	auto suf_idx = UnsafeNumericCast<int32_t>(suffix_size) - 1;
 	idx_t str_idx = str_size - 1;
 	for (; suf_idx >= 0; --suf_idx, --str_idx) {
 		if (suffix_data[suf_idx] != str_data[str_idx]) {
@@ -38,10 +38,6 @@ ScalarFunction SuffixFun::GetFunction() {
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                      LogicalType::BOOLEAN,                         // return type
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator>);
-}
-
-void SuffixFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"suffix", "ends_with"}, GetFunction());
 }
 
 } // namespace duckdb

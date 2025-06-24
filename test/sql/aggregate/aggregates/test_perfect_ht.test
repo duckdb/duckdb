@@ -35,7 +35,7 @@ NULL	1	1	1
 
 # use aggregates with destructors
 query III
-SELECT year, LIST(val), STRING_AGG(val, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
 ----
 NULL	[1]	1
 1996	[10, 20, NULL]	10,20

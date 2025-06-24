@@ -26,23 +26,35 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <string.h>
+#include "snappy_version.hpp"
+
+#if SNAPPY_NEW_VERSION
+
+#include <stddef.h>
+#include <cstring>
 
 #include "snappy-sinksource.h"
 
 namespace duckdb_snappy {
 
-Source::~Source() { }
+Source::~Source() = default;
 
-Sink::~Sink() { }
+Sink::~Sink() = default;
 
 char* Sink::GetAppendBuffer(size_t length, char* scratch) {
+  // TODO: Switch to [[maybe_unused]] when we can assume C++17.
+  (void)length;
+
   return scratch;
 }
 
 char* Sink::GetAppendBufferVariable(
       size_t min_size, size_t desired_size_hint, char* scratch,
       size_t scratch_size, size_t* allocated_size) {
+  // TODO: Switch to [[maybe_unused]] when we can assume C++17.
+  (void)min_size;
+  (void)desired_size_hint;
+
   *allocated_size = scratch_size;
   return scratch;
 }
@@ -55,7 +67,7 @@ void Sink::AppendAndTakeOwnership(
   (*deleter)(deleter_arg, bytes, n);
 }
 
-ByteArraySource::~ByteArraySource() { }
+ByteArraySource::~ByteArraySource() = default;
 
 size_t ByteArraySource::Available() const { return left_; }
 
@@ -74,22 +86,26 @@ UncheckedByteArraySink::~UncheckedByteArraySink() { }
 void UncheckedByteArraySink::Append(const char* data, size_t n) {
   // Do no copying if the caller filled in the result of GetAppendBuffer()
   if (data != dest_) {
-    memcpy(dest_, data, n);
+    std::memcpy(dest_, data, n);
   }
   dest_ += n;
 }
 
 char* UncheckedByteArraySink::GetAppendBuffer(size_t len, char* scratch) {
+  // TODO: Switch to [[maybe_unused]] when we can assume C++17.
+  (void)len;
+  (void)scratch;
+
   return dest_;
 }
 
 void UncheckedByteArraySink::AppendAndTakeOwnership(
-    char* data, size_t n,
+    char* bytes, size_t n,
     void (*deleter)(void*, const char*, size_t),
     void *deleter_arg) {
-  if (data != dest_) {
-    memcpy(dest_, data, n);
-    (*deleter)(deleter_arg, data, n);
+  if (bytes != dest_) {
+    std::memcpy(dest_, bytes, n);
+    (*deleter)(deleter_arg, bytes, n);
   }
   dest_ += n;
 }
@@ -97,8 +113,94 @@ void UncheckedByteArraySink::AppendAndTakeOwnership(
 char* UncheckedByteArraySink::GetAppendBufferVariable(
       size_t min_size, size_t desired_size_hint, char* scratch,
       size_t scratch_size, size_t* allocated_size) {
+  // TODO: Switch to [[maybe_unused]] when we can assume C++17.
+  (void)min_size;
+  (void)scratch;
+  (void)scratch_size;
+
   *allocated_size = desired_size_hint;
   return dest_;
 }
 
 }  // namespace duckdb_snappy
+
+#else // #if SNAPPY_NEW_VERSION
+
+#include <string.h>
+
+#include "snappy-sinksource.h"
+
+namespace duckdb_snappy {
+
+Source::~Source() { }
+
+Sink::~Sink() { }
+
+char* Sink::GetAppendBuffer(size_t length, char* scratch) {
+	return scratch;
+}
+
+char* Sink::GetAppendBufferVariable(
+	  size_t min_size, size_t desired_size_hint, char* scratch,
+	  size_t scratch_size, size_t* allocated_size) {
+	*allocated_size = scratch_size;
+	return scratch;
+}
+
+void Sink::AppendAndTakeOwnership(
+	char* bytes, size_t n,
+	void (*deleter)(void*, const char*, size_t),
+	void *deleter_arg) {
+	Append(bytes, n);
+	(*deleter)(deleter_arg, bytes, n);
+}
+
+ByteArraySource::~ByteArraySource() { }
+
+size_t ByteArraySource::Available() const { return left_; }
+
+const char* ByteArraySource::Peek(size_t* len) {
+	*len = left_;
+	return ptr_;
+}
+
+void ByteArraySource::Skip(size_t n) {
+	left_ -= n;
+	ptr_ += n;
+}
+
+UncheckedByteArraySink::~UncheckedByteArraySink() { }
+
+void UncheckedByteArraySink::Append(const char* data, size_t n) {
+	// Do no copying if the caller filled in the result of GetAppendBuffer()
+	if (data != dest_) {
+		memcpy(dest_, data, n);
+	}
+	dest_ += n;
+}
+
+char* UncheckedByteArraySink::GetAppendBuffer(size_t len, char* scratch) {
+	return dest_;
+}
+
+void UncheckedByteArraySink::AppendAndTakeOwnership(
+	char* data, size_t n,
+	void (*deleter)(void*, const char*, size_t),
+	void *deleter_arg) {
+	if (data != dest_) {
+		memcpy(dest_, data, n);
+		(*deleter)(deleter_arg, data, n);
+	}
+	dest_ += n;
+}
+
+char* UncheckedByteArraySink::GetAppendBufferVariable(
+	  size_t min_size, size_t desired_size_hint, char* scratch,
+	  size_t scratch_size, size_t* allocated_size) {
+	*allocated_size = desired_size_hint;
+	return dest_;
+}
+
+}  // namespace duckdb_snappy
+
+#endif  // #if SNAPPY_NEW_VERSION # else

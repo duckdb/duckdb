@@ -1,7 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/to_string.hpp"
-
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "catch.hpp"
 
 #include "duckdb/common/vector.hpp"
@@ -145,6 +145,85 @@ TEST_CASE("Test join vector items", "[string_util]") {
 	}
 }
 
+TEST_CASE("Test SplitWithParentheses", "[string_util]") {
+	SECTION("Standard split") {
+		REQUIRE(StringUtil::SplitWithParentheses("") == duckdb::vector<string> {});
+		REQUIRE(StringUtil::SplitWithParentheses("x") == duckdb::vector<string> {"x"});
+		REQUIRE(StringUtil::SplitWithParentheses("hello") == duckdb::vector<string> {"hello"});
+		REQUIRE(StringUtil::SplitWithParentheses("hello,world") == duckdb::vector<string> {"hello", "world"});
+	}
+
+	SECTION("Single item with parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("STRUCT(year BIGINT, month BIGINT, day BIGINT)") ==
+		        duckdb::vector<string> {"STRUCT(year BIGINT, month BIGINT, day BIGINT)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple)") == duckdb::vector<string> {"(apple)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple, pear)") == duckdb::vector<string> {"(apple, pear)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple, pear) banana") ==
+		        duckdb::vector<string> {"(apple, pear) banana"});
+		REQUIRE(StringUtil::SplitWithParentheses("banana (apple, pear)") ==
+		        duckdb::vector<string> {"banana (apple, pear)"});
+		REQUIRE(StringUtil::SplitWithParentheses("banana (apple, pear) banana") ==
+		        duckdb::vector<string> {"banana (apple, pear) banana"});
+	}
+
+	SECTION("Multiple items with parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("map::MAP(ANY,ANY),key::ANY") ==
+		        duckdb::vector<string> {"map::MAP(ANY,ANY)", "key::ANY"});
+		REQUIRE(StringUtil::SplitWithParentheses("extra,STRUCT(year BIGINT, month BIGINT, day BIGINT)") ==
+		        duckdb::vector<string> {"extra", "STRUCT(year BIGINT, month BIGINT, day BIGINT)"});
+		REQUIRE(StringUtil::SplitWithParentheses("extra,STRUCT(year BIGINT, month BIGINT, day BIGINT),extra") ==
+		        duckdb::vector<string> {"extra", "STRUCT(year BIGINT, month BIGINT, day BIGINT)", "extra"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa(bb)cc,dd(ee)ff") ==
+		        duckdb::vector<string> {"aa(bb)cc", "dd(ee)ff"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa(bb cc,dd),ee(f,,f)gg") ==
+		        duckdb::vector<string> {"aa(bb cc,dd)", "ee(f,,f)gg"});
+	}
+
+	SECTION("Leading and trailing separators") {
+		REQUIRE(StringUtil::SplitWithParentheses(",") == duckdb::vector<string> {""});
+		REQUIRE(StringUtil::SplitWithParentheses(",,") == duckdb::vector<string> {"", ""});
+		REQUIRE(StringUtil::SplitWithParentheses("aa,") == duckdb::vector<string> {"aa"});
+		REQUIRE(StringUtil::SplitWithParentheses(",aa") == duckdb::vector<string> {"", "aa"});
+		REQUIRE(StringUtil::SplitWithParentheses(",(aa,),") == duckdb::vector<string> {"", "(aa,)"});
+	}
+
+	SECTION("Leading and trailing spaces") {
+		REQUIRE(StringUtil::SplitWithParentheses(" ") == duckdb::vector<string> {" "});
+		REQUIRE(StringUtil::SplitWithParentheses("   ") == duckdb::vector<string> {"   "});
+		REQUIRE(StringUtil::SplitWithParentheses("   , ") == duckdb::vector<string> {"   ", " "});
+		REQUIRE(StringUtil::SplitWithParentheses("aa, bb") == duckdb::vector<string> {"aa", " bb"});
+		REQUIRE(StringUtil::SplitWithParentheses(" aa,(bb, cc) ") == duckdb::vector<string> {" aa", "(bb, cc) "});
+	}
+
+	SECTION("Nested parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("STRUCT(aa BIGINT, bb STRUCT(cc BIGINT, dd BIGINT, BIGINT))") ==
+		        duckdb::vector<string> {"STRUCT(aa BIGINT, bb STRUCT(cc BIGINT, dd BIGINT, BIGINT))"});
+		REQUIRE(StringUtil::SplitWithParentheses("(((aa)))") == duckdb::vector<string> {"(((aa)))"});
+		REQUIRE(StringUtil::SplitWithParentheses("((aa, bb))") == duckdb::vector<string> {"((aa, bb))"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa,(bb,(cc,dd)),ee") ==
+		        duckdb::vector<string> {"aa", "(bb,(cc,dd))", "ee"});
+	}
+
+	SECTION("other parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses(" aa,[bb, cc] )", ',', '[', ']') ==
+		        duckdb::vector<string> {" aa", "[bb, cc] )"});
+	}
+
+	SECTION("other separators") {
+		REQUIRE(StringUtil::SplitWithParentheses(" aa|(bb| cc),dd", '|') ==
+		        duckdb::vector<string> {" aa", "(bb| cc),dd"});
+	}
+
+	SECTION("incongruent parentheses") {
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("("));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses(")"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa(bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa)bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa)bb)"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa(bb)"));
+	}
+}
+
 TEST_CASE("Test split quoted strings", "[string_util]") {
 	SECTION("Empty string") {
 		REQUIRE(StringUtil::SplitWithQuote("") == duckdb::vector<string> {});
@@ -227,5 +306,66 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\"\"y\""), ParserException);
 		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\" \"y\""), ParserException);
 		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("x y"), ParserException);
+	}
+}
+
+TEST_CASE("Test path utilities", "[string_util]") {
+	SECTION("File name") {
+		REQUIRE("bin" == StringUtil::GetFileName("/usr/bin/"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("tmp/foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("tmp\\foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("/tmp/foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("\\tmp\\foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/."));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/./"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/.//"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\."));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\.\\"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\.\\\\"));
+		REQUIRE(".." == StringUtil::GetFileName(".."));
+		REQUIRE("" == StringUtil::GetFileName("/"));
+	}
+
+	SECTION("File extension") {
+		REQUIRE("cpp" == StringUtil::GetFileExtension("test.cpp"));
+		REQUIRE("gz" == StringUtil::GetFileExtension("test.cpp.gz"));
+		REQUIRE("" == StringUtil::GetFileExtension("test"));
+		REQUIRE("" == StringUtil::GetFileExtension(".gitignore"));
+	}
+
+	SECTION("File stem (base name)") {
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp"));
+		REQUIRE("test.cpp" == StringUtil::GetFileStem("test.cpp.gz"));
+		REQUIRE("test" == StringUtil::GetFileStem("test"));
+		REQUIRE(".gitignore" == StringUtil::GetFileStem(".gitignore"));
+
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/."));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/./"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/.//"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\."));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\.\\"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\.\\\\"));
+		REQUIRE(".." == StringUtil::GetFileStem(".."));
+		REQUIRE("" == StringUtil::GetFileStem("/"));
+		REQUIRE("test" == StringUtil::GetFileStem("tmp/test.txt"));
+		REQUIRE("test" == StringUtil::GetFileStem("tmp\\test.txt"));
+		REQUIRE("test" == StringUtil::GetFileStem("/tmp/test.txt"));
+		REQUIRE("test" == StringUtil::GetFileStem("\\tmp\\test.txt"));
+	}
+
+	SECTION("File path") {
+		REQUIRE("/usr/local/bin" == StringUtil::GetFilePath("/usr/local/bin/test.cpp"));
+		REQUIRE("\\usr\\local\\bin" == StringUtil::GetFilePath("\\usr\\local\\bin\\test.cpp"));
+		REQUIRE("tmp" == StringUtil::GetFilePath("tmp/test.txt"));
+		REQUIRE("tmp" == StringUtil::GetFilePath("tmp\\test.txt"));
+		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp/test.txt"));
+		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\test.txt"));
+		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp/test.txt/"));
+		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\test.txt\\"));
+		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp//test.txt"));
+		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\\\test.txt"));
 	}
 }

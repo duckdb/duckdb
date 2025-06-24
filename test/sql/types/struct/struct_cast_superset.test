@@ -1,0 +1,39 @@
+# name: test/sql/types/struct/struct_cast_superset.test
+# description: Test STRUCT cast + UNION BY NAME
+# group: [struct]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (s1 STRUCT(a INT, b INT));
+
+statement ok
+INSERT INTO t1 VALUES ({a: 42, b: 43});
+
+statement ok
+CREATE TABLE t2 (s1 STRUCT(a INT, c INT));
+
+statement ok
+INSERT INTO t2 VALUES ({a: 100, c: 101});
+
+statement ok
+COPY t1 TO '__TEST_DIR__/struct_cast_t1.parquet' (FORMAT 'parquet');
+
+statement ok
+COPY t2 TO '__TEST_DIR__/struct_cast_t2.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/struct_cast_*.parquet', union_by_name = TRUE);
+----
+{'a': 42, 'b': 43, 'c': NULL}
+{'a': 100, 'b': NULL, 'c': 101}
+
+query I
+SELECT {'a': {'e1': 42, 'e2': 42}} AS c
+UNION ALL BY NAME SELECT {'a': {'e2': 'hello', 'e3': 'world'}, 'b': '100'} AS c;
+----
+{'a': {'e1': 42, 'e2': 42, 'e3': NULL}, 'b': NULL}
+{'a': {'e1': NULL, 'e2': hello, 'e3': world}, 'b': 100}

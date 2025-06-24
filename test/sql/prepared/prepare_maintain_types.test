@@ -1,0 +1,36 @@
+# name: test/sql/prepared/prepare_maintain_types.test
+# description: Maintain PREPARE parameter types
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+prepare v1 as select cast(111 as short) * $1;
+
+# literals adapt to the type
+statement error
+execute v1(1665);
+----
+Overflow
+
+statement error
+execute v1('1665');
+----
+Overflow
+
+# explicit casts force the type to be used
+statement error
+execute v1('1665'::VARCHAR);
+----
+No function matches the given name and argument types
+
+query I
+execute v1(1665::BIGINT);
+----
+184815
+
+statement error
+execute v1(1665::SHORT);
+----
+Overflow

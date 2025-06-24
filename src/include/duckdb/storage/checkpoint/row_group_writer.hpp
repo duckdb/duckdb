@@ -30,12 +30,8 @@ public:
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
-	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state, Serializer &serializer) = 0;
-
+	virtual CheckpointType GetCheckpointType() const = 0;
 	virtual MetadataWriter &GetPayloadWriter() = 0;
-
-	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
-	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
@@ -50,19 +46,18 @@ protected:
 class SingleFileRowGroupWriter : public RowGroupWriter {
 public:
 	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
-	                         MetadataWriter &table_data_writer)
-	    : RowGroupWriter(table, partial_block_manager), table_data_writer(table_data_writer) {
-	}
+	                         TableDataWriter &writer, MetadataWriter &table_data_writer);
 
+public:
+	CheckpointType GetCheckpointType() const override;
+	MetadataWriter &GetPayloadWriter() override;
+
+private:
+	//! Underlying writer object
+	TableDataWriter &writer;
 	//! MetadataWriter is a cursor on a given BlockManager. This returns the
 	//! cursor against which we should write payload data for the specified RowGroup.
 	MetadataWriter &table_data_writer;
-
-public:
-	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
-	                                     Serializer &serializer) override;
-
-	virtual MetadataWriter &GetPayloadWriter() override;
 };
 
 } // namespace duckdb

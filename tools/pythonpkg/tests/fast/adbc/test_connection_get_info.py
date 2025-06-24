@@ -4,13 +4,20 @@ import duckdb
 import pytest
 
 pa = pytest.importorskip("pyarrow")
+adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
+if sys.version_info < (3, 9):
+    pytest.skip(
+        "Python Version must be higher or equal to 3.9 to run this test",
+        allow_module_level=True,
+    )
 
 try:
     adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
     con = adbc_driver_duckdb.connect()
-except:
+except adbc_driver_manager.InternalError as e:
     pytest.skip(
-        "'duckdb_adbc_init' was not exported in this install, try running 'python3 setup.py install'.",
+        f"'duckdb_adbc_init' was not exported in this install, try running 'python3 setup.py install': {e}",
         allow_module_level=True,
     )
 

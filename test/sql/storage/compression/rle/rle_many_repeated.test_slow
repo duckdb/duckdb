@@ -1,0 +1,25 @@
+# name: test/sql/storage/compression/rle/rle_many_repeated.test_slow
+# description: Test forcing RLE as the compression scheme
+# group: [rle]
+
+require vector_size 2048
+
+load __TEST_DIR__/rle_many_repeated.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE test_rle (a BIGINT);
+
+statement ok
+INSERT INTO test_rle SELECT 3::BIGINT FROM range(0, 65535) UNION ALL SELECT 4::BIGINT FROM range(100000);
+
+statement ok
+CHECKPOINT
+
+query II
+SELECT a, COUNT(*) FROM test_rle GROUP BY ALL
+----
+3	65535
+4	100000

@@ -5,40 +5,49 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+CREATE TABLE t0 as FROM VALUES('asdf') t(c0);
+
+# null
+query I
+SELECT regexp_matches(c0, NULL) from t0
+----
+NULL
+
 # constant strings
 query T
-SELECT regexp_matches('asdf', '.*sd.*')
+SELECT regexp_matches(c0, '.*sd.*') from t0;
 ----
 1
 
 query T
-SELECT regexp_matches('asdf', '.*yu.*')
+SELECT regexp_matches(c0, '.*yu.*') from t0;
 ----
 0
 
 query T
-SELECT regexp_matches('asdf', '')
+SELECT regexp_matches(c0, '') from t0;
 ----
 1
 
 # partial matches okay
 query T
-SELECT regexp_matches('asdf', 'sd')
+SELECT regexp_matches(c0, 'sd') from t0;
 ----
 1
 
 query T
-SELECT regexp_full_match('asdf', 'sd')
+SELECT regexp_full_match(c0, 'sd') from t0;
 ----
 0
 
 query T
-SELECT regexp_full_match('asdf', '.sd.')
+SELECT regexp_full_match(c0, '.sd.') from t0;
 ----
 1
 
 query T
-SELECT regexp_matches('asdf', '^sdf$')
+SELECT regexp_matches(c0, '^sdf$') from t0;
 ----
 0
 
@@ -55,7 +64,7 @@ SELECT regexp_matches('', '.*')
 
 # NULLs
 query T
-SELECT regexp_matches('asdf', CAST(NULL AS STRING))
+SELECT regexp_matches(c0, CAST(NULL AS STRING)) from t0;
 ----
 NULL
 
@@ -77,6 +86,7 @@ SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')
 # postgres says throw error on invalid regex
 statement error
 SELECT regexp_matches('', '\X')
+----
 
 statement ok
 CREATE TABLE regex(s STRING, p STRING)
@@ -103,12 +113,12 @@ NULL
 # test regex_matches with options
 # case sensitivity
 query T
-SELECT regexp_matches('asdf', '.*SD.*', 'i')
+SELECT regexp_matches(c0, '.*SD.*', 'i') from t0;
 ----
 1
 
 query T
-SELECT regexp_matches('asdf', '.*SD.*', 'c')
+SELECT regexp_matches(c0, '.*SD.*', 'c') from t0;
 ----
 0
 
@@ -138,13 +148,13 @@ world', '.*', 'n')
 
 # whitespace is ignored
 query T
-SELECT regexp_matches('asdf', '.*SD.*', ' i 	')
+SELECT regexp_matches(c0, '.*SD.*', ' i 	') from t0;
 ----
 1
 
 # NULL in options is an error
 statement error
-SELECT regexp_matches('asdf', '.*SD.*', NULL)
+SELECT regexp_matches(c0, '.*SD.*', NULL) from t0;
 ----
 must not be NULL
 
@@ -169,14 +179,17 @@ SELECT regexp_matches(v, 'h.*', 'c') FROM test ORDER BY v
 
 statement error
 SELECT regexp_matches(v, 'h.*', v) FROM test ORDER BY v
+----
 
 # throw on invalid options
 statement error
-SELECT regexp_matches('asdf', '.*SD.*', 'q')
+SELECT regexp_matches(c0, '.*SD.*', 'q') from t0;
+----
 
 # can only use "g" with regexp replace
 statement error
-SELECT regexp_matches('asdf', '.*SD.*', 'g')
+SELECT regexp_matches(c0, '.*SD.*', 'g') from t0;
+----
 
 # error in non-constant regex
 statement ok
@@ -184,3 +197,4 @@ INSERT INTO regex VALUES ('asdf', '(')
 
 statement error
 SELECT regexp_matches(s, p) FROM regex
+----

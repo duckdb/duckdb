@@ -23,9 +23,6 @@ INSERT INTO keys_to_lookup
 	FROM range(100) t(i)
 
 statement ok
-PRAGMA force_index_join
-
-statement ok
 SELECT COUNT(*) FROM
 (
 	SELECT key, value

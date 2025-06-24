@@ -1,0 +1,25 @@
+# name: test/sql/types/nested/array/array_storage_2.test_slow
+# group: [array]
+
+load __TEST_DIR__/temp_array_storage_2.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma preserve_insertion_order=true
+
+statement ok
+CREATE TABLE t4 (i INT[3]);
+
+statement ok
+INSERT INTO t4 SELECT array_value(a::VARCHAR,b::VARCHAR,c::VARCHAR)
+FROM range(1,100) AS r1(a), range(1,100) AS r2(b), range(1,50) AS r3(c);
+
+statement ok
+INSERT INTO t4 SELECT array_value(5, 5, 5);
+
+query I
+SELECT * FROM t4 OFFSET 480249
+----
+[5, 5, 5]

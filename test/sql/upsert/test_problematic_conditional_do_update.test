@@ -1,0 +1,40 @@
+# name: test/sql/upsert/test_problematic_conditional_do_update.test
+# group: [upsert]
+
+statement ok
+CREATE TABLE users (
+	id BIGINT PRIMARY KEY,
+	username TEXT UNIQUE,
+	email TEXT
+);
+
+# FIXME: not consistent
+mode skip
+
+# The condition skips the last tuple
+statement error
+INSERT INTO users (id, username, email)
+VALUES
+	(3, 'inner_conflict', 'test'),
+	(3, 'inner_conflict2', 'other_test'),
+	(3, 'inner_conflict3', 'filtered_out')
+ON CONFLICT (id) DO
+    UPDATE SET email = EXCLUDED.email
+    WHERE EXCLUDED.email != 'filtered_out'
+----
+Not implemented Error: Inner conflicts detected with a conditional DO UPDATE on-conflict action, not fully implemented yet
+
+# The result of the condition can also be influenced based on previous updates
+statement error
+INSERT INTO users (id, username, email)
+VALUES
+	(3, 'inner_conflict', 'test'),
+	(3, 'inner_conflict2', 'other_test'),
+	(3, 'inner_conflict3', 'yet_another_test'),
+	(3, 'inner_conflict4', 'dont_skip_me')
+ON CONFLICT (id) DO
+    UPDATE SET email = EXCLUDED.email
+    WHERE email != 'other_test' OR EXCLUDED.email == 'dont_skip_me'
+RETURNING *;
+----
+Not implemented Error: Inner conflicts detected with a conditional DO UPDATE on-conflict action, not fully implemented yet

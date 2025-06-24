@@ -60,7 +60,7 @@ LSR &LSR::operator=(LSR &&other) U_NOEXCEPT {
     return *this;
 }
 
-UBool LSR::operator==(const LSR &other) const {
+bool LSR::operator==(const LSR &other) const {
     return
         uprv_strcmp(language, other.language) == 0 &&
         uprv_strcmp(script, other.script) == 0 &&

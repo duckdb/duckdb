@@ -40,7 +40,7 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 		// We have not seen this parameter before
 		if (node.number != 0) {
 			// Preserve the parameter number
-			known_param_index = node.number;
+			known_param_index = NumericCast<idx_t>(node.number);
 		} else {
 			known_param_index = ParamCount() + 1;
 			if (!node.name) {

@@ -1,0 +1,12 @@
+# name: test/sql/catalog/table/create_table_parameters.test
+# description: Issue #10008 - DuckDB SIGSEGV when creating table with DEFAULT ?
+# group: [table]
+
+statement error
+CREATE TABLE t0 ( c1 INT DEFAULT ? );
+----
+DEFAULT values cannot contain parameters
+
+statement error
+CREATE TABLE t0 ( c1 INT CHECK (?) );
+----

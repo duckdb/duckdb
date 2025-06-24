@@ -1,0 +1,21 @@
+# name: test/sql/types/struct/struct_unnest_recursion.test
+# description: Test struct unnest recursion
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT UNNEST ( ( '1,2,3,4,,6' , ( 1 ) ) ) , x x;
+----
+cannot be referenced before it is defined
+
+query IIII
+SELECT UNNEST ( ( '1,2,3,4,,6' , ( case when random() < 10 then 0 else 1 end ) ) ), 42 x, x;
+----
+1,2,3,4,,6	0	42	42
+
+
+
+
+

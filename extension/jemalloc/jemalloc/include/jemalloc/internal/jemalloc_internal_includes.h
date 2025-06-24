@@ -36,9 +36,6 @@
  * global jemalloc definitions, however.
  */
 
-// For ptrdiff_t
-#include <stddef.h>
-
 /******************************************************************************/
 /* TYPES */
 /******************************************************************************/
@@ -71,16 +68,16 @@
 /* INLINES */
 /******************************************************************************/
 
-#include "jemalloc/internal/jemalloc_int_inl_a.h"
+#include "jemalloc/internal/jemalloc_internal_inlines_a.h"
 /*
  * Include portions of arena code interleaved with tcache code in order to
  * resolve circular dependencies.
  */
 #include "jemalloc/internal/arena_inlines_a.h"
-#include "jemalloc/internal/jemalloc_int_inl_b.h"
+#include "jemalloc/internal/jemalloc_internal_inlines_b.h"
 #include "jemalloc/internal/tcache_inlines.h"
 #include "jemalloc/internal/arena_inlines_b.h"
-#include "jemalloc/internal/jemalloc_int_inl_c.h"
+#include "jemalloc/internal/jemalloc_internal_inlines_c.h"
 #include "jemalloc/internal/prof_inlines.h"
 #include "jemalloc/internal/background_thread_inlines.h"
 

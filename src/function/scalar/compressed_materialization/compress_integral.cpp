@@ -1,7 +1,9 @@
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 
 namespace duckdb {
 
@@ -14,7 +16,7 @@ template <class INPUT_TYPE, class RESULT_TYPE>
 struct TemplatedIntegralCompress {
 	static inline RESULT_TYPE Operation(const INPUT_TYPE &input, const INPUT_TYPE &min_val) {
 		D_ASSERT(min_val <= input);
-		return input - min_val;
+		return UnsafeNumericCast<RESULT_TYPE>(input - min_val);
 	}
 };
 
@@ -22,7 +24,15 @@ template <class RESULT_TYPE>
 struct TemplatedIntegralCompress<hugeint_t, RESULT_TYPE> {
 	static inline RESULT_TYPE Operation(const hugeint_t &input, const hugeint_t &min_val) {
 		D_ASSERT(min_val <= input);
-		return (input - min_val).lower;
+		return UnsafeNumericCast<RESULT_TYPE>((input - min_val).lower);
+	}
+};
+
+template <class RESULT_TYPE>
+struct TemplatedIntegralCompress<uhugeint_t, RESULT_TYPE> {
+	static inline RESULT_TYPE Operation(const uhugeint_t &input, const uhugeint_t &min_val) {
+		D_ASSERT(min_val <= input);
+		return UnsafeNumericCast<RESULT_TYPE>((input - min_val).lower);
 	}
 };
 
@@ -31,9 +41,16 @@ static void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Ve
 	D_ASSERT(args.ColumnCount() == 2);
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
 	const auto min_val = ConstantVector::GetData<INPUT_TYPE>(args.data[1])[0];
-	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
-	});
+	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
+	    args.data[0], result, args.size(),
+	    [&](const INPUT_TYPE &input) {
+		    return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
+	    },
+#if defined(D_ASSERT_IS_ENABLED)
+	    FunctionErrors::CAN_THROW_RUNTIME_ERROR); // Can only throw a runtime error when assertions are enabled
+#else
+	    FunctionErrors::CANNOT_ERROR);
+#endif
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -75,6 +92,8 @@ static scalar_function_t GetIntegralCompressFunctionInputSwitch(const LogicalTyp
 		return GetIntegralCompressFunctionResultSwitch<uint32_t>(input_type, result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetIntegralCompressFunctionResultSwitch<uint64_t>(input_type, result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetIntegralCompressFunctionResultSwitch<uhugeint_t>(input_type, result_type);
 	default:
 		throw InternalException("Unexpected input type in GetIntegralCompressFunctionInputSwitch");
 	}
@@ -86,9 +105,25 @@ static string IntegralDecompressFunctionName(const LogicalType &result_type) {
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
-static inline RESULT_TYPE TemplatedIntegralDecompress(const INPUT_TYPE &input, const RESULT_TYPE &min_val) {
-	return min_val + input;
-}
+struct TemplatedIntegralDecompress {
+	static inline RESULT_TYPE Operation(const INPUT_TYPE &input, const RESULT_TYPE &min_val) {
+		return min_val + UnsafeNumericCast<RESULT_TYPE, INPUT_TYPE>(input);
+	}
+};
+
+template <class INPUT_TYPE>
+struct TemplatedIntegralDecompress<INPUT_TYPE, hugeint_t> {
+	static inline hugeint_t Operation(const INPUT_TYPE &input, const hugeint_t &min_val) {
+		return min_val + hugeint_t(0, input);
+	}
+};
+
+template <class INPUT_TYPE>
+struct TemplatedIntegralDecompress<INPUT_TYPE, uhugeint_t> {
+	static inline uhugeint_t Operation(const INPUT_TYPE &input, const uhugeint_t &min_val) {
+		return min_val + uhugeint_t(0, input);
+	}
+};
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -96,9 +131,12 @@ static void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, 
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(args.data[1].GetType() == result.GetType());
 	const auto min_val = ConstantVector::GetData<RESULT_TYPE>(args.data[1])[0];
-	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>(input, min_val);
-	});
+	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
+	    args.data[0], result, args.size(),
+	    [&](const INPUT_TYPE &input) {
+		    return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
+	    },
+	    FunctionErrors::CANNOT_ERROR);
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -124,6 +162,8 @@ static scalar_function_t GetIntegralDecompressFunctionResultSwitch(const Logical
 		return GetIntegralDecompressFunction<INPUT_TYPE, uint32_t>(input_type, result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetIntegralDecompressFunction<INPUT_TYPE, uint64_t>(input_type, result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetIntegralDecompressFunction<INPUT_TYPE, uhugeint_t>(input_type, result_type);
 	default:
 		throw InternalException("Unexpected input type in GetIntegralDecompressFunctionSetSwitch");
 	}
@@ -161,8 +201,7 @@ unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, Scala
 
 ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralCompressFunctionName(result_type), {input_type, input_type}, result_type,
-	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type),
-	                      CompressedMaterializationFunctions::Bind);
+	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
 	result.serialize = CMIntegralSerialize;
 	result.deserialize = CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>;
 	return result;
@@ -178,16 +217,9 @@ static ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &resul
 	return set;
 }
 
-void CMIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : CompressedMaterializationFunctions::IntegralTypes()) {
-		set.AddFunction(GetIntegralCompressFunctionSet(result_type));
-	}
-}
-
 ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
-	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type),
-	                      CompressedMaterializationFunctions::Bind);
+	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
 	result.serialize = CMIntegralSerialize;
 	result.deserialize = CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>;
 	return result;
@@ -195,7 +227,7 @@ ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_typ
 
 static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_type) {
 	ScalarFunctionSet set(IntegralDecompressFunctionName(result_type));
-	for (const auto &input_type : CompressedMaterializationFunctions::IntegralTypes()) {
+	for (const auto &input_type : CMUtils::IntegralTypes()) {
 		if (GetTypeIdSize(result_type.InternalType()) > GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(CMIntegralDecompressFun::GetFunction(input_type, result_type));
 		}
@@ -203,12 +235,52 @@ static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &res
 	return set;
 }
 
-void CMIntegralDecompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : LogicalType::Integral()) {
-		if (GetTypeIdSize(result_type.InternalType()) > 1) {
-			set.AddFunction(GetIntegralDecompressFunctionSet(result_type));
-		}
-	}
+ScalarFunctionSet InternalCompressIntegralUtinyintFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::UTINYINT));
+}
+
+ScalarFunctionSet InternalCompressIntegralUsmallintFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::USMALLINT));
+}
+
+ScalarFunctionSet InternalCompressIntegralUintegerFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::UINTEGER));
+}
+
+ScalarFunctionSet InternalCompressIntegralUbigintFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralSmallintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::SMALLINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralIntegerFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::INTEGER));
+}
+
+ScalarFunctionSet InternalDecompressIntegralBigintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::BIGINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralHugeintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::HUGEINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUsmallintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::USMALLINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUintegerFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UINTEGER));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUbigintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUhugeintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UHUGEINT));
 }
 
 } // namespace duckdb

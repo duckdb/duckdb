@@ -20,10 +20,14 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
+		for (auto &al : kv.second->key_targets) {
+			kv_info->key_targets.push_back(al->Copy());
+		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
 		res.map[kv.first] = std::move(kv_info);
 	}
+
 	return res;
 }
 
@@ -44,6 +48,7 @@ string CommonTableExpressionMap::ToString() const {
 		result += "RECURSIVE ";
 	}
 	bool first_cte = true;
+
 	for (auto &kv : map) {
 		if (!first_cte) {
 			result += ", ";
@@ -59,6 +64,16 @@ string CommonTableExpressionMap::ToString() const {
 				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[k]);
 			}
 			result += ")";
+		}
+		if (!cte.key_targets.empty()) {
+			result += " USING KEY (";
+			for (idx_t k = 0; k < cte.key_targets.size(); k++) {
+				if (k > 0) {
+					result += ", ";
+				}
+				result += cte.key_targets[k]->ToString();
+			}
+			result += ") ";
 		}
 		if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			result += " AS MATERIALIZED (";
@@ -131,15 +146,20 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (cte_map.map.size() != other->cte_map.map.size()) {
 		return false;
 	}
+
 	for (auto &entry : cte_map.map) {
 		auto other_entry = other->cte_map.map.find(entry.first);
 		if (other_entry == other->cte_map.map.end()) {
 			return false;
 		}
-		if (entry.second->aliases != other_entry->second->aliases) {
+
+		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
 			return false;
 		}
-		if (!entry.second->query->Equals(*other_entry->second->query)) {
+		if (!ParsedExpression::ListEquals(entry.second->key_targets, other_entry->second->key_targets)) {
+			return false;
+		}
+		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
 			return false;
 		}
 	}
@@ -154,6 +174,9 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
+		}
+		for (auto &key : kv.second->key_targets) {
+			kv_info->key_targets.push_back(key->Copy());
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;

@@ -1,0 +1,30 @@
+# name: benchmark/micro/index/point/in_filter_with_index_scan.benchmark
+# description: Benchmark the performance of adaptively choosing an index scan for an IN filter.
+# group: [point]
+
+name IN filter with index scan
+group art
+
+require tpch
+
+load
+CALL dbgen(sf=1);
+CREATE TABLE random_orders AS (
+	(SELECT o_orderkey FROM orders
+	OFFSET 100
+	LIMIT 3)
+	UNION
+	(SELECT o_orderkey FROM orders
+	OFFSET (SELECT COUNT(*) FROM orders) / 2
+	LIMIT 3)
+	UNION
+	(SELECT o_orderkey FROM orders
+	OFFSET (SELECT COUNT(*) FROM orders) / 2 + 100000
+	LIMIT 3));
+CREATE TABLE orders_shuffled AS FROM orders ORDER BY random();
+ALTER TABLE orders_shuffled ADD PRIMARY KEY (o_orderkey);
+
+run
+SELECT o_orderkey FROM orders_shuffled WHERE o_orderkey IN (
+	SELECT UNNEST(LIST(o_orderkey)) FROM random_orders
+) ORDER BY ALL;

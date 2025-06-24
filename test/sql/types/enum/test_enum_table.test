@@ -14,6 +14,7 @@ CREATE TABLE person (
     name text,
     current_car car
 );
+----
 
 statement ok
 CREATE TABLE person (
@@ -26,6 +27,7 @@ INSERT INTO person VALUES ('Moe', 'happy');
 
 statement error
 INSERT INTO person VALUES ('Moe', 'diego');
+----
 
 query TT
 select * from person
@@ -76,7 +78,7 @@ Anne	happy
 Oogie Boogie	ok
 Mr. Fluffles McFluffingstein	NULL
 
-query TT
+query TT rowsort
 select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
 ----
 Moe	Anne
@@ -97,6 +99,7 @@ CREATE TABLE aliens (
     name text,
     current_mood mood
 );
+----
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
@@ -221,6 +224,7 @@ ok
 
 statement error
 SELECT CAST ('bla' as mood)
+----
 
 query I
 SELECT TRY_CAST ('bla' as mood)

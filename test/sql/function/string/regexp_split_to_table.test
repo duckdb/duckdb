@@ -1,0 +1,30 @@
+# name: test/sql/function/string/regexp_split_to_table.test
+# description: regexp_split_to_table test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# non-regex split
+query T
+SELECT regexp_split_to_table('a b c', ' ')
+----
+a
+b
+c
+
+# regex-based split
+query T
+SELECT regexp_split_to_table('axbyc', '[x|y]')
+----
+a
+b
+c
+
+# regex-based split with an unaffected column
+query II
+SELECT regexp_split_to_table('axbyc', '[x|y]'), 42
+----
+a	42
+b	42
+c	42

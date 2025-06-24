@@ -170,16 +170,21 @@ Math	Masters	1
 
 statement error
 select course, count(*) from students group by cube () order by 1, 2;
+----
 
 statement error
 select course, count(*) from students group by cube (cube (course)) order by 1, 2;
+----
 
 statement error
 select course, count(*) from students group by cube (grouping_sets (course)) order by 1, 2;
+----
 
 # cube exceeds maximum grouping set
 statement error
 select course, type, count(*) from students group by cube (course, type, course, type, course, type, course, type, course, type, course, type, (course, type), (course, type), course, type) order by 1, 2, 3;
+----
 
 statement error
 select course, type, count(*) from students group by cube (course, type, course, type, course), cube(type, course, type, course), cube(type, course, type, (course, type), (course, type), course, type) order by 1, 2, 3;
+----

@@ -1,5 +1,5 @@
 # name: test/sql/storage/parallel/reclaim_space_batch_insert.test_slow
-# description: Test space reclamation of optimistic writing with failures
+# description: Test space reclamation of optimistic writing with batch inserts and a primary key.
 # group: [parallel]
 
 require parquet
@@ -21,22 +21,20 @@ INSERT INTO integers2 VALUES (9999999);
 statement error
 INSERT INTO integers2 SELECT * FROM integers;
 ----
-violates primary key constraint
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
-CREATE TABLE block_count (count int);
+CREATE TABLE block_count (count INT);
 
 loop i 0 10
 
-# conflict with base table data
 statement error
 INSERT INTO integers2 SELECT * FROM integers;
 ----
-violates primary key constraint
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
-# conflict with transaction local data
 statement ok
-BEGIN TRANSACTION
+BEGIN;
 
 statement ok
 INSERT INTO integers2 VALUES (9999998);
@@ -44,7 +42,7 @@ INSERT INTO integers2 VALUES (9999998);
 statement error
 INSERT INTO integers2 SELECT * FROM integers WHERE i <= 9999998;
 ----
-PRIMARY KEY or UNIQUE constraint violated
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
 
 statement ok
 ROLLBACK
@@ -68,7 +66,8 @@ SELECT COUNT(*) - ${i} FROM integers2;
 ----
 2
 
-# ensure there is a small diff between min and max block counts
+# Ensure there is only a small difference between the MIN and MAX block counts.
+
 query I
 SELECT (MAX(count) - MIN(count)) < 20 FROM block_count;
 ----

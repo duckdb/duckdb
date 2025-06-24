@@ -1,7 +1,7 @@
 #include "include/icu-datesub.hpp"
 #include "include/icu-datefunc.hpp"
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -139,10 +139,10 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, DatabaseInstance &db) {
+	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		loader.RegisterFunction(set);
 	}
 };
 
@@ -209,6 +209,17 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		return sub_func(calendar, start_date, end_date);
 	}
 
+	static part_trunc_t DiffTruncationFactory(DatePartSpecifier type) {
+		switch (type) {
+		case DatePartSpecifier::WEEK:
+			//	Weeks are computed without anchors
+			return TruncationFactory(DatePartSpecifier::DAY);
+		default:
+			break;
+		}
+		return TruncationFactory(type);
+	}
+
 	template <typename T>
 	static void ICUDateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 3);
@@ -229,7 +240,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				const auto part = GetDatePartSpecifier(specifier);
-				auto trunc_func = TruncationFactory(part);
+				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
 				BinaryExecutor::ExecuteWithNulls<T, T, int64_t>(
 				    startdate_arg, enddate_arg, result, args.size(),
@@ -248,7 +259,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 			    [&](string_t specifier, T start_date, T end_date, ValidityMask &mask, idx_t idx) {
 				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());
-					    auto trunc_func = TruncationFactory(part);
+					    auto trunc_func = DiffTruncationFactory(part);
 					    auto sub_func = SubtractFactory(part);
 					    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 				    } else {
@@ -264,19 +275,19 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, DatabaseInstance &db) {
+	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		loader.RegisterFunction(set);
 	}
 };
 
-void RegisterICUDateSubFunctions(DatabaseInstance &db) {
-	ICUCalendarSub::AddFunctions("date_sub", db);
-	ICUCalendarSub::AddFunctions("datesub", db);
+void RegisterICUDateSubFunctions(ExtensionLoader &loader) {
+	ICUCalendarSub::AddFunctions("date_sub", loader);
+	ICUCalendarSub::AddFunctions("datesub", loader);
 
-	ICUCalendarDiff::AddFunctions("date_diff", db);
-	ICUCalendarDiff::AddFunctions("datediff", db);
+	ICUCalendarDiff::AddFunctions("date_diff", loader);
+	ICUCalendarDiff::AddFunctions("datediff", loader);
 }
 
 } // namespace duckdb

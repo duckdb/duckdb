@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_RB_H
 #define JEMALLOC_INTERNAL_RB_H
 
-#include "jemalloc/internal/jemalloc_internal_decls.h"
-
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/safety_check.h"
 
 /*-
  *******************************************************************************
@@ -564,6 +563,20 @@ a_prefix##reverse_iter_filtered(a_rbt_type *rbtree, a_type *start,	\
  * the same as with the unfiltered version, with the added constraint that the
  * returned node must pass the filter.
  */
+JEMALLOC_ALWAYS_INLINE void
+rb_remove_safety_checks(const void *nodep, const char *function_name) {
+	if (!config_opt_safety_checks) {
+		return;
+	}
+	if (unlikely(nodep == NULL)) {
+		safety_check_fail(
+		    "<jemalloc>: Invalid deallocation detected in %s: "
+		    "attempting to remove node from tree but node was "
+		    "not found. Possibly caused by double free bugs.",
+		    function_name);
+        }
+}
+
 #define rb_gen(a_attr, a_prefix, a_rbt_type, a_type, a_field, a_cmp)	\
     rb_gen_impl(a_attr, a_prefix, a_rbt_type, a_type, a_field, a_cmp,	\
 	rb_empty_summarize, false)
@@ -856,6 +869,8 @@ a_prefix##remove(a_rbt_type *rbtree, a_type *node) {			\
 	    }								\
 	}								\
     }									\
+    rb_remove_safety_checks(nodep, __func__);				\
+    assert(nodep != NULL);                                              \
     assert(nodep->node == node);					\
     pathp--;								\
     if (pathp->node != node) {						\
@@ -1856,7 +1871,5 @@ a_prefix##reverse_iter_filtered(a_rbt_type *rbtree, a_type *start,	\
     return ret;								\
 }									\
 ) /* end rb_summarized_only */
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_RB_H */

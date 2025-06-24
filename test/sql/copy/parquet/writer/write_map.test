@@ -29,10 +29,12 @@ statement error
 INSERT INTO int_maps VALUES
 	(MAP([NULL], [NULL]))
 ;
+----
 
 # parquet does not support keys with null values
 statement error
 COPY string_map TO '__TEST_DIR__/int_maps.parquet' (FORMAT PARQUET)
+----
 
 # string -> string map
 statement ok
@@ -63,6 +65,7 @@ statement error
 INSERT INTO string_map VALUES
 	(MAP([NULL], [NULL]))
 ;
+----
 
 # list -> list map
 statement ok
@@ -92,3 +95,4 @@ statement error
 INSERT INTO list_map VALUES
 	(MAP([NULL], [NULL]))
 ;
+----

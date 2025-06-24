@@ -1,9 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_PAI_H
 #define JEMALLOC_INTERNAL_PAI_H
 
-/* An interface for page allocation. */
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/edata.h"
+#include "jemalloc/internal/tsd_types.h"
 
-namespace duckdb_jemalloc {
+/* An interface for page allocation. */
 
 typedef struct pai_s pai_t;
 struct pai_s {
@@ -18,7 +20,7 @@ struct pai_s {
 	 * the results are not necessarily zeroed.
 	 */
 	size_t (*alloc_batch)(tsdn_t *tsdn, pai_t *self, size_t size,
-	    size_t nallocs, edata_list_active_t *results,
+	    size_t nallocs, edata_list_active_t *results, bool frequent_reuse,
 	    bool *deferred_work_generated);
 	bool (*expand)(tsdn_t *tsdn, pai_t *self, edata_t *edata,
 	    size_t old_size, size_t new_size, bool zero,
@@ -48,9 +50,10 @@ pai_alloc(tsdn_t *tsdn, pai_t *self, size_t size, size_t alignment,
 
 static inline size_t
 pai_alloc_batch(tsdn_t *tsdn, pai_t *self, size_t size, size_t nallocs,
-    edata_list_active_t *results, bool *deferred_work_generated) {
+    edata_list_active_t *results, bool frequent_reuse,
+    bool *deferred_work_generated) {
 	return self->alloc_batch(tsdn, self, size, nallocs, results,
-	    deferred_work_generated);
+	    frequent_reuse, deferred_work_generated);
 }
 
 static inline bool
@@ -89,11 +92,10 @@ pai_time_until_deferred_work(tsdn_t *tsdn, pai_t *self) {
  * each item in the list.
  */
 size_t pai_alloc_batch_default(tsdn_t *tsdn, pai_t *self, size_t size,
-    size_t nallocs, edata_list_active_t *results, bool *deferred_work_generated);
+    size_t nallocs, edata_list_active_t *results, bool frequent_reuse,
+    bool *deferred_work_generated);
 /* Ditto, for dalloc. */
 void pai_dalloc_batch_default(tsdn_t *tsdn, pai_t *self,
     edata_list_active_t *list, bool *deferred_work_generated);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PAI_H */

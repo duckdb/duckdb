@@ -1,0 +1,19 @@
+# name: test/fuzzer/duckfuzz/json_extract_string_null.test
+# description: NULL input to json_extract_string - found by fuzzer
+# group: [duckfuzz]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table integers(i int);
+
+statement ok
+insert into integers values (1);
+
+query I
+SELECT json_extract_string(false, COALESCE(CASE WHEN (i) THEN (CAST(NULL AS "json")) ELSE NULL END, NULL)) FROM integers;
+----
+NULL

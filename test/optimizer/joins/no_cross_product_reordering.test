@@ -1,0 +1,54 @@
+# name: test/optimizer/joins/no_cross_product_reordering.test
+# description: cannot create cross product between LHS and RHS of semi/anti joins
+# group: [joins]
+
+statement ok
+create table t1 as select range a from range(1000);
+
+statement ok
+create table t2 as select range b from range(1);
+
+statement ok
+create table t3 as select range c from range(100);
+
+query II
+explain select * from t1, t2 where a in (select * from t3);
+----
+physical_plan	<REGEX>:.*CROSS_PRODUCT.*HASH_JOIN.*SEMI.*
+
+
+#An incorrect join plan looks like
+#┌─────────────┴─────────────┐
+#│         PROJECTION        │
+#│   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+#│        Expressions:       │
+#│             a             │
+#│             b             │
+#└─────────────┬─────────────┘
+#┌─────────────┴─────────────┐
+#│      COMPARISON_JOIN      │
+#│   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+#│         Join Type:        │
+#│            SEMI           ├───────────────────────────────────────────┐
+#│   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │                                           │
+#│        Conditions:        │                                           │
+#│        (a = #[9.0])       │                                           │
+#└─────────────┬─────────────┘                                           │
+#┌─────────────┴─────────────┐                             ┌─────────────┴─────────────┐
+#│       CROSS_PRODUCT       │                             │          SEQ_SCAN         │
+#│                           │                             │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+#│                           ├──────────────┐              │        Stringified:       │
+#│                           │              │              │             t1            │
+#└─────────────┬─────────────┘              │              └───────────────────────────┘
+#┌─────────────┴─────────────┐┌─────────────┴─────────────┐
+#│          SEQ_SCAN         ││         PROJECTION        │
+#│   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   ││   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+#│        Stringified:       ││        Expressions:       │
+#│             t2            ││             c             │
+#└───────────────────────────┘└─────────────┬─────────────┘
+#                             ┌─────────────┴─────────────┐
+#                             │          SEQ_SCAN         │
+#                             │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+#                             │        Stringified:       │
+#                             │             t3            │
+#                             └───────────────────────────┘

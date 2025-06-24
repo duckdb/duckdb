@@ -1,0 +1,475 @@
+product_name|store_name|store_zip|b_street_number|b_street_name|b_city|b_zip|c_street_number|c_street_name|c_city|c_zip|cs1syear|cs1cnt|s11|s21|s31|s12|s22|s32|syear|cnt
+ablebaresebareing|able|38048|32|Park |Four Points|51216|552|4th |Clifton|78014|1999|1|8.61|11.70|0.00|18.98|26.76|0.00|2000|1
+ablebaresebareing|able|44136|123|Madison Jackson|Newport|51521|202|Lake |Unionville|61711|1999|1|41.41|62.94|0.00|84.07|135.35|0.00|2000|1
+ablebaresebareing|bar|38828|624|Jefferson |Brownsville|39310|24|1st |Greenville|81387|1999|1|93.51|176.73|0.00|45.88|61.02|0.00|2000|1
+ablebaresebareing|eing|72812|235|6th Poplar|Oak Ridge|58371|845|Third |Maple Grove|78252|1999|1|36.35|53.43|0.00|57.68|108.43|483.63|2000|1
+ablebaresebareing|ese|56098|760|Oak 3rd|Greenwood|28828|846|Lake |Arlington|76557|1999|1|2.80|4.76|0.00|13.69|22.04|0.00|2000|1
+ablebaresebareing|ese|56098|760|Oak 3rd|Greenwood|28828|846|Lake |Arlington|76557|1999|1|2.80|4.76|0.00|44.34|46.11|0.00|2000|1
+ablebaresebareing|ese|74136|NULL|NULL|NULL|NULL|99|14th |Farmington|89145|1999|1|18.87|20.56|0.00|15.06|19.12|0.00|2000|1
+ablebaresebareing|ese|49431|76|Forest |Glenwood|73511|615|Walnut 11th|Clifton|48014|1999|1|35.95|62.91|0.00|19.90|29.45|0.00|2000|1
+ablebaresebareing|pri|38828|686|Cherry |Fairview|25709|560|Hillcrest |Summit|50499|1999|1|43.76|70.89|0.00|36.95|71.68|0.00|2000|1
+ablebaresebareing|pri|34136|868|4th Maple|Morris|56696|416|Poplar |Hamilton|82808|1999|1|82.46|126.16|0.00|72.56|75.46|0.00|2000|1
+ableeingcallyn stcallyought|ation|62812|77|3rd |Lakeside|79532|44|Center |Midway|81904|1999|1|68.53|81.55|0.00|32.46|32.46|0.00|2000|1
+ableeingcallyn stcallyought|bar|44136|371|Smith |Centerville|40059|729|Maple Elm|Stringtown|20162|1999|1|76.71|121.20|0.00|92.57|123.11|0.00|2000|1
+ableeingcallyn stcallyought|bar|44136|NULL|NULL|Buena Vista|55752|575|Cedar West|Forest Hills|69237|1999|1|92.82|129.01|2281.02|92.57|123.11|0.00|2000|1
+ableeseablebarpri|able|44136|1|10th |Macedonia|91087|495|Park |Highland Park|66534|1999|1|91.66|160.40|1702.98|51.64|60.93|0.00|2000|1
+ableeseablebarpri|anti|44136|410|Forest Miller|Pine Grove|24593|138|Ridge 9th|Hamilton|32808|1999|1|73.36|133.51|0.00|46.66|55.05|340.00|2000|1
+ableeseablebarpri|cally|61904|868|Railroad Hillcrest|Stringtown|40162|55|Cedar Central|Antioch|98605|1999|1|95.90|186.04|0.00|38.91|50.97|0.00|2000|1
+ablen steingn stantiought|cally|58048|557|Adams |Enterprise|91757|251|Wilson View|Union Hill|87746|1999|1|67.68|124.53|0.00|88.01|122.33|45.67|2000|1
+ablen stn stbarpri|able|45709|57|Oak |Edgewood|20069|661|2nd Jackson|Oakdale|69584|1999|1|14.64|19.32|0.00|60.60|78.17|1457.49|2000|1
+ablen stn stbarpri|able|45709|951|Spring Cedar|Enterprise|71757|771|NULL|NULL|NULL|1999|1|33.98|60.14|0.00|60.60|78.17|1457.49|2000|1
+ablen stn stbarpri|ation|40059|383|3rd Ridge|NULL|36614|864|Elm |Cedar Grove|70411|1999|1|76.70|90.50|0.00|48.32|73.92|0.00|2000|1
+ablen stn stbarpri|bar|75709|776|Jackson Cedar|West Liberty|44752|4|River |Stafford|24980|1999|1|2.00|2.70|0.00|85.55|101.80|0.00|2000|1
+ablen stn stbarpri|cally|72812|351|Main Hill|Bethel|55281|59|Washington Park|Springfield|49303|1999|1|51.48|83.91|0.00|36.12|52.37|213.74|2000|1
+ablen stn stbarpri|cally|33451|164|6th |Unionville|71711|472|Meadow |Macedonia|81087|1999|1|80.06|108.08|0.00|4.66|6.29|0.00|2000|1
+ablen stn stbarpri|eing|55709|10|Park |Midway|71904|86|Railroad |Greenwood|09428|1999|1|1.71|2.39|0.00|22.10|43.97|0.00|2000|1
+ablen stn stbarpri|eing|55709|114|1st |Union Hill|37746|67|Oak Madison|Five Points|56098|1999|1|57.91|82.23|735.08|22.10|43.97|0.00|2000|1
+ablen stn stbarpri|ese|32477|24|Jackson Spring|Greenfield|65038|663|2nd Maple|Spring Hill|76787|1999|1|5.77|9.28|0.00|42.36|56.33|0.00|2000|1
+ablen stn stbarpri|ese|32477|24|Jackson Spring|Greenfield|65038|663|2nd Maple|Spring Hill|76787|1999|1|5.77|9.28|0.00|84.07|160.57|0.00|2000|1
+ablen stn stbarpri|ese|35281|119|Spruce Highland|Summit|50499|648|Jackson |Midway|71904|1999|1|53.62|73.45|910.43|66.70|71.36|0.00|2000|1
+ablen stn stbarpri|ought|72739|59|Park Oak|Unionville|71711|NULL|Locust |Greenville|NULL|1999|1|30.84|53.35|443.52|57.13|74.84|0.00|2000|1
+ablen stn stbarpri|ought|72739|59|Park Oak|Unionville|71711|NULL|Locust |Greenville|NULL|1999|1|30.84|53.35|443.52|63.28|73.40|0.00|2000|1
+ableoughtcallyationcallyought|able|38048|691|Oak |Brookwood|50965|107|Spring |Union Hill|57746|1999|1|19.16|35.82|0.00|57.30|74.49|0.00|2000|1
+ableoughtcallyationcallyought|ation|33604|885|Main |Springfield|79303|902|Smith |Brownsville|79310|1999|1|24.74|40.07|0.00|80.30|85.11|5905.07|2000|1
+ableoughtcallyationcallyought|bar|75709|509|Fourth Seventh|Unionville|81711|199|Jefferson |Lebanon|62898|1999|1|85.23|119.32|2010.09|6.25|9.50|0.00|2000|1
+ableoughtcallyationcallyought|eing|23604|420|7th 7th|Pine Grove|64593|798|5th Center|Mount Vernon|19127|1999|1|68.57|126.85|0.00|52.02|61.38|0.00|2000|1
+ableoughtcallyationcallyought|n st|68048|79|Spring Davis|Brownsville|49310|593|Miller Walnut|Union Hill|87746|1999|1|23.28|41.90|0.00|33.87|65.70|0.00|2000|1
+ableoughtprieseation|able|44136|295|Main 1st|Lakeside|89532|631|First Jefferson|Sunnyside|51952|1999|1|11.65|20.15|0.00|39.59|60.17|0.00|2000|1
+ableoughtprieseation|ation|35709|160|Seventh |Oak Ridge|58371|315|Maple West|Willis|36788|1999|1|83.66|132.18|0.00|53.94|81.98|0.00|2000|1
+ableoughtprieseation|bar|43604|544|10th River|Lebanon|52898|911|First |Plainview|83683|1999|1|8.80|14.08|37.25|95.36|103.94|0.00|2000|1
+ableoughtprieseation|bar|34136|279|7th |Mount Vernon|49127|242|Hickory 3rd|Shiloh|59275|1999|1|11.18|16.88|0.00|85.54|153.97|0.00|2000|1
+ableoughtprieseation|bar|75709|161|Spruce |Riverside|59231|569|Second 5th|Mount Pleasant|52739|1999|1|22.38|42.29|0.00|91.68|147.60|1091.50|2000|1
+ableoughtprieseation|bar|43451|NULL|Forest |NULL|NULL|460|Locust Chestnut|Pleasant Valley|42477|1999|1|23.40|40.01|0.00|23.40|35.33|0.00|2000|1
+ableoughtprieseation|bar|43451|880|Meadow Fifth|Newtown|31749|492|Ridge 3rd|Greenfield|85038|1999|1|82.02|135.33|0.00|23.40|35.33|0.00|2000|1
+ableoughtprieseation|cally|78370|NULL|8th |Greenville|NULL|317|Laurel |Enterprise|51757|1999|1|81.72|92.34|0.00|32.96|37.24|0.00|2000|1
+ableoughtprieseation|cally|78370|NULL|8th |Greenville|NULL|317|Laurel |Enterprise|51757|1999|1|81.72|92.34|0.00|48.52|93.15|0.00|2000|1
+ableoughtprieseation|eing|23451|823|North |Sulphur Springs|78354|436|Oak 1st|Hamilton|42808|1999|1|65.89|104.76|652.84|47.39|53.55|0.00|2000|1
+ableoughtprieseation|eing|39231|888|Fourth |Mount Vernon|69127|279|Wilson Hill|Deerfield|59840|1999|1|83.08|150.37|0.00|43.78|84.93|0.00|2000|1
+ableoughtprieseation|eing|39231|888|Fourth |Mount Vernon|69127|279|Wilson Hill|Deerfield|59840|1999|1|83.08|150.37|0.00|70.58|90.34|0.00|2000|1
+ableoughtprieseation|ese|28828|836|Sunset |Rosebud|72244|348|13th Forest|Oak Grove|38370|1999|1|13.76|26.69|0.00|84.42|86.10|0.00|2000|1
+ableoughtprieseation|ese|28828|879|Main Ridge|Oak Ridge|98371|430|3rd Jefferson|Centerville|10059|1999|1|35.87|43.76|0.00|84.42|86.10|0.00|2000|1
+ableoughtprieseation|ese|28828|365|Dogwood View|Spring Valley|56060|639|Wilson |Five Forks|72293|1999|1|74.87|130.27|0.00|84.42|86.10|0.00|2000|1
+antiantiantioughtpri|anti|35709|394|Fifth |Newport|61521|630|Fifth |Bunker Hill|60150|1999|1|42.34|67.32|0.00|9.31|13.59|0.00|2000|1
+antiantiantioughtpri|anti|35709|NULL|NULL|Lakeview|NULL|554|Hill |West Liberty|44752|1999|1|92.50|100.82|0.00|9.31|13.59|0.00|2000|1
+antiantiantioughtpri|ation|45281|234|Cherry |Woodland|34854|107|Ridge |Spring Valley|96060|1999|1|96.46|124.43|0.00|11.13|21.14|0.00|2000|1
+antiantiantioughtpri|bar|75709|351|Railroad Pine|Jenkins|57292|514|Main Second|Union Hill|77746|1999|1|17.68|18.03|0.00|37.29|42.51|0.00|2000|1
+antiantiantioughtpri|bar|38828|670|13th |Rolling Hills|57272|447|Miller |Glenwood|63511|1999|1|53.56|58.38|0.00|96.00|110.40|0.00|2000|1
+antiantiantioughtpri|bar|38828|717|West |Liberty|43451|936|Adams |Salem|28048|1999|1|85.93|118.58|0.00|96.00|110.40|0.00|2000|1
+antiantiantioughtpri|ese|35281|764|2nd Second|Midway|71904|431|1st Spring|Saint James|25799|1999|1|10.79|13.27|0.00|69.47|136.16|0.00|2000|1
+antibarationoughtn st|able|65709|996|Williams |Bunker Hill|60150|349|1st Church|Unionville|91711|1999|1|28.66|41.27|0.00|44.42|71.96|0.00|2000|1
+antibarationoughtn st|able|49843|479|Spring |Clinton|68222|186|Railroad 1st|Antioch|28605|1999|1|42.60|54.10|0.00|10.68|17.83|0.00|2000|1
+antibarationoughtn st|ation|31904|947|Locust Church|Brunswick|84642|947|Church |Granite|26284|1999|1|20.09|37.36|0.00|25.06|49.11|330.04|2000|1
+antibarationoughtn st|bar|38828|361|Willow |Oak Grove|48370|115|West Davis|Lebanon|72898|1999|1|3.41|5.55|0.00|6.23|6.66|0.00|2000|1
+antibarationoughtn st|bar|38828|236|Woodland Lake|Spring Hill|76787|947|Spruce Davis|Mount Zion|78054|1999|1|18.85|24.88|0.00|6.23|6.66|0.00|2000|1
+antibarationoughtn st|bar|25281|503|13th Park|Sheffield|56896|599|2nd Railroad|Greenfield|25038|1999|1|67.82|123.43|0.00|5.82|10.24|0.00|2000|1
+antibarationoughtn st|cally|36098|10|Pine Williams|Highland|99454|664|River |Page|20296|1999|1|8.14|12.12|137.62|8.33|15.32|0.00|2000|1
+antibarationoughtn st|cally|36098|733|Elm |Hillcrest|13003|301|West |Five Forks|82293|1999|1|67.91|118.84|0.00|8.33|15.32|0.00|2000|1
+antibarationoughtn st|ese|56098|603|Madison Walnut|White Oak|66668|70|Seventh |Antioch|58605|1999|1|6.73|11.30|0.00|41.17|41.17|0.00|2000|1
+antibarationoughtn st|pri|51904|635|Oak |Fairfield|76192|496|Dogwood |Shiloh|59275|1999|1|21.59|37.56|0.00|51.88|68.48|0.00|2000|1
+antibarprin steseought|anti|35281|903|Sunset |Sunnyside|31952|60|2nd |Edgewood|60069|1999|1|12.02|20.91|0.00|86.06|99.82|0.00|2000|1
+antibarprin steseought|bar|43451|572|Maple |Farmington|69145|917|Park |Plainview|83683|1999|1|79.83|136.50|0.00|99.00|117.81|0.00|2000|1
+antibarprin steseought|eing|76098|350|Cedar Oak|Marion|20399|334|Spring |Ashland|14244|1999|1|35.11|43.18|0.00|20.13|37.84|0.00|2000|1
+antibarprin steseought|eing|68828|87|Chestnut |Sunnyside|61952|45|2nd |Fayette|76517|1999|1|84.52|102.26|0.00|37.53|39.40|0.00|2000|1
+antibarprin steseought|ese|39843|432|Lincoln Poplar|Arcola|61654|837|Church |Union Hill|77746|1999|1|29.99|53.08|0.00|49.05|89.27|5181.44|2000|1
+antibarprin steseought|ese|35281|702|NULL|NULL|NULL|8|Cedar |Newport|02121|1999|1|79.24|82.40|0.00|78.95|131.05|0.00|2000|1
+antibarprin steseought|ese|35281|41|Forest East|Concord|24107|169|Sunset 13th|Riverside|69231|1999|1|81.97|154.92|0.00|78.95|131.05|0.00|2000|1
+antibarprin steseought|ought|35709|683|2nd Mill|Harmony|45804|331|12th Park|Florence|63394|1999|1|38.16|41.21|672.88|33.37|56.72|256.77|2000|1
+antioughtn stableeing|anti|35281|906|5th |Farmington|79145|834|Broadway |Highland Park|36534|1999|1|1.88|2.70|0.00|89.62|165.79|0.00|2000|1
+antioughtn stableeing|cally|58828|378|View |Oak Grove|NULL|85|Oak Madison|Wilson|66971|1999|1|39.31|75.47|0.00|28.27|46.36|0.00|2000|1
+antioughtn stableeing|eing|29431|861|Chestnut Valley|Wilson|46971|310|Elm Lakeview|Summit|40499|1999|1|7.62|10.05|0.00|5.55|10.48|0.00|2000|1
+antioughtn stableeing|eing|68828|816|Pine |Lakeview|78579|511|Locust |Nottingham|74074|1999|1|31.25|59.37|0.00|75.05|91.56|0.00|2000|1
+antioughtn stableeing|ese|49431|585|Davis Sunset|Jackson|39583|60|Central Locust|Crossroads|70534|1999|1|18.33|30.06|0.00|25.67|49.28|0.00|2000|1
+antioughtn stableeing|ese|53604|317|Poplar |Freeman|02897|922|Center Walnut|Crystal|75258|1999|1|27.89|27.89|0.00|57.33|63.06|0.00|2000|1
+antioughtn stableeing|ese|49431|488|First Valley|Greenfield|15038|573|Mill Main|Springfield|19303|1999|1|66.45|126.91|0.00|25.67|49.28|0.00|2000|1
+antioughtn stableeing|n st|38370|551|Meadow Ash|Summit|70499|349|Poplar |Oakland|69843|1999|1|17.09|28.36|0.00|2.41|2.67|0.00|2000|1
+antioughtn stableeing|n st|32739|745|3rd Ash|Hillcrest|63003|509|8th |Bridgeport|85817|1999|1|68.07|109.59|0.00|41.34|79.78|0.00|2000|1
+antioughtn stableeing|ought|34136|956|Sixth |Antioch|28605|968|First 6th|Crossroads|60534|1999|1|34.00|58.48|0.00|2.85|4.04|0.00|2000|1
+antioughtn stableeing|ought|34136|750|Pine |Kingston|44975|311|Laurel |Jackson|49583|1999|1|93.34|154.01|1533.84|2.85|4.04|0.00|2000|1
+antioughtn stableeing|pri|51904|833|3rd Church|Midway|41904|174|Hillcrest |Pomona|34153|1999|1|81.22|121.01|3652.50|72.94|97.73|0.00|2000|1
+ationationeingeseationought|able|45709|53|View |Mountain View|84466|228|Second 12th|Enterprise|51757|1999|1|72.73|98.91|0.00|64.17|92.40|0.00|2000|1
+ationationeingeseationought|able|44136|672|Elm Main|Arlington|66557|665|9th Ninth|Summit|30499|1999|1|77.82|133.07|0.00|1.40|1.77|4.23|2000|1
+ationationeingeseationought|able|44136|672|Elm Main|Arlington|66557|665|9th Ninth|Summit|30499|1999|1|77.82|133.07|0.00|6.85|10.20|0.00|2000|1
+ationationeingeseationought|able|44136|191|College |Glendale|23951|23|Meadow |Plainview|13683|1999|1|91.19|104.86|0.00|1.40|1.77|4.23|2000|1
+ationationeingeseationought|able|44136|191|College |Glendale|23951|23|Meadow |Plainview|13683|1999|1|91.19|104.86|0.00|6.85|10.20|0.00|2000|1
+ationationeingeseationought|able|72477|238|14th |Forest Hills|59237|236|Hillcrest 10th|Providence|26614|1999|1|99.57|119.48|0.00|84.99|102.83|0.00|2000|1
+ationationeingeseationought|ation|29231|413|5th |Lebanon|42898|989|Hickory |Oak Ridge|78371|1999|1|89.10|123.84|0.00|56.71|106.04|0.00|2000|1
+ationationeingeseationought|cally|48048|560|Fourth |Concord|24107|345|Pine |Forest Hills|39237|1999|1|13.10|25.28|216.25|15.83|17.57|0.00|2000|1
+ationationeingeseationought|eing|31904|501|1st Walnut|Highland Park|76534|475|Lake 11th|Salem|98048|1999|1|81.79|148.03|0.00|43.75|48.12|0.00|2000|1
+ationationeingeseationought|ese|49431|23|Jefferson Walnut|Bethel|65281|494|Dogwood |Sulphur Springs|88354|1999|1|27.06|44.91|0.00|37.41|63.97|0.00|2000|1
+ationationeingeseationought|n st|29843|992|Green Williams|Spring Hill|56787|481|Eigth 6th|Maple Grove|38252|1999|1|83.59|143.77|0.00|17.71|26.91|0.00|2000|1
+ationbarcallybarpri|able|29431|187|Elm |Pine Grove|94593|171|Elm Birch|Oakwood|30169|1999|1|43.63|86.82|0.00|3.97|5.71|0.00|2000|1
+ationbarcallybarpri|able|45709|98|Adams |Fairview|06309|613|Center |Bridgeport|25817|1999|1|83.45|112.65|0.00|20.89|24.02|0.00|2000|1
+ationbarcallybarpri|ation|53451|938|Green Jackson|NULL|NULL|20|Elevnth College|Sulphur Springs|28354|1999|1|18.01|35.11|0.00|74.91|99.63|0.00|2000|1
+ationbarcallybarpri|bar|25281|321|Hill Johnson|Georgetown|87057|820|Eigth Tenth|Centerville|20059|1999|1|4.83|8.16|20.48|24.23|40.46|0.00|2000|1
+ationbarcallybarpri|ought|33451|816|First 11th|Riverside|39231|212|Elm |Lakewood|18877|1999|1|68.01|134.65|0.00|98.15|175.68|165.26|2000|1
+ationcallyoughtablepri|able|65709|NULL|Cherry 9th|NULL|38252|38|Forest Laurel|Fairview|55709|1999|1|34.18|62.20|164.20|83.03|132.84|0.00|2000|1
+ationcallyoughtablepri|able|38721|963|North View|Springfield|89303|470|Dogwood Highland|Crossroads|50534|1999|1|51.36|88.85|742.03|48.03|70.60|0.00|2000|1
+ationcallyoughtablepri|able|59843|646|3rd 14th|Florence|33394|704|2nd |Oakwood|90169|1999|1|63.23|125.82|0.00|21.13|28.52|0.00|2000|1
+ationcallyoughtablepri|able|55281|NULL|NULL|Clifton|28014|848|Spring |Woodland|64854|1999|1|79.55|98.64|505.02|34.19|55.38|0.00|2000|1
+ationcallyoughtablepri|able|38721|631|Lakeview |Lakewood|68877|337|Spring |Oak Ridge|88371|1999|1|93.45|167.27|0.00|48.03|70.60|0.00|2000|1
+ationcallyoughtablepri|anti|39843|632|Elm Spring|Avoca|80540|612|Center |Northwood|54104|1999|1|61.24|83.89|0.00|43.72|77.38|0.00|2000|1
+ationcallyoughtablepri|anti|39231|240|11th |Midway|71904|621|7th Franklin|Ashland|74244|1999|1|86.76|147.49|0.00|90.23|162.41|7449.02|2000|1
+ationcallyoughtablepri|ation|33604|911|Fourth Davis|Mount Pleasant|32739|303|Railroad 5th|Fairview|35709|1999|1|13.48|26.42|0.00|95.24|164.76|0.00|2000|1
+ationcallyoughtablepri|bar|44136|791|Railroad |Newtown|31749|432|Lakeview |White Oak|96668|1999|1|28.47|33.02|0.00|9.90|18.81|0.00|2000|1
+ationcallyoughtablepri|bar|41904|812|Franklin |Pleasant Valley|52477|887|Sycamore View|Mount Pleasant|62739|1999|1|71.13|100.29|0.00|73.67|147.34|0.00|2000|1
+ationcallyoughtablepri|bar|41904|697|First |Union|38721|709|Wilson |Centerville|70059|1999|1|92.35|141.29|70.50|73.67|147.34|0.00|2000|1
+ationcallyoughtablepri|cally|72812|389|8th |Maple Grove|48252|462|View Hickory|Newport|11521|1999|1|35.92|51.36|0.00|48.80|69.78|0.00|2000|1
+ationcallyoughtablepri|eing|40059|395|Meadow Jefferson|Stringtown|50162|132|Elm |Concord|64107|1999|1|50.76|74.10|1361.42|41.08|42.72|0.00|2000|1
+ationcallyoughtablepri|ese|29231|605|5th |Plainview|13683|536|Maple |Carter|70919|1999|1|56.37|79.48|0.00|21.40|33.81|398.36|2000|1
+ationcallyoughtablepri|ese|32477|162|Maple Meadow|Spring Hill|66787|95|Forest Fifth|Sulphur Springs|58354|1999|1|78.45|156.90|0.00|85.43|130.70|0.00|2000|1
+ationn stesebaranti|able|41904|639|East Oak|Walnut Grove|47752|778|Cedar Lincoln|Midway|21904|1999|1|75.42|143.29|601.31|5.27|9.43|0.00|2000|1
+ationn stesebaranti|ation|50059|350|Miller |Georgetown|97057|519|Ash |Woodville|44289|1999|1|85.68|89.10|0.00|61.10|62.32|0.00|2000|1
+ationn stesebaranti|bar|38828|744|Sunset |Lincoln|31289|633|Pine 2nd|Red Hill|84338|1999|1|8.68|15.88|0.00|63.99|110.70|1507.49|2000|1
+ationn stesebaranti|bar|38828|644|Lincoln Dogwood|Hopewell|70587|374|Washington |Mount Olive|58059|1999|1|13.00|18.98|0.00|63.99|110.70|1507.49|2000|1
+ationn stesebaranti|bar|38828|842|Walnut Hill|Bridgeport|15817|683|NULL|Five Points|56098|1999|1|32.90|36.51|0.00|63.99|110.70|1507.49|2000|1
+ationn stesebaranti|eing|39231|470|2nd Maple|Greenwood|28828|450|Park |Fairfield|46192|1999|1|15.55|28.92|0.00|26.53|40.59|0.00|2000|1
+ationn stesebaranti|eing|39231|300|Jefferson |Ruth|50309|482|Park |Glendale|63951|1999|1|27.66|54.49|0.00|26.53|40.59|0.00|2000|1
+ationn stesebaranti|eing|72812|901|9th |Five Points|66098|268|Mill |Sunnyside|71952|1999|1|88.44|142.38|489.51|17.30|30.96|0.00|2000|1
+ationn stesebaranti|eing|48370|119|5th |NULL|NULL|207|Willow Railroad|Salem|28048|1999|1|88.87|98.64|0.00|3.26|4.40|0.00|2000|1
+ationn stesebaranti|eing|48370|119|5th |NULL|NULL|207|Willow Railroad|Salem|28048|1999|1|88.87|98.64|0.00|4.63|8.56|0.00|2000|1
+ationn stesebaranti|ese|45281|239|First |Mount Vernon|29127|541|Sunset 1st|Youngstown|60001|1999|1|72.43|126.75|0.00|15.84|24.23|0.00|2000|1
+ationn stesebaranti|ese|56098|433|Woodland |Ashland|54244|340|7th Ash|Florence|93394|1999|1|81.23|94.22|0.00|97.20|192.45|0.00|2000|1
+ationn stesebaranti|n st|49231|329|Wilson |Enterprise|81757|103|Lincoln |Bolton|85957|1999|1|10.04|14.45|0.00|64.54|97.45|0.00|2000|1
+ationn stesebaranti|n st|49231|329|Wilson |Enterprise|81757|103|Lincoln |Bolton|85957|1999|1|10.04|14.45|0.00|76.60|94.21|0.00|2000|1
+barableesecallyable|able|45709|91|Washington |Pine Grove|74593|592|Ridge 4th|Concord|34107|1999|1|33.84|50.76|0.00|13.53|27.06|0.00|2000|1
+barableesecallyable|able|45709|533|Lake Adams|Woodland|74854|489|Third |Bridgeport|75817|1999|1|84.82|109.41|0.00|13.53|27.06|0.00|2000|1
+barableesecallyable|ation|29231|NULL|Main |Brownsville|NULL|556|Broadway Main|Brownsville|69310|1999|1|45.58|57.43|0.00|67.54|123.59|1050.87|2000|1
+barableesecallyable|ation|45281|NULL|NULL|Spring Hill|NULL|857|Dogwood Lakeview|Florence|53394|1999|1|85.21|97.99|0.00|9.10|13.83|0.00|2000|1
+barableesecallyable|bar|34136|829|Church Dogwood|Mount Pleasant|62739|73|Washington Davis|Shady Grove|52812|1999|1|40.80|75.48|0.00|93.36|100.82|924.66|2000|1
+barableesecallyable|bar|75709|714|1st View|Bridgeport|15817|271|3rd Adams|Five Forks|02893|1999|1|49.01|61.75|0.00|96.20|147.18|0.00|2000|1
+barableesecallyable|bar|75709|86|Elevnth |Concord|44107|420|West Sunset|Brownsville|89310|1999|1|88.70|157.88|0.00|96.20|147.18|0.00|2000|1
+barableesecallyable|cally|46098|671|3rd |Union|88721|95|Spruce Lee|Mount Vernon|69127|1999|1|63.92|87.57|0.00|77.11|84.04|0.00|2000|1
+barableesecallyable|cally|39843|214|Fifth |Jackson|29583|371|Hill Miller|Liberty|63451|1999|1|97.12|119.45|3637.96|93.55|123.48|0.00|2000|1
+barableesecallyable|ese|49431|732|Smith Dogwood|Greenwood|78828|602|View |Wilson|66971|1999|1|9.70|14.16|0.00|12.67|13.30|0.00|2000|1
+barableesecallyable|ese|49431|732|Smith Dogwood|Greenwood|78828|602|View |Wilson|66971|1999|1|9.70|14.16|0.00|57.64|69.74|0.00|2000|1
+barableesecallyable|ese|49843|709|Railroad College|Maple Grove|08852|117|Park Oak|NULL|NULL|1999|1|83.72|164.09|0.00|1.60|1.84|0.00|2000|1
+barableesecallyable|ese|49843|709|Railroad College|Maple Grove|08852|117|Park Oak|NULL|NULL|1999|1|83.72|164.09|0.00|33.69|38.74|0.00|2000|1
+barableesecallyable|n st|32739|268|Cherry Johnson|Woodland|44854|164|10th |Pleasant Valley|92477|1999|1|3.42|5.30|0.00|10.00|11.50|0.00|2000|1
+barableesecallyable|ought|53451|624|First |Five Forks|52293|NULL|NULL|NULL|58828|1999|1|70.98|131.31|0.00|91.83|117.54|0.00|2000|1
+barableeseoughtbarought|able|29431|943|8th 2nd|Rutland|68375|787|Center Washington|Green Acres|77683|1999|1|43.43|66.88|0.00|26.36|41.38|0.00|2000|1
+barableeseoughtbarought|able|29431|943|8th 2nd|Rutland|68375|787|Center Washington|Green Acres|77683|1999|1|43.43|66.88|0.00|79.88|128.60|0.00|2000|1
+barableeseoughtbarought|able|45709|86|Spruce First|Summit|80499|271|River |Aberdeen|17995|1999|1|51.41|86.36|222.72|63.08|78.85|0.00|2000|1
+barableeseoughtbarought|eing|38721|690|Oak Ninth|Midway|31904|215|Lake Broadway|Sulphur Springs|38354|1999|1|3.71|7.27|0.00|15.25|25.92|0.00|2000|1
+barableeseoughtbarought|eing|55709|757|Church |Marion|40399|802|5th Jackson|Arlington|46557|1999|1|95.70|161.73|0.00|19.62|37.47|0.00|2000|1
+barableeseoughtbarought|pri|34136|740|Oak Spruce|Florence|43394|381|West |Durham|49094|1999|1|77.88|154.20|0.00|63.96|127.92|0.00|2000|1
+bareingantiationpri|anti|32812|486|Oak |Stringtown|40162|520|Oak |Webb|60899|1999|1|22.81|33.98|0.00|34.83|61.64|0.00|2000|1
+bareingantiationpri|bar|43451|393|6th North|Texas|33342|910|Second |Rocky Point|51209|1999|1|27.03|38.92|0.00|10.46|17.46|521.06|2000|1
+bareingantiationpri|bar|43451|393|6th North|Texas|33342|910|Second |Rocky Point|51209|1999|1|27.03|38.92|0.00|48.98|74.44|0.00|2000|1
+bareingantiationpri|bar|43451|892|3rd |Woodland|64854|NULL|Center |Pleasant Grove|NULL|1999|1|49.25|72.89|2578.03|10.46|17.46|521.06|2000|1
+bareingantiationpri|bar|43451|892|3rd |Woodland|64854|NULL|Center |Pleasant Grove|NULL|1999|1|49.25|72.89|2578.03|48.98|74.44|0.00|2000|1
+bareingantiationpri|bar|38828|623|Sunset Dogwood|Spring Valley|76060|12|Park 7th|Marion|50399|1999|1|58.37|65.37|0.00|11.32|21.62|0.00|2000|1
+bareingantiationpri|bar|29843|761|Railroad Birch|Antioch|68605|882|Hill |Harmony|55804|1999|1|91.63|142.02|0.00|59.55|108.97|0.00|2000|1
+bareingantiationpri|bar|29843|761|Railroad Birch|Antioch|68605|882|Hill |Harmony|55804|1999|1|91.63|142.02|0.00|99.93|150.89|0.00|2000|1
+bareingantiationpri|cally|58828|132|Sunset Park|Springfield|79303|806|NULL|NULL|69391|1999|1|5.77|9.34|0.00|43.13|83.67|1416.44|2000|1
+bareingantiationpri|cally|29431|269|10th Cherry|Whitesville|95903|348|14th View|Pleasant Hill|73604|1999|1|38.02|50.94|324.38|78.58|112.36|0.00|2000|1
+bareingantiationpri|cally|29431|775|Fifth |Oakdale|79584|85|Jackson Oak|Maple Grove|38252|1999|1|80.09|100.11|0.00|78.58|112.36|0.00|2000|1
+bareingantiationpri|ought|34136|687|Madison |Midway|51904|170|Walnut Spruce|Mount Vernon|79127|1999|1|62.47|103.07|8.07|57.39|98.71|135.01|2000|1
+bareingantiationpri|ought|34136|687|Madison |Midway|51904|170|Walnut Spruce|Mount Vernon|79127|1999|1|62.47|103.07|8.07|96.16|180.78|0.00|2000|1
+baroughtantibarbarable|able|44136|831|3rd |Hamilton|42808|153|Highland Lakeview|Greenville|51387|1999|1|56.00|58.80|0.00|64.78|91.33|0.00|2000|1
+baroughtantibarbarable|ation|31904|471|Church 3rd|Clifton|38014|886|1st Hillcrest|Jerome|79920|1999|1|4.21|7.62|151.93|67.10|108.70|0.00|2000|1
+baroughtantibarbarable|bar|43451|258|Lake |Hamilton|22808|320|Cedar 3rd|Lakeside|39532|1999|1|36.21|40.55|0.00|88.34|175.79|0.00|2000|1
+baroughtantibarbarable|bar|53451|95|First |Stanton|25038|NULL|NULL|NULL|NULL|1999|1|50.08|82.63|0.00|58.50|115.83|0.00|2000|1
+baroughtantibarbarable|bar|53451|471|Smith |Oakland|29843|883|Central Maple|Friendship|64536|1999|1|93.07|137.74|0.00|58.50|115.83|0.00|2000|1
+baroughtantibarbarable|eing|39231|915|Oak |Woodlawn|84098|244|Maple |Riverdale|89391|1999|1|11.58|20.61|171.40|26.89|47.86|0.00|2000|1
+baroughtantibarbarable|eing|39231|915|Oak |Woodlawn|84098|244|Maple |Riverdale|89391|1999|1|11.58|20.61|171.40|47.57|61.84|0.00|2000|1
+baroughtantibarbarable|eing|55709|22|Spring Cedar|Providence|86614|567|Oak 7th|Unionville|31711|1999|1|59.83|74.78|3176.64|30.03|51.35|213.24|2000|1
+baroughtantibarbarable|eing|55709|125|Dogwood North|Harmony|75804|634|1st |Spring Hill|76787|1999|1|70.53|82.52|0.00|30.03|51.35|213.24|2000|1
+baroughtantibarbarable|ought|21904|535|Lakeview Lincoln|Friendship|44536|123|14th Broadway|Pleasant Valley|72477|1999|1|19.70|20.88|0.00|86.97|89.57|0.00|2000|1
+baroughtantibarbarable|ought|32812|117|Mill Davis|Spring Hill|46787|615|Third |Cedar Grove|60411|1999|1|38.96|40.51|0.00|25.79|51.32|194.83|2000|1
+baroughtantibarbarable|ought|28721|426|Fifteenth |Evans|72284|625|5th Maple|Fairview|95709|1999|1|84.81|133.15|1884.84|93.16|173.27|0.00|2000|1
+baroughtprioughtpri|anti|35709|80|2nd Lake|Summit|50499|568|West |Lakeside|59532|1999|1|48.42|91.51|0.00|89.82|132.93|0.00|2000|1
+baroughtprioughtpri|anti|35709|71|Mill |Oak Ridge|78371|811|Willow |Crossroads|50534|1999|1|94.16|155.36|0.00|89.82|132.93|0.00|2000|1
+baroughtprioughtpri|bar|35709|224|NULL|Highland|79454|727|Church Railroad|Pine Grove|44593|1999|1|62.12|62.74|0.00|71.63|139.67|0.00|2000|1
+baroughtprioughtpri|bar|75709|118|1st Central|Greenfield|95038|368|Thirteenth |Summit|80499|1999|1|77.64|100.15|0.00|61.80|123.60|0.00|2000|1
+baroughtprioughtpri|bar|75709|118|1st Central|Greenfield|95038|368|Thirteenth |Summit|80499|1999|1|77.64|100.15|0.00|73.07|101.56|0.00|2000|1
+baroughtprioughtpri|ese|75709|928|Smith 3rd|Pleasant Valley|52477|820|Main 8th|Welcome|66386|1999|1|26.68|32.01|0.00|49.96|84.43|4099.16|2000|1
+baroughtprioughtpri|ese|75709|928|Smith 3rd|Pleasant Valley|52477|820|Main 8th|Welcome|66386|1999|1|26.68|32.01|0.00|77.59|122.59|0.00|2000|1
+baroughtprioughtpri|ese|56098|51|3rd |Whitesville|15903|629|Hillcrest |Georgetown|67057|1999|1|39.60|78.80|0.00|61.97|73.12|0.00|2000|1
+baroughtprioughtpri|ese|56098|51|3rd |Whitesville|15903|629|Hillcrest |Georgetown|67057|1999|1|39.60|78.80|0.00|66.34|122.72|0.00|2000|1
+baroughtprioughtpri|n st|52739|85|Elm |Greenville|81387|886|River |Spring Hill|26787|1999|1|35.91|46.32|0.00|12.22|20.04|0.00|2000|1
+callyationablebarbarable|able|49431|298|Cherry 13th|Stringtown|70162|64|Franklin Third|NULL|NULL|1999|1|7.26|9.65|0.00|9.69|12.40|3.56|2000|1
+callyationablebarbarable|anti|35709|401|Valley 2nd|Jamestown|56867|175|Johnson |Lakewood|58877|1999|1|30.08|31.88|0.00|21.14|31.92|0.00|2000|1
+callyationablebarbarable|eing|48370|814|Sunset |Woodville|34289|134|Adams Davis|Springdale|68883|1999|1|87.22|115.13|0.00|8.91|9.71|2.20|2000|1
+callyationablebarbarable|ese|58721|570|11th Lake|Silver Springs|24843|96|Second Fifth|Clifton|78014|1999|1|14.54|19.33|0.00|1.37|2.54|0.00|2000|1
+callyationablebarbarable|ought|52477|165|15th Church|Summit|40499|137|1st |Mount Olive|78059|1999|1|20.33|31.51|0.00|10.51|16.29|0.00|2000|1
+callyn stn stationn stought|able|41904|31|Sycamore |Liberty|53451|293|Hill |Forest Hills|29237|1999|1|51.92|63.34|0.00|95.51|185.28|660.82|2000|1
+callyn stn stationn stought|able|41904|636|East 8th|Antioch|28605|183|Locust |Mount Zion|98054|1999|1|82.24|157.90|0.00|95.51|185.28|660.82|2000|1
+callyn stn stationn stought|able|45709|662|Ash |Harmony|85804|419|Oak |Greenfield|65038|1999|1|92.61|99.09|0.00|1.00|1.83|40.70|2000|1
+callyn stn stationn stought|able|45709|662|Ash |Harmony|85804|419|Oak |Greenfield|65038|1999|1|92.61|99.09|0.00|72.14|95.22|0.00|2000|1
+callyn stn stationn stought|ation|53451|589|Maple 1st|Clifton|88014|316|13th Maple|Oak Hill|37838|1999|1|33.77|53.69|0.00|17.31|21.98|0.00|2000|1
+callyn stn stationn stought|bar|36098|535|View 5th|Ashland|24244|335|NULL|NULL|46871|1999|1|4.75|5.55|283.46|64.01|90.25|0.00|2000|1
+callyn stn stationn stought|bar|36098|535|View 5th|Ashland|24244|335|NULL|NULL|46871|1999|1|4.75|5.55|283.46|93.37|120.44|0.00|2000|1
+callyn stn stationn stought|bar|35281|NULL|Elm |NULL|NULL|214|Main |Forest Hills|69237|1999|1|67.82|67.82|0.00|65.52|89.10|0.00|2000|1
+callyn stn stationn stought|cally|34136|NULL|NULL|NULL|98370|64|15th |Clinton|48222|1999|1|3.47|4.02|0.00|42.66|65.26|0.00|2000|1
+callyn stn stationn stought|cally|34136|NULL|NULL|NULL|98370|64|15th |Clinton|48222|1999|1|3.47|4.02|0.00|65.19|85.39|167.14|2000|1
+callyn stn stationn stought|cally|29431|613|Ridge 7th|Greenville|71387|477|8th |Guthrie|11423|1999|1|21.74|41.74|0.00|64.96|121.47|0.00|2000|1
+callyn stn stationn stought|eing|49843|904|Valley |Woodville|54289|883|Chestnut Ridge|Union|68721|1999|1|81.98|141.00|0.00|28.11|30.07|0.00|2000|1
+callyoughtprin stese|bar|33604|488|Railroad Green|Lakeview|38579|897|West |Hamilton|92808|1999|1|43.03|43.03|804.45|95.35|108.69|16.42|2000|1
+callyoughtprin stese|bar|34136|507|Tenth |Friendship|24536|866|Sunset 2nd|Midway|51904|1999|1|98.73|186.59|0.00|3.54|4.35|0.00|2000|1
+callyoughtprin stese|cally|22477|597|Railroad 4th|Highland|59454|876|Main |Newport|51521|1999|1|84.34|95.30|0.00|84.20|129.66|0.00|2000|1
+callyoughtprin stese|eing|48370|497|Sixth |Ashland|54244|762|3rd Franklin|Bethel|65281|1999|1|4.04|6.78|0.00|15.58|15.89|0.00|2000|1
+callyoughtprin stese|eing|55709|695|Willow |Union|58721|164|Sunset Jackson|Lebanon|62898|1999|1|17.92|24.19|0.00|78.90|101.78|2143.44|2000|1
+callyoughtprin stese|pri|70059|833|1st |Woodland|74854|466|Highland |Salem|28048|1999|1|7.42|12.61|0.00|72.65|127.86|0.00|2000|1
+callypriantiantiation|able|65709|671|8th Spruce|Friendship|84536|877|College Willow|Philadelphia|45591|1999|1|24.93|40.38|210.20|3.11|3.57|0.00|2000|1
+callypriantiantiation|bar|25281|388|South |Five Forks|62293|608|Johnson Jackson|Franklin|59101|1999|1|28.49|41.88|0.00|70.94|83.70|0.00|2000|1
+callypriantiantiation|bar|25281|132|Park Pine|Oakdale|99584|827|Lakeview |Sunnyside|91952|1999|1|86.75|90.22|0.00|70.94|83.70|0.00|2000|1
+callypriantiantiation|cally|20059|228|Pine 1st|Maple Grove|68252|861|Main Second|Empire|64145|1999|1|18.98|25.43|0.00|78.88|107.27|0.00|2000|1
+callypriantiantiation|cally|20059|228|Pine 1st|Maple Grove|68252|861|Main Second|Empire|64145|1999|1|18.98|25.43|0.00|96.32|188.78|0.00|2000|1
+callypriantiantiation|n st|32812|NULL|NULL|NULL|21711|922|Smith |Johnsonville|57745|1999|1|45.37|48.99|0.00|35.90|40.20|620.76|2000|1
+callypriantiantiation|n st|32812|107|Oak |Bridgeport|75817|513|West Madison|Edgewood|60069|1999|1|55.29|88.46|458.78|35.90|40.20|620.76|2000|1
+callypriationesen st|bar|43604|81|Ridge |Tremont|79515|331|Second North|Lucas|94554|1999|1|45.72|63.55|0.00|21.63|24.65|0.00|2000|1
+callypriationesen st|bar|68370|426|Broadway |Leesburg|65605|861|Chestnut Valley|Wilson|46971|1999|1|72.91|137.79|0.00|99.39|160.01|0.00|2000|1
+callypriationesen st|ese|32477|916|9th |Oak Ridge|38371|799|Hill |Oakland|59843|1999|1|59.47|90.39|0.00|14.31|26.04|0.00|2000|1
+callypriationesen st|ese|32477|916|9th |Oak Ridge|38371|799|Hill |Oakland|59843|1999|1|59.47|90.39|0.00|44.31|87.73|0.00|2000|1
+callypriationesen st|ese|39843|NULL|NULL|Portland|NULL|900|9th Park|Belmont|30191|1999|1|95.80|99.63|302.45|71.27|71.27|0.00|2000|1
+callypricallyn steseought|able|28370|976|Valley |Jerome|49920|904|Hill |Glendale|63951|1999|1|26.63|48.99|0.00|61.12|102.68|0.00|2000|1
+callypricallyn steseought|bar|33604|691|Seventh Lakeview|Newtown|41749|978|Lincoln Lee|Red Oak|55018|1999|1|30.43|55.07|0.00|19.38|35.65|30.72|2000|1
+callypricallyn steseought|bar|33604|691|Seventh Lakeview|Newtown|41749|978|Lincoln Lee|Red Oak|55018|1999|1|30.43|55.07|0.00|49.07|50.54|681.78|2000|1
+callypricallyn steseought|bar|33604|835|Smith |Unionville|02311|83|South 8th|Spring Valley|46060|1999|1|79.25|148.99|0.00|19.38|35.65|30.72|2000|1
+callypricallyn steseought|bar|33604|835|Smith |Unionville|02311|83|South 8th|Spring Valley|46060|1999|1|79.25|148.99|0.00|49.07|50.54|681.78|2000|1
+callypricallyn steseought|eing|41904|505|2nd Ninth|Oakdale|69584|950|Hill |Newtown|51749|1999|1|19.26|26.77|291.16|78.64|80.21|0.00|2000|1
+callypricallyn steseought|eing|73451|838|6th |Fairview|85709|963|Cedar Mill|Bridgeport|85817|1999|1|87.57|112.08|0.00|9.79|12.62|0.00|2000|1
+callypricallyn steseought|n st|32739|353|Williams 13th|Mount Vernon|39127|330|Main South|Leon|70913|1999|1|57.24|104.17|0.00|59.49|106.48|0.00|2000|1
+eingantin stpribarought|able|65709|389|Smith Walnut|Lincoln|11289|237|Sixth 9th|Woodville|94289|1999|1|55.66|75.14|0.00|37.62|50.41|0.00|2000|1
+eingantin stpribarought|anti|39843|270|Park View|Jamestown|46867|50|Hill |Valley View|15124|1999|1|76.09|81.41|0.00|45.32|79.31|0.00|2000|1
+eingantin stpribarought|bar|53451|703|Church |Lincoln|41289|641|7th |Hopewell|20587|1999|1|2.45|4.60|0.00|52.13|95.39|0.00|2000|1
+eingantin stpribarought|bar|33604|774|Maple Park|Newtown|31749|379|Jefferson |Lone Oak|46893|1999|1|18.07|22.22|0.00|5.12|7.01|115.92|2000|1
+eingantin stpribarought|bar|33604|272|Central Cedar|Forest Hills|29237|804|8th Laurel|Woodland|64854|1999|1|51.82|101.04|0.00|5.12|7.01|115.92|2000|1
+eingantin stpribarought|bar|59431|405|College |Valley View|45124|586|Miller |Spring Valley|46060|1999|1|52.33|52.33|0.00|28.41|53.97|546.40|2000|1
+eingantin stpribarought|bar|33604|NULL|NULL|NULL|78054|218|3rd 8th|Valley View|65124|1999|1|52.89|76.69|0.00|5.12|7.01|115.92|2000|1
+eingantin stpribarought|cally|69431|894|Hickory Maple|Unionville|41711|192|1st Church|Morris|07296|1999|1|21.96|31.40|0.00|32.36|58.24|0.00|2000|1
+eingantin stpribarought|eing|55709|919|South Park|Rockwood|21545|244|Fifth Poplar|Liberty|63451|1999|1|25.61|46.61|0.00|40.02|63.23|152.81|2000|1
+eingantin stpribarought|eing|39231|170|East |Oak Grove|28370|894|Elevnth |Brookville|43524|1999|1|67.72|135.44|0.00|6.54|10.46|21.90|2000|1
+eingantin stpribarought|pri|52477|50|Jefferson |Woodville|84289|59|College Elm|Harmony|55804|1999|1|13.09|17.27|0.00|64.47|97.34|0.00|2000|1
+eingantioughtcallyeingought|bar|75709|218|12th Fourth|Spring Valley|56060|919|Seventh Main|Pleasant Grove|44136|1999|1|5.35|5.77|0.00|49.33|70.54|0.00|2000|1
+eingantioughtcallyeingought|bar|75709|218|12th Fourth|Spring Valley|56060|919|Seventh Main|Pleasant Grove|44136|1999|1|5.35|5.77|0.00|83.19|111.47|0.00|2000|1
+eingantioughtcallyeingought|bar|53451|818|Church |Sulphur Springs|48354|863|4th Railroad|Green Acres|57683|1999|1|31.71|54.85|0.00|18.43|26.72|0.00|2000|1
+eingantioughtcallyeingought|bar|53451|818|Church |Sulphur Springs|48354|863|4th Railroad|Green Acres|57683|1999|1|31.71|54.85|0.00|71.02|142.04|0.00|2000|1
+eingantioughtcallyeingought|eing|41904|670|Dogwood Second|Pine Grove|84593|202|Johnson |New Hope|49431|1999|1|58.02|91.67|0.00|83.28|129.08|0.00|2000|1
+eingantioughtcallyeingought|n st|49231|499|15th Locust|Oakland|69843|8|Dogwood |Woodland|24854|1999|1|71.60|134.60|0.00|63.90|95.85|0.00|2000|1
+eingbareingeingeing|able|44136|782|5th |Red Hill|44338|545|North |Summit|50499|1999|1|13.68|20.65|NULL|29.74|44.01|0.00|2000|1
+eingbareingeingeing|able|44136|782|5th |Red Hill|44338|545|North |Summit|50499|1999|1|13.68|20.65|NULL|47.24|82.19|0.00|2000|1
+eingbareingeingeing|able|44136|782|5th |Red Hill|44338|545|North |Summit|50499|1999|1|13.68|20.65|NULL|49.31|88.26|0.00|2000|1
+eingbareingeingeing|bar|38828|155|View Madison|Red Hill|44338|164|Maple |Rossville|72503|1999|1|24.96|42.18|0.00|46.10|61.77|2723.17|2000|1
+eingbareingeingeing|bar|38828|155|View Madison|Red Hill|44338|164|Maple |Rossville|72503|1999|1|24.96|42.18|0.00|86.66|157.72|635.51|2000|1
+eingbareingeingeing|bar|75709|10|Oak Washington|Arlington|26557|344|Pine Center|Lakeview|38579|1999|1|30.31|57.58|0.00|27.40|36.99|0.00|2000|1
+eingbareingeingeing|bar|34136|532|Park Main|Oakland|59843|470|Lincoln |Sulphur Springs|68354|1999|1|47.30|66.22|0.00|53.86|78.09|1176.58|2000|1
+eingbareingeingeing|bar|68370|381|Sycamore |Riverdale|59391|618|Dogwood Lincoln|Pleasant Hill|43604|1999|1|65.79|105.92|0.00|18.49|22.74|0.00|2000|1
+eingbareingeingeing|bar|34136|839|Lake |Brownsville|29310|594|Washington Broadway|Oneida|74027|1999|1|80.37|114.92|0.00|53.86|78.09|1176.58|2000|1
+eingbareingeingeing|ese|35281|349|Laurel |Maple Grove|28252|464|Central Church|Georgetown|47057|1999|1|94.57|156.98|0.00|73.36|120.31|0.00|2000|1
+eingbareingeingeing|ese|49431|936|Wilson |Centerville|60059|785|Jackson |Deerfield|19840|1999|1|96.81|149.08|0.00|66.46|105.00|0.00|2000|1
+eingbareingeingeing|n st|73604|507|Woodland |Valley View|75124|794|Lee Fourth|Hopewell|40587|1999|1|52.85|72.40|0.00|3.59|6.06|0.00|2000|1
+eingbareingeingeing|n st|73604|101|Second 11th|Guthrie|21423|517|Jackson |Spring Hill|96787|1999|1|85.64|149.87|0.00|3.59|6.06|0.00|2000|1
+eingbaroughtbarationought|able|44136|NULL|Cherry |Glendale|NULL|383|Spruce Lakeview|Spring Hill|46787|1999|1|40.69|75.68|0.00|97.39|133.42|0.00|2000|1
+eingbaroughtbarationought|anti|54136|977|5th |Clifton|78014|523|Spruce Hickory|Summit|50499|1999|1|46.27|50.43|839.25|8.83|14.21|0.00|2000|1
+eingbaroughtbarationought|ation|45281|320|8th |Pleasant Valley|22477|224|2nd 1st|Oak Hill|57838|1999|1|79.73|86.90|0.00|43.05|48.21|0.00|2000|1
+eingbaroughtbarationought|bar|38828|175|Lincoln |Fairfield|76192|387|Woodland |Hurricane|47644|1999|1|17.29|17.80|0.00|84.29|138.23|0.00|2000|1
+eingbaroughtbarationought|bar|29231|665|Lincoln |Wildwood|86871|483|Jackson Green|Clinton|58222|1999|1|51.01|71.41|0.00|19.35|26.50|0.00|2000|1
+eingbaroughtbarationought|bar|34136|709|Center Pine|Murphy|92105|698|Hickory |Edgewood|50069|1999|1|61.26|64.93|35.76|49.80|96.61|1569.79|2000|1
+eingbaroughtbarationought|eing|52812|662|Dogwood |Oakdale|99584|662|10th |Cedar Grove|60411|1999|1|34.51|56.59|0.00|40.99|75.42|0.00|2000|1
+eingbaroughtbarationought|ese|56098|697|12th |Hamilton|82808|305|Spruce |Mount Pleasant|42739|1999|1|86.62|93.54|1048.82|92.00|140.76|0.00|2000|1
+eingbaroughtbarationought|ese|43604|171|Meadow |Woodland|24854|868|Woodland 2nd|Brownsville|69310|1999|1|87.52|147.90|0.00|16.84|27.28|0.00|2000|1
+eingbaroughtbarationought|ese|43604|171|Meadow |Woodland|24854|868|Woodland 2nd|Brownsville|69310|1999|1|87.52|147.90|0.00|65.40|96.13|0.00|2000|1
+eingbaroughtbarationought|ought|52477|776|Center West|Plainview|73683|36|Oak Railroad|Macedonia|21087|1999|1|23.52|29.63|0.00|21.12|23.86|0.00|2000|1
+eingbaroughtbarationought|pri|28828|616|Washington Miller|Florence|63394|273|View Washington|Salem|48048|1999|1|81.88|89.24|0.00|81.39|96.85|0.00|2000|1
+eseantieingn stantiought|able|49843|593|Third |Jackson|49583|449|Lee |Arlington|16557|1999|1|32.43|63.88|0.00|67.13|85.92|0.00|2000|1
+eseantieingn stantiought|able|55281|66|9th 1st|Kingston|94975|NULL|Seventh |Clifton|NULL|1999|1|99.75|126.68|0.00|60.95|79.84|313.51|2000|1
+eseantieingn stantiought|bar|33604|29|Third |Concord|54107|194|8th |Cedar Grove|60411|1999|1|35.25|45.82|21.48|76.33|112.96|111.14|2000|1
+eseantieingn stantiought|bar|33604|29|Third |Concord|54107|194|8th |Cedar Grove|60411|1999|1|35.25|45.82|21.48|89.86|119.51|0.00|2000|1
+eseantieingn stantiought|bar|35281|371|4th Miller|Antioch|68605|356|NULL|NULL|14244|1999|1|77.93|155.86|0.00|58.80|110.54|0.00|2000|1
+eseantieingn stantiought|bar|33604|899|Lakeview 15th|Macedonia|41087|28|Ash |Lakeside|79532|1999|1|91.64|127.37|0.00|76.33|112.96|111.14|2000|1
+eseantieingn stantiought|bar|33604|899|Lakeview 15th|Macedonia|41087|28|Ash |Lakeside|79532|1999|1|91.64|127.37|0.00|89.86|119.51|0.00|2000|1
+eseantieingn stantiought|bar|65281|605|6th |Lakewood|28877|178|3rd 12th|Spring Valley|76060|1999|1|91.72|94.47|250.51|15.90|27.66|0.00|2000|1
+eseantieingn stantiought|cally|23604|677|Lee |Crossroads|10534|461|Hickory Park|Wildwood|26871|1999|1|18.58|36.97|0.00|28.07|31.71|27.61|2000|1
+eseantieingn stantiought|cally|23604|719|Forest |Hurricane|27644|229|Fourth Lincoln|Valley View|35124|1999|1|94.96|173.77|0.00|28.07|31.71|27.61|2000|1
+eseantieingn stantiought|ese|39843|408|Spruce 8th|Mount Pleasant|52739|693|West |Oakland|89843|1999|1|1.80|2.17|0.00|19.27|27.94|0.00|2000|1
+esecallyantiantieingought|able|51904|663|Mill |Florence|13394|635|Green |Mount Vernon|19127|1999|1|39.14|47.75|0.00|81.34|134.21|0.00|2000|1
+esecallyantiantieingought|bar|75709|61|Maple |Friendship|34536|730|Spruce |Mount Olive|88059|1999|1|13.41|26.01|0.00|26.16|28.77|0.00|2000|1
+esecallyantiantieingought|bar|75709|61|Maple |Friendship|34536|730|Spruce |Mount Olive|88059|1999|1|13.41|26.01|0.00|40.55|69.74|0.00|2000|1
+esecallyantiantieingought|eing|45281|804|Williams Park|Farmington|09745|709|Highland |Clinton|58222|1999|1|4.86|6.75|0.00|98.96|109.84|302.31|2000|1
+esecallyantiantieingought|eing|22739|411|Birch Birch|Mitchell|52648|251|Jackson Tenth|Springfield|39303|1999|1|55.77|94.80|3055.78|95.41|153.61|0.00|2000|1
+esecallyantiantieingought|eing|25709|853|Church |Sunshine|81525|375|Broadway |Union|38721|1999|1|59.91|70.09|98.68|21.47|34.56|0.00|2000|1
+esecallyantiantieingought|ese|29231|656|6th Oak|Riverside|79231|958|13th Hillcrest|Franklin|39101|1999|1|93.44|133.61|0.00|40.98|79.09|0.00|2000|1
+esecallyantiantieingought|ese|29231|656|6th Oak|Riverside|79231|958|13th Hillcrest|Franklin|39101|1999|1|93.44|133.61|0.00|69.70|76.67|0.00|2000|1
+esecallyantiantieingought|pri|28828|442|15th Meadow|Lincoln|21289|982|4th |Concord|84107|1999|1|75.68|103.68|0.00|35.79|41.87|0.00|2000|1
+n stableableantiought|able|38721|976|Center |Five Forks|02893|816|NULL|Farmington|49145|1999|1|12.98|16.35|0.00|44.76|57.74|0.00|2000|1
+n stableableantiought|able|49431|263|Main |New Hope|49431|NULL|14th |Buena Vista|NULL|1999|1|41.13|45.65|3738.11|71.10|80.34|332.62|2000|1
+n stableableantiought|able|49431|502|Center |Hopewell|50587|273|6th |Springdale|28883|1999|1|91.32|94.97|4551.56|71.10|80.34|332.62|2000|1
+n stableableantiought|bar|78721|551|Elevnth Valley|Woodville|34289|752|2nd |Riverdale|59391|1999|1|2.48|2.90|0.00|86.62|93.54|0.00|2000|1
+n stableableantiought|cally|58828|158|Valley 4th|Hubbard|46291|NULL|Sunset Laurel|NULL|NULL|1999|1|87.41|164.33|0.00|96.27|116.48|0.00|2000|1
+n stableableantiought|eing|45281|219|Maple |Summit|60499|885|Park |Ashland|64244|1999|1|47.93|54.64|0.00|29.25|43.29|0.00|2000|1
+n stableableantiought|eing|23451|493|Pine Laurel|Mulberry|48080|845|River |Greenwood|09428|1999|1|73.52|118.36|0.00|53.30|70.88|0.00|2000|1
+n stableableantiought|eing|32812|55|Spruce |Summit|50499|652|Cedar River|Highland|09454|1999|1|74.33|126.36|0.00|87.59|119.12|0.00|2000|1
+n stableableantiought|ese|32477|862|5th |Pleasant Grove|74136|NULL|8th Sycamore|Andover|NULL|1999|1|19.62|33.55|0.00|91.32|114.15|0.00|2000|1
+n stableableantiought|ese|32477|862|5th |Pleasant Grove|74136|NULL|8th Sycamore|Andover|NULL|1999|1|19.62|33.55|0.00|96.71|140.22|0.00|2000|1
+n stableableantiought|ese|35281|595|Chestnut |Fairfield|36192|179|Willow Sunset|Pleasant Grove|44136|1999|1|36.15|46.99|30.06|33.57|66.13|0.00|2000|1
+n stableableantiought|ese|35281|595|Chestnut |Fairfield|36192|179|Willow Sunset|Pleasant Grove|44136|1999|1|36.15|46.99|30.06|51.66|64.05|0.00|2000|1
+n stableableantiought|ese|35281|595|Chestnut |Fairfield|36192|179|Willow Sunset|Pleasant Grove|44136|1999|1|36.15|46.99|30.06|84.17|166.65|5265.58|2000|1
+n stableableantiought|ese|32477|94|9th |Hamilton|82808|109|Spring 3rd|Buena Vista|65752|1999|1|67.98|107.40|0.00|91.32|114.15|0.00|2000|1
+n stableableantiought|ese|32477|94|9th |Hamilton|82808|109|Spring 3rd|Buena Vista|65752|1999|1|67.98|107.40|0.00|96.71|140.22|0.00|2000|1
+n stableableantiought|pri|49843|168|Valley |Sunnyside|31952|142|Park Maple|Pine Grove|05193|1999|1|91.89|162.64|0.00|69.56|75.12|1230.46|2000|1
+n stableableeseanti|bar|33604|437|First 15th|Mount Vernon|59127|455|North 15th|San Jose|68003|1999|1|72.40|136.83|0.00|54.01|62.11|0.00|2000|1
+n stableableeseanti|cally|73604|849|2nd |Friendship|34536|889|Spring Oak|Saint George|25926|1999|1|66.61|109.24|0.00|10.58|11.10|0.00|2000|1
+n stableableeseanti|eing|22739|NULL|Railroad Spruce|NULL|38828|843|Willow Ninth|Plainview|53683|1999|1|79.45|123.14|0.00|53.93|79.81|0.00|2000|1
+n stableableeseanti|eing|45281|99|4th |Georgetown|57057|515|10th Jackson|Providence|66614|1999|1|84.66|99.05|0.00|31.28|31.90|0.00|2000|1
+n stableableeseanti|ese|75709|198|Miller East|Summerfield|20634|657|River |Evans|32284|1999|1|22.05|26.90|0.00|24.29|35.94|0.00|2000|1
+n stableableeseanti|ese|29231|310|Sixth |Kingston|34975|467|2nd 12th|Brownsville|69310|1999|1|65.94|69.89|0.00|1.59|2.51|0.00|2000|1
+n stablen steingcally|able|43451|328|Hill |Georgetown|77057|532|Mill Laurel|Forest Hills|59237|1999|1|26.50|47.43|0.00|11.36|13.29|0.00|2000|1
+n stablen steingcally|anti|35709|548|Fourth |Riverview|69003|424|Valley 11th|Hopewell|70587|1999|1|5.43|10.26|0.00|5.17|6.61|115.56|2000|1
+n stablen steingcally|bar|33604|413|Washington Davis|Lakewood|68877|335|Cedar |Florence|43394|1999|1|53.32|84.77|0.00|33.04|60.13|0.00|2000|1
+n stablen steingcally|bar|33604|872|Second |Springdale|58883|930|Cedar 4th|Wilson|26971|1999|1|62.44|99.90|152.84|33.04|60.13|0.00|2000|1
+n stablen steingcally|bar|33604|447|Spruce |Mountain View|54466|784|Maple |Leon|20913|1999|1|84.28|132.31|5253.84|33.04|60.13|0.00|2000|1
+n stablen steingcally|eing|45281|212|Madison 12th|Five Forks|62293|174|Cedar Hickory|Concord|64107|1999|1|24.35|31.41|100.74|41.89|51.52|0.00|2000|1
+n stablen steingcally|eing|55709|648|First |NULL|31289|465|Elm |Plainview|73683|1999|1|66.29|114.01|0.00|89.69|96.86|0.00|2000|1
+n stablen steingcally|eing|55709|504|11th |Ashland|34244|657|13th Poplar|Washington Heights|76523|1999|1|92.28|169.79|0.00|89.69|96.86|0.00|2000|1
+n stablen steingcally|n st|49231|762|Eigth Meadow|Highland|69454|493|Jefferson |Brownsville|69310|1999|1|98.93|163.23|0.00|20.04|30.46|0.00|2000|1
+n stablen steingcally|ought|34136|22|Broadway 12th|Centerville|80059|32|West Twelfth|Ashland|44244|1999|1|24.30|45.92|694.74|13.27|23.62|0.00|2000|1
+n stbaresecallyableought|able|44136|379|Meadow |Pleasant Grove|24136|218|Elm |Greenville|71387|1999|1|52.60|88.89|0.00|51.52|66.97|0.00|2000|1
+n stbaresecallyableought|eing|38721|733|NULL|NULL|NULL|536|Hill 1st|Bunker Hill|30150|1999|1|86.82|147.59|94.94|99.10|108.01|0.00|2000|1
+n stbaresecallyableought|ese|32477|477|Main Washington|Centerville|50059|908|Church Ash|Enterprise|31757|1999|1|6.91|12.92|0.00|10.07|14.80|0.00|2000|1
+n stbaresecallyableought|ese|78048|497|4th |Glendale|93951|504|Green Church|Pleasant Grove|94136|1999|1|10.67|19.31|194.64|66.14|89.95|0.00|2000|1
+n stbaresecallyableought|ese|38828|934|First 3rd|Belmont|20191|799|Seventh Lee|Salem|18048|1999|1|40.47|63.13|2680.03|46.47|71.56|0.00|2000|1
+n stbaresecallyableought|ese|32477|796|Hickory |Amity|20766|64|Wilson 7th|Five Points|66098|1999|1|90.13|102.74|0.00|10.07|14.80|0.00|2000|1
+n stbaresecallyableought|ought|72739|422|Poplar Sycamore|Jamestown|26867|141|7th |Springdale|58883|1999|1|2.86|3.66|0.00|21.67|38.78|0.00|2000|1
+n stbaresecallyableought|ought|33451|890|1st Locust|Buena Vista|15752|646|7th Cedar|Five Points|26098|1999|1|43.08|78.40|0.00|21.27|31.26|191.81|2000|1
+n stbaresecallyableought|ought|32812|989|First Wilson|Riverview|49003|950|Mill |Deerfield|39840|1999|1|59.90|83.86|0.00|64.82|77.13|637.00|2000|1
+n stoughtoughtationpriought|able|49431|677|Smith Maple|Clinton|28222|716|Wilson |Newport|51521|1999|1|3.95|5.72|0.00|35.78|47.22|0.00|2000|1
+n stoughtoughtationpriought|ation|68048|395|Jefferson |Wilson|36971|877|East Elm|Riverview|39003|1999|1|93.85|143.59|0.00|63.00|121.59|0.00|2000|1
+n stoughtoughtationpriought|bar|68370|69|Locust |King|00608|877|Ash 4th|Sulphur Springs|68354|1999|1|60.63|89.73|0.00|97.10|153.41|0.00|2000|1
+n stoughtoughtationpriought|bar|39843|475|Maple |Whispering Pines|47609|701|1st |Jamestown|36867|1999|1|64.38|91.41|0.00|82.07|84.53|0.00|2000|1
+n stoughtoughtationpriought|ese|38828|924|Williams River|Sulphur Springs|38354|446|Pine Pine|Walnut Grove|27752|1999|1|10.99|13.84|0.00|59.73|103.33|0.00|2000|1
+n stoughtoughtationpriought|ese|38828|924|Williams River|Sulphur Springs|38354|446|Pine Pine|Walnut Grove|27752|1999|1|10.99|13.84|0.00|96.29|189.69|0.00|2000|1
+n stoughtoughtationpriought|n st|49231|435|Ash |Centerville|50059|97|Pine |Derby|47702|1999|1|73.50|113.92|0.00|67.47|130.89|0.00|2000|1
+n stpribarableeseought|anti|32812|175|South Park|Antioch|68605|386|Oak Oak|Crossroads|80534|1999|1|21.22|40.31|0.00|10.75|14.51|0.00|2000|1
+n stpribarableeseought|bar|53451|983|View Ridge|Mount Olive|28059|847|6th |Salem|58048|1999|1|24.62|27.08|0.00|20.54|37.79|0.00|2000|1
+n stpribarableeseought|bar|53451|983|View Ridge|Mount Olive|28059|847|6th |Salem|58048|1999|1|24.62|27.08|0.00|47.11|60.30|0.00|2000|1
+n stpribarableeseought|bar|53451|983|View Ridge|Mount Olive|28059|847|6th |Salem|58048|1999|1|24.62|27.08|0.00|90.17|100.08|0.00|2000|1
+n stpribarableeseought|bar|53451|539|1st |Riverview|89003|578|Seventh |Union Hill|57746|1999|1|87.86|121.24|0.00|20.54|37.79|0.00|2000|1
+n stpribarableeseought|bar|53451|539|1st |Riverview|89003|578|Seventh |Union Hill|57746|1999|1|87.86|121.24|0.00|47.11|60.30|0.00|2000|1
+n stpribarableeseought|bar|53451|539|1st |Riverview|89003|578|Seventh |Union Hill|57746|1999|1|87.86|121.24|0.00|90.17|100.08|0.00|2000|1
+n stpribarableeseought|eing|45281|250|View |Clifton|08614|201|Jefferson |Hillcrest|43003|1999|1|20.40|38.14|0.00|84.67|142.24|0.00|2000|1
+n stpribarableeseought|eing|45281|67|Sixth Lincoln|Rolling Hills|77272|339|8th First|Mount Olive|58059|1999|1|30.68|34.66|0.00|84.67|142.24|0.00|2000|1
+n stpribarableeseought|eing|45281|603|Hill Hill|Buena Vista|15752|332|Fifth |Greenfield|45038|1999|1|49.76|88.57|0.00|84.67|142.24|0.00|2000|1
+n stpribarableeseought|eing|22739|602|Cedar |Mount Zion|28054|NULL|NULL|NULL|NULL|1999|1|95.18|98.03|0.00|31.93|46.61|0.00|2000|1
+n stpribarableeseought|ese|49431|677|Railroad Forest|Mount Olive|58059|233|Maple |NULL|NULL|1999|1|58.77|96.97|0.00|17.79|19.74|0.00|2000|1
+n stpribarableeseought|ese|49431|677|Railroad Forest|Mount Olive|58059|233|Maple |NULL|NULL|1999|1|58.77|96.97|0.00|51.96|90.41|0.00|2000|1
+n stpribarableeseought|n st|38370|557|Seventh Railroad|Pleasant Valley|52477|302|3rd Sunset|New Hope|39431|1999|1|41.37|59.57|0.00|20.33|23.17|0.00|2000|1
+n stpribarableeseought|ought|34136|779|Spring |Plainview|73683|596|Cedar |Crossroads|50534|1999|1|3.93|6.09|0.00|48.03|69.16|0.00|2000|1
+n stpribarableeseought|ought|30059|213|8th |Oakland|49843|563|Highland |Waterloo|21675|1999|1|77.20|93.41|0.00|26.32|42.90|234.22|2000|1
+n stpribarableeseought|ought|30059|45|Sunset |Stringtown|80162|314|Thirteenth |Glenwood|43511|1999|1|77.27|87.31|0.00|26.32|42.90|234.22|2000|1
+n stprieingantieingought|able|29431|208|Forest 2nd|New Hope|69431|407|Willow Fourth|Florence|33394|1999|1|43.96|87.92|0.00|7.64|14.74|0.00|2000|1
+n stprieingantieingought|able|58828|923|Seventh Hill|Jamestown|26867|692|Spring |Red Hill|64338|1999|1|67.89|130.34|0.00|30.28|32.70|0.00|2000|1
+n stprieingantieingought|able|58828|923|Seventh Hill|Jamestown|26867|692|Spring |Red Hill|64338|1999|1|67.89|130.34|0.00|75.54|108.77|0.00|2000|1
+n stprieingantieingought|able|29431|306|Park Third|Bethel|75281|886|Birch East|Argyle|78722|1999|1|91.01|146.52|0.00|7.64|14.74|0.00|2000|1
+n stprieingantieingought|anti|35281|799|4th Cherry|Cedar Grove|70411|349|North |Salem|58048|1999|1|93.18|153.74|0.00|37.93|67.89|2256.07|2000|1
+n stprieingantieingought|ation|63451|417|NULL|Summit|90499|307|View 3rd|Pleasant Valley|62477|1999|1|39.58|39.58|0.00|87.81|139.61|0.00|2000|1
+n stprieingantieingought|ese|33451|91|Adams |Unionville|41711|288|South |Shiloh|79275|1999|1|18.81|33.29|0.00|50.62|59.22|0.00|2000|1
+n stprieingantieingought|n st|73604|525|Railroad |Newtown|61749|756|Fifth Lincoln|Woodlawn|64098|1999|1|19.39|24.04|145.86|13.28|20.31|0.00|2000|1
+n stprieingantieingought|n st|49231|164|Park |Griffin|41204|998|North |Oak Hill|57838|1999|1|57.63|88.75|0.00|84.86|85.70|0.00|2000|1
+n stprieingantieingought|ought|32812|856|Maple |Mountain View|44466|796|2nd |Pleasant Hill|43604|1999|1|83.90|160.24|0.00|40.97|67.60|0.00|2000|1
+n stprioughtantiation|able|44136|239|View Smith|Wilson|26971|280|Ridge Jackson|Oakwood|80169|1999|1|35.46|35.46|0.00|54.01|58.33|861.89|2000|1
+n stprioughtantiation|ation|51904|253|Madison |Florence|33394|912|8th |Maple Grove|58252|1999|1|40.90|52.76|416.40|60.49|60.49|0.00|2000|1
+n stprioughtantiation|ation|51904|366|1st Jefferson|Pleasant Hill|53604|225|Mill |Wesley|11218|1999|1|74.65|83.60|0.00|60.49|60.49|0.00|2000|1
+n stprioughtantiation|bar|59431|228|14th |Valley View|25124|511|5th 11th|NULL|NULL|1999|1|24.53|37.04|0.00|49.49|92.05|0.00|2000|1
+n stprioughtantiation|bar|43451|813|Willow |Elba|40262|220|Williams 5th|Pleasant Grove|84136|1999|1|87.56|119.95|0.00|22.49|40.70|129.12|2000|1
+n stprioughtantiation|cally|58828|998|Lee Park|Sulphur Springs|58354|786|Second |Providence|16614|1999|1|72.28|101.91|833.47|11.11|18.55|0.00|2000|1
+n stprioughtantiation|n st|50059|425|7th Meadow|Salem|28048|245|Pine |Shady Grove|12812|1999|1|67.18|114.87|0.00|31.42|56.24|0.00|2000|1
+oughtablebaresepri|able|38721|66|Hill |Kingston|64975|717|Green |Woodland|74854|1999|1|9.77|10.45|0.00|87.76|162.35|509.11|2000|1
+oughtablebaresepri|anti|35281|48|Valley |Mount Pleasant|82739|160|Laurel |Forest Hill|79112|1999|1|17.98|22.83|0.00|76.17|121.87|0.00|2000|1
+oughtablebaresepri|bar|75709|671|2nd Dogwood|Howell|64854|302|Lee |Red Hill|34338|1999|1|8.27|15.96|18.36|78.85|104.87|0.00|2000|1
+oughtablebaresepri|bar|36098|70|13th |Concord|44107|798|Chestnut River|Fairfield|06792|1999|1|16.81|32.77|0.00|15.17|26.24|0.00|2000|1
+oughtablebaresepri|bar|33604|120|River |Crossroads|60534|653|Poplar |Five Points|96098|1999|1|69.77|136.05|0.00|62.70|67.71|0.00|2000|1
+oughtablebaresepri|bar|34136|420|Park 2nd|Friendship|24536|740|Spring Franklin|Springdale|68883|1999|1|73.38|74.11|0.00|87.96|141.61|0.00|2000|1
+oughtablebaresepri|cally|34136|322|Elm |Union Hill|47746|780|West |Jackson|89583|1999|1|50.15|57.67|0.00|9.41|18.34|0.00|2000|1
+oughtablebaresepri|eing|52812|717|Wilson |Marion|30399|972|West Cedar|Liberty|63451|1999|1|24.26|36.14|1674.38|38.56|74.80|0.00|2000|1
+oughtablebaresepri|eing|52812|150|Mill 6th|Arlington|96557|761|Hillcrest 14th|Red Hill|64338|1999|1|51.88|88.19|0.00|38.56|74.80|0.00|2000|1
+oughtablebaresepri|eing|29431|183|9th 9th|Oakwood|60169|460|Dogwood |Pleasant Valley|22477|1999|1|69.02|102.83|0.00|98.54|179.34|0.00|2000|1
+oughtablebaresepri|ese|56098|20|Madison Spruce|Spring Valley|66060|420|Tenth 6th|Hamilton|62808|1999|1|13.48|26.42|6.72|40.19|48.22|0.00|2000|1
+oughtablebaresepri|pri|52739|309|13th Cherry|Concord|14107|371|Hill Valley|Marion|60399|1999|1|95.58|134.76|0.00|71.67|134.02|0.00|2000|1
+oughtationesebarcallyought|able|44136|227|Lee Meadow|Belmont|30191|343|Fifth |Lincoln|71289|1999|1|34.28|58.61|823.54|15.08|25.93|0.00|2000|1
+oughtationesebarcallyought|bar|36098|745|NULL|NULL|NULL|975|3rd |Spring Valley|36060|1999|1|13.52|19.87|0.00|12.20|21.96|0.00|2000|1
+oughtationesebarcallyought|bar|75709|679|Washington |Franklin|49101|442|Second 8th|Jackson|89583|1999|1|51.11|66.95|0.00|58.55|111.83|4521.48|2000|1
+oughtationesebarcallyought|cally|48828|56|Jackson |Waterloo|61675|457|Pine |Providence|66614|1999|1|29.54|33.38|0.00|15.38|21.22|0.00|2000|1
+oughtationesebarcallyought|ought|72739|500|14th |Pine Valley|88209|91|Center Ash|Cedar Grove|30411|1999|1|62.74|68.38|0.00|40.93|64.66|866.08|2000|1
+oughtationesebarcallyought|pri|52477|366|Franklin Maple|Midway|61904|628|Woodland |Centerville|70059|1999|1|11.41|20.65|0.00|49.48|67.78|933.45|2000|1
+oughtcallyeseoughtpriought|anti|32812|921|6th Spring|Springfield|79303|973|Forest |Cordova|76938|1999|1|33.56|50.00|876.64|34.18|44.43|0.00|2000|1
+oughtcallyeseoughtpriought|bar|33604|531|1st |Shady Grove|22812|770|7th |Florence|23394|1999|1|15.66|29.59|0.00|3.55|5.92|0.00|2000|1
+oughtcallyeseoughtpriought|bar|33604|531|1st |Shady Grove|22812|770|7th |Florence|23394|1999|1|15.66|29.59|0.00|90.80|125.30|0.00|2000|1
+oughtcallyeseoughtpriought|bar|43451|466|Fourth Valley|Wildwood|76871|791|Laurel |Union|68721|1999|1|53.32|76.24|0.00|8.17|8.98|1.47|2000|1
+oughtcallyeseoughtpriought|bar|33604|771|Mill Main|Fairview|45709|85|Meadow |Greenville|61387|1999|1|69.35|116.50|0.00|3.55|5.92|0.00|2000|1
+oughtcallyeseoughtpriought|bar|33604|771|Mill Main|Fairview|45709|85|Meadow |Greenville|61387|1999|1|69.35|116.50|0.00|90.80|125.30|0.00|2000|1
+oughtcallyeseoughtpriought|bar|25281|401|South View|Georgetown|77057|710|Oak |Providence|26614|1999|1|74.30|80.24|0.00|57.89|96.09|0.00|2000|1
+oughtcallyeseoughtpriought|cally|46098|297|Lake Second|Wildwood|96871|401|Maple |Centerville|20059|1999|1|38.72|69.30|0.00|82.50|82.50|0.00|2000|1
+oughtcallyeseoughtpriought|eing|71904|481|West Willow|Antioch|48605|551|1st |Scottsville|94190|1999|1|86.59|139.40|0.00|68.93|110.28|0.00|2000|1
+oughtcallyeseoughtpriought|ese|56098|326|Center |Glendale|33951|955|Railroad Main|Woodlawn|44098|1999|1|91.75|117.44|207.80|69.07|136.06|0.00|2000|1
+oughtcallyeseoughtpriought|n st|49231|318|Chestnut Miller|Crossroads|50534|550|Lake |Providence|26614|1999|1|28.54|39.38|69.20|15.06|23.79|0.00|2000|1
+oughtcallyeseoughtpriought|ought|35709|1|13th Cedar|Belmont|10191|81|Broadway |Woodville|44289|1999|1|86.04|115.29|0.00|17.35|24.81|0.00|2000|1
+oughtcallyoughteingantiought|able|59843|412|Main Maple|Bridgeport|25817|600|East Mill|Phoenix|62276|1999|1|6.84|8.96|0.00|94.02|116.58|813.34|2000|1
+oughtcallyoughteingantiought|able|45709|374|Ash Jefferson|San Jose|88003|447|View |Florence|13394|1999|1|16.30|23.14|0.00|7.77|13.13|0.00|2000|1
+oughtcallyoughteingantiought|able|58828|881|Sixth |Oak Ridge|78371|192|Highland 6th|Franklin|49101|1999|1|21.10|25.32|0.00|53.21|62.25|0.00|2000|1
+oughtcallyoughteingantiought|bar|69231|57|Davis Laurel|Clifton|78014|255|2nd |Jamestown|86867|1999|1|40.59|79.55|0.00|53.93|78.73|0.00|2000|1
+oughtcallyoughteingantiought|bar|35709|366|Wilson |Antioch|28605|581|Smith |Lakeview|48579|1999|1|42.06|55.09|0.00|88.89|90.66|0.00|2000|1
+oughtcallyoughteingantiought|bar|35709|344|Hickory |Belfast|20125|106|Center |Farmington|69145|1999|1|42.56|85.12|0.00|88.89|90.66|0.00|2000|1
+oughtcallyoughteingantiought|bar|43451|630|Miller Walnut|Wildwood|07471|511|Park |Harvey|35858|1999|1|70.51|95.89|267.01|9.30|10.88|0.00|2000|1
+oughtcallyoughteingantiought|ese|49431|126|Mill Williams|Franklin|49101|728|Johnson Second|Stringtown|20162|1999|1|54.85|66.91|0.00|31.93|32.56|0.00|2000|1
+oughtcallyoughteingantiought|ought|34136|90|Valley |NULL|NULL|482|Park |Fairview|45709|1999|1|63.94|83.76|0.00|36.54|48.59|0.00|2000|1
+oughteingeseoughtoughtought|anti|35709|395|Johnson Lake|Salem|78048|782|Johnson Walnut|Pleasant Valley|12477|1999|1|20.36|34.81|0.00|76.47|128.46|0.00|2000|1
+oughteingeseoughtoughtought|anti|35709|166|Jackson Park|Woodville|44289|130|Main |Mount Pleasant|32739|1999|1|58.50|79.56|1790.87|76.47|128.46|0.00|2000|1
+oughteingeseoughtoughtought|ese|68828|696|15th Fourteenth|Union|78721|347|6th 3rd|Lincoln|31289|1999|1|34.64|42.60|0.00|33.69|66.70|0.00|2000|1
+oughteingeseoughtoughtought|ese|26098|215|4th Center|NULL|NULL|383|2nd |Woodville|94289|1999|1|35.63|42.04|0.00|28.00|52.36|245.81|2000|1
+oughteingeseoughtoughtought|ese|68828|849|12th 2nd|Farmington|79145|682|Birch Smith|Woodbine|74253|1999|1|47.88|75.65|0.00|33.69|66.70|0.00|2000|1
+oughteingeseoughtoughtought|ought|72739|310|South Miller|Highland Park|16534|478|3rd |Cedar Grove|30411|1999|1|77.57|100.84|0.00|28.18|48.46|0.00|2000|1
+oughteingeseoughtoughtought|ought|52477|816|River |Friendship|24536|754|Church |Ashland|34244|1999|1|98.78|182.74|0.00|9.31|12.84|314.76|2000|1
+oughtesen stableeingought|able|59843|591|East |White Oak|76668|NULL|NULL|Fairview|NULL|1999|1|55.55|57.77|29.60|25.40|47.49|1560.63|2000|1
+oughtesen stableeingought|able|28370|524|Center Cherry|Farmington|09745|535|Main |Cedar Grove|40411|1999|1|61.58|80.66|0.00|40.12|70.21|540.71|2000|1
+oughtesen stableeingought|ation|62812|475|West |Hamilton|22808|102|2nd Cedar|Wilson|16971|1999|1|88.86|159.94|0.00|55.06|95.80|0.00|2000|1
+oughtesen stableeingought|cally|49843|398|3rd |Glendale|43951|299|Cedar |Aberdeen|47995|1999|1|3.03|5.36|0.00|14.96|17.05|0.00|2000|1
+oughtesen stableeingought|eing|73451|707|Elm 13th|Pleasant Valley|12477|180|Forest Park|Arlington|76557|1999|1|64.30|81.01|0.00|75.41|90.49|0.00|2000|1
+oughtesen stableeingought|eing|45709|629|Spring Pine|Shiloh|79275|730|West Maple|Lakeview|78579|1999|1|94.32|105.63|0.00|28.63|42.94|435.72|2000|1
+oughtesen stableeingought|ese|35709|523|Ridge |Clifton|28014|469|Highland Oak|Shiloh|49275|1999|1|11.06|16.59|0.00|45.86|55.94|0.00|2000|1
+oughtesen stableeingought|ese|58721|882|Seventh 3rd|Union|38721|998|Locust |Clearwater|89534|1999|1|23.26|40.00|0.00|30.44|60.57|0.00|2000|1
+oughtesen stableeingought|ese|35709|NULL|NULL|NULL|NULL|812|Miller Mill|Shady Grove|42812|1999|1|32.81|61.02|0.00|45.86|55.94|0.00|2000|1
+oughtesen stableeingought|ese|78048|440|3rd Forest|Ashland|74244|435|Woodland 3rd|Kingston|05575|1999|1|80.69|91.98|0.00|17.31|28.73|694.76|2000|1
+oughtn stn stpriableought|able|44136|165|Hickory Johnson|Salem|68048|295|Willow |Farmington|29145|1999|1|28.81|46.67|0.00|10.25|17.63|0.00|2000|1
+oughtn stn stpriableought|anti|44136|NULL|Maple First|NULL|NULL|715|River |Summit|40499|1999|1|55.97|66.60|0.00|21.49|27.93|0.00|2000|1
+oughtn stn stpriableought|bar|78721|907|Hillcrest 1st|Page|80296|991|Washington Center|Belmont|00791|1999|1|46.60|55.92|0.00|73.46|96.96|84.14|2000|1
+oughtn stn stpriableought|eing|45281|584|15th |Mount Vernon|49127|673|Main |Pleasant Valley|42477|1999|1|70.89|77.27|898.60|88.50|101.77|0.00|2000|1
+oughtn stn stpriableought|n st|32739|652|8th |Belfast|40125|741|Cherry 8th|Covington|49966|1999|1|20.58|40.13|0.00|62.65|72.67|0.00|2000|1
+oughtn stn stpriableought|n st|49231|577|Maple |Sulphur Springs|08954|566|Green 4th|Summit|50499|1999|1|73.08|101.58|0.00|78.03|133.43|0.00|2000|1
+oughtn stn stpriableought|ought|30059|18|Highland Jackson|Marion|40399|NULL|NULL|Newport|NULL|1999|1|52.61|72.07|0.00|53.35|106.70|0.00|2000|1
+oughtn stn stpriableought|ought|30059|18|Highland Jackson|Marion|40399|NULL|NULL|Newport|NULL|1999|1|52.61|72.07|0.00|99.74|107.71|0.00|2000|1
+oughtn stn stpriableought|ought|39843|452|Davis Birch|Hamilton|12808|799|Second Chestnut|Franklin|29101|1999|1|77.38|100.59|0.00|50.18|82.79|771.38|2000|1
+oughtn stn stpriableought|pri|49843|43|Laurel 13th|Springfield|79303|998|Spruce Davis|Franklin|19101|1999|1|76.30|113.68|3002.98|80.83|126.09|751.07|2000|1
+oughtoughtcallyantiableought|able|38721|351|Meadow |Mountain View|84466|762|Lakeview |Salem|28048|1999|1|55.56|105.00|0.00|68.83|103.24|676.31|2000|1
+oughtoughtcallyantiableought|bar|34136|404|Park |Cedar Grove|80411|934|Lakeview Fourth|Spring Hill|86787|1999|1|87.82|144.02|0.00|27.58|43.85|0.00|2000|1
+oughtoughtcallyantiableought|bar|34136|404|Park |Cedar Grove|80411|934|Lakeview Fourth|Spring Hill|86787|1999|1|87.82|144.02|0.00|61.17|96.03|0.00|2000|1
+oughtoughtcallyantiableought|cally|39843|NULL|NULL|NULL|61675|21|Seventh |Shady Grove|42812|1999|1|85.22|148.28|0.00|43.45|59.96|0.00|2000|1
+oughtoughtcallyantiableought|eing|48370|15|Ash |Shelby|46575|9|Center 9th|Mountain View|05066|1999|1|21.93|36.18|0.00|50.67|73.97|0.00|2000|1
+oughtoughtcallyantiableought|eing|23451|20|3rd |Hopewell|30587|891|Second |Unionville|21711|1999|1|40.93|49.93|0.00|26.86|34.38|0.00|2000|1
+oughtoughtcallyantiableought|ese|53604|917|Church Ash|Wildwood|66871|226|Hill Walnut|Mount Olive|28059|1999|1|51.18|57.83|10.83|15.18|24.43|22.99|2000|1
+prieingbarbareseought|able|38721|794|Mill Green|Cumberland|18971|185|4th |Florence|73394|1999|1|5.18|8.80|0.00|32.46|52.90|0.00|2000|1
+prieingbarbareseought|able|38721|794|Mill Green|Cumberland|18971|185|4th |Florence|73394|1999|1|5.18|8.80|0.00|77.82|87.15|589.17|2000|1
+prieingbarbareseought|able|49431|42|Chestnut |Riverdale|29391|950|Ridge |Bethel|95281|1999|1|13.79|25.09|0.00|25.25|41.91|0.00|2000|1
+prieingbarbareseought|able|49431|874|North |Harmony|35804|837|Cedar Hickory|Lakeside|69532|1999|1|27.39|54.23|0.00|25.25|41.91|0.00|2000|1
+prieingbarbareseought|bar|75709|649|3rd East|Arlington|56557|217|First |Howell|64854|1999|1|11.21|16.03|27.82|21.52|31.63|25.20|2000|1
+prieingbarbareseought|bar|75709|649|3rd East|Arlington|56557|217|First |Howell|64854|1999|1|11.21|16.03|27.82|52.85|62.36|0.00|2000|1
+prieingbarbareseought|bar|29843|865|East Valley|Riverdale|59391|39|4th |Mount Zion|88054|1999|1|29.94|38.02|0.00|7.61|10.04|0.00|2000|1
+prieingbarbareseought|cally|69431|646|Franklin Park|Riverdale|39391|7|Walnut Elm|Midway|51904|1999|1|84.39|160.34|2297.32|62.24|106.43|1296.31|2000|1
+prieingbarbareseought|eing|29431|275|Maple |Highland Park|36534|670|Church |Greenfield|55038|1999|1|10.68|18.58|0.00|13.59|14.13|0.00|2000|1
+prieingbarbareseought|ese|74136|818|7th |Frogtown|78784|151|Madison |Woodlawn|54098|1999|1|68.25|121.48|0.00|6.19|9.53|0.00|2000|1
+prieingbarbareseought|ese|49431|269|Valley Park|Riverside|69231|943|Center |Woodbine|24253|1999|1|73.38|87.32|0.00|61.25|115.15|0.00|2000|1
+prieingbarbareseought|ese|49431|269|Valley Park|Riverside|69231|943|Center |Woodbine|24253|1999|1|73.38|87.32|0.00|85.80|170.74|0.00|2000|1
+prieingbarbareseought|ought|32739|641|Cedar |Crossroads|50534|431|Jefferson |Gum Springs|NULL|1999|1|57.72|110.82|0.00|90.39|105.75|0.00|2000|1
+prieingbarbareseought|pri|52739|487|Miller Sycamore|Texas|63342|17|Willow Hill|Clinton|58222|1999|1|77.82|147.07|0.00|8.02|11.38|0.00|2000|1
+prioughtoughteingcally|able|45709|944|5th Highland|Salem|48048|32|North Laurel|Jackson|99583|1999|1|10.62|21.13|0.00|56.33|111.53|3583.26|2000|1
+prioughtoughteingcally|able|45709|944|5th Highland|Salem|48048|32|North Laurel|Jackson|99583|1999|1|10.62|21.13|0.00|61.75|101.88|0.00|2000|1
+prioughtoughteingcally|able|43451|711|Maple Washington|Clinton|38222|107|Locust |Buena Vista|65752|1999|1|76.45|107.79|0.00|26.38|45.90|0.00|2000|1
+prioughtoughteingcally|ation|51904|761|Pine |Clinton|28222|596|Thirteenth |Oak Grove|68370|1999|1|87.93|121.34|0.00|56.07|98.68|0.00|2000|1
+prioughtoughteingcally|ation|51904|761|Pine |Clinton|28222|596|Thirteenth |Oak Grove|68370|1999|1|87.93|121.34|0.00|93.01|131.14|0.00|2000|1
+prioughtoughteingcally|bar|75709|834|West Sunset|Salem|08648|423|Miller |Wildwood|56871|1999|1|26.84|34.08|23.17|4.92|6.24|0.00|2000|1
+prioughtoughteingcally|bar|75709|834|West Sunset|Salem|08648|423|Miller |Wildwood|56871|1999|1|26.84|34.08|23.17|22.82|27.61|0.00|2000|1
+prioughtoughteingcally|bar|39843|NULL|NULL|NULL|NULL|551|Pine |Union Hill|57746|1999|1|51.93|83.60|0.00|61.12|111.84|0.00|2000|1
+prioughtoughteingcally|bar|33604|421|Chestnut |Summit|90499|327|Adams 4th|Florence|23394|1999|1|99.37|144.08|0.00|60.35|105.61|0.00|2000|1
+prioughtoughteingcally|cally|29431|879|6th Oak|Carter|40919|710|Pine 6th|Hopewell|70587|1999|1|83.17|96.47|0.00|59.50|102.34|0.00|2000|1
+
+

@@ -30,6 +30,7 @@ SELECT i::UBIGINT FROM utinyints ORDER BY i
 # -> signed
 statement error
 SELECT i::TINYINT FROM utinyints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM utinyints ORDER BY i
@@ -94,6 +95,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 
 statement error
 SELECT s::UTINYINT FROM strings
+----
 
 query I
 SELECT TRY_CAST(s AS UTINYINT) FROM strings
@@ -134,15 +136,19 @@ SELECT i::DECIMAL(38,0)::UTINYINT FROM utinyints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(3,1)::UTINYINT FROM utinyints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(9,7)::UTINYINT FROM utinyints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(18,16)::UTINYINT FROM utinyints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(38,36)::UTINYINT FROM utinyints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,1))::UTINYINT FROM utinyints ORDER BY i

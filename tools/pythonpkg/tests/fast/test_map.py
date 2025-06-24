@@ -6,24 +6,33 @@ import re
 from conftest import NumpyPandas, ArrowPandas
 
 
+# column count differs from bind
+def evil1(df):
+    if len(df) == 0:
+        return df['col0'].to_frame()
+    else:
+        return df
+
+
 class TestMap(object):
+    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    def test_evil_map(self, duckdb_cursor, pandas):
+        testrel = duckdb.values([1, 2])
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 columns from UDF, got 2'):
+            rel = testrel.map(evil1, schema={'i': str})
+            df = rel.df()
+            print(df)
+
     @pytest.mark.parametrize('pandas', [NumpyPandas()])
     def test_map(self, duckdb_cursor, pandas):
         testrel = duckdb.values([1, 2])
-        conn = duckdb.connect()
+        conn = duckdb_cursor
         conn.execute('CREATE TABLE t (a integer)')
         empty_rel = conn.table('t')
 
         newdf1 = testrel.map(lambda df: df['col0'].add(42).to_frame())
         newdf2 = testrel.map(lambda df: df['col0'].astype('string').to_frame())
         newdf3 = testrel.map(lambda df: df)
-
-        # column count differs from bind
-        def evil1(df):
-            if len(df) == 0:
-                return df['col0'].to_frame()
-            else:
-                return df
 
         # column type differs from bind
         def evil2(df):

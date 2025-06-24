@@ -8,37 +8,43 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
+#include "geo_parquet.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {
+struct CachingFileHandle;
 
-//! ParquetFileMetadataCache
+enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
+
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
-	ParquetFileMetadataCache() : metadata(nullptr) {
-	}
-	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::format::FileMetaData> file_metadata, time_t r_time)
-	    : metadata(std::move(file_metadata)), read_time(r_time) {
-	}
-
+	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
+	                         unique_ptr<GeoParquetFileMetadata> geo_metadata, idx_t footer_size);
 	~ParquetFileMetadataCache() override = default;
 
 	//! Parquet file metadata
-	unique_ptr<const duckdb_parquet::format::FileMetaData> metadata;
+	unique_ptr<const duckdb_parquet::FileMetaData> metadata;
 
-	//! read time
-	time_t read_time;
+	//! GeoParquet metadata
+	unique_ptr<GeoParquetFileMetadata> geo_metadata;
+
+	//! Parquet footer size
+	idx_t footer_size;
 
 public:
-	static string ObjectType() {
-		return "parquet_metadata";
-	}
+	static string ObjectType();
+	string GetObjectType() override;
 
-	string GetObjectType() override {
-		return ObjectType();
-	}
+	bool IsValid(CachingFileHandle &new_handle) const;
+	//! Check if a cache entry is valid based ONLY on the OpenFileInfo (without doing any file system calls)
+	//! If the OpenFileInfo does not have enough information this can return UNKNOWN
+	ParquetCacheValidity IsValid(const OpenFileInfo &info) const;
+
+private:
+	bool validate;
+	time_t last_modified;
+	string version_tag;
 };
+
 } // namespace duckdb

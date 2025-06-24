@@ -24,12 +24,19 @@ public:
 	                              const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 
 	static void EnumerateTableRefChildren(TableRef &ref,
-	                                      const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
-	static void EnumerateQueryNodeChildren(QueryNode &node,
-	                                       const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
+	                                      const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+	                                      const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback);
+	static void
+	EnumerateQueryNodeChildren(QueryNode &node,
+	                           const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback,
+	                           const std::function<void(TableRef &ref)> &ref_callback = DefaultRefCallback);
 
-	static void EnumerateQueryNodeModifiers(QueryNode &node,
-	                                        const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
+	static void
+	EnumerateQueryNodeModifiers(QueryNode &node,
+	                            const std::function<void(unique_ptr<ParsedExpression> &child)> &expr_callback);
+
+private:
+	static void DefaultRefCallback(TableRef &ref) {}; // NOP
 };
 
 } // namespace duckdb

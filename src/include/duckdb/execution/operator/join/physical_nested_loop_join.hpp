@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 namespace duckdb {
@@ -19,8 +18,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::NESTED_LOOP_JOIN;
 
 public:
-	PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+	                       idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+	                       idx_t estimated_cardinality);
 
 public:
 	// Operator Interface
@@ -43,7 +46,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return PropagatesBuildSide(join_type);
 	}
 	bool ParallelSource() const override {
 		return true;

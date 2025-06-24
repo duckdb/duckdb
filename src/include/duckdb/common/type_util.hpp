@@ -13,6 +13,7 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -39,11 +40,21 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
+	} else if (std::is_same<T, uhugeint_t>()) {
+		return PhysicalType::UINT128;
 	} else if (std::is_same<T, date_t>()) {
 		return PhysicalType::INT32;
 	} else if (std::is_same<T, dtime_t>()) {
 		return PhysicalType::INT64;
 	} else if (std::is_same<T, timestamp_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, timestamp_sec_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, timestamp_ms_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, timestamp_ns_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, timestamp_tz_t>()) {
 		return PhysicalType::INT64;
 	} else if (std::is_same<T, float>()) {
 		return PhysicalType::FLOAT;
@@ -60,7 +71,8 @@ PhysicalType GetTypeId() {
 
 template <class T>
 bool TypeIsNumber() {
-	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>();
+	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>() ||
+	       std::is_same<T, uhugeint_t>();
 }
 
 template <class T>

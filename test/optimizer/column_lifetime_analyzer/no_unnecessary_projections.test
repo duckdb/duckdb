@@ -1,0 +1,24 @@
+# name: test/optimizer/column_lifetime_analyzer/no_unnecessary_projections.test
+# description: Test column lifetime
+# group: [column_lifetime_analyzer]
+
+statement ok
+CREATE TABLE lhs AS SELECT range % 5 i, range j FROM range(100);
+
+statement ok
+CREATE TABLE rhs AS SELECT range % 5 i, range j FROM range(10);
+
+query II
+explain analyze SELECT rhs.j FROM rhs SEMI JOIN lhs USING (i);
+----
+analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
+
+query II
+explain analyze SELECT rhs.j FROM rhs SEMI JOIN lhs USING (i);
+----
+analyzed_plan	<!REGEX>:.*HASH JOIN.*PROJECTION.*
+
+query II
+explain analyze SELECT rhs.j FROM rhs ANTI JOIN lhs USING (i);
+----
+analyzed_plan	<!REGEX>:.*HASH JOIN.*PROJECTION.*
