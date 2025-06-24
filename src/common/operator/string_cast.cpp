@@ -161,6 +161,9 @@ duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	idx_t nano_length = 0;
 	if (picos) {
 		//	If there are ps, we need all the µs
+		if (!time[3]) {
+			TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		}
 		time_length = 15;
 		nano_length = 6;
 		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));
