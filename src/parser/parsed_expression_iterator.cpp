@@ -321,6 +321,7 @@ void ParsedExpressionIterator::VisitExpressionClass(
     const std::function<void(const ParsedExpression &child)> &callback) {
 	if (expr.GetExpressionClass() == expr_class) {
 		callback(expr);
+		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { VisitExpressionClass(child, expr_class, callback); });
@@ -330,6 +331,7 @@ void ParsedExpressionIterator::VisitExpressionClassMutable(
     ParsedExpression &expr, ExpressionClass expr_class, const std::function<void(ParsedExpression &child)> &callback) {
 	if (expr.GetExpressionClass() == expr_class) {
 		callback(expr);
+		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { VisitExpressionClassMutable(child, expr_class, callback); });

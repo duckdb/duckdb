@@ -17,12 +17,9 @@
 
 namespace duckdb {
 
-static void RewriteJoinCondition(Expression &expr, idx_t offset) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_REF) {
-		auto &ref = expr.Cast<BoundReferenceExpression>();
-		ref.index += offset;
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
+static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset) {
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index += offset; });
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
@@ -99,7 +96,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	for (auto &cond : op.conditions) {
-		RewriteJoinCondition(*cond.right, left.types.size());
+		RewriteJoinCondition(cond.right, left.types.size());
 	}
 	auto condition = JoinCondition::CreateExpression(std::move(op.conditions));
 	return Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(condition), op.join_type, op.estimated_cardinality);
