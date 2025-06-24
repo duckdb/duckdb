@@ -31,7 +31,10 @@ static const TestConfigOption test_config_options[] = {
     {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalTypeId::VARCHAR, TestConfiguration::ParseConnectScript},
-    {"on_init", "Script to execute on init", LogicalTypeId::VARCHAR, nullptr},
+    {"on_init", "SQL statements to execute on init", LogicalTypeId::VARCHAR, nullptr},
+    {"on_load", "SQL statements to execute on explicit load", LogicalTypeId::VARCHAR, nullptr},
+    {"on_new_connection", "SQL statements to execute on connection", LogicalTypeId::VARCHAR, nullptr},
+    {"skip_tests", "Tests to be skipped", LogicalTypeId::VARCHAR, nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalTypeId::BOOLEAN, nullptr},
     {nullptr, nullptr, LogicalTypeId::INVALID, nullptr},
 };
@@ -160,8 +163,29 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	}
 }
 
-string TestConfiguration::OnConnectCommand() {
+bool TestConfiguration::ShouldSkipTest(const string &test) {
+	string skip_list = string(",") + GetOptionOrDefault("skip_tests", string()) + string(",");
+	string to_find = string(",") + test + string(",");
+	if (skip_list.find(to_find) != std::string::npos) {
+		return true;
+	}
+	return false;
+}
+
+string TestConfiguration::OnInitCommand() {
 	return GetOptionOrDefault("on_init", string());
+}
+
+string TestConfiguration::OnLoadCommand() {
+	auto res = GetOptionOrDefault("on_load", string(""));
+	if (res != "" && res != "skip") {
+		throw std::runtime_error("Unsupported parameter to on_load");
+	}
+	return res;
+}
+
+string TestConfiguration::OnConnectionCommand() {
+	return GetOptionOrDefault("on_new_connection", string());
 }
 
 void TestConfiguration::ParseConnectScript(const Value &input) {

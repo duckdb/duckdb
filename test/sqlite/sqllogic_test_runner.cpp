@@ -134,7 +134,7 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 
 	auto &test_config = TestConfiguration::Get();
-	auto init_cmd = test_config.OnConnectCommand();
+	auto init_cmd = test_config.OnInitCommand();
 	if (!init_cmd.empty()) {
 		test_config.ProcessPath(init_cmd, file_name);
 		auto res = con->Query(ReplaceKeywords(init_cmd));
@@ -634,6 +634,12 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	auto &test_config = TestConfiguration::Get();
+	if (test_config.ShouldSkipTest(script)) {
+		SKIP_TEST("config skip_tests");
+		return;
+	}
+
 	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
@@ -989,6 +995,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
+			auto &test_config = TestConfiguration::Get();
+			if (test_config.OnLoadCommand() == "skip") {
+				SKIP_TEST("config on_load skip");
+				return;
+			}
 			bool is_read_only = false;
 			if (token.parameters.size() > 1) {
 				auto param = token.parameters[1];

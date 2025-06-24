@@ -42,7 +42,10 @@ public:
 	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
-	string OnConnectCommand();
+	bool ShouldSkipTest(const string &test_name);
+	string OnInitCommand();
+	string OnLoadCommand();
+	string OnConnectionCommand();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
