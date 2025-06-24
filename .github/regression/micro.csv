@@ -22,3 +22,4 @@ benchmark/micro/logger/enabled/logging_enabled_client_context.benchmark
 benchmark/micro/logger/enabled/logging_enabled_global.benchmark
 benchmark/micro/logger/enabled/logging_enabled_file_opener.benchmark
 benchmark/micro/logger/enabled/logging_enabled_global.benchmark
+benchmark/micro/filter/choose_correct_filter_function.benchmark
