@@ -43,6 +43,7 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 		}
 		break;
 	case LogicalType::TIME:
+	case LogicalType::TIME_NS:
 	case LogicalType::TIME_TZ:
 		switch (part) {
 		case DatePartSpecifier::MICROSECONDS:
@@ -1515,7 +1516,7 @@ void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &
 		const auto micros = MicrosecondsOperator::Operation<dtime_ns_t, int64_t>(input);
 		part_data = HasPartValue(bigint_values, DatePartSpecifier::MICROSECONDS);
 		if (part_data) {
-			part_data[idx] = micros / Interval::NANOS_PER_MICRO;
+			part_data[idx] = micros;
 		}
 		part_data = HasPartValue(bigint_values, DatePartSpecifier::MILLISECONDS);
 		if (part_data) {
