@@ -598,6 +598,8 @@ template <>
 DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Time With Time Zone Casts (Offset)

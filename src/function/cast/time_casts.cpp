@@ -42,8 +42,11 @@ BoundCastInfo DefaultCasts::TimeNsCastSwitch(BindCastInput &input, const Logical
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
-		// time to varchar
+		// time (ns) to varchar
 		return BoundCastInfo(&VectorCastHelpers::StringCast<dtime_ns_t, duckdb::StringCast>);
+	case LogicalTypeId::TIME:
+		// time (ns) to time (µs)
+		return BoundCastInfo(&VectorCastHelpers::TemplatedCastLoop<dtime_ns_t, dtime_t, duckdb::Cast>);
 	default:
 		return TryVectorNullCast;
 	}

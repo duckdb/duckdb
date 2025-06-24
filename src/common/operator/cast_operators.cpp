@@ -1046,6 +1046,13 @@ bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict) {
+	//	Round
+	result.micros = (input.micros + (Interval::NANOS_PER_MICRO / 2)) / Interval::NANOS_PER_MICRO;
+	return true;
+}
+
+template <>
 bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict) {
 	if (!TryMultiplyOperator::Operation(input.micros, Interval::NANOS_PER_MICRO, result.micros)) {
 		throw ConversionException("Could not convert TIME to TIME_NS");
