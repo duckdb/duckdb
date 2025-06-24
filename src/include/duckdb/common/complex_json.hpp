@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <string>
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
