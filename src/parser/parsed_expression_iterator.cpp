@@ -316,4 +316,23 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	}
 }
 
+void ParsedExpressionIterator::VisitExpressionClass(
+    const ParsedExpression &expr, ExpressionClass expr_class,
+    const std::function<void(const ParsedExpression &child)> &callback) {
+	if (expr.GetExpressionClass() == expr_class) {
+		callback(expr);
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { VisitExpressionClass(child, expr_class, callback); });
+}
+
+void ParsedExpressionIterator::VisitExpressionClassMutable(
+    ParsedExpression &expr, ExpressionClass expr_class, const std::function<void(ParsedExpression &child)> &callback) {
+	if (expr.GetExpressionClass() == expr_class) {
+		callback(expr);
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { VisitExpressionClassMutable(child, expr_class, callback); });
+}
+
 } // namespace duckdb
