@@ -199,8 +199,10 @@ struct ArrowLosslessConversionSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_lossless_conversion";
 	static constexpr const char *Description =
-	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
-	    "with a duckdb.type_name extension name.";
+	    "For DuckDB types without an obvious corresponding Arrow type, export to an arrow extension type instead of a "
+	    "more portable but less efficient format. For example, UUIDs are exported to Utf8 (string) when `FALSE`, and "
+	    "arrow.uuid type when `TRUE`. See https://github.com/duckdb/duckdb/pull/17857#issuecomment-2999464024 for "
+	    "details.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
