@@ -19,6 +19,8 @@
 #include <cstring>
 #include <algorithm>
 
+#include "duckdb/storage/arena_string.h"
+
 namespace duckdb {
 
 struct string_t {
@@ -69,41 +71,6 @@ public:
 	}
 	string_t(const string &value) // NOLINT: Allow implicit conversion from `const char*`
 	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size())) {
-	}
-
-	// Allocate using an arena allocator
-	string_t(const char *data, const uint32_t len, ArenaAllocator &arena) {
-		value.inlined.length = len;
-		D_ASSERT(data || GetSize() == 0);
-		if (IsInlined()) {
-			// zero initialize the prefix first
-			// this makes sure that strings with length smaller than 4 still have an equal prefix
-			memset(value.inlined.inlined, 0, INLINE_BYTES);
-			if (GetSize() == 0) {
-				return;
-			}
-			// small string: inlined
-			memcpy(value.inlined.inlined, data, GetSize());
-		} else {
-			// large string: store pointer
-#ifndef DUCKDB_DEBUG_NO_INLINE
-			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
-#else
-			memset(value.pointer.prefix, 0, PREFIX_BYTES);
-#endif
-			// copy the data into the arena
-			const auto data_ptr = arena.AllocateAligned(sizeof(char) * GetSize());
-			memcpy(data_ptr, data, GetSize());
-
-			value.pointer.ptr = (char *)data_ptr; // NOLINT
-		}
-	}
-
-	string_t(const char *data, ArenaAllocator &arena) // NOLINT: Allow implicit conversion from `const char*`
-	    : string_t(data, UnsafeNumericCast<uint32_t>(strlen(data)), arena) {
-	}
-	string_t(const string &value, ArenaAllocator &arena) // NOLINT: Allow implicit conversion from `const char*`
-	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size()), arena) {
 	}
 
 	bool IsInlined() const {
@@ -275,6 +242,83 @@ private:
 		} inlined;
 	} value;
 };
+
+class String {
+public:
+	String(string str)
+	    : // NOLINT: allow implicit conversion
+	      owned_data(std::move(str)), data(owned_data.c_str()), size(owned_data.size()) {
+	}
+
+	String(ArenaString str)
+	    : // NOLINT: allow implicit conversion
+	      data(str.GetData()), size(str.GetSize()) {
+	}
+
+public:
+	idx_t GetSize() const {
+		return size;
+	}
+
+	const char *GetData() const {
+		return data;
+	}
+
+	char operator[](const idx_t pos) const {
+		D_ASSERT(pos < size);
+		return data[pos];
+	}
+
+	bool empty() const {
+		return size == 0;
+	}
+
+	const char *c_str() const {
+		return data;
+	}
+
+	const string &get() const {
+		if (!owned_data.empty()) {
+			return owned_data;
+		}
+
+		return string(data, size);
+	}
+
+	struct ConstIterator;
+
+	ConstIterator begin() const;
+	ConstIterator end() const;
+
+private:
+	string owned_data;
+	const char *data;
+	idx_t size;
+};
+
+struct String::ConstIterator {
+	const char *ptr;
+
+	explicit ConstIterator(const char *ptr_p) : ptr(ptr_p) {
+	}
+
+	const char &operator*() const {
+		return *ptr;
+	}
+
+	ConstIterator &operator++() {
+		ptr++;
+		return *this;
+	}
+};
+
+typename String::ConstIterator String::begin() const {
+	return ConstIterator(data);
+}
+
+typename String::ConstIterator String::end() const {
+	return ConstIterator(data + size);
+}
 
 } // namespace duckdb
 
