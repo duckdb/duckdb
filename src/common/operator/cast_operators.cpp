@@ -1486,26 +1486,8 @@ string_t CastFromUUIDToBlob::Operation(hugeint_t input, Vector &vector) {
 	string_t result = StringVector::EmptyString(vector, 16);
 	auto data = result.GetDataWriteable();
 	
-	// Flip back the first bit before converting to binary
-	int64_t upper = int64_t(uint64_t(input.upper) ^ (uint64_t(1) << 63));
-	
-	// Convert hugeint_t to 16 bytes in big-endian format
-	data[0] = (upper >> 56) & 0xFF;
-	data[1] = (upper >> 48) & 0xFF;
-	data[2] = (upper >> 40) & 0xFF;
-	data[3] = (upper >> 32) & 0xFF;
-	data[4] = (upper >> 24) & 0xFF;
-	data[5] = (upper >> 16) & 0xFF;
-	data[6] = (upper >> 8) & 0xFF;
-	data[7] = upper & 0xFF;
-	data[8] = (input.lower >> 56) & 0xFF;
-	data[9] = (input.lower >> 48) & 0xFF;
-	data[10] = (input.lower >> 40) & 0xFF;
-	data[11] = (input.lower >> 32) & 0xFF;
-	data[12] = (input.lower >> 24) & 0xFF;
-	data[13] = (input.lower >> 16) & 0xFF;
-	data[14] = (input.lower >> 8) & 0xFF;
-	data[15] = input.lower & 0xFF;
+	// Use the utility function from BaseUUID
+	BaseUUID::ToBlob(input, data_ptr_cast(data));
 	
 	result.Finalize();
 	return result;
@@ -1532,30 +1514,8 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &res
 	
 	auto data = const_data_ptr_cast(input.GetData());
 	
-	// Convert 16 bytes to hugeint_t in big-endian format
-	int64_t upper = 0;
-	upper |= ((int64_t)data[0] << 56);
-	upper |= ((int64_t)data[1] << 48);
-	upper |= ((int64_t)data[2] << 40);
-	upper |= ((int64_t)data[3] << 32);
-	upper |= ((int64_t)data[4] << 24);
-	upper |= ((int64_t)data[5] << 16);
-	upper |= ((int64_t)data[6] << 8);
-	upper |= data[7];
-	
-	uint64_t lower = 0;
-	lower |= ((uint64_t)data[8] << 56);
-	lower |= ((uint64_t)data[9] << 48);
-	lower |= ((uint64_t)data[10] << 40);
-	lower |= ((uint64_t)data[11] << 32);
-	lower |= ((uint64_t)data[12] << 24);
-	lower |= ((uint64_t)data[13] << 16);
-	lower |= ((uint64_t)data[14] << 8);
-	lower |= data[15];
-	
-	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
-	result.upper = upper ^ NumericLimits<int64_t>::Minimum();
-	result.lower = lower;
+	// Use the utility function from BaseUUID
+	result = BaseUUID::FromBlob(data);
 	
 	return true;
 }
@@ -1569,30 +1529,8 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict
 	
 	auto data = const_data_ptr_cast(input.GetData());
 	
-	// Convert 16 bytes to hugeint_t in big-endian format
-	int64_t upper = 0;
-	upper |= ((int64_t)data[0] << 56);
-	upper |= ((int64_t)data[1] << 48);
-	upper |= ((int64_t)data[2] << 40);
-	upper |= ((int64_t)data[3] << 32);
-	upper |= ((int64_t)data[4] << 24);
-	upper |= ((int64_t)data[5] << 16);
-	upper |= ((int64_t)data[6] << 8);
-	upper |= data[7];
-	
-	uint64_t lower = 0;
-	lower |= ((uint64_t)data[8] << 56);
-	lower |= ((uint64_t)data[9] << 48);
-	lower |= ((uint64_t)data[10] << 40);
-	lower |= ((uint64_t)data[11] << 32);
-	lower |= ((uint64_t)data[12] << 24);
-	lower |= ((uint64_t)data[13] << 16);
-	lower |= ((uint64_t)data[14] << 8);
-	lower |= data[15];
-	
-	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
-	result.upper = upper ^ NumericLimits<int64_t>::Minimum();
-	result.lower = lower;
+	// Use the utility function from BaseUUID
+	result = BaseUUID::FromBlob(data);
 	
 	return true;
 }
