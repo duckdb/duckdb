@@ -3237,6 +3237,22 @@ Turns the vector into a dictionary vector.
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
 
 /*!
+Copy the src vector to the dst with a selection vector that identifies which indices to copy.
+
+* @param src The vector to copy from.
+* @param dst The vector to copy to.
+* @param sel The selection vector. The length of the selection vector should not be more than the length of the src
+vector
+* @param src_count The number of entries from selection vector to copy. Think of this as the effective length of the
+selection vector starting from index 0
+* @param src_offset The offset in the selection vector to copy from (important: actual number of items copied =
+src_count - src_offset).
+* @param dst_offset The offset in the dst vector to start copying to.
+*/
+DUCKDB_C_API void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel,
+                                         idx_t src_count, idx_t src_offset, idx_t dst_offset);
+
+/*!
 Copies the value from `value` to `vector`.
 
 * @param vector The receiving vector.
