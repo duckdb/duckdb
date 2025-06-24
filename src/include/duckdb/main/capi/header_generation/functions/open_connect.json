@@ -237,7 +237,7 @@
                 },
                 {
                     "type": "duckdb_client_properties*",
-                    "name": "out_context"
+                    "name": "out_properties"
                 }
             ],
             "comment": {

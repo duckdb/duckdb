@@ -152,14 +152,14 @@ void duckdb_connection_get_client_context(duckdb_connection connection, duckdb_c
 	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
-void duckdb_connection_get_client_properties(duckdb_connection connection, duckdb_client_properties *out_context) {
-	if (!connection || !out_context) {
+void duckdb_connection_get_client_properties(duckdb_connection connection, duckdb_client_properties *out_properties) {
+	if (!connection || !out_properties) {
 		return;
 	}
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	auto client_properties = conn->context->GetClientProperties();
 	auto wrapper = new CClientPropertiesWrapper(client_properties);
-	*out_context = reinterpret_cast<duckdb_client_properties>(wrapper);
+	*out_properties = reinterpret_cast<duckdb_client_properties>(wrapper);
 }
 
 idx_t duckdb_client_context_get_connection_id(duckdb_client_context context) {

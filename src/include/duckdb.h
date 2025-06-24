@@ -864,10 +864,9 @@ DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connect
 Retrieves the client properties of the connection.
 
 * @param connection The connection.
-* @param out_context The client properties of the connection. Must be destroyed with `duckdb_destroy_client_properties`.
 */
 DUCKDB_C_API void duckdb_connection_get_client_properties(duckdb_connection connection,
-                                                          duckdb_client_properties *out_context);
+                                                          duckdb_client_properties *out_properties);
 
 /*!
 Returns the connection id of the client context.
@@ -4492,13 +4491,27 @@ DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_descrip
 /*!
 Transforms a DuckDB Schema into an Arrow Schema
 
+* @param client_properties The client properties to extract the arrow settings from.
+* @param types The DuckDB Logical Types for each column in the schema.
 * @param names The names for each column in the schema.
 * @param column_count The number of columns that exist in the schema.
+* @param out_schema The resulting arrow schema.
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_properties,
                                                       duckdb_logical_type *types, char **names, idx_t column_count,
                                                       duckdb_arrow_schema *out_schema);
+
+/*!
+Transforms a DuckDB data chunk into an Arrow array.
+
+* @param client_properties The client properties to extract the Arrow settings from.
+* @param chunk The DuckDB data chunk to convert.
+* @param arrow The output Arrow structure that will hold the converted data.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_properties,
+                                                          duckdb_data_chunk chunk, duckdb_arrow *arrow);
 
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!

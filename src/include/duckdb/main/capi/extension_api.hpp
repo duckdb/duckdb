@@ -476,6 +476,8 @@ typedef struct {
 
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties *client_properties, duckdb_logical_type *types,
 	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
+	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties *client_properties,
+	                                                duckdb_data_chunk chunk, duckdb_arrow *arrow);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -490,7 +492,7 @@ typedef struct {
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	void (*duckdb_connection_get_client_properties)(duckdb_connection connection,
-	                                                duckdb_client_properties *out_context);
+	                                                duckdb_client_properties *out_properties);
 	void (*duckdb_destroy_client_properties)(duckdb_client_properties *properties);
 	// New functions around scalar function binding
 
@@ -936,6 +938,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
 	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
+	result.duckdb_data_chunk_to_arrow = duckdb_data_chunk_to_arrow;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;

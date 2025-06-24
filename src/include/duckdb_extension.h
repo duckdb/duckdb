@@ -547,6 +547,8 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties *client_properties, duckdb_logical_type *types,
 	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
+	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties *client_properties,
+	                                                duckdb_data_chunk chunk, duckdb_arrow *arrow);
 #endif
 
 // New functions for duckdb error data
@@ -565,7 +567,7 @@ typedef struct {
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	void (*duckdb_connection_get_client_properties)(duckdb_connection connection,
-	                                                duckdb_client_properties *out_context);
+	                                                duckdb_client_properties *out_properties);
 	void (*duckdb_destroy_client_properties)(duckdb_client_properties *properties);
 #endif
 
@@ -1028,7 +1030,8 @@ typedef struct {
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
 // Version unstable_new_arrow_functions
-#define duckdb_to_arrow_schema duckdb_ext_api.duckdb_to_arrow_schema
+#define duckdb_to_arrow_schema     duckdb_ext_api.duckdb_to_arrow_schema
+#define duckdb_data_chunk_to_arrow duckdb_ext_api.duckdb_data_chunk_to_arrow
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data

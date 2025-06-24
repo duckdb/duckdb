@@ -30,11 +30,38 @@
             "comment": {
                 "description": "Transforms a DuckDB Schema into an Arrow Schema \n\n",
                 "param_comments": {
-                    "connection": "The client properties to extract the arrow settings from.",
-                    "query": "The DuckDB Logical Types for each column in the schema.",
+                    "client_properties": "The client properties to extract the arrow settings from.",
+                    "types": "The DuckDB Logical Types for each column in the schema.",
                     "names": "The names for each column in the schema.",
                     "column_count": "The number of columns that exist in the schema.",
-                    "out_result": "The resulting arrow schema."
+                    "out_schema": "The resulting arrow schema."
+                },
+                "return_value": "The error data."
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_to_arrow",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_client_properties *",
+                    "name": "client_properties"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "duckdb_arrow *",
+                    "name": "arrow"
+                }
+            ],
+            "comment": {
+                "description": "Transforms a DuckDB data chunk into an Arrow array.\n\n",
+                "param_comments": {
+                    "client_properties": "The client properties to extract the Arrow settings from.",
+                    "chunk": "The DuckDB data chunk to convert.",
+                    "arrow": "The output Arrow structure that will hold the converted data."
                 },
                 "return_value": "The error data."
             }

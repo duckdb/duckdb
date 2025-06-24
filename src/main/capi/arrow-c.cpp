@@ -6,6 +6,7 @@
 
 using duckdb::ArrowConverter;
 using duckdb::ArrowResultWrapper;
+using duckdb::CClientPropertiesWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
 using duckdb::LogicalType;
@@ -14,9 +15,8 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
-DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_properties,
-                                                      duckdb_logical_type *types, char **names, idx_t column_count,
-                                                      duckdb_arrow_schema *out_schema) {
+duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_properties, duckdb_logical_type *types,
+                                         char **names, idx_t column_count, duckdb_arrow_schema *out_schema) {
 
 	if (!types || !names || !out_schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
@@ -28,14 +28,19 @@ DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *
 		schema_names.emplace_back(names[i]);
 		schema_types.emplace_back(types_array[i]);
 	}
-	auto client_properties_wrapper = reinterpret_cast<duckdb::ClientProperties *>(client_properties);
+	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(*client_properties);
 	try {
 		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(*out_schema), schema_types, schema_names,
-		                              *client_properties_wrapper);
+		                              client_properties_wrapper->properties);
 	} catch (...) {
 		// TODO : catch actual exception
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
 	}
+	return nullptr;
+}
+
+duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_properties, duckdb_data_chunk chunk,
+                                             duckdb_arrow *arrow) {
 	return nullptr;
 }
 

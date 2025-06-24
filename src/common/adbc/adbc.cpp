@@ -546,8 +546,11 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 		names[i] = new char[wrapper->result->names[i].size() + 1];
 		std::strcpy(names[i], wrapper->result->names[i].c_str());
 	}
-	auto res = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(&wrapper->result->client_properties),
-	                                  reinterpret_cast<duckdb_logical_type *>(types), names, count,
+
+	auto client_wrapper = new duckdb::CClientPropertiesWrapper(wrapper->result->client_properties);
+	auto client_properties = reinterpret_cast<duckdb_client_properties>(client_wrapper);
+
+	auto res = duckdb_to_arrow_schema(&client_properties, reinterpret_cast<duckdb_logical_type *>(types), names, count,
 	                                  reinterpret_cast<duckdb_arrow_schema *>(&out));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i]; // Delete each individual C-string
@@ -776,17 +779,17 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		std::strcpy(names[i], name.c_str());
 	}
 
-	duckdb_client_properties *client_properties = nullptr;
-	duckdb_connection_get_client_properties(wrapper->connection, client_properties);
+	duckdb_client_properties client_properties;
+	duckdb_connection_get_client_properties(wrapper->connection, &client_properties);
 
-	auto res = duckdb_to_arrow_schema(client_properties, reinterpret_cast<duckdb_logical_type *>(types), names, count,
+	auto res = duckdb_to_arrow_schema(&client_properties, reinterpret_cast<duckdb_logical_type *>(types), names, count,
 	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i];
 	}
 	delete[] types;
 	delete[] names;
-	duckdb_destroy_client_properties(client_properties);
+	duckdb_destroy_client_properties(&client_properties);
 
 	if (res) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
