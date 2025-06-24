@@ -85,7 +85,7 @@ public:
 		return max;
 	}
 
-	template<typename It>
+	template <typename It>
 	bool enqueue_bulk(It itemFirst, size_t count) {
 		for (size_t i = 0; i < count; i++) {
 			q.push(std::move(*itemFirst++));
