@@ -62,7 +62,7 @@ static bool CanReplaceConstantOrNull(TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
 		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
 	}
-	D_ASSERT(table_filter->filter_type == TableFilterType::EXPRESSION_FILTER);
+	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
 	auto &expr_filter = table_filter.Cast<ExpressionFilter>();
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
 	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
