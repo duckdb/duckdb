@@ -52,6 +52,9 @@ int main(int argc_in, char *argv[]) {
 		return 1;
 	}
 
+	if (test_config.GetSkipCompiledTests()) {
+		Catch::getMutableRegistryHub().clearTests();
+	}
 	RegisterSqllogictests();
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
