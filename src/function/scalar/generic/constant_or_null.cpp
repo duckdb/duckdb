@@ -80,10 +80,7 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 	D_ASSERT(expr.bind_info);
 	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
 	D_ASSERT(bind_data.value.type() == val.type());
-	if (expr.children.size() == 2 && expr.children.at(1)->type == ExpressionType::BOUND_COLUMN_REF) {
-		return bind_data.value == val;
-	}
-	return false;
+	return bind_data.value == val;
 }
 
 unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
