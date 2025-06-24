@@ -269,7 +269,7 @@ struct DBConfigOptions {
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
 	//!  By default, WAL is encrypted for encrypted databases
-	bool enable_wal_encryption = true;
+	bool wal_encryption = true;
 	//! Encrypt the temp files
 	bool enable_temp_file_encryption = false;
 	//! Full encryption mode (by default on)

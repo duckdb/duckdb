@@ -332,8 +332,9 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-	db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
-	db.SetIsEncrypted();
+	auto &catalog = db.GetCatalog();
+	catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+	catalog.SetIsEncrypted();
 
 	std::fill(user_key.begin(), user_key.end(), 0);
 	user_key.clear();
@@ -374,14 +375,14 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
 		// automatically encrypt the WAL and temp files
-		config.options.enable_wal_encryption = true;
 		config.options.enable_temp_file_encryption = true;
 		config.options.full_encryption = true;
 
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-		db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
-		db.SetIsEncrypted();
+		auto &catalog = db.GetCatalog();
+		catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+		catalog.SetIsEncrypted();
 
 		//! Store all metadata in the main header
 		StoreEncryptionMetadata(main_header);
@@ -459,28 +460,19 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	if (main_header.IsEncrypted()) {
 		auto &config = DBConfig::GetConfig(db.GetDatabase());
-		// encryption is set, check if the given key upon attach is correct
-		//! Get the stored salt
-		uint8_t salt[MainHeader::SALT_LEN];
-		memset(salt, 0, MainHeader::SALT_LEN);
-		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
-
 		if (options.encryption_options.encryption_enabled) {
-			//! Key given with attach
-			//! Check if the correct key is used to decrypt the database
+			//! Encryption is set
+			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache
 			CheckAndAddEncryptionKey(main_header);
 			// delete user key ptr
 			options.encryption_options.user_key = nullptr;
-		}
-
-		if (!options.encryption_options.encryption_enabled) {
-			// if encrypted, but no encryption
+		} else {
+			// if encrypted, but no encryption key given
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
 
 		// automatically encrypt the WAL and temp files if we deal with an encrypted database
-		config.options.enable_wal_encryption = true;
 		config.options.enable_temp_file_encryption = true;
 		config.options.full_encryption = true;
 	}

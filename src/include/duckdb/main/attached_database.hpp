@@ -76,22 +76,6 @@ public:
 		return db;
 	}
 
-	void SetEncryptionKeyId(const string &key_id) {
-		encryption_key_id = key_id;
-	};
-
-	string &GetEncryptionKeyId() {
-		return encryption_key_id;
-	};
-
-	void SetIsEncrypted() {
-		is_encrypted = true;
-	};
-
-	bool GetIsEncrypted() {
-		return is_encrypted;
-	};
-
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
 	}
