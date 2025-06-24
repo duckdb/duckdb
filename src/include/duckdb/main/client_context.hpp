@@ -339,8 +339,8 @@ public:
 	bool Valid() const {
 		return context != nullptr;
 	}
-	ClientContext &GetClientContext() {
-		return *context;
+	optional_ptr<ClientContext> GetClientContext() const {
+		return context;
 	}
 
 private:
