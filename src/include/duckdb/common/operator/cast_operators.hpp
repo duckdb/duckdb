@@ -914,7 +914,7 @@ duckdb::date_t CastTimestampNsToDate::Operation(duckdb::timestamp_t input);
 template <>
 duckdb::dtime_t CastTimestampNsToTime::Operation(duckdb::timestamp_t input);
 template <>
-duckdb::dtime_ns_t CastTimestampNsToTimeNs::Operation(duckdb::timestamp_t input);
+duckdb::dtime_ns_t CastTimestampNsToTimeNs::Operation(duckdb::timestamp_ns_t input);
 template <>
 duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_t input);
 template <>
