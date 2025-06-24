@@ -144,8 +144,8 @@
       {
         "id": 202,
         "name": "with_ordinality",
-        "type": "Ordinality_request_t",
-        "default": "Ordinality_request_t::NOT_REQUESTED"
+        "type": "OrdinalityType",
+        "default": "OrdinalityType::WITHOUT_ORDINALITY"
       }
     ]
   },
