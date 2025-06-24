@@ -356,7 +356,7 @@ jobs:
   with:
     runs_on: ${{ matrix.config.runs_on }}
     duckdb_arch: ${{ matrix.config.duckdb_arch }}
-    duckdb_binary: ${{ matrix.config.duckb_binary }}
+    duckdb_binary: ${{ matrix.config.duckdb_binary }}
     nightly_build: 'windows'
     branch: ${{ github.ref_name }}
 
