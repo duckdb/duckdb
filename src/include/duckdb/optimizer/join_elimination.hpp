@@ -41,6 +41,7 @@ public:
 	optional_ptr<LogicalOperator> join_parent = nullptr;
 	idx_t join_index = 0;
 
+public:
 	PipelineInfo CreateChild() {
 		auto result = PipelineInfo();
 		result.ref_table_ids = ref_table_ids;
