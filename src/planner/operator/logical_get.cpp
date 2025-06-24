@@ -220,6 +220,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
+	serializer.WritePropertyWithDefault<OrdinalityType>(213, "ordinality_request", ordinality_data.ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -249,6 +250,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
+	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(213, "ordinality_request", result->ordinality_data.ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
