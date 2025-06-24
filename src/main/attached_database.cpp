@@ -178,8 +178,6 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 }
 
 void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
-	auto is_encrypted = options.encryption;
-
 	if (IsSystem()) {
 		catalog->Initialize(context, true);
 	} else {

@@ -1209,19 +1209,19 @@ void Catalog::FinalizeLoad(optional_ptr<ClientContext> context) {
 
 void Catalog::SetEncryptionKeyId(const string &key_id) {
 	throw InternalException("SetEncryptionKeyId() is only implemented for DuckCatalog");
-};
+}
 
 string &Catalog::GetEncryptionKeyId() {
 	throw InternalException("GetEncryptionKeyId() is only implemented for DuckCatalog");
-};
+}
 
 void Catalog::SetIsEncrypted() {
 	throw InternalException("SetIsEncrypted() is only implemented for DuckCatalog");
-};
+}
 
 bool Catalog::GetIsEncrypted() {
 	throw InternalException("GetIsEncrypted() is only implemented for DuckCatalog");
-};
+}
 
 void Catalog::OnDetach(ClientContext &context) {
 }

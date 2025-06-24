@@ -104,10 +104,6 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
-
-	//! key ID for encryption
-	string encryption_key_id;
-	bool is_encrypted = false;
 };
 
 } // namespace duckdb
