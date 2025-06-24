@@ -272,6 +272,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		auto ordinality_pos = bind_return_types.begin() + result->ordinality_data.column_id;
+		bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}

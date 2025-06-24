@@ -1,0 +1,145 @@
+# name: test/sql/ordinality/ordinality.test
+# description: Tests with ordinality using multiple queries
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT o,range FROM range(1) WITH ORDINALITY AS _(range,o);
+----
+1	0
+
+
+query II
+SELECT col = 'test\sql\ordinality\ordinality.test' OR col = 'test/sql/ordinality/ordinality.test', o FROM glob('test/sql/ordinality/ordinality.test') with ordinality AS _(col,o);
+----
+true	1
+
+
+query II
+SELECT my_range, my_ordinality FROM range(3) WITH ORDINALITY AS _(my_range, my_ordinality) ORDER BY my_range,my_ordinality;
+----
+0	1
+1	2
+2	3
+
+statement ok
+CREATE TABLE test(a int);
+
+
+statement ok
+INSERT INTO test VALUES (1),(3);
+
+
+query III
+SELECT a,my_range,my_ordinality FROM test AS t(a), LATERAL range(t.a) WITH ORDINALITY AS _(my_range,my_ordinality) ORDER BY my_range;
+----
+1	0	1
+3	0	1
+3	1	2
+3	2	3
+
+
+query II
+SELECT my_series, my_ordinality FROM generate_series(0,3,1) WITH ORDINALITY AS _(my_series,my_ordinality) ORDER BY my_series, my_ordinality;
+----
+0	1
+1	2
+2	3
+3	4
+
+
+query III
+SELECT a,my_series,my_ordinality FROM test AS t(a), LATERAL generate_series(0,t.a,1) WITH ORDINALITY AS _(my_series,my_ordinality) ORDER BY t.a, my_series, my_ordinality;
+----
+1	0	1
+1	1	2
+3	0	1
+3	1	2
+3	2	3
+3	3	4
+
+
+query II
+SELECT * FROM repeat('x', 5) WITH ORDINALITY;
+----
+x	1
+x	2
+x	3
+x	4
+x	5
+
+
+statement ok
+CREATE OR REPLACE VIEW view_ordinality AS
+SELECT r AS range, o AS my_ordinality
+FROM range((select 10)) WITH ORDINALITY AS _(r, o)
+WHERE my_ordinality > 4
+ORDER BY range, my_ordinality;
+
+
+query II
+SELECT range, my_ordinality FROM view_ordinality ORDER BY range, my_ordinality;
+----
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+
+
+query II
+WITH ordinalityCTE AS (
+    SELECT r AS range, o AS my_ordinality
+    FROM range((select 10)) WITH ORDINALITY AS _(r, o)
+    WHERE my_ordinality > 4
+) SELECT range, my_ordinality FROM ordinalityCTE ORDER BY range, my_ordinality;
+----
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+
+query I
+WITH RECURSIVE ordinalityCTE AS (
+    SELECT 1 AS ordinality
+    UNION
+    SELECT oCTE.ordinality + r.ordinality AS ordinality
+    FROM
+        ordinalityCTE AS oCTE,
+        LATERAL range(1) WITH ORDINALITY AS r(range,ordinality)
+    WHERE oCTE.ordinality < 5
+) SELECT * FROM ordinalityCTE;
+----
+1
+2
+3
+4
+5
+
+
+query I
+WITH RECURSIVE ordinalityCTE AS (
+    SELECT 1 AS ordinality
+    UNION
+    SELECT oCTE.ordinality + r.ordinality AS ordinality
+    FROM
+        ordinalityCTE AS oCTE,
+        LATERAL range(oCTE.ordinality) WITH ORDINALITY AS r(range,ordinality)
+    WHERE oCTE.ordinality < 5
+) SELECT * FROM ordinalityCTE;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+
+
