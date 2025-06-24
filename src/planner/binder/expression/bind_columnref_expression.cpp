@@ -445,10 +445,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {
-
-	// try binding as a lambda parameter
 	if (!col_ref.IsQualified()) {
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
+		// Try binding as a lambda parameter.
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
 		if (lambda_ref) {
 			return lambda_ref;
 		}
