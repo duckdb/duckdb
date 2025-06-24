@@ -15,9 +15,7 @@
 
 namespace duckdb {
 
-enum class ComplexJSONType : uint8_t {
-	VALUE = 0, OBJECT = 1, ARRAY = 2
-};
+enum class ComplexJSONType : uint8_t { VALUE = 0, OBJECT = 1, ARRAY = 2 };
 
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {
