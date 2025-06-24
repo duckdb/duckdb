@@ -317,7 +317,7 @@ bool TemporaryFileHandle::DeleteIfEmpty() {
 }
 
 bool TemporaryFileHandle::IsEncrypted() const {
-	{ return (db.config.options.full_encryption); }
+	{ return (db.config.options.temp_file_encryption); }
 }
 
 TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
@@ -644,7 +644,7 @@ void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
 }
 
 bool TemporaryFileManager::IsEncrypted() const {
-	return db.config.options.full_encryption && db.config.options.enable_temp_file_encryption;
+	return db.config.options.temp_file_encryption;
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
@@ -657,6 +657,7 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
 		handle = GetFileHandle(lock, index.identifier);
 	}
 
+	// before the reusable buffer is given,
 	auto buffer = handle->ReadTemporaryBuffer(index.block_index.GetIndex(), std::move(reusable_buffer));
 	{
 		// remove the block (and potentially erase the temp file)

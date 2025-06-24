@@ -116,27 +116,6 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
-static void PragmaEnableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.enable_temp_file_encryption = true;
-	//! A randomly generated key for encrypting temporary files gets added
-	EncryptionEngine::AddTempKeyToCache(*context.db);
-}
-
-static void PragmaDisableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.enable_temp_file_encryption = false;
-}
-
-static void PragmaEnableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.full_encryption = true;
-	//! A randomly generated key for encrypting temporary files gets added
-	EncryptionEngine::AddTempKeyToCache(*context.db);
-}
-
-// If full encryption is disabled, WAL and temp files are not encrypted.
-static void PragmaDisableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.full_encryption = false;
-}
-
 static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
 	if (parameters.values.empty()) {
 		context.db->GetLogManager().SetEnableLogging(true);
@@ -217,14 +196,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
-
-	set.AddFunction(
-	    PragmaFunction::PragmaStatement("debug_enable_temp_file_encryption", PragmaEnableTempFilesEncryption));
-	set.AddFunction(
-	    PragmaFunction::PragmaStatement("debug_disable_temp_file_encryption", PragmaDisableTempFilesEncryption));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_full_encryption", PragmaEnableFullEncryption));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_full_encryption", PragmaDisableFullEncryption));
 }
 
 } // namespace duckdb

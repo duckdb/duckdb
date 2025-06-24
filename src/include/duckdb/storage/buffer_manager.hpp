@@ -110,6 +110,8 @@ public:
 	virtual void SetTemporaryDirectory(const string &new_dir);
 	//! Returns true, if the path to the temporary file directory is not empty.
 	virtual bool HasTemporaryDirectory() const;
+	//! Returns true if there are files found in the temporary directory
+	virtual bool HasFilesInTemporaryDirectory() const;
 
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size,

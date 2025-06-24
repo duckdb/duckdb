@@ -113,6 +113,7 @@ public:
 	DUCKDB_API void ReserveMemory(idx_t size) final;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
 	bool HasTemporaryDirectory() const final;
+	bool HasFilesInTemporaryDirectory() const final;
 
 protected:
 	//! Helper
