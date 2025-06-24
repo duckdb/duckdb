@@ -14,29 +14,29 @@ typedef void (*on_set_option_t)(const Value &input);
 struct TestConfigOption {
 	const char *name;
 	const char *description;
-	LogicalTypeId type;
+	LogicalType type;
 	on_set_option_t on_set_option;
 };
 
 static const TestConfigOption test_config_options[] = {
-    {"description", "Config description", LogicalTypeId::VARCHAR, nullptr},
-    {"initial_db", "Initial database path", LogicalTypeId::VARCHAR, nullptr},
-    {"max_threads", "Max threads to use during tests", LogicalTypeId::BIGINT, nullptr},
-    {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalTypeId::BIGINT,
+    {"description", "Config description", LogicalType::VARCHAR, nullptr},
+    {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
+    {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
      nullptr},
-    {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalTypeId::BOOLEAN, nullptr},
-    {"force_restart", "Force restart the database between runs", LogicalTypeId::BOOLEAN, nullptr},
-    {"summarize_failures", "Print a summary of all test failures after running", LogicalTypeId::BOOLEAN, nullptr},
-    {"test_memory_leaks", "Run memory leak tests", LogicalTypeId::BOOLEAN, nullptr},
-    {"verify_vector", "Run vector verification for a specific vector type", LogicalTypeId::VARCHAR, nullptr},
-    {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR, nullptr},
-    {"init_script", "Script to execute on init", LogicalTypeId::VARCHAR, TestConfiguration::ParseConnectScript},
-    {"on_init", "SQL statements to execute on init", LogicalTypeId::VARCHAR, nullptr},
-    {"on_load", "SQL statements to execute on explicit load", LogicalTypeId::VARCHAR, nullptr},
-    {"on_new_connection", "SQL statements to execute on connection", LogicalTypeId::VARCHAR, nullptr},
-    {"skip_tests", "Tests to be skipped", LogicalTypeId::VARCHAR, nullptr},
-    {"skip_compiled", "Skip compiled tests", LogicalTypeId::BOOLEAN, nullptr},
-    {nullptr, nullptr, LogicalTypeId::INVALID, nullptr},
+    {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalType::BOOLEAN, nullptr},
+    {"force_restart", "Force restart the database between runs", LogicalType::BOOLEAN, nullptr},
+    {"summarize_failures", "Print a summary of all test failures after running", LogicalType::BOOLEAN, nullptr},
+    {"test_memory_leaks", "Run memory leak tests", LogicalType::BOOLEAN, nullptr},
+    {"verify_vector", "Run vector verification for a specific vector type", LogicalType::VARCHAR, nullptr},
+    {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
+    {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
+    {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
+    {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
+    {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
+    {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
+    {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
 TestConfiguration &TestConfiguration::Get() {
@@ -164,17 +164,7 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 }
 
 bool TestConfiguration::ShouldSkipTest(const string &test) {
-
-	auto entry = options.find("skip_tests");
-	if (entry == options.end()) {
-		return false;
-	}
-	string skip_list = GetOptionOrDefault("skip_tests", string());
-	string to_find = string("\"") + test + string("\"");
-	if (skip_list.find(to_find) != std::string::npos) {
-		return true;
-	}
-	return false;
+	return tests_to_be_skipped.count(test);
 }
 
 string TestConfiguration::OnInitCommand() {
@@ -218,6 +208,16 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	auto json_values = json->Flatten();
 	for (auto &entry : json_values) {
 		ParseOption(entry.first, Value(entry.second));
+	}
+
+	// Convert to unordered_set<string> the list of tests to be skipped
+	auto entry = options.find("skip_tests");
+	if (entry != options.end()) {
+		vector<Value> skip_list = ListValue::GetChildren(entry->second);
+
+		for (auto x : skip_list) {
+			tests_to_be_skipped.insert(x.GetValue<string>());
+		}
 	}
 }
 
