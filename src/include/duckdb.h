@@ -4507,11 +4507,11 @@ Transforms a DuckDB data chunk into an Arrow array.
 
 * @param client_properties The client properties to extract the Arrow settings from.
 * @param chunk The DuckDB data chunk to convert.
-* @param arrow The output Arrow structure that will hold the converted data.
+* @param out_arrow_array The output Arrow structure that will hold the converted data.
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_properties,
-                                                          duckdb_data_chunk chunk, duckdb_arrow *arrow);
+                                                          duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
 
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!

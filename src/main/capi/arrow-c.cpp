@@ -40,7 +40,23 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_proper
 }
 
 duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_properties, duckdb_data_chunk chunk,
-                                             duckdb_arrow *arrow) {
+                                             duckdb_arrow_array *out_arrow_array) {
+	if (!out_arrow_array) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_data_chunk_to_arrow");
+	}
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(*client_properties);
+	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
+	    *client_properties_wrapper->properties.client_context, dchunk->GetTypes());
+
+
+	try {
+		ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_arrow_array),
+	                             client_properties_wrapper->properties, extension_type_cast);
+	} catch (...) {
+		// TODO : catch actual exception
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
+	}
 	return nullptr;
 }
 

@@ -52,8 +52,8 @@
                     "name": "chunk"
                 },
                 {
-                    "type": "duckdb_arrow *",
-                    "name": "arrow"
+                    "type": "duckdb_arrow_array *",
+                    "name": "out_arrow_array"
                 }
             ],
             "comment": {
@@ -61,7 +61,7 @@
                 "param_comments": {
                     "client_properties": "The client properties to extract the Arrow settings from.",
                     "chunk": "The DuckDB data chunk to convert.",
-                    "arrow": "The output Arrow structure that will hold the converted data."
+                    "out_arrow_array": "The output Arrow structure that will hold the converted data."
                 },
                 "return_value": "The error data."
             }

@@ -477,7 +477,7 @@ typedef struct {
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties *client_properties, duckdb_logical_type *types,
 	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties *client_properties,
-	                                                duckdb_data_chunk chunk, duckdb_arrow *arrow);
+	                                                duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);

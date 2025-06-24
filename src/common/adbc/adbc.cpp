@@ -555,6 +555,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i]; // Delete each individual C-string
 	}
+	duckdb_destroy_client_properties(&client_properties);
 	delete[] types;
 	delete[] names;
 	if (res) {
@@ -568,9 +569,24 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 		return DuckDBError;
 	}
 	out->release = nullptr;
+	auto wrapper = reinterpret_cast<duckdb::ArrowResultWrapper *>(stream->private_data);
+	auto fetch_success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
+	if (!fetch_success) {
+		return DuckDBError;
+	}
+	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
+		return DuckDBSuccess;
+	}
+	auto client_wrapper = new duckdb::CClientPropertiesWrapper(wrapper->result->client_properties);
+	auto client_properties = reinterpret_cast<duckdb_client_properties>(client_wrapper);
 
-	return duckdb_query_arrow_array(static_cast<duckdb_arrow>(stream->private_data),
-	                                reinterpret_cast<duckdb_arrow_array *>(&out));
+	auto conversion_success = duckdb_data_chunk_to_arrow(&client_properties, reinterpret_cast<duckdb_data_chunk>(wrapper->current_chunk.get()), reinterpret_cast<duckdb_arrow_array *>(&out));
+	duckdb_destroy_client_properties(&client_properties);
+
+	if (conversion_success) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }
 
 void release(struct ArrowArrayStream *stream) {
@@ -589,7 +605,6 @@ const char *get_last_error(struct ArrowArrayStream *stream) {
 		return nullptr;
 	}
 	return nullptr;
-	// return duckdb_query_arrow_error(stream);
 }
 
 // this is an evil hack, normally we would need a stream factory here, but its probably much easier if the adbc clients
