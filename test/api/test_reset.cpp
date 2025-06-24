@@ -120,7 +120,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
-	    {"enable_external_file_cache", {false}}};
+	    {"enable_external_file_cache", {false}},
+	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
