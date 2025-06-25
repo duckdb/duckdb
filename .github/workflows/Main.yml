@@ -126,7 +126,7 @@ jobs:
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-24.04
-    needs: force-storage
+    needs: linux-configs
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -163,7 +163,7 @@ jobs:
  prefetch-all-parquet-files:
    name: Prefetch All Parquet Files
    runs-on: ubuntu-24.04
-   needs: force-storage
+   needs: linux-configs
    env:
      GEN: ninja
      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -196,7 +196,7 @@ jobs:
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
-    needs: force-storage
+    needs: linux-configs
     env:
       CC: gcc-10
       CXX: g++-10
@@ -240,7 +240,7 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
-    needs: force-storage
+    needs: linux-configs
     env:
       CC: clang
       CXX: clang++
@@ -276,7 +276,7 @@ jobs:
 
  vector-verification:
     name: Vector Verification Tests
-    needs: force-storage
+    needs: linux-configs
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -338,7 +338,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
-    needs: force-storage
+    needs: linux-configs
     runs-on: ubuntu-24.04
     env:
       CC: clang
@@ -447,17 +447,17 @@ jobs:
         ./build/reldebug/test/unittest --test-config test/configs/encrypted_db.json
 
     - name: test/configs/force_storage.json
-       shell: bash
-       run: |
+      shell: bash
+      run: |
         ./build/reldebug/test/unittest --test-config test/configs/force_storage.json
 
     - name: test/configs/force_storage_restart.json
-       shell: bash
-       run: |
+      shell: bash
+      run: |
         ./build/reldebug/test/unittest --test-config test/configs/force_storage_restart.json
 
     - name: test/configs/latest_storage.json
-       shell: bash
-       run: |
+      shell: bash
+      run: |
         ./build/reldebug/test/unittest --test-config test/configs/latest_storage.json
 
