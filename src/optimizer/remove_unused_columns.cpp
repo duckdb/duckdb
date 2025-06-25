@@ -239,7 +239,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			ClearUnusedExpressions(proj_sel, get.table_index, false);
 
 			vector<unique_ptr<Expression>> filter_expressions;
-			vector<unique_ptr<BoundColumnRefExpression>> column_refs;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
@@ -259,12 +258,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
-				if (filter_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-					AddBinding(*column_ref);
-					column_refs.push_back(std::move(column_ref));
-				} else {
-					VisitExpression(&filter_expr);
+				if (filter_expr->IsScalar()) {
+					filter_expr = std::move(column_ref);
 				}
+				VisitExpression(&filter_expr);
 				filter_expressions.push_back(std::move(filter_expr));
 			}
 
