@@ -260,10 +260,6 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 		// write an UNCOMPRESSED buffer to the file
 		if (identifier.encrypted) {
-			// create a new FileBuffer and write that one to the file
-			// auto temp_buf = make_uniq<FileBuffer>(Allocator::Get(db), buffer.GetBufferType(), buffer.Size(),
-			//                                       DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
-
 			// nonce and tag are written separately
 			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 			EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);

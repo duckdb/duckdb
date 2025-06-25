@@ -473,7 +473,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
 
-		// automatically encrypt the WAL and temp files if we deal with an encrypted database
+		// automatically encrypt the temp files if we deal with an encrypted database
 		config.options.temp_file_encryption = true;
 	}
 
@@ -834,11 +834,12 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	source_buffer.Restructure(*this);
-	return make_uniq<Block>(source_buffer, block_id);
+	// FIXME; maybe we should pass the block header size explicitly
+	return make_uniq<Block>(source_buffer, block_id, GetBlockHeaderSize());
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	// FIXME; maybe we should pass the block header size explicitly
 	unique_ptr<Block> result;
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);

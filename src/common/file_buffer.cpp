@@ -32,10 +32,11 @@ void FileBuffer::Init() {
 	internal_size = 0;
 }
 
-FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
+FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, idx_t block_header_size)
+    : allocator(source.allocator), type(type_p) {
 	// take over the structures of the source buffer
-	buffer = source.buffer;
-	size = source.size;
+	buffer = source.internal_buffer + block_header_size;
+	size = source.internal_size - block_header_size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
 
@@ -61,6 +62,7 @@ void FileBuffer::ReallocBuffer(idx_t new_size) {
 	if (!new_buffer) {
 		throw std::bad_alloc();
 	}
+
 	internal_buffer = new_buffer;
 	internal_size = new_size;
 
@@ -98,21 +100,6 @@ void FileBuffer::Resize(uint64_t new_size, BlockManager &block_manager) {
 
 void FileBuffer::Resize(BlockManager &block_manager) {
 	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
-}
-
-void FileBuffer::RestructureDefault() {
-	buffer = internal_buffer + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-	size = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-}
-
-void FileBuffer::Restructure(BlockManager &block_manager) {
-	buffer = internal_buffer + block_manager.GetBlockHeaderSize();
-	size = block_manager.GetBlockSize();
-}
-
-void FileBuffer::Restructure(uint64_t block_size, uint64_t block_header_size) {
-	buffer = internal_buffer + block_header_size;
-	size = block_size;
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {

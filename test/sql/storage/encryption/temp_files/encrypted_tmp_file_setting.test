@@ -1,4 +1,4 @@
-# name: test/sql/storage/encryption/temp_files/encrypted_tmp_file_pragmas.test
+# name: test/sql/storage/encryption/temp_files/encrypted_tmp_file_setting.test
 # group: [temp_files]
 
 require block_size 262144

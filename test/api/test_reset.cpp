@@ -160,6 +160,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_community_extensions",    // cant change this while db is running
 	    "allow_unredacted_secrets",      // cant change this while db is running
 	    "disable_database_invalidation", // cant change this while db is running
+	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "streaming_buffer_size",
 	    "log_query_path",
