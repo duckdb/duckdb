@@ -61,6 +61,7 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 			}
 			break;
 		}
+		case TestConfiguration::ExtensionInstallMode::REMOTE_NO_CHECKS:
 		case TestConfiguration::ExtensionInstallMode::REMOTE_ONLY: {
 			config->options.allow_unsigned_extensions = false;
 			config->options.autoinstall_known_extensions = true;
@@ -638,6 +639,15 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		if (install_has_error) {
 			return RequireResult::MISSING;
+		}
+		if (install_mode == TestConfiguration::ExtensionInstallMode::REMOTE_NO_CHECKS) {
+			bool has_error = false;
+			has_error |= con->Query("FORCE INSTALL " + param + " FROM '" + local_extension_repo + "';")->HasError();
+			if (!has_error) {
+				ExtensionHelper::LoadExtension(*db, param);
+			}
+			// In case of REMOTE_NO_CHECKS, we just move forward, and let the test eventually fail
+			return RequireResult::PRESENT;
 		}
 		if (loading_mode == TestConfiguration::ExtensionLoadingMode::ALL) {
 			if (!con->Query("LOAD " + param + ";")->HasError()) {

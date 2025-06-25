@@ -22,7 +22,7 @@ namespace duckdb {
 class TestConfiguration {
 public:
 	enum class ExtensionLoadingMode { NONE = 0, AUTOLOAD_ONLY = 1, ALL = 2 };
-	enum class ExtensionInstallMode { NONE = 0, LOCAL_ONLY = 1, REMOTE_ONLY = 2, EITHER = 3 };
+	enum class ExtensionInstallMode { NONE = 0, LOCAL_ONLY = 1, REMOTE_ONLY = 2, EITHER = 3, REMOTE_NO_CHECKS = 4 };
 
 	static TestConfiguration &Get();
 

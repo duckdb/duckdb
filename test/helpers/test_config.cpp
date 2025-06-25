@@ -188,6 +188,8 @@ TestConfiguration::ExtensionInstallMode TestConfiguration::GetExtensionInstallMo
 		return TestConfiguration::ExtensionInstallMode::LOCAL_ONLY;
 	} else if (res == "remote" || res == "remote_only") {
 		return TestConfiguration::ExtensionInstallMode::REMOTE_ONLY;
+	} else if (res == "remote_no_checks" || res == "release_mode") {
+		return TestConfiguration::ExtensionInstallMode::REMOTE_NO_CHECKS;
 	} else if (res == "either") {
 		return TestConfiguration::ExtensionInstallMode::EITHER;
 	}
