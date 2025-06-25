@@ -37,17 +37,7 @@ struct SchedulerThread {
 };
 
 #ifndef DUCKDB_NO_THREADS
-struct TaskQueueTraits : duckdb_moodycamel::ConcurrentQueueDefaultTraits {
-	// Use the defaults with our own allocator
-	static inline void *malloc(size_t size) {
-		return Allocator::DefaultAllocate(nullptr, size);
-	}
-	static inline void free(void *ptr) {
-		return Allocator::DefaultFree(nullptr, data_ptr_cast(ptr), 0);
-	}
-};
-
-typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>, TaskQueueTraits> concurrent_queue_t;
+typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
 typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
