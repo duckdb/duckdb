@@ -123,44 +123,6 @@ jobs:
       shell: bash
       run: make allunit
 
- force-storage:
-    name: Force Storage
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-22.04
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
-      RUN_SLOW_VERIFIERS: 1
-      DUCKDB_TEST_DESCRIPTION: 'Tests run with --force-storage'
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make reldebug
-
-    - name: Output version info
-      shell: bash
-      run: ./build/reldebug/duckdb -c "PRAGMA version;"
-
-    - name: Test
-      shell: bash
-      run: build/reldebug/test/unittest --force-storage
-
  force-restart:
     name: Force Restart
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -553,4 +515,9 @@ jobs:
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/encrypted_db.json
+
+    - name: test/configs/force_storage.json
+       shell: bash
+       run: |
+        ./build/reldebug/test/unittest --test-config test/configs/force_storage.json
 
