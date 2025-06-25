@@ -160,39 +160,6 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
- prefetch-all-parquet-files:
-   name: Prefetch All Parquet Files
-   runs-on: ubuntu-24.04
-   needs: linux-configs
-   env:
-     GEN: ninja
-     CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-     PREFETCH_ALL_PARQUET_FILES: 1
-     LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-
-   steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - name: Install
-       shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-     - name: Build
-       shell: bash
-       run: make relassert
-
-     - name: Test
-       shell: bash
-       run: build/relassert/test/unittest
-
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
@@ -403,6 +370,12 @@ jobs:
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/latest_storage.json
+
+    - name: test/configs/prefetch_all_parquet_files.json
+      if: steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --test-config test/configs/prefetch_all_parquet_files.json
 
     - name: Test dictionary_expression
       if: steps.build.conclusion == 'success'
