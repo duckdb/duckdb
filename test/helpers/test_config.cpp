@@ -31,6 +31,8 @@ static const TestConfigOption test_config_options[] = {
     {"test_memory_leaks", "Run memory leak tests", LogicalType::BOOLEAN, nullptr},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalType::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
+    {"extension_install", "Install strategy for extensions", LogicalType::VARCHAR, nullptr},
+    {"extension_loading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
@@ -166,8 +168,34 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	}
 }
 
-bool TestConfiguration::ShouldSkipTest(const string &test) {
-	return tests_to_be_skipped.count(test);
+TestConfiguration::ExtensionLoadingMode TestConfiguration::GetExtensionLoadingMode() {
+	string res = StringUtil::Lower(GetOptionOrDefault("extension_loading", string("none")));
+	if (res == "none") {
+		return TestConfiguration::ExtensionLoadingMode::NONE;
+	} else if (res == "autoload" || res == "autoload_only") {
+		return TestConfiguration::ExtensionLoadingMode::AUTOLOAD_ONLY;
+	} else if (res == "all") {
+		return TestConfiguration::ExtensionLoadingMode::ALL;
+	}
+	throw std::runtime_error("Unknown extension-loading mode");
+}
+
+TestConfiguration::ExtensionInstallMode TestConfiguration::GetExtensionInstallMode() {
+	string res = StringUtil::Lower(GetOptionOrDefault("extension_install", string("none")));
+	if (res == "none") {
+		return TestConfiguration::ExtensionInstallMode::NONE;
+	} else if (res == "local" || res == "local_only") {
+		return TestConfiguration::ExtensionInstallMode::LOCAL_ONLY;
+	} else if (res == "remote" || res == "remote_only") {
+		return TestConfiguration::ExtensionInstallMode::REMOTE_ONLY;
+	} else if (res == "either") {
+		return TestConfiguration::ExtensionInstallMode::EITHER;
+	}
+	throw std::runtime_error("Unknown extension-loading mode");
+}
+
+bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	return tests_to_be_skipped.count(test_name);
 }
 
 string TestConfiguration::OnInitCommand() {

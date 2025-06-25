@@ -21,6 +21,9 @@ namespace duckdb {
 
 class TestConfiguration {
 public:
+	enum class ExtensionLoadingMode { NONE = 0, AUTOLOAD_ONLY = 1, ALL = 2 };
+	enum class ExtensionInstallMode { NONE = 0, LOCAL_ONLY = 1, REMOTE_ONLY = 2, EITHER = 3 };
+
 	static TestConfiguration &Get();
 
 	void Initialize();
@@ -42,6 +45,8 @@ public:
 	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
+	ExtensionLoadingMode GetExtensionLoadingMode();
+	ExtensionInstallMode GetExtensionInstallMode();
 	bool ShouldSkipTest(const string &test_name);
 	string OnInitCommand();
 	string OnLoadCommand();
