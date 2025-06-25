@@ -537,7 +537,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	}
 	auto result_wrapper = reinterpret_cast<duckdb_result *>(stream->private_data);
 	auto count = duckdb_column_count(result_wrapper);
-	auto types = new duckdb_logical_type[count];
+	std::vector<duckdb_logical_type> types(count);
 	// Allocate array of char* using new
 	char **names = new char *[count];
 
@@ -551,12 +551,14 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto client_properties = duckdb_client_property(result_wrapper);
 
 	auto res =
-	    duckdb_to_arrow_schema(&client_properties, types, names, count, reinterpret_cast<duckdb_arrow_schema *>(&out));
+	    duckdb_to_arrow_schema(&client_properties, &types[0], names, count, reinterpret_cast<duckdb_arrow_schema *>(&out));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i]; // Delete each individual C-string
 	}
 	duckdb_destroy_client_properties(&client_properties);
-	delete[] types;
+	for (auto& type: types) {
+		duckdb_destroy_logical_type(&type);
+	}
 	delete[] names;
 	if (res) {
 		return DuckDBError;
@@ -596,8 +598,8 @@ void release(struct ArrowArrayStream *stream) {
 		return;
 	}
 	if (stream->private_data) {
-		// FIXME
-		duckdb_destroy_arrow(reinterpret_cast<duckdb_arrow *>(&stream->private_data));
+		auto result_wrapper = reinterpret_cast<duckdb_result *>(stream->private_data);
+		duckdb_destroy_result(result_wrapper);
 		stream->private_data = nullptr;
 	}
 	stream->release = nullptr;
@@ -737,7 +739,6 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 		duckdb_destroy_prepare(&wrapper->statement);
 		wrapper->statement = nullptr;
 	}
-	duckdb_destroy_result(&wrapper->result);
 	if (wrapper->ingestion_stream.release) {
 		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
 		wrapper->ingestion_stream.release = nullptr;

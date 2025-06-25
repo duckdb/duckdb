@@ -23,10 +23,9 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_proper
 	}
 	duckdb::vector<LogicalType> schema_types;
 	duckdb::vector<std::string> schema_names;
-	auto types_array = reinterpret_cast<duckdb::LogicalType *>(types);
 	for (idx_t i = 0; i < column_count; i++) {
 		schema_names.emplace_back(names[i]);
-		schema_types.emplace_back(types_array[i]);
+		schema_types.emplace_back(*reinterpret_cast<duckdb::LogicalType *>(types[i]));
 	}
 	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(*client_properties);
 	try {

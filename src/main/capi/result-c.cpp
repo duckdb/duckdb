@@ -448,7 +448,7 @@ duckdb_client_properties duckdb_client_property(duckdb_result *result) {
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
-	if (result_data.result) {
+	if (!result_data.result) {
 		return nullptr;
 	}
 	auto client_wrapper = new CClientPropertiesWrapper(result_data.result->client_properties);
