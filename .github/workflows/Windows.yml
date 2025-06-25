@@ -32,6 +32,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
+      - 'test-uploaded-ext'
 
   merge_group:
   pull_request:

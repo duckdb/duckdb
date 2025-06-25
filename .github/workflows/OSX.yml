@@ -29,6 +29,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'test-uploaded-ext'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -314,6 +315,7 @@ jobs:
     with:
       runs_on: ${{ matrix.config.runs_on }}
       duckdb_arch: ${{ matrix.config.duckdb_arch }}
+      run_id: ${{ github.run_id }}
       duckdb_binary: ${{ matrix.config.duckdb_binary }}
       nightly_build: 'osx'
       branch: ${{ github.ref_name }}
