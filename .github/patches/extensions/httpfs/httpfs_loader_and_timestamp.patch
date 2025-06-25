@@ -138,10 +138,18 @@ index 04bd795..3a3e89e 100644
  
  size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 686162f..c8713f6 100644
+index 686162f..cb55421 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
-@@ -263,19 +263,6 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+@@ -7,6 +7,7 @@
+ #include "duckdb/common/http_util.hpp"
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/hash.hpp"
++#include "duckdb/common/types/time.hpp"
+ #include "duckdb/function/scalar/strftime_format.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/main/client_context.hpp"
+@@ -263,19 +264,6 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
  	return response;
  }
  
@@ -161,7 +169,7 @@ index 686162f..c8713f6 100644
  HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
                                 unique_ptr<HTTPParams> params_p)
      : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params->Cast<HTTPFSParams>()),
-@@ -286,7 +273,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpe
+@@ -286,7 +274,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpe
  		auto &info = file.extended_info->options;
  		auto lm_entry = info.find("last_modified");
  		if (lm_entry != info.end()) {
@@ -170,7 +178,7 @@ index 686162f..c8713f6 100644
  		}
  		auto etag_entry = info.find("etag");
  		if (etag_entry != info.end()) {
-@@ -466,7 +453,7 @@ int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
+@@ -466,7 +454,7 @@ int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
  	return sfh.length;
  }
  
@@ -179,7 +187,7 @@ index 686162f..c8713f6 100644
  	auto &sfh = handle.Cast<HTTPFileHandle>();
  	return sfh.last_modified;
  }
-@@ -549,7 +536,7 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
+@@ -549,20 +537,14 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
  	}
  }
  
@@ -188,12 +196,19 @@ index 686162f..c8713f6 100644
  	StrpTimeFormat::ParseResult parse_result;
  	if (!StrpTimeFormat::TryParse("%a, %d %h %Y %T %Z", timestamp, parse_result)) {
  		return false;
-@@ -562,7 +549,7 @@ bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, time_t &r
- 	tm.tm_min = parse_result.data[4];
- 	tm.tm_sec = parse_result.data[5];
- 	tm.tm_isdst = 0;
+ 	}
+-	struct tm tm {};
+-	tm.tm_year = parse_result.data[0] - 1900;
+-	tm.tm_mon = parse_result.data[1] - 1;
+-	tm.tm_mday = parse_result.data[2];
+-	tm.tm_hour = parse_result.data[3];
+-	tm.tm_min = parse_result.data[4];
+-	tm.tm_sec = parse_result.data[5];
+-	tm.tm_isdst = 0;
 -	result = mktime(&tm);
-+	Timestamp::FromTimeT(mktime(&tm));
++	auto date = Date::FromDate(parse_result.data[0] - 1900, parse_result.data[1] - 1, parse_result.data[2]);
++	auto time = Time::FromTime(parse_result.data[3], parse_result.data[4], parse_result.data[5]);
++	result = Timestamp::FromDatetime(date, time);
  	return true;
  }
  

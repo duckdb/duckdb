@@ -123,7 +123,7 @@ index 5ce0b8d..d0758e2 100644
 +}
 \ No newline at end of file
 diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
-index d7ed201..ef11c56 100644
+index d7ed201..07f84eb 100644
 --- a/src/azure_filesystem.cpp
 +++ b/src/azure_filesystem.cpp
 @@ -40,7 +40,7 @@ AzureFileHandle::AzureFileHandle(AzureStorageFileSystem &fs, const OpenFileInfo
@@ -144,7 +144,7 @@ index d7ed201..ef11c56 100644
  	auto &afh = handle.Cast<AzureFileHandle>();
  	return afh.last_modified;
  }
-@@ -228,9 +228,9 @@ AzureReadOptions AzureStorageFileSystem::ParseAzureReadOptions(optional_ptr<File
+@@ -228,9 +228,10 @@ AzureReadOptions AzureStorageFileSystem::ParseAzureReadOptions(optional_ptr<File
  	return options;
  }
  
@@ -152,7 +152,8 @@ index d7ed201..ef11c56 100644
 +timestamp_t AzureStorageFileSystem::ToTimestamp(const Azure::DateTime &dt) {
  	auto time_point = static_cast<std::chrono::system_clock::time_point>(dt);
 -	return std::chrono::system_clock::to_time_t(time_point);
-+	return Timestamp::FromTimeT(std::chrono::system_clock::to_time_t(time_point));
++	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(time_point.time_since_epoch()).count();
++	return timestamp_t(micros);
  }
  
  } // namespace duckdb

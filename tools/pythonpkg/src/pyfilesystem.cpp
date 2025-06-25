@@ -194,7 +194,7 @@ timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 
 	auto last_mod = filesystem.attr("modified")(handle.path);
 
-	return Timestamp::FromTimeT(py::int_(last_mod.attr("timestamp")()));
+	return Timestamp::FromEpochSeconds(py::int_(last_mod.attr("timestamp")()));
 }
 void PythonFilesystem::FileSync(FileHandle &handle) {
 	D_ASSERT(!py::gil_check());
