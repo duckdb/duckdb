@@ -516,3 +516,40 @@ jobs:
       run:  |
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+
+ linux-configs-changes:
+    name: Test configs
+    runs-on: ubuntu-24.04
+    needs: linux-extensions-64
+    env:
+      BASE_BRANCH: ${{ github.base_ref || 'main') }}
+      CORE_EXTENSIONS: "json;parquet;tpch;tpcds"
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Test changed configurations
+      shell: bash
+      run: |
+        git diff --name-only ${BASE_BRANCH} test/configs| xargs -I{} echo $./build/release/test/unittest --test-config {}
