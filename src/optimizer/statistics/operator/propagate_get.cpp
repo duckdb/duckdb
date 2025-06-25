@@ -10,7 +10,6 @@
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
@@ -25,7 +24,7 @@ static void GetColumnIndex(unique_ptr<Expression> &expr, idx_t &index) {
 }
 
 FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
-																 TableFilter &filter) {
+                                                                 TableFilter &filter) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 
@@ -71,7 +70,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 	}
 }
 
-static bool IsConstantOrNullFilter(TableFilter & table_filter) {
+static bool IsConstantOrNullFilter(TableFilter &table_filter) {
 	if (table_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
 		return false;
 	}
@@ -83,7 +82,7 @@ static bool IsConstantOrNullFilter(TableFilter & table_filter) {
 	return ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true));
 }
 
-static bool CanReplaceConstantOrNull(TableFilter & table_filter) {
+static bool CanReplaceConstantOrNull(TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
 		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
 	}
@@ -106,8 +105,8 @@ static bool CanReplaceConstantOrNull(TableFilter & table_filter) {
 	return true;
 }
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet & get,
-                                                                     unique_ptr<LogicalOperator> & node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	if (get.function.cardinality) {
 		node_stats = get.function.cardinality(context, get.bind_data.get());
 	}
