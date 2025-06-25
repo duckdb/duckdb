@@ -620,6 +620,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
 		// Set the validity mask for each row before inserting data
+		// TODO only when if !layout.AllValid()
 		InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
 
 		if (!layout.AllConstant()) {
@@ -660,17 +661,27 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const Vector
 	                          chunk_state.vector_data[column_id].unified, scatter_function.child_functions);
 }
 
+#ifdef DUCKDB_SMALLER_BINARY
 template <class T>
-static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorFormat &source_format,
-                                      const SelectionVector &append_sel, const idx_t append_count,
-                                      const TupleDataLayout &layout, const Vector &row_locations,
-                                      Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &,
-                                      const vector<TupleDataScatterFunction> &) {
+#else
+template <class T, bool HAS_APPEND_SEL, bool HAS_SOURCE_SEL, bool ALL_VALID>
+#endif
+static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVectorFormat &source_format,
+                                              const SelectionVector &append_sel, const idx_t append_count,
+                                              const TupleDataLayout &layout, const Vector &row_locations,
+                                              Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &,
+                                              const vector<TupleDataScatterFunction> &) {
 	// Source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
 	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
 	const auto &validity = source_data.validity;
+
+#ifdef DUCKDB_SMALLER_BINARY
+	const auto HAS_APPEND_SEL = append_sel.IsSet();
+	const auto HAS_SOURCE_SEL = source_sel.IsSet();
+	const auto ALL_VALID = validity.AllValid();
+#endif
 
 	// Target
 	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -682,29 +693,74 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
-	if (validity.AllValid()) {
-		if (!append_sel.IsSet() && !source_sel.IsSet()) {
-			// Fast path
-			for (idx_t i = 0; i < append_count; i++) {
-				TupleDataValueStore<T>(data[i], target_locations[i], offset_in_row, target_heap_locations[i]);
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto append_idx = HAS_APPEND_SEL ? append_sel.get_index_unsafe(i) : i;
+		const auto source_idx = HAS_SOURCE_SEL ? source_sel.get_index_unsafe(append_idx) : append_idx;
+		if (ALL_VALID || validity.RowIsValid(source_idx)) {
+			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+		} else {
+			TupleDataValueStore<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
+			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
+		}
+	}
+}
+
+template <class T>
+static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVectorFormat &source_format,
+                                      const SelectionVector &append_sel, const idx_t append_count,
+                                      const TupleDataLayout &layout, const Vector &row_locations,
+                                      Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
+                                      const vector<TupleDataScatterFunction> &child_functions) {
+#ifdef DUCKDB_SMALLER_BINARY
+	TupleDataTemplatedScatterInternal<T>(source, source_format, append_sel, append_count, layout, row_locations,
+	                                     heap_locations, col_idx, dummy_arg, child_functions);
+#else
+	if (append_sel.IsSet()) {
+		if (source_format.unified.sel->IsSet()) {
+			if (source_format.unified.validity.AllValid()) {
+				TupleDataTemplatedScatterInternal<T, true, true, true>(source, source_format, append_sel, append_count,
+				                                                       layout, row_locations, heap_locations, col_idx,
+				                                                       dummy_arg, child_functions);
+			} else {
+				TupleDataTemplatedScatterInternal<T, true, true, false>(source, source_format, append_sel, append_count,
+				                                                        layout, row_locations, heap_locations, col_idx,
+				                                                        dummy_arg, child_functions);
 			}
 		} else {
-			for (idx_t i = 0; i < append_count; i++) {
-				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-				TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+			if (source_format.unified.validity.AllValid()) {
+				TupleDataTemplatedScatterInternal<T, true, false, true>(source, source_format, append_sel, append_count,
+				                                                        layout, row_locations, heap_locations, col_idx,
+				                                                        dummy_arg, child_functions);
+			} else {
+				TupleDataTemplatedScatterInternal<T, true, false, false>(
+				    source, source_format, append_sel, append_count, layout, row_locations, heap_locations, col_idx,
+				    dummy_arg, child_functions);
 			}
 		}
 	} else {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			if (validity.RowIsValid(source_idx)) {
-				TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+		if (source_format.unified.sel->IsSet()) {
+			if (source_format.unified.validity.AllValid()) {
+				TupleDataTemplatedScatterInternal<T, false, true, true>(source, source_format, append_sel, append_count,
+				                                                        layout, row_locations, heap_locations, col_idx,
+				                                                        dummy_arg, child_functions);
 			} else {
-				TupleDataValueStore<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
-				ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
+				TupleDataTemplatedScatterInternal<T, false, true, false>(
+				    source, source_format, append_sel, append_count, layout, row_locations, heap_locations, col_idx,
+				    dummy_arg, child_functions);
+			}
+		} else {
+			if (source_format.unified.validity.AllValid()) {
+				TupleDataTemplatedScatterInternal<T, false, false, true>(
+				    source, source_format, append_sel, append_count, layout, row_locations, heap_locations, col_idx,
+				    dummy_arg, child_functions);
+			} else {
+				TupleDataTemplatedScatterInternal<T, false, false, false>(
+				    source, source_format, append_sel, append_count, layout, row_locations, heap_locations, col_idx,
+				    dummy_arg, child_functions);
 			}
 		}
 	}
+#endif
 }
 
 template <class T, SortKeyType SORT_KEY_TYPE>
@@ -1253,11 +1309,20 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 	Vector::Verify(result, target_sel, scan_count);
 }
 
+#ifdef DUCKDB_SMALLER_BINARY
 template <class T>
-static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
-                                     const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                     const SelectionVector &target_sel, optional_ptr<Vector>,
-                                     const vector<TupleDataGatherFunction> &) {
+#else
+template <class T, bool HAS_SCAN_SEL, bool HAS_TARGET_SEL, bool ALL_VALID>
+#endif
+static void TupleDataTemplatedGatherInternal(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+                                             const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+                                             const SelectionVector &target_sel, optional_ptr<Vector>,
+                                             const vector<TupleDataGatherFunction> &) {
+#ifdef DUCKDB_SMALLER_BINARY
+	const bool HAS_SCAN_SEL = scan_sel.IsSet();
+	const bool HAS_TARGET_SEL = target_sel.IsSet();
+	const bool ALL_VALID = layout.AllValid();
+#endif
 	// Source
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
@@ -1272,31 +1337,76 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	const auto column_count = layout.ColumnCount();
-	if (!scan_sel.IsSet() && !target_sel.IsSet()) {
-		// Fast path
-		for (idx_t i = 0; i < scan_count; i++) {
-			const auto &source_row = source_locations[i];
-			target_data[i] = Load<T>(source_row + offset_in_row);
-			ValidityBytes row_mask(source_row, column_count);
-			if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
-				target_validity.SetInvalid(i);
+	for (idx_t i = 0; i < scan_count; i++) {
+		const auto source_idx = HAS_SCAN_SEL ? scan_sel.get_index_unsafe(i) : i;
+		const auto target_idx = HAS_TARGET_SEL ? target_sel.get_index_unsafe(i) : i;
+		const auto &source_row = source_locations[source_idx];
+		target_data[target_idx] = Load<T>(source_row + offset_in_row);
+		if (!ALL_VALID &&
+		    !ValidityBytes::RowIsValid(ValidityBytes(source_row, column_count).GetValidityEntryUnsafe(entry_idx),
+		                               idx_in_entry)) {
+			target_validity.SetInvalid(target_idx);
+		} else {
+			TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+		}
+	}
+}
+
+template <class T>
+static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+                                     const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+                                     const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
+                                     const vector<TupleDataGatherFunction> &child_functions) {
+#ifdef DUCKDB_SMALLER_BINARY
+	TupleDataTemplatedGatherInternal<T>(layout, row_locations, col_idx, scan_sel, scan_count, target, target_sel,
+	                                    list_vector, child_functions);
+#else
+	if (scan_sel.IsSet()) {
+		if (target_sel.IsSet()) {
+			if (layout.AllValid()) {
+				TupleDataTemplatedGatherInternal<T, true, true, true>(layout, row_locations, col_idx, scan_sel,
+				                                                      scan_count, target, target_sel, list_vector,
+				                                                      child_functions);
 			} else {
-				TupleDataValueVerify<T>(target.GetType(), target_data[i]);
+				TupleDataTemplatedGatherInternal<T, true, true, false>(layout, row_locations, col_idx, scan_sel,
+				                                                       scan_count, target, target_sel, list_vector,
+				                                                       child_functions);
+			}
+		} else {
+			if (layout.AllValid()) {
+				TupleDataTemplatedGatherInternal<T, true, false, true>(layout, row_locations, col_idx, scan_sel,
+				                                                       scan_count, target, target_sel, list_vector,
+				                                                       child_functions);
+			} else {
+				TupleDataTemplatedGatherInternal<T, true, false, false>(layout, row_locations, col_idx, scan_sel,
+				                                                        scan_count, target, target_sel, list_vector,
+				                                                        child_functions);
 			}
 		}
 	} else {
-		for (idx_t i = 0; i < scan_count; i++) {
-			const auto &source_row = source_locations[scan_sel.get_index(i)];
-			const auto target_idx = target_sel.get_index(i);
-			target_data[target_idx] = Load<T>(source_row + offset_in_row);
-			ValidityBytes row_mask(source_row, column_count);
-			if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
-				target_validity.SetInvalid(target_idx);
+		if (target_sel.IsSet()) {
+			if (layout.AllValid()) {
+				TupleDataTemplatedGatherInternal<T, false, true, true>(layout, row_locations, col_idx, scan_sel,
+				                                                       scan_count, target, target_sel, list_vector,
+				                                                       child_functions);
 			} else {
-				TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+				TupleDataTemplatedGatherInternal<T, false, true, false>(layout, row_locations, col_idx, scan_sel,
+				                                                        scan_count, target, target_sel, list_vector,
+				                                                        child_functions);
+			}
+		} else {
+			if (layout.AllValid()) {
+				TupleDataTemplatedGatherInternal<T, false, false, true>(layout, row_locations, col_idx, scan_sel,
+				                                                        scan_count, target, target_sel, list_vector,
+				                                                        child_functions);
+			} else {
+				TupleDataTemplatedGatherInternal<T, false, false, false>(layout, row_locations, col_idx, scan_sel,
+				                                                         scan_count, target, target_sel, list_vector,
+				                                                         child_functions);
 			}
 		}
 	}
+#endif
 }
 
 template <class T, SortKeyType SORT_KEY_TYPE>

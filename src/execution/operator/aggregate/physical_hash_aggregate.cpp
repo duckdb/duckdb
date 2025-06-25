@@ -25,8 +25,8 @@ HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p
                                                      bool all_groups_valid)
     : table_data(grouping_set_p, grouped_aggregate_data, all_groups_valid) {
 	if (info) {
-		distinct_data =
-		    make_uniq<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups, all_groups_valid);
+		// TODO also check if all group expressions are valid
+		distinct_data = make_uniq<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups, false);
 	}
 }
 

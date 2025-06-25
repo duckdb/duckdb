@@ -46,7 +46,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 
 	// Null mask at the front - 1 bit per value.
 	all_valid = all_valid_p;
-	flag_width = ValidityBytes::ValidityMaskSize(all_valid ? 0 : types.size());
+	flag_width = ValidityBytes::ValidityMaskSize(false ? 0 : types.size()); // TODO use all_valid instead of false
 	row_width = flag_width;
 
 	// Whether all columns are constant size.
@@ -100,8 +100,9 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	}
 
 	// Alignment padding for aggregates
+	const auto align = !aggregates_p.empty();
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	if (!aggregates.empty()) {
+	if (align) {
 		row_width = AlignValue(row_width);
 	}
 #endif
@@ -120,7 +121,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 
 	// Alignment padding for the next row
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	if (!aggregates.empty()) {
+	if (align) {
 		row_width = AlignValue(row_width);
 	}
 #endif
