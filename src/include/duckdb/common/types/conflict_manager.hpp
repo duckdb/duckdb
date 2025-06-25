@@ -9,9 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -19,22 +18,27 @@ class Index;
 class ConflictInfo;
 
 enum class ConflictManagerMode : uint8_t {
-	SCAN, // gather conflicts without throwing
-	THROW // throw on the conflicts that were not found during the scan
+	SCAN, // Gather conflicts without throwing a constraint exception.
+	THROW // Throw on the conflicts that were not found during the scan.
 };
 
 enum class LookupResultType : uint8_t { LOOKUP_MISS, LOOKUP_HIT, LOOKUP_NULL };
 
+//! The conflict manager tracks conflicts during constraint verification.
+//! It decides when/if to throw, and records conflicts to be used later in case
+//! of ON CONFLICT DO. The conflict manager operates on a per-chunk basis,
+//! i.e., we construct a new conflict manager per incoming chunk.
+//! On conflict manager can gather conflicts across multiple indexes, if
+//! they match the ON CONFLICT DO target.
 class ConflictManager {
 public:
-	ConflictManager(VerifyExistenceType lookup_type, idx_t input_size,
+	ConflictManager(const VerifyExistenceType lookup_type, const idx_t chunk_size,
 	                optional_ptr<ConflictInfo> conflict_info = nullptr);
 
 public:
 	// These methods return a boolean indicating whether we should throw or not
-	bool AddHit(idx_t chunk_index, row_t row_id);
-	bool AddNull(idx_t chunk_index);
-	VerifyExistenceType LookupType() const;
+	bool AddHit(const idx_t index_in_chunk, const row_t row_id);
+	bool AddNull(const idx_t index_in_chunk);
 	// This should be called before using the conflicts selection vector
 	void Finalize();
 
@@ -56,34 +60,55 @@ public:
 	//! Returns a reference to the matched delete indexes.
 	const vector<optional_ptr<BoundIndex>> &MatchedDeleteIndexes() const;
 
+	VerifyExistenceType GetVerifyExistenceType() const {
+		return verify_existence_type;
+	}
+
 private:
 	bool IsConflict(LookupResultType type);
-	const unordered_set<idx_t> &InternalConflictSet() const;
 	Vector &InternalRowIds();
 	Vector &InternalIntermediate();
 	ManagedSelection &InternalSelection();
-	bool SingleIndexTarget() const;
-	bool ShouldThrow(idx_t chunk_index) const;
-	bool ShouldIgnoreNulls() const;
-	void AddConflictInternal(idx_t chunk_index, row_t row_id);
-	void AddToConflictSet(idx_t chunk_index);
+	//! Returns true, if the conflict manager should throw an exception, else false.
+	bool ShouldThrow(const idx_t index_in_chunk) const;
+	void AddConflictInternal(const idx_t index_in_chunk, const row_t row_id);
+
+	//! Returns true, if we ignore NULLs, else false.
+	bool IgnoreNulls() const {
+		switch (verify_existence_type) {
+		case VerifyExistenceType::APPEND:
+			return true;
+		case VerifyExistenceType::APPEND_FK:
+			return false;
+		case VerifyExistenceType::DELETE_FK:
+			return true;
+		default:
+			throw InternalException("Type not implemented for VerifyExistenceType");
+		}
+	}
 
 private:
-	VerifyExistenceType lookup_type;
-	idx_t input_size;
+	//! The type of constraint verification for which we're using the conflict manager.
+	VerifyExistenceType verify_existence_type;
+	//! The count of the data chunk for which we've created the conflict manager.
+	idx_t chunk_size;
+	//! Optional information to match indexes to the conflict target.
 	optional_ptr<ConflictInfo> conflict_info;
-	bool finalized = false;
+
 	ManagedSelection conflicts;
+	ConflictManagerMode mode;
+
+	bool finalized = false;
 	unique_ptr<Vector> row_ids;
 	// Used to check if a given conflict is part of the conflict target or not
 	unique_ptr<unordered_set<idx_t>> conflict_set;
 	// Contains 'input_size' booleans, indicating if a given index in the input chunk has a conflict
 	unique_ptr<Vector> intermediate_vector;
-	// Mapping from chunk_index to row_id
-	vector<row_t> row_id_map;
+	//! Each row in the data chunk has a key. With that key, we can look up the row ID
+	//! in the index. row_to_rowid maps the row to its row ID.
+	unordered_map<idx_t, row_t> row_to_rowid;
 	// Whether we have already found the one conflict target we're interested in
 	bool single_index_finished = false;
-	ConflictManagerMode mode;
 
 	//! Indexes matching the conflict target.
 	vector<reference<BoundIndex>> matched_indexes;
