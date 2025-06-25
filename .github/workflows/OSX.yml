@@ -308,7 +308,7 @@ jobs:
   test-install-load-extensions:
     name: Test OSX Extensions
     needs: upload-osx-extensions
-    uses: duckdb/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
+    uses: hmeriann/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
     strategy:
       matrix:
         config: [ { runs_on: macos-latest, duckdb_arch: osx_amd64, duckdb_binary: osx }, { runs_on: macos-14, duckdb_arch: osx_arm64, duckdb_binary: osx }]
