@@ -15,10 +15,14 @@ void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses,
 	auto aggr_idx = layout.ColumnCount();
 
 	for (const auto &aggr : layout.GetAggregates()) {
-		for (idx_t i = 0; i < count; ++i) {
-			auto row_idx = sel.get_index(i);
-			auto row = pointers[row_idx];
-			aggr.function.initialize(aggr.function, row + offsets[aggr_idx]);
+		if (sel.IsSet()) {
+			for (idx_t i = 0; i < count; ++i) {
+				aggr.function.initialize(aggr.function, pointers[sel.get_index_unsafe(i)] + offsets[aggr_idx]);
+			}
+		} else {
+			for (idx_t i = 0; i < count; ++i) {
+				aggr.function.initialize(aggr.function, pointers[i] + offsets[aggr_idx]);
+			}
 		}
 		++aggr_idx;
 	}
