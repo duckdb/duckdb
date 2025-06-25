@@ -114,9 +114,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		statistics_map[aggregate_binding] = std::move(stats);
 	}
 
-	// after we propagate statistics - try to directly execute aggregates using statistics
-	TryExecuteAggregates(aggr, node_ptr);
-
 	// check whether all inputs to the aggregate functions are valid
 	bool all_expr_inputs_valid = true;
 	for (const auto &aggr_ref : aggr.expressions) {
@@ -145,6 +142,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		}
 	}
 	aggr.all_expr_inputs_valid = all_expr_inputs_valid;
+
+	// after we propagate statistics - try to directly execute aggregates using statistics
+	TryExecuteAggregates(aggr, node_ptr);
 
 	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique
 	// group)
