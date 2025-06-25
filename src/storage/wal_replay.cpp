@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
