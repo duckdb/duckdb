@@ -113,7 +113,7 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 	// Row width in the hash table
 	types.push_back(LogicalType::HASH);
 	auto tuple_layout = TupleDataLayout();
-	tuple_layout.Initialize(types);
+	tuple_layout.Initialize(types, false);
 	auto row_width = tuple_layout.GetRowWidth();
 
 	for (const auto &type : types) {

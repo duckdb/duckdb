@@ -48,8 +48,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	group_types_p.emplace_back(LogicalType::HASH);
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
-	const auto align = !aggregate_objects_p.empty();
-	layout->Initialize(std::move(group_types_p), std::move(aggregate_objects_p), align);
+	layout->Initialize(std::move(group_types_p), std::move(aggregate_objects_p), false);
 	layout_ptr = std::move(layout);
 
 	hash_offset = layout_ptr->GetOffsets()[layout_ptr->ColumnCount() - 1];

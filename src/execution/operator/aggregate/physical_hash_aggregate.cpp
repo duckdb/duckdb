@@ -21,10 +21,12 @@ namespace duckdb {
 
 HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p,
                                                      const GroupedAggregateData &grouped_aggregate_data,
-                                                     unique_ptr<DistinctAggregateCollectionInfo> &info)
-    : table_data(grouping_set_p, grouped_aggregate_data) {
+                                                     unique_ptr<DistinctAggregateCollectionInfo> &info,
+                                                     bool all_groups_valid)
+    : table_data(grouping_set_p, grouped_aggregate_data, all_groups_valid) {
 	if (info) {
-		distinct_data = make_uniq<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups);
+		distinct_data =
+		    make_uniq<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups, all_groups_valid);
 	}
 }
 
@@ -114,7 +116,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
                                              vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
     : PhysicalHashAggregate(physical_plan, context, std::move(types), std::move(expressions), std::move(groups_p), {},
-                            {}, estimated_cardinality) {
+                            {}, estimated_cardinality, false) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context,
@@ -122,7 +124,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
                                              vector<unsafe_vector<idx_t>> grouping_functions_p,
-                                             idx_t estimated_cardinality)
+                                             idx_t estimated_cardinality, bool all_groups_valid)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
       grouping_sets(std::move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
@@ -173,7 +175,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(grouped_aggregate_data.aggregates);
 
 	for (idx_t i = 0; i < grouping_sets.size(); i++) {
-		groupings.emplace_back(grouping_sets[i], grouped_aggregate_data, distinct_collection_info);
+		groupings.emplace_back(grouping_sets[i], grouped_aggregate_data, distinct_collection_info, all_groups_valid);
 	}
 }
 
@@ -241,9 +243,6 @@ void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
 	auto &gstate = state.Cast<HashAggregateGlobalSinkState>();
 	for (auto &grouping_state : gstate.grouping_states) {
 		RadixPartitionedHashTable::SetMultiScan(*grouping_state.table_state);
-		if (!grouping_state.distinct_state) {
-			continue;
-		}
 	}
 }
 
