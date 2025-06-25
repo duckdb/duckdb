@@ -4525,6 +4525,32 @@ Transforms a DuckDB data chunk into an Arrow array.
 DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_properties,
                                                           duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
 
+/*!
+Transforms an Arrow Schema into a DuckDB Schema.
+
+* @param connection The connection to get the transformation settings from.
+* @param schema The input Arrow schema.
+* @param out_types The resulting DuckDB Logical Types array.
+* @param out_names The resulting column names array.
+* @param out_column_count The number of columns extracted from the Arrow schema.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
+                                                      duckdb_logical_type *out_types, char **out_names,
+                                                      idx_t *out_column_count);
+
+/*!
+Transforms an Arrow array into a DuckDB data chunk.
+
+* @param arrow_array The input Arrow array.
+* @param arrow_schema The schema describing the Arrow array.
+* @param out_chunk The resulting DuckDB data chunk.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
+                                                          duckdb_arrow_schema arrow_schema,
+                                                          duckdb_data_chunk *out_chunk);
+
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.

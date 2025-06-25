@@ -3,6 +3,8 @@
     "description": "New arrow interface functions",
     "entries": [
         "duckdb_to_arrow_schema",
-        "duckdb_data_chunk_to_arrow"
+        "duckdb_data_chunk_to_arrow",
+        "arrow_to_duckdb_schema",
+        "arrow_to_duckdb_data_chunk"
     ]
 }

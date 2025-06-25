@@ -549,6 +549,11 @@ typedef struct {
 	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties *client_properties,
 	                                                duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
+	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, duckdb_arrow_schema schema,
+	                                            duckdb_logical_type *out_types, char **out_names,
+	                                            idx_t *out_column_count);
+	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_arrow_array arrow_array, duckdb_arrow_schema arrow_schema,
+	                                                duckdb_data_chunk *out_chunk);
 #endif
 
 // New functions for duckdb error data
@@ -1037,6 +1042,8 @@ typedef struct {
 // Version unstable_new_arrow_functions
 #define duckdb_to_arrow_schema     duckdb_ext_api.duckdb_to_arrow_schema
 #define duckdb_data_chunk_to_arrow duckdb_ext_api.duckdb_data_chunk_to_arrow
+#define arrow_to_duckdb_schema     duckdb_ext_api.arrow_to_duckdb_schema
+#define arrow_to_duckdb_data_chunk duckdb_ext_api.arrow_to_duckdb_data_chunk
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data

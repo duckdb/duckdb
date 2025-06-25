@@ -478,6 +478,11 @@ typedef struct {
 	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties *client_properties,
 	                                                duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
+	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, duckdb_arrow_schema schema,
+	                                            duckdb_logical_type *out_types, char **out_names,
+	                                            idx_t *out_column_count);
+	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_arrow_array arrow_array, duckdb_arrow_schema arrow_schema,
+	                                                duckdb_data_chunk *out_chunk);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -942,6 +947,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
 	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
 	result.duckdb_data_chunk_to_arrow = duckdb_data_chunk_to_arrow;
+	result.arrow_to_duckdb_schema = arrow_to_duckdb_schema;
+	result.arrow_to_duckdb_data_chunk = arrow_to_duckdb_data_chunk;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;

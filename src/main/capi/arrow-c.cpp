@@ -59,6 +59,29 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_pr
 	return nullptr;
 }
 
+duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema, duckdb_logical_type *out_types, char **out_names,
+                                         idx_t *out_column_count) {
+	duckdb::vector<std::string> names;
+	duckdb::vector<LogicalType> return_types;
+	duckdb::ArrowTableType arrow_table;
+	duckdb::ArrowSchemaWrapper schema_wrapper;
+	schema_wrapper.arrow_schema = *reinterpret_cast<ArrowSchema *>(schema);
+	auto conn = reinterpret_cast<Connection *>(connection);
+	try {
+		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), arrow_table,
+	                                                   schema_wrapper, names, return_types);
+	} catch (...) {
+		// TODO : catch actual exception
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
+	}
+
+	*out_column_count = names.size();
+	for (idx_t i = 0; i < *out_column_count; i ++) {
+		// duckdb_type LogicalTypeIdToC(const LogicalTypeId type)
+	}
+	return nullptr;
+}
+
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {
 	Connection *conn = (Connection *)connection;
 	auto wrapper = new ArrowResultWrapper();
