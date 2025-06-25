@@ -32,6 +32,7 @@ static const TestConfigOption test_config_options[] = {
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalTypeId::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalTypeId::VARCHAR, TestConfiguration::ParseConnectScript},
     {"on_init", "Script to execute on init", LogicalTypeId::VARCHAR, nullptr},
+    {"skip_compiled", "Skip compiled tests", LogicalTypeId::BOOLEAN, nullptr},
     {nullptr, nullptr, LogicalTypeId::INVALID, nullptr},
 };
 
@@ -239,6 +240,10 @@ bool TestConfiguration::GetTestMemoryLeaks() {
 
 bool TestConfiguration::GetSummarizeFailures() {
 	return GetOptionOrDefault("summarize_failures", false);
+}
+
+bool TestConfiguration::GetSkipCompiledTests() {
+	return GetOptionOrDefault("skip_compiled", false);
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
