@@ -550,13 +550,13 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 
 	auto client_properties = duckdb_client_property(result_wrapper);
 
-	auto res =
-	    duckdb_to_arrow_schema(&client_properties, &types[0], names, count, reinterpret_cast<duckdb_arrow_schema *>(&out));
+	auto res = duckdb_to_arrow_schema(&client_properties, &types[0], names, count,
+	                                  reinterpret_cast<duckdb_arrow_schema *>(&out));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i]; // Delete each individual C-string
 	}
 	duckdb_destroy_client_properties(&client_properties);
-	for (auto& type: types) {
+	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
 	}
 	delete[] names;
@@ -571,21 +571,21 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 		return DuckDBError;
 	}
 	out->release = nullptr;
-	auto wrapper = reinterpret_cast<duckdb::ArrowResultWrapper *>(stream->private_data);
-	auto fetch_success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
-	if (!fetch_success) {
-		return DuckDBError;
-	}
-	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
+	auto result_wrapper = static_cast<duckdb_result *>(stream->private_data);
+	auto duckdb_chunk = duckdb_fetch_chunk(*result_wrapper);
+	// auto fetch_success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
+	if (!duckdb_chunk) {
 		return DuckDBSuccess;
 	}
-	auto client_wrapper = new duckdb::CClientPropertiesWrapper(wrapper->result->client_properties);
-	auto client_properties = reinterpret_cast<duckdb_client_properties>(client_wrapper);
+	// if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
+	// 	return DuckDBSuccess;
+	// }
+	auto client_properties = duckdb_client_property(result_wrapper);
 
-	auto conversion_success = duckdb_data_chunk_to_arrow(
-	    &client_properties, reinterpret_cast<duckdb_data_chunk>(wrapper->current_chunk.get()),
-	    reinterpret_cast<duckdb_arrow_array *>(&out));
+	auto conversion_success =
+	    duckdb_data_chunk_to_arrow(&client_properties, duckdb_chunk, reinterpret_cast<duckdb_arrow_array *>(&out));
 	duckdb_destroy_client_properties(&client_properties);
+	duckdb_destroy_data_chunk(&duckdb_chunk);
 
 	if (conversion_success) {
 		return DuckDBError;
@@ -751,8 +751,8 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 		free(wrapper->db_schema);
 		wrapper->db_schema = nullptr;
 	}
-	free(statement->private_data);
-	statement->private_data = nullptr;
+	// free(statement->private_data);
+	// statement->private_data = nullptr;
 	return ADBC_STATUS_OK;
 }
 
@@ -779,17 +779,14 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto count = prepared_wrapper->statement->data->properties.parameter_count;
-	auto types = new duckdb::LogicalType[count];
+	std::vector<duckdb_logical_type> types(count);
 	char **names = new char *[count];
-
 	for (idx_t i = 0; i < count; i++) {
-		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
-		// 'AdbcStatementGetParameterSchema'
-		const auto type = duckdb::LogicalType::SQLNULL;
-
 		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
 		auto name = std::to_string(i);
-		types[i] = type;
+		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
+		// 'AdbcStatementGetParameterSchema'
+		types[i] = duckdb_create_logical_type(DUCKDB_TYPE_SQLNULL);
 		names[i] = new char[name.size() + 1];
 		std::strcpy(names[i], name.c_str());
 	}
@@ -797,12 +794,14 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	duckdb_client_properties client_properties;
 	duckdb_connection_get_client_properties(wrapper->connection, &client_properties);
 
-	auto res = duckdb_to_arrow_schema(&client_properties, reinterpret_cast<duckdb_logical_type *>(types), names, count,
+	auto res = duckdb_to_arrow_schema(&client_properties, &types[0], names, count,
 	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i];
 	}
-	delete[] types;
+	for (auto &type : types) {
+		duckdb_destroy_logical_type(&type);
+	}
 	delete[] names;
 	duckdb_destroy_client_properties(&client_properties);
 
