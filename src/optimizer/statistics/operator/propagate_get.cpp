@@ -10,6 +10,7 @@
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
