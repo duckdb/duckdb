@@ -122,6 +122,20 @@ class TestDataFrame(object):
             with pytest.raises(TypeError, match="must be an iterable, not int"):
                 df = spark.createDataFrame(address, 5)
 
+    def test_dataframe_from_list_dicts(self, spark):
+        data = [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "age": 30, "name": "Bob"},
+            {"age": 35, "id": 3, "name": "Charlie", "city": "New York"},
+        ]
+        df = spark.createDataFrame(data)
+        res = df.collect()
+        assert res == [
+            Row(age=25, id=1, name='Alice', city=None),
+            Row(age=30, id=2, name='Bob', city=None),
+            Row(age=35, id=3, name='Charlie', city='New York'),
+        ]
+
     def test_dataframe(self, spark):
         # Create DataFrame
         df = spark.createDataFrame([("Scala", 25000), ("Spark", 35000), ("PHP", 21000)])
