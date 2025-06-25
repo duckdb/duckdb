@@ -274,68 +274,6 @@ jobs:
       shell: bash
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
- vector-verification:
-    name: Vector Verification Tests
-    needs: linux-configs
-    runs-on: ubuntu-22.04
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-      - name: Build
-        shell: bash
-        env:
-          DISABLE_CPP_UNITTESTS: 1
-          DUCKDB_TEST_DESCRIPTION: 'Tests run with --verify_vector=[VECTOR]. Use require no_vector_verification to skip tests.'
-        run: make reldebug
-
-      - name: Test dictionary_expression
-        shell: bash
-        env:
-          DUCKDB_TEST_VERIFY_VECTOR: dictionary_expression
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
-
-      - name: Test dictionary_operator
-        shell: bash
-        env:
-          DUCKDB_TEST_VERIFY_VECTOR: dictionary_operator
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
-
-      - name: Test constant_operator
-        shell: bash
-        env:
-          DUCKDB_TEST_VERIFY_VECTOR: constant_operator
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
-
-      - name: Test sequence_operator
-        shell: bash
-        env:
-          DUCKDB_TEST_VERIFY_VECTOR: sequence_operator
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
-
-      - name: Test nested_shuffle
-        shell: bash
-        env:
-          DUCKDB_TEST_VERIFY_VECTOR: nested_shuffle
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
-
  threadsan:
     name: Thread Sanitizer
     needs: linux-configs
@@ -461,3 +399,27 @@ jobs:
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/latest_storage.json
 
+    - name: Test dictionary_expression
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --verify_vector=dictionary_expression --skip-compiled
+
+    - name: Test dictionary_operator
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --verify_vector=dictionary_operator --skip-compiled
+
+    - name: Test constant_operator
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --verify_vector=constant_operator --skip-compiled
+
+    - name: Test sequence_operator
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --verify_vector=sequence_operator --skip-compiled
+
+    - name: Test nested_shuffle
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --verify_vector=nested_shuffle --skip-compiled
