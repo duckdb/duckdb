@@ -136,7 +136,7 @@ public:
 			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
 
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
-			auto &catalog = static_cast<DuckCatalog &>(state_p.db.GetCatalog());
+			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
 			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(

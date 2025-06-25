@@ -332,7 +332,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-	auto &catalog = static_cast<DuckCatalog &>(db.GetCatalog());
+	auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
 	catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
 	catalog.SetIsEncrypted();
 
@@ -375,7 +375,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-		auto &catalog = static_cast<DuckCatalog &>(db.GetCatalog());
+		auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
 		catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
 		catalog.SetIsEncrypted();
 

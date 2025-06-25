@@ -121,7 +121,8 @@ public:
 		// if the config.encrypt WAL is true
 		// and if the attached database is encrypted
 		// then encrypt WAL before flushing
-		auto &catalog = static_cast<DuckCatalog &>(wal.GetDatabase().GetCatalog());
+		auto &catalog = wal.GetDatabase().GetCatalog().Cast<DuckCatalog>();
+
 		if (wal.IsEncrypted() && catalog.GetIsEncrypted()) {
 			return FlushEncrypted();
 		}
@@ -140,7 +141,7 @@ public:
 	}
 
 	void FlushEncrypted() {
-		auto &catalog = static_cast<DuckCatalog &>(wal.GetDatabase().GetCatalog());
+		auto &catalog = wal.GetDatabase().GetCatalog().Cast<DuckCatalog>();
 		auto encryption_key_id = catalog.GetEncryptionKeyId();
 
 		auto data = memory_stream.GetData();
@@ -245,7 +246,7 @@ void WriteAheadLog::WriteVersion() {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	auto &catalog = static_cast<DuckCatalog &>(GetDatabase().GetCatalog());
+	auto &catalog = GetDatabase().GetCatalog().Cast<DuckCatalog>();
 	auto encryption_key_id = catalog.GetEncryptionKeyId();
 	if (IsEncrypted() && catalog.GetIsEncrypted()) {
 		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
