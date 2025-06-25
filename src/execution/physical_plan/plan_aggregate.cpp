@@ -259,8 +259,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		if (can_use_simple_aggregation) {
-			auto &group_by =
-			    Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions), op.estimated_cardinality);
+			auto &group_by = Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions),
+			                                                  op.estimated_cardinality, op.all_expr_inputs_valid);
 			group_by.children.push_back(plan);
 			return group_by;
 		}
@@ -292,7 +292,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
-	                                             op.estimated_cardinality, all_groups_valid);
+	                                             op.estimated_cardinality, all_groups_valid, op.all_expr_inputs_valid);
 	group_by.children.push_back(plan);
 	return group_by;
 }

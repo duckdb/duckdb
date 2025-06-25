@@ -68,8 +68,8 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 }
 
 //! Persistent + shared (read-only) data for the distinct aggregates
-DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info)
-    : DistinctAggregateData(info, {}, nullptr, false) {
+DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, bool all_expr_inputs_valid)
+    : DistinctAggregateData(info, {}, nullptr, all_expr_inputs_valid) {
 }
 
 DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, const GroupingSet &groups,

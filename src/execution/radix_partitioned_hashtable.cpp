@@ -322,13 +322,14 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 		return InitialSinkRadixBits(); // Don't repartition unless we go external
 	}
 	// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
+	auto maximum = MAXIMUM_FINAL_SINK_RADIX_BITS;
 	if (row_width >= ROW_WIDTH_THRESHOLD_TWO) {
-		return MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
+		maximum = MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
 	}
 	if (row_width >= ROW_WIDTH_THRESHOLD_ONE) {
-		return MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
+		maximum = MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
 	}
-	return MAXIMUM_FINAL_SINK_RADIX_BITS;
+	return ClampValue(NextPowerOfTwo(number_of_threads), InitialSinkRadixBits(), maximum);
 }
 
 idx_t RadixHTConfig::SinkCapacity() const {

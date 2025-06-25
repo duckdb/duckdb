@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
@@ -116,7 +117,37 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	// after we propagate statistics - try to directly execute aggregates using statistics
 	TryExecuteAggregates(aggr, node_ptr);
 
-	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique group)
+	// check whether all inputs to the aggregate functions are valid
+	bool all_expr_inputs_valid = true;
+	for (const auto &aggr_ref : aggr.expressions) {
+		if (!all_expr_inputs_valid) {
+			break;
+		}
+		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+			// Bail if it's not a bound aggregate
+			all_expr_inputs_valid = false;
+			continue;
+		}
+		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
+		for (const auto &child : aggr_expr.children) {
+			if (child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				// Bail if bound aggregate child is not a colref
+				all_expr_inputs_valid = false;
+				break;
+			}
+			const auto &col_ref = child->Cast<BoundColumnRefExpression>();
+			auto it = statistics_map.find(col_ref.binding);
+			if (it == statistics_map.end() || !it->second || it->second->CanHaveNull()) {
+				// Bail if no stats or if there can be a NULL
+				all_expr_inputs_valid = false;
+				break;
+			}
+		}
+	}
+	aggr.all_expr_inputs_valid = all_expr_inputs_valid;
+
+	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique
+	// group)
 	return std::move(node_stats);
 }
 

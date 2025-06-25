@@ -25,7 +25,8 @@ public:
 
 public:
 	PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, vector<LogicalType> types,
-	                           vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality);
+	                           vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality,
+	                           bool all_expr_inputs_valid);
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;

@@ -690,7 +690,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		    FlatVector::GetData<data_ptr_t>(state.partitioned_append_state.chunk_state.row_locations);
 		const auto &row_sel = state.partitioned_append_state.reverse_partition_sel;
 		for (idx_t i = 0; i < chunk_size; i++) {
-			const auto &row_idx = row_sel[i];
+			const auto row_idx = row_sel.get_index_unsafe(i);
 			const auto &row_location = row_locations[row_idx];
 			addresses[i] = row_location;
 		}
@@ -767,8 +767,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			const auto row_locations = FlatVector::GetData<data_ptr_t>(append_state->chunk_state.row_locations);
 			const auto &row_sel = append_state->reverse_partition_sel;
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
-				const auto &index = empty_vector[new_entry_idx];
-				const auto &row_idx = row_sel[index];
+				const auto index = empty_vector.get_index_unsafe(new_entry_idx);
+				const auto row_idx = row_sel.get_index_unsafe(index);
 				const auto &row_location = row_locations[row_idx];
 
 				auto &entry = entries[ht_offsets[index]];
@@ -781,7 +781,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		if (need_compare_count != 0) {
 			// Get the pointers to the rows that need to be compared
 			for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
-				const auto &index = state.group_compare_vector[need_compare_idx];
+				const auto index = state.group_compare_vector.get_index_unsafe(need_compare_idx);
 				const auto &entry = entries[ht_offsets[index]];
 				addresses[index] = entry.GetPointer();
 			}
@@ -794,7 +794,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
-			const auto &index = state.no_match_vector[i];
+			const auto index = state.no_match_vector.get_index_unsafe(i);
 			auto &ht_offset = ht_offsets[index];
 			const auto salt = hash_salts[index];
 			SaltIncrementAndWrap(ht_offset, salt, bitmask);
