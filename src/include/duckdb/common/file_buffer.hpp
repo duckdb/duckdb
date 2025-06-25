@@ -60,6 +60,10 @@ public:
 	void Resize(uint64_t user_size, BlockManager &block_manager);
 	void Resize(BlockManager &block_manager);
 
+	idx_t GetBlockHeaderSize() const {
+		return internal_size - size;
+	}
+
 	uint64_t AllocSize() const {
 		return internal_size;
 	}
