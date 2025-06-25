@@ -108,12 +108,6 @@ public:
 		return false;
 	}
 
-	// Encryption specific settings
-	virtual void SetEncryptionKeyId(const string &key_id);
-	virtual string &GetEncryptionKeyId();
-	virtual void SetIsEncrypted();
-	virtual bool GetIsEncrypted();
-
 	virtual void Initialize(bool load_builtin) = 0;
 	virtual void Initialize(optional_ptr<ClientContext> context, bool load_builtin);
 	virtual void FinalizeLoad(optional_ptr<ClientContext> context);
@@ -387,10 +381,6 @@ public:
 protected:
 	//! Reference to the database
 	AttachedDatabase &db;
-
-	//! optionally for if the database is encrypted
-	bool is_encrypted;
-	string encryption_key_id;
 
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
 	string default_table;

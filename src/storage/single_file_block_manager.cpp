@@ -15,6 +15,7 @@
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -332,7 +333,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-	auto &catalog = db.GetCatalog();
+	auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
 	catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
 	catalog.SetIsEncrypted();
 
@@ -380,7 +381,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-		auto &catalog = db.GetCatalog();
+		auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
 		catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
 		catalog.SetIsEncrypted();
 

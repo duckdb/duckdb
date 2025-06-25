@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/checksum.hpp"
@@ -136,7 +137,8 @@ public:
 			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
 
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
-			auto derived_key = keys.GetKey(state_p.db.GetCatalog().GetEncryptionKeyId());
+			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
+			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
 			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
