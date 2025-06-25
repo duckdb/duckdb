@@ -15,6 +15,7 @@
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 #include <algorithm>
 #include <cstring>
