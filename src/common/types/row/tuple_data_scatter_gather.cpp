@@ -149,7 +149,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		} else {
 			for (idx_t i = 0; i < append_count; i++) {
 				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-				if (source_validity.RowIsValid(source_idx)) {
+				if (source_validity.RowIsValidUnsafe(source_idx)) {
 					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
 				} else {
 					heap_sizes[i] += StringHeapSize(NullValue<string_t>());
@@ -697,7 +697,7 @@ static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVec
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto append_idx = HAS_APPEND_SEL ? append_sel.get_index_unsafe(i) : i;
 		const auto source_idx = HAS_SOURCE_SEL ? source_sel.get_index_unsafe(append_idx) : append_idx;
-		if (ALL_VALID || validity.RowIsValid(source_idx)) {
+		if (ALL_VALID || validity.RowIsValidUnsafe(source_idx)) {
 			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
 		} else {
 			D_ASSERT(!layout.AllValid());
