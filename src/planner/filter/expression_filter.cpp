@@ -36,13 +36,14 @@ string ExpressionFilter::ToString(const string &column_name) const {
 	return ToExpression(*name_expr)->ToString();
 }
 
-static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column) {
-	if (expr->type == ExpressionType::BOUND_REF) {
+void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
+                                                  ExpressionType replace_type) {
+	if (expr->type == replace_type) {
 		expr = column.Copy();
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column); });
+	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column, replace_type); });
 }
 
 unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) const {
