@@ -124,7 +124,7 @@ WITH RECURSIVE ordinalityCTE AS (
         ordinalityCTE AS oCTE,
         LATERAL range(1) WITH ORDINALITY AS r(range,ordinality)
     WHERE oCTE.ordinality < 5
-) SELECT * FROM ordinalityCTE ORDER BY ordinality;
+) SELECT ordinality FROM ordinalityCTE ORDER BY ordinality;
 ----
 1
 2
@@ -142,7 +142,7 @@ WITH RECURSIVE ordinalityCTE AS (
         ordinalityCTE AS oCTE,
         LATERAL range(oCTE.ordinality) WITH ORDINALITY AS r(range,ordinality)
     WHERE oCTE.ordinality < 5
-) SELECT * FROM ordinalityCTE ORDER BY ordinality;
+) SELECT ordinality FROM ordinalityCTE ORDER BY ordinality;
 ----
 1
 2
@@ -163,7 +163,7 @@ WITH RECURSIVE ordinalityCTE AS (
           ordinalityCTE AS oCTE,
           LATERAL range(oCTE.ordinality) WITH ORDINALITY AS r(range,ordinality)
       WHERE oCTE.ordinality <= 4
-  ) SELECT * FROM ordinalityCTE order by ordinality;
+  ) SELECT ordinality FROM ordinalityCTE order by ordinality;
 ----
 1
 2
@@ -191,10 +191,12 @@ WITH RECURSIVE ordinalityCTE AS (
         ordinalityCTE AS oCTE,
         LATERAL range(1) WITH ORDINALITY AS r(range,ordinality)
     WHERE oCTE.ordinality < 5
-) SELECT * FROM ordinalityCTE ORDER BY ordinality;
+) SELECT ordinality FROM ordinalityCTE ORDER BY ordinality;
 ----
 1
 2
 3
 4
 5
+
+
