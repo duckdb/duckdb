@@ -104,9 +104,10 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 				global_state.inserted_dictionaries[col_idx]++;
 
 				constexpr double TOTAL_GROWTH_THRESHOLD = 0.1;
-				const idx_t MIN_STRING_SEEN = 10000;
+				const idx_t MIN_DICTIONARY_SEEN = 10;
+				constexpr idx_t HARD_LIMIT = 100000;
 
-				if (global_state.inserted_unique_strings[col_idx] > MIN_STRING_SEEN) {
+				if (global_state.inserted_dictionaries[col_idx] > MIN_DICTIONARY_SEEN) {
 					auto avg_growth =
 					    static_cast<double>(global_state.unique_strings_in_unified_dictionary_per_column[col_idx]) /
 					    static_cast<double>(global_state.inserted_unique_strings[col_idx]);
@@ -114,6 +115,9 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 					if (avg_growth > TOTAL_GROWTH_THRESHOLD) {
 						global_state.is_high_cardinality[col_idx] = true;
 					}
+				}
+				if(global_state.unique_strings_in_unified_dictionary_per_column[col_idx] > HARD_LIMIT){
+					global_state.is_high_cardinality[col_idx] = true;
 				}
 				lock.unlock();
 
