@@ -37,7 +37,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
 	auto aggregate_objects = AggregateObject::CreateAggregateObjects(op.bindings);
-	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), false);
+	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), all_groups_valid);
 	layout_ptr = std::move(layout);
 }
 

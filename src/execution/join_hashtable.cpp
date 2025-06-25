@@ -611,6 +611,8 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
 	ApplyBitmaskAndGetSaltBuild(hashes_v, state.salt_v, count, ht.bitmask);
 
+	const auto &layout = data_collection.GetLayout();
+
 	// the salts offset for each row to insert
 	const auto ht_offsets = FlatVector::GetData<idx_t>(hashes_v);
 	const auto hash_salts = FlatVector::GetData<hash_t>(state.salt_v);
@@ -639,7 +641,12 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 			idx_t new_remaining_count = 0;
 			for (idx_t i = 0; i < remaining_count; i++) {
 				const auto idx = remaining_sel->get_index(i);
-				if (ValidityBytes(lhs_row_locations[idx], count).RowIsValidUnsafe(col_idx)) {
+				const auto valid =
+				    layout.AllValid() ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(lhs_row_locations[idx], layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+				        idx_in_entry);
+				if (valid) {
 					state.remaining_sel.set_index(new_remaining_count++, idx);
 				}
 			}

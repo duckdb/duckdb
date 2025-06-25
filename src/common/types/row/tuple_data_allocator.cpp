@@ -410,8 +410,11 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &row_location = row_locations[offset + i] + base_col_offset;
-		ValidityBytes row_mask(row_location, layout.ColumnCount());
-		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+		const auto valid =
+		    layout.AllValid() ||
+		    ValidityBytes::RowIsValid(
+		        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+		if (valid) {
 			auto recomputed_string = Load<string_t>(row_location + col_offset);
 			recomputed_string.Verify();
 		}
@@ -499,8 +502,12 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    layout.AllValid() ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+				        idx_in_entry);
+				if (!valid) {
 					continue;
 				}
 
@@ -524,8 +531,12 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    layout.AllValid() ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+				        idx_in_entry);
+				if (!valid) {
 					continue;
 				}
 
@@ -583,8 +594,12 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 				// We always serialize a NullValue<string_t>, which isn't inlined if this build flag is enabled
 				// So we need to grab the pointer from here even if the string is NULL
 #ifndef DUCKDB_DEBUG_NO_INLINE
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    layout.AllValid() ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+				        idx_in_entry);
+				if (valid) {
 #endif
 					const auto string_location = row_location + col_offset;
 					if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
@@ -607,8 +622,12 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 				const auto &row_location = row_locations[idx] + base_col_offset;
 				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    layout.AllValid() ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+				        idx_in_entry);
+				if (valid) {
 					const auto &list_ptr_location = row_location + col_offset;
 					heap_locations[idx] = Load<data_ptr_t>(list_ptr_location);
 					continue;

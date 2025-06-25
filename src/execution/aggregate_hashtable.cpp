@@ -608,7 +608,7 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
                                                idx_t &empty_count, idx_t &compare_count) {
 	// For each remaining entry, figure out whether or not it belongs to a full or empty group
 	for (idx_t i = 0; i < remaining_entries; i++) {
-		const auto index = HAS_SEL ? UnsafeNumericCast<idx_t>((*sel_vector)[i]) : i;
+		const auto index = HAS_SEL ? sel_vector->get_index_unsafe(i) : i;
 		const auto salt = hash_salts[index];
 		auto &ht_offset = ht_offsets[index];
 

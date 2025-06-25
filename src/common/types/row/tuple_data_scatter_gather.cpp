@@ -620,8 +620,9 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
 		// Set the validity mask for each row before inserting data
-		// TODO only when if !layout.AllValid()
-		InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
+		if (!layout.AllValid()) {
+			InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
+		}
 
 		if (!layout.AllConstant()) {
 			// Set the heap size for each row
@@ -699,6 +700,7 @@ static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVec
 		if (ALL_VALID || validity.RowIsValid(source_idx)) {
 			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
 		} else {
+			D_ASSERT(!layout.AllValid());
 			TupleDataValueStore<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
 			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
@@ -825,6 +827,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 
 	// Set validity of the STRUCT in this layout
 	if (!validity.AllValid()) {
+		D_ASSERT(!layout.AllValid());
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 			if (!validity.RowIsValid(source_idx)) {
@@ -895,6 +898,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 			Store<uint64_t>(data[source_idx].length, target_heap_location);
 			target_heap_location += sizeof(uint64_t);
 		} else {
+			D_ASSERT(!layout.AllValid());
 			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
 	}
@@ -944,6 +948,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 			Store<uint64_t>(data[source_idx].length, target_heap_location);
 			target_heap_location += sizeof(uint64_t);
 		} else {
+			D_ASSERT(!layout.AllValid());
 			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
 	}
