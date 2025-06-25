@@ -6,6 +6,7 @@ name Large Array Dense Select
 group array
 
 load
+SET threads = 1;
 CREATE TABLE arrays AS SELECT i%2000 as sparse_id, i%3 as dense_id, [i + x for x in range(1024)]::INT[1024] arr FROM range(10000000) tbl(i);
 
 run

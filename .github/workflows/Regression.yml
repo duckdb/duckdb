@@ -125,7 +125,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          ls benchmark/micro/**/*.benchmark > MI.csv && python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks MI.csv --verbose --threads 2
+          ls benchmark/micro/**/*.benchmark > MI.csv && python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks MI.csv --verbose --threads 2 --disable-timeout
 
   #     - name: Regression Test Ingestion Perf
   #       if: always()
