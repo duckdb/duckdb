@@ -33,7 +33,7 @@ struct SumState {
 	}
 
 	void Combine(const SumState<T> &other) {
-		this->isset = other.isset || this->isset;
+		this->isset = other.isset | this->isset;
 		this->value += other.value;
 	}
 };
