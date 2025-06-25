@@ -517,13 +517,11 @@ jobs:
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
 
- linux-configs-changes:
-    name: Tests changed configurations
+ linux-configs:
+    name: Tests with different configurations
     runs-on: ubuntu-24.04
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
-      CORE_EXTENSIONS: "json;parquet;tpch;tpcds"
-      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -546,12 +544,12 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make
+      env:
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;inet;fts"
+        GEN: ninja
+      run: make reldebug
 
-    - name: Test changed configurations
+    - name: test/configs/encrypted_db.json
       shell: bash
-      # git diff --name-only generates a list of files (in the relevant directory) with changes
-      # filtering with ls -d remove non-existing files (diff might be due to a file being moved out or deleted)
-      # then finally run unittester on changed files
       run: |
-        git diff --name-only ${BASE_BRANCH} test/configs| xargs ls -d 2>/dev/null| xargs -I{} ./build/release/test/unittest --test-config {}
+        ./build/reldebug/test/unittest --test-config test/configs/encrypted_db.json
