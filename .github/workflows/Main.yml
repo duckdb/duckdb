@@ -553,3 +553,4 @@ jobs:
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/encrypted_db.json
+
