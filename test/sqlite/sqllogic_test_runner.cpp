@@ -612,25 +612,32 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (could_autoload) {
+		bool install_has_error = false;
 		if (install_mode == TestConfiguration::ExtensionInstallMode::LOCAL_ONLY ||
 		    install_mode == TestConfiguration::ExtensionInstallMode::EITHER) {
-			con->Query("INSTALL " + param + " FROM " + local_extension_repo + ";");
+			install_has_error |= con->Query("INSTALL " + param + " FROM '" + local_extension_repo + "';")->HasError();
 		}
 		if (install_mode == TestConfiguration::ExtensionInstallMode::EITHER ||
 		    install_mode == TestConfiguration::ExtensionInstallMode::REMOTE_ONLY) {
-			if (con->Query("INSTALL " + param + ";")->HasError()) {
-				return RequireResult::MISSING;
-			}
+			install_has_error |= con->Query("INSTALL " + param + ";")->HasError();
 		}
-		return RequireResult::PRESENT;
+		if (install_has_error) {
+			return RequireResult::MISSING;
+		} else {
+			return RequireResult::PRESENT;
+		}
 	} else {
+		bool install_has_error = false;
 		if (install_mode == TestConfiguration::ExtensionInstallMode::LOCAL_ONLY ||
 		    install_mode == TestConfiguration::ExtensionInstallMode::EITHER) {
-			con->Query("INSTALL " + param + " FROM " + local_extension_repo + ";");
+			install_has_error |= con->Query("INSTALL " + param + " FROM '" + local_extension_repo + "';")->HasError();
 		}
 		if (install_mode == TestConfiguration::ExtensionInstallMode::EITHER ||
 		    install_mode == TestConfiguration::ExtensionInstallMode::REMOTE_ONLY) {
-			con->Query("INSTALL " + param + ";");
+			install_has_error |= con->Query("INSTALL " + param + ";")->HasError();
+		}
+		if (install_has_error) {
+			return RequireResult::MISSING;
 		}
 		if (loading_mode == TestConfiguration::ExtensionLoadingMode::ALL) {
 			if (!con->Query("LOAD " + param + ";")->HasError()) {
