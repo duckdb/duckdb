@@ -8,7 +8,11 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
+#ifdef DUCKDB_SMALLER_BINARY
+template <bool NO_MATCH_SEL, class T, class OP>
+#else
 template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID, bool RHS_ALL_VALID>
+#endif
 static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                                 const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                                 SelectionVector *no_match_sel, idx_t &no_match_count) {
@@ -18,6 +22,11 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	const auto &lhs_sel = *lhs_format.unified.sel;
 	const auto lhs_data = UnifiedVectorFormat::GetData<T>(lhs_format.unified);
 	const auto &lhs_validity = lhs_format.unified.validity;
+
+#ifdef DUCKDB_SMALLER_BINARY
+	const auto LHS_ALL_VALID = lhs_validity.AllValid();
+	const auto RHS_ALL_VALID = rhs_layout.AllValid();
+#endif
 
 	// RHS
 	const auto rhs_locations = FlatVector::GetData<data_ptr_t>(rhs_row_locations);
@@ -54,6 +63,10 @@ template <bool NO_MATCH_SEL, class T, class OP>
 static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                             const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                             const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+#ifdef DUCKDB_SMALLER_BINARY
+	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
+	                                               no_match_sel, no_match_count);
+#else
 	if (lhs_format.unified.validity.AllValid()) {
 		if (rhs_layout.AllValid()) {
 			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true, true>(
@@ -71,6 +84,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
 		}
 	}
+#endif
 }
 
 template <bool NO_MATCH_SEL, class OP>
@@ -98,8 +112,10 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
 
 		const auto &rhs_location = rhs_locations[idx];
-		const ValidityBytes rhs_mask(rhs_location, rhs_layout.ColumnCount());
-		const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+		const auto rhs_null =
+		    !rhs_layout.AllValid() &&
+		    !ValidityBytes::RowIsValid(
+		        ValidityBytes(rhs_location, rhs_layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
 		// For structs there is no value to compare, here we match NULLs and let recursion do the rest
 		// So we use the comparison only if rhs or LHS is NULL and COMPARE_NULL is true
