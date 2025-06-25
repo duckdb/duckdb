@@ -39,6 +39,7 @@ public:
 	bool GetCheckpointOnShutdown();
 	bool GetTestMemoryLeaks();
 	bool GetSummarizeFailures();
+	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
 	string OnConnectCommand();
