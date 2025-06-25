@@ -518,11 +518,10 @@ jobs:
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
 
  linux-configs-changes:
-    name: Test configs
+    name: Tests changed configurations
     runs-on: ubuntu-24.04
-    needs: linux-extensions-64
     env:
-      BASE_BRANCH: ${{ github.base_ref || 'main') }}
+      BASE_BRANCH: ${{ github.base_ref || 'main' }}
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds"
       GEN: ninja
 
@@ -551,5 +550,8 @@ jobs:
 
     - name: Test changed configurations
       shell: bash
+      # git diff --name-only generates a list of files (in the relevant directory) with changes
+      # filtering with ls -d remove non-existing files (diff might be due to a file being moved out or deleted)
+      # then finally run unittester on changed files
       run: |
-        git diff --name-only ${BASE_BRANCH} test/configs| xargs -I{} echo $./build/release/test/unittest --test-config {}
+        git diff --name-only ${BASE_BRANCH} test/configs| xargs ls -d 2>/dev/null| xargs -I{} ./build/release/test/unittest --test-config {}
