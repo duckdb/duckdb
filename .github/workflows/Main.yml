@@ -469,6 +469,7 @@ jobs:
     - name: Build
       shell: bash
       env:
+        DEBUG_STACKTRACE: 1
         CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;inet;fts"
         GEN: ninja
       run: make reldebug
