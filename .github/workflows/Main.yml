@@ -371,6 +371,7 @@ jobs:
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
+      id: build
       shell: bash
       env:
         BLOCK_VERIFICATION: 1
@@ -380,46 +381,55 @@ jobs:
       run: make reldebug
 
     - name: test/configs/encrypted_db.json
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/encrypted_db.json
 
     - name: test/configs/force_storage.json
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/force_storage.json
 
     - name: test/configs/force_storage_restart.json
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/force_storage_restart.json
 
     - name: test/configs/latest_storage.json
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --test-config test/configs/latest_storage.json
 
     - name: Test dictionary_expression
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --verify_vector=dictionary_expression --skip-compiled
 
     - name: Test dictionary_operator
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --verify_vector=dictionary_operator --skip-compiled
 
     - name: Test constant_operator
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --verify_vector=constant_operator --skip-compiled
 
     - name: Test sequence_operator
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --verify_vector=sequence_operator --skip-compiled
 
     - name: Test nested_shuffle
+      if: steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/reldebug/test/unittest --verify_vector=nested_shuffle --skip-compiled
