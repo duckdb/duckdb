@@ -276,7 +276,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
-		if (result->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY) {
+		if (result->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY && function.in_out_function) {
 			auto ordinality_pos = bind_return_types.begin() + result->ordinality_data.column_id;
 			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
 		}
