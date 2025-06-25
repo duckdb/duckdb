@@ -46,7 +46,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 
 	// Null mask at the front - 1 bit per value.
 	all_valid = all_valid_p;
-	flag_width = ValidityBytes::ValidityMaskSize(false ? 0 : types.size()); // TODO use all_valid instead of false
+	flag_width = ValidityBytes::ValidityMaskSize(false ? 0 : types.size()); // TODO set 0 if all_valid
 	row_width = flag_width;
 
 	// Whether all columns are constant size.

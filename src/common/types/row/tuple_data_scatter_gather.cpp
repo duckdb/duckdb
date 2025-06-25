@@ -1441,8 +1441,9 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 		const auto &source_row = source_locations[source_idx];
 
 		// Set the validity
-		ValidityBytes row_mask(source_row, layout.ColumnCount());
-		if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+		if (!layout.AllValid() &&
+		    !ValidityBytes::RowIsValid(
+		        ValidityBytes(source_row, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			const auto target_idx = target_sel.get_index(i);
 			target_validity.SetInvalid(target_idx);
 		}
@@ -1494,10 +1495,11 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	uint64_t target_list_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
 		const auto &source_row = source_locations[scan_sel.get_index(i)];
-		ValidityBytes row_mask(source_row, layout.ColumnCount());
 
 		const auto target_idx = target_sel.get_index(i);
-		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+		if (layout.AllValid() ||
+		    ValidityBytes::RowIsValid(ValidityBytes(source_row, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+		                              idx_in_entry)) {
 			auto &source_heap_location = source_heap_locations[i];
 			source_heap_location = Load<data_ptr_t>(source_row + offset_in_row);
 
