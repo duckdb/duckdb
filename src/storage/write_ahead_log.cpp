@@ -121,7 +121,8 @@ public:
 		// if the config.encrypt WAL is true
 		// and if the attached database is encrypted
 		// then encrypt WAL before flushing
-		if (wal.IsEncrypted() && wal.GetDatabase().GetCatalog().GetIsEncrypted()) {
+		auto &catalog = static_cast<DuckCatalog &>(wal.GetDatabase().GetCatalog());
+		if (wal.IsEncrypted() && catalog.GetIsEncrypted()) {
 			return FlushEncrypted();
 		}
 
@@ -139,6 +140,9 @@ public:
 	}
 
 	void FlushEncrypted() {
+		auto &catalog = static_cast<DuckCatalog &>(wal.GetDatabase().GetCatalog());
+		auto encryption_key_id = catalog.GetEncryptionKeyId();
+
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 
@@ -148,7 +152,7 @@ public:
 		auto &db = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    keys.GetKey(db.GetCatalog().GetEncryptionKeyId()), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    keys.GetKey(encryption_key_id), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
@@ -168,8 +172,7 @@ public:
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
 		//! encrypt the temp buf
-		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN,
-		                                       keys.GetKey(db.GetCatalog().GetEncryptionKeyId()),
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, keys.GetKey(encryption_key_id),
 		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
@@ -242,7 +245,9 @@ void WriteAheadLog::WriteVersion() {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	if (IsEncrypted() && GetDatabase().GetCatalog().GetIsEncrypted()) {
+	auto &catalog = static_cast<DuckCatalog &>(GetDatabase().GetCatalog());
+	auto encryption_key_id = catalog.GetEncryptionKeyId();
+	if (IsEncrypted() && catalog.GetIsEncrypted()) {
 		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
 	} else {
 		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));

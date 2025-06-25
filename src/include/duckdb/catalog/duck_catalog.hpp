@@ -22,11 +22,6 @@ public:
 	bool IsDuckCatalog() override;
 	void Initialize(bool load_builtin) override;
 
-	void SetEncryptionKeyId(const string &key_id) override;
-	string &GetEncryptionKeyId() override;
-	void SetIsEncrypted() override;
-	bool GetIsEncrypted() override;
-
 	string GetCatalogType() override {
 		return "duckdb";
 	}
@@ -34,6 +29,12 @@ public:
 	mutex &GetWriteLock() {
 		return write_lock;
 	}
+
+	// Encryption Functions
+	void SetEncryptionKeyId(const string &key_id);
+	string &GetEncryptionKeyId();
+	void SetIsEncrypted();
+	bool GetIsEncrypted();
 
 public:
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
