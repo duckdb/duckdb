@@ -1,0 +1,100 @@
+# name: test/sql/ordinality/ordinality_constant.test
+# description: Tests with ordinality for constant TVFs and non-correlated InOut-functions
+# group: [ordinality]
+
+
+statement ok
+PRAGMA enable_verification;
+
+
+query II
+SELECT o,range FROM range(1) WITH ORDINALITY AS _(range,o);
+----
+1	0
+
+
+query II
+SELECT col = 'data/csv/customer.csv' OR col = 'data\csv\customer.csv', o FROM glob('data/csv/customer.csv') with ordinality AS _(col,o);
+----
+true	1
+
+
+query III nosort read_csv_result
+SELECT * FROM read_csv('data/csv/customer.csv') WITH ORDINALITY ORDER BY ordinality;
+
+
+query III nosort read_csv_result
+SELECT *, row_number() OVER () AS ordinality FROM read_csv('data/csv/customer.csv') ORDER BY ordinality;
+
+
+query II
+SELECT my_range, my_ordinality FROM range(3) WITH ORDINALITY AS _(my_range, my_ordinality) ORDER BY my_range,my_ordinality;
+----
+0	1
+1	2
+2	3
+
+
+query II
+SELECT my_series, my_ordinality FROM generate_series(0,3,1) WITH ORDINALITY AS _(my_series,my_ordinality) ORDER BY my_series, my_ordinality;
+----
+0	1
+1	2
+2	3
+3	4
+
+
+query II
+SELECT * FROM repeat('x', 5) WITH ORDINALITY ORDER BY ordinality;
+----
+x	1
+x	2
+x	3
+x	4
+x	5
+
+
+query II
+SELECT * FROM repeat('x', 9) WITH ORDINALITY WHERE ordinality >  4 ORDER BY ordinality;
+----
+x	5
+x	6
+x	7
+x	8
+x	9
+
+
+query I
+WITH RECURSIVE ordinalityCTE AS (
+    SELECT 1 AS ordinality
+    UNION
+    SELECT oCTE.ordinality + r.ordinality AS ordinality
+    FROM
+        ordinalityCTE AS oCTE,
+        LATERAL range(1) WITH ORDINALITY AS r(range,ordinality)
+    WHERE oCTE.ordinality < 5
+) SELECT ordinality FROM ordinalityCTE ORDER BY ordinality;
+----
+1
+2
+3
+4
+5
+
+
+query I
+WITH RECURSIVE ordinalityCTE AS (
+    SELECT 1 AS ordinality
+    UNION ALL
+    SELECT oCTE.ordinality + r.ordinality AS ordinality
+    FROM
+        ordinalityCTE AS oCTE,
+        LATERAL range(1) WITH ORDINALITY AS r(range,ordinality)
+    WHERE oCTE.ordinality < 5
+) SELECT ordinality FROM ordinalityCTE ORDER BY ordinality;
+----
+1
+2
+3
+4
+5
