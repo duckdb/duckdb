@@ -98,3 +98,13 @@ WITH RECURSIVE ordinalityCTE AS (
 3
 4
 5
+
+
+query II
+SELECT * FROM unnest([41,42,43]) WITH ORDINALITY;
+----
+41	1
+42	2
+43	3
+
+
