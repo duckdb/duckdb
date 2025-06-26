@@ -27,13 +27,14 @@
 #undef RemoveDirectory
 
 namespace duckdb {
+
 class AttachedDatabase;
-class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
-class FileHandleLogger;
 class Logger;
+class ClientContext;
+class QueryContext;
 
 enum class FileType {
 	//! Regular file
@@ -67,7 +68,7 @@ public:
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
 	DUCKDB_API idx_t SeekPosition();
