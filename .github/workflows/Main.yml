@@ -343,7 +343,7 @@ jobs:
       # Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
       # DEBUG_STACKTRACE: 1 + reldebug ?
       env:
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;inet"
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
         GEN: ninja
       run: make
 
