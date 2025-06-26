@@ -37,7 +37,8 @@ static const TestConfigOption test_config_options[] = {
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
-    {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
+     LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
