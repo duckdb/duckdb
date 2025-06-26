@@ -7,7 +7,7 @@ namespace duckdb {
 
 TupleDataLayout::TupleDataLayout()
     : sort_key_type(SortKeyType::INVALID), flag_width(0), data_width(0), aggr_width(0), row_width(0),
-      all_constant(true), heap_size_offset(0) {
+      all_constant(true), heap_size_offset(0), all_valid(false) {
 }
 
 TupleDataLayout TupleDataLayout::Copy() const {
@@ -31,6 +31,7 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	result.all_constant = this->all_constant;
 	result.heap_size_offset = this->heap_size_offset;
 	result.aggr_destructor_idxs = this->aggr_destructor_idxs;
+	result.all_valid = this->all_valid;
 	return result;
 }
 
@@ -155,6 +156,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	all_constant = true;
 	heap_size_offset = DConstants::INVALID_INDEX;
 	aggr_destructor_idxs.clear();
+	all_valid = false;
 
 	// Type is determined by "create_sort_key", if it is <= 8 we get a bigint
 	types.push_back(type);
