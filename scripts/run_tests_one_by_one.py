@@ -315,4 +315,8 @@ if summarize_failures and len(error_container):
     for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
+        # set warnings
+        subprocess.run(f'echo "::warning::{i}: {error["test"]}"', shell=True)
+        subprocess.run(f'echo "::warning::{i}: {error["stderr"]}"', shell=True)
+
 exit(1)
