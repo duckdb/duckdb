@@ -2367,6 +2367,7 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** the database fails to open, print an error message and exit.
 */
 void ShellState::OpenDB(int flags) {
+
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
 			if (zDbFilename.empty()) {
