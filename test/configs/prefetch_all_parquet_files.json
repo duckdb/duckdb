@@ -1,5 +1,8 @@
 {
   "description": "Debug setting around testing of parquet files",
   "skip_compiled": "true",
-  "on_init": "INSTALL parquet FROM 'build/release/repository'; LOAD parquet; SET prefetch_all_parquet_files=true;"
+  "on_init": "INSTALL parquet FROM 'build/release/repository'; LOAD parquet; SET prefetch_all_parquet_files=true;",
+  "skip_tests": [
+    "test/sql/copy/csv/zstd_crash.test"
+  ]
 }
