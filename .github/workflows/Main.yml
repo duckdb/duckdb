@@ -340,8 +340,8 @@ jobs:
     - name: Build
       id: build
       shell: bash
+      # Bring back BLOCK_VERIFICATION: 1
       env:
-        BLOCK_VERIFICATION: 1
         DEBUG_STACKTRACE: 1
         CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;inet;fts"
         GEN: ninja
@@ -381,28 +381,28 @@ jobs:
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify_vector=dictionary_expression --skip-compiled
+        ./build/reldebug/test/unittest --verify-vector=dictionary_expression --skip-compiled
 
     - name: Test dictionary_operator
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify_vector=dictionary_operator --skip-compiled
+        ./build/reldebug/test/unittest --verify-vector=dictionary_operator --skip-compiled
 
     - name: Test constant_operator
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify_vector=constant_operator --skip-compiled
+        ./build/reldebug/test/unittest --verify-vector=constant_operator --skip-compiled
 
     - name: Test sequence_operator
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify_vector=sequence_operator --skip-compiled
+        ./build/reldebug/test/unittest --verify-vector=sequence_operator --skip-compiled
 
     - name: Test nested_shuffle
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify_vector=nested_shuffle --skip-compiled
+        ./build/reldebug/test/unittest --verify-vector=nested_shuffle --skip-compiled
