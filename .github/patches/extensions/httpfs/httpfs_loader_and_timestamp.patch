@@ -138,7 +138,7 @@ index 04bd795..3a3e89e 100644
  
  size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 686162f..bd7e7c8 100644
+index 686162f..cd43a64 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -7,6 +7,7 @@
@@ -187,7 +187,7 @@ index 686162f..bd7e7c8 100644
  	auto &sfh = handle.Cast<HTTPFileHandle>();
  	return sfh.last_modified;
  }
-@@ -549,20 +537,19 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
+@@ -549,20 +537,14 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
  	}
  }
  
@@ -206,12 +206,7 @@ index 686162f..bd7e7c8 100644
 -	tm.tm_sec = parse_result.data[5];
 -	tm.tm_isdst = 0;
 -	result = mktime(&tm);
-+	date_t date;
-+	if (!Date::TryFromDate(parse_result.data[0] - 1900, parse_result.data[1] - 1, parse_result.data[2], date)) {
-+		return false;
-+	}
-+	auto time = Time::FromTime(parse_result.data[3], parse_result.data[4], parse_result.data[5]);
-+	if (!Timestamp::TryFromDatetime(date, time, result)) {
++	if (!parse_result.TryToTimestamp(result)) {
 +		return false;
 +	}
  	return true;
