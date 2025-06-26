@@ -306,13 +306,17 @@ else:
 if all_passed:
     exit(0)
 if summarize_failures and len(error_container):
+    error_list = error_container.get_errors()
+    job_name = os.getenv('GITHUB_JOB', 'Unknown')
+    with open(f"{job_name}_failures_summary.json", 'a') as f:
+        json.dump(error_list, f, indent=2)
     print(
         '''\n\n====================================================
 ================  FAILURES SUMMARY  ================
 ====================================================\n
 '''
     )
-    for i, error in enumerate(error_container.get_errors(), start=1):
+    for i, error in enumerate(error_list, start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
         # set warnings
