@@ -3,6 +3,7 @@
   "on_init": "ATTACH '{TEST_DIR}/{BASE_TEST_NAME}encrypted_db.db' as db (ENCRYPTION_KEY 'key={BASE_TEST_NAME}');",
   "on_new_connection": "USE db;",
   "on_load": "skip",
+  "skip_compiled": "true",
   "skip_tests": [
     "test/extension/test_tags.test",
     "test/extension/load_extension.test",

@@ -3,6 +3,7 @@
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}latest_storage.db' as db (STORAGE_VERSION 'latest'); SET storage_compatibility_version='latest';",
   "on_new_connection": "USE db;",
   "on_load": "skip",
+  "skip_compiled": "true",
   "skip_tests": [
     "test/extension/test_tags.test",
     "test/extension/load_extension.test",

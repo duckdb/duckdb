@@ -1,4 +1,5 @@
 {
   "description": "Debug setting around testing of parquet files",
-  "on_new_connection": "SET prefetch_all_parquet_files=true;"
+  "skip_compiled": "true",
+  "on_init": "INSTALL parquet FROM 'build/release/repository'; LOAD parquet; SET prefetch_all_parquet_files=true;"
 }
