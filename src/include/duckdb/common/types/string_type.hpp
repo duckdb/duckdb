@@ -14,12 +14,9 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 
 #include <cstring>
 #include <algorithm>
-
-#include "duckdb/storage/arena_string.h"
 
 namespace duckdb {
 
@@ -242,83 +239,6 @@ private:
 		} inlined;
 	} value;
 };
-
-class String {
-public:
-	String(string str)
-	    : // NOLINT: allow implicit conversion
-	      owned_data(std::move(str)), data(owned_data.c_str()), size(owned_data.size()) {
-	}
-
-	String(ArenaString str)
-	    : // NOLINT: allow implicit conversion
-	      data(str.GetData()), size(str.GetSize()) {
-	}
-
-public:
-	idx_t GetSize() const {
-		return size;
-	}
-
-	const char *GetData() const {
-		return data;
-	}
-
-	char operator[](const idx_t pos) const {
-		D_ASSERT(pos < size);
-		return data[pos];
-	}
-
-	bool empty() const {
-		return size == 0;
-	}
-
-	const char *c_str() const {
-		return data;
-	}
-
-	const string &get() const {
-		if (!owned_data.empty()) {
-			return owned_data;
-		}
-
-		return string(data, size);
-	}
-
-	struct ConstIterator;
-
-	ConstIterator begin() const;
-	ConstIterator end() const;
-
-private:
-	string owned_data;
-	const char *data;
-	idx_t size;
-};
-
-struct String::ConstIterator {
-	const char *ptr;
-
-	explicit ConstIterator(const char *ptr_p) : ptr(ptr_p) {
-	}
-
-	const char &operator*() const {
-		return *ptr;
-	}
-
-	ConstIterator &operator++() {
-		ptr++;
-		return *this;
-	}
-};
-
-typename String::ConstIterator String::begin() const {
-	return ConstIterator(data);
-}
-
-typename String::ConstIterator String::end() const {
-	return ConstIterator(data + size);
-}
 
 } // namespace duckdb
 

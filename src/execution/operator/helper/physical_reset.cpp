@@ -15,7 +15,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		config.ResetOption(name);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.set_variables[String(name).get()] = extension_option.default_value;
+		client_config.set_variables[name.ToStdString()] = extension_option.default_value;
 	}
 }
 
@@ -29,13 +29,12 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
 
-	String string_name(name);
 	if (!option) {
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(string_name.get());
+		auto entry = config.extension_parameters.find(name.ToStdString());
 		if (entry == config.extension_parameters.end()) {
 			Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(string_name.get());
+			entry = config.extension_parameters.find(name.ToStdString());
 			D_ASSERT(entry != config.extension_parameters.end());
 		}
 		ResetExtensionVariable(context, config, entry->second);
@@ -56,7 +55,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
-			throw CatalogException("option \"%s\" cannot be reset globally", string_name.get());
+			throw CatalogException("option \"%s\" cannot be reset globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
 		config.ResetOption(&db, *option);
@@ -64,7 +63,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	}
 	case SetScope::SESSION:
 		if (!option->reset_local) {
-			throw CatalogException("option \"%s\" cannot be reset locally", string_name.get());
+			throw CatalogException("option \"%s\" cannot be reset locally", name);
 		}
 		option->reset_local(context.client);
 		break;

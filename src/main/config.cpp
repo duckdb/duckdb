@@ -214,10 +214,10 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByIndex(idx_t target_
 }
 
 optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &name) {
-	auto lname = StringUtil::Lower(name.get());
+	auto lname = name.Lower();
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
-		if (internal_options[index].name == lname) {
+		if (internal_options[index].name == lname.ToStdString()) {
 			return internal_options + index;
 		}
 	}
@@ -282,15 +282,15 @@ void DBConfig::SetOption(const string &name, Value value) {
 
 void DBConfig::ResetOption(const String &name) {
 	lock_guard<mutex> l(config_lock);
-	auto extension_option = extension_parameters.find(name.get());
+	auto extension_option = extension_parameters.find(name.ToStdString());
 	D_ASSERT(extension_option != extension_parameters.end());
 	auto &default_value = extension_option->second.default_value;
 	if (!default_value.IsNull()) {
 		// Default is not NULL, override the setting
-		options.set_variables[name.get()] = default_value;
+		options.set_variables[name.ToStdString()] = default_value;
 	} else {
 		// Otherwise just remove it from the 'set_variables' map
-		options.set_variables.erase(name.get());
+		options.set_variables.erase(name.ToStdString());
 	}
 }
 
@@ -454,13 +454,12 @@ void DBConfig::CheckLock(const String &name) {
 		return;
 	}
 	case_insensitive_set_t allowed_settings {"schema", "search_path"};
-	if (allowed_settings.find(name.get()) != allowed_settings.end()) {
+	if (allowed_settings.find(name.ToStdString()) != allowed_settings.end()) {
 		// we are always allowed to change these settings
 		return;
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
-	                            String(name).get());
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {

@@ -21,6 +21,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/types/string.hpp"
 
 #include <functional>
 

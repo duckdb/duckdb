@@ -183,7 +183,7 @@ public:
 	}
 
 	void ResetUserVariable(const String &name) {
-		user_variables.erase(name.get());
+		user_variables.erase(name.ToStdString());
 	}
 
 	template <class OP>

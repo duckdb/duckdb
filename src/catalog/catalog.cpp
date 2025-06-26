@@ -538,7 +538,8 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
-		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name.get(), EXTENSION_SETTINGS);
+		auto extension_name =
+		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return;
@@ -546,7 +547,7 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String
 	}
 #endif
 
-	throw Catalog::UnrecognizedConfigurationError(context, configuration_name.get());
+	throw Catalog::UnrecognizedConfigurationError(context, configuration_name.ToStdString());
 }
 
 static bool IsAutoloadableFunction(CatalogType type) {

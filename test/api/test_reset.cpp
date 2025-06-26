@@ -191,76 +191,75 @@ void RequireValueEqual(const ConfigurationOption &op, const Value &left, const V
 	REQUIRE(false);
 }
 
-// TODO: Broken test
 //! New options should be added to the value_map in GetValueForOption
 //! Or added to the 'excluded_options' in OptionIsExcludedFromTest
-// TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
-// 	// Create a connection
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
-// 	con.Query("BEGIN TRANSACTION");
-// 	con.Query("PRAGMA disable_profiling");
-//
-// 	auto &config = DBConfig::GetConfig(*db.instance);
-// 	// Get all configuration options
-// 	auto options = config.GetOptions();
-//
-// 	// Test RESET for every option
-// 	for (auto &option : options) {
-// 		if (OptionIsExcludedFromTest(option.name)) {
-// 			continue;
-// 		}
-//
-// 		auto op = config.GetOptionByName(option.name);
-// 		REQUIRE(op);
-//
-// 		// Get the current value of the option
-// 		auto original_value = op->get_setting(*con.context);
-// 		auto parameter_type = DBConfig::ParseLogicalType(option.parameter_type);
-//
-// 		auto value_set = GetValueForOption(option.name, parameter_type);
-// 		// verify that at least one value is different
-// 		bool any_different = false;
-// 		string options;
-// 		for (auto &value_pair : value_set.pairs) {
-// 			if (!ValueEqual(original_value, value_pair.output)) {
-// 				any_different = true;
-// 			} else {
-// 				if (!options.empty()) {
-// 					options += ", ";
-// 				}
-// 				options += value_pair.output.ToString();
-// 			}
-// 		}
-// 		if (!any_different) {
-// 			auto error = StringUtil::Format(
-// 			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", op->name,
-// 			    original_value.ToString(), options);
-// 			cerr << error << endl;
-// 			REQUIRE(false);
-// 		}
-// 		for (auto &value_pair : value_set.pairs) {
-// 			// Get the new value for the option
-// 			auto input = value_pair.input.DefaultCastAs(parameter_type);
-// 			// Set the new option
-// 			if (op->set_local) {
-// 				op->set_local(*con.context, input);
-// 			} else {
-// 				op->set_global(db.instance.get(), config, input);
-// 			}
-// 			// Get the value of the option again
-// 			auto changed_value = op->get_setting(*con.context);
-// 			REQUIRE_VALUE_EQUAL(*op, changed_value, value_pair.output);
-//
-// 			if (op->reset_local) {
-// 				op->reset_local(*con.context);
-// 			} else {
-// 				op->reset_global(db.instance.get(), config);
-// 			}
-//
-// 			// Get the reset value of the option
-// 			auto reset_value = op->get_setting(*con.context);
-// 			REQUIRE_VALUE_EQUAL(*op, reset_value, original_value);
-// 		}
-// 	}
-// }
+TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
+	// Create a connection
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("BEGIN TRANSACTION");
+	con.Query("PRAGMA disable_profiling");
+
+	auto &config = DBConfig::GetConfig(*db.instance);
+	// Get all configuration options
+	auto options = config.GetOptions();
+
+	// Test RESET for every option
+	for (auto &option : options) {
+		if (OptionIsExcludedFromTest(option.name)) {
+			continue;
+		}
+
+		auto op = config.GetOptionByName(option.name);
+		REQUIRE(op);
+
+		// Get the current value of the option
+		auto original_value = op->get_setting(*con.context);
+		auto parameter_type = DBConfig::ParseLogicalType(option.parameter_type);
+
+		auto value_set = GetValueForOption(option.name, parameter_type);
+		// verify that at least one value is different
+		bool any_different = false;
+		string options;
+		for (auto &value_pair : value_set.pairs) {
+			if (!ValueEqual(original_value, value_pair.output)) {
+				any_different = true;
+			} else {
+				if (!options.empty()) {
+					options += ", ";
+				}
+				options += value_pair.output.ToString();
+			}
+		}
+		if (!any_different) {
+			auto error = StringUtil::Format(
+			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", op->name,
+			    original_value.ToString(), options);
+			cerr << error << endl;
+			REQUIRE(false);
+		}
+		for (auto &value_pair : value_set.pairs) {
+			// Get the new value for the option
+			auto input = value_pair.input.DefaultCastAs(parameter_type);
+			// Set the new option
+			if (op->set_local) {
+				op->set_local(*con.context, input);
+			} else {
+				op->set_global(db.instance.get(), config, input);
+			}
+			// Get the value of the option again
+			auto changed_value = op->get_setting(*con.context);
+			REQUIRE_VALUE_EQUAL(*op, changed_value, value_pair.output);
+
+			if (op->reset_local) {
+				op->reset_local(*con.context);
+			} else {
+				op->reset_global(db.instance.get(), config);
+			}
+
+			// Get the reset value of the option
+			auto reset_value = op->get_setting(*con.context);
+			REQUIRE_VALUE_EQUAL(*op, reset_value, original_value);
+		}
+	}
+}
