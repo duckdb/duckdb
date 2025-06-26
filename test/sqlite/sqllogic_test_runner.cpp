@@ -97,7 +97,11 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	try {
 		db = make_uniq<DuckDB>(dbpath, config.get());
 		// always load core functions
-		ExtensionHelper::LoadExtension(*db, "core_functions");
+
+		auto &test_config = TestConfiguration::Get();
+		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
+			ExtensionHelper::LoadExtension(*db, ext);
+		}
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
 		SQLLogicTestLogger::LoadDatabaseFail(file_name, dbpath, err.Message());

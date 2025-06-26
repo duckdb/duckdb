@@ -37,6 +37,7 @@ static const TestConfigOption test_config_options[] = {
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
+    {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -182,6 +183,21 @@ string TestConfiguration::OnLoadCommand() {
 
 string TestConfiguration::OnConnectionCommand() {
 	return GetOptionOrDefault("on_new_connection", string());
+}
+
+vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
+	vector<string> res;
+	auto entry = options.find("statically_loaded_extensions");
+	if (entry != options.end()) {
+		vector<Value> ext_list = ListValue::GetChildren(entry->second);
+
+		for (auto ext : ext_list) {
+			res.push_back(ext.GetValue<string>());
+		}
+	} else {
+		res.push_back("core_functions");
+	}
+	return res;
 }
 
 void TestConfiguration::ParseConnectScript(const Value &input) {
