@@ -20,6 +20,7 @@ struct TestConfigOption {
 
 static const TestConfigOption test_config_options[] = {
     {"description", "Config description", LogicalType::VARCHAR, nullptr},
+    {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
