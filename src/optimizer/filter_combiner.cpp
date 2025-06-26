@@ -242,7 +242,7 @@ bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 	if (in_list.empty()) {
 		return true;
 	}
-	if (!in_list[0].type().IsIntegral()) {
+	if (!in_list[0].type().IsIntegral() || in_list[0].type() == LogicalType::UHUGEINT) {
 		return false;
 	}
 	// sort the input list
