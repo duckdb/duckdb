@@ -1,4 +1,4 @@
 {
   "description": "Debug setting around testing of parquet files",
-  "on_init": "SET prefetch_all_parquet_files=true"
+  "on_init": "LOAD parquet; SET prefetch_all_parquet_files=true;"
 }
