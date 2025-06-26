@@ -214,8 +214,12 @@ if summary and not no_summary:
         if failure_message["old_failure"] != failure_message["new_failure"]:
             print("Old:\n", failure_message["old_failure"])
             print("New:\n", failure_message["new_failure"])
+            # set warnings
+            subprocess.run(f'echo "::warning::{i}: {failure_message["benchmark"]}::"Old::", {failure_message["old_failure"]}::New::", {failure_message["new_failure"]}"', shell=True)
         else:
             print(failure_message["old_failure"])
+            # set warnings
+            subprocess.run(f'echo "::warning::{i}: {failure_message["benchmark"]}::"Old::", {failure_message["old_failure"]}"', shell=True)
         print("-", 52)
 
 exit(exit_code)
