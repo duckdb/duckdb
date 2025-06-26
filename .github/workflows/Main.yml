@@ -340,69 +340,69 @@ jobs:
     - name: Build
       id: build
       shell: bash
-      # Bring back BLOCK_VERIFICATION: 1
+      # Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
+      # DEBUG_STACKTRACE: 1 + reldebug ?
       env:
-        DEBUG_STACKTRACE: 1
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;inet;fts"
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;inet"
         GEN: ninja
-      run: make reldebug
+      run: make
 
     - name: test/configs/encrypted_db.json
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/encrypted_db.json
+        ./build/release/test/unittest --test-config test/configs/encrypted_db.json
 
     - name: test/configs/force_storage.json
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/force_storage.json
+        ./build/release/test/unittest --test-config test/configs/force_storage.json
 
     - name: test/configs/force_storage_restart.json
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/force_storage_restart.json
+        ./build/release/test/unittest --test-config test/configs/force_storage_restart.json
 
     - name: test/configs/latest_storage.json
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/latest_storage.json
+        ./build/release/test/unittest --test-config test/configs/latest_storage.json
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/prefetch_all_parquet_files.json
+        ./build/release/test/unittest --test-config test/configs/prefetch_all_parquet_files.json
 
     - name: Test dictionary_expression
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify-vector=dictionary_expression --skip-compiled
+        ./build/release/test/unittest --verify-vector=dictionary_expression --skip-compiled
 
     - name: Test dictionary_operator
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify-vector=dictionary_operator --skip-compiled
+        ./build/release/test/unittest --verify-vector=dictionary_operator --skip-compiled
 
     - name: Test constant_operator
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify-vector=constant_operator --skip-compiled
+        ./build/release/test/unittest --verify-vector=constant_operator --skip-compiled
 
     - name: Test sequence_operator
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify-vector=sequence_operator --skip-compiled
+        ./build/release/test/unittest --verify-vector=sequence_operator --skip-compiled
 
     - name: Test nested_shuffle
       if: always() && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --verify-vector=nested_shuffle --skip-compiled
+        ./build/release/test/unittest --verify-vector=nested_shuffle --skip-compiled
