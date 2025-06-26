@@ -1392,19 +1392,20 @@ const StringUtil::EnumStringLiteral *GetExplainFormatValues() {
 		{ static_cast<uint32_t>(ExplainFormat::TEXT), "TEXT" },
 		{ static_cast<uint32_t>(ExplainFormat::JSON), "JSON" },
 		{ static_cast<uint32_t>(ExplainFormat::HTML), "HTML" },
-		{ static_cast<uint32_t>(ExplainFormat::GRAPHVIZ), "GRAPHVIZ" }
+		{ static_cast<uint32_t>(ExplainFormat::GRAPHVIZ), "GRAPHVIZ" },
+		{ static_cast<uint32_t>(ExplainFormat::YAML), "YAML" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
-	return StringUtil::EnumToString(GetExplainFormatValues(), 5, "ExplainFormat", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExplainFormatValues(), 6, "ExplainFormat", static_cast<uint32_t>(value));
 }
 
 template<>
 ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
-	return static_cast<ExplainFormat>(StringUtil::StringToEnum(GetExplainFormatValues(), 5, "ExplainFormat", value));
+	return static_cast<ExplainFormat>(StringUtil::StringToEnum(GetExplainFormatValues(), 6, "ExplainFormat", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExplainOutputTypeValues() {
