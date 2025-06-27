@@ -128,7 +128,6 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	}
 
 	auto type = duckdb_get_type_id(logical_type);
-
 	duckdb_destroy_logical_type(&logical_type);
 
 	return type;

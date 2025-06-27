@@ -52,6 +52,10 @@ public:
 		return false;
 	}
 
+	virtual string TaskType() const {
+		return "UnnamedTask";
+	}
+
 public:
 	optional_ptr<ProducerToken> token;
 };

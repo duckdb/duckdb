@@ -2,15 +2,16 @@
 # description: Test storage with string compression inside structs
 # group: [string]
 
-# load the DB from disk
-load __TEST_DIR__/test_string_compression.db
-
-foreach compression fsst dictionary
-
-foreach enable_fsst_vector true false
+foreach compression fsst dictionary dict_fsst
 
 statement ok
-SET enable_fsst_vectors='${enable_fsst_vector}'
+SET storage_compatibility_version='v1.0.0'
+
+onlyif compression=dict_fsst
+statement ok
+SET storage_compatibility_version='v1.3.0'
+
+load __TEST_DIR__/test_struct_${compression}.db
 
 statement ok
 PRAGMA force_compression='${compression}'
@@ -46,7 +47,5 @@ SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHER
 
 statement ok
 DROP TABLE test;
-
-endloop
 
 endloop

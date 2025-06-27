@@ -73,9 +73,10 @@ public:
 	                                           const vector<unique_ptr<Expression>> &groups);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
-private:
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
+
+private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 
@@ -84,9 +85,9 @@ private:
 	                                         const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx MultipleCandidateException(const string &name, FunctionSet<T> &functions,
-	                                        vector<idx_t> &candidate_functions, const vector<LogicalType> &arguments,
-	                                        ErrorData &error);
+	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
+	                                        FunctionSet<T> &functions, vector<idx_t> &candidate_functions,
+	                                        const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
 	optional_idx BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,

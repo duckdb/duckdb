@@ -2,9 +2,6 @@
 # description: Test the list_bit_or aggregate function
 # group: [aggregates]
 
-require skip_reload
-
-
 # bit_or on a sequence
 statement ok
 CREATE SEQUENCE seq;

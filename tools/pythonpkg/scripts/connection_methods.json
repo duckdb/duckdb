@@ -301,6 +301,12 @@
 		"return": "None"
 	},
 	{
+		"name": "query_progress",
+		"function": "QueryProgress",
+		"docs": "Query progress of pending operation",
+		"return": "float"
+	},
+	{
 		"name": "fetchone",
 		"function": "FetchOne",
 		"docs": "Fetch a single row from a result following execute",
@@ -377,6 +383,13 @@
 				"name": "rows_per_batch",
 				"default": "1000000",
 				"type": "int"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "lazy",
+				"default": "False",
+				"type": "bool"
 			}
 		],
 		"return": "polars.DataFrame"
@@ -1023,6 +1036,13 @@
 			{
 				"name": "query",
 				"type": "str"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "qualified",
+				"default": "False",
+				"type": "bool"
 			}
 		],
 		"return": "Set[str]"

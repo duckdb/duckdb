@@ -1,0 +1,58 @@
+# name: test/sql/alter/list/rename_column_in_struct.test
+# group: [list]
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		i INTEGER,
+		j INTEGER
+	)[]
+)
+
+statement ok
+INSERT INTO test VALUES
+	([ROW(1, 1)]),
+	([ROW(2, 2)])
+
+# attempt to rename 'element' from the list
+statement error
+ALTER TABLE test RENAME COLUMN s.element TO not_element
+----
+Catalog Error: Cannot rename field 'element' from column 's' - can only rename fields inside a struct
+
+statement ok
+ALTER TABLE test RENAME COLUMN s.element.j TO k
+
+query I
+select * from test
+----
+[{'i': 1, 'k': 1}]
+[{'i': 2, 'k': 2}]
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		a STRUCT(
+			i INTEGER,
+			j INTEGER
+		)[]
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(ROW([ROW(1, 1)])),
+	(ROW([ROW(2, 2)]))
+
+# add a column to a struct
+statement ok
+ALTER TABLE test RENAME COLUMN s.a.element.i TO k
+
+query I
+select * from test
+----
+{'a': [{'k': 1, 'j': 1}]}
+{'a': [{'k': 2, 'j': 2}]}

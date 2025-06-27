@@ -6,7 +6,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -619,7 +619,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 	}
 
-	static void AddTimeBucketFunction(DatabaseInstance &db) {
+	static void AddTimeBucketFunction(ExtensionLoader &loader) {
 		ScalarFunctionSet set("time_bucket");
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
 		                               ICUTimeBucketFunction, Bind));
@@ -632,12 +632,12 @@ struct ICUTimeBucket : public ICUDateFunc {
 		for (auto &func : set.functions) {
 			BaseScalarFunction::SetReturnsError(func);
 		}
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 };
 
-void RegisterICUTimeBucketFunctions(DatabaseInstance &db) {
-	ICUTimeBucket::AddTimeBucketFunction(db);
+void RegisterICUTimeBucketFunctions(ExtensionLoader &loader) {
+	ICUTimeBucket::AddTimeBucketFunction(loader);
 }
 
 } // namespace duckdb

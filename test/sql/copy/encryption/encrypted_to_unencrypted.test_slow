@@ -1,0 +1,50 @@
+# name: test/sql/copy/encryption/encrypted_to_unencrypted.test_slow
+# group: [encryption]
+
+require skip_reload
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+
+statement ok
+USE encrypted;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+COPY FROM DATABASE encrypted to unencrypted;
+
+statement ok
+USE memory;
+
+statement ok
+DETACH unencrypted
+
+statement ok
+DETACH encrypted
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' AS unencrypted;
+
+query I
+SELECT l_suppkey FROM unencrypted.lineitem limit 10;
+----
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60

@@ -69,7 +69,7 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry &table,
+	PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &table,
 	               vector<unique_ptr<BoundConstraint>> bound_constraints,
 	               vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns,
 	               vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk, bool parallel,
@@ -77,8 +77,8 @@ public:
 	               unique_ptr<Expression> do_update_condition, unordered_set<column_t> on_conflict_filter,
 	               vector<column_t> columns_to_fetch, bool update_is_del_and_insert);
 	//! CREATE TABLE AS
-	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
-	               idx_t estimated_cardinality, bool parallel);
+	PhysicalInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
+	               unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality, bool parallel);
 
 	//! The table to insert into
 	optional_ptr<TableCatalogEntry> insert_table;

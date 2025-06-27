@@ -102,6 +102,13 @@
         "type": "idx_t",
         "default": "0",
         "property": "parquet_options.explicit_cardinality"
+      },
+      {
+        "id": 107,
+        "name": "can_have_nan",
+        "type": "bool",
+        "default": "false",
+        "property": "parquet_options.can_have_nan"
       }
     ],
     "pointer_type": "none"

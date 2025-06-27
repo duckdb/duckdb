@@ -1,261 +1,201 @@
-diff --git a/src/include/storage/sqlite_catalog.hpp b/src/include/storage/sqlite_catalog.hpp
-index 236923a..3d9da9d 100644
---- a/src/include/storage/sqlite_catalog.hpp
-+++ b/src/include/storage/sqlite_catalog.hpp
-@@ -33,23 +33,19 @@ public:
- 
- 	void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
- 
--	optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
--	                                           OnEntryNotFound if_not_found,
--	                                           QueryErrorContext error_context = QueryErrorContext()) override;
-+	optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
-+	                                           OnEntryNotFound if_not_found) override;
- 
- 	SQLiteSchemaEntry &GetMainSchema() {
- 		return *main_schema;
+diff --git a/src/include/sqlite_scanner_extension.hpp b/src/include/sqlite_scanner_extension.hpp
+index 40dfb9a..d290788 100644
+--- a/src/include/sqlite_scanner_extension.hpp
++++ b/src/include/sqlite_scanner_extension.hpp
+@@ -13,11 +13,9 @@ public:
+ 	std::string Name() override {
+ 		return "sqlite_scanner";
  	}
+-	void Load(DuckDB &db) override;
++	void Load(ExtensionLoader &loader) override;
+ };
  
--	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
--	                                        unique_ptr<PhysicalOperator> plan) override;
--	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
--	                                               unique_ptr<PhysicalOperator> plan) override;
--	unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
--	                                        unique_ptr<PhysicalOperator> plan) override;
--	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
--	                                        unique_ptr<PhysicalOperator> plan) override;
--	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
-+    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
-+    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
-+    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
-+    PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) override;
-+
-+    unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
- 	                                            unique_ptr<LogicalOperator> plan) override;
- 
- 	DatabaseSize GetDatabaseSize(ClientContext &context) override;
-diff --git a/src/include/storage/sqlite_schema_entry.hpp b/src/include/storage/sqlite_schema_entry.hpp
-index 1ecdb04..6661467 100644
---- a/src/include/storage/sqlite_schema_entry.hpp
-+++ b/src/include/storage/sqlite_schema_entry.hpp
-@@ -36,7 +36,7 @@ public:
- 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
- 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
- 	void DropEntry(ClientContext &context, DropInfo &info) override;
--	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
-+	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
- 
- private:
- 	void AlterTable(SQLiteTransaction &transaction, RenameTableInfo &info);
-diff --git a/src/storage/sqlite_catalog.cpp b/src/storage/sqlite_catalog.cpp
-index 40a97ce..96b0802 100644
---- a/src/storage/sqlite_catalog.cpp
-+++ b/src/storage/sqlite_catalog.cpp
-@@ -31,9 +31,9 @@ void SQLiteCatalog::ScanSchemas(ClientContext &context, std::function<void(Schem
- 	callback(*main_schema);
+ extern "C" {
+-DUCKDB_EXTENSION_API void sqlite_scanner_init(duckdb::DatabaseInstance &db);
+-DUCKDB_EXTENSION_API const char *sqlite_scanner_version();
+-DUCKDB_EXTENSION_API void sqlite_scanner_storage_init(DBConfig &config);
++	DUCKDB_CPP_EXTENSION_ENTRY(sqlite_scanner, loader);
  }
+\ No newline at end of file
+diff --git a/src/include/storage/sqlite_delete.hpp b/src/include/storage/sqlite_delete.hpp
+index 3c07df3..7315ebe 100644
+--- a/src/include/storage/sqlite_delete.hpp
++++ b/src/include/storage/sqlite_delete.hpp
+@@ -14,7 +14,7 @@ namespace duckdb {
  
--optional_ptr<SchemaCatalogEntry> SQLiteCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
--                                                          OnEntryNotFound if_not_found,
--                                                          QueryErrorContext error_context) {
-+optional_ptr<SchemaCatalogEntry> SQLiteCatalog::LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
-+                                                          OnEntryNotFound if_not_found) {
-+    auto &schema_name = schema_lookup.GetEntryName();
- 	if (schema_name == DEFAULT_SCHEMA || schema_name == INVALID_SCHEMA) {
- 		return main_schema.get();
- 	}
-diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
-index 201e70b..bb75a40 100644
---- a/src/storage/sqlite_delete.cpp
-+++ b/src/storage/sqlite_delete.cpp
-@@ -87,15 +87,14 @@ InsertionOrderPreservingMap<string> SQLiteDelete::ParamsToString() const {
- //===--------------------------------------------------------------------===//
- // Plan
- //===--------------------------------------------------------------------===//
--unique_ptr<PhysicalOperator> SQLiteCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
--                                                       unique_ptr<PhysicalOperator> plan) {
-+PhysicalOperator &SQLiteCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) {
- 	if (op.return_chunk) {
- 		throw BinderException("RETURNING clause not yet supported for deletion of a SQLite table");
- 	}
- 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
--	auto insert = make_uniq<SQLiteDelete>(op, op.table, bound_ref.index);
--	insert->children.push_back(std::move(plan));
--	return std::move(insert);
-+	auto &delete_op = planner.Make<SQLiteDelete>(op, op.table, bound_ref.index);
-+    delete_op.children.push_back(plan);
-+	return delete_op;
- }
+ class SQLiteDelete : public PhysicalOperator {
+ public:
+-	SQLiteDelete(LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
++	SQLiteDelete(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index);
  
- } // namespace duckdb
-diff --git a/src/storage/sqlite_index.cpp b/src/storage/sqlite_index.cpp
-index 68f941e..440db80 100644
---- a/src/storage/sqlite_index.cpp
-+++ b/src/storage/sqlite_index.cpp
-@@ -35,8 +35,8 @@ public:
+ 	//! The table to delete from
+ 	TableCatalogEntry &table;
+diff --git a/src/include/storage/sqlite_index.hpp b/src/include/storage/sqlite_index.hpp
+index 4400497..f60a33a 100644
+--- a/src/include/storage/sqlite_index.hpp
++++ b/src/include/storage/sqlite_index.hpp
+@@ -16,7 +16,7 @@ namespace duckdb {
+ //! PhysicalCreateSequence represents a CREATE SEQUENCE command
+ class SQLiteCreateIndex : public PhysicalOperator {
+ public:
+-	explicit SQLiteCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
++	SQLiteCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table);
+ 
  	unique_ptr<CreateIndexInfo> info;
  	TableCatalogEntry &table;
+diff --git a/src/include/storage/sqlite_insert.hpp b/src/include/storage/sqlite_insert.hpp
+index 65ec357..2a5d181 100644
+--- a/src/include/storage/sqlite_insert.hpp
++++ b/src/include/storage/sqlite_insert.hpp
+@@ -16,9 +16,9 @@ namespace duckdb {
+ class SQLiteInsert : public PhysicalOperator {
+ public:
+ 	//! INSERT INTO
+-	SQLiteInsert(LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
++	SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map);
+ 	//! CREATE TABLE AS
+-	SQLiteInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
++	SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info);
  
--	unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) override {
--		return make_uniq<SQLiteCreateIndex>(std::move(info), table);
-+	PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) override {
-+		return planner.Make<SQLiteCreateIndex>(std::move(info), table);
- 	}
+ 	//! The table to insert into
+ 	optional_ptr<TableCatalogEntry> table;
+diff --git a/src/include/storage/sqlite_update.hpp b/src/include/storage/sqlite_update.hpp
+index 0061620..92ed76e 100644
+--- a/src/include/storage/sqlite_update.hpp
++++ b/src/include/storage/sqlite_update.hpp
+@@ -15,7 +15,7 @@ namespace duckdb {
  
- 	void Serialize(Serializer &writer) const override {
+ class SQLiteUpdate : public PhysicalOperator {
+ public:
+-	SQLiteUpdate(LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
++	SQLiteUpdate(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns);
+ 
+ 	//! The table to delete from
+ 	TableCatalogEntry &table;
+diff --git a/src/sqlite_extension.cpp b/src/sqlite_extension.cpp
+index f85328f..c2f7c81 100644
+--- a/src/sqlite_extension.cpp
++++ b/src/sqlite_extension.cpp
+@@ -9,7 +9,7 @@
+ #include "sqlite_scanner_extension.hpp"
+ 
+ #include "duckdb/catalog/catalog.hpp"
+-#include "duckdb/main/extension_util.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+ 
+ using namespace duckdb;
+@@ -20,16 +20,17 @@ static void SetSqliteDebugQueryPrint(ClientContext &context, SetScope scope, Val
+ 	SQLiteDB::DebugSetPrintQueries(BooleanValue::Get(parameter));
+ }
+ 
+-static void LoadInternal(DatabaseInstance &db) {
++static void LoadInternal(ExtensionLoader &loader) {
+ 	SqliteScanFunction sqlite_fun;
+-	ExtensionUtil::RegisterFunction(db, sqlite_fun);
++	loader.RegisterFunction(sqlite_fun);
+ 
+ 	SqliteAttachFunction attach_func;
+-	ExtensionUtil::RegisterFunction(db, attach_func);
++	loader.RegisterFunction(attach_func);
+ 
+ 	SQLiteQueryFunction query_func;
+-	ExtensionUtil::RegisterFunction(db, query_func);
++	loader.RegisterFunction(query_func);
+ 
++	auto &db = loader.GetDatabaseInstance();
+ 	auto &config = DBConfig::GetConfig(db);
+ 	config.AddExtensionOption("sqlite_all_varchar", "Load all SQLite columns as VARCHAR columns", LogicalType::BOOLEAN);
+ 
+@@ -39,19 +40,12 @@ static void LoadInternal(DatabaseInstance &db) {
+ 	config.storage_extensions["sqlite_scanner"] = make_uniq<SQLiteStorageExtension>();
+ }
+ 
+-void SqliteScannerExtension::Load(DuckDB &db) {
+-	LoadInternal(*db.instance);
++void SqliteScannerExtension::Load(ExtensionLoader &loader) {
++	LoadInternal(loader);
+ }
+ 
+-DUCKDB_EXTENSION_API void sqlite_scanner_init(duckdb::DatabaseInstance &db) {
+-	LoadInternal(db);
++DUCKDB_CPP_EXTENSION_ENTRY(sqlite_scanner, loader) {
++	LoadInternal(loader);
+ }
+ 
+-DUCKDB_EXTENSION_API const char *sqlite_scanner_version() {
+-	return DuckDB::LibraryVersion();
+-}
+-
+-DUCKDB_EXTENSION_API void sqlite_scanner_storage_init(DBConfig &config) {
+-	config.storage_extensions["sqlite_scanner"] = make_uniq<SQLiteStorageExtension>();
+-}
+ }
+diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
+index c19f45b..bde562f 100644
+--- a/src/storage/sqlite_delete.cpp
++++ b/src/storage/sqlite_delete.cpp
+@@ -9,8 +9,8 @@
+ 
+ namespace duckdb {
+ 
+-SQLiteDelete::SQLiteDelete(LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
++SQLiteDelete::SQLiteDelete(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, idx_t row_id_index)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), row_id_index(row_id_index) {
+ }
+ 
+ //===--------------------------------------------------------------------===//
+diff --git a/src/storage/sqlite_index.cpp b/src/storage/sqlite_index.cpp
+index 440db80..e076502 100644
+--- a/src/storage/sqlite_index.cpp
++++ b/src/storage/sqlite_index.cpp
+@@ -6,8 +6,8 @@
+ 
+ namespace duckdb {
+ 
+-SQLiteCreateIndex::SQLiteCreateIndex(unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
++SQLiteCreateIndex::SQLiteCreateIndex(PhysicalPlan &physical_plan, unique_ptr<CreateIndexInfo> info, TableCatalogEntry &table)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {LogicalType::BIGINT}, 1), info(std::move(info)), table(table) {
+ }
+ 
+ //===--------------------------------------------------------------------===//
 diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
-index d25aa9f..20cd1b7 100644
+index 9cd4786..fbca2ac 100644
 --- a/src/storage/sqlite_insert.cpp
 +++ b/src/storage/sqlite_insert.cpp
-@@ -141,10 +141,10 @@ InsertionOrderPreservingMap<string> SQLiteInsert::ParamsToString() const {
- //===--------------------------------------------------------------------===//
- // Plan
- //===--------------------------------------------------------------------===//
--unique_ptr<PhysicalOperator> AddCastToSQLiteTypes(ClientContext &context, unique_ptr<PhysicalOperator> plan) {
-+PhysicalOperator &AddCastToSQLiteTypes(ClientContext &context, PhysicalPlanGenerator &planner, PhysicalOperator &plan) {
- 	// check if we need to cast anything
- 	bool require_cast = false;
--	auto &child_types = plan->GetTypes();
-+	auto &child_types = plan.GetTypes();
- 	for (auto &type : child_types) {
- 		auto sqlite_type = SQLiteUtils::ToSQLiteType(type);
- 		if (sqlite_type != type) {
-@@ -152,34 +152,33 @@ unique_ptr<PhysicalOperator> AddCastToSQLiteTypes(ClientContext &context, unique
- 			break;
- 		}
- 	}
--	if (require_cast) {
--		vector<LogicalType> sqlite_types;
--		vector<unique_ptr<Expression>> select_list;
--		for (idx_t i = 0; i < child_types.size(); i++) {
--			auto &type = child_types[i];
--			unique_ptr<Expression> expr;
--			expr = make_uniq<BoundReferenceExpression>(type, i);
--
--			auto sqlite_type = SQLiteUtils::ToSQLiteType(type);
--			if (sqlite_type != type) {
--				// add a cast
--				expr = BoundCastExpression::AddCastToType(context, std::move(expr), sqlite_type);
--			}
--			sqlite_types.push_back(std::move(sqlite_type));
--			select_list.push_back(std::move(expr));
--		}
--		// we need to cast: add casts
--		auto proj =
--		    make_uniq<PhysicalProjection>(std::move(sqlite_types), std::move(select_list), plan->estimated_cardinality);
--		proj->children.push_back(std::move(plan));
--		plan = std::move(proj);
--	}
+@@ -13,14 +13,14 @@
  
--	return plan;
-+    if (!require_cast) {
-+        return plan;
-+    }
-+
-+    vector<LogicalType> sqlite_types;
-+    vector<unique_ptr<Expression>> select_list;
-+    for (idx_t i = 0; i < child_types.size(); i++) {
-+        auto &type = child_types[i];
-+        unique_ptr<Expression> expr;
-+        expr = make_uniq<BoundReferenceExpression>(type, i);
-+
-+        auto sqlite_type = SQLiteUtils::ToSQLiteType(type);
-+        if (sqlite_type != type) {
-+            // add a cast
-+            expr = BoundCastExpression::AddCastToType(context, std::move(expr), sqlite_type);
-+        }
-+        sqlite_types.push_back(std::move(sqlite_type));
-+        select_list.push_back(std::move(expr));
-+    }
-+    // we need to cast: add casts
-+    auto &proj = planner.Make<PhysicalProjection>(std::move(sqlite_types), std::move(select_list), plan.estimated_cardinality);
-+    proj.children.push_back(plan);
-+    return proj;
+ namespace duckdb {
+ 
+-SQLiteInsert::SQLiteInsert(LogicalOperator &op, TableCatalogEntry &table,
++SQLiteInsert::SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
+                            physical_index_vector_t<idx_t> column_index_map_p)
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table), schema(nullptr),
+       column_index_map(std::move(column_index_map_p)) {
  }
  
--unique_ptr<PhysicalOperator> SQLiteCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
--                                                       unique_ptr<PhysicalOperator> plan) {
-+PhysicalOperator &SQLiteCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) {
- 	if (op.return_chunk) {
- 		throw BinderException("RETURNING clause not yet supported for insertion into SQLite table");
- 	}
-@@ -187,20 +186,18 @@ unique_ptr<PhysicalOperator> SQLiteCatalog::PlanInsert(ClientContext &context, L
- 		throw BinderException("ON CONFLICT clause not yet supported for insertion into SQLite table");
- 	}
- 
--	plan = AddCastToSQLiteTypes(context, std::move(plan));
--
--	auto insert = make_uniq<SQLiteInsert>(op, op.table, op.column_index_map);
--	insert->children.push_back(std::move(plan));
--	return std::move(insert);
-+    D_ASSERT(plan);
-+	auto &inner_plan = AddCastToSQLiteTypes(context, planner, *plan);
-+	auto &insert = planner.Make<SQLiteInsert>(op, op.table, op.column_index_map);
-+	insert.children.push_back(*plan);
-+	return insert;
+-SQLiteInsert::SQLiteInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
++SQLiteInsert::SQLiteInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
+       info(std::move(info)) {
  }
  
--unique_ptr<PhysicalOperator> SQLiteCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
--                                                              unique_ptr<PhysicalOperator> plan) {
--	plan = AddCastToSQLiteTypes(context, std::move(plan));
--
--	auto insert = make_uniq<SQLiteInsert>(op, op.schema, std::move(op.info));
--	insert->children.push_back(std::move(plan));
--	return std::move(insert);
-+PhysicalOperator &SQLiteCatalog::PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) {
-+	auto &inner_plan = AddCastToSQLiteTypes(context, planner, plan);
-+	auto &insert = planner.Make<SQLiteInsert>(op, op.schema, std::move(op.info));
-+	insert.children.push_back(inner_plan);
-+	return insert;
- }
- 
- } // namespace duckdb
-diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
-index 5477cfd..1a9e9f5 100644
---- a/src/storage/sqlite_schema_entry.cpp
-+++ b/src/storage/sqlite_schema_entry.cpp
-@@ -296,14 +296,13 @@ void SQLiteSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
- 	transaction.DropEntry(info.type, info.name, info.cascade);
- }
- 
--optional_ptr<CatalogEntry> SQLiteSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
--                                                       const string &name) {
-+optional_ptr<CatalogEntry> SQLiteSchemaEntry::LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
- 	auto &sqlite_transaction = GetSQLiteTransaction(transaction);
--	switch (type) {
-+	switch (lookup_info.GetCatalogType()) {
- 	case CatalogType::INDEX_ENTRY:
- 	case CatalogType::TABLE_ENTRY:
- 	case CatalogType::VIEW_ENTRY:
--		return sqlite_transaction.GetCatalogEntry(name);
-+		return sqlite_transaction.GetCatalogEntry(lookup_info.GetEntryName());
- 	default:
- 		return nullptr;
- 	}
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
-index 90a3934..a84137a 100644
+index b550549..6c071d7 100644
 --- a/src/storage/sqlite_update.cpp
 +++ b/src/storage/sqlite_update.cpp
-@@ -103,8 +103,7 @@ InsertionOrderPreservingMap<string> SQLiteUpdate::ParamsToString() const {
- //===--------------------------------------------------------------------===//
- // Plan
- //===--------------------------------------------------------------------===//
--unique_ptr<PhysicalOperator> SQLiteCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
--                                                       unique_ptr<PhysicalOperator> plan) {
-+PhysicalOperator &SQLiteCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) {
- 	if (op.return_chunk) {
- 		throw BinderException("RETURNING clause not yet supported for updates of a SQLite table");
- 	}
-@@ -113,9 +112,9 @@ unique_ptr<PhysicalOperator> SQLiteCatalog::PlanUpdate(ClientContext &context, L
- 			throw BinderException("SET DEFAULT is not yet supported for updates of a SQLite table");
- 		}
- 	}
--	auto insert = make_uniq<SQLiteUpdate>(op, op.table, std::move(op.columns));
--	insert->children.push_back(std::move(plan));
--	return std::move(insert);
-+	auto &update = planner.Make<SQLiteUpdate>(op, op.table, std::move(op.columns));
-+    update.children.push_back(plan);
-+	return update;
+@@ -8,8 +8,8 @@
+ 
+ namespace duckdb {
+ 
+-SQLiteUpdate::SQLiteUpdate(LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
+-    : PhysicalOperator(PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
++SQLiteUpdate::SQLiteUpdate(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table, vector<PhysicalIndex> columns_p)
++    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(table), columns(std::move(columns_p)) {
  }
  
- } // namespace duckdb
+ //===--------------------------------------------------------------------===//

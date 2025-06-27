@@ -2,10 +2,7 @@
 # description: Window Sharing should distiguish identical volatile expressions
 # group: [window]
 
-require skip_reload
-
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 query II
 SELECT 

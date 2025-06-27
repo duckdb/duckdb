@@ -7,7 +7,5 @@
 # CMakeLists.txt file with the `BUILD_PYTHON` variable.
 # TODO: unify this by making setup.py also use this configuration, making this the config for all python builds
 duckdb_extension_load(json)
-duckdb_extension_load(tpcds)
-duckdb_extension_load(tpch)
 duckdb_extension_load(parquet)
 duckdb_extension_load(icu)

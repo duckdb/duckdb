@@ -2,14 +2,10 @@
 # description: Test reservoir sample crash on large data sets
 # group: [sample]
 
-# seed does not persist across restarts
-require skip_reload
-
 statement ok
 create table output (num_rows INT);
 
-statement ok
-select setseed(0.3);
+set seed 0.3
 
 loop i 0 500
 
@@ -42,8 +38,7 @@ NULL	NULL	NULL
 statement ok
 create table t1 as select range id from range(1000);
 
-statement ok
-select setseed(0.6);
+set seed 0.6
 
 query I nosort result_1
 select id from t1 USING SAMPLE 1% (bernoulli, 5);

@@ -70,7 +70,7 @@ SELECT * FROM test
 statement error
 ALTER TABLE test ADD COLUMN s.i.a INTEGER
 ----
-not a struct
+Binder Error: Column 'i' is not a nested type, ADD COLUMN can only be used on nested types
 
 # nested column does not exist
 statement error

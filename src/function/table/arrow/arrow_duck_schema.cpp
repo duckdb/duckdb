@@ -172,6 +172,9 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 	} else if (format == "Z") {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+	} else if (format == "vz") {
+		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW);
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
 		string parameters = format.substr(format.find(':') + 1);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));

@@ -33,7 +33,12 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
 		if (!table.ColumnExists(colname)) {
-			throw BinderException("Referenced update column %s not found in table!", colname);
+			vector<string> column_names;
+			for (auto &col : table.GetColumns().Physical()) {
+				column_names.push_back(col.Name());
+			}
+			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname, "Did you mean");
+			throw BinderException("Referenced update column %s not found in table!\n%s", colname, candidates);
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {

@@ -14,36 +14,40 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op, PhysicalOperator &left,
-                                                       PhysicalOperator &right, vector<JoinCondition> cond,
-                                                       JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond), join_type,
-                        estimated_cardinality) {
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
+                                                       PhysicalOperator &left, PhysicalOperator &right,
+                                                       vector<JoinCondition> cond, JoinType join_type,
+                                                       idx_t estimated_cardinality,
+                                                       unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+    : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
+                        join_type, estimated_cardinality) {
 
-	for (auto &cond : conditions) {
-		D_ASSERT(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type);
+	filter_pushdown = std::move(pushdown_info_p);
+
+	for (auto &join_cond : conditions) {
+		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);
+		join_key_types.push_back(join_cond.left->return_type);
 
 		// Convert the conditions to sort orders
-		auto left = cond.left->Copy();
-		auto right = cond.right->Copy();
-		switch (cond.comparison) {
+		auto left_expr = join_cond.left->Copy();
+		auto right_expr = join_cond.right->Copy();
+		switch (join_cond.comparison) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left));
-			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right));
+			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
+			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right_expr));
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left));
-			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right));
+			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
+			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right_expr));
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			// Allowed in multi-predicate joins, but can't be first/sort.
 			D_ASSERT(!lhs_orders.empty());
-			lhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left));
-			rhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right));
+			lhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left_expr));
+			rhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right_expr));
 			break;
 
 		default:
@@ -56,15 +60,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class MergeJoinLocalState : public LocalSinkState {
-public:
-	explicit MergeJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child)
-	    : table(context, op, child) {
-	}
-
-	//! The local sort state
-	PhysicalRangeJoin::LocalSortedTable table;
-};
+class MergeJoinLocalState;
 
 class MergeJoinGlobalState : public GlobalSinkState {
 public:
@@ -77,26 +73,39 @@ public:
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
+		if (op.filter_pushdown) {
+			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
+			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
+		}
 	}
 
 	inline idx_t Count() const {
 		return table->count;
 	}
 
-	void Sink(DataChunk &input, MergeJoinLocalState &lstate) {
-		auto &global_sort_state = table->global_sort_state;
-		auto &local_sort_state = lstate.table.local_sort_state;
+	void Sink(DataChunk &input, MergeJoinLocalState &lstate);
 
-		// Sink the data into the local sort state
-		lstate.table.Sink(input, global_sort_state);
+	unique_ptr<GlobalSortedTable> table;
+	//! Should we not bother pushing down filters?
+	bool skip_filter_pushdown = false;
+	//! The global filter states to push down (if any)
+	unique_ptr<JoinFilterGlobalState> global_filter_state;
+};
 
-		// When sorting data reaches a certain size, we sort it
-		if (local_sort_state.SizeInBytes() >= table->memory_per_thread) {
-			local_sort_state.Sort(global_sort_state, true);
+class MergeJoinLocalState : public LocalSinkState {
+public:
+	explicit MergeJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, MergeJoinGlobalState &gstate,
+	                             const idx_t child)
+	    : table(context, op, child) {
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
 		}
 	}
 
-	unique_ptr<GlobalSortedTable> table;
+	//! The local sort state
+	PhysicalRangeJoin::LocalSortedTable table;
+	//! Local state for accumulating filter statistics
+	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -105,7 +114,21 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_uniq<MergeJoinLocalState>(context.client, *this, 1U);
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
+	return make_uniq<MergeJoinLocalState>(context.client, *this, gstate, 1U);
+}
+
+void MergeJoinGlobalState::Sink(DataChunk &input, MergeJoinLocalState &lstate) {
+	auto &global_sort_state = table->global_sort_state;
+	auto &local_sort_state = lstate.table.local_sort_state;
+
+	// Sink the data into the local sort state
+	lstate.table.Sink(input, global_sort_state);
+
+	// When sorting data reaches a certain size, we sort it
+	if (local_sort_state.SizeInBytes() >= table->memory_per_thread) {
+		local_sort_state.Sort(global_sort_state, true);
+	}
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -114,6 +137,10 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataC
 	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 
 	gstate.Sink(chunk, lstate);
+
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Sink(lstate.table.keys, *lstate.local_filter_state);
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -127,6 +154,9 @@ SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &cont
 
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
+	}
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -137,6 +167,9 @@ SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &cont
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                       OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
+		(void)filter_pushdown->Finalize(context, nullptr, *gstate.global_filter_state, *this);
+	}
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (PropagatesBuildSide(join_type)) {

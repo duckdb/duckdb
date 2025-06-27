@@ -40,6 +40,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
+	// If there is already a binding for the CTE, we need to remove it first
+	// as we are binding a CTE currently, we take precendence over the existing binding.
+	// This implements the CTE shadowing behavior.
+	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
 	                                                 result->types, !statement.key_targets.empty());
 

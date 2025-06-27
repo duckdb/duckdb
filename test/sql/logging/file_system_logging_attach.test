@@ -1,0 +1,42 @@
+# name: test/sql/logging/file_system_logging_attach.test
+# group: [logging]
+
+# We directly compare to the number of bytes written in the last statement,
+# which is the block size.
+require block_size 262144
+
+require parquet
+
+require noforcestorage
+
+require no_alternative_verify
+
+statement ok
+SET enable_logging=true;
+
+statement ok
+SET logging_level='trace';
+
+statement ok
+ATTACH '__TEST_DIR__/filehandle_logging.db' AS db;
+
+statement ok
+CREATE TABLE db.test AS SELECT 1;
+
+statement ok
+DETACH db;
+
+# Note: regex for test stability
+query IIII
+SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*filehandle_logging.db"', '"path":"filehandle_logging.db"') AS msg
+FROM duckdb_logs
+WHERE type = 'FileSystem' AND contains(msg, '"path":"filehandle_logging.db"')
+ORDER BY timestamp
+----
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"OPEN"}
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"WRITE","bytes":"4096","pos":"0"}
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"WRITE","bytes":"4096","pos":"4096"}
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"WRITE","bytes":"4096","pos":"8192"}
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"WRITE","bytes":"262144","pos":"12288"}
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"WRITE","bytes":"4096","pos":"4096"}
+DATABASE	FileSystem	TRACE	{"fs":"LocalFileSystem","path":"filehandle_logging.db","op":"CLOSE"}

@@ -1,8 +1,6 @@
 # name: test/sql/table_function/duckdb_memory.test_slow
 # group: [table_function]
 
-require noforcestorage
-
 require vector_size 2048
 
 statement ok

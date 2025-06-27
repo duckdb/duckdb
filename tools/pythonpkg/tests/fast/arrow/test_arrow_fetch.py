@@ -19,18 +19,6 @@ def check_equal(duckdb_conn):
 
 
 class TestArrowFetch(object):
-    def test_over_vector_size(self, duckdb_cursor):
-        if not can_run:
-            return
-
-        duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("CREATE TABLE test (a  INTEGER)")
-        for value in range(10000):
-            duckdb_conn.execute("INSERT INTO  test VALUES (" + str(value) + ");")
-        duckdb_conn.execute("INSERT INTO  test VALUES(NULL);")
-
-        check_equal(duckdb_conn)
-
     def test_empty_table(self, duckdb_cursor):
         if not can_run:
             return

@@ -150,6 +150,16 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"delta_scan", "delta", CatalogType::TABLE_FUNCTION_ENTRY},
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_cleanup_old_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_expire_snapshots", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_list_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_merge_adjacent_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_set_option", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_snapshots", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_table_changes", "ducklake", CatalogType::TABLE_MACRO_ENTRY},
+    {"ducklake_table_deletions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_table_info", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_table_insertions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"editdist3", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"element_at", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"encode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -354,6 +364,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_array_length", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_contains", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_deserialize_sql", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_each", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"json_execute_serialized_sql", "json", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"json_execute_serialized_sql", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"json_exists", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -374,6 +385,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_structure", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_tree", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"json_type", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_valid", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_value", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -423,6 +435,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"make_date", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_time", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"make_timestamp_ms", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp_ns", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -660,6 +673,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_union_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_voronoidiagram", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_within", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_withinproperly", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_x", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_xmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_xmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1035,8 +1049,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parquet"},
-                                                              {"json", "json"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
+static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
+    {"parquet", "parquet"}, {"json", "json"}, {"avro", "avro"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1079,8 +1093,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
-    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"},  {".ndjson", "json"},
-    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}, {".xlsx", "excel"},
+    {".parquet", "parquet"}, {".json", "json"},   {".jsonl", "json"}, {".ndjson", "json"}, {".shp", "spatial"},
+    {".gpkg", "spatial"},    {".fgb", "spatial"}, {".xlsx", "excel"}, {".avro", "avro"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -1116,6 +1130,8 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"avro",
                                                           "autocomplete",
                                                           "core_functions",
                                                           "delta",
+                                                          "ducklake",
+                                                          "encodings",
                                                           "excel",
                                                           "fts",
                                                           "httpfs",

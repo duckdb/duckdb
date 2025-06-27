@@ -2,18 +2,19 @@
 # description: Test storage of string columns with compression and many null values
 # group: [string]
 
-# load the DB from disk
-load __TEST_DIR__/test_rle.db
-
 statement ok
 pragma enable_verification
 
-foreach compression fsst dictionary
-
-foreach enable_fsst_vector true false
+foreach compression fsst dictionary dict_fsst
 
 statement ok
-SET enable_fsst_vectors='${enable_fsst_vector}'
+SET storage_compatibility_version='v1.0.0'
+
+onlyif compression=dict_fsst
+statement ok
+SET storage_compatibility_version='v1.3.0'
+
+load __TEST_DIR__/test_null_${compression}.db
 
 statement ok
 PRAGMA force_compression='${compression}'
@@ -64,16 +65,6 @@ select current_setting('force_compression') ILIKE '${compression}'
 ----
 true
 
-query I
-SELECT
-	compression ILIKE 'uncompressed' or
-	(
-		compression ILIKE 'dictionary' and '${compression}'='dictionary'
-	)
-	FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
-----
-1
-
 # mix with non-null values
 statement ok
 INSERT INTO nulls VALUES (1), (1), (1), (2), (2), (2)
@@ -97,9 +88,6 @@ query I
 SELECT lower(compression)='${compression}' FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
-
-# enable_fsst_vector
-endloop
 
 # compression
 endloop

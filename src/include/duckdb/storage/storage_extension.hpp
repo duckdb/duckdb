@@ -49,4 +49,8 @@ public:
 	}
 };
 
+struct OpenFileStorageExtension {
+	static unique_ptr<StorageExtension> Create();
+};
+
 } // namespace duckdb

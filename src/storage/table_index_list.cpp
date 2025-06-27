@@ -164,7 +164,7 @@ optional_ptr<Index> TableIndexList::FindForeignKeyIndex(const vector<PhysicalInd
 
 void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
                                       DataChunk &chunk, ConflictManager &conflict_manager) {
-	auto fk_type = conflict_manager.LookupType() == VerifyExistenceType::APPEND_FK
+	auto fk_type = conflict_manager.GetVerifyExistenceType() == VerifyExistenceType::APPEND_FK
 	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 

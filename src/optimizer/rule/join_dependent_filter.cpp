@@ -16,15 +16,9 @@ JoinDependentFilterRule::JoinDependentFilterRule(ExpressionRewriter &rewriter) :
 	root = std::move(op);
 }
 
-static inline void GetTableIndices(const Expression &expression, unordered_set<idx_t> &table_idxs) {
-	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
-		if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &colref = child.Cast<BoundColumnRefExpression>();
-			table_idxs.insert(colref.binding.table_index);
-		} else {
-			GetTableIndices(child, table_idxs);
-		}
-	});
+static void GetTableIndices(const Expression &root_expr, unordered_set<idx_t> &table_idxs) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) { table_idxs.insert(colref.binding.table_index); });
 }
 
 static inline bool ExpressionReferencesMultipleTables(const Expression &binding) {

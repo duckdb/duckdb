@@ -17,7 +17,7 @@ SELECT list_resize(str, 1) FROM struct_data;
 NULL
 
 query I
-SELECT list_reduce(str, (a, b) -> a) FROM struct_data;
+SELECT list_reduce(str, lambda a, b: a) FROM struct_data;
 ----
 NULL
 
@@ -49,12 +49,12 @@ statement ok
 INSERT INTO nested_struct_data VALUES ([NULL]);
 
 query I
-SELECT list_transform(str, x -> x) FROM nested_struct_data;
+SELECT list_transform(str, lambda x: x) FROM nested_struct_data;
 ----
 [NULL]
 
 query I
-SELECT list_filter(str, x -> x.str_nested IS NULL) FROM nested_struct_data;
+SELECT list_filter(str, lambda x: x.str_nested IS NULL) FROM nested_struct_data;
 ----
 [NULL]
 
@@ -80,7 +80,7 @@ statement ok
 INSERT INTO many_structs_data VALUES (NULL), ([{'val': 'hello', 'str2': NULL}, (NULL, NULL), {'val': 'world', 'str2': {'val': [1, 2]}}]);
 
 query I
-SELECT list_reduce(str1, (a, b) -> a) FROM many_structs_data;
+SELECT list_reduce(str1, lambda a, b: a) FROM many_structs_data;
 ----
 NULL
 {'val': hello, 'str2': NULL}
@@ -89,7 +89,7 @@ NULL
 
 query IIIII
 WITH foo AS (
-    SELECT str.reduce((a, b) -> a) AS str FROM struct_data
+    SELECT str.reduce(lambda a, b: a) AS str FROM struct_data
 )
 SELECT str, str.val, str.val = '', str.val IS NULL, str IS NULL FROM foo;
 ----
@@ -111,9 +111,9 @@ INSERT INTO filter_data VALUES
 query II
 WITH transformed AS (
 	SELECT foo.list_transform(
-                x -> struct_pack(val := x, conflict := false)
+                lambda x: struct_pack(val := x, conflict := false)
             ).reduce(
-                (res, x) -> CASE
+                lambda res, x: CASE
                     WHEN res.conflict THEN res
                     WHEN res.val = x.val THEN res
                     ELSE struct_pack(val := null, conflict := true)
@@ -136,9 +136,9 @@ WITH data_(foo) AS (VALUES (null::text[]), (['a', 'b', 'c'])
     ), transformed AS (
         SELECT
             foo.list_transform(
-                x -> struct_pack(val := x, conflict := false)
+                lambda x: struct_pack(val := x, conflict := false)
             ).reduce(
-                (res, x) -> CASE
+                lambda res, x: CASE
                     WHEN res.conflict THEN res
                     WHEN res.val = x.val THEN res
                     ELSE struct_pack(val := null, conflict := true)

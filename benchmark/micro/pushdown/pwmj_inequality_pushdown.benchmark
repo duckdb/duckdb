@@ -1,0 +1,23 @@
+# name: benchmark/micro/pushdown/pwmj_inequality_pushdown.benchmark
+# description: Show the performance of using pushdown with PieceWiseMergeJoin
+# group: [pushdown]
+
+name PieceWiseMergeJoinInequalityPushdown
+group micro
+subgroup pushdown
+
+require tpch
+
+argument sf 10
+
+cache tpch_sf${sf}.duckdb
+
+load
+CALL dbgen(sf=${sf});
+
+run
+SELECT lhs.l_orderkey as l, rhs.l_orderkey as r
+FROM lineitem lhs 
+INNER JOIN lineitem rhs
+        ON lhs.l_orderkey < rhs.l_orderkey
+WHERE rhs.l_orderkey < (rhs.l_suppkey // 100);

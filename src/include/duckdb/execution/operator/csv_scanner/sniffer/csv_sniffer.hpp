@@ -30,6 +30,18 @@ struct QuoteEscapeCombination {
 	char escape;
 };
 
+//! Current stats of candidate analysis
+struct CandidateStats {
+	//! Number of rows read
+	idx_t rows_read = 0;
+	//! Best Number of consistent rows (i.e., presenting all columns)
+	idx_t best_consistent_rows = 0;
+	//! If padding was necessary (i.e., rows are missing some columns, how many)
+	idx_t prev_padding_count = 0;
+	//! Min number of ignored rows
+	idx_t min_ignored_rows = 0;
+};
+
 //! All the options that will be used to sniff the dialect of the CSV file
 struct DialectCandidates {
 	//! The constructor populates all of our the options that will be used in our sniffer search space
@@ -131,9 +143,9 @@ private:
 	void GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
 	                                     const DialectCandidates &dialect_candidates);
 
-	//! 2. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
-	                             idx_t &prev_padding_count, idx_t &min_ignored_rows);
+	//! 2. Analyzes if a dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
+	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, CandidateStats &stats,
+	                             vector<unique_ptr<ColumnCountScanner>> &successful_candidates);
 	//! 3. Refine Candidates over remaining chunks
 	void RefineCandidates();
 

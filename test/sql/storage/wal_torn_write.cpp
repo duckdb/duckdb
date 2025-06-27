@@ -119,7 +119,7 @@ static void FlipWALByte(FileSystem &fs, const string &path, idx_t byte_pos) {
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
 	handle->Read(wal_contents.get(), wal_size, 0);
 	wal_contents[byte_pos]++;
-	handle->Write(wal_contents.get(), wal_size, 0);
+	handle->Write(nullptr, wal_contents.get(), wal_size, 0);
 }
 
 TEST_CASE("Test WAL checksums", "[storage][.]") {

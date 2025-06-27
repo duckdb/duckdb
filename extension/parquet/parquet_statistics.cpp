@@ -304,7 +304,8 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 }
 
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
-                                                                             const vector<ColumnChunk> &columns) {
+                                                                             const vector<ColumnChunk> &columns,
+                                                                             bool can_have_nan) {
 
 	// Not supported types
 	auto &type = schema.type;
@@ -320,7 +321,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		// Recurse into child readers
 		for (idx_t i = 0; i < schema.children.size(); i++) {
 			auto &child_schema = schema.children[i];
-			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns);
+			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
 		}
 		row_group_stats = struct_stats.ToUnique();
@@ -363,7 +364,16 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		break;
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
-		row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
+		if (can_have_nan) {
+			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
+			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+			row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
+		} else {
+			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
+			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
+			// probably the best we can do for now.
+			row_group_stats = CreateNumericStats(type, schema, parquet_stats);
+		}
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);

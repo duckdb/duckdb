@@ -23,7 +23,7 @@ from doubles
 
 
 statement ok
-copy doubles to '__TEST_DIR__/bss.parquet';
+copy doubles to '__TEST_DIR__/bss.parquet' (PARQUET_VERSION V2);
 
 query IIII nosort q0
 from '__TEST_DIR__/bss.parquet';
@@ -44,7 +44,7 @@ from floats
 
 
 statement ok
-copy floats to '__TEST_DIR__/bss.parquet';
+copy floats to '__TEST_DIR__/bss.parquet' (PARQUET_VERSION V2);
 
 query IIII nosort q1
 from '__TEST_DIR__/bss.parquet';

@@ -2,8 +2,6 @@
 # description: Test ATTACH with export and import
 # group: [attach]
 
-require skip_reload
-
 statement ok
 ATTACH ':memory:' AS db1
 

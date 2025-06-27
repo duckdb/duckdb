@@ -69,7 +69,17 @@ struct CurrentQueryId {
 	static constexpr const char *Name = "current_query_id";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current query_id";
-	static constexpr const char *Example = "current_transaction_id('Hello')";
+	static constexpr const char *Example = "current_query_id()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ParseLogMessage {
+	static constexpr const char *Name = "parse_duckdb_log_message";
+	static constexpr const char *Parameters = "type,message";
+	static constexpr const char *Description = "Parse the message into the expected logical type";
+	static constexpr const char *Example = "parse_duckdb_log_message('FileSystem', log_message)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

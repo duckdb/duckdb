@@ -28,15 +28,15 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator>
 PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
 
+	// Resolve the types of each operator.
+	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES);
+	op->ResolveOperatorTypes();
+	profiler.EndPhase();
+
 	// Resolve the column references.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING);
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
-	profiler.EndPhase();
-
-	// Resolve the types of each operator.
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES);
-	op->ResolveOperatorTypes();
 	profiler.EndPhase();
 
 	// Create the main physical plan.

@@ -2,8 +2,6 @@
 # description: Re-attach a database with a non-standard schema and re-name the database
 # group: [attach]
 
-require skip_reload
-
 statement ok
 ATTACH '__TEST_DIR__/reattach_schema.db' AS new_db;
 

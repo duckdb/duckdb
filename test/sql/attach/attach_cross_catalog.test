@@ -2,8 +2,6 @@
 # description: Cross catalog dependencies should not be allowed
 # group: [attach]
 
-require skip_reload
-
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
 

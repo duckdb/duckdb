@@ -119,6 +119,7 @@ struct ReadAheadBuffer {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
 			read_head.buffer_handle = file_handle.Read(read_head.buffer_ptr, read_head.size, read_head.location);
+			D_ASSERT(read_head.buffer_handle.IsValid());
 			read_head.data_isset = true;
 		}
 	}
@@ -141,8 +142,10 @@ public:
 			if (!prefetch_buffer->data_isset) {
 				prefetch_buffer->buffer_handle =
 				    file_handle.Read(prefetch_buffer->buffer_ptr, prefetch_buffer->size, prefetch_buffer->location);
+				D_ASSERT(prefetch_buffer->buffer_handle.IsValid());
 				prefetch_buffer->data_isset = true;
 			}
+			D_ASSERT(prefetch_buffer->buffer_handle.IsValid());
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
 			Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_handle.GetFileSize() - location));

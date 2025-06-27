@@ -155,6 +155,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_HALT:
 	case SQLLogicTokenType::SQLLOGIC_MODE:
 	case SQLLogicTokenType::SQLLOGIC_SET:
+	case SQLLogicTokenType::SQLLOGIC_RESET:
 	case SQLLogicTokenType::SQLLOGIC_LOOP:
 	case SQLLogicTokenType::SQLLOGIC_FOREACH:
 	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
@@ -198,6 +199,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_MODE;
 	} else if (token == "set") {
 		return SQLLogicTokenType::SQLLOGIC_SET;
+	} else if (token == "reset") {
+		return SQLLogicTokenType::SQLLOGIC_RESET;
 	} else if (token == "loop") {
 		return SQLLogicTokenType::SQLLOGIC_LOOP;
 	} else if (token == "concurrentloop") {

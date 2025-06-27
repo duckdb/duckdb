@@ -89,6 +89,8 @@ public:
 	virtual ~WindowExecutor() {
 	}
 
+	virtual bool IgnoreNulls() const;
+
 	virtual unique_ptr<WindowExecutorGlobalState>
 	GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask, const ValidityMask &order_mask) const;
 	virtual unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const;

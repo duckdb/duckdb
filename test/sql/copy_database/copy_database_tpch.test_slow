@@ -2,8 +2,6 @@
 # description: Test COPY statement with TPC-H database
 # group: [copy_database]
 
-require noforcestorage
-
 require tpch
 
 statement ok

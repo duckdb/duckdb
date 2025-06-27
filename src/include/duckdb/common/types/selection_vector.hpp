@@ -177,7 +177,7 @@ public:
 	}
 	void Initialize(idx_t new_size) {
 		D_ASSERT(!initialized);
-		this->size = new_size;
+		size = new_size;
 		sel_vec.Initialize(new_size);
 		internal_opt_selvec.Initialize(&sel_vec);
 		initialized = true;

@@ -52,3 +52,51 @@ ORDER BY i
 7	3	8	6
 8	4	9	7
 9	4	NULL	8
+
+# test lag and lead when offset is null
+statement ok
+CREATE TABLE issue17266(c1 INT, c2 SMALLINT, c3 BITSTRING);
+
+statement ok
+INSERT INTO issue17266 VALUES
+(0, null, null),
+(1, 32767, '101'),
+(2, -32767, '101'),
+(3, 0, '000'),
+(4, 1, '010'),
+(5, 0, '110'),
+(6, null, null);
+
+query IIII
+SELECT
+	c1,
+        c3,
+        c2,
+        LAG(c3, c2 ORDER BY c1, BITSTRING'010101010') OVER (PARTITION BY c1 ORDER BY c3)
+FROM issue17266
+ORDER BY c1;
+----
+0	NULL	NULL	NULL
+1	101	32767	NULL
+2	101	-32767	NULL
+3	000	0	000
+4	010	1	NULL
+5	110	0	110
+6	NULL	NULL	NULL
+
+query IIII
+SELECT
+	c1,
+        c3,
+        c2,
+        LEAD(c3, c2 ORDER BY c1, BITSTRING'010101010') OVER (PARTITION BY c1 ORDER BY c3)
+FROM issue17266
+ORDER BY c1;
+----
+0	NULL	NULL	NULL
+1	101	32767	NULL
+2	101	-32767	NULL
+3	000	0	000
+4	010	1	NULL
+5	110	0	110
+6	NULL	NULL	NULL

@@ -11,7 +11,9 @@ float Float16ToFloat32(const uint16_t &float16_value) {
 	uint32_t sign = float16_value >> 15;
 	uint32_t exponent = (float16_value >> 10) & 0x1F;
 	uint32_t fraction = (float16_value & 0x3FF);
-	uint32_t float32_value;
+	// Avoid strict aliasing issues and compiler warnings
+	uint32_t float32_value = 0;
+
 	if (exponent == 0) {
 		if (fraction == 0) {
 			// zero
@@ -39,7 +41,7 @@ float Float16ToFloat32(const uint16_t &float16_value) {
 		float32_value = (sign << 31) | ((exponent + (127 - 15)) << 23) | (fraction << 13);
 	}
 
-	return *reinterpret_cast<float *>(&float32_value);
+	return Load<float>(const_data_ptr_cast(&float32_value));
 }
 
 } // namespace duckdb

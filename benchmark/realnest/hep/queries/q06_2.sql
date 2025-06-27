@@ -1,6 +1,6 @@
 WITH trijets_b_tag_dval AS materialized (SELECT
     row_id_i,
-    list_max(list_transform([j1, j2, j3], x -> x.btag)) AS b_tag_dval,
+    list_max(list_transform([j1, j2, j3], lambda x: x.btag)) AS b_tag_dval,
     AddPtEtaPhiM3({'pt':j1.pt, 'eta':j1.eta, 'phi':j1.phi, 'mass':j1.mass},
         {'pt':j2.pt, 'eta':j2.eta, 'phi':j2.phi, 'mass':j2.mass},
         {'pt':j3.pt, 'eta':j3.eta, 'phi':j3.phi, 'mass':j3.mass}) AS triJet,

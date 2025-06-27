@@ -220,13 +220,9 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 	string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	// If persistent file already exists remove
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
+	fs.TryRemoveFile(file_path);
 	// If temporary file already exists remove
-	if (fs.FileExists(temp_path)) {
-		fs.RemoveFile(temp_path);
-	}
+	fs.TryRemoveFile(temp_path);
 
 	WriteSecretFileToDisk(fs, temp_path, secret);
 

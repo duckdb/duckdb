@@ -1,0 +1,163 @@
+# name: test/sql/copy/encryption/multiple_encrypted_databases.test_slow
+# group: [encryption]
+
+require skip_reload
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted2.duckdb' as encrypted2 (ENCRYPTION_KEY 'xxxx');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted3.duckdb' as encrypted3 (ENCRYPTION_KEY 'e8f2a36455d84f8a3cb94780c2f4dd5c5b4ab1ff42d67c0b6f9c9a90e771c158');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted4.duckdb' as encrypted4 (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE encrypted;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+USE encrypted2;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+USE encrypted3;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+USE encrypted4;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+USE memory;
+
+statement ok
+DETACH encrypted
+
+statement ok
+DETACH encrypted2
+
+statement ok
+DETACH encrypted3
+
+statement ok
+DETACH encrypted4
+
+statement error
+ATTACH '__TEST_DIR__/encrypted2.duckdb' AS encrypted2 (ENCRYPTION_KEY 'asdf');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted3.duckdb' AS encrypted3 (ENCRYPTION_KEY 'asdf');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'xxxx');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted3.duckdb' AS encrypted3 (ENCRYPTION_KEY 'xxxx');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted4.duckdb' AS encrypted4 (ENCRYPTION_KEY 'xxxx');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'e8f2a36455d84f8a3cb94780c2f4dd5c5b4ab1ff42d67c0b6f9c9a90e771c158');
+----
+Wrong encryption key used to open the database file
+
+statement error
+ATTACH '__TEST_DIR__/encrypted2.duckdb' AS encrypted2 (ENCRYPTION_KEY 'e8f2a36455d84f8a3cb94780c2f4dd5c5b4ab1ff42d67c0b6f9c9a90e771c158');
+----
+Wrong encryption key used to open the database file
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted2.duckdb' AS encrypted2 (ENCRYPTION_KEY 'xxxx');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted3.duckdb' AS encrypted3 (ENCRYPTION_KEY 'e8f2a36455d84f8a3cb94780c2f4dd5c5b4ab1ff42d67c0b6f9c9a90e771c158');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted4.duckdb' AS encrypted4 (ENCRYPTION_KEY 'asdf');
+
+query I
+SELECT l_suppkey FROM encrypted.lineitem limit 10;
+----
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60
+
+query I
+SELECT l_suppkey FROM encrypted2.lineitem limit 10;
+----
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60
+
+query I
+SELECT l_suppkey FROM encrypted3.lineitem limit 10;
+----
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60
+
+query I
+SELECT l_suppkey FROM encrypted4.lineitem limit 10;
+----
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60

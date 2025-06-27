@@ -1,0 +1,22 @@
+# name: test/sql/storage/compression/fsst/fsst_read.test_slow
+# group: [fsst]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/fsst.db.gz __TEST_DIR__/fsst.db
+
+load __TEST_DIR__/fsst.db readonly
+
+query I
+select count(street) from tbl;
+----
+397527
+
+query I nosort res
+select street from tbl;
+----
+
+query I
+SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type == 'VARCHAR' AND compression != 'FSST';
+----

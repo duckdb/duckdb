@@ -102,6 +102,7 @@ enum class ExpressionType : uint8_t {
 	WINDOW_LEAD = 132,
 	WINDOW_LAG = 133,
 	WINDOW_NTH_VALUE = 134,
+	WINDOW_FILL = 135,
 
 	// -----------------------------
 	// Functions

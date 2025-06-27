@@ -358,7 +358,9 @@ struct ArrowBool8 {
 		auto source_ptr = reinterpret_cast<bool *>(format.data);
 		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
-			result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			if (format.validity.RowIsValid(i)) {
+				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			}
 		}
 	}
 };

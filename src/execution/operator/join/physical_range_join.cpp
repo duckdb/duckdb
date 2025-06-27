@@ -102,6 +102,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "RangeJoinMergeTask";
+	}
+
 private:
 	ClientContext &context;
 	GlobalSortedTable &table;
@@ -161,10 +165,10 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 	}
 }
 
-PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type, PhysicalOperator &left,
-                                     PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
-                                     idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
+PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
+                                     PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                                     JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalComparisonJoin(physical_plan, op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?

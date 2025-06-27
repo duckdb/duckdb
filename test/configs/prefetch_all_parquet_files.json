@@ -1,0 +1,12 @@
+{
+  "description": "Debug setting around testing of parquet files",
+  "skip_compiled": "true",
+  "on_init": "SET prefetch_all_parquet_files=true;",
+  "statically_loaded_extensions": [
+    "core_functions",
+    "parquet"
+  ],
+  "skip_tests": [
+    "test/sql/copy/csv/zstd_crash.test"
+  ]
+}

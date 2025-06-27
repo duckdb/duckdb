@@ -1,0 +1,6 @@
+{
+  "description": "Equivalent to CI --force-storage: persistent DuckDB database AND verify_fetch_row",
+  "comment": "TODO: add back to 'on_init' 'PRAGMA verify_fetch_row;'",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}/memory.db",
+  "skip_compiled": "true"
+}

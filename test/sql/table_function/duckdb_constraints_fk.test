@@ -2,8 +2,6 @@
 # description: Test duckdb_constraints function
 # group: [table_function]
 
-require noforcestorage
-
 statement ok
 CREATE TABLE tf_1 (
   a integer, "b c" integer, "d e" integer,

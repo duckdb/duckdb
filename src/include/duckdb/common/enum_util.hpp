@@ -78,6 +78,8 @@ enum class BindingMode : uint8_t;
 
 enum class BitpackingMode : uint8_t;
 
+enum class BlockIteratorStateType : int8_t;
+
 enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
@@ -196,6 +198,8 @@ enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
+enum class HTTPStatusCode : uint16_t;
+
 enum class IndexAppendMode : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
@@ -209,6 +213,10 @@ enum class JoinRefType : uint8_t;
 enum class JoinType : uint8_t;
 
 enum class KeywordCategory : uint8_t;
+
+enum class LambdaSyntax : uint8_t;
+
+enum class LambdaSyntaxType : uint8_t;
 
 enum class LimitNodeType : uint8_t;
 
@@ -250,6 +258,8 @@ enum class OnCreateConflict : uint8_t;
 
 enum class OnEntryNotFound : uint8_t;
 
+enum class OperatorFinalResultType : uint8_t;
+
 enum class OperatorFinalizeResultType : uint8_t;
 
 enum class OperatorResultType : uint8_t;
@@ -290,6 +300,8 @@ enum class PreserveOrderType : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
+enum class ProfilingCoverage : uint8_t;
+
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -299,6 +311,8 @@ enum class QueryResultType : uint8_t;
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
+
+enum class RequestType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
@@ -338,6 +352,8 @@ enum class SinkNextBatchType : uint8_t;
 
 enum class SinkResultType : uint8_t;
 
+enum class SortKeyType : uint8_t;
+
 enum class SourceResultType : uint8_t;
 
 enum class StarExpressionType : uint8_t;
@@ -373,6 +389,8 @@ enum class TaskExecutionResult : uint8_t;
 enum class TemporaryBufferSize : uint64_t;
 
 enum class TemporaryCompressionLevel : int;
+
+enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
@@ -473,6 +491,9 @@ const char* EnumUtil::ToChars<BindingMode>(BindingMode value);
 
 template<>
 const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value);
+
+template<>
+const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType value);
 
 template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
@@ -652,6 +673,9 @@ template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
+const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
+
+template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
@@ -671,6 +695,12 @@ const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntax>(LambdaSyntax value);
+
+template<>
+const char* EnumUtil::ToChars<LambdaSyntaxType>(LambdaSyntaxType value);
 
 template<>
 const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
@@ -733,6 +763,9 @@ template<>
 const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value);
 
 template<>
+const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType value);
+
+template<>
 const char* EnumUtil::ToChars<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
 
 template<>
@@ -793,6 +826,9 @@ template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
+const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
+
+template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
 
 template<>
@@ -806,6 +842,9 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
+
+template<>
+const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
@@ -865,6 +904,9 @@ template<>
 const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
 
 template<>
+const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value);
+
+template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
 
 template<>
@@ -917,6 +959,9 @@ const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
 
 template<>
 const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value);
+
+template<>
+const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
@@ -1032,6 +1077,9 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value);
 
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value);
+
+template<>
+BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *value);
 
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);
@@ -1211,6 +1259,9 @@ template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
+HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
+
+template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
@@ -1230,6 +1281,12 @@ JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
+
+template<>
+LambdaSyntax EnumUtil::FromString<LambdaSyntax>(const char *value);
+
+template<>
+LambdaSyntaxType EnumUtil::FromString<LambdaSyntaxType>(const char *value);
 
 template<>
 LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
@@ -1292,6 +1349,9 @@ template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value);
 
 template<>
+OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char *value);
+
+template<>
 OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(const char *value);
 
 template<>
@@ -1352,6 +1412,9 @@ template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
+ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
+
+template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
 
 template<>
@@ -1365,6 +1428,9 @@ RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
@@ -1424,6 +1490,9 @@ template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
+SortKeyType EnumUtil::FromString<SortKeyType>(const char *value);
+
+template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
 
 template<>
@@ -1476,6 +1545,9 @@ TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value)
 
 template<>
 TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value);
+
+template<>
+ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);

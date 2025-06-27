@@ -269,6 +269,9 @@ struct LogicalType {
 		}
 		return false;
 	}
+	inline bool IsUnknown() const {
+		return id_ == LogicalTypeId::UNKNOWN;
+	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
 		return type_info_;
@@ -345,6 +348,9 @@ struct LogicalType {
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
 	DUCKDB_API void Verify() const;
+
+	DUCKDB_API bool IsSigned() const;
+	DUCKDB_API bool IsUnsigned() const;
 
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;

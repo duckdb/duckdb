@@ -19,8 +19,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_SEQUENCE;
 
 public:
-	explicit PhysicalCreateSequence(unique_ptr<CreateSequenceInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {LogicalType::BIGINT}, estimated_cardinality),
+	explicit PhysicalCreateSequence(PhysicalPlan &physical_plan, unique_ptr<CreateSequenceInfo> info,
+	                                idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_SEQUENCE, {LogicalType::BIGINT},
+	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

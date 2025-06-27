@@ -138,7 +138,9 @@ struct ParquetBaseStringOperator : public BaseParquetOperator {
 
 	template <class SRC, class TGT>
 	static idx_t GetRowSize(const Vector &vector, idx_t index) {
-		return FlatVector::GetData<string_t>(vector)[index].GetSize();
+		// This needs to add the 4 bytes (just like WriteSize) otherwise we underestimate and we have to realloc
+		// This seriously harms performance, mostly by making it very inconsistent (see internal issue #4990)
+		return sizeof(uint32_t) + FlatVector::GetData<string_t>(vector)[index].GetSize();
 	}
 };
 

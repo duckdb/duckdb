@@ -1,4 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
 #include "jemalloc_extension.hpp"
 
 #include "duckdb/common/allocator.hpp"
@@ -9,8 +8,11 @@
 
 namespace duckdb {
 
-void JemallocExtension::Load(DuckDB &db) {
+static void LoadInternal(ExtensionLoader &) {
 	// NOP: This extension can only be loaded statically
+}
+void JemallocExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string JemallocExtension::Name() {
@@ -128,16 +130,7 @@ unsigned duckdb_malloc_ncpus() {
 #endif
 }
 
-DUCKDB_EXTENSION_API void jemalloc_init(duckdb::DatabaseInstance &db) {
-	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::JemallocExtension>();
-}
-
-DUCKDB_EXTENSION_API const char *jemalloc_version() {
-	return duckdb::DuckDB::LibraryVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(jemalloc, loader) {
+	duckdb::LoadInternal(loader);
 }
 }
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
-#endif

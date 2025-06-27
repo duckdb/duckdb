@@ -11,20 +11,17 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
+static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, unique_ptr<Expression> &root_expr,
                                  LogicalSetOperation &setop) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.binding.table_index == setop.table_index);
-		D_ASSERT(colref.depth == 0);
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &expr) {
+		    D_ASSERT(colref.binding.table_index == setop.table_index);
+		    D_ASSERT(colref.depth == 0);
 
-		// rewrite the binding by looking into the bound_tables list of the subquery
-		colref.binding = bindings[colref.binding.column_index];
-		filter.bindings.insert(colref.binding.table_index);
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(
-	    expr, [&](Expression &child) { ReplaceSetOpBindings(bindings, filter, child, setop); });
+		    // rewrite the binding by looking into the bound_tables list of the subquery
+		    colref.binding = bindings[colref.binding.column_index];
+		    filter.bindings.insert(colref.binding.table_index);
+	    });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
@@ -47,9 +44,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		right_filter->filter = filters[i]->filter->Copy();
 
 		// in the original filter, rewrite references to the result of the union into references to the left_index
-		ReplaceSetOpBindings(left_bindings, *filters[i], *filters[i]->filter, setop);
+		ReplaceSetOpBindings(left_bindings, *filters[i], filters[i]->filter, setop);
 		// in the copied filter, rewrite references to the result of the union into references to the right_index
-		ReplaceSetOpBindings(right_bindings, *right_filter, *right_filter->filter, setop);
+		ReplaceSetOpBindings(right_bindings, *right_filter, right_filter->filter, setop);
 
 		// extract bindings again
 		filters[i]->ExtractBindings();

@@ -924,6 +924,27 @@ void Vector::Flatten(idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
+		switch (GetType().InternalType()) {
+		case PhysicalType::STRUCT: {
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->Flatten(count);
+			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &entry = ListVector::GetEntry(*this);
+			entry.Flatten(ListVector::GetListSize(*this));
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &entry = ArrayVector::GetEntry(*this);
+			entry.Flatten(ArrayVector::GetTotalSize(*this));
+			break;
+		}
+		default:
+			break;
+		}
 		break;
 	case VectorType::FSST_VECTOR: {
 		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way

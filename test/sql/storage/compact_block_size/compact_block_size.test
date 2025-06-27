@@ -2,10 +2,6 @@
 # description: Various tests with a compact block size of 16384 bytes
 # group: [compact_block_size]
 
-require noforcestorage
-
-require skip_reload
-
 require exact_vector_size 2048
 
 statement ok

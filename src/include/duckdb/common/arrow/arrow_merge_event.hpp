@@ -34,6 +34,10 @@ public:
 	void ProduceRecordBatches();
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
+	string TaskType() const override {
+		return "ArrowBatchTask";
+	}
+
 private:
 	ArrowQueryResult &result;
 	vector<idx_t> record_batch_indices;

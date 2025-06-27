@@ -62,7 +62,7 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	unique_ptr<CachingFileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
-	std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
+	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
 	SelectionVector sel;
@@ -108,6 +108,7 @@ struct ParquetOptions {
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
+	bool can_have_nan = false; // if floats or doubles can contain NaN values
 };
 
 struct ParquetOptionsSerialization {
@@ -149,6 +150,21 @@ public:
 	atomic<idx_t> rows_read;
 
 public:
+	string GetReaderType() const override {
+		return "Parquet";
+	}
+
+	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
+	          DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
+	double GetProgressInFile(ClientContext &context) override;
+
+public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 
@@ -171,10 +187,6 @@ public:
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
-
-	string GetReaderType() const override {
-		return "Parquet";
-	}
 
 	void AddVirtualColumn(column_t virtual_column_id) override;
 

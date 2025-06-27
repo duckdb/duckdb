@@ -6,7 +6,6 @@
 #include "duckdb/common/operator/abs.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
@@ -138,54 +137,15 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 }
 
 //===--------------------------------------------------------------------===//
-// Cast Interpolation
+// Quantile Casts
 //===--------------------------------------------------------------------===//
 template <>
-interval_t CastInterpolation::Cast(const dtime_t &src, Vector &result) {
+interval_t QuantileCast::Operation(const dtime_t &src, Vector &result) {
 	return {0, 0, src.micros};
 }
 
 template <>
-double CastInterpolation::Interpolate(const double &lo, const double d, const double &hi) {
-	return lo * (1.0 - d) + hi * d;
-}
-
-template <>
-dtime_t CastInterpolation::Interpolate(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
-}
-
-template <>
-timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
-}
-
-template <>
-hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	return Hugeint::Convert(Interpolate(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
-}
-
-static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
-	D_ASSERT(d >= 0 && d <= 1);
-	return Interval::FromMicro(std::llround(static_cast<double>(Interval::GetMicro(i)) * d));
-}
-
-inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
-	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
-}
-
-inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
-	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
-}
-
-template <>
-interval_t CastInterpolation::Interpolate(const interval_t &lo, const double d, const interval_t &hi) {
-	const interval_t delta = hi - lo;
-	return lo + MultiplyByDouble(delta, d);
-}
-
-template <>
-string_t CastInterpolation::Cast(const string_t &src, Vector &result) {
+string_t QuantileCast::Operation(const string_t &src, Vector &result) {
 	return StringVector::AddStringOrBlob(result, src);
 }
 
@@ -203,7 +163,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		Interpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
+		QuantileInterpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
 		target = interp.template Operation<typename STATE::InputType, T>(state.v.data(), finalize_data.result);
 	}
 
@@ -265,7 +225,7 @@ struct QuantileScalarFallback : QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		Interpolator<true> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
+		QuantileInterpolator<true> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
 		auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
 		CreateSortKeyHelpers::DecodeSortKey(interpolation_result, finalize_data.result, finalize_data.result_idx,
 		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
@@ -300,7 +260,7 @@ struct QuantileListOperation : QuantileOperation {
 		idx_t lower = 0;
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			Interpolator<DISCRETE> interp(quantile, state.v.size(), bind_data.desc);
+			QuantileInterpolator<DISCRETE> interp(quantile, state.v.size(), bind_data.desc);
 			interp.begin = lower;
 			rdata[ridx + q] = interp.template Operation<typename STATE::InputType, CHILD_TYPE>(v_t, result);
 			lower = interp.FRN;
@@ -371,7 +331,7 @@ struct QuantileListFallback : QuantileOperation {
 		idx_t lower = 0;
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			Interpolator<true> interp(quantile, state.v.size(), bind_data.desc);
+			QuantileInterpolator<true> interp(quantile, state.v.size(), bind_data.desc);
 			interp.begin = lower;
 			auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
 			CreateSortKeyHelpers::DecodeSortKey(interpolation_result, result, ridx + q,
@@ -588,7 +548,7 @@ AggregateFunction GetContinuousQuantileList(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 // Quantile binding
 //===--------------------------------------------------------------------===//
-static const Value &CheckQuantile(const Value &quantile_val) {
+static Value CheckQuantile(const Value &quantile_val) {
 	if (quantile_val.IsNull()) {
 		throw BinderException("QUANTILE parameter cannot be NULL");
 	}
@@ -820,7 +780,7 @@ struct ContinuousQuantileListFunction {
 };
 
 template <class OP>
-AggregateFunction EmptyQuantileFunction(LogicalType input, LogicalType result, const LogicalType &extra_arg) {
+AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalType &result, const LogicalType &extra_arg) {
 	AggregateFunction fun({std::move(input)}, std::move(result), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {

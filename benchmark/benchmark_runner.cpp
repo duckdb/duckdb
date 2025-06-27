@@ -87,7 +87,7 @@ void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState 
 			if (!hotrun) {
 				runner->Log(StringUtil::Format("%s\t%d\t", benchmark->name, 0));
 			}
-			runner->LogResult("KILLED");
+			runner->LogResult("Benchmark timeout reached; Interrupt failed. Benchmark killed by benchmark runner");
 			exit(1);
 		}
 	}

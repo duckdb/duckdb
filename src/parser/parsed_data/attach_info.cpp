@@ -16,8 +16,20 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			// even though the corresponding option we expose to the user is called "block_size".
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "encryption_key") {
+			// check the type of the key
+			auto type = entry.second.type();
+			if (type.id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("\"%s\" is not a valid key. A key must be of type VARCHAR",
+				                      entry.second.ToString());
+			} else if (entry.second.GetValue<string>().empty()) {
+				throw BinderException("Not a valid key. A key cannot be empty");
+			}
+			storage_options.user_key =
+			    make_shared_ptr<string>(StringValue::Get(entry.second.DefaultCastAs(LogicalType::BLOB)));
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
+		} else if (entry.first == "encryption_cipher") {
+			throw BinderException("\"%s\" is not a valid cipher. Only AES GCM is supported.", entry.second.ToString());
 		} else if (entry.first == "row_group_size") {
 			storage_options.row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
@@ -28,14 +40,14 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 	}
 	if (storage_options.encryption && (!storage_options.storage_version.IsValid() ||
 	                                   storage_options.storage_version.GetIndex() <
-	                                       SerializationCompatibility::FromString("v1.3.0").serialization_version)) {
+	                                       SerializationCompatibility::FromString("v1.4.0").serialization_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException(
-			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.3.0) are not compatible",
+			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
 			    storage_version_user_provided);
 		}
-		// set storage version to v1.3.0
-		storage_options.storage_version = SerializationCompatibility::FromString("v1.3.0").serialization_version;
+		// set storage version to v1.4.0
+		storage_options.storage_version = SerializationCompatibility::FromString("v1.4.0").serialization_version;
 	}
 	return storage_options;
 }

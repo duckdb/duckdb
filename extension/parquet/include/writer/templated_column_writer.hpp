@@ -403,7 +403,7 @@ private:
 			break;
 		}
 		case duckdb_parquet::Encoding::BYTE_STREAM_SPLIT: {
-			if (page_state.bss_initialized) {
+			if (!page_state.bss_initialized) {
 				page_state.bss_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()));
 				page_state.bss_initialized = true;
 			}

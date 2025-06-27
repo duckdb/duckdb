@@ -1,0 +1,13 @@
+# name: test/sql/types/map/map_extract_nested_null.test
+# group: [map]
+
+statement ok
+CREATE TABLE test(id int, attr MAP(VARCHAR, UNION(i INT, s VARCHAR)));
+
+statement ok
+INSERT INTO test VALUES (1, MAP{'key1': 'str'});
+
+query II
+SELECT id, attr['key2'] FROM test;
+----
+1	NULL

@@ -283,25 +283,25 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 }
 
 string TextTreeRenderer::ToString(const LogicalOperator &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string TextTreeRenderer::ToString(const PhysicalOperator &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string TextTreeRenderer::ToString(const ProfilingNode &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string TextTreeRenderer::ToString(const Pipeline &op) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }

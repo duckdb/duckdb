@@ -1013,3 +1013,9 @@ class TestArrowFilterPushdown(object):
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a <= 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a = 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a != 'NaN'::FLOAT")
+
+    def test_dynamic_filter(self, duckdb_cursor):
+        t = pa.Table.from_pydict({"a": [3, 24, 234, 234, 234, 234, 234, 234, 234, 45, 2, 5, 2, 45]})
+        duckdb_cursor.register("t", t)
+        res = duckdb_cursor.sql("SELECT a FROM t ORDER BY a LIMIT 11").fetchall()
+        assert len(res) == 11

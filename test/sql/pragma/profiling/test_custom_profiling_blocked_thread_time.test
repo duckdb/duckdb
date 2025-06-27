@@ -29,13 +29,18 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
+SELECT unnest(res) FROM (
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	raw_setting.trim('{}') AS setting,
+	string_split(setting, ', ') AS res
 ) ORDER BY ALL
 ----
 "BLOCKED_THREAD_TIME": "true"
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+query I
+SELECT COUNT(blocked_thread_time) FROM metrics_output;
+----
+1

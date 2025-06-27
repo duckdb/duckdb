@@ -92,8 +92,8 @@ public:
 	};
 
 public:
-	PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type, PhysicalOperator &left,
-	                  PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+	PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
+	                  PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
 	                  idx_t estimated_cardinality);
 
 	// Projection mappings

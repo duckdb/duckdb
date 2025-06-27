@@ -4,10 +4,7 @@
 
 require block_size 262144
 
-statement ok
-SET storage_compatibility_version='v1.2.0'
-
-load __TEST_DIR__/test_roaring.db
+load __TEST_DIR__/test_roaring.db readwrite v1.2.0
 
 statement ok
 set variable dataset_size = 120_000_000;

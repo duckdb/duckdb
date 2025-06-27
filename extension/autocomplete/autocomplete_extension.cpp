@@ -1,5 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
-
 #include "autocomplete_extension.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -11,7 +9,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "matcher.hpp"
@@ -468,18 +466,18 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
-static void LoadInternal(DatabaseInstance &db) {
+static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
-	ExtensionUtil::RegisterFunction(db, auto_complete_fun);
+	loader.RegisterFunction(auto_complete_fun);
 
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
-	ExtensionUtil::RegisterFunction(db, check_peg_parser_fun);
+	loader.RegisterFunction(check_peg_parser_fun);
 }
 
-void AutocompleteExtension::Load(DuckDB &db) {
-	LoadInternal(*db.instance);
+void AutocompleteExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string AutocompleteExtension::Name() {
@@ -493,15 +491,7 @@ std::string AutocompleteExtension::Version() const {
 } // namespace duckdb
 extern "C" {
 
-DUCKDB_EXTENSION_API void autocomplete_init(duckdb::DatabaseInstance &db) {
-	LoadInternal(db);
-}
-
-DUCKDB_EXTENSION_API const char *autocomplete_version() {
-	return duckdb::AutocompleteExtension::DefaultVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(autocomplete, loader) {
+	LoadInternal(loader);
 }
 }
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
-#endif

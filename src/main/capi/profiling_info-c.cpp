@@ -12,15 +12,17 @@ duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 		return nullptr;
 	}
 	Connection *conn = reinterpret_cast<Connection *>(connection);
-	optional_ptr<ProfilingNode> profiling_info;
+	optional_ptr<ProfilingNode> profiling_node;
 	try {
-		profiling_info = conn->GetProfilingTree();
+		profiling_node = conn->GetProfilingTree();
 	} catch (std::exception &ex) {
 		return nullptr;
 	}
 
-	ProfilingNode *profiling_info_ptr = profiling_info.get();
-	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
+	if (!profiling_node) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_profiling_info>(profiling_node.get());
 }
 
 duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key) {
@@ -46,7 +48,7 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
 	auto &profiling_info = node.GetProfilingInfo();
 
-	duckdb::unordered_map<duckdb::string, duckdb::string> metrics_map;
+	duckdb::InsertionOrderPreservingMap<duckdb::string> metrics_map;
 	for (const auto &metric : profiling_info.metrics) {
 		auto key = EnumUtil::ToString(metric.first);
 		if (!profiling_info.Enabled(profiling_info.settings, metric.first)) {

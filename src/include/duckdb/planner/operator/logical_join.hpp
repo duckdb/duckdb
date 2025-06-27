@@ -25,7 +25,7 @@ public:
 
 	// Gets the set of table references that are reachable from this node
 	static void GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings);
-	static void GetExpressionBindings(Expression &expr, unordered_set<idx_t> &bindings);
+	static void GetExpressionBindings(const Expression &expr, unordered_set<idx_t> &bindings);
 
 	bool HasProjectionMap() const override {
 		return !left_projection_map.empty() || !right_projection_map.empty();

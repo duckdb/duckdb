@@ -169,4 +169,29 @@ struct NodeChildren {
 	array_ptr<Node> children;
 };
 
+template <class T>
+class NodeHandle {
+public:
+	NodeHandle(ART &art, const Node node)
+	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
+		handle.MarkModified();
+	}
+
+	NodeHandle(const NodeHandle &) = delete;
+	NodeHandle &operator=(const NodeHandle &) = delete;
+
+	NodeHandle(NodeHandle &&other) noexcept : handle(std::move(other.handle)), n(handle.GetRef<T>()) {
+	}
+	NodeHandle &operator=(NodeHandle &&other) noexcept = delete;
+
+public:
+	T &Get() {
+		return n;
+	}
+
+private:
+	SegmentHandle handle;
+	T &n;
+};
+
 } // namespace duckdb

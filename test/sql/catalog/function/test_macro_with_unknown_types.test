@@ -1,0 +1,16 @@
+# name: test/sql/catalog/function/test_macro_with_unknown_types.test
+# description: Test MACRO binding with unknown parameter types.
+# group: [function]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TEMP MACRO m1(x, y) AS (
+    SELECT list_has_all(x, y) AND list_has_all(y, x)
+);
+
+query I
+SELECT m1([1, 2], [1, 2]);
+----
+true

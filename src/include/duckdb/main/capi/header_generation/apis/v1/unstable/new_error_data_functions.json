@@ -1,0 +1,11 @@
+{
+  "version": "unstable_new_error_data_functions",
+  "description": "New functions for duckdb error data",
+  "entries": [
+    "duckdb_create_error_data",
+    "duckdb_destroy_error_data",
+    "duckdb_error_data_error_type",
+    "duckdb_error_data_message",
+    "duckdb_error_data_has_error"
+  ]
+}

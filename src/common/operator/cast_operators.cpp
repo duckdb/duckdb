@@ -26,12 +26,32 @@
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
 
 namespace duckdb {
+
+ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
+                                                       optional_ptr<CastParameters> parameters) {
+	optional_idx query_location;
+	if (parameters) {
+		query_location = parameters->query_location;
+		if (parameters->cast_source && parameters->cast_target) {
+			auto &source_expr = *parameters->cast_source;
+			auto &target_expr = *parameters->cast_target;
+			return ConversionException(query_location,
+			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
+		}
+	}
+	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
+}
+
+string TryCast::UnimplementedCastMessage(const LogicalType &source, const LogicalType &target) {
+	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source, target);
+}
 
 //===--------------------------------------------------------------------===//
 // Cast bool -> Numeric
@@ -1753,6 +1773,9 @@ struct HugeIntegerCastOperation {
 
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
+			if (e < -38) {
+				return false;
+			}
 			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent);
 		} else {

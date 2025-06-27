@@ -30,6 +30,36 @@ static void FillFunctionParameters(FunctionDescription &function_description, co
 	}
 }
 
+static vector<string> GetExamplesForFunctionAlias(const string &function_name, const string &alias_of,
+                                                  vector<string> &all_examples) {
+	vector<string> filtered_examples;
+	bool is_operator = (!function_name.empty() && !(function_name[0] >= 'a' && function_name[0] <= 'z') &&
+	                    !(function_name[0] >= 'A' && function_name[0] <= 'Z'));
+	bool alias_of_is_operator = (!alias_of.empty() && !(alias_of[0] >= 'a' && alias_of[0] <= 'z') &&
+	                             !(alias_of[0] >= 'A' && alias_of[0] <= 'Z'));
+	// select examples with matching function name
+	for (string &example : all_examples) {
+		if (example.compare(0, function_name.size(), function_name) == 0 ||
+		    (is_operator && example.find(function_name) != string::npos)) {
+			filtered_examples.emplace_back(std::move(example));
+		}
+	}
+	// fallback 1: create fitting examples by replacing canonical name by function_name
+	if (filtered_examples.empty() && !alias_of.empty() && !alias_of_is_operator && !is_operator) {
+		for (string &example : all_examples) {
+			if (example.compare(0, alias_of.size(), alias_of) == 0) {
+				filtered_examples.emplace_back(function_name +
+				                               example.substr(alias_of.size(), example.size() - alias_of.size()));
+			}
+		}
+	}
+	// fallback 2: use available examples anyway
+	if (filtered_examples.empty()) {
+		filtered_examples = all_examples;
+	}
+	return filtered_examples;
+}
+
 template <class FunctionDefinition, class T>
 static void FillFunctionDescriptions(const FunctionDefinition &function, T &info) {
 	vector<string> variants = StringUtil::Split(function.parameters, '\1');
@@ -56,13 +86,15 @@ static void FillFunctionDescriptions(const FunctionDefinition &function, T &info
 			throw InternalException("Incorrect number of function descriptions for function '%s'", function.name);
 		}
 		// examples
+		duckdb::vector<string> variant_examples;
 		if (examples.size() == variants.size()) {
-			function_description.examples = StringUtil::Split(examples[variant_index], '\2');
+			variant_examples = StringUtil::Split(examples[variant_index], '\2');
 		} else if (examples.size() == 1) {
-			function_description.examples = StringUtil::Split(examples[0], '\2');
+			variant_examples = StringUtil::Split(examples[0], '\2');
 		} else if (!examples.empty()) {
 			throw InternalException("Incorrect number of function examples for function '%s'", function.name);
 		}
+		function_description.examples = GetExamplesForFunctionAlias(function.name, info.alias_of, variant_examples);
 		// categories
 		if (variant_index < categories.size()) {
 			function_description.categories = StringUtil::Split(categories[variant_index], ',');

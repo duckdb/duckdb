@@ -4,6 +4,10 @@
 
 require json
 
+require parquet
+
+require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
+
 # test automatic detection even with .gz
 statement ok
 create table integers as select 42 i

@@ -21,10 +21,11 @@
 
 namespace duckdb {
 
-PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
+PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
                                                        idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types),
+                       estimated_cardinality),
       aggregates(std::move(expressions)) {
 
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
@@ -444,6 +445,10 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+
+	string TaskType() const override {
+		return "UngroupedDistinctAggregateFinalizeTask";
+	}
 
 private:
 	TaskExecutionResult AggregateDistinct();

@@ -59,6 +59,9 @@ struct CSVSchema {
 	//! Get a vector with types
 	vector<LogicalType> GetTypes() const;
 
+	//! Replace any SQLNull types with Varchar
+	void ReplaceNullWithVarchar();
+
 private:
 	//! If a type can be cast to another
 	static bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination);

@@ -26,7 +26,7 @@ static const DefaultView internal_views[] = {
     {DEFAULT_SCHEMA, "duckdb_tables", "SELECT * FROM duckdb_tables() WHERE NOT internal"},
     {DEFAULT_SCHEMA, "duckdb_types", "SELECT * FROM duckdb_types()"},
     {DEFAULT_SCHEMA, "duckdb_views", "SELECT * FROM duckdb_views() WHERE NOT internal"},
-	{DEFAULT_SCHEMA, "duckdb_logs", "SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs() as l JOIN duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;"},
+	{DEFAULT_SCHEMA, "duckdb_logs", "SELECT * exclude (l.rowid, l.context_id, c.context_id) FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs()) as l JOIN duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp, l.rowid;"},
     {"pg_catalog", "pg_am", "SELECT 0 oid, 'art' amname, NULL amhandler, 'i' amtype"},
     {"pg_catalog", "pg_prepared_statements", "SELECT name, statement, NULL prepare_time, parameter_types, result_types, NULL from_sql, NULL generic_plans, NULL custom_plans from duckdb_prepared_statements()"},
     {"pg_catalog", "pg_attribute", "SELECT table_oid attrelid, column_name attname, data_type_id atttypid, 0 attstattarget, NULL attlen, column_index attnum, 0 attndims, -1 attcacheoff, case when data_type ilike '%decimal%' then numeric_precision*1000+numeric_scale else -1 end atttypmod, false attbyval, NULL attstorage, NULL attalign, NOT is_nullable attnotnull, column_default IS NOT NULL atthasdef, false atthasmissing, '' attidentity, '' attgenerated, false attisdropped, true attislocal, 0 attinhcount, 0 attcollation, NULL attcompression, NULL attacl, NULL attoptions, NULL attfdwoptions, NULL attmissingval FROM duckdb_columns()"},

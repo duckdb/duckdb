@@ -61,6 +61,7 @@ struct FunctionData {
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
+	DUCKDB_API virtual bool SupportStatementCache() const;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -105,15 +106,24 @@ public:
 	//! Additional Information to specify function from it's name
 	string extra_info;
 
+	// Optional catalog name of the function
+	string catalog_name;
+
+	// Optional schema name of the function
+	string schema_name;
+
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
-	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
+	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
+	                                      const vector<LogicalType> &arguments,
 	                                      const LogicalType &varargs = LogicalType::INVALID);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
-	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
-	                                      const LogicalType &varargs, const LogicalType &return_type);
+	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
+	                                      const vector<LogicalType> &arguments, const LogicalType &varargs,
+	                                      const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
-	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
+	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
+	                                      const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);
 
 	//! Used in the bind to erase an argument from a function

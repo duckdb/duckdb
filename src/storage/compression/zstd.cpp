@@ -203,8 +203,9 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	if (average_length >= threshold) {
 		penalty = 1.0;
 	} else {
-		// Inbetween these two points you're better off using uncompressed or a different compression algorithm.
-		return NumericLimits<idx_t>::Maximum();
+		// set a high penalty if we are below the threshold - this still allows ZSTD to be forced
+		// but makes it very unlikely to be chosen automatically
+		penalty = 1000.0;
 	}
 
 	auto expected_compressed_size = (double)state.total_size / 2.0;

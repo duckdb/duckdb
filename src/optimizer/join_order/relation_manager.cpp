@@ -117,24 +117,21 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	}
 }
 
-bool ExpressionContainsColumnRef(Expression &expression) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		// Here you have a filter on a single column in a table. Return a binding for the column
-		// being filtered on so the filter estimator knows what HLL count to pull
+bool ExpressionContainsColumnRef(const Expression &root_expr) {
+	bool contains_column_ref = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) {
+	// Here you have a filter on a single column in a table. Return a binding for the column
+	// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		(void)colref.depth;
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		    (void)colref.depth;
+		    D_ASSERT(colref.depth == 0);
+		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 #endif
-		// map the base table index to the relation index used by the JoinOrderOptimizer
-		return true;
-	}
-	// TODO: handle inequality filters with functions.
-	auto children_ret = false;
-	ExpressionIterator::EnumerateChildren(expression,
-	                                      [&](Expression &expr) { children_ret = ExpressionContainsColumnRef(expr); });
-	return children_ret;
+		    // map the base table index to the relation index used by the JoinOrderOptimizer
+		    contains_column_ref = true;
+	    });
+	return contains_column_ref;
 }
 
 static bool JoinIsReorderable(LogicalOperator &op) {
@@ -390,21 +387,41 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
 		// optimize the rhs child
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
-		auto table_index = op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE
-		                       ? op->Cast<LogicalMaterializedCTE>().table_index
-		                       : op->Cast<LogicalRecursiveCTE>().table_index;
+		auto table_index = op->Cast<LogicalCTE>().table_index;
+
+		auto child_1_card = lhs_stats.stats_initialized ? lhs_stats.cardinality : 0;
 		rhs_optimizer.AddMaterializedCTEStats(table_index, std::move(lhs_stats));
-		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]));
+		if (op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			rhs_optimizer.recursive_cte_indexes.insert(op->Cast<LogicalCTE>().table_index);
+		}
+		RelationStats rhs_stats;
+		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), &rhs_stats);
+
+		// create the stats for the CTE
+		auto child_2_card = rhs_stats.stats_initialized ? rhs_stats.cardinality : 0;
+
+		if (op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			// we cannot really estimate the cardinality of a recursive CTE
+			// because we don't know how many times it will be executed
+			// we just assume it will be executed 1000 times
+			op->SetEstimatedCardinality(child_1_card + child_2_card * 1000);
+		} else if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			// for a materialized CTE, we just take the cardinality of the right children
+			op->SetEstimatedCardinality(child_2_card);
+		}
+
 		return false;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op->Cast<LogicalCTERef>();
-		if (cte_ref.materialized_cte != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
-			return false;
-		}
 		auto cte_stats = optimizer.GetMaterializedCTEStats(cte_ref.cte_index);
 		cte_ref.SetEstimatedCardinality(cte_stats.cardinality);
 		AddRelation(input_op, parent, cte_stats);
+
+		auto is_recursive = optimizer.recursive_cte_indexes.find(cte_ref.cte_index);
+		if (is_recursive != optimizer.recursive_cte_indexes.end()) {
+			return false;
+		}
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {

@@ -19,11 +19,12 @@ namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-using std::stringstream;
+using duckdb::stringstream;
 
-PhysicalExport::PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
-                               idx_t estimated_cardinality, unique_ptr<BoundExportData> exported_tables)
-    : PhysicalOperator(PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
+PhysicalExport::PhysicalExport(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
+                               unique_ptr<CopyInfo> info, idx_t estimated_cardinality,
+                               unique_ptr<BoundExportData> exported_tables)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
       function(std::move(function)), info(std::move(info)), exported_tables(std::move(exported_tables)) {
 }
 

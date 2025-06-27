@@ -1,0 +1,26 @@
+# name: test/parquet/constant_dictionary_vector_parquet.test
+# description: Test that we retain constant/dictionary compression for strings when writing to Parquet (small data)
+# group: [parquet]
+
+require vector_size 2048
+
+require parquet
+
+# low memory limit to test that we don't blow up intermediates
+statement ok
+set memory_limit='10mb'
+
+# we should be able to do this without spilling
+statement ok
+set temp_directory=null
+
+# 1k strings of ~50kb = ~50 MB
+# the ColumnDataCollection should keep the constant string compressed
+# and the Parquet writer will use dictionary compression, not blowing them up there either
+statement ok
+copy (select repeat('a', 50_000) s from range(1000)) to '__TEST_DIR__/cdc_constant.parquet'
+
+# the written file has dictionary compression
+# when we copy it over to another file we should still be able to avoid blowing it up
+statement ok
+copy (from '__TEST_DIR__/cdc_constant.parquet') to '__TEST_DIR__/cdc_dictionary.parquet'

@@ -1,0 +1,137 @@
+# name: test/sql/storage/encryption/wal/encrypted_wal_pragmas.test
+# description: test encrypted wal debug PRAGMAS
+# group: [wal]
+
+load __TEST_DIR__/any_wal_db.db
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# create a table and add a column to it
+statement ok
+CREATE TABLE enc.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO enc.test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+ALTER TABLE enc.test ALTER b TYPE VARCHAR
+
+query IT
+SELECT * FROM enc.test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
+statement ok
+SET wal_encryption = false;
+
+statement ok
+INSERT INTO enc.test VALUES (10, 'hello')
+
+# enable WAL encryption for the other tests
+statement ok
+SET wal_encryption = true;
+
+restart
+
+# WAL replay fails, because file is corrupted
+statement error
+ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'asdf');
+----
+
+# now set debug pragma at the start
+statement ok
+ATTACH '__TEST_DIR__/encrypted_wal_restart_new.db' as enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE enc.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO enc.test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+ALTER TABLE enc.test ALTER b TYPE VARCHAR
+
+query IT
+SELECT * FROM enc.test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
+restart
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_wal_restart_new.db' as enc (ENCRYPTION_KEY 'asdf');
+
+query IT
+SELECT * FROM enc.test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
+restart
+
+# now disable, but then directly enable
+# this should work
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_wal_disable_enable.db' as enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE enc.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO enc.test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+ALTER TABLE enc.test ALTER b TYPE VARCHAR
+
+query IT
+SELECT * FROM enc.test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
+statement ok
+SET wal_encryption = false;
+
+statement ok
+SET wal_encryption = true;
+
+statement ok
+INSERT INTO enc.test VALUES (10, 'hello')
+
+restart
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_wal_disable_enable.db' as enc (ENCRYPTION_KEY 'asdf');
+
+query IT
+SELECT * FROM enc.test ORDER BY 1
+----
+10	hello
+11	22
+12	21
+13	22
+
+

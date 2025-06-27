@@ -4,8 +4,6 @@
 
 require noforcestorage
 
-require skip_reload
-
 # Set the temporary directory to an empty directory.
 statement ok
 PRAGMA temp_directory=''

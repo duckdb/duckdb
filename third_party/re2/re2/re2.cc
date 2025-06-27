@@ -36,6 +36,10 @@
 
 namespace duckdb_re2 {
 
+static bool CharacterIsSpace(char c) {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
 // Controls the maximum count permitted by GlobalReplace(); -1 is unlimited.
 static int maximum_global_replace_count = -1;
 
@@ -1121,13 +1125,13 @@ static const char* TerminateNumber(char* buf, size_t nbuf, const char* str,
                                    size_t* np, bool accept_spaces) {
   size_t n = *np;
   if (n == 0) return "";
-  if (n > 0 && isspace(*str)) {
+  if (n > 0 && CharacterIsSpace(*str)) {
     // We are less forgiving than the strtoxxx() routines and do not
     // allow leading spaces. We do allow leading spaces for floats.
     if (!accept_spaces) {
       return "";
     }
-    while (n > 0 && isspace(*str)) {
+    while (n > 0 && CharacterIsSpace(*str)) {
       n--;
       str++;
     }

@@ -207,7 +207,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 					// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
 					// correctly)
 					try {
-						auto timestamp_seconds = Timestamp::FromEpochSeconds(file_handle->GetLastModifiedTime());
+						auto timestamp_seconds = file_handle->GetLastModifiedTime();
 						FlatVector::GetData<timestamp_tz_t>(last_modified_vector)[out_idx] =
 						    timestamp_tz_t(timestamp_seconds);
 					} catch (std::exception &ex) {

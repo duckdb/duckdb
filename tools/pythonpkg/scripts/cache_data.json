@@ -538,7 +538,8 @@
         "name": "duckdb",
         "children": [
             "duckdb.filesystem",
-            "duckdb.Value"
+            "duckdb.Value",
+            "duckdb.polars_io"
         ]
     },
     "duckdb.filesystem": {
@@ -692,5 +693,21 @@
         "full_path": "pyarrow.ipc.MessageReader",
         "name": "MessageReader",
         "children": []
+    },
+    "duckdb.polars_io": {
+        "type": "module",
+        "full_path": "duckdb.polars_io",
+        "name": "polars_io",
+        "children": [
+            "duckdb.polars_io.duckdb_source"
+        ],
+        "required": false
+    },
+    "duckdb.polars_io.duckdb_source": {
+        "type": "attribute",
+        "full_path": "duckdb.polars_io.duckdb_source",
+        "name": "duckdb_source",
+        "children": [],
+        "required": false
     }
 }

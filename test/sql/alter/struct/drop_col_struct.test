@@ -37,7 +37,7 @@ ALTER TABLE test DROP COLUMN IF EXISTS s.v
 statement error
 ALTER TABLE test DROP COLUMN s.j.a
 ----
-not a struct
+Catalog Error: Cannot drop field from column "s" - not a nested type
 
 # field does not exist
 statement error

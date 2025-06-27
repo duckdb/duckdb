@@ -36,3 +36,23 @@ select * from parquet_schema('data/parquet-testing/glob/*.parquet');
 # list parameters
 statement ok
 select * from parquet_schema(['data/parquet-testing/decimal/int64_decimal.parquet', 'data/parquet-testing/decimal/int64_decimal.parquet']);
+
+query III
+SELECT name, type, duckdb_type FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet') WHERE type IS NOT NULL;
+----
+l_orderkey	INT64	BIGINT
+l_partkey	INT64	BIGINT
+l_suppkey	INT64	BIGINT
+l_linenumber	INT32	INTEGER
+l_quantity	INT32	INTEGER
+l_extendedprice	DOUBLE	DOUBLE
+l_discount	DOUBLE	DOUBLE
+l_tax	DOUBLE	DOUBLE
+l_returnflag	BYTE_ARRAY	VARCHAR
+l_linestatus	BYTE_ARRAY	VARCHAR
+l_shipdate	BYTE_ARRAY	VARCHAR
+l_commitdate	BYTE_ARRAY	VARCHAR
+l_receiptdate	BYTE_ARRAY	VARCHAR
+l_shipinstruct	BYTE_ARRAY	VARCHAR
+l_shipmode	BYTE_ARRAY	VARCHAR
+l_comment	BYTE_ARRAY	VARCHAR

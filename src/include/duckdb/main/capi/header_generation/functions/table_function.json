@@ -29,11 +29,11 @@
                 }
             ],
             "comment": {
-                "description": "Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.\n\nNote that the bind data should be considered as read-only.\nFor tracking state, use the init data instead.\n\n",
+                "description": "Gets the table function's bind data set by `duckdb_bind_set_bind_data`. \n\nNote that the bind data is read-only.\nFor tracking state, use the init data instead.\n\n",
                 "param_comments": {
-                    "info": "The info object"
+                    "info": "The function info object."
                 },
-                "return_value": "The bind data object"
+                "return_value": "The bind data object."
             }
         },
         {

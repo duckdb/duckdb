@@ -724,3 +724,17 @@ class TestReadCSV(object):
         rel = con.read_csv(file1, comment='#', skiprows=1, all_varchar=True)
         assert rel.columns == ['x', 'y', 'z']
         assert rel.fetchall() == [('1', '2', '3'), ('4', '5', '6')]
+
+    def test_files_to_sniff_option(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('bar,baz\n2025-05-12,baz')
+        file2 = tmp_path / "file2.csv"
+        file2.write_text('bar,baz\nbar,baz')
+
+        file_path = tmp_path / "file*.csv"
+        con = duckdb.connect()
+        with pytest.raises(duckdb.ConversionException, match="Conversion Error"):
+            rel = con.read_csv(file_path, files_to_sniff=1)
+            rel.fetchall()
+        rel = con.read_csv(file_path, files_to_sniff=-1)
+        assert rel.fetchall() == [('2025-05-12', 'baz'), ('bar', 'baz')]

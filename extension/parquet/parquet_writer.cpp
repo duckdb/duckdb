@@ -376,7 +376,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	}
 
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
-	protocol = tproto_factory.getProtocol(std::make_shared<MyTransport>(*writer));
+	protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
 	file_meta_data.version = 1;

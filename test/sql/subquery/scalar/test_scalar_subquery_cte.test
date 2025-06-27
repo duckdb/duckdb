@@ -80,10 +80,11 @@ More than one row returned by a subquery
 statement ok
 SET scalar_subquery_error_on_multiple_rows=false
 
+# the result is non-deterministic, so any of the values can be returned
 query I
-SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte)
+SELECT (WITH cte AS (SELECT a * 42 FROM test) SELECT * FROM cte) IN (462, 504, 546)
 ----
-462
+true
 
 # operations on subquery
 query I
@@ -132,12 +133,14 @@ SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN 22 ELSE NULL END) SELECT
 12	NULL
 13	NULL
 
-query II
-SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) SELECT * FROM cte) FROM test ORDER BY a
-----
-11	22
-12	NULL
-13	NULL
+# This test case is broken with PR #17459. Without CTE inlining, the result is arbitrary due to the materialization of the CTE.
+# Previously no_alternative_verify prevented that, but now it does not suffice anymore.
+# query II
+# SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) SELECT * FROM cte) FROM test ORDER BY a
+# ----
+# 11	22
+# 12	NULL
+# 13	NULL
 
 query II
 SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) SELECT * FROM cte) FROM test ORDER BY a

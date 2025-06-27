@@ -36,6 +36,10 @@ bool TableFunctionData::Equals(const FunctionData &other) const {
 	return false;
 }
 
+bool FunctionData::SupportStatementCache() const {
+	return true;
+}
+
 Function::Function(string name_p) : name(std::move(name_p)) {
 }
 Function::~Function() {
@@ -49,7 +53,7 @@ SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(name, arguments, varargs);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs);
 }
 
 bool SimpleFunction::HasVarArgs() const {
@@ -65,7 +69,7 @@ SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
 
 string SimpleNamedParameterFunction::ToString() const {
-	return Function::CallToString(name, arguments, named_parameters);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, named_parameters);
 }
 
 bool SimpleNamedParameterFunction::HasNamedParameters() const {
@@ -84,7 +88,7 @@ BaseScalarFunction::~BaseScalarFunction() {
 }
 
 string BaseScalarFunction::ToString() const {
-	return Function::CallToString(name, arguments, varargs, return_type);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
 }
 
 // add your initializer for new functions here
@@ -113,8 +117,18 @@ hash_t BaseScalarFunction::Hash() const {
 	return hash;
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs) {
-	string result = name + "(";
+static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
+	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
+	       schema_name != DEFAULT_SCHEMA;
+}
+
+string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+                              const vector<LogicalType> &arguments, const LogicalType &varargs) {
+	string result;
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+		result += catalog_name + "." + schema_name + ".";
+	}
+	result += name + "(";
 	vector<string> string_arguments;
 	for (auto &arg : arguments) {
 		string_arguments.push_back(arg.ToString());
@@ -126,14 +140,16 @@ string Function::CallToString(const string &name, const vector<LogicalType> &arg
 	return result + ")";
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs,
+string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+                              const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
-	string result = CallToString(name, arguments, varargs);
+	string result = CallToString(catalog_name, schema_name, name, arguments, varargs);
 	result += " -> " + return_type.ToString();
 	return result;
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+                              const vector<LogicalType> &arguments,
                               const named_parameter_type_map_t &named_parameters) {
 	vector<string> input_arguments;
 	input_arguments.reserve(arguments.size() + named_parameters.size());
@@ -143,7 +159,11 @@ string Function::CallToString(const string &name, const vector<LogicalType> &arg
 	for (auto &kv : named_parameters) {
 		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
 	}
-	return StringUtil::Format("%s(%s)", name, StringUtil::Join(input_arguments, ", "));
+	string prefix = "";
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+		prefix = StringUtil::Format("%s.%s.", catalog_name, schema_name);
+	}
+	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
 }
 
 void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,

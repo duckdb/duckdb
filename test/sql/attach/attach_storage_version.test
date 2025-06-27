@@ -2,8 +2,6 @@
 # description: Tests attaching database files with different block allocation sizes.
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -27,7 +25,7 @@ The storage version of an existing database cannot be lowered
 
 # unknown storage version
 statement error
-ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.4.0');
+ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'non_existant');
 ----
 not a known DuckDB version
 

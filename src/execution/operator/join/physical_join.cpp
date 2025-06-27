@@ -6,9 +6,9 @@
 
 namespace duckdb {
 
-PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type,
-                           idx_t estimated_cardinality)
-    : CachingPhysicalOperator(type, op.types, estimated_cardinality), join_type(join_type) {
+PhysicalJoin::PhysicalJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperatorType type,
+                           JoinType join_type, idx_t estimated_cardinality)
+    : CachingPhysicalOperator(physical_plan, type, op.types, estimated_cardinality), join_type(join_type) {
 }
 
 bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {

@@ -1,0 +1,58 @@
+# name: test/sql/alter/list/drop_column_in_struct.test
+# group: [list]
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		i INTEGER,
+		j INTEGER
+	)[]
+)
+
+statement ok
+INSERT INTO test VALUES
+	([ROW(1, 1)]),
+	([ROW(2, 2)])
+
+# attempt to drop element from the list
+statement error
+ALTER TABLE test DROP COLUMN s.element
+----
+Catalog Error: Cannot drop field 'element' from column 's' - it's not a struct
+
+statement ok
+ALTER TABLE test DROP COLUMN s.element.j
+
+query I
+select * from test
+----
+[{'i': 1}]
+[{'i': 2}]
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		a STRUCT(
+			i INTEGER,
+			j INTEGER
+		)[]
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(ROW([ROW(1, 1)])),
+	(ROW([ROW(2, 2)]))
+
+# add a column to a struct
+statement ok
+ALTER TABLE test DROP COLUMN s.a.element.i
+
+query I
+select * from test
+----
+{'a': [{'j': 1}]}
+{'a': [{'j': 2}]}

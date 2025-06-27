@@ -93,7 +93,7 @@ void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 //===--------------------------------------------------------------------===//
 void ConstantSelectValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                             const SelectionVector &sel, idx_t sel_count) {
-	ConstantScanFunctionValidity(segment, state, vector_count, result);
+	ConstantScanFunctionValidity(segment, state, sel_count, result);
 }
 
 template <class T>

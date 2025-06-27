@@ -32,6 +32,8 @@ class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
+class FileHandleLogger;
+class Logger;
 
 enum class FileType {
 	//! Regular file
@@ -65,7 +67,7 @@ public:
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void Write(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
 	DUCKDB_API idx_t SeekPosition();
@@ -81,6 +83,8 @@ public:
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
+
+	DUCKDB_API void TryAddLogger(FileOpener &opener);
 
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
@@ -108,6 +112,8 @@ public:
 	FileSystem &file_system;
 	string path;
 	FileOpenFlags flags;
+
+	shared_ptr<Logger> logger;
 };
 
 class FileSystem {
@@ -142,7 +148,7 @@ public:
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-	DUCKDB_API virtual time_t GetLastModifiedTime(FileHandle &handle);
+	DUCKDB_API virtual timestamp_t GetLastModifiedTime(FileHandle &handle);
 	//! Returns a tag that uniquely identifies the version of the file,
 	//! used for checking cache invalidation for CachingFileSystem httpfs files
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
@@ -178,6 +184,8 @@ public:
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
+	//! Remvoe a file from disk if it exists - if it does not exist, return false
+	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory

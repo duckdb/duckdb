@@ -40,7 +40,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 }
 
 string TypeCatalogEntry::ToSQL() const {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "CREATE TYPE ";
 	ss << KeywordHelper::WriteOptionallyQuoted(name);
 	ss << " AS ";

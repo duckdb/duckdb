@@ -14,7 +14,7 @@ create table lineitem (l_orderkey int, l_suppkey int, l_partkey int);
 statement ok
 insert into lineitem values (1,1,42),(1,2,43),(3,3,44),(4,5,45),(5,5,46),(6,5,47);
 
-query III
+query III rowsort
 select * from lineitem l1 where exists (
     select * from lineitem l2
     where

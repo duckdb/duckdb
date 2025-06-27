@@ -2,8 +2,6 @@
 # description: Test ALTER TABLE ALTER TYPE and dependencies
 # group: [alter_type]
 
-require skip_reload
-
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 

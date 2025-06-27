@@ -279,8 +279,13 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		return dataset_scalar(constant.GetValue<double>());
 	case LogicalTypeId::VARCHAR:
 		return dataset_scalar(constant.ToString());
-	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BLOB: {
+		if (type.GetTypeInfo<ArrowStringInfo>().GetSizeType() == ArrowVariableSizeType::VIEW) {
+			py::object binary_view_type = py::module_::import("pyarrow").attr("binary_view");
+			return dataset_scalar(scalar(py::bytes(constant.GetValueUnsafe<string>()), binary_view_type()));
+		}
 		return dataset_scalar(py::bytes(constant.GetValueUnsafe<string>()));
+	}
 	case LogicalTypeId::DECIMAL: {
 		py::object decimal_type;
 		auto &datetime_info = type.GetTypeInfo<ArrowDecimalInfo>();
@@ -446,6 +451,10 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
 		}
 		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+	}
+	case TableFilterType::DYNAMIC_FILTER: {
+		//! Ignore dynamic filters for now, not necessary for correctness
+		return py::none();
 	}
 	default:
 		throw NotImplementedException("Pushdown Filter Type %s is not currently supported in PyArrow Scans",

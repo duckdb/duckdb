@@ -28,7 +28,7 @@ SELECT s1.t.c, t.c, c FROM s1.t
 statement error
 SELECT s1.t.c, t.c, c FROM s1.t AS t
 ----
-Referenced table "s1" not found
+Referenced table "s1.t" not found
 
 statement error
 SELECT s1.x.c FROM s1.v AS x

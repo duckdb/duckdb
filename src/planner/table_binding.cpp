@@ -135,24 +135,20 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 	}
 }
 
-static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
+static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
                            const unordered_map<idx_t, string> &alias_map) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		D_ASSERT(col_names.size() == 1);
 		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
 		col_names = {alias};
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { ReplaceAliases(child, list, alias_map); });
+	});
 }
 
-static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_alias) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
+static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &binding_alias) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		col_names.insert(col_names.begin(), binding_alias.GetAlias());
@@ -162,9 +158,7 @@ static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_al
 		if (!binding_alias.GetCatalog().empty()) {
 			col_names.insert(col_names.begin(), binding_alias.GetCatalog());
 		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(expr,
-	                                            [&](ParsedExpression &child) { BakeTableName(child, binding_alias); });
+	});
 }
 
 unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {

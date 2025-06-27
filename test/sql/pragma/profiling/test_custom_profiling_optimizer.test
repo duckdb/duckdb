@@ -171,3 +171,5 @@ SELECT unnest(res) FROM (
 "QUERY_NAME": "true"
 "RESULT_SET_SIZE": "true"
 "ROWS_RETURNED": "true"
+"SYSTEM_PEAK_BUFFER_MEMORY": "true"
+"SYSTEM_PEAK_TEMP_DIR_SIZE": "true"

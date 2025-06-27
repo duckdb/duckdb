@@ -17,7 +17,6 @@
 namespace duckdb {
 
 class DuckDB;
-class HTTPLogger;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
@@ -242,7 +241,6 @@ private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
 	                                                                 const string &local_path, const string &extension,
 	                                                                 ExtensionInstallOptions &options,
-	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);

@@ -7,6 +7,7 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -139,11 +140,9 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 // The C++ init function
-typedef void (*ext_init_fun_t)(DatabaseInstance &);
+typedef void (*ext_init_fun_t)(ExtensionLoader &);
 // The C init function
 typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
-typedef const char *(*ext_version_fun_t)(void);
-typedef bool (*ext_is_storage_t)(void);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
@@ -517,7 +516,9 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
-	if (db.ExtensionIsLoaded(extension)) {
+	auto &manager = ExtensionManager::Get(db);
+	auto info = manager.BeginLoad(extension);
+	if (!info) {
 		return;
 	}
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -527,7 +528,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
-		auto init_fun_name = extension_init_result.filebase + "_init";
+		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
 		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
 		                                                                 extension_init_result.filename);
 		if (!init_fun) {
@@ -536,7 +537,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			(*init_fun)(db);
+			ExtensionLoader loader(*info);
+			(*init_fun)(loader);
+			loader.FinalizeLoad();
 		} catch (std::exception &e) {
 			ErrorData error(e);
 			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
@@ -545,7 +548,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info->FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
@@ -585,7 +588,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info->FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 

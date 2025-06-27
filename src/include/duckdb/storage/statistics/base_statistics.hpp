@@ -138,7 +138,7 @@ private:
 	bool has_null;
 	//! Whether or not the segment can contain values that are not null
 	bool has_no_null;
-	// estimate that one may have even if distinct_stats==nullptr
+	//! estimate that one may have even if distinct_stats==nullptr
 	idx_t distinct_count;
 	//! Numeric and String stats
 	union {

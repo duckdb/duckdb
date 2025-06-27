@@ -2,9 +2,6 @@
 # description: Test JSON fields in temporary tables for issue 8062
 # group: [issues]
 
-# Can't do reload tests with temp tables
-require skip_reload
-
 require json
 
 statement ok

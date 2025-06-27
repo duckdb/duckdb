@@ -41,5 +41,5 @@ SELECT * FROM test
 statement error
 ALTER TABLE test ADD COLUMN s.s2.v1.x INTEGER
 ----
-not a struct
+Binder Error: Column 'v1' is not a nested type, ADD COLUMN can only be used on nested types
 

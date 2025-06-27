@@ -2,7 +2,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "include/icu-datefunc.hpp"
@@ -229,14 +229,15 @@ struct ICUTableRange {
 		}
 	}
 
-	static void AddICUTableRangeFunction(DatabaseInstance &db) {
+	static void AddICUTableRangeFunction(ExtensionLoader &loader) {
 		TableFunctionSet range("range");
 		TableFunction range_function({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range_function.cardinality = Cardinality;
 		range.AddFunction(range_function);
-		ExtensionUtil::RegisterFunction(db, range);
+
+		loader.RegisterFunction(range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
@@ -246,12 +247,13 @@ struct ICUTableRange {
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series_function.cardinality = Cardinality;
 		generate_series.AddFunction(generate_series_function);
-		ExtensionUtil::RegisterFunction(db, generate_series);
+
+		loader.RegisterFunction(generate_series);
 	}
 };
 
-void RegisterICUTableRangeFunctions(DatabaseInstance &db) {
-	ICUTableRange::AddICUTableRangeFunction(db);
+void RegisterICUTableRangeFunctions(ExtensionLoader &loader) {
+	ICUTableRange::AddICUTableRangeFunction(loader);
 }
 
 } // namespace duckdb

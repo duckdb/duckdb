@@ -2,8 +2,6 @@
 # description: Test create index on an attached database with an alias
 # group: [attach]
 
-require skip_reload
-
 statement ok
 ATTACH '' AS tmp;
 

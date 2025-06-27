@@ -914,8 +914,8 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	auto error_msg_extract_statements = duckdb_extract_statements_error(extracted_statements);
 	if (error_msg_extract_statements != nullptr) {
 		// Things went wrong when executing internal prepared statement
-		duckdb_destroy_extracted(&extracted_statements);
 		SetError(error, error_msg_extract_statements);
+		duckdb_destroy_extracted(&extracted_statements);
 		return ADBC_STATUS_INTERNAL;
 	}
 	// Now lets loop over the statements, and execute every one
@@ -1067,7 +1067,7 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "Statement Set Option " << key << " is not yet accepted by DuckDB";
 	SetError(error, ss.str());
 	return ADBC_STATUS_INVALID_ARGUMENT;

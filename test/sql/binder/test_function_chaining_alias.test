@@ -1,0 +1,140 @@
+# name: test/sql/binder/test_function_chaining_alias.test
+# description: Test referencing an alias or a function chaining alias
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT 'test' || ' more testing' AS added, added.substr(5) AS my_substr
+----
+test more testing	 more testing
+
+statement ok
+CREATE TABLE varchars(v VARCHAR);
+
+statement ok
+INSERT INTO varchars VALUES ('>>%Test<<'), ('%FUNCTION%'), ('Chaining')
+
+query I
+SELECT v.lower() FROM varchars
+----
+>>%test<<
+%function%
+chaining
+
+# Use only_alphabet before it is defined.
+
+statement error
+SELECT
+	v.trim('><') AS trim_inequality,
+	only_alphabet.lower() AS lower,
+	trim_inequality.replace('%', '') AS only_alphabet,
+FROM varchars
+----
+<REGEX>:Binder Error.*column cannot be referenced before it is defined.*
+
+query III
+SELECT
+	v.trim('><') AS trim_inequality,
+	trim_inequality.replace('%', '') AS only_alphabet,
+	only_alphabet.lower() AS lower
+FROM varchars
+----
+%Test	Test	test
+%FUNCTION%	FUNCTION	function
+Chaining	Chaining	chaining
+
+# Test a column with a table name.
+
+query III
+SELECT
+	varchars.v.trim('><') AS trim_inequality,
+	trim_inequality.replace('%', '') AS only_alphabet,
+	only_alphabet.lower() AS lower
+FROM varchars
+----
+%Test	Test	test
+%FUNCTION%	FUNCTION	function
+Chaining	Chaining	chaining
+
+statement ok
+DELETE FROM varchars
+
+statement ok
+INSERT INTO varchars VALUES ('Test Function Chaining Alias');
+
+query III
+SELECT
+	v.split(' ')::VARCHAR strings,
+	strings.lower() lower,
+	lower.upper() upper
+FROM varchars
+----
+[Test, Function, Chaining, Alias]	[test, function, chaining, alias]	[TEST, FUNCTION, CHAINING, ALIAS]
+
+query IIII
+SELECT
+	v.split(' ') strings,
+	strings.apply(lambda x: x.lower()).filter(lambda x: x[1] == 't') lower,
+	strings.apply(lambda x: x.upper()).filter(lambda x: x[1] == 'T') upper,
+	lower + upper AS mix_case_srings
+FROM varchars
+----
+[Test, Function, Chaining, Alias]	[test]	[TEST]	[test, TEST]
+
+# Test prepared statements.
+
+statement ok
+PREPARE v1 AS 
+SELECT
+	(?.split(' ')::VARCHAR).lower() lstrings,
+	(?.split(' ')::VARCHAR).upper() ustrings,
+	list_concat(lstrings::VARCHAR[], ustrings::VARCHAR[]) AS mix_case_srings
+
+query III
+EXECUTE v1('Hello World', 'test function chaining')
+----
+[hello, world]	[TEST, FUNCTION, CHAINING]	[hello, world, TEST, FUNCTION, CHAINING]
+
+statement ok
+INSERT INTO varchars VALUES ('Another longggggg String');
+
+# Use an alias in a WHERE clause.
+
+query IIII
+SELECT
+	v.split(' ') strings,
+	strings.apply(lambda x: x.lower()).filter(lambda x: x[1] == 't' OR x[1] == 'a') lower,
+	strings.apply(lambda x: x.upper()).filter(lambda x: x[1] == 'T' OR x[1] == 'A') upper,
+	lower + upper AS mix_case_srings
+FROM varchars
+WHERE mix_case_srings[1] = 'test'
+----
+[Test, Function, Chaining, Alias]	[test, alias]	[TEST, ALIAS]	[test, alias, TEST, ALIAS]
+
+query IIII
+SELECT
+	v.split(' ') strings,
+	strings.apply(lambda x: x.lower()).filter(lambda x: x[1] == 't' OR x[1] == 'a') lower,
+	strings.apply(lambda x: x.upper()).filter(lambda x: x[1] == 'T' OR x[1] == 'A') upper,
+	lower + upper AS mix_case_srings
+FROM varchars
+WHERE mix_case_srings[1] = 'another'
+----
+[Another, longggggg, String]	[another]	[ANOTHER]	[another, ANOTHER]
+
+# CTE with function chaining alias.
+
+query II
+WITH test AS (
+    SELECT 'woot' AS my_column
+)
+FROM test
+SELECT
+	my_column.substr(2) AS partial_woot,
+	partial_woot.substr(2) AS more_partially_woot
+WHERE
+    more_partially_woot = 'ot';
+----
+oot	ot

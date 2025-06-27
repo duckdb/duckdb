@@ -2,8 +2,6 @@
 # description: Test NULL versions
 # group: [transactions]
 
-require skip_reload
-
 statement ok
 SET immediate_transaction_mode=true
 

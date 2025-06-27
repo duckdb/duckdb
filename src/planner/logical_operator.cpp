@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -126,7 +127,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 
 string LogicalOperator::ToString(ExplainFormat format) const {
 	auto renderer = TreeRenderer::CreateRenderer(format);
-	stringstream ss;
+	duckdb::stringstream ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
 	return ss.str();

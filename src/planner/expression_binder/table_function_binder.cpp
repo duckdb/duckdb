@@ -18,18 +18,18 @@ BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, i
 
 BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
                                                     bool root_expression) {
-	// try binding as a lambda parameter
 	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
-		auto column_name = col_ref.GetName();
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
+		// Try binding as a lambda parameter.
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
-		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
+		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 			throw ParameterNotResolvedException();
 		}
 	}
+
 	auto query_location = col_ref.GetQueryLocation();
 	auto column_names = col_ref.column_names;
 	auto result_name = StringUtil::Join(column_names, ".");

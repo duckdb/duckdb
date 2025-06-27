@@ -2,8 +2,6 @@
 # description: Test foreign key constraint
 # group: [foreignkey]
 
-require skip_reload
-
 statement ok
 CREATE TEMPORARY TABLE album(artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (artistid, albumname));
 

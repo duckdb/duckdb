@@ -54,6 +54,18 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	return ret;
 }
 
+idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context, idx_t column_id) {
+	if (!get.function.statistics) {
+		return 0;
+	}
+	auto column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
+	if (!column_statistics) {
+		return 0;
+	}
+	auto distinct_count = column_statistics->GetDistinctCount();
+	return distinct_count;
+}
+
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
 	auto return_stats = RelationStats();
 
@@ -68,33 +80,17 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		return_stats.table_name = name;
 	}
 
-	// if we can get the catalog table, then our column statistics will be accurate
-	// parquet readers etc. will still return statistics, but they initialize distinct column
-	// counts to 0.
-	// TODO: fix this, some file formats can encode distinct counts, we don't want to rely on
-	//  getting a catalog table to know that we can use statistics.
-	bool have_catalog_table_statistics = false;
-	if (get.GetTable()) {
-		have_catalog_table_statistics = true;
-	}
-
 	// first push back basic distinct counts for each column (if we have them).
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i].GetPrimaryIndex();
-		bool have_distinct_count_stats = false;
-		if (get.function.statistics) {
-			column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
-			if (column_statistics && have_catalog_table_statistics) {
-				auto distinct_count = MaxValue<idx_t>(1, column_statistics->GetDistinctCount());
-				auto column_distinct_count = DistinctCount({distinct_count, true});
-				return_stats.column_distinct_count.push_back(column_distinct_count);
-				return_stats.column_names.push_back(name + "." + get.names.at(column_id));
-				have_distinct_count_stats = true;
-			}
-		}
-		if (!have_distinct_count_stats) {
-			// currently treating the cardinality as the distinct count.
+		auto distinct_count = GetDistinctCount(get, context, column_id);
+		if (distinct_count > 0) {
+			auto column_distinct_count = DistinctCount({distinct_count, true});
+			return_stats.column_distinct_count.push_back(column_distinct_count);
+			return_stats.column_names.push_back(name + "." + get.names.at(column_id));
+		} else {
+			// treat the cardinality as the distinct count.
 			// the cardinality estimator will update these distinct counts based
 			// on the extra columns that are joined on.
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});

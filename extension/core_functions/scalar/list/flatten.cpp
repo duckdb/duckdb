@@ -162,9 +162,9 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 
 	auto &input_type = arguments[0]->return_type;
 	bound_function.arguments[0] = input_type;
-	if (input_type.id() == LogicalTypeId::UNKNOWN) {
-		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+	if (input_type.IsUnknown()) {
+		bound_function.arguments[0] = LogicalType::UNKNOWN;
+		bound_function.return_type = LogicalType::UNKNOWN;
 		return nullptr;
 	}
 	D_ASSERT(input_type.id() == LogicalTypeId::LIST);
@@ -174,9 +174,9 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 		bound_function.return_type = input_type;
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
-	if (child_type.id() == LogicalTypeId::UNKNOWN) {
-		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+	if (child_type.IsUnknown()) {
+		bound_function.arguments[0] = LogicalType::UNKNOWN;
+		bound_function.return_type = LogicalType::UNKNOWN;
 		return nullptr;
 	}
 	D_ASSERT(child_type.id() == LogicalTypeId::LIST);

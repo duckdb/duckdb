@@ -47,15 +47,10 @@ CompressedMaterialization::CompressedMaterialization(Optimizer &optimizer_p, Log
     : optimizer(optimizer_p), context(optimizer.context), root(&root_p), statistics_map(statistics_map_p) {
 }
 
-void CompressedMaterialization::GetReferencedBindings(const Expression &expression,
+void CompressedMaterialization::GetReferencedBindings(const Expression &root_expr,
                                                       column_binding_set_t &referenced_bindings) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		const auto &col_ref = expression.Cast<BoundColumnRefExpression>();
-		referenced_bindings.insert(col_ref.binding);
-	} else {
-		ExpressionIterator::EnumerateChildren(
-		    expression, [&](const Expression &child) { GetReferencedBindings(child, referenced_bindings); });
-	}
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &col_ref) { referenced_bindings.insert(col_ref.binding); });
 }
 
 void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding,

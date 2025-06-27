@@ -57,13 +57,12 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &
 	}
 }
 
-void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &bindings) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		bindings.insert(colref.binding.table_index);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
+void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<idx_t> &bindings) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
+	                                                              [&](const BoundColumnRefExpression &colref) {
+		                                                              D_ASSERT(colref.depth == 0);
+		                                                              bindings.insert(colref.binding.table_index);
+	                                                              });
 }
 
 } // namespace duckdb

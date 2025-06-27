@@ -235,8 +235,10 @@ private:
 	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall &root);
 	//! Transform a Postgres boolean expression into an Expression
 	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant &root);
-	//! Transform a Postgres lambda node [e.g. (x, y) -> x + y] into a lambda expression
+	//! Transform a LAMBDA node (e.g., lambda x, y: x + y) into a lambda expression.
 	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction &node);
+	//! Transform a single arrow operator (e.g., (x, y) -> x + y) into a lambda expression.
+	unique_ptr<ParsedExpression> TransformSingleArrow(duckdb_libpgquery::PGSingleArrowFunction &node);
 	//! Transform a Postgres array access node (e.g. x[1] or x[1:3])
 	unique_ptr<ParsedExpression> TransformArrayAccess(duckdb_libpgquery::PGAIndirection &node);
 	//! Transform a positional reference (e.g. #1)

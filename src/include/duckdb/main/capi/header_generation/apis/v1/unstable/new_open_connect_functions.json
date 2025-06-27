@@ -1,0 +1,10 @@
+{
+  "version": "unstable_new_open_connect_functions",
+  "description": "New functions around the client context",
+  "entries": [
+    "duckdb_client_context_get_connection_id",
+    "duckdb_destroy_client_context",
+    "duckdb_connection_get_client_context",
+    "duckdb_get_table_names"
+  ]
+}

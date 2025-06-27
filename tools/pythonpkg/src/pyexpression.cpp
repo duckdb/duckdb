@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -291,7 +292,9 @@ static void PopulateExcludeList(qualified_column_set_t &exclude, py::object list
 	py::list list = py::cast<py::list>(list_p);
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
-			exclude.insert(QualifiedColumnName(std::string(py::str(item))));
+			string col_str = std::string(py::str(item));
+			QualifiedColumnName qname = QualifiedColumnName::Parse(col_str);
+			exclude.insert(qname);
 			continue;
 		}
 		shared_ptr<DuckDBPyExpression> expr;

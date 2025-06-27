@@ -1,5 +1,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -883,8 +884,14 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, double, interval_t, MultiplyOperator>));
 	multiply.AddFunction(
+	    ScalarFunction({LogicalType::DOUBLE, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<double, interval_t, interval_t, MultiplyOperator>));
+	multiply.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	multiply.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	for (auto &func : multiply.functions) {
 		ScalarFunction::SetReturnsError(func);
 	}
@@ -1114,6 +1121,54 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 	}
 
 	return modulo;
+}
+
+//===--------------------------------------------------------------------===//
+// Linear Interpolation
+//===--------------------------------------------------------------------===//
+
+template <>
+double InterpolateOperator::Operation(const double &lo, const double d, const double &hi) {
+	return lo * (1.0 - d) + hi * d;
+}
+
+template <>
+dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
+	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
+}
+
+template <>
+timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
+	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+}
+
+template <>
+hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
+	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+}
+
+template <>
+uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
+	return Hugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
+}
+
+static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
+	D_ASSERT(d >= 0 && d <= 1);
+	return Interval::FromMicro(std::llround(static_cast<double>(Interval::GetMicro(i)) * d));
+}
+
+inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
+	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
+}
+
+inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
+	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
+}
+
+template <>
+interval_t InterpolateOperator::Operation(const interval_t &lo, const double d, const interval_t &hi) {
+	const interval_t delta = hi - lo;
+	return lo + MultiplyByDouble(delta, d);
 }
 
 } // namespace duckdb

@@ -29,7 +29,16 @@ def load_data(shell_path, load_script):
     with tempfile.NamedTemporaryFile() as f:
         filename = f.name
     proc = subprocess.Popen(
-        [shell_path, '-c', "set storage_compatibility_version='latest'", '-c', load_script, filename]
+        [
+            shell_path,
+            '-storage_version',
+            'latest',
+            '-c',
+            "set storage_compatibility_version='latest'",
+            '-c',
+            load_script,
+            filename,
+        ]
     )
     proc.wait()
     if proc.returncode != 0:

@@ -2,10 +2,6 @@
 # description: Deadlock when checkpointing multiple databases
 # group: [attach]
 
-require noforcestorage
-
-require skip_reload
-
 concurrentforeach dbname foo bar i1 i2 i3 i4 i5 i6 i7 i8 i9
 
 statement ok

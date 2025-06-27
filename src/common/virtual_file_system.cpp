@@ -5,7 +5,10 @@
 
 namespace duckdb {
 
-VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
+VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLocal()) {
+}
+
+VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_fs(std::move(inner)) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
@@ -38,6 +41,11 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
 		auto entry = compressed_fs.find(compression);
 		if (entry == compressed_fs.end()) {
+			if (compression == FileCompressionType::ZSTD) {
+				throw NotImplementedException(
+				    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
+				    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+			}
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
@@ -65,7 +73,7 @@ int64_t VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_by
 int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 	return handle.file_system.GetFileSize(handle);
 }
-time_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
 string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
@@ -115,6 +123,10 @@ bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> 
 
 void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	FindFileSystem(filename).RemoveFile(filename, opener);
+}
+
+bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(filename).TryRemoveFile(filename, opener);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

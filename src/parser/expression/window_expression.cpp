@@ -28,6 +28,7 @@ WindowExpression::WindowExpression(ExpressionType type, string catalog_name, str
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_FILL:
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
@@ -57,6 +58,8 @@ ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_LAG;
 	} else if (fun_name == "ntile") {
 		return ExpressionType::WINDOW_NTILE;
+	} else if (fun_name == "fill") {
+		return ExpressionType::WINDOW_FILL;
 	}
 	return ExpressionType::WINDOW_AGGREGATE;
 }

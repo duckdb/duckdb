@@ -2,8 +2,6 @@
 # description: Test attach and re-attach with serialized dependencies
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 set storage_compatibility_version='latest';
 
