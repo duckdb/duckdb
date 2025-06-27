@@ -31,10 +31,11 @@ select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', n
 ----
 a	b	c	year
 
-query IIII
+#	duckdb does not do hive auto-detection for csv files
+query III
 select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d']) LIMIT 1;
 ----
-a	b	c	year
+a	b	c
 
 #	test a csv partition by year,month
 statement ok
@@ -55,10 +56,11 @@ select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', n
 ----
 a	b	month	year
 
-query IIII
+#	duckdb does not do hive auto-detection for csv files
+query II
 select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', names=['a','b','c','d']) LIMIT 1;
 ----
-a	b	month	year
+a	b
 
 #	test a single file
 query I
@@ -81,11 +83,6 @@ a	b	c	d
 
 query IIII
 select alias(columns(*)) from read_csv_auto('__TEST_DIR__/bad_file.csv', names=['a','b','c','d'], HIVE_PARTITIONING=1) LIMIT 1;
-----
-a	b	c	d
-
-query IIII
-select alias(columns(*)) from read_csv_auto('__TEST_DIR__/bad_file.csv', names=['a','b','c','d']) LIMIT 1;
 ----
 a	b	c	d
 
@@ -222,11 +219,6 @@ select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', n
 ----
 a	b	c	d	year
 
-query IIIII
-select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d']) LIMIT 1;
-----
-a	b	c	d	year
-
 #	test a csv partition by year,month
 statement ok
 COPY t TO '__TEST_DIR__/csv_partition_2' (partition_by(year,month), overwrite_or_ignore, write_partition_columns);
@@ -243,11 +235,6 @@ a	b	c	d
 
 query IIIIII
 select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', names=['a','b','c','d'], HIVE_PARTITIONING=1) LIMIT 1;
-----
-a	b	c	d	month	year
-
-query IIIIII
-select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_2/**', names=['a','b','c','d']) LIMIT 1;
 ----
 a	b	c	d	month	year
 
