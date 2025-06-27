@@ -13,7 +13,6 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -22,7 +21,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types.hpp"
 #include "fast_float/fast_float.h"
-#include "fmt/format.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
@@ -1042,6 +1040,27 @@ bool TryCast::Operation(dtime_t input, dtime_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict) {
+	result.micros = input.micros;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict) {
+	//	Round
+	result.micros = (input.micros + (Interval::NANOS_PER_MICRO / 2)) / Interval::NANOS_PER_MICRO;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict) {
+	if (!TryMultiplyOperator::Operation(input.micros, Interval::NANOS_PER_MICRO, result.micros)) {
+		throw ConversionException("Could not convert TIME to TIME_NS");
+	}
+	return true;
+}
+
+template <>
 bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict) {
 	result = dtime_tz_t(input, 0);
 	return true;
@@ -1258,6 +1277,11 @@ template <>
 dtime_t CastTimestampNsToTime::Operation(timestamp_t input) {
 	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return Timestamp::GetTime(us);
+}
+
+template <>
+dtime_ns_t CastTimestampNsToTimeNs::Operation(timestamp_ns_t input) {
+	return Timestamp::GetTimeNs(input);
 }
 
 template <>
@@ -1539,6 +1563,41 @@ bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
 template <>
 dtime_t Cast::Operation(string_t input) {
 	return Time::FromCString(input.GetData(), input.GetSize());
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Time (ns)
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastErrorMessage::Operation(string_t input, dtime_ns_t &result, CastParameters &parameters) {
+	if (!TryCast::Operation<string_t, dtime_ns_t>(input, result, parameters.strict)) {
+		HandleCastError::AssignError(Time::ConversionError(input), parameters);
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
+	idx_t pos;
+	dtime_t micros;
+	int32_t nanos = 0;
+	if (!Time::TryConvertTime(input.GetData(), input.GetSize(), pos, micros, strict, &nanos)) {
+		return false;
+	}
+	if (!TryCast::Operation(micros, result)) {
+		return false;
+	}
+	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.micros, nanos, result.micros);
+}
+
+template <>
+dtime_ns_t Cast::Operation(string_t input) {
+	dtime_ns_t result;
+	if (!TryCast::Operation(input, result, false)) {
+		throw ConversionException(Time::ConversionError(input));
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

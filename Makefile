@@ -515,6 +515,7 @@ generate-files:
 	python3 scripts/generate_storage_info.py
 	python3 scripts/generate_enum_util.py
 	python3 scripts/generate_metric_enums.py
+	python3 scripts/generate_builtin_types.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

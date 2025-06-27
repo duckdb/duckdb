@@ -38,6 +38,20 @@ BoundCastInfo DefaultCasts::TimeCastSwitch(BindCastInput &input, const LogicalTy
 	}
 }
 
+BoundCastInfo DefaultCasts::TimeNsCastSwitch(BindCastInput &input, const LogicalType &src, const LogicalType &target) {
+	// now switch on the result type
+	switch (target.id()) {
+	case LogicalTypeId::VARCHAR:
+		// time (ns) to varchar
+		return BoundCastInfo(&VectorCastHelpers::StringCast<dtime_ns_t, duckdb::StringCast>);
+	case LogicalTypeId::TIME:
+		// time (ns) to time (µs)
+		return BoundCastInfo(&VectorCastHelpers::TemplatedCastLoop<dtime_ns_t, dtime_t, duckdb::Cast>);
+	default:
+		return TryVectorNullCast;
+	}
+}
+
 BoundCastInfo DefaultCasts::TimeTzCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
 	// now switch on the result type
@@ -121,6 +135,10 @@ BoundCastInfo DefaultCasts::TimestampNsCastSwitch(BindCastInput &input, const Lo
 		// timestamp (ns) to time
 		return BoundCastInfo(
 		    &VectorCastHelpers::TemplatedCastLoop<timestamp_t, dtime_t, duckdb::CastTimestampNsToTime>);
+	case LogicalTypeId::TIME_NS:
+		// timestamp (ns) to time (ns)
+		return BoundCastInfo(
+		    &VectorCastHelpers::TemplatedCastLoop<timestamp_ns_t, dtime_ns_t, duckdb::CastTimestampNsToTimeNs>);
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (ns) to timestamp (us)
 		return BoundCastInfo(

@@ -128,6 +128,7 @@ public:
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
+	DUCKDB_API static Value TIME_NS(dtime_ns_t time);
 	DUCKDB_API static Value TIMETZ(dtime_tz_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
@@ -327,6 +328,7 @@ private:
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
+		dtime_ns_t time_ns;
 		dtime_tz_t timetz;
 		timestamp_t timestamp;
 		timestamp_sec_t timestamp_s;
@@ -491,6 +493,8 @@ Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(dtime_ns_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(dtime_tz_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(timestamp_t value);
@@ -550,6 +554,8 @@ DUCKDB_API date_t Value::GetValue() const;
 template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
+DUCKDB_API dtime_ns_t Value::GetValue() const;
+template <>
 DUCKDB_API dtime_tz_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
@@ -600,6 +606,8 @@ template <>
 DUCKDB_API date_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API dtime_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API dtime_ns_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API dtime_tz_t Value::GetValueUnsafe() const;
 template <>
