@@ -233,6 +233,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;

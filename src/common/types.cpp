@@ -1417,7 +1417,8 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 LogicalType LogicalType::Copy() const {
 	LogicalType copy = *this;
-	if (type_info_) {
+	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
 		copy.type_info_ = type_info_->Copy();
 	}
 	return copy;
@@ -1425,7 +1426,8 @@ LogicalType LogicalType::Copy() const {
 
 LogicalType LogicalType::DeepCopy() const {
 	LogicalType copy = *this;
-	if (type_info_) {
+	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
 		copy.type_info_ = type_info_->DeepCopy();
 	}
 	return copy;

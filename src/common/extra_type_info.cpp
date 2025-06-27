@@ -462,6 +462,10 @@ shared_ptr<ExtraTypeInfo> AnyTypeInfo::Copy() const {
 	return make_shared_ptr<AnyTypeInfo>(*this);
 }
 
+shared_ptr<ExtraTypeInfo> AnyTypeInfo::DeepCopy() const {
+	return make_shared_ptr<AnyTypeInfo>(target_type.DeepCopy(), cast_score);
+}
+
 //===--------------------------------------------------------------------===//
 // Integer Literal Type Info
 //===--------------------------------------------------------------------===//
