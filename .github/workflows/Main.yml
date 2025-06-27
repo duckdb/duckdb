@@ -218,6 +218,7 @@ jobs:
 
  valgrind:
     name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
     needs: linux-configs
     env:
