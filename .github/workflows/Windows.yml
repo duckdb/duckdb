@@ -27,6 +27,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -38,6 +39,7 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -110,6 +112,15 @@ jobs:
       run: |
         test/Release/unittest.exe
 
+    - name: Test with VS2019 C++ stdlib
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        choco install wget -y --no-progress
+        wget -P test/Release https://blobs.duckdb.org/ci/msvcp140.dll
+        test/Release/unittest.exe
+        rm test/Release/msvcp140.dll
+
     - name: Tools Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
@@ -142,9 +153,9 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python scripts/amalgamation.py
-        choco install zip -y --force
-        zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
+        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
+        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
     - uses: actions/upload-artifact@v4
@@ -255,9 +266,9 @@ jobs:
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          python scripts/amalgamation.py
-         choco install zip -y --force
-         zip -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
-         zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
+         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
+         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
      - uses: actions/upload-artifact@v4

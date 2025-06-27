@@ -198,7 +198,7 @@ public:
 			error += StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i].row_start,
 			                            nodes[i].node->count.load());
 		}
-		throw InternalException("Could not find node in column segment tree!\n%s%s", error, Exception::GetStackTrace());
+		throw InternalException("Could not find node in column segment tree!\n%s", error);
 	}
 
 	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) {

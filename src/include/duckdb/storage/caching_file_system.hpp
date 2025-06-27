@@ -46,7 +46,7 @@ public:
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
-	DUCKDB_API time_t GetLastModifiedTime();
+	DUCKDB_API timestamp_t GetLastModifiedTime();
 	DUCKDB_API string GetVersionTag();
 	DUCKDB_API bool Validate() const;
 	DUCKDB_API bool CanSeek();
@@ -89,7 +89,7 @@ private:
 	//! The underlying FileHandle (optional)
 	unique_ptr<FileHandle> file_handle;
 	//! Last modified time and version tag (if FileHandle is opened)
-	time_t last_modified;
+	timestamp_t last_modified;
 	string version_tag;
 
 	//! Current position (if non-seeking reads)

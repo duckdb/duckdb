@@ -129,11 +129,15 @@ void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
 	}
 }
 
-void MbedTlsWrapper::SHA256State::AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len) {
+void MbedTlsWrapper::SHA256State::AddBytes(duckdb::const_data_ptr_t input_bytes, duckdb::idx_t len) {
 	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
 	if (mbedtls_sha256_update(context, input_bytes, len)) {
 		throw std::runtime_error("SHA256 Error");
 	}
+}
+
+void MbedTlsWrapper::SHA256State::AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len) {
+	AddBytes(duckdb::const_data_ptr_t(input_bytes), len);
 }
 
 void MbedTlsWrapper::SHA256State::AddSalt(unsigned char *salt, size_t salt_len) {

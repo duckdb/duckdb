@@ -26,6 +26,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -36,6 +37,7 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
