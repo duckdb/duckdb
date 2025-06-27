@@ -35,7 +35,7 @@ env:
 
 jobs:
  linux-debug:
-    name: Linux Debug (${{ matrix.tag }})
+    name: Linux RelDebug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     strategy:
@@ -73,11 +73,11 @@ jobs:
 
     - name: Build
       shell: bash
-      run:  make debug
+      run:  make reldebug
 
     - name: Output version info
       shell: bash
-      run: ./build/debug/duckdb -c "PRAGMA version;"
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -89,7 +89,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
+        python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
 
  linux-release:
     name: Linux Release (full suite)
