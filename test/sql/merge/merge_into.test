@@ -3,7 +3,7 @@
 # group: [merge]
 
 statement ok
-CREATE TABLE Stock(item_id int UNIQUE, balance int);
+CREATE TABLE Stock(item_id int, balance int);
 
 statement ok
 INSERT INTO Stock VALUES (10, 2200);
@@ -29,9 +29,20 @@ INSERT INTO Sale VALUES (10, 2200);
 statement ok
 INSERT INTO Sale VALUES (20, 1000);
 
+statement ok
+PRAGMA disable_optimizer
+
 # default behavior: UPDATE *, INSERT *
 query I
 MERGE INTO Stock USING Buy ON Stock.item_id = Buy.item_id
 WHEN MATCHED THEN UPDATE SET balance = balance + Buy.volume
 WHEN NOT MATCHED THEN INSERT VALUES (Buy.item_id, Buy.volume)
 ----
+2
+
+query II
+FROM Stock ORDER BY item_id
+----
+10	3200
+20	1900
+30	300

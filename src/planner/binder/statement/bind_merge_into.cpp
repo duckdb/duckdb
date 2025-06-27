@@ -120,6 +120,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// bind any extra columns necessary for CHECK constraints or indexes
 	//	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
+	merge_into->row_id_start = projection_expressions.size();
 	// finally bind the row id column and add them to the projection list
 	BindRowIdColumns(table, *get, projection_expressions);
 

@@ -44,6 +44,7 @@ public:
 	idx_t table_index;
 	vector<unique_ptr<Expression>> bound_defaults;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	idx_t row_id_start;
 
 	vector<unique_ptr<BoundMergeIntoAction>> when_matched_actions;
 	vector<unique_ptr<BoundMergeIntoAction>> when_not_matched_actions;

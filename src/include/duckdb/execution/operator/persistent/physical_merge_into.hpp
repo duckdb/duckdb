@@ -14,14 +14,12 @@ namespace duckdb {
 
 class MergeIntoOperator {
 public:
-	MergeIntoOperator(unique_ptr<Expression> condition_p, PhysicalOperator &op_p)
-	    : condition(std::move(condition_p)), op(op_p) {
-	}
-
 	//! Condition - or NULL if this should always be performed for the given action
 	unique_ptr<Expression> condition;
-	//! The operator to push data into for this action
-	PhysicalOperator &op;
+	//! The operator to push data into for this action (if any)
+	optional_ptr<PhysicalOperator> op;
+	//! Expressions to execute (if any) prior to sinking
+	vector<unique_ptr<Expression>> expressions;
 };
 
 class PhysicalMergeInto : public PhysicalOperator {
@@ -31,10 +29,12 @@ public:
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
 	                  vector<unique_ptr<MergeIntoOperator>> when_matched_actions,
-	                  vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions);
+	                  vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions,
+	                  idx_t row_id_index);
 
 	vector<unique_ptr<MergeIntoOperator>> when_matched_actions;
 	vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions;
+	idx_t row_id_index;
 
 public:
 	// Source interface
