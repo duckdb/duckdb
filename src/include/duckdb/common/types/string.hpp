@@ -14,28 +14,28 @@
 namespace duckdb {
 class String {
 public:
-	String(std::string str)
-	    : // NOLINT: allow implicit conversion
-	      owned_data(std::move(str)), data(owned_data.c_str()), size(owned_data.size()) {
+	// Owning constructors
+	String(std::string str) // NOLINT: allow implicit conversion
+	    : owned_data(std::move(str)), data(owned_data.c_str()), size(owned_data.size()) {
 	}
 
-	String(const char *ptr, const size_t len) : owned_data(ptr, len), data(nullptr), size(0) {
+	String(const char *ptr, const size_t len) : owned_data(ptr, len), data(ptr), size(len) {
 	}
 
-	String(const char *ptr)
-	    : // NOLINT: allow implicit conversion
-	      owned_data(ptr), data(nullptr), size(0) {
+	String(const char *ptr) // NOLINT: allow implicit conversion
+	    : String(ptr, strlen(ptr)) {
 	}
 
-	static String From(const char *ptr, const size_t len) {
+	// Non-owning constructors
+	static String CreateView(const char *ptr, const size_t len) {
 		String str;
 		str.data = ptr;
 		str.size = len;
 		return str;
 	}
 
-	static String From(const char *ptr) {
-		return From(ptr, strlen(ptr));
+	static String CreateView(const char *ptr) {
+		return CreateView(ptr, strlen(ptr));
 	}
 
 public:
@@ -95,11 +95,11 @@ public:
 
 public:
 	idx_t GetSize() const {
-		return IsOwned() ? owned_data.size() : size;
+		return size;
 	}
 
 	const char *GetData() const {
-		return IsOwned() ? owned_data.data() : data;
+		return data;
 	}
 
 	char operator[](const idx_t pos) const {
@@ -112,14 +112,7 @@ public:
 	}
 
 	bool empty() const {
-		if (IsOwned()) {
-			return false;
-		}
-
-		if (size == 0) {
-			return true;
-		}
-		return false;
+		return size == 0;
 	}
 
 	const char *c_str() const {
