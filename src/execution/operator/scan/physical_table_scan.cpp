@@ -82,6 +82,8 @@ public:
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
+	//! Where to continue the ordinality sequence in between chunks
+	idx_t ordinality_idx = 1;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
@@ -110,6 +112,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		function.in_out_function_final(context, data, chunk);
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
+
 	case OperatorResultType::BLOCKED: {
 		auto guard = g_state.Lock();
 		return g_state.BlockSource(guard, input.interrupt_state);
@@ -118,6 +121,12 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
 		// might be relying on current behaviour. Needs a rework that is not in scope
 		break;
+	}
+
+	if (this->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY) {
+		idx_t ordinality = chunk.size();
+		this->ordinality_data.SetOrdinality(chunk, l_state.ordinality_idx, ordinality);
+		l_state.ordinality_idx += ordinality;
 	}
 
 	if (chunk.size() == 0 && function.in_out_function_final) {

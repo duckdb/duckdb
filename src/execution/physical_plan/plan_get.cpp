@@ -77,6 +77,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		    Make<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
 		                                     op.estimated_cardinality, std::move(op.projected_input));
 		table_in_out.children.push_back(child);
+		auto &cast_table_in_out = table_in_out.Cast<PhysicalTableInOutFunction>();
+		cast_table_in_out.ordinality_data = op.ordinality_data;
 		return table_in_out;
 	}
 
@@ -143,6 +145,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		    op.returned_types, op.function, std::move(op.bind_data), op.returned_types, column_ids, vector<column_t>(),
 		    op.names, std::move(table_filters), op.estimated_cardinality, std::move(op.extra_info),
 		    std::move(op.parameters), std::move(op.virtual_columns));
+		auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
+		cast_table_scan.ordinality_data = op.ordinality_data;
 		// first check if an additional projection is necessary
 		if (column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -191,6 +195,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	                            std::move(op.extra_info), std::move(op.parameters), std::move(op.virtual_columns));
 	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
+	cast_table_scan.ordinality_data = op.ordinality_data;
 	if (filter) {
 		filter->children.push_back(table_scan);
 		return *filter;
