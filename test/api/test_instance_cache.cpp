@@ -51,32 +51,26 @@ struct DelayingStorageExtension : StorageExtension {
 	}
 };
 
-void log_time(const std::string &message) {
-	auto now = system_clock::now();
-	auto now_time_t = system_clock::to_time_t(now);
-	std::tm now_tm = *std::localtime(&now_time_t);
-	char buffer[20];
-	std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &now_tm);
-	std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &now_tm);
-	Printer::Print("[" + std::string(buffer) + "] " + message);
-}
-
-TEST_CASE("Test duckdb in memory database queued up after hanging md connection - with instance cache",
-          "[integration]") {
-
+TEST_CASE("Test db creation does not block instance cache", "[integration]") {
 	DBInstanceCache instance_cache;
-	DBConfig db_config;
-	db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
 
-	std::thread t1 {[&] {
+	std::thread t1 {[&instance_cache]() {
+		DBConfig db_config;
+		db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
 		instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 	}};
 	std::this_thread::sleep_for(std::chrono::seconds(1));
-	std::thread t2 {[&] {
-		log_time("Create second DB");
+
+	auto shutdown_was_quick_enough = false;
+	std::thread t2 {[&instance_cache, &shutdown_was_quick_enough]() {
+		const auto start_time = high_resolution_clock::now();
+		DBConfig db_config;
 		instance_cache.GetOrCreateInstance(":memory:", db_config, false);
-		log_time("Finished creation");
+		const auto end_time = high_resolution_clock::now();
+		shutdown_was_quick_enough = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count() < 1;
 	}};
+
 	t1.join();
 	t2.join();
+	REQUIRE(shutdown_was_quick_enough);
 }
