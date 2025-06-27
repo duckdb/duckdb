@@ -1,5 +1,9 @@
 # This code is based on code from Apache Spark under the license found in the LICENSE file located in the 'spark' folder.
 
+import array
+from collections.abc import Iterable
+import decimal
+from functools import reduce
 from typing import (
     cast,
     overload,
@@ -23,6 +27,7 @@ import re
 
 import duckdb
 from duckdb.typing import DuckDBPyType
+from ..errors.exceptions.base import PySparkTypeError
 
 from ..exception import ContributionsAcceptedError
 
@@ -1083,6 +1088,315 @@ _all_complex_types: Dict[str, Type[Union[ArrayType, MapType, StructType]]] = dic
 _FIXED_DECIMAL = re.compile(r"decimal\(\s*(\d+)\s*,\s*(-?\d+)\s*\)")
 _INTERVAL_DAYTIME = re.compile(r"interval (day|hour|minute|second)( to (day|hour|minute|second))?")
 
+
+# Mapping Python types to Spark SQL DataType
+_type_mappings = {
+    type(None): NullType,
+    bool: BooleanType,
+    int: LongType,
+    float: DoubleType,
+    str: StringType,
+    bytearray: BinaryType,
+    decimal.Decimal: DecimalType,
+    datetime.date: DateType,
+    datetime.datetime: TimestampType,  # can be TimestampNTZType
+    datetime.time: TimestampType,  # can be TimestampNTZType
+    datetime.timedelta: DayTimeIntervalType,
+    bytes: BinaryType,
+}
+
+
+# The list of all supported array typecodes, is stored here
+_array_type_mappings: Dict[str, Type[DataType]] = {
+    # Warning: Actual properties for float and double in C is not specified in C.
+    # On almost every system supported by both python and JVM, they are IEEE 754
+    # single-precision binary floating-point format and IEEE 754 double-precision
+    # binary floating-point format. And we do assume the same thing here for now.
+    "f": FloatType,
+    "d": DoubleType,
+}
+
+
+def _has_nulltype(dt: DataType) -> bool:
+    """Return whether there is a NullType in `dt` or not"""
+    if isinstance(dt, StructType):
+        return any(_has_nulltype(f.dataType) for f in dt.fields)
+    elif isinstance(dt, ArrayType):
+        return _has_nulltype((dt.elementType))
+    elif isinstance(dt, MapType):
+        return _has_nulltype(dt.keyType) or _has_nulltype(dt.valueType)
+    else:
+        return isinstance(dt, NullType)
+
+
+@overload
+def _merge_type(
+    a: StructType, b: StructType, name: Optional[str] = None
+) -> StructType: ...
+
+
+@overload
+def _merge_type(
+    a: ArrayType, b: ArrayType, name: Optional[str] = None
+) -> ArrayType: ...
+
+
+@overload
+def _merge_type(a: MapType, b: MapType, name: Optional[str] = None) -> MapType: ...
+
+
+@overload
+def _merge_type(a: DataType, b: DataType, name: Optional[str] = None) -> DataType: ...
+
+
+def _merge_type(
+    a: Union[StructType, ArrayType, MapType, DataType],
+    b: Union[StructType, ArrayType, MapType, DataType],
+    name: Optional[str] = None,
+) -> Union[StructType, ArrayType, MapType, DataType]:
+    if name is None:
+
+        def new_msg(msg: str) -> str:
+            return msg
+
+        def new_name(n: str) -> str:
+            return "field %s" % n
+
+    else:
+
+        def new_msg(msg: str) -> str:
+            return "%s: %s" % (name, msg)
+
+        def new_name(n: str) -> str:
+            return "field %s in %s" % (n, name)
+
+    if isinstance(a, NullType):
+        return b
+    elif isinstance(b, NullType):
+        return a
+    elif isinstance(a, TimestampType) and isinstance(b, TimestampNTZType):
+        return a
+    elif isinstance(a, TimestampNTZType) and isinstance(b, TimestampType):
+        return b
+    elif isinstance(a, AtomicType) and isinstance(b, StringType):
+        return b
+    elif isinstance(a, StringType) and isinstance(b, AtomicType):
+        return a
+    elif type(a) is not type(b):
+        # TODO: type cast (such as int -> long)
+        raise PySparkTypeError(
+            error_class="CANNOT_MERGE_TYPE",
+            message_parameters={
+                "data_type1": type(a).__name__,
+                "data_type2": type(b).__name__,
+            },
+        )
+
+    # same type
+    if isinstance(a, StructType):
+        nfs = dict((f.name, f.dataType) for f in cast(StructType, b).fields)
+        fields = [
+            StructField(
+                f.name,
+                _merge_type(
+                    f.dataType, nfs.get(f.name, NullType()), name=new_name(f.name)
+                ),
+            )
+            for f in a.fields
+        ]
+        names = set([f.name for f in fields])
+        for n in nfs:
+            if n not in names:
+                fields.append(StructField(n, nfs[n]))
+        return StructType(fields)
+
+    elif isinstance(a, ArrayType):
+        return ArrayType(
+            _merge_type(
+                a.elementType,
+                cast(ArrayType, b).elementType,
+                name="element in array %s" % name,
+            ),
+            True,
+        )
+
+    elif isinstance(a, MapType):
+        return MapType(
+            _merge_type(
+                a.keyType, cast(MapType, b).keyType, name="key of map %s" % name
+            ),
+            _merge_type(
+                a.valueType, cast(MapType, b).valueType, name="value of map %s" % name
+            ),
+            True,
+        )
+    else:
+        return a
+
+def _infer_type(
+    obj: Any,
+    infer_dict_as_struct: bool = False,
+    infer_array_from_first_element: bool = False,
+    prefer_timestamp_ntz: bool = False,
+) -> DataType:
+    """Infer the DataType from obj"""
+    if obj is None:
+        return NullType()
+
+    if hasattr(obj, "__UDT__"):
+        return obj.__UDT__
+
+    dataType = _type_mappings.get(type(obj))
+    if dataType is DecimalType:
+        # the precision and scale of `obj` may be different from row to row.
+        return DecimalType(38, 18)
+    if dataType is TimestampType and prefer_timestamp_ntz and obj.tzinfo is None:
+        return TimestampNTZType()
+    if dataType is DayTimeIntervalType:
+        return DayTimeIntervalType()
+    elif dataType is not None:
+        return dataType()
+
+    if isinstance(obj, dict):
+        if infer_dict_as_struct:
+            struct = StructType()
+            for key, value in obj.items():
+                if key is not None and value is not None:
+                    struct.add(
+                        key,
+                        _infer_type(
+                            value,
+                            infer_dict_as_struct,
+                            infer_array_from_first_element,
+                            prefer_timestamp_ntz,
+                        ),
+                        True,
+                    )
+            return struct
+        else:
+            for key, value in obj.items():
+                if key is not None and value is not None:
+                    return MapType(
+                        _infer_type(
+                            key,
+                            infer_dict_as_struct,
+                            infer_array_from_first_element,
+                            prefer_timestamp_ntz,
+                        ),
+                        _infer_type(
+                            value,
+                            infer_dict_as_struct,
+                            infer_array_from_first_element,
+                            prefer_timestamp_ntz,
+                        ),
+                        True,
+                    )
+            return MapType(NullType(), NullType(), True)
+    elif isinstance(obj, list):
+        if len(obj) > 0:
+            if infer_array_from_first_element:
+                return ArrayType(
+                    _infer_type(
+                        obj[0],
+                        infer_dict_as_struct,
+                        infer_array_from_first_element,
+                        prefer_timestamp_ntz,
+                    ),
+                    True,
+                )
+            else:
+                return ArrayType(
+                    reduce(
+                        _merge_type,
+                        (
+                            _infer_type(
+                                v,
+                                infer_dict_as_struct,
+                                infer_array_from_first_element,
+                                prefer_timestamp_ntz,
+                            )
+                            for v in obj
+                        ),
+                    ),
+                    True,
+                )
+        return ArrayType(NullType(), True)
+    elif isinstance(obj, array):
+        if obj.typecode in _array_type_mappings:
+            return ArrayType(_array_type_mappings[obj.typecode](), False)
+        else:
+            raise PySparkTypeError(
+                error_class="UNSUPPORTED_DATA_TYPE",
+                message_parameters={"data_type": f"array({obj.typecode})"},
+            )
+    else:
+        try:
+            return _infer_schema(
+                obj,
+                infer_dict_as_struct=infer_dict_as_struct,
+                infer_array_from_first_element=infer_array_from_first_element,
+            )
+        except TypeError:
+            raise PySparkTypeError(
+                error_class="UNSUPPORTED_DATA_TYPE",
+                message_parameters={"data_type": type(obj).__name__},
+            )
+
+
+def _infer_schema(
+    row: Any,
+    names: Optional[List[str]] = None,
+    infer_dict_as_struct: bool = False,
+    infer_array_from_first_element: bool = False,
+    prefer_timestamp_ntz: bool = False,
+) -> StructType:
+    """Infer the schema from dict/namedtuple/object"""
+    items: Iterable[Tuple[str, Any]]
+    if isinstance(row, dict):
+        items = sorted(row.items())
+
+    elif isinstance(row, (tuple, list)):
+        if hasattr(row, "__fields__"):  # Row
+            items = zip(row.__fields__, tuple(row))  # type: ignore[union-attr]
+        elif hasattr(row, "_fields"):  # namedtuple
+            items = zip(row._fields, tuple(row))  # type: ignore[union-attr]
+        else:
+            if names is None:
+                names = ["_%d" % i for i in range(1, len(row) + 1)]
+            elif len(names) < len(row):
+                names.extend("_%d" % i for i in range(len(names) + 1, len(row) + 1))
+            items = zip(names, row)
+
+    elif hasattr(row, "__dict__"):  # object
+        items = sorted(row.__dict__.items())
+
+    else:
+        raise PySparkTypeError(
+            error_class="CANNOT_INFER_SCHEMA_FOR_TYPE",
+            message_parameters={"data_type": type(row).__name__},
+        )
+
+    fields = []
+    for k, v in items:
+        try:
+            fields.append(
+                StructField(
+                    k,
+                    _infer_type(
+                        v,
+                        infer_dict_as_struct,
+                        infer_array_from_first_element,
+                        prefer_timestamp_ntz,
+                    ),
+                    True,
+                )
+            )
+        except TypeError:
+            raise PySparkTypeError(
+                error_class="CANNOT_INFER_TYPE_FOR_FIELD",
+                message_parameters={"field_name": k},
+            )
+    return StructType(fields)
 
 def _create_row(fields: Union["Row", List[str]], values: Union[Tuple[Any, ...], List[Any]]) -> "Row":
     row = Row(*values)
