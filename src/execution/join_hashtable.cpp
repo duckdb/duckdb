@@ -625,6 +625,9 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	idx_t remaining_count = count;
 	const auto *remaining_sel = FlatVector::IncrementalSelectionVector();
 
+	const auto all_valid = layout.AllValid();
+	const auto column_count = layout.ColumnCount();
+
 	if (PropagatesBuildSide(ht.join_type)) {
 		// if we propagate the build side, we may have added rows with NULL keys to the HT
 		// these may need to be filtered out depending on the comparison type (exactly like PrepareKeys does)
@@ -642,9 +645,9 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 			for (idx_t i = 0; i < remaining_count; i++) {
 				const auto idx = remaining_sel->get_index(i);
 				const auto valid =
-				    layout.AllValid() ||
+				    all_valid ||
 				    ValidityBytes::RowIsValid(
-				        ValidityBytes(lhs_row_locations[idx], layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx),
+				        ValidityBytes(lhs_row_locations[idx], column_count).GetValidityEntryUnsafe(entry_idx),
 				        idx_in_entry);
 				if (valid) {
 					state.remaining_sel.set_index(new_remaining_count++, idx);

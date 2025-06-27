@@ -116,7 +116,7 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				input.input_idx = HAS_ISEL ? isel.get_index_unsafe(i) : i;
 				auto sidx = HAS_SSEL ? ssel.get_index_unsafe(i) : i;
-				if (mask.RowIsValid(input.input_idx)) {
+				if (mask.RowIsValidUnsafe(input.input_idx)) {
 					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 				}
 			}
