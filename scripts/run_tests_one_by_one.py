@@ -315,7 +315,8 @@ if summarize_failures and len(error_container):
     for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
-        # set warnings
-        subprocess.run(f'echo "::warning::{i}: {error["test"]}"::{error["stderr"]}"', shell=True)
+        # set warnings if in CI
+        if 'CI' in os.environ:
+            subprocess.run(f'echo "::warning::{i}: {error["test"]}"::{error["stderr"]}"', shell=True)
 
 exit(1)
