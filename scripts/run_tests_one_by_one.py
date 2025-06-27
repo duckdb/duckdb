@@ -7,6 +7,7 @@ import tempfile
 import os
 import shutil
 import re
+import json
 
 
 class ErrorContainer:
