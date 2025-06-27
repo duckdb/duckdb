@@ -39,7 +39,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		// path does not exist in the list yet - no cache entry
 		return nullptr;
 	}
-	auto cache_entry = entry->second.get_future().get().lock();
+	auto cache_entry = entry->second.get().lock();
 	if (!cache_entry) {
 		// cache entry does not exist anymore - clean it up
 		db_instances.erase(entry);
@@ -55,7 +55,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 			// clear our cache entry
 			cache_entry.reset();
 			// try to lock it again
-			cache_entry = entry->second.get_future().get().lock();
+			cache_entry = entry->second.get().lock();
 		}
 		// the cache entry has now been deleted - clear it from the set of database instances and return
 		db_instances.erase(entry);
@@ -98,7 +98,8 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	}
 	shared_ptr<DuckDB> db_instance;
 	if (cache_entry) {
-		db_instances[abs_database_path] = std::promise<weak_ptr<DatabaseCacheEntry>> {};
+		std::promise<weak_ptr<DatabaseCacheEntry>> set_db_promise {};
+		db_instances[abs_database_path] = set_db_promise.get_future().share();
 		lock.unlock();
 
 		// Create the new instance after unlocking to avoid new ddb creation requests to be blocked
@@ -106,7 +107,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		// attach cache entry to the database
 		cache_entry->database = db_instance;
 		// set the promise to the cache entry
-		db_instances[abs_database_path].set_value(cache_entry);
+		set_db_promise.set_value(cache_entry);
 	} else {
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 	}

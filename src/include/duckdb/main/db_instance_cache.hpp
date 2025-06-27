@@ -43,7 +43,7 @@ public:
 
 private:
 	//! A map with the cached instances <absolute_path/instance>
-	unordered_map<string, std::promise<weak_ptr<DatabaseCacheEntry>>> db_instances;
+	unordered_map<string, std::shared_future<weak_ptr<DatabaseCacheEntry>>> db_instances;
 
 	//! Lock to alter cache
 	mutex cache_lock;

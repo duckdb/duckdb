@@ -54,10 +54,20 @@ struct DelayingStorageExtension : StorageExtension {
 TEST_CASE("Test db creation does not block instance cache", "[integration]") {
 	DBInstanceCache instance_cache;
 
-	std::thread t1 {[&instance_cache]() {
+	auto second_creation_was_quick = false;
+	std::thread t1 {[&instance_cache, &second_creation_was_quick]() {
 		DBConfig db_config;
+
 		db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
-		instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
+		auto stick_around = instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
+
+		const auto start_time = high_resolution_clock::now();
+		for (idx_t i = 0; i < 10; i++) {
+			db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
+			instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
+		}
+		const auto end_time = high_resolution_clock::now();
+		second_creation_was_quick = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count() < 1;
 	}};
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -72,5 +82,6 @@ TEST_CASE("Test db creation does not block instance cache", "[integration]") {
 
 	t1.join();
 	t2.join();
+	REQUIRE(second_creation_was_quick);
 	REQUIRE(shutdown_was_quick_enough);
 }
