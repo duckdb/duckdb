@@ -56,19 +56,13 @@ env:
 jobs:
  check-draft:
     name: Don't trigger further jobs to run on draft PR
-    runs-on: ubuntu-latest
-    outputs:
-      is_draft: ${{ steps.check-draft.outputs.is_draft }}
-    steps:
-    - id: check-draft
-      run: |
-        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+    runs-on: ubuntu-24.04
+    if: github.event.pull_request.draft == false
 
  linux-release-cli:
     needs: 
       - linux-extensions-64
       - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
 
     strategy:
       fail-fast: false
@@ -160,7 +154,6 @@ jobs:
     # Builds extensions for linux_amd64
     name: Linux Extensions (x64)
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -210,7 +203,6 @@ jobs:
     needs: 
       - linux-extensions-64
       - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     strategy:
       matrix:
         duckdb_arch: [linux_amd64_musl]
@@ -258,7 +250,6 @@ jobs:
     needs: 
       - linux-extensions-64
       - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     strategy:
       matrix:
         duckdb_arch: [linux_arm64]

@@ -42,18 +42,12 @@ jobs:
   check-draft:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
-    outputs:
-      is_draft: ${{ steps.check-draft.outputs.is_draft }}
-    steps:
-    - id: check-draft
-      run: |
-        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+    if: github.event.pull_request.draft == false
 
   format-check:
     name: Format Check
     runs-on: ubuntu-22.04
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     env:
       CC: gcc-10
       CXX: g++-10

@@ -32,17 +32,11 @@ jobs:
   check-draft:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
-    outputs:
-      is_draft: ${{ steps.check-draft.outputs.is_draft }}
-    steps:
-    - id: check-draft
-      run: |
-        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+    if: github.event.pull_request.draft == false
 
   linux-memory-leaks:
      name: Linux Memory Leaks
      needs: check-draft
-     if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
      runs-on: ubuntu-24.04
      env:
        GEN: ninja
@@ -301,7 +295,6 @@ jobs:
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
      needs: check-draft
-     if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
      runs-on: ubuntu-22.04
      env:
         GEN: ninja
@@ -600,8 +593,6 @@ jobs:
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
     needs: check-draft
-    if: false && ${{ needs.check-draft.outputs.is_draft == 'false' }}
-    
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -717,6 +708,5 @@ jobs:
 
   pyodide:
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     uses: ./.github/workflows/Pyodide.yml
     secrets: inherit

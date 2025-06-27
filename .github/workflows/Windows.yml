@@ -62,18 +62,12 @@ jobs:
  check-draft:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
-    outputs:
-      is_draft: ${{ steps.check-draft.outputs.is_draft }}
-    steps:
-    - id: check-draft
-      run: |
-        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+    if: github.event.pull_request.draft == false
 
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -175,7 +169,7 @@ jobs:
     needs: 
       - win-release-64
       - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
+    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
     runs-on: windows-latest
 
     steps:
@@ -217,7 +211,7 @@ jobs:
    needs: 
     - win-release-64
     - check-draft
-   if: ${{ needs.check-draft.outputs.is_draft == 'false' && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
+   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
    runs-on: windows-latest
 
    steps:
@@ -283,7 +277,7 @@ jobs:
      needs: 
       - win-release-64
       - check-draft
-     if: ${{ needs.check-draft.outputs.is_draft == 'false' && inputs.skip_tests != 'true' }}
+     if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
      steps:
        - uses: actions/checkout@v4
@@ -331,7 +325,6 @@ jobs:
    needs: 
     - win-release-64
     - check-draft
-   if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
    runs-on: windows-latest
    steps:
      - name: Keep \n line endings

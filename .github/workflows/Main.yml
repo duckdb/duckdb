@@ -39,17 +39,12 @@ jobs:
  check-draft:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
-    outputs:
-      is_draft: ${{ steps.check-draft.outputs.is_draft }}
-    steps:
-    - id: check-draft
-      run: |
-        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+    if: github.event.pull_request.draft == false
 
  linux-debug:
     name: Linux Debug (${{ matrix.tag }})
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' && !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -107,7 +102,6 @@ jobs:
  linux-release:
     name: Linux Release (full suite)
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-24.04
     env:
       GEN: ninja
@@ -301,7 +295,6 @@ jobs:
     name: Amalgamation Tests
     runs-on: ubuntu-22.04
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     env:
       CC: clang
       CXX: clang++
@@ -331,7 +324,6 @@ jobs:
     name: Tests with different configurations
     runs-on: ubuntu-24.04
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 

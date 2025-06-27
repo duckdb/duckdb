@@ -39,17 +39,11 @@ jobs:
   check-draft:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
-    outputs:
-      is_draft: ${{ steps.check-draft.outputs.is_draft }}
-    steps:
-    - id: check-draft
-      run: |
-        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+    if: github.event.pull_request.draft == false
 
   format_check:
     name: Julia Format Check
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +65,6 @@ jobs:
   main_julia:
     name: Julia ${{ matrix.version }}
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
