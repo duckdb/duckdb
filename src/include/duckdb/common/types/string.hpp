@@ -38,25 +38,6 @@ public:
 		return From(ptr, strlen(ptr));
 	}
 
-	// struct Str {
-	// 	bool is_owned;
-	// 	union {
-	// 		std::string owning;
-	// 		struct {
-	// 			char* ptr;
-	// 			size_t size;
-	// 		} non_owning;
-	// 	};
-	//
-	// 	size_t GetSize() const {
-	// 		if (is_owned) {
-	// 			return owning.size();
-	// 		} else {
-	// 			return non_owning.size;
-	// 		}
-	// 	}
-	// };
-
 public:
 	bool operator==(const String &other) const {
 		const idx_t this_size = GetSize();
@@ -95,11 +76,14 @@ public:
 		const idx_t this_size = GetSize();
 		const idx_t other_size = other.GetSize();
 
-		idx_t length = MinValue<idx_t>(this_size, other_size);
-		length += this_size != other_size;
+		const idx_t length = MinValue<idx_t>(this_size, other_size);
+
 		for (idx_t i = 0; i < length; i++) {
-			if (this_data[i] != other_data[i]) {
-				break;
+			if (this_data[i] < other_data[i]) {
+				return true;
+			}
+			if (this_data[i] > other_data[i]) {
+				return false;
 			}
 		}
 		return this_size < other_size;
