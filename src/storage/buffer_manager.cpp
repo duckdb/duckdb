@@ -89,6 +89,10 @@ bool BufferManager::HasTemporaryDirectory() const {
 	return false;
 }
 
+bool BufferManager::HasFilesInTemporaryDirectory() const {
+	return false;
+}
+
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, idx_t block_header_size,
                                                              unique_ptr<FileBuffer> &&, FileBufferType type) {
 	throw NotImplementedException("This type of BufferManager can not construct managed buffers");

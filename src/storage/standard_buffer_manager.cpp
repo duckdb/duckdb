@@ -11,6 +11,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 namespace duckdb {
 
@@ -43,7 +44,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
-		result = make_uniq<FileBuffer>(*tmp, type);
+		result = make_uniq<FileBuffer>(*tmp, type, block_header_size);
 	} else {
 		// non re-usable buffer: allocate a new buffer
 		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
@@ -473,13 +474,31 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	return result;
 }
 
-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
-                                                                          FileHandle &handle, idx_t position,
-                                                                          idx_t size,
-                                                                          unique_ptr<FileBuffer> reusable_buffer) {
+unique_ptr<FileBuffer>
+StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
+                                                   idx_t size, unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
 	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
 	                                                    std::move(reusable_buffer));
 	buffer->Read(handle, position);
+	return buffer;
+}
+
+unique_ptr<FileBuffer>
+StandardBufferManager::ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager, FileHandle &handle,
+                                                            idx_t position, idx_t size,
+                                                            unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
+
+	auto buffer =
+	    buffer_manager.ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, std::move(reusable_buffer));
+
+	//! Read nonce and tag from file.
+	uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+	handle.Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, position);
+
+	//! Read and decrypt the buffer.
+	buffer->Read(handle, position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+	EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), *buffer, encryption_metadata);
+
 	return buffer;
 }
 
@@ -515,15 +534,31 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	}
 
 	// Get the path to write to.
+	// These files are .block, and variable sized (larger then 256kb), as opposed to .tmp
 	auto path = GetTemporaryPath(block_id);
+
+	idx_t delta = 0;
+	if (db.config.options.temp_file_encryption) {
+		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+	}
+
 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
 
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
+	//! for very large buffers, we store the size of the buffer in plaintext.
 	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
-	buffer.Write(nullptr, *handle, sizeof(idx_t));
+
+	if (db.config.options.temp_file_encryption) {
+		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
+		//! Write the nonce (and tag for GCM).
+		handle->Write(nullptr, encryption_metadata, delta, sizeof(idx_t));
+	}
+
+	buffer.Write(nullptr, *handle, sizeof(idx_t) + delta);
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
@@ -544,7 +579,14 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+	unique_ptr<FileBuffer> buffer;
+	if (db.config.options.temp_file_encryption) {
+		buffer =
+		    ReadTemporaryBufferInternalEncrypted(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+	} else {
+		buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+	}
+
 	handle.reset();
 
 	// Delete the file and return the buffer.
@@ -565,6 +607,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 			return;
 		}
 	}
+
 	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockAllocSize();
@@ -587,6 +630,24 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 
 bool StandardBufferManager::HasTemporaryDirectory() const {
 	return !temporary_directory.path.empty();
+}
+
+bool StandardBufferManager::HasFilesInTemporaryDirectory() const {
+	if (temporary_directory.path.empty()) {
+		return false;
+	}
+
+	auto &fs = FileSystem::GetFileSystem(db);
+	bool found = false;
+	fs.ListFiles(temporary_directory.path, [&](const string &name, bool is_dir) {
+		if (is_dir) {
+			return;
+		}
+		if (StringUtil::EndsWith(name, ".block") || StringUtil::EndsWith(name, ".tmp")) {
+			found = true;
+		}
+	});
+	return found;
 }
 
 vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {

@@ -11,6 +11,53 @@
 
 namespace duckdb {
 
+template <idx_t input_size>
+struct EncryptionMetadata {
+	EncryptionMetadata() {
+		memset(metadata, 0, input_size);
+	}
+
+	data_ptr_t data() {
+		return metadata;
+	}
+
+	idx_t size() const {
+		return input_size;
+	}
+
+	data_t metadata[input_size];
+};
+
+struct EncryptionTag {
+	EncryptionTag() = default;
+
+	data_ptr_t data() {
+		return tag.data();
+	}
+
+	idx_t size() const {
+		return tag.size();
+	}
+
+private:
+	EncryptionMetadata<MainHeader::AES_TAG_LEN> tag;
+};
+
+struct EncryptionNonce {
+	EncryptionNonce() = default;
+
+	data_ptr_t data() {
+		return nonce.data();
+	}
+
+	idx_t size() const {
+		return nonce.size();
+	}
+
+private:
+	EncryptionMetadata<MainHeader::AES_NONCE_LEN> nonce;
+};
+
 class EncryptionEngine {
 
 public:
@@ -30,6 +77,15 @@ public:
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
 	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
 	                         uint64_t block_size, uint64_t delta);
+
+	// Encrypt Buffers (temp files)
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata);
+	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes, data_ptr_t metadata);
+
+	static void DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata);
+	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
+	                                          data_ptr_t metadata);
 };
 
 class EncryptionTypes {

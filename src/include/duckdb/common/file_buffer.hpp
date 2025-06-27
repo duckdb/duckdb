@@ -32,7 +32,7 @@ public:
 	//! DIRECT_IO
 	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size);
 	FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager);
-	FileBuffer(FileBuffer &source, FileBufferType type);
+	FileBuffer(FileBuffer &source, FileBufferType type, idx_t block_header_size);
 
 	virtual ~FileBuffer();
 
@@ -59,6 +59,10 @@ public:
 	// the requested user bytes. We then sector-align the result.
 	void Resize(uint64_t user_size, BlockManager &block_manager);
 	void Resize(BlockManager &block_manager);
+
+	idx_t GetHeaderSize() const {
+		return internal_size - size;
+	}
 
 	uint64_t AllocSize() const {
 		return internal_size;
