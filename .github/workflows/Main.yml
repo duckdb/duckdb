@@ -329,6 +329,8 @@ jobs:
  linux-configs:
     name: Tests with different configurations
     runs-on: ubuntu-24.04
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 
