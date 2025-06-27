@@ -39,7 +39,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		// path does not exist in the list yet - no cache entry
 		return nullptr;
 	}
-	auto cache_entry = entry->second.lock();
+	auto cache_entry = entry->second.get_future().get().lock();
 	if (!cache_entry) {
 		// cache entry does not exist anymore - clean it up
 		db_instances.erase(entry);
@@ -55,7 +55,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 			// clear our cache entry
 			cache_entry.reset();
 			// try to lock it again
-			cache_entry = entry->second.lock();
+			cache_entry = entry->second.get_future().get().lock();
 		}
 		// the cache entry has now been deleted - clear it from the set of database instances and return
 		db_instances.erase(entry);
@@ -76,7 +76,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 }
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
-                                                           bool cache_instance,
+                                                           const bool cache_instance, std::unique_lock<std::mutex> lock,
                                                            const std::function<void(DuckDB &)> &on_create) {
 	string abs_database_path;
 	if (config.file_system) {
@@ -85,10 +85,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		auto tmp_fs = FileSystem::CreateLocal();
 		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
 	}
-	if (db_instances.find(abs_database_path) != db_instances.end()) {
-		throw duckdb::Exception(ExceptionType::CONNECTION,
-		                        "Instance with path: " + abs_database_path + " already exists.");
-	}
+	D_ASSERT(db_instances.find(abs_database_path) == db_instances.end());
 	// Creates new instance
 	string instance_path = abs_database_path;
 	if (abs_database_path.rfind(IN_MEMORY_PATH, 0) == 0) {
@@ -99,13 +96,19 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		cache_entry = make_shared_ptr<DatabaseCacheEntry>();
 		config.db_cache_entry = cache_entry;
 	}
-	auto db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
+	shared_ptr<DuckDB> db_instance;
 	if (cache_entry) {
+		db_instances[abs_database_path] = std::promise<weak_ptr<DatabaseCacheEntry>> {};
+		lock.unlock();
+
+		// Create the new instance after unlocking to avoid new ddb creation requests to be blocked
+		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 		// attach cache entry to the database
 		cache_entry->database = db_instance;
-
-		// cache the entry in the db_instances map
-		db_instances[abs_database_path] = cache_entry;
+		// set the promise to the cache entry
+		db_instances[abs_database_path].set_value(cache_entry);
+	} else {
+		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 	}
 	if (on_create) {
 		on_create(*db_instance);
@@ -115,21 +118,22 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance,
                                                    const std::function<void(DuckDB &)> &on_create) {
-	lock_guard<mutex> l(cache_lock);
-	return CreateInstanceInternal(database, config, cache_instance, on_create);
+	unique_lock<mutex> lock(cache_lock);
+	return CreateInstanceInternal(database, config, cache_instance, std::move(lock), on_create);
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
                                                         bool cache_instance,
                                                         const std::function<void(DuckDB &)> &on_create) {
-	lock_guard<mutex> l(cache_lock);
+	unique_lock<mutex> lock(cache_lock);
 	if (cache_instance) {
 		auto instance = GetInstanceInternal(database, config_dict);
 		if (instance) {
 			return instance;
 		}
 	}
-	return CreateInstanceInternal(database, config_dict, cache_instance, on_create);
+
+	return CreateInstanceInternal(database, config_dict, cache_instance, std::move(lock), on_create);
 }
 
 } // namespace duckdb
