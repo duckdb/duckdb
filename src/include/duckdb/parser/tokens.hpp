@@ -43,6 +43,7 @@ class LoadStatement;
 class LogicalPlanStatement;
 class MultiStatement;
 class CopyDatabaseStatement;
+class MergeIntoStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -105,5 +106,6 @@ class ShowRef;
 // Other
 //===--------------------------------------------------------------------===//
 class SampleOptions;
+class MergeIntoAction;
 
 } // namespace duckdb

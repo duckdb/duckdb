@@ -53,12 +53,12 @@ matched_clause_action:
 	;
 
 not_matched_clause_action:
-	INSERT opt_insert_column_list VALUES expr_list_opt_comma
+	INSERT opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
 			n->insertCols = $2;
-			n->insertValues = $4;
+			n->insertValues = $5;
 			$$ = (PGNode *)n;
 		}
 	| DO NOTHING
@@ -72,10 +72,9 @@ not_matched_clause_action:
 matched_clause:
 	WHEN MATCHED opt_and_clause THEN matched_clause_action
 		{
-			PGMatchEntry *n = makeNode(PGMatchEntry);
+			PGMatchAction *n = (PGMatchAction *) $5;
 			n->when = MERGE_ACTION_WHEN_MATCHED;
 			n->andClause = $3;
-			n->action = $5;
 			$$ = (PGNode *)n;
 		}
 	;
@@ -83,10 +82,9 @@ matched_clause:
 not_matched_clause:
 	WHEN NOT MATCHED opt_and_clause THEN not_matched_clause_action
 		{
-			PGMatchEntry *n = makeNode(PGMatchEntry);
+			PGMatchAction *n = (PGMatchAction *) $6;
 			n->when = MERGE_ACTION_WHEN_NOT_MATCHED;
 			n->andClause = $4;
-			n->action = $6;
 			$$ = (PGNode *)n;
 		}
 

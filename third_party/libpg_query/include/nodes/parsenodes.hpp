@@ -2275,13 +2275,6 @@ typedef enum {
 	MERGE_ACTION_WHEN_NOT_MATCHED   /* WHEN NOT MATCHED */
 } MergeAction;
 
-typedef struct PGMatchEntry {
-	PGNodeTag type;
-	MergeAction when;             /* WHEN MATCHED or WHEN NOT MATCHED */
-	PGNode *andClause;            /* AND condition, if any */
-	PGNode *action;               /* action */
-} PGMatchEntry;
-
 typedef enum {
 	MERGE_ACTION_TYPE_UPDATE,		/* DO UPDATE SET */
 	MERGE_ACTION_TYPE_DELETE,		/* DELETE */
@@ -2291,11 +2284,12 @@ typedef enum {
 
 typedef struct PGMatchAction {
 	PGNodeTag type;
+	MergeAction when;             /* WHEN MATCHED or WHEN NOT MATCHED */
+	PGNode *andClause;            /* AND condition, if any */
 	MergeActionType actionType;   /* UPDATE, DELETE, etc */
 	PGList *updateTargets;        /* the target list for UPDATE */
 	PGList *insertCols;           /* optional: names of the target columns for insert */
 	PGList *insertValues;         /* values for insert */
 } PGMatchAction;
-
 
 }
