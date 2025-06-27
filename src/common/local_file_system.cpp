@@ -582,14 +582,14 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  handle.path, strerror(errno));
 	}
-	return s.st_mtime;
+	return Timestamp::FromTimeT(s.st_mtime);
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
@@ -1090,7 +1090,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
-time_t FiletimeToTimeT(FILETIME file_time) {
+timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
 	ULARGE_INTEGER ul;
 	ul.LowPart = file_time.dwLowDateTime;
@@ -1104,11 +1104,10 @@ time_t FiletimeToTimeT(FILETIME file_time) {
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
 	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
-	return result;
+	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 
 	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
@@ -1117,7 +1116,7 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
 	}
-	return FiletimeToTimeT(last_write);
+	return FiletimeToTimeStamp(last_write);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1217,8 +1216,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
 		options.emplace("file_size", Value::BIGINT(file_size_bytes));
 		// last modified time
-		auto last_modified_time = FiletimeToTimeT(ffd.ftLastWriteTime);
-		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(last_modified_time)));
+		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
+		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
 
 		// callback
 		callback(info);

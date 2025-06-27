@@ -427,7 +427,7 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
 
-time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
