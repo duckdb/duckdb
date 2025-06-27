@@ -123,8 +123,8 @@ public:
 	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
 
 	// Get the extension directory path
-	static string GetExtensionDirectoryPath(ClientContext &context);
-	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
+	static string GetExtensionDirectoryPath(ClientContext &context, idx_t &how_deep);
+	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs, idx_t &how_deep);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
@@ -243,7 +243,7 @@ private:
 	                                                                 ExtensionInstallOptions &options,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
-	static string DefaultExtensionFolder(FileSystem &fs);
+	static pair<string, idx_t> DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
