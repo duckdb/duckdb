@@ -13,8 +13,9 @@
 
 namespace duckdb {
 
-RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
-    : grouping_set(grouping_set_p), op(op_p) {
+RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p,
+                                                     bool all_groups_valid_p)
+    : grouping_set(grouping_set_p), op(op_p), all_groups_valid(all_groups_valid_p) {
 	auto groups_count = op.GroupCount();
 	for (idx_t i = 0; i < groups_count; i++) {
 		if (grouping_set.find(i) == grouping_set.end()) {
@@ -36,8 +37,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
 	auto aggregate_objects = AggregateObject::CreateAggregateObjects(op.bindings);
-	const auto align = !aggregate_objects.empty();
-	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), align);
+	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), all_groups_valid);
 	layout_ptr = std::move(layout);
 }
 
@@ -71,7 +71,7 @@ const TupleDataLayout &RadixPartitionedHashTable::GetLayout() const {
 unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(ClientContext &context, const idx_t capacity,
                                                                           const idx_t radix_bits) const {
 	return make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), group_types, op.payload_types,
-	                                            op.bindings, capacity, radix_bits);
+	                                            op.bindings, capacity, radix_bits, all_groups_valid);
 }
 
 //===--------------------------------------------------------------------===//
@@ -322,13 +322,15 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 		return InitialSinkRadixBits(); // Don't repartition unless we go external
 	}
 	// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
+	auto maximum = MAXIMUM_FINAL_SINK_RADIX_BITS;
 	if (row_width >= ROW_WIDTH_THRESHOLD_TWO) {
-		return MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
+		maximum = MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
 	}
 	if (row_width >= ROW_WIDTH_THRESHOLD_ONE) {
-		return MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
+		maximum = MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
 	}
-	return MAXIMUM_FINAL_SINK_RADIX_BITS;
+	return ClampValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(number_of_threads)),
+	                  InitialSinkRadixBits(), maximum);
 }
 
 idx_t RadixHTConfig::SinkCapacity() const {

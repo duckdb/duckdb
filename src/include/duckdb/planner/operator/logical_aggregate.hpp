@@ -38,6 +38,8 @@ public:
 	vector<unsafe_vector<idx_t>> grouping_functions;
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
+	//! Whether the inputs to all expression are non-NULL
+	bool all_expr_inputs_valid;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

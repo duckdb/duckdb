@@ -226,6 +226,7 @@ void LogicalAggregate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", groups);
 	serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
 	serializer.WritePropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", grouping_functions);
+	serializer.WritePropertyWithDefault<bool>(207, "all_expr_inputs_valid", all_expr_inputs_valid, false);
 }
 
 unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserializer) {
@@ -237,6 +238,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", result->grouping_sets);
 	deserializer.ReadPropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", result->grouping_functions);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "all_expr_inputs_valid", result->all_expr_inputs_valid, false);
 	return std::move(result);
 }
 

@@ -7,7 +7,7 @@ namespace duckdb {
 
 TupleDataLayout::TupleDataLayout()
     : sort_key_type(SortKeyType::INVALID), flag_width(0), data_width(0), aggr_width(0), row_width(0),
-      all_constant(true), heap_size_offset(0) {
+      all_constant(true), heap_size_offset(0), all_valid(false) {
 }
 
 TupleDataLayout TupleDataLayout::Copy() const {
@@ -31,10 +31,12 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	result.all_constant = this->all_constant;
 	result.heap_size_offset = this->heap_size_offset;
 	result.aggr_destructor_idxs = this->aggr_destructor_idxs;
+	result.all_valid = this->all_valid;
 	return result;
 }
 
-void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align, bool heap_offset_p) {
+void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool all_valid_p,
+                                 bool heap_offset_p) {
 	sort_key_type = SortKeyType::INVALID;
 	offsets.clear();
 	aggr_destructor_idxs.clear();
@@ -44,7 +46,8 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	variable_columns.clear();
 
 	// Null mask at the front - 1 bit per value.
-	flag_width = ValidityBytes::ValidityMaskSize(types.size());
+	all_valid = all_valid_p;
+	flag_width = ValidityBytes::ValidityMaskSize(all_valid ? 0 : types.size());
 	row_width = flag_width;
 
 	// Whether all columns are constant size.
@@ -98,6 +101,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	}
 
 	// Alignment padding for aggregates
+	const auto align = !aggregates_p.empty();
 #ifndef DUCKDB_ALLOW_UNDEFINED
 	if (align) {
 		row_width = AlignValue(row_width);
@@ -131,12 +135,12 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	}
 }
 
-void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool align, bool heap_offset_p) {
-	Initialize(std::move(types_p), Aggregates(), align, heap_offset_p);
+void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool all_valid, bool heap_offset) {
+	Initialize(std::move(types_p), Aggregates(), all_valid, heap_offset);
 }
 
-void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align, bool heap_offset_p) {
-	Initialize(vector<LogicalType>(), std::move(aggregates_p), align, heap_offset_p);
+void TupleDataLayout::Initialize(Aggregates aggregates_p) {
+	Initialize(vector<LogicalType>(), std::move(aggregates_p), false, false);
 }
 
 void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const LogicalType &type, bool has_payload) {
@@ -152,6 +156,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	all_constant = true;
 	heap_size_offset = DConstants::INVALID_INDEX;
 	aggr_destructor_idxs.clear();
+	all_valid = false;
 
 	// Type is determined by "create_sort_key", if it is <= 8 we get a bigint
 	types.push_back(type);

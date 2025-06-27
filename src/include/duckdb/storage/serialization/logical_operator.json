@@ -95,6 +95,12 @@
         "id": 206,
         "name": "grouping_functions",
         "type": "vector<unsafe_vector<idx_t>>"
+      },
+      {
+        "id": 207,
+        "name": "all_expr_inputs_valid",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["group_index", "aggregate_index", "expressions"]
