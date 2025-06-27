@@ -174,10 +174,10 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
     A polars IO plugin for DuckDB.
     """
     def source_generator(
-        with_columns: list[str] | None,
-        predicate: pl.Expr | None,
-        n_rows: int | None,
-        batch_size: int | None,
+        with_columns: Optional[list[str]],
+        predicate: Optional[pl.Expr],
+        n_rows: Optional[int],
+        batch_size: Optional[int],
     ) -> Iterator[pl.DataFrame]:
         duck_predicate = None
         relation_final = relation
