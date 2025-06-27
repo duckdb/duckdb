@@ -45,9 +45,20 @@ env:
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
+  check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    outputs:
+      is_draft: ${{ steps.check-draft.outputs.is_draft }}
+    steps:
+    - id: check-draft
+      run: |
+        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+
   regression-test-benchmark-runner:
     name: Regression Tests
-    if: ${{ github.event.pull_request.draft == false }}
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -185,7 +196,8 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
-    if: ${{ github.event.pull_request.draft == false }}
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -266,7 +278,8 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
-    if: ${{ github.event.pull_request.draft == false }}
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -309,7 +322,8 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
-    if: ${{ github.event.pull_request.draft == false }}
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10

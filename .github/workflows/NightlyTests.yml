@@ -12,7 +12,7 @@ on:
       - '!.github/workflows/NightlyTests.yml'
       - '!.github/patches/duckdb-wasm/**'
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -29,9 +29,20 @@ env:
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
+  check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    outputs:
+      is_draft: ${{ steps.check-draft.outputs.is_draft }}
+    steps:
+    - id: check-draft
+      run: |
+        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+
   linux-memory-leaks:
      name: Linux Memory Leaks
-     if: ${{ github.event.pull_request.draft == false }}
+     needs: check-draft
+     if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
      runs-on: ubuntu-24.04
      env:
        GEN: ninja
@@ -66,7 +77,6 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     needs: linux-memory-leaks
     env:
@@ -103,7 +113,6 @@ jobs:
 
   release-assert-osx:
     name: Release Assertions OSX
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: macos-latest
     needs: linux-memory-leaks
     env:
@@ -141,7 +150,6 @@ jobs:
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: macos-latest
     needs: linux-memory-leaks
     env:
@@ -179,7 +187,6 @@ jobs:
 
   smaller-binary:
     name: Smaller Binary
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
@@ -216,7 +223,6 @@ jobs:
 
   release-assert-clang:
     name: Release Assertions with Clang
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     needs: linux-memory-leaks
     env:
@@ -257,8 +263,8 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2_28_x86_64
-    if: ${{ github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature') }}
     needs: linux-memory-leaks
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
@@ -286,7 +292,6 @@ jobs:
 
   linux-tarball:
      name: Python 3 Tarball
-     if: ${{ github.event.pull_request.draft == false }}
      runs-on: ubuntu-22.04
      needs: linux-memory-leaks
      steps:
@@ -326,7 +331,8 @@ jobs:
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
-     if: ${{ github.event.pull_request.draft == false }}
+     needs: check-draft
+     if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
      runs-on: ubuntu-22.04
      env:
         GEN: ninja
@@ -361,7 +367,6 @@ jobs:
 
   sqllogic:
      name: Sqllogic tests
-     if: ${{ github.event.pull_request.draft == false }}
      runs-on: ubuntu-latest # Secondary task of this CI job is to test building duckdb on latest ubuntu
      needs: linux-memory-leaks
 
@@ -387,7 +392,6 @@ jobs:
 
   storage-initialization:
      name: Storage Initialization Verification
-     if: ${{ github.event.pull_request.draft == false }}
      runs-on: ubuntu-22.04
      needs: linux-memory-leaks
      env:
@@ -420,7 +424,6 @@ jobs:
 
   extension-updating:
     name: Extension updating test
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
@@ -471,7 +474,6 @@ jobs:
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
@@ -504,7 +506,6 @@ jobs:
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
-   if: ${{ github.event.pull_request.draft == false }}
    runs-on: ubuntu-22.04
    needs: linux-memory-leaks
    env:
@@ -586,7 +587,6 @@ jobs:
 
   block-sizes:
     name: Block Sizes
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
@@ -630,7 +630,9 @@ jobs:
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
-    if: false && github.event.pull_request.draft == false
+    needs: check-draft
+    if: false && ${{ needs.check-draft.outputs.is_draft == 'false' }}
+    
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -704,7 +706,6 @@ jobs:
 
   codecov:
     name: Code Coverage
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
@@ -746,6 +747,7 @@ jobs:
           if-no-files-found: error
 
   pyodide:
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     uses: ./.github/workflows/Pyodide.yml
     secrets: inherit
-    if: ${{ github.event.pull_request.draft == false }}

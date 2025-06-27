@@ -35,7 +35,7 @@ on:
 
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -57,10 +57,21 @@ env:
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
 
 jobs:
+ check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    outputs:
+      is_draft: ${{ steps.check-draft.outputs.is_draft }}
+    steps:
+    - id: check-draft
+      run: |
+        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    if: ${{ github.event.pull_request.draft == false }}
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -150,9 +161,11 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    if: ${{ github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
+    needs: 
+      - win-release-64
+      - check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
     runs-on: windows-latest
-    needs: win-release-64
 
     steps:
     - uses: actions/checkout@v4
@@ -190,9 +203,11 @@ jobs:
 
  win-release-arm64:
    name: Windows (ARM64)
-   if: ${{ github.event.pull_request.draft == false && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
+   needs: 
+    - win-release-64
+    - check-draft
+   if: ${{ needs.check-draft.outputs.is_draft == 'false' && (github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true') }}
    runs-on: windows-latest
-   needs: win-release-64
 
    steps:
      - uses: actions/checkout@v4
@@ -254,9 +269,11 @@ jobs:
 
  mingw:
      name: MinGW (64 Bit)
-     if: ${{ github.event.pull_request.draft == false && inputs.skip_tests != 'true' }}
+     needs: 
+      - win-release-64
+      - check-draft
+     if: ${{ needs.check-draft.outputs.is_draft == 'false' && inputs.skip_tests != 'true' }}
      runs-on: windows-latest
-     needs: win-release-64
      steps:
        - uses: actions/checkout@v4
          with:
@@ -300,9 +317,11 @@ jobs:
  win-extensions-64:
    # Builds extensions for windows_amd64
    name: Windows Extensions (64-bit)
-   if: ${{ github.event.pull_request.draft == false }}
+   needs: 
+    - win-release-64
+    - check-draft
+   if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
    runs-on: windows-latest
-   needs: win-release-64
    steps:
      - name: Keep \n line endings
        shell: bash
@@ -339,7 +358,6 @@ jobs:
 
  upload-windows_amd64-extensions:
     name: Upload windows_amd64 Extensions
-    if: ${{ github.event.pull_request.draft == false }}
     needs: win-extensions-64
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
@@ -350,7 +368,6 @@ jobs:
 
  win-packaged-upload:
    runs-on: windows-latest
-   if: ${{ github.event.pull_request.draft == false }}
    needs:
      - win-release-64
      - win-release-arm64

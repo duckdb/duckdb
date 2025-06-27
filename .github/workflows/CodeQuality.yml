@@ -20,7 +20,7 @@ on:
       - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'
@@ -37,11 +37,21 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
+  check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    outputs:
+      is_draft: ${{ steps.check-draft.outputs.is_draft }}
+    steps:
+    - id: check-draft
+      run: |
+        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+
   format-check:
     name: Format Check
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-22.04
-
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -76,7 +86,6 @@ jobs:
 
   enum-check:
     name: C Enum Integrity Check
-    if: ${{ github.event.pull_request.draft == false }}
     needs: format-check
     runs-on: ubuntu-22.04
 
@@ -102,7 +111,6 @@ jobs:
 
   tidy-check:
     name: Tidy Check
-    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     needs: format-check
 

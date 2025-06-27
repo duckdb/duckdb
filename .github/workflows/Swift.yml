@@ -19,7 +19,7 @@ on:
       - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -36,10 +36,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    outputs:
+      is_draft: ${{ steps.check-draft.outputs.is_draft }}
+    steps:
+    - id: check-draft
+      run: |
+        echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
 
   test-apple-platforms:
     name: Test Apple Platforms
-    if: ${{ github.event.pull_request.draft == false }}
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
     strategy:
       matrix:
         # destinations need to match selected version of Xcode
