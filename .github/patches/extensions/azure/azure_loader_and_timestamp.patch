@@ -1,5 +1,5 @@
 diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
-index 6ba3a0e..d8c79a3 100644
+index ee19c8c..4116a59 100644
 --- a/src/azure_blob_filesystem.cpp
 +++ b/src/azure_blob_filesystem.cpp
 @@ -12,7 +12,7 @@
@@ -11,6 +11,58 @@ index 6ba3a0e..d8c79a3 100644
  #include "duckdb/main/client_data.hpp"
  #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
  #include <azure/storage/blobs.hpp>
+@@ -151,8 +151,8 @@ vector<OpenFileInfo> AzureBlobStorageFileSystem::Glob(const string &path, FileOp
+ 				info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+ 				auto &options = info.extended_info->options;
+ 				options.emplace("file_size", Value::BIGINT(key.BlobSize));
+-				options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(
+-				                                     AzureStorageFileSystem::ToTimeT(key.Details.LastModified))));
++				options.emplace("last_modified", Value::TIMESTAMP(
++				                                     AzureStorageFileSystem::ToTimestamp(key.Details.LastModified)));
+ 				result.push_back(info);
+ 			}
+ 		}
+@@ -171,10 +171,10 @@ vector<OpenFileInfo> AzureBlobStorageFileSystem::Glob(const string &path, FileOp
+ void AzureBlobStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
+ 	auto &hfh = handle.Cast<AzureBlobStorageFileHandle>();
+ 
+-	if (hfh.length == 0 && hfh.last_modified == 0) {
++	if (hfh.length == 0 && hfh.last_modified == timestamp_t(0)) {
+ 		auto res = hfh.blob_client.GetProperties();
+ 		hfh.length = res.Value.BlobSize;
+-		hfh.last_modified = ToTimeT(res.Value.LastModified);
++		hfh.last_modified = ToTimestamp(res.Value.LastModified);
+ 	}
+ }
+ 
+diff --git a/src/azure_dfs_filesystem.cpp b/src/azure_dfs_filesystem.cpp
+index 5feb445..af8f03c 100644
+--- a/src/azure_dfs_filesystem.cpp
++++ b/src/azure_dfs_filesystem.cpp
+@@ -67,8 +67,8 @@ static void Walk(const Azure::Storage::Files::DataLake::DataLakeFileSystemClient
+ 					info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+ 					auto &options = info.extended_info->options;
+ 					options.emplace("file_size", Value::BIGINT(elt.FileSize));
+-					options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(
+-					                                     AzureStorageFileSystem::ToTimeT(elt.LastModified))));
++					options.emplace("last_modified", Value::TIMESTAMP(
++					                                     AzureStorageFileSystem::ToTimestamp(elt.LastModified)));
+ 					out_result->push_back(info);
+ 				}
+ 			}
+@@ -172,10 +172,10 @@ vector<OpenFileInfo> AzureDfsStorageFileSystem::Glob(const string &path, FileOpe
+ void AzureDfsStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
+ 	auto &hfh = handle.Cast<AzureDfsStorageFileHandle>();
+ 
+-	if (hfh.length == 0 && hfh.last_modified == 0) {
++	if (hfh.length == 0 && hfh.last_modified == timestamp_t(0)) {
+ 		auto res = hfh.file_client.GetProperties();
+ 		hfh.length = res.Value.FileSize;
+-		hfh.last_modified = ToTimeT(res.Value.LastModified);
++		hfh.last_modified = ToTimestamp(res.Value.LastModified);
+ 	}
+ }
+ 
 diff --git a/src/azure_extension.cpp b/src/azure_extension.cpp
 index 5ce0b8d..d0758e2 100644
 --- a/src/azure_extension.cpp
@@ -70,6 +122,41 @@ index 5ce0b8d..d0758e2 100644
 -#endif
 +}
 \ No newline at end of file
+diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
+index d7ed201..07f84eb 100644
+--- a/src/azure_filesystem.cpp
++++ b/src/azure_filesystem.cpp
+@@ -40,7 +40,7 @@ AzureFileHandle::AzureFileHandle(AzureStorageFileSystem &fs, const OpenFileInfo
+ 		}
+ 		auto entry2 = info.extended_info->options.find("last_modified");
+ 		if (entry2 != info.extended_info->options.end()) {
+-			last_modified = Timestamp::ToTimeT(entry2->second.GetValue<timestamp_t>());
++			last_modified = entry2->second.GetValue<timestamp_t>();
+ 		}
+ 	}
+ }
+@@ -93,7 +93,7 @@ int64_t AzureStorageFileSystem::GetFileSize(FileHandle &handle) {
+ 	return afh.length;
+ }
+ 
+-time_t AzureStorageFileSystem::GetLastModifiedTime(FileHandle &handle) {
++timestamp_t AzureStorageFileSystem::GetLastModifiedTime(FileHandle &handle) {
+ 	auto &afh = handle.Cast<AzureFileHandle>();
+ 	return afh.last_modified;
+ }
+@@ -228,9 +228,10 @@ AzureReadOptions AzureStorageFileSystem::ParseAzureReadOptions(optional_ptr<File
+ 	return options;
+ }
+ 
+-time_t AzureStorageFileSystem::ToTimeT(const Azure::DateTime &dt) {
++timestamp_t AzureStorageFileSystem::ToTimestamp(const Azure::DateTime &dt) {
+ 	auto time_point = static_cast<std::chrono::system_clock::time_point>(dt);
+-	return std::chrono::system_clock::to_time_t(time_point);
++	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(time_point.time_since_epoch()).count();
++	return timestamp_t(micros);
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/azure_secret.cpp b/src/azure_secret.cpp
 index e9f08f0..7b1919a 100644
 --- a/src/azure_secret.cpp
@@ -144,6 +231,37 @@ index c9be37e..1a8404f 100644
  	std::string Name() override;
  };
  
+diff --git a/src/include/azure_filesystem.hpp b/src/include/azure_filesystem.hpp
+index 32c26bf..e29cf9a 100644
+--- a/src/include/azure_filesystem.hpp
++++ b/src/include/azure_filesystem.hpp
+@@ -61,7 +61,7 @@ public:
+ 
+ 	// File info
+ 	idx_t length;
+-	time_t last_modified;
++	timestamp_t last_modified;
+ 
+ 	// Read buffer
+ 	duckdb::unique_ptr<data_t[]> read_buffer;
+@@ -93,7 +93,7 @@ public:
+ 		return false;
+ 	}
+ 	int64_t GetFileSize(FileHandle &handle) override;
+-	time_t GetLastModifiedTime(FileHandle &handle) override;
++	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+ 	void Seek(FileHandle &handle, idx_t location) override;
+ 	void FileSync(FileHandle &handle) override;
+ 
+@@ -125,7 +125,7 @@ protected:
+ 	static AzureReadOptions ParseAzureReadOptions(optional_ptr<FileOpener> opener);
+ 
+ public:
+-	static time_t ToTimeT(const Azure::DateTime &dt);
++	static timestamp_t ToTimestamp(const Azure::DateTime &dt);
+ };
+ 
+ } // namespace duckdb
 diff --git a/src/include/azure_secret.hpp b/src/include/azure_secret.hpp
 index 3dc39e9..6b81816 100644
 --- a/src/include/azure_secret.hpp
