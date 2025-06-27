@@ -1046,6 +1046,23 @@ void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Pin Threads
+//===----------------------------------------------------------------------===//
+void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.pin_threads = EnumUtil::FromString<ThreadPinMode>(str_input);
+}
+
+void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.pin_threads = DBConfig().options.pin_threads;
+}
+
+Value PinThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.pin_threads)));
+}
+
+//===----------------------------------------------------------------------===//
 // Pivot Filter Threshold
 //===----------------------------------------------------------------------===//
 void PivotFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
