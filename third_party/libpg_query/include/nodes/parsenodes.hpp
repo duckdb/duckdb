@@ -2256,4 +2256,46 @@ typedef struct PGCommentOnStmt {
 	PGNode *column_expr;
 } PGCommentOnStmt;
 
+/* ----------------------
+ *		Merge Into Statement
+ * ----------------------
+ */
+
+typedef struct PGMergeIntoStmt {
+	PGNodeTag type;
+	PGRangeVar *targetTable;     /* relation to merge into */
+	PGNode *source;              /* source table or query */
+	PGNode *joinCondition;       /* qualifications */
+	PGList *matchActions;        /* list of match actions */
+	PGWithClause *withClause;    /* WITH clause */
+} PGMergeIntoStmt;
+
+typedef enum {
+	MERGE_ACTION_WHEN_MATCHED,		/* WHEN MATCHED */
+	MERGE_ACTION_WHEN_NOT_MATCHED   /* WHEN NOT MATCHED */
+} MergeAction;
+
+typedef struct PGMatchEntry {
+	PGNodeTag type;
+	MergeAction when;             /* WHEN MATCHED or WHEN NOT MATCHED */
+	PGNode *andClause;            /* AND condition, if any */
+	PGNode *action;               /* action */
+} PGMatchEntry;
+
+typedef enum {
+	MERGE_ACTION_TYPE_UPDATE,		/* DO UPDATE SET */
+	MERGE_ACTION_TYPE_DELETE,		/* DELETE */
+	MERGE_ACTION_TYPE_INSERT,		/* INSERT */
+	MERGE_ACTION_TYPE_DO_NOTHING	/* DO NOTHING */
+} MergeActionType;
+
+typedef struct PGMatchAction {
+	PGNodeTag type;
+	MergeActionType actionType;   /* UPDATE, DELETE, etc */
+	PGList *updateTargets;        /* the target list for UPDATE */
+	PGList *insertCols;           /* optional: names of the target columns for insert */
+	PGList *insertValues;         /* values for insert */
+} PGMatchAction;
+
+
 }

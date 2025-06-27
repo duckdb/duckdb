@@ -1,0 +1,37 @@
+# name: test/sql/merge/merge_into.test
+# description: Test MERGE INTO
+# group: [merge]
+
+statement ok
+CREATE TABLE Stock(item_id int UNIQUE, balance int);
+
+statement ok
+INSERT INTO Stock VALUES (10, 2200);
+
+statement ok
+INSERT INTO Stock VALUES (20, 1900);
+
+statement ok
+CREATE TABLE Buy(item_id int, volume int);
+
+statement ok
+INSERT INTO Buy values(10, 1000);
+
+statement ok
+INSERT INTO Buy values(30, 300);
+
+statement ok
+CREATE TABLE Sale(item_id int, volume int);
+
+statement ok
+INSERT INTO Sale VALUES (10, 2200);
+
+statement ok
+INSERT INTO Sale VALUES (20, 1000);
+
+# default behavior: UPDATE *, INSERT *
+query I
+MERGE INTO Stock USING Buy ON Stock.item_id = Buy.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + Buy.volume
+WHEN NOT MATCHED THEN INSERT VALUES (Buy.item_id, Buy.volume)
+----

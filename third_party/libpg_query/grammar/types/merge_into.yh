@@ -1,0 +1,2 @@
+%type <list> merge_match_list opt_insert_column_list
+%type <node> matched_or_not_matched_clause matched_clause not_matched_clause opt_and_clause matched_clause_action not_matched_clause_action
