@@ -2,8 +2,6 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -125,7 +123,9 @@ duckdb::string_t StringAsTime(dtime_t input, Vector &vector) {
 	idx_t nano_length = 0;
 	if (picos) {
 		//	If there are ps, we need all the µs
-		TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		if (!time[3]) {
+			TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		}
 		time_length = 15;
 		nano_length = 6;
 		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));

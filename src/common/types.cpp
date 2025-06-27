@@ -1271,22 +1271,23 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 23;
 	// date/time/timestamp
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 		return 50;
-	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME_NS:
 		return 51;
-	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::DATE:
 		return 52;
-	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return 53;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return 54;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return 54;
-	case LogicalTypeId::TIMESTAMP_NS:
 		return 55;
-	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::TIMESTAMP_NS:
 		return 56;
+	case LogicalTypeId::INTERVAL:
+		return 58;
 	// text/character strings
 	case LogicalTypeId::CHAR:
 		return 75;
