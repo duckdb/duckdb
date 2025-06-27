@@ -1,0 +1,60 @@
+[
+  {
+    "test": "test/sql/aggregate/aggregates/histogram_table_function.test",
+    "return_code": 1,
+    "stdout": "Filters: test/sql/aggregate/aggregates/histogram_table_function.test\n\r[0/1] (0%): test/sql/aggregate/aggregates/histogram_table_function.test         \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nunittest is a Catch v2.13.7 host application.\nRun with -? for options\n\n-------------------------------------------------------------------------------\ntest/sql/aggregate/aggregates/histogram_table_function.test\n-------------------------------------------------------------------------------\n/Users/zuleykhapavlichenkova/Documents/duckdb_clean/test/sqlite/test_sqllogictest.cpp:225\n...............................................................................\n\ntest/sql/aggregate/aggregates/histogram_table_function.test:28: FAILED:\nexplicitly with message:\n  0\n\n\r[1/1] (100%): test/sql/aggregate/aggregates/histogram_table_function.test       \n===============================================================================\ntest cases:  1 |  0 passed | 1 failed\nassertions: 11 | 10 passed | 1 failed\n\n",
+    "stderr": "SELECT * FROM histogram_values(integers, k);\n================================================================================\nActual result:\n================================================================================\nBinder Error: Referenced column \"k\" not found in FROM clause!\nCandidate bindings: \"i\"\n\nLINE 1: SELECT * FROM histogram_values(integers, k)\n                      ^\n"
+  },
+  {
+    "test": "test/sql/copy/csv/test_date.test",
+    "return_code": 1,
+    "stdout": "Filters: test/sql/copy/csv/test_date.test\n\r[0/1] (0%): test/sql/copy/csv/test_date.test                                    \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nunittest is a Catch v2.13.7 host application.\nRun with -? for options\n\n-------------------------------------------------------------------------------\ntest/sql/copy/csv/test_date.test\n-------------------------------------------------------------------------------\n/Users/zuleykhapavlichenkova/Documents/duckdb_clean/test/sqlite/test_sqllogictest.cpp:225\n...............................................................................\n\ntest/sql/copy/csv/test_date.test:11: FAILED:\nexplicitly with message:\n  0\n\n\r[1/1] (100%): test/sql/copy/csv/test_date.test                                  \n===============================================================================\ntest cases: 1 | 1 failed\nassertions: 3 | 2 passed | 1 failed\n\n",
+    "stderr": "COPY date_test FROM 'data/csv/test/date.csv';\n================================================================================\nMismatch on row 1, column Count(index 1)\n1 <> 1dfgsdfg\n================================================================================\nExpected result:\n================================================================================\n1dfgsdfg\n\n================================================================================\nActual result:\n================================================================================\n1\n\n"
+  },
+  {
+    "test": "test/sql/cte/recursive_cte_key_variant.test",
+    "return_code": 1,
+    "stdout": "Filters: test/sql/cte/recursive_cte_key_variant.test\n\r[0/1] (0%): test/sql/cte/recursive_cte_key_variant.test                         \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nunittest is a Catch v2.13.7 host application.\nRun with -? for options\n\n-------------------------------------------------------------------------------\ntest/sql/cte/recursive_cte_key_variant.test\n-------------------------------------------------------------------------------\n/Users/zuleykhapavlichenkova/Documents/duckdb_clean/test/sqlite/test_sqllogictest.cpp:225\n...............................................................................\n\ntest/sql/cte/recursive_cte_key_variant.test:8: FAILED:\nexplicitly with message:\n  0\n\n\r[1/1] (100%): test/sql/cte/recursive_cte_key_variant.test                       \n===============================================================================\ntest cases: 1 | 1 failed\nassertions: 2 | 1 passed | 1 failed\n\n",
+    "stderr": "CREATE TABLE tbl();\n================================================================================\nParser Error: Table must have at least one column!\n"
+  }
+]
+
+benchmark/micro/aggregate/grouped_distinct.benchmark
+Old timing: 0.207187
+New timing: 0.331802
+
+benchmark/micro/aggregate/simple_distinct.benchmark
+Old timing: 0.163412
+New timing: 0.291126
+
+benchmark/micro/cast/cast_list_string.benchmark
+Old timing: 0.427477
+New timing: 0.557096
+
+benchmark/micro/cast/cast_string_list.benchmark
+Old timing: 0.754986
+New timing: 1.356877
+
+benchmark/micro/cast/cast_string_map.benchmark
+Old timing: 2.435656
+New timing: 3.358688
+
+benchmark/micro/cast/cast_string_struct.benchmark
+Old timing: 0.735615
+New timing: 2.885101
+
+benchmark/micro/cast/cast_string_struct_missing_val.benchmark
+Old timing: 0.75234
+New timing: 2.904506
+
+benchmark/micro/cast/cast_struct_string.benchmark
+Old timing: 2.189797
+New timing: 3.129946
+
+benchmark/micro/join/range_join_small_rhs.benchmark
+Old timing: 1.627061
+New timing: 2.189695
+
+benchmark/micro/list/list_value.benchmark
+Old timing: 2.172754
+New timing: 3.144249
