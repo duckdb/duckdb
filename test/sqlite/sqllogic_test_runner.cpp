@@ -23,12 +23,54 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	config->options.allow_unredacted_secrets = true;
 	config->options.load_extensions = false;
 
+	auto &test_config = TestConfiguration::Get();
+	loading_mode = test_config.GetExtensionLoadingMode();
+	install_mode = test_config.GetExtensionInstallMode();
+
+	config->options.autoload_known_extensions = false;
+	config->options.autoinstall_known_extensions = false;
+	config->options.allow_unsigned_extensions = true;
+	local_extension_repo = "";
+
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
-	if (!env_var) {
-		config->options.autoload_known_extensions = false;
-	} else {
+	if (env_var) {
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
+	}
+
+	switch (loading_mode) {
+	case TestConfiguration::ExtensionLoadingMode::NONE: {
+		break;
+	}
+	case TestConfiguration::ExtensionLoadingMode::AUTOLOAD_ONLY:
+	case TestConfiguration::ExtensionLoadingMode::ALL: {
+		config->options.autoload_known_extensions = true;
+		break;
+	}
+	}
+	if (config->options.autoinstall_known_extensions) {
+		switch (install_mode) {
+		case TestConfiguration::ExtensionInstallMode::NONE: {
+			break;
+		}
+		case TestConfiguration::ExtensionInstallMode::LOCAL_ONLY:
+		case TestConfiguration::ExtensionInstallMode::EITHER: {
+			config->options.autoinstall_known_extensions = true;
+			if (local_extension_repo.empty()) {
+				local_extension_repo = "build/release/repository";
+			}
+			break;
+		}
+		case TestConfiguration::ExtensionInstallMode::REMOTE_NO_CHECKS:
+		case TestConfiguration::ExtensionInstallMode::REMOTE_ONLY: {
+			config->options.allow_unsigned_extensions = false;
+			config->options.autoinstall_known_extensions = true;
+			if (local_extension_repo.empty()) {
+				local_extension_repo = "http://extensions.duckdb.org";
+			}
+			break;
+		}
+		}
 	}
 }
 
@@ -565,7 +607,54 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 	}
 
-	if (!config->options.autoload_known_extensions) {
+	bool could_autoload = false;
+	if (config->options.autoload_known_extensions && !excluded_from_autoloading) {
+		could_autoload = true;
+	}
+
+	if (could_autoload) {
+		bool install_has_error = false;
+		if (install_mode == TestConfiguration::ExtensionInstallMode::LOCAL_ONLY ||
+		    install_mode == TestConfiguration::ExtensionInstallMode::EITHER) {
+			install_has_error |= con->Query("INSTALL " + param + " FROM '" + local_extension_repo + "';")->HasError();
+		}
+		if (install_mode == TestConfiguration::ExtensionInstallMode::EITHER ||
+		    install_mode == TestConfiguration::ExtensionInstallMode::REMOTE_ONLY) {
+			install_has_error |= con->Query("INSTALL " + param + ";")->HasError();
+		}
+		if (install_has_error) {
+			return RequireResult::MISSING;
+		} else {
+			return RequireResult::PRESENT;
+		}
+	} else {
+		bool install_has_error = false;
+		if (install_mode == TestConfiguration::ExtensionInstallMode::LOCAL_ONLY ||
+		    install_mode == TestConfiguration::ExtensionInstallMode::EITHER) {
+			install_has_error |= con->Query("INSTALL " + param + " FROM '" + local_extension_repo + "';")->HasError();
+		}
+		if (install_mode == TestConfiguration::ExtensionInstallMode::EITHER ||
+		    install_mode == TestConfiguration::ExtensionInstallMode::REMOTE_ONLY) {
+			install_has_error |= con->Query("INSTALL " + param + ";")->HasError();
+		}
+		if (install_has_error) {
+			return RequireResult::MISSING;
+		}
+		if (install_mode == TestConfiguration::ExtensionInstallMode::REMOTE_NO_CHECKS) {
+			bool has_error = false;
+			has_error |= con->Query("FORCE INSTALL " + param + " FROM '" + local_extension_repo + "';")->HasError();
+			if (!has_error) {
+				ExtensionHelper::LoadExtension(*db, param);
+			}
+			// In case of REMOTE_NO_CHECKS, we just move forward, and let the test eventually fail
+			return RequireResult::PRESENT;
+		}
+		if (loading_mode == TestConfiguration::ExtensionLoadingMode::ALL) {
+			if (!con->Query("LOAD " + param + ";")->HasError()) {
+				extensions.insert(param);
+				return RequireResult::PRESENT;
+			}
+		}
 		auto result = ExtensionHelper::LoadExtension(*db, param);
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
@@ -576,8 +665,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			// extension known but not build: skip this test
 			return RequireResult::MISSING;
 		}
-	} else if (excluded_from_autoloading) {
-		return RequireResult::MISSING;
 	}
 	return RequireResult::PRESENT;
 }
