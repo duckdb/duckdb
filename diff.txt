@@ -1,0 +1,607 @@
+diff --git a/src/catalog/catalog.cpp b/src/catalog/catalog.cpp
+index 73e844da81..f02f2ecaf3 100644
+--- a/src/catalog/catalog.cpp
++++ b/src/catalog/catalog.cpp
+@@ -534,11 +534,12 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
+ 	return false;
+ }
+ 
+-void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
++void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name) {
+ #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+ 	auto &dbconfig = DBConfig::GetConfig(context);
+ 	if (dbconfig.options.autoload_known_extensions) {
+-		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
++		auto extension_name =
++		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
+ 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+ 			ExtensionHelper::AutoLoadExtension(context, extension_name);
+ 			return;
+@@ -546,7 +547,7 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string
+ 	}
+ #endif
+ 
+-	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
++	throw Catalog::UnrecognizedConfigurationError(context, configuration_name.ToStdString());
+ }
+ 
+ static bool IsAutoloadableFunction(CatalogType type) {
+diff --git a/src/common/exception_format_value.cpp b/src/common/exception_format_value.cpp
+index ddef4e10c8..1b61c3c354 100644
+--- a/src/common/exception_format_value.cpp
++++ b/src/common/exception_format_value.cpp
+@@ -6,6 +6,7 @@
+ #include "duckdb/common/types/hugeint.hpp"
+ #include "duckdb/common/types/uhugeint.hpp"
+ #include "duckdb/parser/keyword_helper.hpp"
++#include "duckdb/common/types/string.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -24,6 +25,9 @@ ExceptionFormatValue::ExceptionFormatValue(uhugeint_t uhuge_val)
+ ExceptionFormatValue::ExceptionFormatValue(string str_val)
+     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val)) {
+ }
++ExceptionFormatValue::ExceptionFormatValue(String str_val)
++    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val.ToStdString())) {
++}
+ 
+ template <>
+ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
+@@ -46,6 +50,10 @@ template <>
+ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
+ 	return ExceptionFormatValue(std::move(value));
+ }
++template <>
++ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value) {
++	return ExceptionFormatValue(std::move(value));
++}
+ 
+ template <>
+ ExceptionFormatValue
+diff --git a/src/common/types/value.cpp b/src/common/types/value.cpp
+index 19cb67d72c..bd19254346 100644
+--- a/src/common/types/value.cpp
++++ b/src/common/types/value.cpp
+@@ -27,6 +27,7 @@
+ #include "duckdb/common/types/varint.hpp"
+ #include "duckdb/common/serializer/serializer.hpp"
+ #include "duckdb/common/serializer/deserializer.hpp"
++#include "duckdb/common/types/string.hpp"
+ 
+ #include <utility>
+ #include <cmath>
+@@ -160,6 +161,13 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
+ 	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
+ }
+ 
++Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
++	if (!Value::StringIsValid(val.c_str(), val.GetSize())) {
++		throw ErrorManager::InvalidUnicodeError(val, "value construction");
++	}
++	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val.ToStdString()));
++}
++
+ Value::~Value() {
+ }
+ 
+diff --git a/src/execution/operator/helper/physical_reset.cpp b/src/execution/operator/helper/physical_reset.cpp
+index b6a219a48d..97e1fc6136 100644
+--- a/src/execution/operator/helper/physical_reset.cpp
++++ b/src/execution/operator/helper/physical_reset.cpp
+@@ -15,7 +15,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
+ 		config.ResetOption(name);
+ 	} else {
+ 		auto &client_config = ClientConfig::GetConfig(context.client);
+-		client_config.set_variables[name] = extension_option.default_value;
++		client_config.set_variables[name.ToStdString()] = extension_option.default_value;
+ 	}
+ }
+ 
+@@ -28,12 +28,13 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
+ 	auto &config = DBConfig::GetConfig(context.client);
+ 	config.CheckLock(name);
+ 	auto option = DBConfig::GetOptionByName(name);
++
+ 	if (!option) {
+ 		// check if this is an extra extension variable
+-		auto entry = config.extension_parameters.find(name);
++		auto entry = config.extension_parameters.find(name.ToStdString());
+ 		if (entry == config.extension_parameters.end()) {
+ 			Catalog::AutoloadExtensionByConfigName(context.client, name);
+-			entry = config.extension_parameters.find(name);
++			entry = config.extension_parameters.find(name.ToStdString());
+ 			D_ASSERT(entry != config.extension_parameters.end());
+ 		}
+ 		ResetExtensionVariable(context, config, entry->second);
+diff --git a/src/include/duckdb/catalog/catalog.hpp b/src/include/duckdb/catalog/catalog.hpp
+index 4294de0239..08d6b05a83 100644
+--- a/src/include/duckdb/catalog/catalog.hpp
++++ b/src/include/duckdb/catalog/catalog.hpp
+@@ -21,6 +21,7 @@
+ #include "duckdb/common/reference_map.hpp"
+ #include "duckdb/parser/query_error_context.hpp"
+ #include "duckdb/catalog/entry_lookup_info.hpp"
++#include "duckdb/common/types/string.hpp"
+ 
+ #include <functional>
+ 
+@@ -369,7 +370,7 @@ public:
+ 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
+ 
+ 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
+-	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
++	static void AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name);
+ 	//! Autoload the extension required for `function_name` or throw a CatalogException
+ 	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
+ 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
+diff --git a/src/include/duckdb/common/exception_format_value.hpp b/src/include/duckdb/common/exception_format_value.hpp
+index 34be78c094..41323320d0 100644
+--- a/src/include/duckdb/common/exception_format_value.hpp
++++ b/src/include/duckdb/common/exception_format_value.hpp
+@@ -15,6 +15,8 @@
+ 
+ namespace duckdb {
+ 
++class String;
++
+ // Helper class to support custom overloading
+ // Escaping " and quoting the value with "
+ class SQLIdentifier {
+@@ -50,6 +52,7 @@ struct ExceptionFormatValue {
+ 	DUCKDB_API ExceptionFormatValue(double dbl_val);     // NOLINT
+ 	DUCKDB_API ExceptionFormatValue(int64_t int_val);    // NOLINT
+ 	DUCKDB_API ExceptionFormatValue(string str_val);     // NOLINT
++	DUCKDB_API ExceptionFormatValue(String str_val);     // NOLINT
+ 	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val);   // NOLINT
+ 	DUCKDB_API ExceptionFormatValue(uhugeint_t uhg_val); // NOLINT
+ 
+@@ -81,6 +84,9 @@ template <>
+ DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
+ template <>
+ DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
++template <>
++DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value);
++
+ template <>
+ DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
+ template <>
+diff --git a/src/include/duckdb/common/types/string.hpp b/src/include/duckdb/common/types/string.hpp
+new file mode 100644
+index 0000000000..fb8aa9b0f7
+--- /dev/null
++++ b/src/include/duckdb/common/types/string.hpp
+@@ -0,0 +1,191 @@
++//===----------------------------------------------------------------------===//
++//                         DuckDB
++//
++// duckdb/common/types/string.hpp
++//
++//
++//===----------------------------------------------------------------------===//
++
++#pragma once
++
++#include "duckdb/common/numeric_utils.hpp"
++#include "duckdb/common/typedefs.hpp"
++
++namespace duckdb {
++class String {
++public:
++	// Owning constructors
++	String(std::string str)
++	    : // NOLINT: allow implicit conversion
++	      owned_data(std::move(str)), data(owned_data.c_str()), size(owned_data.size()) {
++	}
++
++	String(const char *ptr, const size_t len) : owned_data(ptr, len), data(ptr), size(len) {
++	}
++
++	String(const char *ptr) { // NOLINT: allow implicit conversion
++		String(ptr, strlen(ptr));
++	}
++
++	// Non-owning constructors
++	static String CreateView(const char *ptr, const size_t len) {
++		String str;
++		str.data = ptr;
++		str.size = len;
++		return str;
++	}
++
++	static String CreateView(const char *ptr) {
++		return CreateView(ptr, strlen(ptr));
++	}
++
++public:
++	bool operator==(const String &other) const {
++		const idx_t this_size = GetSize();
++		const idx_t other_size = other.GetSize();
++
++		if (this_size != other_size) {
++			return false;
++		}
++
++		const char *this_data = GetData();
++		const char *other_data = other.GetData();
++
++		for (idx_t i = 0; i < this_size; i++) {
++			if (this_data[i] != other_data[i]) {
++				return false;
++			}
++		}
++		return true;
++	}
++
++	bool operator!=(const String &other) const {
++		return !(*this == other);
++	}
++
++	bool operator<=(const String &other) const {
++		return *this < other || *this == other;
++	}
++
++	bool operator>=(const String &other) const {
++		return !(*this < other);
++	}
++
++	bool operator<(const String &other) const {
++		const char *this_data = GetData();
++		const char *other_data = other.GetData();
++		const idx_t this_size = GetSize();
++		const idx_t other_size = other.GetSize();
++
++		const idx_t length = MinValue<idx_t>(this_size, other_size);
++
++		for (idx_t i = 0; i < length; i++) {
++			if (this_data[i] < other_data[i]) {
++				return true;
++			}
++			if (this_data[i] > other_data[i]) {
++				return false;
++			}
++		}
++		return this_size < other_size;
++	}
++
++	bool operator>(const String &other) const {
++		return !(*this <= other);
++	}
++
++public:
++	idx_t GetSize() const {
++		return size;
++	}
++
++	const char *GetData() const {
++		return data;
++	}
++
++	char operator[](const idx_t pos) const {
++		D_ASSERT(pos < size);
++		return data[pos];
++	}
++
++	bool IsOwned() const {
++		return !owned_data.empty();
++	}
++
++	bool empty() const {
++		return size == 0;
++	}
++
++	const char *c_str() const {
++		return GetData();
++	}
++
++	const string &ToStdString() const {
++		if (!owned_data.empty()) {
++			return owned_data;
++		}
++
++		owned_data = string(data, size);
++		return owned_data;
++	}
++
++public:
++	static char CharacterToLower(char c) {
++		if (c >= 'A' && c <= 'Z') {
++			return UnsafeNumericCast<char>(c + ('a' - 'A'));
++		}
++		return c;
++	}
++
++	String Lower() const {
++		const auto str_data = GetData();
++		const auto str_size = GetSize();
++
++		std::string lowercase_str;
++		lowercase_str.reserve(str_size);
++		for (idx_t i = 0; i < str_size; ++i) {
++			lowercase_str.push_back(CharacterToLower(str_data[i]));
++		}
++		return String(std::move(lowercase_str));
++	}
++
++	struct ConstIterator;
++
++	ConstIterator begin() const;
++
++	ConstIterator end() const;
++
++private:
++	String() : data(nullptr), size(0) {
++	}
++
++private:
++	mutable string owned_data;
++	const char *data;
++	idx_t size;
++};
++
++struct String::ConstIterator {
++	const char *ptr;
++
++	explicit ConstIterator(const char *ptr_p) : ptr(ptr_p) {
++	}
++
++	const char &operator*() const {
++		return *ptr;
++	}
++
++	ConstIterator &operator++() {
++		ptr++;
++		return *this;
++	}
++};
++
++inline String::ConstIterator String::begin() const {
++	return ConstIterator(data);
++}
++
++inline String::ConstIterator String::end() const {
++	return ConstIterator(data + size);
++}
++} // namespace duckdb
+diff --git a/src/include/duckdb/common/types/value.hpp b/src/include/duckdb/common/types/value.hpp
+index 309f8221fd..c2f16123de 100644
+--- a/src/include/duckdb/common/types/value.hpp
++++ b/src/include/duckdb/common/types/value.hpp
+@@ -22,6 +22,7 @@
+ 
+ namespace duckdb {
+ 
++class String;
+ class CastFunctionSet;
+ struct GetCastFunctionInput;
+ struct ExtraValueInfo;
+@@ -57,6 +58,8 @@ public:
+ 	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
+ 	//! Create a VARCHAR value
+ 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
++	//! Create a VARCHAR value
++	DUCKDB_API Value(String val); // NOLINT: Allow implicit conversion from `string`
+ 	//! Copy constructor
+ 	DUCKDB_API Value(const Value &other);
+ 	//! Move constructor
+diff --git a/src/include/duckdb/execution/operator/helper/physical_reset.hpp b/src/include/duckdb/execution/operator/helper/physical_reset.hpp
+index 9a3f1dac2f..16157c0f28 100644
+--- a/src/include/duckdb/execution/operator/helper/physical_reset.hpp
++++ b/src/include/duckdb/execution/operator/helper/physical_reset.hpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/common/enums/set_scope.hpp"
+ #include "duckdb/execution/physical_operator.hpp"
+ #include "duckdb/parser/parsed_data/vacuum_info.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -25,7 +26,7 @@ public:
+ public:
+ 	PhysicalReset(PhysicalPlan &physical_plan, const std::string &name_p, SetScope scope_p, idx_t estimated_cardinality)
+ 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESET, {LogicalType::BOOLEAN}, estimated_cardinality),
+-	      name(name_p), scope(scope_p) {
++	      name(physical_plan.ArenaRef().MakeString(name_p)), scope(scope_p) {
+ 	}
+ 
+ public:
+@@ -37,7 +38,7 @@ public:
+ 	}
+ 
+ public:
+-	const std::string name;
++	const String name;
+ 	const SetScope scope;
+ 
+ private:
+diff --git a/src/include/duckdb/main/client_config.hpp b/src/include/duckdb/main/client_config.hpp
+index dc00d393c9..6bd5d62141 100644
+--- a/src/include/duckdb/main/client_config.hpp
++++ b/src/include/duckdb/main/client_config.hpp
+@@ -182,8 +182,8 @@ public:
+ 		return true;
+ 	}
+ 
+-	void ResetUserVariable(const string &name) {
+-		user_variables.erase(name);
++	void ResetUserVariable(const String &name) {
++		user_variables.erase(name.ToStdString());
+ 	}
+ 
+ 	template <class OP>
+diff --git a/src/include/duckdb/main/config.hpp b/src/include/duckdb/main/config.hpp
+index 9e27274f8d..d86608e6c4 100644
+--- a/src/include/duckdb/main/config.hpp
++++ b/src/include/duckdb/main/config.hpp
+@@ -374,17 +374,17 @@ public:
+ 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
+ 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
+ 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
+-	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const string &name);
++	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
+ 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
+ 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
+ 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
+ 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
+ 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
+ 	DUCKDB_API void SetOption(const string &name, Value value);
+-	DUCKDB_API void ResetOption(const string &name);
++	DUCKDB_API void ResetOption(const String &name);
+ 	static LogicalType ParseLogicalType(const string &type);
+ 
+-	DUCKDB_API void CheckLock(const string &name);
++	DUCKDB_API void CheckLock(const String &name);
+ 
+ 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
+ 
+diff --git a/src/include/duckdb/main/error_manager.hpp b/src/include/duckdb/main/error_manager.hpp
+index bb3fcc944b..aaedffd4b9 100644
+--- a/src/include/duckdb/main/error_manager.hpp
++++ b/src/include/duckdb/main/error_manager.hpp
+@@ -13,6 +13,7 @@
+ #include "duckdb/common/map.hpp"
+ 
+ namespace duckdb {
++class String;
+ class ClientContext;
+ class DatabaseInstance;
+ class TransactionException;
+@@ -52,7 +53,8 @@ public:
+ 		return Get(context).FormatException(error_type, params...);
+ 	}
+ 
+-	DUCKDB_API static InvalidInputException InvalidUnicodeError(const string &input, const string &context);
++	DUCKDB_API static InvalidInputException InvalidUnicodeError(const String &input, const string &context);
++
+ 	DUCKDB_API static FatalException InvalidatedDatabase(ClientContext &context, const string &invalidated_msg);
+ 	DUCKDB_API static TransactionException InvalidatedTransaction(ClientContext &context);
+ 
+diff --git a/src/include/duckdb/storage/arena_allocator.hpp b/src/include/duckdb/storage/arena_allocator.hpp
+index 39a01537d8..6729b25775 100644
+--- a/src/include/duckdb/storage/arena_allocator.hpp
++++ b/src/include/duckdb/storage/arena_allocator.hpp
+@@ -10,6 +10,7 @@
+ 
+ #include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/common.hpp"
++#include "duckdb/common/types/string.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -83,6 +84,17 @@ public:
+ 		return new (mem) T(std::forward<ARGS>(args)...);
+ 	}
+ 
++	String MakeString(const char *data, const idx_t len) {
++		const auto mem = AllocateAligned(sizeof(char) * len);
++		memcpy(mem, data, len);
++
++		return String((char *)mem, len); // NOLINT
++	}
++
++	String MakeString(const std::string &data) {
++		return MakeString(data.c_str(), data.size());
++	}
++
+ private:
+ 	void AllocateNewBlock(idx_t min_size);
+ 
+diff --git a/src/main/config.cpp b/src/main/config.cpp
+index 1a52e48889..d8d0589050 100644
+--- a/src/main/config.cpp
++++ b/src/main/config.cpp
+@@ -213,11 +213,11 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByIndex(idx_t target_
+ 	return nullptr;
+ }
+ 
+-optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &name) {
+-	auto lname = StringUtil::Lower(name);
++optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &name) {
++	auto lname = name.Lower();
+ 	for (idx_t index = 0; internal_options[index].name; index++) {
+ 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
+-		if (internal_options[index].name == lname) {
++		if (internal_options[index].name == lname.ToStdString()) {
+ 			return internal_options + index;
+ 		}
+ 	}
+@@ -280,17 +280,17 @@ void DBConfig::SetOption(const string &name, Value value) {
+ 	options.set_variables[name] = std::move(value);
+ }
+ 
+-void DBConfig::ResetOption(const string &name) {
++void DBConfig::ResetOption(const String &name) {
+ 	lock_guard<mutex> l(config_lock);
+-	auto extension_option = extension_parameters.find(name);
++	auto extension_option = extension_parameters.find(name.ToStdString());
+ 	D_ASSERT(extension_option != extension_parameters.end());
+ 	auto &default_value = extension_option->second.default_value;
+ 	if (!default_value.IsNull()) {
+ 		// Default is not NULL, override the setting
+-		options.set_variables[name] = default_value;
++		options.set_variables[name.ToStdString()] = default_value;
+ 	} else {
+ 		// Otherwise just remove it from the 'set_variables' map
+-		options.set_variables.erase(name);
++		options.set_variables.erase(name.ToStdString());
+ 	}
+ }
+ 
+@@ -448,13 +448,13 @@ void DBConfig::SetDefaultTempDirectory() {
+ 	}
+ }
+ 
+-void DBConfig::CheckLock(const string &name) {
++void DBConfig::CheckLock(const String &name) {
+ 	if (!options.lock_configuration) {
+ 		// not locked
+ 		return;
+ 	}
+ 	case_insensitive_set_t allowed_settings {"schema", "search_path"};
+-	if (allowed_settings.find(name) != allowed_settings.end()) {
++	if (allowed_settings.find(name.ToStdString()) != allowed_settings.end()) {
+ 		// we are always allowed to change these settings
+ 		return;
+ 	}
+diff --git a/src/main/error_manager.cpp b/src/main/error_manager.cpp
+index 2feab024f2..4e8ed769a7 100644
+--- a/src/main/error_manager.cpp
++++ b/src/main/error_manager.cpp
+@@ -3,6 +3,7 @@
+ #include "utf8proc_wrapper.hpp"
+ #include "duckdb/common/exception/list.hpp"
+ #include "duckdb/common/string_util.hpp"
++#include "duckdb/common/types/string.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -49,10 +50,10 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
+ 	return ExceptionFormatValue::Format(error, values);
+ }
+ 
+-InvalidInputException ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
++InvalidInputException ErrorManager::InvalidUnicodeError(const String &input, const string &context) {
+ 	UnicodeInvalidReason reason;
+ 	size_t pos;
+-	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.size(), &reason, &pos);
++	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.GetSize(), &reason, &pos);
+ 	if (unicode != UnicodeType::INVALID) {
+ 		return InvalidInputException("Invalid unicode error thrown but no invalid unicode detected in " + context);
+ 	}
+diff --git a/test/api/test_config.cpp b/test/api/test_config.cpp
+index f894f06ac3..051b5091a4 100644
+--- a/test/api/test_config.cpp
++++ b/test/api/test_config.cpp
+@@ -12,7 +12,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
+ 
+ 	auto options = config.GetOptions();
+ 
+-	map<string, duckdb::vector<string>> test_options;
++	map<String, duckdb::vector<String>> test_options;
+ 	test_options["access_mode"] = {"automatic", "read_only", "read_write"};
+ 	test_options["default_order"] = {"asc", "desc"};
+ 	test_options["default_null_order"] = {"nulls_first", "nulls_last"};
+diff --git a/test/sql/storage_version/storage_version.dbtest.duckdb b/test/sql/storage_version/storage_version.dbtest.duckdb
+new file mode 100644
+index 0000000000..6e5ffa8320
+Binary files /dev/null and b/test/sql/storage_version/storage_version.dbtest.duckdb differ

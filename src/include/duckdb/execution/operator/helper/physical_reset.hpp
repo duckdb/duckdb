@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,7 @@ public:
 public:
 	PhysicalReset(PhysicalPlan &physical_plan, const std::string &name_p, SetScope scope_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESET, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      name(name_p), scope(scope_p) {
+	      name(physical_plan.ArenaRef().MakeString(name_p)), scope(scope_p) {
 	}
 
 public:
@@ -37,7 +38,7 @@ public:
 	}
 
 public:
-	const std::string name;
+	const String name;
 	const SetScope scope;
 
 private:

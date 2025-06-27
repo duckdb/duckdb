@@ -15,7 +15,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		config.ResetOption(name);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.set_variables[name] = extension_option.default_value;
+		client_config.set_variables[name.ToStdString()] = extension_option.default_value;
 	}
 }
 
@@ -28,12 +28,13 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	auto &config = DBConfig::GetConfig(context.client);
 	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
+
 	if (!option) {
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(name);
+		auto entry = config.extension_parameters.find(name.ToStdString());
 		if (entry == config.extension_parameters.end()) {
 			Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(name);
+			entry = config.extension_parameters.find(name.ToStdString());
 			D_ASSERT(entry != config.extension_parameters.end());
 		}
 		ResetExtensionVariable(context, config, entry->second);
