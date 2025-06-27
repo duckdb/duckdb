@@ -40,6 +40,8 @@ jobs:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
     if: github.event.pull_request.draft == false
+    steps:
+      - run: echo ${{ github.event.pull_request.draft }}
 
   test-apple-platforms:
     name: Test Apple Platforms

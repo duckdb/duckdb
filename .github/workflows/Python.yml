@@ -72,7 +72,9 @@ jobs:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
     if: github.event.pull_request.draft == false
-
+    steps:
+      - run: echo ${{ github.event.pull_request.draft }}
+      
 # This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
     name: Python 3.10 Linux
