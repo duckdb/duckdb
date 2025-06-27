@@ -620,7 +620,17 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
 		// Set the validity mask for each row before inserting data
-		if (!layout.AllValid()) {
+		// This is not necessary if none of the columns contain any NULLs
+		// However, it also fetches the start of each row into the CPU cache
+		// On Intel, the initialization actually improves performance, so we always do it
+#if defined(__aarch64__) || defined(__ARM_ARCH)
+		// ARM: unaligned stores are pretty much the same performance as aligned stores
+		const auto initialize_validity_mask = !layout.AllValid();
+#else
+		// Assume Intel: aligned stores are better, so initializing is better at hiding cache misses
+		const auto initialize_validity_mask = true;
+#endif
+		if (initialize_validity_mask) {
 			InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
 		}
 
