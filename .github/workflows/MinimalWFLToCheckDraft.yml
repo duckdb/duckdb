@@ -1,0 +1,37 @@
+name: MinimalWFLToCheckDraft
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+jobs:          
+    pre-run-check:
+        name: Decide if the workflow runs
+        runs-on: ubuntu-latest
+    
+        steps:
+            - run: return ${{ github.event.pull_request.draft == true }}
+
+    test:
+        name: Test
+        runs-on: ubuntu-latest
+        needs: pre-run-check
+        if: ${{ needs.pre-run-check.result == false }}
+
+        steps:
+        - run: Echo ${{needs.pre-run-check.result}}
+
+    another-test:
+        name: Another Test
+        runs-on: ubuntu-latest
+        needs: pre-run-check
+
+        steps:
+        - run: Echo ${{needs.pre-run-check.result}}
