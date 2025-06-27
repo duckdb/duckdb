@@ -266,7 +266,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_output_version >= 14) {
+			// Views are only introduced in arrow format v1.4
+			child.format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
@@ -276,7 +279,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
 		} else {
-			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			if (options.arrow_output_version >= 14) {
+				// Views are only introduced in arrow format v1.4
+				child.format = "vz";
+			} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				child.format = "Z";
 			} else {
 				child.format = "z";
