@@ -148,10 +148,7 @@ jobs:
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-22.04
-    needs: 
-      - linux-python3-10
-      - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
+    needs: linux-python3-10
     strategy:
       fail-fast: false
       matrix:
@@ -252,10 +249,8 @@ jobs:
 
   osx-python3:
     name: Python 3 OSX
-    needs: 
-      - linux-python3-10
-      - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true') }}
+    needs: linux-python3-10
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -318,10 +313,7 @@ jobs:
   win-python3:
     name: Python 3 Windows
     runs-on: windows-latest
-    needs: 
-      - linux-python3-10
-      - check-draft
-    if: ${{ needs.check-draft.outputs.is_draft == 'false' }}
+    needs: linux-python3-10
     strategy:
       matrix:
         python_build: [cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
