@@ -312,7 +312,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
-	if (!config.options.database_type.empty()) {
+	if (!config.options.database_type.empty() &&
+	    config.storage_extensions.find(config.options.database_type) == config.storage_extensions.end()) {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
@@ -442,6 +443,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
+	}
+	if (!new_config.storage_extensions.empty()) {
+		config.storage_extensions = std::move(new_config.storage_extensions);
 	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
