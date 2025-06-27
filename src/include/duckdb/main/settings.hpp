@@ -1070,6 +1070,17 @@ struct PerfectHtThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct PinThreadsSetting {
+	using RETURN_TYPE = ThreadPinMode;
+	static constexpr const char *Name = "pin_threads";
+	static constexpr const char *Description =
+	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct PivotFilterThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "pivot_filter_threshold";
