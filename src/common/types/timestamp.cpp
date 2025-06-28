@@ -330,10 +330,10 @@ timestamp_t Timestamp::FromString(const string &str) {
 
 string Timestamp::ToString(timestamp_t timestamp) {
 	if (timestamp == timestamp_t::infinity()) {
-		return Date::PINF;
+		return Date::PINF.str;
 	}
 	if (timestamp == timestamp_t::ninfinity()) {
-		return Date::NINF;
+		return Date::NINF.str;
 	}
 
 	date_t date;
