@@ -9,11 +9,14 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/enums/merge_action_type.hpp"
 
 namespace duckdb {
 
 class MergeIntoOperator {
 public:
+	// Merge action type
+	MergeActionType action_type;
 	//! Condition - or NULL if this should always be performed for the given action
 	unique_ptr<Expression> condition;
 	//! The operator to push data into for this action (if any)

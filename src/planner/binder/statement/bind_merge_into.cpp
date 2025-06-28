@@ -48,7 +48,8 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 		break;
 	case MergeActionType::MERGE_DELETE:
 	case MergeActionType::MERGE_DO_NOTHING:
-		// DELETE / DO NOTHING have nothing extra to bind
+	case MergeActionType::MERGE_ABORT:
+		// DELETE / DO NOTHING / ABORT have nothing extra to bind
 		break;
 	default:
 		throw InternalException("Unsupported merge action type");
@@ -77,16 +78,16 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// we need to do a right join because we need to know all rows that matched, and all rows that did not match
 	auto from_binder = Binder::CreateBinder(context, this);
 	BoundJoinRef bound_join(JoinRefType::REGULAR);
-	bound_join.type = JoinType::RIGHT;
-	bound_join.left = std::move(bound_table);
-	bound_join.right = from_binder->Bind(*stmt.source);
+	bound_join.type = JoinType::LEFT;
+	bound_join.left = from_binder->Bind(*stmt.source);
+	bound_join.right = std::move(bound_table);
 	bind_context.AddContext(std::move(from_binder->bind_context));
 
 	WhereBinder binder(*this, context);
 	bound_join.condition = binder.Bind(stmt.join_condition);
 
 	root = CreatePlan(bound_join);
-	get = &root->children[0]->Cast<LogicalGet>();
+	get = &root->children[1]->Cast<LogicalGet>();
 
 	if (!table.temporary) {
 		// update of persistent table: not read only!

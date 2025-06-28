@@ -50,6 +50,12 @@ matched_clause_action:
 			n->actionType = MERGE_ACTION_TYPE_DO_NOTHING;
 			$$ = (PGNode *)n;
 		}
+	| ABORT_P
+		{
+			PGMatchAction *n = makeNode(PGMatchAction);
+			n->actionType = MERGE_ACTION_TYPE_ABORT;
+			$$ = (PGNode *)n;
+		}
 	;
 
 not_matched_clause_action:
@@ -65,6 +71,12 @@ not_matched_clause_action:
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_DO_NOTHING;
+			$$ = (PGNode *)n;
+		}
+	| ABORT_P
+		{
+			PGMatchAction *n = makeNode(PGMatchAction);
+			n->actionType = MERGE_ACTION_TYPE_ABORT;
 			$$ = (PGNode *)n;
 		}
 	;

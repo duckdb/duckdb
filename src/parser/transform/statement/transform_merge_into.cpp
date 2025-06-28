@@ -27,6 +27,9 @@ unique_ptr<MergeIntoAction> Transformer::TransformMergeIntoAction(duckdb_libpgqu
 	case duckdb_libpgquery::MERGE_ACTION_TYPE_DO_NOTHING:
 		result->action_type = MergeActionType::MERGE_DO_NOTHING;
 		break;
+	case duckdb_libpgquery::MERGE_ACTION_TYPE_ABORT:
+		result->action_type = MergeActionType::MERGE_ABORT;
+		break;
 	default:
 		throw InternalException("Unsupported merge into action");
 	}

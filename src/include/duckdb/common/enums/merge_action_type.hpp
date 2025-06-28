@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class MergeActionType : uint8_t { MERGE_UPDATE, MERGE_DELETE, MERGE_INSERT, MERGE_DO_NOTHING };
+enum class MergeActionType : uint8_t { MERGE_UPDATE, MERGE_DELETE, MERGE_INSERT, MERGE_DO_NOTHING, MERGE_ABORT };
 
 } // namespace duckdb

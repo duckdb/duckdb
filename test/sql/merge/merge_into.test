@@ -2,14 +2,11 @@
 # description: Test MERGE INTO
 # group: [merge]
 
+# statement ok
+# PRAGMA enable_verification
+
 statement ok
 CREATE TABLE Stock(item_id int, balance int);
-
-statement ok
-INSERT INTO Stock VALUES (10, 2200);
-
-statement ok
-INSERT INTO Stock VALUES (20, 1900);
 
 statement ok
 CREATE TABLE Buy(item_id int, volume int);
@@ -20,19 +17,22 @@ INSERT INTO Buy values(10, 1000);
 statement ok
 INSERT INTO Buy values(30, 300);
 
-statement ok
-CREATE TABLE Sale(item_id int, volume int);
+# insert using merge into with a CTE
+query I
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks ON FALSE
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
+----
+2
 
-statement ok
-INSERT INTO Sale VALUES (10, 2200);
+query II
+FROM Stock ORDER BY item_id
+----
+10	2200
+20	1900
 
-statement ok
-INSERT INTO Sale VALUES (20, 1000);
-
-statement ok
-PRAGMA disable_optimizer
-
-# default behavior: UPDATE *, INSERT *
+# update and insert
 query I
 MERGE INTO Stock USING Buy ON Stock.item_id = Buy.item_id
 WHEN MATCHED THEN UPDATE SET balance = balance + Buy.volume
@@ -46,3 +46,36 @@ FROM Stock ORDER BY item_id
 10	3200
 20	1900
 30	300
+
+# sell - deleting all rows that are fully sold
+statement ok
+CREATE TABLE Sale(item_id int, volume int);
+
+statement ok
+INSERT INTO Sale VALUES (10, 2200);
+
+statement ok
+INSERT INTO Sale VALUES (33, 1900);
+
+query I
+MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
+WHEN MATCHED AND Sale.volume >= balance THEN DELETE
+WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
+WHEN NOT MATCHED THEN ABORT
+----
+2
+
+query II
+FROM Stock ORDER BY item_id
+----
+10	1000
+30	300
+
+# abort - row does not exist
+statement error
+MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
+WHEN MATCHED AND Sale.volume >= balance THEN DELETE
+WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
+WHEN NOT MATCHED THEN ABORT
+----
+Merge abort condition

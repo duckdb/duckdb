@@ -21,6 +21,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		throw InternalException("Move bound constraints");
 	}
 
+	result->action_type = action.action_type;
 	result->condition = std::move(action.condition);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
@@ -50,6 +51,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		break;
 	}
 	case MergeActionType::MERGE_DO_NOTHING:
+	case MergeActionType::MERGE_ABORT:
 		break;
 	default:
 		throw InternalException("Unsupported merge action");

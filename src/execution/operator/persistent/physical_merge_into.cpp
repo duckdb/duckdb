@@ -53,6 +53,19 @@ public:
 		for(idx_t i = 0; i < actions.size(); i++) {
 			auto &action = actions[i];
 			if (!action->op) {
+				if (action->action_type == MergeActionType::MERGE_ABORT) {
+					// abort - generate an error message
+					string merge_condition = "WHEN";
+					if (!matched) {
+						merge_condition += " NOT";
+					}
+					merge_condition += " MATCHED";
+					if (action->condition) {
+						merge_condition += " AND " + action->condition->ToString();
+					}
+					throw ConstraintException("Merge abort condition %s", merge_condition);
+				}
+				D_ASSERT(action->action_type == MergeActionType::MERGE_DO_NOTHING);
 				continue;
 			}
 			auto &gstate = sink_states[i + offset];
