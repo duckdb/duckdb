@@ -511,7 +511,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 				const auto string_ptr_location = string_location + string_t::HEADER_SIZE;
 
 				if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH &&
-				    !string_t::isInUnifiedStringDictionary(char_ptr_cast(Load<data_ptr_t>(string_ptr_location)))) {
+				    !string_t::IsInUnifiedStringDictionary(char_ptr_cast(Load<data_ptr_t>(string_ptr_location)))) {
 					const auto string_ptr = Load<data_ptr_t>(string_ptr_location);
 					const auto diff = string_ptr - old_heap_ptr;
 					D_ASSERT(diff >= 0);

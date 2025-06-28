@@ -126,6 +126,7 @@ public:
 		return reinterpret_cast<char *>(reinterpret_cast<uint64_t>(value.pointer.ptr) & POINTER_MASK);
 	}
 
+	// Currently only Unified String Dictionary strings make use of tagged pointers in string_t
 	char *GetTaggedPointer() const {
 		D_ASSERT(!IsInlined());
 		return value.pointer.ptr;
@@ -136,7 +137,7 @@ public:
 		value.pointer.ptr = new_ptr;
 	}
 
-	static bool isInUnifiedStringDictionary(char *ptr) {
+	static bool IsInUnifiedStringDictionary(char *ptr) {
 		return reinterpret_cast<uint64_t>(ptr) & UNIFIED_STRING_DICTIONARY_SALT_MASK;
 	}
 

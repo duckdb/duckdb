@@ -51,15 +51,15 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 		if (input.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto str_value = reinterpret_cast<string_t *>(ConstantVector::GetData(input.data[col_idx]));
 			auto validity = ConstantVector::Validity(input.data[col_idx]);
-			if(validity.AllValid()){
-				context.client.GetUnifiedStringDictionary().insert(*str_value);
+			if (validity.AllValid()) {
+				context.client.GetUnifiedStringDictionary().Insert(*str_value);
 			}
 		} else if (input.data[col_idx].GetVectorType() == VectorType::FLAT_VECTOR && insert_flat_vectors) {
 			auto start = reinterpret_cast<string_t *>(FlatVector::GetData(input.data[col_idx]));
 			auto validity = FlatVector::Validity(input.data[col_idx]);
 			for (idx_t i = 0; i < input.size(); i++) {
-				if(validity.RowIsValid(i)){
-					context.client.GetUnifiedStringDictionary().insert(start[i]);
+				if (validity.RowIsValid(i)) {
+					context.client.GetUnifiedStringDictionary().Insert(start[i]);
 				}
 			}
 		} else if (input.data[col_idx].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -77,7 +77,7 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 					if (!dict_validity.RowIsValid(i)) {
 						continue;
 					}
-					auto result = context.client.GetUnifiedStringDictionary().insert(start[i]);
+					auto result = context.client.GetUnifiedStringDictionary().Insert(start[i]);
 					// process the results, we use the statistics to determine the unique cardinality of the column
 					switch (result) {
 					case InsertResult::SUCCESS:
@@ -116,7 +116,7 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 						global_state.is_high_cardinality[col_idx] = true;
 					}
 				}
-				if(global_state.unique_strings_in_unified_dictionary_per_column[col_idx] > HARD_LIMIT){
+				if (global_state.unique_strings_in_unified_dictionary_per_column[col_idx] > HARD_LIMIT) {
 					global_state.is_high_cardinality[col_idx] = true;
 				}
 				lock.unlock();

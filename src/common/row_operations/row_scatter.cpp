@@ -57,7 +57,7 @@ static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_
 		auto col_idx = col.sel->get_index(idx) + offset;
 		const auto &str = data[col_idx];
 		if (col.validity.RowIsValid(col_idx) && !str.IsInlined() &&
-		    (!string_t::isInUnifiedStringDictionary(str.GetTaggedPointer()))) {
+		    (!string_t::IsInUnifiedStringDictionary(str.GetTaggedPointer()))) {
 			entry_sizes[i] += str.GetSize();
 		}
 	}
@@ -80,7 +80,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 			col_mask.SetInvalidUnsafe(col_no);
 			Store<string_t>(null, row + col_offset);
 		} else if (string_data[col_idx].IsInlined() ||
-		           string_t::isInUnifiedStringDictionary(string_data[col_idx].GetTaggedPointer())) {
+		           string_t::IsInUnifiedStringDictionary(string_data[col_idx].GetTaggedPointer())) {
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];

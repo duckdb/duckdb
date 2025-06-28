@@ -36,7 +36,7 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 				data_ptr_t string_ptr = col_ptr + string_t::HEADER_SIZE;
 				for (idx_t i = 0; i < next; i++) {
 					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH &&
-					    !string_t::isInUnifiedStringDictionary(char_ptr_cast(string_ptr))) {
+					    !string_t::IsInUnifiedStringDictionary(char_ptr_cast(string_ptr))) {
 						// Overwrite the string pointer with the within-row offset (if not inlined)
 						Store<idx_t>(UnsafeNumericCast<idx_t>(Load<data_ptr_t>(string_ptr) - heap_row_ptrs[i]),
 						             string_ptr);
@@ -142,7 +142,7 @@ void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t 
 				data_ptr_t string_ptr = col_ptr + string_t::HEADER_SIZE;
 				for (idx_t i = 0; i < next; i++) {
 					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH &&
-					    !string_t::isInUnifiedStringDictionary(char_ptr_cast(string_ptr))) {
+					    !string_t::IsInUnifiedStringDictionary(char_ptr_cast(string_ptr))) {
 						// Overwrite the string offset with the pointer (if not inlined)
 						Store<data_ptr_t>(heap_row_ptrs[i] + Load<idx_t>(string_ptr), string_ptr);
 						VerifyUnswizzledString(layout, col_idx, row_ptr + i * row_width);

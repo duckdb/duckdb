@@ -122,7 +122,7 @@ UnifiedStringDictionaryOptimizerContext UnifiedStringDictionaryOptimizer::Rewrit
 		op->children[i] = std::move(rewrite_result.op);
 	}
 	if (!target_operator_result) {
-		   target_operator_result |= CheckIfTargetOperatorAndInsert(op);
+		target_operator_result |= CheckIfTargetOperatorAndInsert(op);
 	}
 	return {std::move(op), target_operator_result};
 }

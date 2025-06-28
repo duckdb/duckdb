@@ -11,6 +11,10 @@
 
 namespace duckdb {
 
+#if !defined(DUCKDB_DISABLE_POINTER_SALT) && defined(__ANDROID__)
+#define DUCKDB_DISABLE_POINTER_SALT
+#endif
+
 enum class InsertResult {
 	// string is inserted for the first time
 	SUCCESS,
@@ -24,54 +28,56 @@ enum class InsertResult {
 	INVALID
 };
 
+// Unified String Dictionary is a per-query dictionary containing the most valuable strings in a particular query with
+// their pre-computed hashes. The strings and their hashes are materialized in the Data Region. A linear probing hash
+// table is used for fast look ups.
 class UnifiedStringsDictionary {
 public:
-	static constexpr const uint64_t ATTEMPT_THRESHOLD = 1000;
-	static constexpr const uint64_t MAX_STRING_LENGTH = 512;
-
-	static constexpr const uint64_t USD_SLOT_SIZE = 8;
-	idx_t USD_SIZE;
-
-	// first two bytes are the slot number into the data region
-	// and the second two bytes are the hash extract (a part of the original string's hash)
-	static constexpr const uint64_t HT_BUCKET_SIZE = 4;
-	idx_t HT_SIZE;
-
-	static constexpr const idx_t PROBING_LIMIT = 32;
-
-	idx_t slot_bits = 16;
-	uint64_t slot_mask;
-	idx_t required_bits = 19;
-
-	static constexpr const idx_t STR_LENGTH_BYTES = 2;
-
-	idx_t USD_size;
+	UnifiedStringsDictionary(idx_t usd_sf);
+	~UnifiedStringsDictionary();
+	void UpdateFailedAttempts(idx_t n_failed);
+	InsertResult Insert(string_t &str);
+	// Loads the pre-computed hash for a USD backed string
+	static hash_t LoadHash(string_t &str);
 
 private:
-	// Overarching USSR buffer, contains DataRegion + HT + extra, 1MB size
+	static constexpr const idx_t FAILED_ATTEMPT_THRESHOLD = 1000;
+	static constexpr const idx_t MAX_STRING_LENGTH = 512;
+	static constexpr const idx_t USD_SLOT_SIZE = 8;
+	// each 32-bit hash table bucket is consisted of (slot_bits) to index into data region and (32 - slot_bits) as
+	// HT_bucket_salt
+	static constexpr const uint64_t HT_BUCKET_SIZE = 4;
+	// the baseline size of USD is 512kB (64k slots of 8bytes)
+	static constexpr const idx_t USD_BASELINE_SIZE = 65536;
+	static constexpr const idx_t PROBING_LIMIT = 32;
+	// This sentinel value is put into HT buckets as an indicator that the string is being inserted and not finalized
+	static constexpr const idx_t HT_DIRTY_SENTINEL = 1;
+
+	// total number of 8-byte slots in data region,
+	idx_t usd_size;
+	// total number of 4-byte buckets in the linear probing hash table,
+	idx_t ht_size;
+	// number of bits in HT bucket needed to index into the data region, initialized during construction
+	idx_t slot_bits = 16;
+	uint64_t slot_mask;
+	// input parameter determines the usd total size (power of two multiplied by the baseline size)
+	idx_t usd_scale_factor;
+
+	// Overarching USD buffer, contains DataRegion + HT
 	unsafe_unique_array<data_t> buffer;
 	// Start of the DataRegion
 	uint64_t *DataRegion;
-	atomic<uint64_t> currentEmptySlot;
+	// Start of the linear probing hash table
 	atomic<uint32_t> *HT;
-
-	atomic<idx_t> failed_attempt;
-
-	static constexpr const idx_t HT_DIRTY_SENTINEL = 1;
-
-public:
-	UnifiedStringsDictionary(idx_t size);
-
-	~UnifiedStringsDictionary();
-
-	void UpdateFailedAttempts(idx_t n_failed);
-
-	InsertResult insert(string_t &str);
+	// A counter that keeps track of the next empty slot to store a string in the Data Region.
+	atomic<uint64_t> current_empty_slot;
+	atomic<idx_t> failed_attempts;
 
 private:
 	char *AddTag(char *ptr);
 	bool CheckEqualityAndUpdatePtr(string_t &str, idx_t bucket_idx);
 	bool WaitUntilSlotResolves(idx_t bucket_idx);
+	InsertResult InsertInternal(string_t &str);
 };
 
 } // namespace duckdb
