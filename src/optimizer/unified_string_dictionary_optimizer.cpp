@@ -20,6 +20,10 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr_op = op->Cast<LogicalAggregate>();
+		// TryAddCompressedGroup in hash aggregate is far more effective for single columns
+		if (aggr_op.groups.size() == 1) {
+			break;
+		}
 		for (auto &expr : aggr_op.groups) {
 			if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
@@ -32,6 +36,10 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct_op = op->Cast<LogicalDistinct>();
+		// TryAddCompressedGroup in hash aggregate is far more effective for single columns
+		if (distinct_op.distinct_targets.size() == 1) {
+			break;
+		}
 		for (auto &expr : distinct_op.distinct_targets) {
 			if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
@@ -94,9 +102,8 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 			}
 
 			bool insert_flat_vecs = false;
-			if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-			    op->children[i]->has_estimated_cardinality && op->children[i]->estimated_cardinality < 1000) {
-				insert_flat_vecs = true;
+			if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+				insert_flat_vecs = EnableFlatVecInsertion(op->children[i], op->children[1 - i]);
 			}
 
 			auto new_operator =
@@ -107,6 +114,15 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 			op->ResolveOperatorTypes();
 		}
 		return true;
+	}
+	return false;
+}
+
+bool UnifiedStringDictionaryOptimizer::EnableFlatVecInsertion(optional_ptr<LogicalOperator> op,
+                                                              optional_ptr<LogicalOperator> neighbor_op) {
+	if (op->has_estimated_cardinality && neighbor_op->has_estimated_cardinality &&
+	    op->estimated_cardinality < JOIN_CARDINALITY_THRESHOLD) {
+		return (neighbor_op->estimated_cardinality / op->estimated_cardinality) > JOIN_CARDINALITY_RATIO_THRESHOLD;
 	}
 	return false;
 }

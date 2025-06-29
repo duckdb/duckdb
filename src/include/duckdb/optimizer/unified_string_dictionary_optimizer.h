@@ -24,8 +24,12 @@ public:
 
 private:
 	Optimizer *optimizer;
+	static constexpr idx_t JOIN_CARDINALITY_THRESHOLD = 2000;
+	static constexpr idx_t JOIN_CARDINALITY_RATIO_THRESHOLD = 10;
 
 	bool CheckIfTargetOperatorAndInsert(optional_ptr<LogicalOperator> op);
+	// Only enable flat vector insertion if joining on primary-foreign key relation.
+	bool EnableFlatVecInsertion(optional_ptr<LogicalOperator> op, optional_ptr<LogicalOperator> neighbor_op);
 };
 
 } // namespace duckdb

@@ -41,13 +41,9 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 	auto &state = state_p.Cast<USDInsertionState>();
 	auto &global_state = gstate.Cast<USDInsertionGState>();
 	for (idx_t col_idx = 0; col_idx < input.data.size(); ++col_idx) {
-		if (input.data[col_idx].GetType() != LogicalType::VARCHAR || !insert_to_usd[col_idx] ||
-		    input.size() == 1 // FIXME: this condition is not needed but there's an extremely odd bug with this test:
-		                      // test/sql/copy/partitioned/hive_partition_escape.test
-		) {
+		if (input.data[col_idx].GetType() != LogicalType::VARCHAR || !insert_to_usd[col_idx]) {
 			continue;
 		}
-
 		if (input.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto str_value = reinterpret_cast<string_t *>(ConstantVector::GetData(input.data[col_idx]));
 			auto validity = ConstantVector::Validity(input.data[col_idx]);
@@ -102,7 +98,7 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 				global_state.inserted_unique_strings[col_idx] += size.GetIndex();
 				global_state.unique_strings_in_unified_dictionary_per_column[col_idx] += state.n_success;
 				global_state.inserted_dictionaries[col_idx]++;
-
+				// FIXME: magic numbers should not be here, still trying to fine tune this section
 				constexpr double TOTAL_GROWTH_THRESHOLD = 0.1;
 				const idx_t MIN_DICTIONARY_SEEN = 10;
 				constexpr idx_t HARD_LIMIT = 100000;
@@ -123,7 +119,7 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 
 				context.client.GetUnifiedStringDictionary().UpdateFailedAttempts(state.n_rejected_probing +
 				                                                                 state.n_rejected_full);
-
+				// FIXME: move the whole statistics update out of execution
 				state.n_success = 0;
 				state.n_rejected_full = 0;
 				state.n_rejected_probing = 0;

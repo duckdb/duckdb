@@ -113,9 +113,7 @@ InsertResult UnifiedStringsDictionary::InsertInternal(string_t &str) {
 				auto slots_needed =
 				    (total_bytes_needed % 8 == 0) ? total_bytes_needed / 8 : 1 + (total_bytes_needed / 8);
 				auto slot_to_insert = current_empty_slot.fetch_add(slots_needed);
-				if (slot_to_insert + slots_needed > usd_size
-				    //				    || total_bytes_needed > (USD_SIZE - slot_to_insert) * 8
-				) {
+				if (slot_to_insert + slots_needed - 1 > usd_size) {
 					// give back the reserved slots
 					current_empty_slot.fetch_sub(slots_needed, std::memory_order_relaxed);
 					// clear the dirtied bucket
