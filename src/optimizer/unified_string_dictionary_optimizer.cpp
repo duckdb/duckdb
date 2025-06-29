@@ -125,7 +125,7 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 bool UnifiedStringDictionaryOptimizer::EnableFlatVecInsertion(optional_ptr<LogicalOperator> op,
                                                               optional_ptr<LogicalOperator> neighbor_op) {
 	if (op->has_estimated_cardinality && neighbor_op->has_estimated_cardinality &&
-	    op->estimated_cardinality < JOIN_CARDINALITY_THRESHOLD) {
+	    op->estimated_cardinality < JOIN_CARDINALITY_THRESHOLD && op->estimated_cardinality > 0) {
 		return (neighbor_op->estimated_cardinality / op->estimated_cardinality) > JOIN_CARDINALITY_RATIO_THRESHOLD;
 	}
 	return false;
