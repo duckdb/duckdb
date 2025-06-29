@@ -108,6 +108,10 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 
 			auto new_operator =
 			    make_uniq<LogicalUnifiedStringDictionaryInsertion>(std::move(usd_insert_vec), insert_flat_vecs);
+
+			if(op->children[i]->has_estimated_cardinality){
+				new_operator->SetEstimatedCardinality(op->children[i]->estimated_cardinality);
+			}
 			new_operator->children.push_back(std::move(op->children[i]));
 			op->children[i] = std::move(new_operator);
 
