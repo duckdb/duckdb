@@ -74,18 +74,6 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &sort_op = op->Cast<LogicalOrder>();
-		for (auto &node : sort_op.orders) {
-			if (node.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &bound_colref = node.expression->Cast<BoundColumnRefExpression>();
-				if (bound_colref.return_type == LogicalType::VARCHAR) {
-					isTargetOperator = true;
-				}
-			}
-		}
-		break;
-	}
 	default:
 		break;
 	}

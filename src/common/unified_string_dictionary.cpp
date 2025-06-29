@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/unified_string_dictionary.h"
+#include "duckdb/common/unified_string_dictionary.h"
 #include "duckdb/common/types/hash.hpp"
 #include <cstring>
 #include <algorithm>
