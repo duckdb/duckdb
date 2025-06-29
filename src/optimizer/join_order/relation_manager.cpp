@@ -117,24 +117,21 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	}
 }
 
-bool ExpressionContainsColumnRef(Expression &expression) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		// Here you have a filter on a single column in a table. Return a binding for the column
-		// being filtered on so the filter estimator knows what HLL count to pull
+bool ExpressionContainsColumnRef(const Expression &root_expr) {
+	bool contains_column_ref = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) {
+	// Here you have a filter on a single column in a table. Return a binding for the column
+	// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		(void)colref.depth;
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		    (void)colref.depth;
+		    D_ASSERT(colref.depth == 0);
+		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 #endif
-		// map the base table index to the relation index used by the JoinOrderOptimizer
-		return true;
-	}
-	// TODO: handle inequality filters with functions.
-	auto children_ret = false;
-	ExpressionIterator::EnumerateChildren(expression,
-	                                      [&](Expression &expr) { children_ret = ExpressionContainsColumnRef(expr); });
-	return children_ret;
+		    // map the base table index to the relation index used by the JoinOrderOptimizer
+		    contains_column_ref = true;
+	    });
+	return contains_column_ref;
 }
 
 static bool JoinIsReorderable(LogicalOperator &op) {

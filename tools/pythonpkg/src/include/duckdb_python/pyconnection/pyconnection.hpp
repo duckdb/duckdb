@@ -319,7 +319,7 @@ public:
 	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
 	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
-	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
+	PolarsDataFrame FetchPolars(idx_t rows_per_batch, bool lazy);
 
 	py::dict FetchPyTorch();
 

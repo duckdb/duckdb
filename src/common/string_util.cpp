@@ -538,6 +538,46 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
+static unique_ptr<ComplexJSON> ParseJSON(const string &json, yyjson_doc *doc, yyjson_val *root, bool ignore_errors) {
+	auto result = make_uniq<ComplexJSON>();
+	switch (yyjson_get_tag(root)) {
+	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE: {
+		size_t idx, max;
+		yyjson_val *val;
+		yyjson_arr_foreach(root, idx, max, val) {
+			result->AddArrayElement(ParseJSON(json, doc, val, ignore_errors));
+		}
+		return result;
+	}
+	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE: {
+		size_t idx, max;
+		yyjson_val *key, *value;
+		yyjson_obj_foreach(root, idx, max, key, value) {
+			const auto key_val = yyjson_get_str(key);
+			const auto key_len = yyjson_get_len(key);
+			result->AddObjectEntry(string(key_val, key_len), ParseJSON(json, doc, value, ignore_errors));
+		}
+		return result;
+	}
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
+		// Since this is a string, we can directly add the value
+		const auto value_val = yyjson_get_str(root);
+		const auto value_len = yyjson_get_len(root);
+		return make_uniq<ComplexJSON>(string(value_val, value_len));
+	}
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE: {
+		// boolean values
+		const bool bool_val = yyjson_get_bool(root);
+		return make_uniq<ComplexJSON>(bool_val ? "true" : "false");
+	}
+	default:
+		yyjson_doc_free(doc);
+		throw SerializationException("Failed to parse JSON string: %s", json);
+	}
+}
+
 unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
 	auto result = make_uniq<ComplexJSON>(json);
 	if (json.empty()) {
@@ -559,48 +599,8 @@ unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore
 		}
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
-	yyjson_obj_iter iter;
-	yyjson_obj_iter_init(root, &iter);
-	yyjson_val *key, *value;
-	while ((key = yyjson_obj_iter_next(&iter))) {
-		value = yyjson_obj_iter_get_val(key);
-		const auto key_val = yyjson_get_str(key);
-		const auto key_len = yyjson_get_len(key);
-		auto type = yyjson_get_type(value);
-		if (type == YYJSON_TYPE_STR) {
-			// Since this is a string, we can directly add the value
-			const auto value_val = yyjson_get_str(value);
-			const auto value_len = yyjson_get_len(value);
-			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(string(value_val, value_len)));
-		} else if (type == YYJSON_TYPE_BOOL) {
-			// boolean values
-			bool bool_val = yyjson_get_bool(value);
-			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(bool_val ? "true" : "false"));
-		} else if (type == YYJSON_TYPE_OBJ) {
-			// We recurse, this is a complex json
-			// Convert the object value to a JSON string and recurse
-			size_t json_str_len;
-			char *json_str = yyjson_val_write(value, 0, &json_str_len);
-			if (json_str) {
-				auto nested_result = ParseJSONMap(string(json_str, json_str_len), ignore_errors);
-				result->AddObject(string(key_val, key_len), std::move(nested_result));
-				free(json_str); // Clean up the allocated string
-			} else {
-				yyjson_doc_free(doc);
-				if (ignore_errors) {
-					return result;
-				}
-				throw SerializationException("Failed to stringify nested JSON object");
-			}
-		} else {
-			// Anything else is invalid.
-			yyjson_doc_free(doc);
-			if (ignore_errors) {
-				return result;
-			}
-			throw SerializationException("Failed to parse JSON string: %s", json);
-		}
-	}
+
+	result = ParseJSON(json, doc, root, ignore_errors);
 	yyjson_doc_free(doc);
 	return result;
 }
@@ -642,7 +642,7 @@ string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
 }
 
 string ComplexJSON::GetValue(const string &key) const {
-	if (is_object) {
+	if (type == ComplexJSONType::OBJECT) {
 		if (obj_value.find(key) != obj_value.end()) {
 			return GetValueRecursive(*obj_value.at(key));
 		}
@@ -651,8 +651,18 @@ string ComplexJSON::GetValue(const string &key) const {
 	return "";
 }
 
+string ComplexJSON::GetValue(const idx_t &index) const {
+	if (type == ComplexJSONType::ARRAY) {
+		if (index >= arr_value.size()) {
+			return "";
+		}
+		return GetValueRecursive(*arr_value[index]);
+	}
+	return "";
+}
+
 string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
-	if (child.is_object) {
+	if (child.type == ComplexJSONType::OBJECT) {
 		// We have to construct the nested json
 		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
 		yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -662,6 +672,16 @@ string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
 			auto value_str = GetValueRecursive(*object.second);
 			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 			yyjson_mut_obj_add(root, key, value);
+		}
+		return WriteJsonToString(doc);
+	} else if (child.type == ComplexJSONType::ARRAY) {
+		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+		yyjson_mut_val *root = yyjson_mut_arr(doc);
+		yyjson_mut_doc_set_root(doc, root);
+		for (const auto &elem : child.arr_value) {
+			auto value_str = GetValueRecursive(*elem);
+			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+			yyjson_mut_arr_append(root, value);
 		}
 		return WriteJsonToString(doc);
 	} else {

@@ -143,10 +143,10 @@ bool EvictionQueue::TryDequeueWithLock(BufferEvictionNode &node) {
 
 void EvictionQueue::Purge() {
 	// only one thread purges the queue, all other threads early-out
-	if (!purge_lock.try_lock()) {
+	unique_lock<mutex> guard(purge_lock, std::try_to_lock);
+	if (!guard.owns_lock()) {
 		return;
 	}
-	lock_guard<mutex> lock {purge_lock, std::adopt_lock};
 
 	// we purge INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER nodes
 	idx_t purge_size = INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER;
@@ -211,7 +211,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	}
 
 	// bulk purge
-	idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
+	const idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
 
 	// retrieve all alive nodes that have been wrongly dequeued
 	idx_t alive_nodes = 0;
@@ -219,10 +219,12 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		auto &node = purge_nodes[i];
 		auto handle = node.TryGetBlockHandle();
 		if (handle) {
-			q.enqueue(std::move(node));
-			alive_nodes++;
+			purge_nodes[alive_nodes++] = std::move(node);
 		}
 	}
+
+	// bulk re-add (TODO order them by timestamp to better retain the LRU behavior)
+	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }

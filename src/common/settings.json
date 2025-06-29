@@ -712,6 +712,13 @@
         ]
     },
     {
+        "name": "pin_threads",
+        "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
+        "type": "VARCHAR",
+        "return_type": "ThreadPinMode",
+        "scope": "global"
+    },
+    {
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
         "type": "UBIGINT",
@@ -852,6 +859,12 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "wal_encryption",
+        "description": "Encrypt the WAL if the database is encrypted",
+        "type": "BOOLEAN",
+        "scope": "global"
     },
     {
         "name": "zstd_min_string_length",
