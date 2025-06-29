@@ -1,0 +1,11 @@
+{
+  "description": "Check duckdb without LocalFileSystem enabled",
+  "on_init": "SET disabled_filesystems = 'LocalFileSystem';",
+  "skip_compiled": "true",
+  "skip_error_messages": [
+    "LocalFileSystem"
+  ],
+  "skip_tests": [
+    "test/sql/attach/attach_filepath_roundtrip.test"
+  ]
+}

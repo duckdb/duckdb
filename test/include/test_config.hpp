@@ -47,6 +47,7 @@ public:
 	string OnLoadCommand();
 	string OnConnectionCommand();
 	vector<string> ExtensionToBeLoadedOnLoad();
+	vector<string> ErrorMessagesToBeSkipped();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
