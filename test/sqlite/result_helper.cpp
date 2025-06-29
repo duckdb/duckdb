@@ -363,6 +363,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 bool TestResultHelper::SkipErrorMessage(const string &message) {
 	for (auto &error_message : runner.ignore_error_messages) {
 		if (StringUtil::Contains(message, error_message)) {
+			SKIP_TEST(string("skip on error_message matching '") + error_message + string("'"));
 			return true;
 		}
 	}
