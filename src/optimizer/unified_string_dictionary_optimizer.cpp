@@ -74,6 +74,7 @@ bool UnifiedStringDictionaryOptimizer::CheckIfTargetOperatorAndInsert(optional_p
 		}
 		break;
 	}
+		// TODO: filter operator is also another possible TargetOperator
 	default:
 		break;
 	}

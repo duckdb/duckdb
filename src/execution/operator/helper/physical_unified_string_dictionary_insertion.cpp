@@ -77,16 +77,16 @@ OperatorResultType PhysicalUnifiedStringDictionary::Execute(ExecutionContext &co
 					auto result = context.client.GetUnifiedStringDictionary().Insert(start[i]);
 					// process the results, we use the statistics to determine the unique cardinality of the column
 					switch (result) {
-					case InsertResult::SUCCESS:
+					case USDInsertResult::SUCCESS:
 						++state.n_success;
 						break;
-					case InsertResult::ALREADY_EXISTS:
+					case USDInsertResult::ALREADY_EXISTS:
 						++state.n_already_exists;
 						break;
-					case InsertResult::REJECTED_PROBING:
+					case USDInsertResult::REJECTED_PROBING:
 						++state.n_rejected_probing;
 						break;
-					case InsertResult::REJECTED_FULL:
+					case USDInsertResult::REJECTED_FULL:
 						++state.n_rejected_full;
 						break;
 					default:

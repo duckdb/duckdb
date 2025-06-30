@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-enum class InsertResult {
+enum class USDInsertResult {
 	// string is inserted for the first time
 	SUCCESS,
 	// string already exists and is returned
@@ -32,7 +32,7 @@ public:
 	explicit UnifiedStringsDictionary(idx_t usd_sf);
 	~UnifiedStringsDictionary();
 	void UpdateFailedAttempts(idx_t n_failed);
-	InsertResult Insert(string_t &str);
+	USDInsertResult Insert(string_t &str);
 	// Loads the pre-computed hash for a USD backed string
 	static hash_t LoadHash(string_t &str);
 
@@ -73,7 +73,7 @@ private:
 	char *AddTag(char *ptr);
 	bool CheckEqualityAndUpdatePtr(string_t &str, idx_t bucket_idx);
 	bool WaitUntilSlotResolves(idx_t bucket_idx);
-	InsertResult InsertInternal(string_t &str);
+	USDInsertResult InsertInternal(string_t &str);
 };
 
 } // namespace duckdb
