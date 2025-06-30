@@ -18,14 +18,6 @@ SELECT col = 'data/csv/customer.csv' OR col = 'data\csv\customer.csv', o FROM gl
 true	1
 
 
-query III nosort read_csv_result
-SELECT * FROM read_csv('data/csv/customer.csv') WITH ORDINALITY ORDER BY ordinality;
-
-
-query III nosort read_csv_result
-SELECT *, row_number() OVER () AS ordinality FROM read_csv('data/csv/customer.csv') ORDER BY ordinality;
-
-
 query II
 SELECT my_range, my_ordinality FROM range(3) WITH ORDINALITY AS _(my_range, my_ordinality) ORDER BY my_range,my_ordinality;
 ----
@@ -107,3 +99,20 @@ SELECT * FROM unnest([41,42,43]) WITH ORDINALITY;
 43	3
 
 
+query II nosort read_csv_result
+SELECT column00, ordinality FROM read_csv('data/csv/customer.csv') WITH ORDINALITY ORDER BY ordinality,column00;
+
+
+query II nosort read_csv_result
+SELECT column00, row_number() OVER () AS ordinality FROM read_csv('data/csv/customer.csv') ORDER BY ordinality,column00;
+
+
+require parquet
+
+
+query II nosort parquet_result
+SELECT d,ordinality FROM read_parquet('data/parquet-testing/date.parquet') WITH ORDINALITY ORDER BY ordinality,d;
+
+
+query III nosort parquet_result
+SELECT d, row_number() OVER () AS ordinality FROM read_parquet('data/parquet-testing/date.parquet') ORDER BY ordinality,d;
