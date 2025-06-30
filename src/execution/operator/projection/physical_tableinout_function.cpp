@@ -70,7 +70,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
 		auto result = function.in_out_function(context, data, input, chunk);
-		if (this->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY && this->ordinality_data.inout_correlation) {
+		if (this->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY &&
+		    this->ordinality_data.inout_correlation) {
 			const idx_t ordinality = chunk.size();
 			this->ordinality_data.SetOrdinality(chunk, state.current_ordinality_idx, ordinality);
 			state.current_ordinality_idx += ordinality;
@@ -106,7 +107,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
-	if (this->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY && this->ordinality_data.inout_correlation) {
+	if (this->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY &&
+	    this->ordinality_data.inout_correlation) {
 		const idx_t ordinality = chunk.size();
 		this->ordinality_data.SetOrdinality(chunk, state.current_ordinality_idx, ordinality);
 		state.current_ordinality_idx += ordinality;

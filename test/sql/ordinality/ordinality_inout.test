@@ -2,7 +2,6 @@
 # description: Tests with ordinality for correlated InOut-TVFs
 # group: [ordinality]
 
-
 statement ok
 PRAGMA enable_verification;
 

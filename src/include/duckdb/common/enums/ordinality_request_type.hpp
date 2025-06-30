@@ -34,7 +34,8 @@ struct OrdinalityData {
 	}
 
 	bool operator==(const OrdinalityData &rhs) const {
-		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id && this->inout_correlation == rhs.inout_correlation);
+		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id &&
+		        this->inout_correlation == rhs.inout_correlation);
 	}
 
 	bool operator!=(const OrdinalityData &rhs) const {
