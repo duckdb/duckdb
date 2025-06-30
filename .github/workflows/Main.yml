@@ -17,7 +17,7 @@ on:
       - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -36,8 +36,16 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
+ check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - run: echo ${{ github.event.pull_request.draft }}
+      
  linux-debug:
     name: Linux Debug (${{ matrix.tag }})
+    needs: check-draft
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     strategy:
@@ -95,6 +103,7 @@ jobs:
 
  linux-release:
     name: Linux Release (full suite)
+    needs: check-draft
     runs-on: ubuntu-24.04
     env:
       GEN: ninja
@@ -287,6 +296,7 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     runs-on: ubuntu-22.04
+    needs: check-draft
     env:
       CC: clang
       CXX: clang++
@@ -315,6 +325,7 @@ jobs:
  linux-configs:
     name: Tests with different configurations
     runs-on: ubuntu-24.04
+    needs: check-draft
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 

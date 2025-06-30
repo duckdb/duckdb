@@ -12,7 +12,7 @@ on:
       - '!.github/workflows/NightlyTests.yml'
       - '!.github/patches/duckdb-wasm/**'
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -29,8 +29,16 @@ env:
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
+  check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - run: echo ${{ github.event.pull_request.draft }}
+
   linux-memory-leaks:
      name: Linux Memory Leaks
+     needs: check-draft
      runs-on: ubuntu-24.04
      env:
        GEN: ninja
@@ -288,6 +296,7 @@ jobs:
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
+     needs: check-draft
      runs-on: ubuntu-22.04
      env:
         GEN: ninja
@@ -585,7 +594,7 @@ jobs:
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
-    if: false
+    needs: check-draft
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -700,5 +709,6 @@ jobs:
           if-no-files-found: error
 
   pyodide:
+    needs: check-draft
     uses: ./.github/workflows/Pyodide.yml
     secrets: inherit
