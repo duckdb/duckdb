@@ -52,9 +52,9 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 	shared_ptr<DuckDB> db_instance;
 	{
 		std::unique_lock<mutex> create_db_lock(cache_entry->update_database_mutex);
-		// cache entry exists - check if the actual database still exists
 		db_instance = cache_entry->database.lock();
 	}
+	// cache entry exists - check if the actual database still exists
 	if (!db_instance) {
 		// if the database does not exist, but the cache entry still exists, the database is being shut down
 		// we need to wait until the database is fully shut down to safely proceed
@@ -122,8 +122,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance,
                                                    const std::function<void(DuckDB &)> &on_create) {
-	unique_lock<mutex> lock(cache_lock);
-	return CreateInstanceInternal(database, config, cache_instance, std::move(lock), on_create);
+	return CreateInstanceInternal(database, config, cache_instance, unique_lock<mutex>(cache_lock), on_create);
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
