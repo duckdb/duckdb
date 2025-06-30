@@ -434,4 +434,22 @@ OperatorPartitionData Sort::GetPartitionData(ExecutionContext &context, DataChun
 	                                      partition_info);
 }
 
+//===--------------------------------------------------------------------===//
+// Non-Standard Interface
+//===--------------------------------------------------------------------===//
+SourceResultType Sort::MaterializeMerge(ExecutionContext &context, OperatorSourceInput &input) const {
+	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
+	if (gstate.merger.total_count == 0) {
+		return SourceResultType::FINISHED;
+	}
+	auto &lstate = input.local_state.Cast<SortLocalSourceState>();
+	OperatorSourceInput merger_input {*gstate.merger_global_state, *lstate.merger_local_state, input.interrupt_state};
+	return gstate.merger.MaterializeMerge(context, merger_input);
+}
+
+unique_ptr<SortedRun> Sort::GetMaterialized(GlobalSourceState &global_state) {
+	auto &gstate = global_state.Cast<SortGlobalSourceState>();
+	return gstate.merger.GetMaterialized(gstate);
+}
+
 } // namespace duckdb
