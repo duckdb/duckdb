@@ -51,6 +51,9 @@ public:
 
 	ExecutorGlobalStates &Initialize(WindowGlobalSinkState &gstate);
 
+	// Set up the task parameters
+	idx_t InitTasks(idx_t per_thread);
+
 	// Scan all of the blocks during the build phase
 	unique_ptr<RowDataCollectionScanner> GetBuildScanner(idx_t block_idx) const {
 		if (!rows) {
@@ -471,21 +474,8 @@ void WindowGlobalSourceState::CreateTaskList() {
 		                        partition_blocks.size(), max_block.first, max_block.second);
 	}
 
-	//	TODO: Generate dynamically instead of building a big list?
-	vector<WindowGroupStage> stages {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
 	for (const auto &b : partition_blocks) {
-		auto &window_hash_group = *window_hash_groups[b.second];
-		auto &tasks = window_hash_group.tasks;
-		for (const auto &stage : stages) {
-			idx_t thread_count = 0;
-			for (Task task(stage, b.second, b.first); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
-				task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
-				tasks.emplace_back(task);
-				thread_count = ++task.thread_idx;
-				++total_tasks;
-			}
-			window_hash_group.thread_states.resize(thread_count);
-		}
+		total_tasks += window_hash_groups[b.second]->InitTasks(per_thread);
 	}
 }
 
@@ -653,6 +643,22 @@ protected:
 	ExpressionExecutor eval_exec;
 	DataChunk eval_chunk;
 };
+
+idx_t WindowHashGroup::InitTasks(idx_t per_thread) {
+	vector<WindowGroupStage> stages {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
+	const idx_t blocks = rows->blocks.size();
+	for (const auto &stage : stages) {
+		idx_t thread_count = 0;
+		for (Task task(stage, hash_bin, blocks); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
+			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
+			tasks.emplace_back(task);
+			thread_count = ++task.thread_idx;
+		}
+		thread_states.resize(thread_count);
+	}
+
+	return tasks.size();
+}
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalSinkState &gsink) {
 	//	Single-threaded building as this is mostly memory allocation
