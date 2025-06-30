@@ -2,8 +2,8 @@
 # description: Test MERGE INTO
 # group: [merge]
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE Stock(item_id int, balance int);
