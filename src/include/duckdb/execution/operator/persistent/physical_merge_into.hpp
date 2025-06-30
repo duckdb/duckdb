@@ -32,8 +32,7 @@ public:
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
 	                  vector<unique_ptr<MergeIntoOperator>> when_matched_actions,
-	                  vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions,
-	                  idx_t row_id_index);
+	                  vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions, idx_t row_id_index);
 
 	vector<unique_ptr<MergeIntoOperator>> when_matched_actions;
 	vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions;

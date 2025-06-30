@@ -14,9 +14,6 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 	auto result = make_uniq<MergeIntoOperator>();
 
 	// FIXME: we cannot move op.bound_defaults/op.bound_constraints - need to copy
-	if (action.condition) {
-		throw InternalException("FIXME: support condition");
-	}
 	if (!op.bound_constraints.empty()) {
 		throw InternalException("Move bound constraints");
 	}
@@ -72,8 +69,8 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 		when_not_matched_actions.push_back(PlanMergeIntoAction(context, op, planner, *action));
 	}
 
-	auto &result =
-	    planner.Make<PhysicalMergeInto>(op.types, std::move(when_matched_actions), std::move(when_not_matched_actions), op.row_id_start);
+	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(when_matched_actions),
+	                                               std::move(when_not_matched_actions), op.row_id_start);
 	result.children.push_back(plan);
 	return result;
 }

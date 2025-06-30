@@ -24593,7 +24593,7 @@ yyreduce:
 
   case 485:
 #line 109 "third_party/libpg_query/grammar/statements/merge_into.y"
-    { (yyval.list) = lappend((yyvsp[(2) - (2)].list), (yyvsp[(1) - (2)].node)); ;}
+    { (yyval.list) = list_concat(list_make1((yyvsp[(1) - (2)].node)), (yyvsp[(2) - (2)].list)); ;}
     break;
 
   case 486:

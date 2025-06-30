@@ -55,12 +55,14 @@ statement ok
 INSERT INTO Sale VALUES (10, 2200);
 
 statement ok
-INSERT INTO Sale VALUES (33, 1900);
+INSERT INTO Sale VALUES (20, 1900);
 
 query I
 MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
-WHEN MATCHED AND Sale.volume >= balance THEN DELETE
-WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
+WHEN MATCHED AND Sale.volume > balance THEN ABORT
+WHEN MATCHED AND Sale.volume = balance THEN DELETE
+WHEN MATCHED AND TRUE THEN UPDATE SET balance = balance - Sale.volume
+WHEN MATCHED THEN ABORT
 WHEN NOT MATCHED THEN ABORT
 ----
 2
@@ -79,3 +81,5 @@ WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
 WHEN NOT MATCHED THEN ABORT
 ----
 Merge abort condition
+
+# error in WHEN MATCHED that should not get executed

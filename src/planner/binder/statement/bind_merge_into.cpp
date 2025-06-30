@@ -24,6 +24,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 		auto cond = where_binder.Bind(action.condition);
 		result->condition =
 		    make_uniq<BoundColumnRefExpression>(cond->return_type, ColumnBinding(proj_index, expressions.size()));
+		result->condition->alias = cond->ToString();
 		expressions.push_back(std::move(cond));
 	}
 	switch (action.action_type) {

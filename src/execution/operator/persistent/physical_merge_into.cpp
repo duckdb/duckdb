@@ -5,7 +5,8 @@ namespace duckdb {
 
 PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                      vector<unique_ptr<MergeIntoOperator>> when_matched_actions_p,
-                                     vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions_p, idx_t row_id_index)
+                                     vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions_p,
+                                     idx_t row_id_index)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_INTO, std::move(types), 1),
       when_matched_actions(std::move(when_matched_actions_p)),
       when_not_matched_actions(std::move(when_not_matched_actions_p)), row_id_index(row_id_index) {
@@ -19,14 +20,19 @@ public:
 	MergeIntoLocalState(ExecutionContext &context, const PhysicalMergeInto &op) {
 		for (auto &action : op.when_matched_actions) {
 			local_states.push_back(action->op ? action->op->GetLocalSinkState(context) : nullptr);
+			executors.push_back(action->condition ? make_uniq<ExpressionExecutor>(context.client, *action->condition)
+			                                      : nullptr);
 		}
 		for (auto &action : op.when_not_matched_actions) {
 			local_states.push_back(action->op ? action->op->GetLocalSinkState(context) : nullptr);
+			executors.push_back(action->condition ? make_uniq<ExpressionExecutor>(context.client, *action->condition)
+			                                      : nullptr);
 		}
 	}
 
 	idx_t combine_idx = 0;
 	vector<unique_ptr<LocalSinkState>> local_states;
+	vector<unique_ptr<ExpressionExecutor>> executors;
 	idx_t merged_count = 0;
 };
 
@@ -47,11 +53,33 @@ public:
 	atomic<idx_t> merged_count;
 
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, MergeIntoLocalState &local_state,
-	OperatorSinkInput &input, bool matched) {
+	                    OperatorSinkInput &input, bool matched) {
 		auto &actions = matched ? op.when_matched_actions : op.when_not_matched_actions;
 		idx_t offset = matched ? 0 : op.when_matched_actions.size();
-		for(idx_t i = 0; i < actions.size(); i++) {
+
+		SelectionVector current_sel;
+		idx_t current_count = chunk.size();
+		for (idx_t i = 0; i < actions.size() && current_count > 0; i++) {
 			auto &action = actions[i];
+			DataChunk new_chunk;
+			if (action->condition) {
+				auto &executor = *local_state.executors[offset + i];
+				SelectionVector selected_sel(chunk.size());
+				SelectionVector remaining_sel(chunk.size());
+				idx_t match_count =
+				    executor.SelectExpression(chunk, selected_sel, remaining_sel, current_sel, current_count);
+				if (match_count == 0) {
+					// no matches - move to next action
+					continue;
+				}
+				// slice the chunk for this action with the matching sel
+				new_chunk.Initialize(context.client, chunk.GetTypes());
+				new_chunk.Slice(chunk, selected_sel, match_count);
+
+				// for the next chunk - update the matches
+				current_count = current_count - match_count;
+				current_sel.Initialize(remaining_sel);
+			}
 			if (!action->op) {
 				if (action->action_type == MergeActionType::MERGE_ABORT) {
 					// abort - generate an error message
@@ -68,6 +96,7 @@ public:
 				D_ASSERT(action->action_type == MergeActionType::MERGE_DO_NOTHING);
 				continue;
 			}
+			auto &input_chunk = action->condition ? new_chunk : chunk;
 			auto &gstate = sink_states[i + offset];
 			auto &lstate = local_state.local_states[i + offset];
 			OperatorSinkInput sink_input {*gstate, *lstate, input.interrupt_state};
@@ -76,15 +105,15 @@ public:
 				ExpressionExecutor executor(context.client, action->expressions);
 
 				vector<LogicalType> insert_types;
-				for(auto &expr : action->expressions) {
+				for (auto &expr : action->expressions) {
 					insert_types.push_back(expr->return_type);
 				}
 				DataChunk insert_chunk;
 				insert_chunk.Initialize(context.client, insert_types);
-				executor.Execute(chunk, insert_chunk);
+				executor.Execute(input_chunk, insert_chunk);
 				result = action->op->Sink(context, insert_chunk, sink_input);
 			} else {
-				result = action->op->Sink(context, chunk, sink_input);
+				result = action->op->Sink(context, input_chunk, sink_input);
 			}
 			if (result == SinkResultType::BLOCKED) {
 				throw InternalException("FIXME: SINK blocked");
@@ -157,7 +186,7 @@ SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chu
 
 	idx_t matched_count = 0;
 	idx_t not_matched_count = 0;
-	for(idx_t i = 0; i < chunk.size(); i++) {
+	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = row_id_data.sel->get_index(i);
 		if (row_id_data.validity.RowIsValid(idx)) {
 			// match

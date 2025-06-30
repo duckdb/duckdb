@@ -197,19 +197,19 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	}
 	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
 		auto &merge_into = op.Cast<LogicalMergeInto>();
-		for(auto &action : merge_into.when_matched_actions) {
+		for (auto &action : merge_into.when_matched_actions) {
 			if (action->condition) {
 				callback(&action->condition);
 			}
-			for(auto &expr : action->expressions) {
+			for (auto &expr : action->expressions) {
 				callback(&expr);
 			}
 		}
-		for(auto &action : merge_into.when_not_matched_actions) {
+		for (auto &action : merge_into.when_not_matched_actions) {
 			if (action->condition) {
 				callback(&action->condition);
 			}
-			for(auto &expr : action->expressions) {
+			for (auto &expr : action->expressions) {
 				callback(&expr);
 			}
 		}

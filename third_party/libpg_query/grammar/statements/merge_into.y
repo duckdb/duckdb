@@ -106,5 +106,5 @@ matched_or_not_matched_clause:
 
 merge_match_list:
 	matched_or_not_matched_clause						{ $$ = list_make1($1); }
-	| matched_or_not_matched_clause merge_match_list	{ $$ = lappend($2, $1); }
+	| matched_or_not_matched_clause merge_match_list	{ $$ = list_concat(list_make1($1), $2); }
 	;
