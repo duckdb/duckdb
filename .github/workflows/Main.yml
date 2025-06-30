@@ -35,25 +35,17 @@ env:
 
 jobs:
  linux-debug:
-    name: Linux Debug (${{ matrix.tag }})
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    name: Linux DEBUG + sanitizers
+    # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - tag: 1
-            start_offset: ""
-            end_offset: "--end-offset 2000"
-          - tag: 2
-            start_offset: "--start-offset 2000"
-            end_offset: ""
     env:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
+      CMAKE_CXX_FLAGS: '-DDEBUG'
+      FORCE_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -73,11 +65,11 @@ jobs:
 
     - name: Build
       shell: bash
-      run:  make debug
+      run:  make release
 
     - name: Output version info
       shell: bash
-      run: ./build/debug/duckdb -c "PRAGMA version;"
+      run: ./build/release/duckdb -c "PRAGMA version;"
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -89,7 +81,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest --tests-per-invocation 100
 
  linux-release:
     name: Linux Release (full suite)
