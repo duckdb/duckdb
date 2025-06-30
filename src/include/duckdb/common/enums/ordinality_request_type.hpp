@@ -19,7 +19,11 @@ enum class OrdinalityType : uint8_t { WITHOUT_ORDINALITY = 0, WITH_ORDINALITY = 
 
 struct OrdinalityData {
 
+	// If WITH ORDINALITY has been requested
 	OrdinalityType ordinality_request = OrdinalityType::WITHOUT_ORDINALITY;
+	// Whether the InOut-function is correlated. If so, create sequence vector instead of pushing window function
+	bool inout_correlation = false;
+	// For correlated InOut-functions: where to insert the ordinality column
 	idx_t column_id;
 
 	void SetOrdinality(DataChunk &chunk, const idx_t &ordinality_idx, const idx_t &ordinality) const {
@@ -30,7 +34,7 @@ struct OrdinalityData {
 	}
 
 	bool operator==(const OrdinalityData &rhs) const {
-		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id);
+		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id && this->inout_correlation == rhs.inout_correlation);
 	}
 
 	bool operator!=(const OrdinalityData &rhs) const {

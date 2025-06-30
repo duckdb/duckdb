@@ -198,6 +198,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 
 	auto bind_index = GenerateTableIndex();
 	idx_t ordinality_column_id;
+	bool inout_correlation = false;
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
@@ -241,7 +242,10 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			                      table_function.name);
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && table_function.in_out_function) {
+		if (!correlated_columns.empty() && table_function.in_out_function) {
+			inout_correlation = true;
+		}
+		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && inout_correlation) {
 			return_types.emplace_back(LogicalType::BIGINT);
 			return_names.emplace_back("ordinality");
 			D_ASSERT(return_names.size() == return_types.size());
@@ -284,13 +288,14 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->input_table_names = input_table_names;
 	get->ordinality_data.ordinality_request = ref.with_ordinality;
 	get->ordinality_data.column_id = ordinality_column_id;
+	get->ordinality_data.inout_correlation = inout_correlation;
 	if (table_function.in_out_function) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
 	}
 
-	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !table_function.in_out_function) {
+	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !inout_correlation) {
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number =
