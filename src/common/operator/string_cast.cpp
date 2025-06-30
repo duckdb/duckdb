@@ -2,8 +2,6 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -88,9 +86,9 @@ duckdb::string_t StringCast::Operation(uhugeint_t input, Vector &vector) {
 template <>
 duckdb::string_t StringCast::Operation(date_t input, Vector &vector) {
 	if (input == date_t::infinity()) {
-		return StringVector::AddString(vector, Date::PINF);
+		return StringVector::AddString(vector, Date::PINF.str);
 	} else if (input == date_t::ninfinity()) {
-		return StringVector::AddString(vector, Date::NINF);
+		return StringVector::AddString(vector, Date::NINF.str);
 	}
 	int32_t date[3];
 	Date::Convert(input, date[0], date[1], date[2]);
@@ -128,10 +126,10 @@ duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
 template <bool HAS_NANOS>
 duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
-		return StringVector::AddString(vector, Date::PINF);
+		return StringVector::AddString(vector, Date::PINF.str);
 	}
 	if (input == timestamp_t::ninfinity()) {
-		return StringVector::AddString(vector, Date::NINF);
+		return StringVector::AddString(vector, Date::NINF.str);
 	}
 
 	date_t date_entry;
@@ -261,10 +259,10 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 template <>
 string_t StringCastTZ::Operation(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
-		return StringVector::AddString(vector, Date::PINF);
+		return StringVector::AddString(vector, Date::PINF.str);
 	}
 	if (input == timestamp_t::ninfinity()) {
-		return StringVector::AddString(vector, Date::NINF);
+		return StringVector::AddString(vector, Date::NINF.str);
 	}
 
 	date_t date_entry;
