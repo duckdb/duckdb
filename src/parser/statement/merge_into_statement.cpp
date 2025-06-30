@@ -8,7 +8,8 @@ MergeIntoStatement::MergeIntoStatement() : SQLStatement(StatementType::MERGE_INT
 MergeIntoStatement::MergeIntoStatement(const MergeIntoStatement &other) : SQLStatement(other) {
 	target = other.target->Copy();
 	source = other.source->Copy();
-	join_condition = other.join_condition->Copy();
+	join_condition = other.join_condition ? other.join_condition->Copy() : nullptr;
+	using_columns = other.using_columns;
 	for (auto &match_action : other.when_matched_actions) {
 		when_matched_actions.push_back(match_action->Copy());
 	}
@@ -25,8 +26,19 @@ string MergeIntoStatement::ToString() const {
 	result += target->ToString();
 	result += " USING ";
 	result += source->ToString();
-	result += " ON ";
-	result += join_condition->ToString();
+	if (join_condition) {
+		result += " ON ";
+		result += join_condition->ToString();
+	} else {
+		result += " USING (";
+		for(idx_t c = 0; c < using_columns.size(); c++) {
+			if (c > 0) {
+				result += ", ";
+			}
+			result += using_columns[c];
+		}
+		result += ")";
+	}
 	for (auto &action : when_matched_actions) {
 		result += " WHEN MATCHED " + action->ToString();
 	}

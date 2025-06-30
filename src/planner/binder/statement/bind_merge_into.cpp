@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 
 #include <algorithm>
 
@@ -59,36 +60,22 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 }
 
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
-	BoundStatement result;
-	unique_ptr<LogicalOperator> root;
+	JoinRef join;
 
-	// visit the table reference
-	auto bound_table = Bind(*stmt.target);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw BinderException("Can only update base table!");
+	join.type = JoinType::LEFT;
+	join.left = std::move(stmt.source);
+	join.right = std::move(stmt.target);
+	if (stmt.join_condition) {
+		join.condition = std::move(stmt.join_condition);
+	} else {
+		join.using_columns = std::move(stmt.using_columns);
 	}
-	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	auto &table = table_binding.table;
+	auto bound_join_node = Bind(join);
+	auto &bound_join = bound_join_node->Cast<BoundJoinRef>();
 
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
-
-	optional_ptr<LogicalGet> get;
-
-	// create a right join between the target table and the merge source
-	// we need to do a right join because we need to know all rows that matched, and all rows that did not match
-	auto from_binder = Binder::CreateBinder(context, this);
-	BoundJoinRef bound_join(JoinRefType::REGULAR);
-	bound_join.type = JoinType::LEFT;
-	bound_join.left = from_binder->Bind(*stmt.source);
-	bound_join.right = std::move(bound_table);
-	bind_context.AddContext(std::move(from_binder->bind_context));
-
-	WhereBinder binder(*this, context);
-	bound_join.condition = binder.Bind(stmt.join_condition);
-
-	root = CreatePlan(bound_join);
-	get = &root->children[1]->Cast<LogicalGet>();
+	auto root = CreatePlan(bound_join);
+	auto &get = root->children[1]->Cast<LogicalGet>();
+	auto &table = *get.GetTable();
 
 	if (!table.temporary) {
 		// update of persistent table: not read only!
@@ -124,13 +111,14 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	merge_into->row_id_start = projection_expressions.size();
 	// finally bind the row id column and add them to the projection list
-	BindRowIdColumns(table, *get, projection_expressions);
+	BindRowIdColumns(table, get, projection_expressions);
 
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
 	proj->AddChild(std::move(root));
 
 	merge_into->AddChild(std::move(proj));
 
+	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = std::move(merge_into);

@@ -2266,6 +2266,7 @@ typedef struct PGMergeIntoStmt {
 	PGRangeVar *targetTable;     /* relation to merge into */
 	PGNode *source;              /* source table or query */
 	PGNode *joinCondition;       /* qualifications */
+	PGList *usingClause;         /* optional using clause for more tables */
 	PGList *matchActions;        /* list of match actions */
 	PGWithClause *withClause;    /* WITH clause */
 } PGMergeIntoStmt;
@@ -2285,12 +2286,13 @@ typedef enum {
 
 typedef struct PGMatchAction {
 	PGNodeTag type;
-	MergeAction when;             /* WHEN MATCHED or WHEN NOT MATCHED */
-	PGNode *andClause;            /* AND condition, if any */
-	MergeActionType actionType;   /* UPDATE, DELETE, etc */
-	PGList *updateTargets;        /* the target list for UPDATE */
-	PGList *insertCols;           /* optional: names of the target columns for insert */
-	PGList *insertValues;         /* values for insert */
+	MergeAction when;                        /* WHEN MATCHED or WHEN NOT MATCHED */
+	PGNode *andClause;                       /* AND condition, if any */
+	MergeActionType actionType;              /* UPDATE, DELETE, etc */
+	PGList *updateTargets;                   /* the target list for UPDATE */
+	PGInsertColumnOrder insert_column_order; /* BY NAME or BY POSITION */
+	PGList *insertCols;                      /* optional: names of the target columns for insert */
+	PGList *insertValues;                    /* values for insert */
 } PGMatchAction;
 
 }

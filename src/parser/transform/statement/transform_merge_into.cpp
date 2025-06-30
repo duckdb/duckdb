@@ -45,7 +45,12 @@ unique_ptr<SQLStatement> Transformer::TransformMergeInto(duckdb_libpgquery::PGMe
 	}
 	result->target = TransformRangeVar(*stmt.targetTable);
 	result->source = TransformTableRefNode(*stmt.source);
-	result->join_condition = TransformExpression(*stmt.joinCondition);
+	if (stmt.joinCondition) {
+		result->join_condition = TransformExpression(*stmt.joinCondition);
+	}
+	if (stmt.usingClause) {
+		result->using_columns = TransformUsingClause(*stmt.usingClause);
+	}
 
 	unique_ptr<MergeIntoAction> when_matched_action;
 	unique_ptr<MergeIntoAction> when_not_matched_action;

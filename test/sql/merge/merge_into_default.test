@@ -1,3 +1,19 @@
 # name: test/sql/merge/merge_into_default.test
+# description: Test MERGE INTO with default values
 # group: [merge]
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SEQUENCE seq
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int, sequence int DEFAULT nextval('seq'));
+
+query I
+MERGE INTO Stock USING (VALUES (10, 20)) initial_stocks(item_id, balance) USING (item_id)
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance, DEFAULT)
+----
+1

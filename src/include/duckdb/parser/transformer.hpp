@@ -327,6 +327,9 @@ private:
 	//! Transform a VALUES list into a set of expressions
 	unique_ptr<TableRef> TransformValuesList(duckdb_libpgquery::PGList *list);
 
+	//! Transform using clause
+	vector<string> TransformUsingClause(duckdb_libpgquery::PGList &usingClause);
+
 	//! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);
 

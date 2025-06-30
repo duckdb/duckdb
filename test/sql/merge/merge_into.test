@@ -29,8 +29,8 @@ WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.bala
 # DO NOTHING is the default - this is a nop
 query I
 WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
-MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)
-WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
+MERGE INTO Stock USING initial_stocks USING (item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (item_id, initial_stocks.balance)
 ----
 0
 

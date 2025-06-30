@@ -44,6 +44,7 @@ public:
 	unique_ptr<TableRef> target;
 	unique_ptr<TableRef> source;
 	unique_ptr<ParsedExpression> join_condition;
+	vector<string> using_columns;
 
 	vector<unique_ptr<MergeIntoAction>> when_matched_actions;
 	vector<unique_ptr<MergeIntoAction>> when_not_matched_actions;

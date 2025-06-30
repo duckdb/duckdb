@@ -7,14 +7,17 @@
 MergeIntoStmt: opt_with_clause
 			MERGE INTO relation_expr_opt_alias
 			USING table_ref
-			ON a_expr
+			join_qual
 			merge_match_list
 				{
 					PGMergeIntoStmt *n = makeNode(PGMergeIntoStmt);
 					n->targetTable = $4;
 					n->source = $6;
-					n->joinCondition = $8;
-					n->matchActions = $9;
+					if ($5 != NULL && IsA($7, PGList))
+						n->usingClause = (PGList *) $7; /* USING clause */
+					else
+						n->joinCondition = $7; /* ON clause */
+					n->matchActions = $8;
 					n->withClause = $1;
 					$$ = (PGNode *)n;
 				}
@@ -44,19 +47,25 @@ matched_clause_action:
 			n->actionType = MERGE_ACTION_TYPE_DELETE;
 			$$ = (PGNode *)n;
 		}
-	| DO NOTHING
+	| not_matched_clause_action
+	;
+;
+
+merge_insert_clause:
+	opt_by_name_or_position opt_star
 		{
-			PGMatchAction *n = makeNode(PGMatchAction);
-			n->actionType = MERGE_ACTION_TYPE_DO_NOTHING;
-			$$ = (PGNode *)n;
+
 		}
-	| ABORT_P
+	opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
 		{
-			PGMatchAction *n = makeNode(PGMatchAction);
-			n->actionType = MERGE_ACTION_TYPE_ABORT;
-			$$ = (PGNode *)n;
+
+		}
+	| DEFAULT VALUES
+		{
 		}
 	;
+
+INSERT (item_id);
 
 not_matched_clause_action:
 	INSERT opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
