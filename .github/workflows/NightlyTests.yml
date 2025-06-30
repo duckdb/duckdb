@@ -30,11 +30,12 @@ env:
 
 jobs:
   check-draft:
-    name: Don't trigger further jobs to run on draft PR
-    runs-on: ubuntu-24.04
+    # We run all other jobs on PRs only if they are not draft PR
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
     steps:
-      - run: echo ${{ github.event.pull_request.draft }}
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
 
   linux-memory-leaks:
      name: Linux Memory Leaks
