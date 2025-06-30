@@ -256,8 +256,13 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 		return true;
 	});
 
-	result.push_back(*system);
-	result.push_back(*context.client_data->temporary_objects);
+	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 1) {
+		result.push_back(*system);
+	}
+	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 2) {
+		result.push_back(*context.client_data->temporary_objects);
+	}
+
 	return result;
 }
 

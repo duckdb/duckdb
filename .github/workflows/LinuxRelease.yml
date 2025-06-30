@@ -26,6 +26,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -34,9 +35,10 @@ on:
       - 'test-uploaded-ext'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -53,8 +55,17 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
+ check-draft:
+    name: Don't trigger further jobs to run on draft PR
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - run: echo ${{ github.event.pull_request.draft }}
+      
  linux-release-cli:
-    needs: linux-extensions-64
+    needs: 
+      - linux-extensions-64
+      - check-draft
 
     strategy:
       fail-fast: false
@@ -145,6 +156,7 @@ jobs:
  linux-extensions-64:
     # Builds extensions for linux_amd64
     name: Linux Extensions (x64)
+    needs: check-draft
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -191,7 +203,9 @@ jobs:
     # Builds extensions for linux_amd64_musl
     name: Linux Extensions (musl + x64)
     runs-on: ubuntu-latest
-    needs: linux-extensions-64
+    needs: 
+      - linux-extensions-64
+      - check-draft
     strategy:
       matrix:
         duckdb_arch: [linux_amd64_musl]
@@ -236,7 +250,9 @@ jobs:
     # Builds extensions for linux_arm64
     name: Linux Extensions (aarch64)
     runs-on: ubuntu-24.04-arm
-    needs: linux-extensions-64
+    needs: 
+      - linux-extensions-64
+      - check-draft
     strategy:
       matrix:
         duckdb_arch: [linux_arm64]
@@ -278,9 +294,9 @@ jobs:
           
  check-load-install-extensions:
     name: Checks extension entries
-    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-22.04
     needs: linux-extensions-64
+    if: ${{ inputs.skip_tests != 'true' }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -366,10 +382,9 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
-    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-22.04
     needs: linux-extensions-64
-
+    if: ${{ inputs.skip_tests != 'true' }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -397,6 +412,7 @@ jobs:
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-22.04
+    needs: linux-extensions-64
     env:
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
       S3_TEST_SERVER_AVAILABLE: 1

@@ -37,6 +37,7 @@ public:
 		~SHA256State();
 		void AddString(const std::string &str);
 		void AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len);
+		void AddBytes(duckdb::const_data_ptr_t input_bytes, duckdb::idx_t len);
 		void AddSalt(unsigned char *salt, size_t salt_len);
 		std::string Finalize();
 		void FinishHex(char *out);

@@ -32,6 +32,7 @@ on:
       - 'test-uploaded-ext'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'

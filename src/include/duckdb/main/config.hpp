@@ -16,6 +16,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
@@ -268,6 +269,8 @@ struct DBConfigOptions {
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
+	//!  By default, WAL is encrypted for encrypted databases
+	bool wal_encryption = true;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.
@@ -306,6 +309,8 @@ struct DBConfigOptions {
 #else
 	bool scheduler_process_partial = false;
 #endif
+	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
+	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
