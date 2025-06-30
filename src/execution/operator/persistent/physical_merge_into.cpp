@@ -118,6 +118,7 @@ public:
 			if (result == SinkResultType::BLOCKED) {
 				throw InternalException("FIXME: SINK blocked");
 			}
+			local_state.merged_count += input_chunk.size();
 		}
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -175,7 +176,6 @@ unique_ptr<LocalSinkState> PhysicalMergeInto::GetLocalSinkState(ExecutionContext
 SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &global_state = input.global_state.Cast<MergeIntoGlobalState>();
 	auto &local_state = input.local_state.Cast<MergeIntoLocalState>();
-	local_state.merged_count += chunk.size();
 
 	// for each row, figure out if we have generated a match or not
 	SelectionVector matched(STANDARD_VECTOR_SIZE);

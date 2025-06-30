@@ -47,19 +47,44 @@ unique_ptr<SQLStatement> Transformer::TransformMergeInto(duckdb_libpgquery::PGMe
 	result->source = TransformTableRefNode(*stmt.source);
 	result->join_condition = TransformExpression(*stmt.joinCondition);
 
+	unique_ptr<MergeIntoAction> when_matched_action;
+	unique_ptr<MergeIntoAction> when_not_matched_action;
+
 	for (auto cell = stmt.matchActions->head; cell; cell = cell->next) {
 		auto match_action = PGPointerCast<duckdb_libpgquery::PGMatchAction>(cell->data.ptr_value);
 		auto action = TransformMergeIntoAction(*match_action);
 		switch (match_action->when) {
 		case duckdb_libpgquery::MERGE_ACTION_WHEN_MATCHED:
+			if (!action->condition) {
+				if (when_matched_action) {
+					throw ParserException("Unconditional WHEN MATCHED clause was already defined - only one "
+					                      "unconditional WHEN MATCHED clause is supported");
+				}
+				when_matched_action = std::move(action);
+				break;
+			}
 			result->when_matched_actions.push_back(std::move(action));
 			break;
 		case duckdb_libpgquery::MERGE_ACTION_WHEN_NOT_MATCHED:
+			if (!action->condition) {
+				if (when_not_matched_action) {
+					throw ParserException("Unconditional WHEN NOT MATCHED clause was already defined - only one "
+					                      "unconditional WHEN NOT MATCHED clause is supported");
+				}
+				when_not_matched_action = std::move(action);
+				break;
+			}
 			result->when_not_matched_actions.push_back(std::move(action));
 			break;
 		default:
 			throw InternalException("Unknown merge action");
 		}
+	}
+	if (when_matched_action) {
+		result->when_matched_actions.push_back(std::move(when_matched_action));
+	}
+	if (when_not_matched_action) {
+		result->when_not_matched_actions.push_back(std::move(when_not_matched_action));
 	}
 	return std::move(result);
 }
