@@ -31,7 +31,9 @@ string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 	return fs.NormalizeAbsolutePath(fs.JoinPath(FileSystem::GetWorkingDirectory(), database));
 }
 
-shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config) {
+shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config,
+                                                        std::unique_lock<std::mutex> &lock) {
+	D_ASSERT(lock.owns_lock());
 	auto local_fs = FileSystem::CreateLocal();
 	auto abs_database_path = GetDBAbsolutePath(database, *local_fs);
 	auto entry = db_instances.find(abs_database_path);
@@ -39,31 +41,37 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		// path does not exist in the list yet - no cache entry
 		return nullptr;
 	}
-	auto cache_entry = entry->second.get().lock();
+	auto weak_cache_entry = entry->second;
+	auto cache_entry = weak_cache_entry.lock();
 	if (!cache_entry) {
 		// cache entry does not exist anymore - clean it up
 		db_instances.erase(entry);
 		return nullptr;
 	}
-	// cache entry exists - check if the actual database still exists
-	auto db_instance = cache_entry->database.lock();
+	lock.unlock();
+	shared_ptr<DuckDB> db_instance;
+	{
+		std::unique_lock<mutex> create_db_lock(cache_entry->update_database_mutex);
+		// cache entry exists - check if the actual database still exists
+		db_instance = cache_entry->database.lock();
+	}
 	if (!db_instance) {
 		// if the database does not exist, but the cache entry still exists, the database is being shut down
 		// we need to wait until the database is fully shut down to safely proceed
 		// we do this here using a busy spin
-		while (cache_entry) {
-			// clear our cache entry
-			cache_entry.reset();
-			// try to lock it again
-			cache_entry = entry->second.get().lock();
+		cache_entry.reset();
+		while (!weak_cache_entry.expired()) {
 		}
+		D_ASSERT(!cache_entry);
 		// the cache entry has now been deleted - clear it from the set of database instances and return
-		db_instances.erase(entry);
+		lock.lock();
+		db_instances.erase(abs_database_path);
+		lock.unlock();
 		return nullptr;
 	}
 	// the database instance exists - check that the config matches
 	if (db_instance->instance->config != config) {
-		throw duckdb::ConnectionException(
+		throw ConnectionException(
 		    "Can't open a connection to same database file with a different configuration "
 		    "than existing connections");
 	}
@@ -71,8 +79,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DBConfig &config) {
-	lock_guard<mutex> l(cache_lock);
-	return GetInstanceInternal(database, config);
+	unique_lock<mutex> lock {cache_lock};
+	return GetInstanceInternal(database, config, lock);
 }
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
@@ -98,16 +106,12 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	}
 	shared_ptr<DuckDB> db_instance;
 	if (cache_entry) {
-		std::promise<weak_ptr<DatabaseCacheEntry>> set_db_promise {};
-		db_instances[abs_database_path] = set_db_promise.get_future().share();
-		lock.unlock();
-
 		// Create the new instance after unlocking to avoid new ddb creation requests to be blocked
+		lock.unlock();
+		lock_guard<mutex> create_db_lock(cache_entry->update_database_mutex);
+		db_instances[abs_database_path] = cache_entry;
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
-		// attach cache entry to the database
 		cache_entry->database = db_instance;
-		// set the promise to the cache entry
-		set_db_promise.set_value(cache_entry);
 	} else {
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 	}
@@ -128,12 +132,13 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
                                                         const std::function<void(DuckDB &)> &on_create) {
 	unique_lock<mutex> lock(cache_lock);
 	if (cache_instance) {
-		auto instance = GetInstanceInternal(database, config_dict);
+		auto instance = GetInstanceInternal(database, config_dict, lock);
 		if (instance) {
+			D_ASSERT(!lock.owns_lock());
 			return instance;
 		}
 	}
-
+	D_ASSERT(lock.owns_lock());
 	return CreateInstanceInternal(database, config_dict, cache_instance, std::move(lock), on_create);
 }
 

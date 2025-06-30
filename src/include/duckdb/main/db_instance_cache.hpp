@@ -12,7 +12,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include <functional>
-#include <future>
 
 namespace duckdb {
 class DBInstanceCache;
@@ -23,6 +22,7 @@ struct DatabaseCacheEntry {
 	~DatabaseCacheEntry();
 
 	weak_ptr<DuckDB> database;
+	mutex update_database_mutex;
 };
 
 class DBInstanceCache {
@@ -43,13 +43,14 @@ public:
 
 private:
 	//! A map with the cached instances <absolute_path/instance>
-	unordered_map<string, std::shared_future<weak_ptr<DatabaseCacheEntry>>> db_instances;
+	unordered_map<string, weak_ptr<DatabaseCacheEntry>> db_instances;
 
 	//! Lock to alter cache
 	mutex cache_lock;
 
 private:
-	shared_ptr<DuckDB> GetInstanceInternal(const string &database, const DBConfig &config_dict);
+	shared_ptr<DuckDB> GetInstanceInternal(const string &database, const DBConfig &config,
+	                                       std::unique_lock<std::mutex> &lock);
 	shared_ptr<DuckDB> CreateInstanceInternal(const string &database, DBConfig &config_dict, bool cache_instance,
 	                                          std::unique_lock<std::mutex> lock,
 	                                          const std::function<void(DuckDB &)> &on_create);

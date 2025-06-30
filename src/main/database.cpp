@@ -317,7 +317,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		auto entry = config.storage_extensions.find(config.options.database_type);
+		if (entry == config.storage_extensions.end()) {
+			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		}
 	}
 
 	LoadExtensionSettings();
@@ -442,6 +445,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
+	}
+	if (!new_config.storage_extensions.empty()) {
+		config.storage_extensions = std::move(new_config.storage_extensions);
 	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();

@@ -53,6 +53,7 @@ struct DelayingStorageExtension : StorageExtension {
 
 TEST_CASE("Test db creation does not block instance cache", "[integration]") {
 	DBInstanceCache instance_cache;
+	using namespace std::chrono;
 
 	auto second_creation_was_quick = false;
 	std::thread t1 {[&instance_cache, &second_creation_was_quick]() {
@@ -61,27 +62,41 @@ TEST_CASE("Test db creation does not block instance cache", "[integration]") {
 		db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
 		auto stick_around = instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 
-		const auto start_time = high_resolution_clock::now();
+		const auto start_time = steady_clock::now();
 		for (idx_t i = 0; i < 10; i++) {
 			db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
 			instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 		}
-		const auto end_time = high_resolution_clock::now();
-		second_creation_was_quick = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count() < 1;
+		const auto end_time = steady_clock::now();
+		second_creation_was_quick = duration_cast<seconds>(end_time - start_time).count() < 1;
 	}};
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	std::this_thread::sleep_for(seconds(2));
 
-	auto shutdown_was_quick_enough = false;
-	std::thread t2 {[&instance_cache, &shutdown_was_quick_enough]() {
-		const auto start_time = high_resolution_clock::now();
+	auto opening_slow_db_takes_remaining_time = false;
+	std::thread t2 {[&instance_cache, &opening_slow_db_takes_remaining_time]() {
 		DBConfig db_config;
-		instance_cache.GetOrCreateInstance(":memory:", db_config, false);
-		const auto end_time = high_resolution_clock::now();
-		shutdown_was_quick_enough = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count() < 1;
+		const auto start_time = steady_clock::now();
+		instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
+		const auto end_time = steady_clock::now();
+		const auto duration = duration_cast<milliseconds>(end_time - start_time);
+		opening_slow_db_takes_remaining_time = duration > seconds(2) && duration < seconds(4);
+	}};
+
+	auto no_delay_for_db_creation = true;
+	std::thread t3 {[&instance_cache, &no_delay_for_db_creation]() {
+		const auto start_time = steady_clock::now();
+		DBConfig db_config;
+		while (start_time + seconds(3) < steady_clock::now()) {
+			auto db_start_time = steady_clock::now();
+			instance_cache.GetOrCreateInstance(":memory:", db_config, false);
+			no_delay_for_db_creation &= duration_cast<milliseconds>(steady_clock::now() - db_start_time).count() < 100;
+		}
 	}};
 
 	t1.join();
 	t2.join();
+	t3.join();
 	REQUIRE(second_creation_was_quick);
-	REQUIRE(shutdown_was_quick_enough);
+	REQUIRE(opening_slow_db_takes_remaining_time);
+	REQUIRE(no_delay_for_db_creation);
 }
