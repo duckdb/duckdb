@@ -57,7 +57,7 @@ jobs:
  check-draft:
     name: Don't trigger further jobs to run on draft PR
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.draft == false || !github.event_name.pull_request
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - run: echo ${{ github.event.pull_request.draft }}
       
