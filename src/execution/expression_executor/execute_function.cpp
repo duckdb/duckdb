@@ -42,7 +42,7 @@ ExecuteFunctionState::~ExecuteFunctionState() {
 
 bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
                                                           ExpressionState &state, Vector &result) {
-	static constexpr double INPUT_FILL_RATIO_THRESHOLD = 0.9;
+	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	if (!input_col_idx.IsValid()) {
 		return false; // This expression is not eligible for dictionary optimization
 	}
@@ -64,9 +64,8 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		return false; // Dictionary has no id, we can't cache across vectors, bail
 	}
 
-	if (input_dictionary_id != dictionary_id &&
-	    static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE < INPUT_FILL_RATIO_THRESHOLD) {
-		return false; // Chunk is filtered, not full enough to justify dictionary optimization
+	if (input_dictionary_size.GetIndex() >= MAX_DICTIONARY_SIZE_THRESHOLD) {
+		return false; // Dictionary is too large, bail
 	}
 
 	// We can do dictionary optimization!

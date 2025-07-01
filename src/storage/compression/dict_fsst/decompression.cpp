@@ -203,11 +203,8 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 	}
 }
 
-bool CompressedStringScanState::AllowDictionaryScan(idx_t start, idx_t scan_count) {
+bool CompressedStringScanState::AllowDictionaryScan(idx_t scan_count) {
 	if (mode == DictFSSTMode::FSST_ONLY) {
-		return false;
-	}
-	if (start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
 		return false;
 	}
 	if (scan_count != STANDARD_VECTOR_SIZE) {
