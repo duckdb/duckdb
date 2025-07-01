@@ -23,13 +23,23 @@ class ColumnDataCollection;
 
 class PhysicalPlan {
 public:
+	explicit PhysicalPlan(Allocator &allocator) : arena(allocator) {};
+
+	~PhysicalPlan() {
+		// Call the destructor of each physical operator.
+		for (auto &op : ops) {
+			auto &op_ref = op.get();
+			op_ref.~PhysicalOperator();
+		}
+	}
+
+public:
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
-		auto op = make_uniq_base<PhysicalOperator, T>(std::forward<ARGS>(args)...);
-		D_ASSERT(op);
-		auto &op_ref = *op;
-		ops.push_back(std::move(op));
-		return op_ref;
+		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
+		auto ptr = arena.Make<T>(*this, std::forward<ARGS>(args)...);
+		ops.push_back(*ptr);
+		return *ptr;
 	}
 
 	PhysicalOperator &Root() {
@@ -39,10 +49,16 @@ public:
 	void SetRoot(PhysicalOperator &op) {
 		root = op;
 	}
+	//! Get a reference to the arena.
+	ArenaAllocator &ArenaRef() {
+		return arena;
+	}
 
 private:
-	//! Contains the memory of the physical plan.
-	vector<unique_ptr<PhysicalOperator>> ops;
+	//! The arena allocator storing the physical operator memory.
+	ArenaAllocator arena;
+	//! References to the physical operators.
+	vector<reference<PhysicalOperator>> ops;
 	//! The root of the physical plan.
 	optional_ptr<PhysicalOperator> root;
 };
@@ -77,10 +93,14 @@ public:
 	//! The order preservation type of the given operator decided by recursively looking at its children
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
 
+	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
+
+public:
+	PhysicalOperator &ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child);
 
 protected:
 	PhysicalOperator &CreatePlan(LogicalAggregate &op);

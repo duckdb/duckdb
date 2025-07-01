@@ -1,0 +1,16 @@
+# name: benchmark/micro/optimizer/topn_large_optimization.benchmark
+# description: Benchmark of top n optimization
+# group: [optimizer]
+
+name TopN Optimization
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE integers AS SELECT range a FROM range(100000000) order by hash(a);
+
+run
+select * from integers order by a limit 500;
+select * from integers order by a limit 5000;
+select * from integers order by a limit 50000;
+select * from integers order by a limit 12800000;

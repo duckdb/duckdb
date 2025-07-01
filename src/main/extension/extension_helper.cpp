@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension.hpp"
@@ -115,13 +116,14 @@ static const DefaultExtension internal_extensions[] = {
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
-    {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
+    {"encodings", "All unicode encodings to UTF-8", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
     {"delta", "Adds support for Delta Lake", false},
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
+    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -139,9 +141,9 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
-                                           "delta",      "iceberg",          "uc_catalog",    "ui",
-                                           nullptr};
+static const char *const auto_install[] = {
+    "motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", "delta", "iceberg", "uc_catalog",
+    "ui",         "ducklake",         nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
@@ -398,8 +400,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
-		DUCKDB_LOG_INFO(db, "duckdb.Extensions.ExtensionAutoloaded", extension_name);
-
+		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());

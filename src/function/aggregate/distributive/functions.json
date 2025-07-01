@@ -9,14 +9,14 @@
     {
         "name": "count",
         "parameters": "arg",
-        "description": "Returns the number of non-null values in arg.",
+        "description": "Returns the number of non-NULL values in arg.",
         "example": "count(A)",
         "type": "aggregate_function_set"
     },
     {
         "name": "first",
         "parameters": "arg",
-        "description": "Returns the first value (null or non-null) from arg. This function is affected by ordering.",
+        "description": "Returns the first value (NULL or non-NULL) from arg. This function is affected by ordering.",
         "example": "first(A)",
         "type": "aggregate_function_set",
         "aliases": ["arbitrary"]
@@ -31,7 +31,7 @@
     {
         "name": "any_value",
         "parameters": "arg",
-        "description": "Returns the first non-null value from arg. This function is affected by ordering.",
+        "description": "Returns the first non-NULL value from arg. This function is affected by ordering.",
         "example": "",
         "type": "aggregate_function_set"
     },

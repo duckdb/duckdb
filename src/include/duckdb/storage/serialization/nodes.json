@@ -546,9 +546,9 @@
     "pointer_type": "none"
   },
   {
-    "class": "MultiFileReaderOptions",
+    "class": "MultiFileOptions",
     "includes": [
-      "duckdb/common/multi_file_reader_options.hpp"
+      "duckdb/common/multi_file/multi_file_options.hpp"
     ],
     "members": [
       {
@@ -585,7 +585,7 @@
         "id": 106,
         "name": "filename_column",
         "type": "string",
-        "default": "MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN"
+        "default": "MultiFileOptions::DEFAULT_FILENAME_COLUMN"
       }
     ],
     "pointer_type": "none"
@@ -593,13 +593,13 @@
   {
     "class": "MultiFileReaderBindData",
     "includes": [
-      "duckdb/common/multi_file_reader.hpp"
+      "duckdb/common/multi_file/multi_file_reader.hpp"
     ],
     "members": [
       {
         "id": 100,
         "name": "filename_idx",
-        "type": "idx_t"
+        "type": "optional_idx"
       },
       {
         "id": 101,
@@ -729,7 +729,7 @@
       },
       {"id": 115,
         "name": "file_options",
-        "type": "MultiFileReaderOptions"
+        "type": "MultiFileOptions"
       },
       {"id": 116,
         "name": "force_quote",
@@ -1083,6 +1083,55 @@
         "id": 2,
         "name": "child_indexes",
         "type": "vector<ColumnIndex>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "TableColumn",
+    "includes": [
+      "duckdb/common/table_column.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "LogicalType"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["name", "type"]
+  },
+  {
+    "class": "ExtraOperatorInfo",
+    "includes": [
+      "duckdb/common/extra_operator_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "file_filters",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "total_files",
+        "type": "optional_idx"
+      },
+      {
+        "id": 102,
+        "name": "filtered_files",
+        "type": "optional_idx"
+      },
+      {
+        "id": 103,
+        "name": "sample_options",
+        "type": "unique_ptr<SampleOptions>"
       }
     ],
     "pointer_type": "none"

@@ -12,8 +12,8 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
@@ -177,7 +177,7 @@ struct JSONError {
 
 class JSONReader : public BaseFileReader {
 public:
-	JSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
+	JSONReader(ClientContext &context, JSONReaderOptions options, OpenFileInfo file);
 
 	void OpenJSONFile();
 	void CloseHandle();
@@ -199,6 +199,19 @@ public:
 
 	const string &GetFileName() const;
 	JSONFileHandle &GetFileHandle() const;
+
+public:
+	string GetReaderType() const override {
+		return "JSON";
+	}
+
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
+	          DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
+	double GetProgressInFile(ClientContext &context) override;
 
 public:
 	//! Get a new buffer index (must hold the lock)

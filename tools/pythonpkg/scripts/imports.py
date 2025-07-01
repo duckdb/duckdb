@@ -5,6 +5,7 @@ pyarrow.dataset.Scanner
 pyarrow.dataset.Dataset
 pyarrow.Table
 pyarrow.RecordBatchReader
+pyarrow.ipc.MessageReader
 
 import pandas
 
@@ -121,3 +122,7 @@ import collections.abc
 
 collections.abc.Iterable
 collections.abc.Mapping
+
+import duckdb.polars_io
+
+duckdb.polars_io.duckdb_source

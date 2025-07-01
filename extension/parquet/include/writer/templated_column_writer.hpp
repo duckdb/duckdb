@@ -89,8 +89,8 @@ public:
 	                                 duckdb_parquet::Encoding::type encoding_p,
 	                                 const PrimitiveDictionary<SRC, TGT, OP> &dictionary_p)
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
-	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(TGT)),
-	      dictionary(dictionary_p), dict_written_value(false),
+	      dlba_encoder(total_value_count, total_string_size), bss_initialized(false),
+	      bss_encoder(total_value_count, sizeof(TGT)), dictionary(dictionary_p), dict_written_value(false),
 	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.GetSize())), dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
@@ -101,6 +101,7 @@ public:
 	bool dlba_initialized;
 	DlbaEncoder dlba_encoder;
 
+	bool bss_initialized;
 	BssEncoder bss_encoder;
 
 	const PrimitiveDictionary<SRC, TGT, OP> &dictionary;
@@ -142,7 +143,7 @@ public:
 		switch (page_state.encoding) {
 		case duckdb_parquet::Encoding::DELTA_BINARY_PACKED:
 			if (!page_state.dbp_initialized) {
-				dbp_encoder::BeginWrite<int64_t>(page_state.dbp_encoder, temp_writer, 0);
+				page_state.dbp_encoder.BeginWrite(temp_writer, 0);
 			}
 			page_state.dbp_encoder.FinishWrite(temp_writer);
 			break;
@@ -158,11 +159,15 @@ public:
 			break;
 		case duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY:
 			if (!page_state.dlba_initialized) {
-				dlba_encoder::BeginWrite<string_t>(page_state.dlba_encoder, temp_writer, string_t(""));
+				page_state.dlba_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()), temp_writer,
+				                                   string_t(""));
 			}
 			page_state.dlba_encoder.FinishWrite(temp_writer);
 			break;
 		case duckdb_parquet::Encoding::BYTE_STREAM_SPLIT:
+			if (!page_state.bss_initialized) {
+				page_state.bss_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()));
+			}
 			page_state.bss_encoder.FinishWrite(temp_writer);
 			break;
 		case duckdb_parquet::Encoding::PLAIN:
@@ -201,7 +206,7 @@ public:
 				const auto &src_value = data_ptr[vector_index];
 				state.dictionary.Insert(src_value);
 				state.total_value_count++;
-				state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
+				state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 			}
 		} else {
 			for (idx_t i = 0; i < vcount; i++) {
@@ -212,7 +217,7 @@ public:
 					const auto &src_value = data_ptr[vector_index];
 					state.dictionary.Insert(src_value);
 					state.total_value_count++;
-					state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
+					state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 				}
 				vector_index++;
 			}
@@ -224,6 +229,7 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		if (state.dictionary.GetSize() == 0 || state.dictionary.IsFull()) {
+			state.dictionary.Reset();
 			if (writer.GetParquetVersion() == ParquetVersion::V1) {
 				// Can't do the cool stuff for V1
 				state.encoding = duckdb_parquet::Encoding::PLAIN;
@@ -351,7 +357,7 @@ private:
 					}
 					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 					OP::template HandleStats<SRC, TGT>(stats, target_value);
-					dbp_encoder::BeginWrite(page_state.dbp_encoder, temp_writer, target_value);
+					page_state.dbp_encoder.BeginWrite(temp_writer, target_value);
 					page_state.dbp_initialized = true;
 					r++; // skip over
 					break;
@@ -364,7 +370,7 @@ private:
 				}
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				dbp_encoder::WriteValue(page_state.dbp_encoder, temp_writer, target_value);
+				page_state.dbp_encoder.WriteValue(temp_writer, target_value);
 			}
 			break;
 		}
@@ -378,7 +384,8 @@ private:
 					}
 					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 					OP::template HandleStats<SRC, TGT>(stats, target_value);
-					dlba_encoder::BeginWrite(page_state.dlba_encoder, temp_writer, target_value);
+					page_state.dlba_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()), temp_writer,
+					                                   target_value);
 					page_state.dlba_initialized = true;
 					r++; // skip over
 					break;
@@ -391,18 +398,22 @@ private:
 				}
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				dlba_encoder::WriteValue(page_state.dlba_encoder, temp_writer, target_value);
+				page_state.dlba_encoder.WriteValue(temp_writer, target_value);
 			}
 			break;
 		}
 		case duckdb_parquet::Encoding::BYTE_STREAM_SPLIT: {
+			if (!page_state.bss_initialized) {
+				page_state.bss_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()));
+				page_state.bss_initialized = true;
+			}
 			for (idx_t r = chunk_start; r < chunk_end; r++) {
 				if (!ALL_VALID && !mask.RowIsValid(r)) {
 					continue;
 				}
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				bss_encoder::WriteValue(page_state.bss_encoder, target_value);
+				page_state.bss_encoder.WriteValue(target_value);
 			}
 			break;
 		}

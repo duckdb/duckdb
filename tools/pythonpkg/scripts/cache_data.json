@@ -6,7 +6,8 @@
         "children": [
             "pyarrow.dataset",
             "pyarrow.Table",
-            "pyarrow.RecordBatchReader"
+            "pyarrow.RecordBatchReader",
+            "pyarrow.ipc"
         ]
     },
     "pyarrow.dataset": {
@@ -537,7 +538,8 @@
         "name": "duckdb",
         "children": [
             "duckdb.filesystem",
-            "duckdb.Value"
+            "duckdb.Value",
+            "duckdb.polars_io"
         ]
     },
     "duckdb.filesystem": {
@@ -677,5 +679,35 @@
         "full_path": "pandas.Series",
         "name": "Series",
         "children": []
+    },
+    "pyarrow.ipc": {
+        "type": "attribute",
+        "full_path": "pyarrow.ipc",
+        "name": "ipc",
+        "children": [
+            "pyarrow.ipc.MessageReader"
+        ]
+    },
+    "pyarrow.ipc.MessageReader": {
+        "type": "attribute",
+        "full_path": "pyarrow.ipc.MessageReader",
+        "name": "MessageReader",
+        "children": []
+    },
+    "duckdb.polars_io": {
+        "type": "module",
+        "full_path": "duckdb.polars_io",
+        "name": "polars_io",
+        "children": [
+            "duckdb.polars_io.duckdb_source"
+        ],
+        "required": false
+    },
+    "duckdb.polars_io.duckdb_source": {
+        "type": "attribute",
+        "full_path": "duckdb.polars_io.duckdb_source",
+        "name": "duckdb_source",
+        "children": [],
+        "required": false
     }
 }

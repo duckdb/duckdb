@@ -81,7 +81,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	REQUIRE(!fs->FileExists(fname_in_dir2));
 
 	auto file_listing = fs->Glob(fs->JoinPath(dname_triple_slash, "*"));
-	REQUIRE(file_listing[0] == fname_in_dir);
+	REQUIRE(file_listing[0].path == fname_in_dir);
 
 	fs->MoveFile(fname_in_dir, fname_in_dir2);
 
@@ -89,7 +89,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	REQUIRE(fs->FileExists(fname_in_dir2));
 
 	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_no_host, "*"));
-	REQUIRE(file_listing_after_move[0] == fname_in_dir3);
+	REQUIRE(file_listing_after_move[0].path == fname_in_dir3);
 
 	fs->RemoveDirectory(dname_triple_slash);
 
@@ -162,7 +162,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// open file for writing
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE));
 	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
+	REQUIRE_NOTHROW(handle->Write(nullptr, (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
 	handle.reset();
 

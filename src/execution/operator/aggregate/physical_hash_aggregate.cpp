@@ -103,25 +103,27 @@ bool PhysicalHashAggregate::CanSkipRegularSink() const {
 	return true;
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
-                                             vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), {}, estimated_cardinality) {
-}
-
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
-                                             vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), std::move(groups_p), {}, {},
+PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context,
+                                             vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+                                             idx_t estimated_cardinality)
+    : PhysicalHashAggregate(physical_plan, context, std::move(types), std::move(expressions), {},
                             estimated_cardinality) {
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
-                                             vector<unique_ptr<Expression>> expressions,
+PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context,
+                                             vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
+    : PhysicalHashAggregate(physical_plan, context, std::move(types), std::move(expressions), std::move(groups_p), {},
+                            {}, estimated_cardinality) {
+}
+
+PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context,
+                                             vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
                                              vector<unsafe_vector<idx_t>> grouping_functions_p,
                                              idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
       grouping_sets(std::move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
 	const idx_t group_count = groups_p.size();
@@ -488,6 +490,10 @@ public:
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
+	string TaskType() const override {
+		return "HashAggregateFinalizeTask";
+	}
+
 private:
 	ClientContext &context;
 	Pipeline &pipeline;
@@ -546,6 +552,10 @@ public:
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+
+	string TaskType() const override {
+		return "HashAggregateDistinctFinalizeTask";
+	}
 
 private:
 	TaskExecutionResult AggregateDistinctGrouping(const idx_t grouping_idx);

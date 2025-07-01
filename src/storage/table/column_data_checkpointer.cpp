@@ -53,11 +53,12 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 }
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
-                                               DatabaseInstance &db, RowGroup &row_group,
+                                               StorageManager &storage_manager, RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
-    : checkpoint_states(checkpoint_states), db(db), row_group(row_group),
+    : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
       intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
 
+	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
@@ -95,15 +96,16 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
-CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &compression_functions,
+CompressionType ForceCompression(StorageManager &storage_manager,
+                                 vector<optional_ptr<CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
-// On of the force_compression flags has been set
-// check if this compression method is available
-#ifdef DEBUG
-	if (CompressionTypeIsDeprecated(compression_type)) {
-		throw InternalException("Deprecated compression type: %s", CompressionTypeToString(compression_type));
-	}
-#endif
+	// One of the force_compression flags has been set
+	// check if this compression method is available
+	// if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
+	//	throw InvalidInputException("The forced compression method (%s) is not available in the current storage
+	// version", 	                            CompressionTypeToString(compression_type));
+	//}
+
 	bool found = false;
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		auto &compression_function = *compression_functions[i];
@@ -154,6 +156,7 @@ void ColumnDataCheckpointer::InitAnalyze() {
 
 vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMethod() {
 	D_ASSERT(!compression_functions.empty());
+	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	vector<CompressionType> forced_methods(checkpoint_states.size(), CompressionType::COMPRESSION_AUTO);
 
@@ -161,11 +164,11 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &functions = compression_functions[i];
 		if (compression_type != CompressionType::COMPRESSION_AUTO) {
-			forced_methods[i] = ForceCompression(functions, compression_type);
+			forced_methods[i] = ForceCompression(storage_manager, functions, compression_type);
 		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO &&
 		    config.options.force_compression != CompressionType::COMPRESSION_AUTO) {
-			forced_methods[i] = ForceCompression(functions, config.options.force_compression);
+			forced_methods[i] = ForceCompression(storage_manager, functions, config.options.force_compression);
 		}
 	}
 
@@ -250,7 +253,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
 
 		auto &best_function = *functions[compression_idx];
-		DUCKDB_LOG_INFO(db, "duckdb.ColumnDataCheckPointer", "FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
+		DUCKDB_LOG_INFO(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
 		                EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
 		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
@@ -301,6 +304,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	if (ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
 		auto &validity = analyze_result[1];
+		auto &db = storage_manager.GetDatabase();
 		auto &config = DBConfig::GetConfig(db);
 		// Override the function to the COMPRESSION_EMPTY
 		// turning the compression+final compress steps into a no-op, saving a single empty segment

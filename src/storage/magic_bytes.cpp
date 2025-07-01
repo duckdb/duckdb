@@ -26,7 +26,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	if (memcmp(buffer + MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) == 0) {
 		return DataFileType::DUCKDB_FILE;
 	}
-	return DataFileType::FILE_DOES_NOT_EXIST;
+	return DataFileType::UNKNOWN_FILE;
 }
 
 } // namespace duckdb

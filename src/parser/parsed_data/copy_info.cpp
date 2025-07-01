@@ -12,6 +12,7 @@ unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	result->file_path = file_path;
 	result->is_from = is_from;
 	result->format = format;
+	result->is_format_auto_detected = is_format_auto_detected;
 	result->options = options;
 	if (select_statement) {
 		result->select_statement = select_statement->Copy();
@@ -19,15 +20,18 @@ unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	return result;
 }
 
-string CopyInfo::CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options) {
-	if (format.empty() && options.empty()) {
+string CopyInfo::CopyOptionsToString(const string &format, bool is_format_auto_detected,
+                                     const case_insensitive_map_t<vector<Value>> &options) {
+	// We only output the format if there is a format, and it was manually set.
+	const bool output_format = !format.empty() && !is_format_auto_detected;
+	if (!output_format && options.empty()) {
 		return string();
 	}
 	string result;
 
 	result += " (";
 	vector<string> stringified;
-	if (!format.empty()) {
+	if (!format.empty() && !is_format_auto_detected) {
 		stringified.push_back(StringUtil::Format(" FORMAT %s", format));
 	}
 	for (auto &opt : options) {
@@ -81,7 +85,7 @@ string CopyInfo::ToString() const {
 		result += TablePartToString();
 		result += " FROM";
 		result += StringUtil::Format(" %s", SQLString(file_path));
-		result += CopyOptionsToString(format, options);
+		result += CopyOptionsToString(format, is_format_auto_detected, options);
 	} else {
 		if (select_statement) {
 			// COPY (select-node) TO ...
@@ -91,7 +95,7 @@ string CopyInfo::ToString() const {
 		}
 		result += " TO ";
 		result += StringUtil::Format("%s", SQLString(file_path));
-		result += CopyOptionsToString(format, options);
+		result += CopyOptionsToString(format, is_format_auto_detected, options);
 	}
 	result += ";";
 	return result;

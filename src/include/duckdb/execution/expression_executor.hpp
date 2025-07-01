@@ -13,6 +13,7 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/enums/debug_vector_verification.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -62,6 +63,9 @@ public:
 	//! Execute the ExpressionExecutor and generate a selection vector from all true values in the result; this should
 	//! only be used with a single boolean expression
 	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
+
+	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &result_sel,
+	                                  optional_ptr<SelectionVector> current_sel, idx_t current_count);
 
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
@@ -154,6 +158,8 @@ private:
 	optional_ptr<ClientContext> context;
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
+	//! The vector verification (debug setting)
+	DebugVectorVerification debug_vector_verification = DebugVectorVerification::NONE;
 
 private:
 	// it is possible to create an expression executor without a ClientContext - but it should be avoided

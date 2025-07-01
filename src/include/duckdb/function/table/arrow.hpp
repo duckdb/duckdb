@@ -133,7 +133,6 @@ public:
 	}
 
 public:
-	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
@@ -227,7 +226,7 @@ protected:
 	static OperatorPartitionData ArrowGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 
 	//! Specify if a given type can be pushed-down by the arrow engine
-	static bool ArrowPushdownType(const LogicalType &type);
+	static bool ArrowPushdownType(const FunctionData &bind_data, idx_t col_idx);
 	//! -----Utility Functions:-----
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);

@@ -8,13 +8,13 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 
 namespace duckdb {
@@ -27,32 +27,34 @@ void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
 
 CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, const vector<string> &input,
                                      named_parameter_map_t &options, vector<ColumnDefinition> &columns,
-                                     MultiFileReaderOptions &file_options) {
+                                     MultiFileOptions &file_options) {
 	auto file_list = MultiFileReader::CreateValueFromFileList(input);
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("ReadCSVRelation");
-	vector<string> files;
+	vector<OpenFileInfo> files;
 	files = multi_file_reader->CreateFileList(*context, file_list)->GetAllFiles();
 
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
-	CSVReaderOptions csv_options;
-	csv_options.file_path = file_name;
+	CSVFileReaderOptions csv_file_options;
+	auto &csv_options = csv_file_options.options;
+	csv_options.file_path = file_name.path;
 	vector<string> empty;
 	csv_options.FromNamedParameters(options, *context, file_options);
 
 	// Run the auto-detect, populating the options with the detected settings
+	SimpleMultiFileList multi_file_list(files);
 
 	if (file_options.union_by_name) {
-		SimpleMultiFileList multi_file_list(files);
 		vector<LogicalType> types;
 		vector<string> names;
 		auto result = make_uniq<MultiFileBindData>();
 		auto csv_data = make_uniq<ReadCSVData>();
+		result->interface = make_uniq<CSVMultiFileInfo>();
 
-		multi_file_reader->BindUnionReader<CSVMultiFileInfo>(*context, types, names, multi_file_list, *result,
-		                                                     csv_options, file_options);
+		multi_file_reader->BindUnionReader(*context, types, names, multi_file_list, *result, csv_file_options,
+		                                   file_options);
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {
@@ -71,14 +73,13 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		}
 	} else {
 		if (csv_options.auto_detect) {
+			vector<LogicalType> return_types;
+			vector<string> names;
 			shared_ptr<CSVBufferManager> buffer_manager;
-			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
-			CSVSniffer sniffer(csv_options, file_options, buffer_manager, CSVStateMachineCache::Get(*context));
-			auto sniffer_result = sniffer.SniffCSV();
-			auto &types = sniffer_result.return_types;
-			auto &names = sniffer_result.names;
-			for (idx_t i = 0; i < types.size(); i++) {
-				columns.emplace_back(names[i], types[i]);
+			CSVSchemaDiscovery::SchemaDiscovery(*context, buffer_manager, csv_options, file_options, return_types,
+			                                    names, multi_file_list);
+			for (idx_t i = 0; i < return_types.size(); i++) {
+				columns.emplace_back(names[i], return_types[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
@@ -91,6 +92,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		csv_options.dialect_options.state_machine_options.escape.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.delimiter.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.quote.ChangeSetByUserTrue();
+		csv_options.dialect_options.state_machine_options.comment.ChangeSetByUserTrue();
 		csv_options.dialect_options.header.ChangeSetByUserTrue();
 		csv_options.dialect_options.skip_rows.ChangeSetByUserTrue();
 	}
@@ -102,7 +104,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
     : TableFunctionRelation(context, "read_csv_auto", {MultiFileReader::CreateValueFromFileList(input)}, nullptr,
                             false),
       alias(std::move(alias_p)) {
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 
 	InitializeAlias(input);
 	CSVReaderOptions csv_options;

@@ -1,12 +1,51 @@
+#include "duckdb/common/helper.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
-FilterPropagateResult StatisticsPropagator::PropagateTableFilter(BaseStatistics &stats, TableFilter &filter) {
+static void GetColumnIndex(unique_ptr<Expression> &expr, idx_t &index) {
+	if (expr->type == ExpressionType::BOUND_REF) {
+		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
+		index = bound_ref.index;
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) { GetColumnIndex(child, index); });
+}
+
+FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
+                                                                 TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+
+		// get physical storage index of the filter
+		// since it is a table filter, every storage index is the same
+		idx_t physical_index = DConstants::INVALID_INDEX;
+		GetColumnIndex(expr_filter.expr, physical_index);
+		D_ASSERT(physical_index != DConstants::INVALID_INDEX);
+
+		auto column_ref = make_uniq<BoundColumnRefExpression>(stats.GetType(), stats_binding);
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
+		// handle the filter before updating the statistics
+		// otherwise the filter can be pruned by the updated statistics
+		auto propagate_result = HandleFilter(filter_expr);
+		auto colref = make_uniq<BoundReferenceExpression>(stats.GetType(), physical_index);
+		UpdateFilterStatistics(*filter_expr);
+
+		// replace BoundColumnRefs with BoundRefs
+		ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);
+		expr_filter.expr = std::move(filter_expr);
+		return propagate_result;
+	}
 	return filter.CheckStatistics(stats);
 }
 
@@ -76,12 +115,16 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// fetch the table filter
 		D_ASSERT(get.table_filters.filters.count(table_filter_column) > 0);
 		auto &filter = get.table_filters.filters[table_filter_column];
-		auto propagate_result = PropagateTableFilter(stats, *filter);
+		auto propagate_result = PropagateTableFilter(stats_binding, stats, *filter);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			get.table_filters.filters.erase(table_filter_column);
+			break;
+		case FilterPropagateResult::FILTER_TRUE_OR_NULL:
+			// filter is true or null; we can replace this with a not null filter
+			get.table_filters.filters[table_filter_column] = make_uniq<IsNotNullFilter>();
 			break;
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:

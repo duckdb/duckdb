@@ -3,7 +3,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/logger.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_storage.hpp"
 
@@ -21,12 +21,12 @@ void LogFormatStringCustomType(SOURCE &src, FUN f) {
 }
 
 #define TEST_ALL_LOG_MACROS(LOG_LEVEL, SOURCE, LOG_TYPE)                                                               \
-	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, "log-a-lot: 'simple'")                                                    \
-	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, "log-a-lot: '%s'", "format")                                              \
-	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, string("log-a-lot: 'string type'"))                                       \
-	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: 'simple with type'")                                      \
-	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: '%s'", "format with type")                                \
-	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, string("log-a-lot: 'string type with type'"))
+	DUCKDB_LOG_INTERNAL(SOURCE, "default", LOG_LEVEL, "log-a-lot: 'simple'")                                           \
+	DUCKDB_LOG_INTERNAL(SOURCE, "default", LOG_LEVEL, "log-a-lot: '%s'", "format")                                     \
+	DUCKDB_LOG_INTERNAL(SOURCE, "default", LOG_LEVEL, string("log-a-lot: 'string type'"))                              \
+	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: 'simple with type'")                             \
+	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: '%s'", "format with type")                       \
+	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, string("log-a-lot: 'string type with type'"))
 
 // Tests all Logger function entrypoints at the specified log level with the specified enabled/disabled loggers
 void test_logging(const string &minimum_level, const string &enabled_log_types, const string &disabled_log_types) {
@@ -156,7 +156,7 @@ static duckdb::unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, 
 
 static void TestLoggingFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &local_state = data_p.local_state->Cast<TestLoggingData>();
-	DUCKDB_LOG_INFO(local_state.context, "duckdb.", "thread_logger");
+	DUCKDB_LOG_INTERNAL(local_state.context, "duckdb.", LogLevel::LOG_INFO, "thread_logger");
 	output.SetCardinality(0);
 }
 
@@ -167,7 +167,8 @@ TEST_CASE("Test thread context logger", "[logging][.]") {
 
 	duckdb::TableFunction tf("test_thread_logger", {}, TestLoggingFunction, TestLoggingBind, nullptr,
 	                         TestLoggingInitLocal);
-	ExtensionUtil::RegisterFunction(*db.instance, tf);
+	ExtensionLoader loader(*db.instance, "log_test_extension");
+	loader.RegisterFunction(tf);
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
 

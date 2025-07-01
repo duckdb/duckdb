@@ -81,6 +81,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
+		bool has_null_value_filter = false;
 
 		// it records the RHS pointers for the result chunk
 		Vector rhs_pointers;
@@ -139,21 +140,17 @@ public:
 	struct SharedState {
 		SharedState();
 
-		// The ptrs to the row to which a key should be inserted into during building
-		// or matched against during probing
-		Vector rhs_row_locations;
 		Vector salt_v;
 
-		SelectionVector salt_match_sel;
-		SelectionVector key_no_match_sel;
+		SelectionVector keys_to_compare_sel;
+		SelectionVector keys_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
 		ProbeState();
 
 		Vector ht_offsets_v;
-		Vector ht_offsets_dense_v;
-
+		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
 	};
 
@@ -163,12 +160,16 @@ public:
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
 
+		// The ptrs to the row to which a key should be inserted into during building
+		// or matched against during probing
+		Vector rhs_row_locations;
+
 		DataChunk lhs_data;
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions, vector<LogicalType> build_types,
-	              JoinType type, const vector<idx_t> &output_columns);
+	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -213,6 +214,7 @@ public:
 	}
 
 	ClientContext &context;
+	const PhysicalOperator &op;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
@@ -235,7 +237,7 @@ public:
 	//! The column indices of the non-equality predicates to be used to compare the rows
 	vector<column_t> non_equality_predicate_columns;
 	//! Data column layout
-	TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
 	//! Matches the equal condition rows during the build phase of the hash join to prevent
 	//! duplicates in a list because of hash-collisions
 	RowMatcher row_matcher_build;
@@ -298,8 +300,8 @@ private:
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
 	//! key_match_sel vector and the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
-	                    SelectionVector &match_sel);
+	                    const SelectionVector *sel, idx_t &count, Vector &pointers_result_v, SelectionVector &match_sel,
+	                    bool has_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v

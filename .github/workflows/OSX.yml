@@ -27,6 +27,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -162,8 +163,9 @@ jobs:
         run: |
           python scripts/amalgamation.py
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+          gzip -9 -k -n -c build/release/duckdb > duckdb_cli-osx-universal.gz
           zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz
 
       - uses: actions/upload-artifact@v4
         with:
@@ -208,11 +210,12 @@ jobs:
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+            run_autoload_tests: ${{ inputs.skip_tests != 'true' && '1' || '0' }}
 
     env:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
+      # TODO check here as well
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:

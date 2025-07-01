@@ -392,7 +392,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	if (!state.current) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	state.segment_checked = true;
+	// for dynamic filters we never consider the segment being "checked" as it can always change
+	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
@@ -577,7 +578,8 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
-	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_size);
+	auto new_segment =
+	    ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }
 
@@ -643,7 +645,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	}
 
 	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
-	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	ColumnDataCheckpointer checkpointer(states, GetStorageManager(), row_group, checkpoint_info);
 	checkpointer.Checkpoint();
 	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;
@@ -841,7 +843,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	BinaryDeserializer deserializer(source);
 	deserializer.Begin();
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
-	CompressionInfo compression_info(block_manager.GetBlockSize());
+	CompressionInfo compression_info(block_manager);
 	deserializer.Set<const CompressionInfo &>(compression_info);
 	deserializer.Set<const LogicalType &>(type);
 	auto persistent_column_data = PersistentColumnData::Deserialize(deserializer);

@@ -51,10 +51,7 @@
         "type": "unordered_map<string, string>"
       }
     ],
-    "pointer_type": "shared_ptr",
-    "constructor": [
-      "$ClientContext"
-    ]
+    "pointer_type": "shared_ptr"
   },
   {
     "class": "ParquetOptionsSerialization",
@@ -77,7 +74,7 @@
       {
         "id": 102,
         "name": "file_options",
-        "type": "MultiFileReaderOptions"
+        "type": "MultiFileOptions"
       },
       {
         "id": 103,
@@ -105,6 +102,13 @@
         "type": "idx_t",
         "default": "0",
         "property": "parquet_options.explicit_cardinality"
+      },
+      {
+        "id": 107,
+        "name": "can_have_nan",
+        "type": "bool",
+        "default": "false",
+        "property": "parquet_options.can_have_nan"
       }
     ],
     "pointer_type": "none"

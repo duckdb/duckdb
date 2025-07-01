@@ -16,7 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {
@@ -65,6 +65,9 @@ struct CSVReaderOptions {
 	bool allow_quoted_nulls = true;
 	char comment = '\0';
 
+	//! Thousands separator option (to be able to accept "100,000.220" as a double or decimal.
+	char thousands_separator = '\0';
+
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//
@@ -76,7 +79,7 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
+	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
 	vector<LogicalType> auto_type_candidates = {
 	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
 	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
@@ -100,6 +103,10 @@ struct CSVReaderOptions {
 	vector<bool> force_not_null;
 	//! Result size of sniffing phases
 	static constexpr idx_t sniff_size = 2048;
+
+	//! In case this is a glob or list of multiple files, how many shall be used to sniff.
+	//! -1 means all
+	int64_t files_to_sniff = 10;
 
 	//! Number of sample chunks used in auto-detection
 	idx_t sample_size_chunks = 20480 / sniff_size;
@@ -184,11 +191,10 @@ struct CSVReaderOptions {
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;
-	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
-	                         MultiFileReaderOptions &file_options);
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileOptions &file_options);
 	void ParseOption(ClientContext &context, const string &key, const Value &val);
 	//! Verify options are not conflicting
-	void Verify(MultiFileReaderOptions &file_options);
+	void Verify(MultiFileOptions &file_options);
 
 	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set

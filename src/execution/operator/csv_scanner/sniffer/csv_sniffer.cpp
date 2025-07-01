@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
                        shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache_p,
                        bool default_null_to_varchar_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), file_options(file_options),

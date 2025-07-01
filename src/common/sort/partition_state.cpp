@@ -1,11 +1,8 @@
 #include "duckdb/common/sort/partition_state.hpp"
 
-#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/executor_task.hpp"
-
-#include <numeric>
 
 namespace duckdb {
 
@@ -99,16 +96,17 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 		++max_bits;
 	}
 
+	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types.Initialize(payload_types);
+			grouping_types_ptr->Initialize(payload_types);
 			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types.Initialize(types);
+			grouping_types_ptr->Initialize(types);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}
@@ -132,13 +130,14 @@ void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &
 	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	if (fixed_bits != old_bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, fixed_bits, hash_col_idx);
+		grouping_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, fixed_bits, hash_col_idx);
 	}
 }
 
 unique_ptr<RadixPartitionedTupleData> PartitionGlobalSinkState::CreatePartition(idx_t new_bits) const {
 	const auto hash_col_idx = payload_types.size();
-	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, new_bits, hash_col_idx);
 }
 
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
@@ -476,7 +475,7 @@ void PartitionLocalMergeState::ExecuteTask() {
 bool PartitionGlobalMergeState::AssignTask(PartitionLocalMergeState &local_state) {
 	lock_guard<mutex> guard(lock);
 
-	if (tasks_assigned >= total_tasks) {
+	if (tasks_assigned >= total_tasks && !TryPrepareNextStage()) {
 		return false;
 	}
 
@@ -495,15 +494,13 @@ void PartitionGlobalMergeState::CompleteTask() {
 }
 
 bool PartitionGlobalMergeState::TryPrepareNextStage() {
-	lock_guard<mutex> guard(lock);
-
 	if (tasks_completed < total_tasks) {
 		return false;
 	}
 
 	tasks_assigned = tasks_completed = 0;
 
-	switch (stage) {
+	switch (stage.load()) {
 	case PartitionSortStage::INIT:
 		//	If the partitions are unordered, don't scan in parallel
 		//	because it produces non-deterministic orderings.
@@ -584,6 +581,10 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
+	string TaskType() const override {
+		return "PartitionMergeTask";
+	}
+
 private:
 	struct ExecutorCallback : public PartitionGlobalMergeStates::Callback {
 		explicit ExecutorCallback(Executor &executor) : executor(executor) {
@@ -626,23 +627,6 @@ bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_sta
 			}
 
 			// Try to assign work for this hash group to this thread
-			if (global_state->AssignTask(local_state)) {
-				// We assigned a task to this thread!
-				// Break out of this loop to re-enter the top-level loop and execute the task
-				break;
-			}
-
-			// Hash group global state couldn't assign a task to this thread
-			// Try to prepare the next stage
-			if (!global_state->TryPrepareNextStage()) {
-				// This current hash group is not yet done
-				// But we were not able to assign a task for it to this thread
-				// See if the next hash group is better
-				continue;
-			}
-
-			// We were able to prepare the next stage for this hash group!
-			// Try to assign a task once more
 			if (global_state->AssignTask(local_state)) {
 				// We assigned a task to this thread!
 				// Break out of this loop to re-enter the top-level loop and execute the task

@@ -402,7 +402,7 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
-static FilterPropagateResult CheckRowIdFilter(TableFilter &filter, idx_t beg_row, idx_t end_row) {
+FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
 	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
@@ -1012,6 +1012,7 @@ bool RowGroup::HasUnloadedDeletes() const {
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	vector<CompressionType> compression_types;
 	compression_types.reserve(columns.size());
+
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
 		if (column.count != this->count) {
@@ -1019,7 +1020,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			                        "group has %llu rows, column has %llu)",
 			                        column_idx, this->count.load(), column.count.load());
 		}
-		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
+		auto compression_type = writer.GetColumnCompressionType(column_idx);
+		compression_types.push_back(compression_type);
 	}
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());

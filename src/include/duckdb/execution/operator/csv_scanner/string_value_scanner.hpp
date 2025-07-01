@@ -33,11 +33,43 @@ public:
 	FullLinePosition() {};
 	LinePosition begin;
 	LinePosition end;
-
+	static void SanitizeError(string &value);
 	//! Reconstructs the current line to be used in error messages
-	string ReconstructCurrentLine(bool &first_char_nl,
-	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
-	                              bool reconstruct_line) const;
+	template <class T>
+	string ReconstructCurrentLine(bool &first_char_nl, T &buffer_handles, bool reconstruct_line) const {
+		if (!reconstruct_line || begin == end) {
+			return {};
+		}
+		string result;
+		if (end.buffer_idx == begin.buffer_idx) {
+			if (buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
+				return {};
+			}
+			auto buffer = buffer_handles[begin.buffer_idx]->Ptr();
+			first_char_nl = buffer[begin.buffer_pos] == '\n' || buffer[begin.buffer_pos] == '\r';
+			for (idx_t i = begin.buffer_pos + first_char_nl; i < end.buffer_pos; i++) {
+				result += buffer[i];
+			}
+		} else {
+			if (buffer_handles.find(begin.buffer_idx) == buffer_handles.end() ||
+			    buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
+				return {};
+			}
+			auto first_buffer = buffer_handles[begin.buffer_idx]->Ptr();
+			auto first_buffer_size = buffer_handles[begin.buffer_idx]->actual_size;
+			auto second_buffer = buffer_handles[end.buffer_idx]->Ptr();
+			first_char_nl = first_buffer[begin.buffer_pos] == '\n' || first_buffer[begin.buffer_pos] == '\r';
+			for (idx_t i = begin.buffer_pos + first_char_nl; i < first_buffer_size; i++) {
+				result += first_buffer[i];
+			}
+			for (idx_t i = 0; i < end.buffer_pos; i++) {
+				result += second_buffer[i];
+			}
+		}
+		// sanitize borked line
+		SanitizeError(result);
+		return result;
+	}
 };
 
 class StringValueResult;
@@ -185,6 +217,9 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
+	//! If we are trying a row or not when figuring out the next row to start from.
+	bool try_row = false;
+
 	unsafe_unique_array<ParseTypeInfo> parse_types;
 	vector<string> names;
 
@@ -241,7 +276,7 @@ public:
 	//! Force the throw of a Unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
-	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
+	inline void AddValueToVector(const char *value_ptr, idx_t size, bool allocate = false);
 	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
@@ -294,7 +329,7 @@ public:
 
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
-	                                                    const MultiFileReaderOptions &file_options);
+	                                                    const MultiFileOptions &file_options);
 
 	bool FinishedIterator() const;
 
@@ -344,7 +379,7 @@ private:
 	idx_t start_pos;
 	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
-	//! Strict state machine, is basically a state machine with rfc 4180 set to true, used to figure out new line.
+	//! Strict state machine is basically a state machine with rfc 4180 set to true, used to figure out a new line.
 	shared_ptr<CSVStateMachine> state_machine_strict;
 };
 

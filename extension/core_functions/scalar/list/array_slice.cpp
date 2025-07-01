@@ -418,6 +418,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		}
 		if (arguments[0]->return_type.IsJSONType()) {
 			// This is needed to avoid producing invalid JSON
+			bound_function.arguments[0] = LogicalType::VARCHAR;
 			bound_function.return_type = LogicalType::VARCHAR;
 		} else {
 			bound_function.return_type = arguments[0]->return_type;

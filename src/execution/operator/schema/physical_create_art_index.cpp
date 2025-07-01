@@ -10,15 +10,17 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
-PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table_p,
-                                               const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+PhysicalCreateARTIndex::PhysicalCreateARTIndex(PhysicalPlan &physical_plan, LogicalOperator &op,
+                                               TableCatalogEntry &table_p, const vector<column_t> &column_ids,
+                                               unique_ptr<CreateIndexInfo> info,
                                                vector<unique_ptr<Expression>> unbound_expressions,
                                                idx_t estimated_cardinality, const bool sorted,
                                                unique_ptr<AlterTableInfo> alter_table_info)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
       sorted(sorted), alter_table_info(std::move(alter_table_info)) {
 
@@ -91,8 +93,8 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(OperatorSinkInput &input) co
 	// Insert each key and its corresponding row ID.
 	for (idx_t i = 0; i < row_count; i++) {
 		auto status = art.tree.GetGateStatus();
-		auto conflict_type =
-		    art.Insert(art.tree, l_state.keys[i], 0, l_state.row_ids[i], status, nullptr, IndexAppendMode::DEFAULT);
+		auto conflict_type = ARTOperator::Insert(l_state.arena_allocator, art, art.tree, l_state.keys[i], 0,
+		                                         l_state.row_ids[i], status, nullptr, IndexAppendMode::DEFAULT);
 		D_ASSERT(conflict_type != ARTConflictType::TRANSACTION);
 		if (conflict_type == ARTConflictType::CONSTRAINT) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");
@@ -174,8 +176,9 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
-	if (!storage.IsRoot()) {
-		throw TransactionException("cannot add an index to a table that has been altered");
+	if (!storage.IsMainTable()) {
+		throw TransactionException(
+		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 	}
 
 	auto &schema = table.schema;

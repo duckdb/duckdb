@@ -118,12 +118,21 @@ static bool TypeHasExactRowCount(const LogicalType &type) {
 }
 
 idx_t StructColumnReader::GroupRowsAvailable() {
-	for (idx_t i = 0; i < child_readers.size(); i++) {
-		if (TypeHasExactRowCount(child_readers[i]->Type())) {
-			return child_readers[i]->GroupRowsAvailable();
+	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
+		if (TypeHasExactRowCount(child->Type())) {
+			return child->GroupRowsAvailable();
 		}
 	}
-	return child_readers[0]->GroupRowsAvailable();
+	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
+		return child->GroupRowsAvailable();
+	}
+	throw InternalException("No projected columns in struct?");
 }
 
 } // namespace duckdb

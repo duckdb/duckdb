@@ -1,6 +1,6 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -18,7 +18,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 
 #include <limits>
 
@@ -84,6 +84,9 @@ void BaseCSVData::Finalize() {
 	// delimiter and comment must not be substrings of each other
 	SubstringDetection(options.dialect_options.state_machine_options.comment.GetValue(), delimiter_string, "COMMENT",
 	                   "DELIMITER");
+
+	// quote and delimiter must not be substrings of each other
+	SubstringDetection(options.thousands_separator, options.decimal_separator, "THOUSANDS", "DECIMAL_SEPARATOR");
 
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
@@ -218,6 +221,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
 	bind_data->requires_quotes['\n'] = true;
 	bind_data->requires_quotes['\r'] = true;
+	bind_data->requires_quotes['#'] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
 	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
@@ -606,7 +610,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.rotate_files = WriteCSVRotateFiles;
 	info.rotate_next_file = WriteCSVRotateNextFile;
 
-	info.copy_from_bind = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBindCopy;
+	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";

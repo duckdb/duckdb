@@ -17,24 +17,22 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type,
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
+                             estimated_cardinality),
       delim_types(std::move(delim_types)) {
 
 	filter_pushdown = std::move(pushdown_info_p);
@@ -102,9 +100,11 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, 
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                                   idx_t estimated_cardinality)
+    : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
+                       nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -249,7 +249,7 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, conditions, payload_columns.col_types, join_type,
+	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
 	                                       rhs_output_columns.col_idxs);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -469,6 +469,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "HashJoinTableInitTask";
+	}
+
 private:
 	HashJoinGlobalSinkState &sink;
 	idx_t entry_idx_from;
@@ -523,6 +527,9 @@ public:
 		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+	string TaskType() const override {
+		return "HashJoinFinalizeTask";
 	}
 
 private:
@@ -605,6 +612,10 @@ public:
 		local_ht.Repartition(global_ht);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "HashJoinRepartitionTask";
 	}
 
 private:
@@ -705,7 +716,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
 
 	// Scan the build keys in the hash table
-	Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
+	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], key_count);
 	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, build_idx,
 	                       build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
 
@@ -733,9 +744,9 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
-                                                       const PhysicalOperator &op) const {
+                                                       const PhysicalComparisonJoin &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -753,6 +764,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
+		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
@@ -767,22 +779,46 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				continue;
 			}
 			// if the HT is small we can generate a complete "OR" filter
-			if (ht.Count() > 1 && ht.Count() <= dynamic_or_filter_threshold) {
-				PushInFilter(info, ht, op, filter_idx, filter_col_idx);
+			// but only if the join condition is equality.
+			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold &&
+			    cmp == ExpressionType::COMPARE_EQUAL) {
+				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
-				// min = max - generate an equality filter
-				auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
+				// min = max - single value
+				// generate a "one-sided" comparison filter for the LHS
+				// Note that this also works for equalities.
+				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
 			} else {
 				// min != max - generate a range filter
-				auto greater_equals =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
-				auto less_equals =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+				// for non-equalities, the range must be half-open
+				// e.g., for lhs < rhs we can only use lhs <= max
+				switch (cmp) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_GREATERTHAN:
+				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+					auto greater_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					break;
+				}
+				default:
+					break;
+				}
+				switch (cmp) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_LESSTHAN:
+				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+					auto less_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					break;
+				}
+				default:
+					break;
+				}
 			}
 		}
 	}
@@ -818,6 +854,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.external = false;
 		}
 	}
+	DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Finalize",
+	           {{"external", to_string(sink.external)}});
 	if (sink.external) {
 		// External Hash Join
 		sink.perfect_join_executor.reset();
@@ -828,8 +866,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		if (!very_very_skewed &&
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
+			const auto radix_bits_before = ht.GetRadixBits();
 			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
 			                           sink.max_partition_count);
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
+			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
+			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
 			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, *this, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
@@ -857,7 +899,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	Value min;
 	Value max;
 	if (filter_pushdown && !sink.skip_filter_pushdown && ht.Count() > 0) {
-		auto final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
+		auto final_min_max = filter_pushdown->Finalize(context, &ht, *sink.global_filter_state, *this);
 		min = final_min_max->data[0].GetValue(0);
 		max = final_min_max->data[1].GetValue(0);
 	} else if (TypeIsIntegral(conditions[0].right->return_type.InternalType())) {

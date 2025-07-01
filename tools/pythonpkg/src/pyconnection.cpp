@@ -57,7 +57,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 
@@ -186,6 +185,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("query"), py::arg("parameters") = py::none());
 	m.def("close", &DuckDBPyConnection::Close, "Close the connection");
 	m.def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations");
+	m.def("query_progress", &DuckDBPyConnection::QueryProgress, "Query progress of pending operation");
 	m.def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute");
 	m.def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	      py::arg("size") = 1);
@@ -201,7 +201,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Fetch a chunk of the result as DataFrame following execute()", py::arg("vectors_per_chunk") = 1,
 	      py::kw_only(), py::arg("date_as_object") = false);
 	m.def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
-	      py::arg("rows_per_batch") = 1000000);
+	      py::arg("rows_per_batch") = 1000000, py::kw_only(), py::arg("lazy") = false);
 	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	      py::arg("rows_per_batch") = 1000000);
 	m.def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
@@ -279,7 +279,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
 	      py::arg("compression") = py::none());
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
-	      py::arg("query"));
+	      py::arg("query"), py::kw_only(), py::arg("qualified") = false);
 	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
 	      "Install an extension by name, with an optional version and/or repository to get the extension from",
 	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
@@ -696,11 +696,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	return shared_from_this();
 }
 
-static void ParseMultiFileReaderOptions(named_parameter_map_t &options, const Optional<py::object> &filename,
-                                        const Optional<py::object> &hive_partitioning,
-                                        const Optional<py::object> &union_by_name,
-                                        const Optional<py::object> &hive_types,
-                                        const Optional<py::object> &hive_types_autocast) {
+static void ParseMultiFileOptions(named_parameter_map_t &options, const Optional<py::object> &filename,
+                                  const Optional<py::object> &hive_partitioning,
+                                  const Optional<py::object> &union_by_name, const Optional<py::object> &hive_types,
+                                  const Optional<py::object> &hive_types_autocast) {
 	if (!py::none().is(filename)) {
 		auto val = TransformPythonValue(filename);
 		options["filename"] = val;
@@ -757,7 +756,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 	auto &name = path_like.files;
 	auto file_like_object_wrapper = std::move(path_like.dependency);
 
-	ParseMultiFileReaderOptions(options, filename, hive_partitioning, union_by_name, hive_types, hive_types_autocast);
+	ParseMultiFileOptions(options, filename, hive_partitioning, union_by_name, hive_types, hive_types_autocast);
 
 	if (!py::none().is(columns)) {
 		if (!py::is_dict_like(columns)) {
@@ -938,6 +937,7 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	                                                "comment"
 	                                                "sep",
 	                                                "delimiter",
+	                                                "files_to_sniff",
 	                                                "dtype",
 	                                                "na_values",
 	                                                "skiprows",
@@ -969,7 +969,8 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	                                                "hive_partitioning",
 	                                                "union_by_name",
 	                                                "hive_types",
-	                                                "hive_types_autocast"};
+	                                                "hive_types_autocast",
+	                                                "thousands"};
 
 	std::ostringstream error;
 	error << "The methods read_csv and read_csv_auto do not have the \"" << unkown_parameter << "\" argument." << '\n';
@@ -1009,6 +1010,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object compression = py::none();
 	py::object sep = py::none();
 	py::object delimiter = py::none();
+	py::object files_to_sniff = py::none();
 	py::object dtype = py::none();
 	py::object na_values = py::none();
 	py::object skiprows = py::none();
@@ -1042,6 +1044,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object hive_types = py::none();
 	py::object hive_types_autocast = py::none();
 	py::object comment = py::none();
+	py::object thousands_separator = py::none();
 
 	for (auto &arg : kwargs) {
 		const auto &arg_name = py::str(arg.first).cast<std::string>();
@@ -1053,8 +1056,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			sep = kwargs[arg_name.c_str()];
 		} else if (arg_name == "delimiter") {
 			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "files_to_sniff") {
+			files_to_sniff = kwargs[arg_name.c_str()];
 		} else if (arg_name == "comment") {
 			comment = kwargs[arg_name.c_str()];
+		} else if (arg_name == "thousands") {
+			thousands_separator = kwargs[arg_name.c_str()];
 		} else if (arg_name == "dtype") {
 			dtype = kwargs[arg_name.c_str()];
 		} else if (arg_name == "na_values") {
@@ -1135,8 +1142,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	auto file_like_object_wrapper = std::move(path_like.dependency);
 	named_parameter_map_t bind_parameters;
 
-	ParseMultiFileReaderOptions(bind_parameters, filename, hive_partitioning, union_by_name, hive_types,
-	                            hive_types_autocast);
+	ParseMultiFileOptions(bind_parameters, filename, hive_partitioning, union_by_name, hive_types, hive_types_autocast);
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
@@ -1190,6 +1196,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		bind_parameters["delim"] = Value(py::str(sep));
 	} else if (has_delimiter) {
 		bind_parameters["delim"] = Value(py::str(delimiter));
+	}
+
+	if (!py::none().is(files_to_sniff)) {
+		if (!py::isinstance<py::int_>(files_to_sniff)) {
+			throw InvalidInputException("read_csv only accepts 'files_to_sniff' as an integer");
+		}
+		bind_parameters["files_to_sniff"] = Value::INTEGER(py::int_(files_to_sniff));
 	}
 
 	if (!py::none().is(names_p)) {
@@ -1251,6 +1264,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			throw InvalidInputException("read_csv only accepts 'comment' as a string");
 		}
 		bind_parameters["comment"] = Value(py::str(comment));
+	}
+
+	if (!py::none().is(thousands_separator)) {
+		if (!py::isinstance<py::str>(thousands_separator)) {
+			throw InvalidInputException("read_csv only accepts 'thousands' as a string");
+		}
+		bind_parameters["thousands"] = Value(py::str(thousands_separator));
 	}
 
 	if (!py::none().is(escapechar)) {
@@ -1734,15 +1754,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
-	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context);
+	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context, true);
 	D_ASSERT(tableref);
 	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
-unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
+unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query, bool qualified) {
 	auto &connection = con.GetConnection();
-	return connection.GetTableNames(query);
+	return connection.GetTableNames(query, qualified);
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
@@ -1808,6 +1828,11 @@ void DuckDBPyConnection::Close() {
 void DuckDBPyConnection::Interrupt() {
 	auto &connection = con.GetConnection();
 	connection.Interrupt();
+}
+
+double DuckDBPyConnection::QueryProgress() {
+	auto &connection = con.GetConnection();
+	return connection.GetQueryProgress();
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install, const py::object &repository,
@@ -1996,12 +2021,12 @@ py::dict DuckDBPyConnection::FetchTF() {
 	return result.FetchTF();
 }
 
-PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
+PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch, bool lazy) {
 	if (!con.HasResult()) {
 		throw InvalidInputException("No open result set");
 	}
 	auto &result = con.GetResult();
-	return result.ToPolars(rows_per_batch);
+	return result.ToPolars(rows_per_batch, lazy);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {
@@ -2059,8 +2084,22 @@ void InstantiateNewInstance(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	PandasScanFunction scan_fun;
 	MapFunction map_fun;
-	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
-	ExtensionUtil::RegisterFunction(db_instance, map_fun);
+
+	TableFunctionSet map_set(map_fun.name);
+	map_set.AddFunction(std::move(map_fun));
+	CreateTableFunctionInfo map_info(std::move(map_set));
+	map_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+
+	TableFunctionSet scan_set(scan_fun.name);
+	scan_set.AddFunction(std::move(scan_fun));
+	CreateTableFunctionInfo scan_info(std::move(scan_set));
+	scan_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+
+	auto &system_catalog = Catalog::GetSystemCatalog(db_instance);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db_instance);
+
+	system_catalog.CreateFunction(transaction, map_info);
+	system_catalog.CreateFunction(transaction, scan_info);
 }
 
 static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {
@@ -2286,10 +2325,13 @@ PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
 		// First Verify Lib Types
 		auto table_class = import_cache.pyarrow.Table();
 		auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
+		auto message_reader_class = import_cache.pyarrow.ipc.MessageReader();
 		if (py::isinstance(obj, table_class)) {
 			return PyArrowObjectType::Table;
 		} else if (py::isinstance(obj, record_batch_reader_class)) {
 			return PyArrowObjectType::RecordBatchReader;
+		} else if (py::isinstance(obj, message_reader_class)) {
+			return PyArrowObjectType::MessageReader;
 		}
 
 		if (ModuleIsLoaded<PyarrowDatasetCacheItem>()) {

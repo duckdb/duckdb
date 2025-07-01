@@ -23,8 +23,9 @@ namespace duckdb {
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::Type;
 
-static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
-                                                     const duckdb_parquet::Statistics &parquet_stats) {
+unique_ptr<BaseStatistics> ParquetStatisticsUtils::CreateNumericStats(const LogicalType &type,
+                                                                      const ParquetColumnSchema &schema_ele,
+                                                                      const duckdb_parquet::Statistics &parquet_stats) {
 	auto stats = NumericStats::CreateUnknown(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -45,6 +46,27 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, co
 	} else {
 		max = Value(type);
 	}
+	NumericStats::SetMin(stats, min);
+	NumericStats::SetMax(stats, max);
+	return stats.ToUnique();
+}
+
+static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &type,
+                                                           const ParquetColumnSchema &schema_ele,
+                                                           const duckdb_parquet::Statistics &parquet_stats) {
+	auto stats = NumericStats::CreateUnknown(type);
+
+	// floating point values can always have NaN values - hence we cannot use the max value from the file
+	Value min;
+	Value max;
+	if (parquet_stats.__isset.min_value) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
+	} else if (parquet_stats.__isset.min) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
+	} else {
+		min = Value(type);
+	}
+	max = Value("nan").DefaultCastAs(type);
 	NumericStats::SetMin(stats, min);
 	NumericStats::SetMax(stats, max);
 	return stats.ToUnique();
@@ -282,7 +304,8 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 }
 
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
-                                                                             const vector<ColumnChunk> &columns) {
+                                                                             const vector<ColumnChunk> &columns,
+                                                                             bool can_have_nan) {
 
 	// Not supported types
 	auto &type = schema.type;
@@ -298,7 +321,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		// Recurse into child readers
 		for (idx_t i = 0; i < schema.children.size(); i++) {
 			auto &child_schema = schema.children[i];
-			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns);
+			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
 		}
 		row_group_stats = struct_stats.ToUnique();
@@ -328,8 +351,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
@@ -340,6 +361,19 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DECIMAL:
 		row_group_stats = CreateNumericStats(type, schema, parquet_stats);
+		break;
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+		if (can_have_nan) {
+			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
+			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+			row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
+		} else {
+			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
+			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
+			// probably the best we can do for now.
+			row_group_stats = CreateNumericStats(type, schema, parquet_stats);
+		}
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);

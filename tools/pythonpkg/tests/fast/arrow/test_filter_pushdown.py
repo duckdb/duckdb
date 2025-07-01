@@ -986,3 +986,36 @@ class TestArrowFilterPushdown(object):
             ('product_code', 100),
             ('price', 100),
         ]
+
+    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the greatest value
+    def test_nan_filter_pushdown(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            """
+            create table test as select a::DOUBLE a from VALUES
+                ('inf'),
+                ('nan'),
+                ('0.34234'),
+                ('34234234.00005'),
+                ('-nan')
+            t(a);
+        """
+        )
+
+        def assert_equal_results(con, arrow_table, query):
+            duckdb_res = con.sql(query.format(table='test')).fetchall()
+            arrow_res = con.sql(query.format(table='arrow_table')).fetchall()
+            assert len(duckdb_res) == len(arrow_res)
+
+        arrow_table = duckdb_cursor.table('test').arrow()
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a > 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a >= 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a < 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a <= 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a = 'NaN'::FLOAT")
+        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a != 'NaN'::FLOAT")
+
+    def test_dynamic_filter(self, duckdb_cursor):
+        t = pa.Table.from_pydict({"a": [3, 24, 234, 234, 234, 234, 234, 234, 234, 45, 2, 5, 2, 45]})
+        duckdb_cursor.register("t", t)
+        res = duckdb_cursor.sql("SELECT a FROM t ORDER BY a LIMIT 11").fetchall()
+        assert len(res) == 11

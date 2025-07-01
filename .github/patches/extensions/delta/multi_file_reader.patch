@@ -10,7 +10,7 @@ index b36853a..7491a5c 100644
  
  namespace duckdb {
  
-@@ -65,16 +66,17 @@ static void FinalizeBindBaseOverride(const MultiFileReaderOptions &file_options,
+@@ -65,16 +66,17 @@ static void FinalizeBindBaseOverride(const MultiFileOptions &file_options,
  		}
  	}
  	for (idx_t i = 0; i < global_column_ids.size(); i++) {
@@ -30,7 +30,7 @@ index b36853a..7491a5c 100644
  			continue;
  		}
  		if (file_options.union_by_name) {
-@@ -87,7 +89,7 @@ static void FinalizeBindBaseOverride(const MultiFileReaderOptions &file_options,
+@@ -87,7 +89,7 @@ static void FinalizeBindBaseOverride(const MultiFileOptions &file_options,
  			if (not_present_in_file) {
  				// we need to project a column with name \"global_name\" - but it does not exist in the current file
  				// push a NULL value of the specified type
@@ -39,7 +39,7 @@ index b36853a..7491a5c 100644
  				continue;
  			}
  		}
-@@ -97,10 +99,10 @@ static void FinalizeBindBaseOverride(const MultiFileReaderOptions &file_options,
+@@ -97,10 +99,10 @@ static void FinalizeBindBaseOverride(const MultiFileOptions &file_options,
  // Parses the columns that are used by the delta extension into
  void DeltaMultiFileReaderGlobalState::SetColumnIdx(const string &column, idx_t idx) {
  	if (column == "file_row_number") {
@@ -52,7 +52,7 @@ index b36853a..7491a5c 100644
  		return;
  	}
  	throw IOException("Unknown column '%s' found as required by the DeltaMultiFileReader");
-@@ -190,7 +192,8 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+@@ -190,7 +192,8 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileOptions &file_optio
  			// We add the constant column for the delta_file_number option
  			// NOTE: we add a placeholder here, to demonstrate how we can also populate extra columns in the
  			// FinalizeChunk
@@ -62,7 +62,7 @@ index b36853a..7491a5c 100644
  		}
  	}
  
-@@ -201,6 +204,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+@@ -201,6 +204,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileOptions &file_optio
  
  	if (!file_metadata.partition_map.empty()) {
  		for (idx_t i = 0; i < global_column_ids.size(); i++) {
@@ -70,7 +70,7 @@ index b36853a..7491a5c 100644
  			column_t col_id = global_column_ids[i].GetPrimaryIndex();
  			if (IsRowIdColumnId(col_id)) {
  				continue;
-@@ -209,10 +213,10 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+@@ -209,10 +213,10 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileOptions &file_optio
  			if (col_partition_entry != file_metadata.partition_map.end()) {
  				auto &current_type = global_columns[col_id].type;
  				if (current_type == LogicalType::BLOB) {
@@ -87,13 +87,13 @@ index b36853a..7491a5c 100644
  // This code is duplicated from MultiFileReader::CreateNameMapping the difference is that for columns that are not found
  // in the parquet files, we just add null constant columns
  static void CustomMulfiFileNameMapping(const string &file_name,
--                                       const vector<MultiFileReaderColumnDefinition> &local_columns,
--                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
+-                                       const vector<MultiFileColumnDefinition> &local_columns,
+-                                       const vector<MultiFileColumnDefinition> &global_columns,
 -                                       const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 -                                       const string &initial_file,
 -                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
-+	                                 const vector<MultiFileReaderColumnDefinition> &local_columns,
-+	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
++	                                 const vector<MultiFileColumnDefinition> &local_columns,
++	                                 const vector<MultiFileColumnDefinition> &global_columns,
 +	                                 const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 +	                                 const MultiFileReaderBindData &bind_data,
 +	                                 const virtual_column_map_t &virtual_columns, const string &initial_file,
@@ -148,8 +148,8 @@ index b36853a..7491a5c 100644
  }
  
  void DeltaMultiFileReader::CreateColumnMapping(const string &file_name,
--                                               const vector<MultiFileReaderColumnDefinition> &local_columns,
--                                               const vector<MultiFileReaderColumnDefinition> &global_columns,
+-                                               const vector<MultiFileColumnDefinition> &local_columns,
+-                                               const vector<MultiFileColumnDefinition> &global_columns,
 -                                               const vector<ColumnIndex> &global_column_ids,
 -                                               MultiFileReaderData &reader_data,
 -                                               const MultiFileReaderBindData &bind_data, const string &initial_file,
@@ -157,8 +157,8 @@ index b36853a..7491a5c 100644
 -	// First call the base implementation to do most mapping
 -	CustomMulfiFileNameMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, initial_file,
 -	                           global_state);
-+	                                 const vector<MultiFileReaderColumnDefinition> &local_columns,
-+	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
++	                                 const vector<MultiFileColumnDefinition> &local_columns,
++	                                 const vector<MultiFileColumnDefinition> &global_columns,
 +	                                 const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 +	                                 const MultiFileReaderBindData &bind_data,
 +	                                 const virtual_column_map_t &virtual_columns, const string &initial_file,
@@ -286,24 +286,24 @@ index bc6aa05..6f7e3a3 100644
  	void SetColumnIdx(const string &column, idx_t idx);
  };
 @@ -42,11 +42,13 @@ struct DeltaMultiFileReader : public MultiFileReader {
- 	void BindOptions(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+ 	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
  	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
  
--	void CreateColumnMapping(const string &file_name, const vector<MultiFileReaderColumnDefinition> &local_columns,
--	                         const vector<MultiFileReaderColumnDefinition> &global_columns,
+-	void CreateColumnMapping(const string &file_name, const vector<MultiFileColumnDefinition> &local_columns,
+-	                         const vector<MultiFileColumnDefinition> &global_columns,
 -	                         const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 -	                         const MultiFileReaderBindData &bind_data, const string &initial_file,
 -	                         optional_ptr<MultiFileReaderGlobalState> global_state) override;
 +	void CreateColumnMapping(const string &file_name,
-+	                                 const vector<MultiFileReaderColumnDefinition> &local_columns,
-+	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
++	                                 const vector<MultiFileColumnDefinition> &local_columns,
++	                                 const vector<MultiFileColumnDefinition> &global_columns,
 +	                                 const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 +	                                 const MultiFileReaderBindData &bind_data,
 +	                                 const virtual_column_map_t &virtual_columns, const string &initial_file,
 +	                                 optional_ptr<MultiFileReaderGlobalState> global_state) override;
  
  	unique_ptr<MultiFileReaderGlobalState>
- 	InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
+ 	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
 @@ -62,8 +64,9 @@ struct DeltaMultiFileReader : public MultiFileReader {
  
  	//! Override the FinalizeChunk method
@@ -315,4 +315,4 @@ index bc6aa05..6f7e3a3 100644
 +	                                      optional_ptr<MultiFileReaderGlobalState> global_state) override;
  
  	//! Override the ParseOption call to parse delta_scan specific options
- 	bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
+ 	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,

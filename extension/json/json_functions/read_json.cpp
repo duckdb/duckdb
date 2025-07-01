@@ -1,5 +1,5 @@
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_structure.hpp"
@@ -39,7 +39,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 }
 
 struct AutoDetectState {
-	AutoDetectState(ClientContext &context_p, MultiFileBindData &bind_data_p, const vector<string> &files,
+	AutoDetectState(ClientContext &context_p, MultiFileBindData &bind_data_p, const vector<OpenFileInfo> &files,
 	                MutableDateFormatMap &date_format_map)
 	    : context(context_p), bind_data(bind_data_p), files(files), date_format_map(date_format_map), files_scanned(0),
 	      tuples_scanned(0), bytes_scanned(0), total_file_size(0) {
@@ -47,7 +47,7 @@ struct AutoDetectState {
 
 	ClientContext &context;
 	MultiFileBindData &bind_data;
-	const vector<string> &files;
+	const vector<OpenFileInfo> &files;
 	MutableDateFormatMap &date_format_map;
 	atomic<idx_t> files_scanned;
 	atomic<idx_t> tuples_scanned;
@@ -70,12 +70,12 @@ public:
 		auto &bind_data = auto_detect_state.bind_data;
 		auto &files = auto_detect_state.files;
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx]);
+		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx].path);
 		if (bind_data.union_readers[file_idx]) {
 			throw InternalException("Union data already set");
 		}
 		auto &reader = *json_reader;
-		auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
+		auto union_data = make_uniq<BaseUnionData>(files[file_idx].path);
 		union_data->reader = std::move(json_reader);
 		bind_data.union_readers[file_idx] = std::move(union_data);
 
@@ -132,6 +132,10 @@ public:
 		}
 	}
 
+	string TaskType() const override {
+		return "JSONSchemaTask";
+	}
+
 private:
 	AutoDetectState &auto_detect_state;
 	JSONStructureNode &node;
@@ -150,45 +154,36 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	JSONStructureNode node;
 	auto &options = json_data.options;
 	auto files = bind_data.file_list->GetAllFiles();
-	auto file_count = files.size();
+	auto file_count = bind_data.file_options.union_by_name
+	                      ? files.size()
+	                      : MinValue<idx_t>(options.maximum_sample_files, files.size());
 	bind_data.union_readers.resize(files.empty() ? 0 : files.size());
 
 	AutoDetectState auto_detect_state(context, bind_data, files, date_format_map);
-	if (bind_data.file_options.union_by_name) {
-		const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-		const auto files_per_task = (file_count + num_threads - 1) / num_threads;
-		const auto num_tasks = file_count / files_per_task;
-		vector<JSONStructureNode> task_nodes(num_tasks);
+	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
+	const auto num_tasks = file_count / files_per_task;
+	vector<JSONStructureNode> task_nodes(num_tasks);
 
-		// Same idea as in union_by_name.hpp
-		TaskExecutor executor(context);
-		for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
-			const auto file_idx_start = task_idx * files_per_task;
-			auto task = make_uniq<JSONSchemaTask>(executor, auto_detect_state, task_nodes[task_idx], file_idx_start,
-			                                      file_idx_start + files_per_task);
-			executor.ScheduleTask(std::move(task));
-		}
-		executor.WorkOnTasks();
-
-		// Merge task nodes into one
-		for (auto &task_node : task_nodes) {
-			JSONStructure::MergeNodes(node, task_node);
-		}
-	} else {
-		ArenaAllocator allocator(BufferAllocator::Get(context));
-		Vector string_vector(LogicalType::VARCHAR);
-		idx_t remaining = options.sample_size;
-		for (idx_t file_idx = 0; file_idx < file_count; file_idx++) {
-			remaining =
-			    JSONSchemaTask::ExecuteInternal(auto_detect_state, node, file_idx, allocator, string_vector, remaining);
-			if (remaining == 0 || file_idx == options.maximum_sample_files - 1) {
-				break; // We sample sample_size in total (across the first maximum_sample_files files)
-			}
-		}
+	// Same idea as in union_by_name.hpp
+	TaskExecutor executor(context);
+	for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
+		const auto file_idx_start = task_idx * files_per_task;
+		auto task = make_uniq<JSONSchemaTask>(executor, auto_detect_state, task_nodes[task_idx], file_idx_start,
+		                                      file_idx_start + files_per_task);
+		executor.ScheduleTask(std::move(task));
 	}
+	executor.WorkOnTasks();
+
+	// Merge task nodes into one
+	for (auto &task_node : task_nodes) {
+		JSONStructure::MergeNodes(node, task_node);
+	}
+
 	// set the max threads/estimated per-file cardinality
 	if (auto_detect_state.files_scanned > 0 && auto_detect_state.tuples_scanned > 0) {
-		auto average_tuple_size = auto_detect_state.bytes_scanned / auto_detect_state.tuples_scanned;
+		auto average_tuple_size =
+		    MaxValue<idx_t>(auto_detect_state.bytes_scanned / auto_detect_state.tuples_scanned, 1);
 		json_data.estimated_cardinality_per_file = auto_detect_state.total_file_size / average_tuple_size;
 		if (auto_detect_state.files_scanned == 1) {
 			json_data.max_threads =
@@ -236,7 +231,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 }
 
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
-	MultiFileReaderFunction<JSONMultiFileInfo> table_function("read_json");
+	MultiFileFunction<JSONMultiFileInfo> table_function("read_json");
 
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;

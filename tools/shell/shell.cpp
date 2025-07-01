@@ -141,6 +141,7 @@ typedef unsigned char u8;
 #define SHELL_USE_LOCAL_GETLINE 1
 #endif
 
+#include "duckdb.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
@@ -2366,6 +2367,7 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** the database fails to open, print an error message and exit.
 */
 void ShellState::OpenDB(int flags) {
+
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
 			if (zDbFilename.empty()) {
@@ -3139,7 +3141,7 @@ MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg >= 2) {
+	if (nArg > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	int rc = 0;
@@ -3246,6 +3248,10 @@ MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg)
 bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 	idx_t n2 = StringLength(mode_str);
 	char c2 = mode_str[0];
+	if (tbl_name && !(c2 == 'i' && strncmp(mode_str, "insert", n2) == 0)) {
+		raw_printf(stderr, "TABLE argument can only be used with .mode insert");
+		return false;
+	}
 	if (c2 == 'l' && n2 > 2 && strncmp(mode_str, "lines", n2) == 0) {
 		mode = RenderMode::LINE;
 		rowSeparator = SEP_Row;
@@ -3629,7 +3635,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
-	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
+	for (iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
 		const char *z = azArg[iName];
 		if (optionMatch(z, "new")) {
 			newFlag = true;
@@ -3851,7 +3857,7 @@ bool ShellState::ReadFromFile(const string &file) {
 		utf8_printf(stderr, "Error: cannot open \"%s\"\n", file.c_str());
 		rc = 1;
 	} else {
-		rc = ProcessInput();
+		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	}
 	in = inSaved;
@@ -3997,7 +4003,8 @@ MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
-	utf8_printf(state.out, "DuckDB %s %s\n" /*extra-version-info*/, sqlite3_libversion(), sqlite3_sourceid());
+	utf8_printf(state.out, "DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
+	            duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 #define CTIMEOPT_VAL_(opt) #opt
 #define CTIMEOPT_VAL(opt)  CTIMEOPT_VAL_(opt)
 #if defined(__clang__) && defined(__clang_major__)
@@ -4385,7 +4392,7 @@ static bool _all_whitespace(const char *z) {
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
-int ShellState::RunOneSqlLine(char *zSql) {
+int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	int rc;
 	char *zErrMsg = nullptr;
 
@@ -4394,7 +4401,7 @@ int ShellState::RunOneSqlLine(char *zSql) {
 		resolve_backslashes(zSql);
 	}
 #ifndef SHELL_USE_LOCAL_GETLINE
-	if (zSql && *zSql && *zSql != '\3') {
+	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
 	}
 #endif
@@ -4425,7 +4432,7 @@ int ShellState::RunOneSqlLine(char *zSql) {
 **
 ** Return the number of errors.
 */
-int ShellState::ProcessInput() {
+int ShellState::ProcessInput(InputMode mode) {
 	char *zLine = nullptr; /* A single input line */
 	char *zSql = nullptr;  /* Accumulated SQL text */
 	idx_t nLine;           /* Length of current line */
@@ -4480,7 +4487,7 @@ int ShellState::ProcessInput() {
 			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
-				if (zLine && *zLine && *zLine != '\3')
+				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3')
 					shell_add_history(zLine);
 #endif
 				rc = DoMetaCommand(zLine);
@@ -4514,7 +4521,7 @@ int ShellState::ProcessInput() {
 			nSql += nLine;
 		}
 		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && sqlite3_complete(zSql)) {
-			errCnt += RunOneSqlLine(zSql);
+			errCnt += RunOneSqlLine(mode, zSql);
 			nSql = 0;
 			if (outCount) {
 				ResetOutput();
@@ -4530,7 +4537,7 @@ int ShellState::ProcessInput() {
 		}
 	}
 	if (nSql && !_all_whitespace(zSql)) {
-		errCnt += RunOneSqlLine(zSql);
+		errCnt += RunOneSqlLine(mode, zSql);
 	}
 	free(zSql);
 	free(zLine);
@@ -4635,7 +4642,7 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 		if (stdin_is_interactive && is_duckdb_rc) {
 			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
 		}
-		rc = ProcessInput();
+		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
@@ -4902,6 +4909,16 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
+		} else if (strcmp(z, "-storage_version") == 0) {
+			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
+			if (storage_version != "latest") {
+				utf8_printf(
+				    stderr,
+				    "%s: Error: unknown argument (%s) for '-storage_version', only 'latest' is supported currently\n",
+				    program_name, storage_version.c_str());
+			} else {
+				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
+			}
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		}
@@ -5016,7 +5033,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-version") == 0) {
-			printf("%s %s\n", sqlite3_libversion(), sqlite3_sourceid());
+			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
+			       duckdb::DuckDB::SourceID());
 			free(azCmd);
 			return 0;
 		} else if (strcmp(z, "-interactive") == 0) {
@@ -5032,11 +5050,14 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			if (i == argc - 1) {
 				break;
 			}
+			auto old_bail = bail_on_error;
+			bail_on_error = true;
 			z = cmdline_option_value(argc, argv, ++i);
 			if (!data.ProcessFile(string(z))) {
 				free(azCmd);
 				return 1;
 			}
+			bail_on_error = old_bail;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;
@@ -5065,6 +5086,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				free(azCmd);
 				return rc;
 			}
+		} else if (strcmp(z, "-storage_version") == 0) {
+			// already processed on start-up
 		} else {
 			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");
@@ -5109,9 +5132,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			char *zHome;
 			char *zHistory;
 			int nHistory;
-			printf("%s %.19s\n" /*extra-version-info*/
+			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
 			       "Enter \".help\" for usage hints.\n",
-			       sqlite3_libversion(), sqlite3_sourceid());
+			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
 				ShellHighlight highlighter(data);
@@ -5138,7 +5161,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;
-			rc = data.ProcessInput();
+			rc = data.ProcessInput(InputMode::STANDARD);
 			if (zHistory) {
 				shell_stifle_history(2000);
 				shell_write_history(zHistory);
@@ -5146,7 +5169,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			}
 		} else {
 			data.in = stdin;
-			rc = data.ProcessInput();
+			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
 	data.SetTableName(0);

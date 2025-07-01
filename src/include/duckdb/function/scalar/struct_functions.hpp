@@ -32,7 +32,8 @@ struct StructExtractAtFun {
 	static constexpr const char *Example = "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetFunction();
+	static unique_ptr<FunctionData> GetBindData(idx_t index);
 };
 
 struct StructPackFun {
@@ -55,6 +56,16 @@ struct RowFun {
 	static ScalarFunction GetFunction();
 };
 
+struct RemapStructFun {
+	static constexpr const char *Name = "remap_struct";
+	static constexpr const char *Parameters = "input,target_type,mapping,defaults";
+	static constexpr const char *Description = "Map a struct to another struct type, potentially re-ordering, renaming and casting members and filling in defaults for missing values";
+	static constexpr const char *Example = "remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct StructConcatFun {
 	static constexpr const char *Name = "struct_concat";
 	static constexpr const char *Parameters = "struct,struct,...";
@@ -63,6 +74,38 @@ struct StructConcatFun {
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+};
+
+struct StructContainsFun {
+	static constexpr const char *Name = "struct_contains";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Check if an unnamed STRUCT contains the value.";
+	static constexpr const char *Example = "struct_contains(ROW(3, 3, 0), 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StructHasFun {
+	using ALIAS = StructContainsFun;
+
+	static constexpr const char *Name = "struct_has";
+};
+
+struct StructPositionFun {
+	static constexpr const char *Name = "struct_position";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Get the position of the entry in an unnamed STRUCT, starting at 1.";
+	static constexpr const char *Example = "struct_position(ROW(3, 3, 0), 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StructIndexofFun {
+	using ALIAS = StructPositionFun;
+
+	static constexpr const char *Name = "struct_indexof";
 };
 
 } // namespace duckdb

@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
@@ -60,7 +61,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		result->force_match = it->second.GetValue<bool>();
 		input.named_parameters.erase("force_match");
 	}
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 	result->options.FromNamedParameters(input.named_parameters, context, file_options);
 	result->options.Verify(file_options);
 
@@ -134,14 +135,14 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	auto paths = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
-	if (paths.size() > 1) {
+	auto files = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
+	if (files.size() > 1) {
 		throw NotImplementedException("sniff_csv does not operate on more than one file yet");
 	}
 
 	// We must run the sniffer.
 	auto sniffer_options = data.options;
-	sniffer_options.file_path = paths[0];
+	sniffer_options.file_path = files[0].path;
 
 	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
 	if (sniffer_options.name_list.empty()) {
@@ -151,13 +152,26 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.sql_type_list.empty()) {
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {
-		for (auto &type : sniffer_result.return_types) {
-			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+		for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
+			if (!sniffer_options.sql_types_per_column.empty()) {
+				if (sniffer_options.sql_types_per_column.find(sniffer_result.names[i]) !=
+				    sniffer_options.sql_types_per_column.end()) {
+					continue;
+				}
+			} else if (i < sniffer_options.sql_type_list.size()) {
+				continue;
+			}
+			D_ASSERT(sniffer_result.return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
+			sniffer_result.return_types[i] = LogicalType::VARCHAR;
+		}
+	}
+	for (auto &type : sniffer_result.return_types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
 			type = LogicalType::VARCHAR;
 		}
 	}
@@ -238,7 +252,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	std::ostringstream csv_read;
 
 	// Base, Path and auto_detect=false
-	csv_read << "FROM read_csv('" << paths[0] << "'" << separator << "auto_detect=false" << separator;
+	csv_read << "FROM read_csv('" << files[0].path << "'" << separator << "auto_detect=false" << separator;
 	// 10.1. Delimiter
 	if (!sniffer_options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		csv_read << "delim="

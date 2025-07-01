@@ -144,7 +144,9 @@ class PypiCleanup:
                 if version_key in releases_by_date.keys():
                     pkg_vers.extend(versions)
                 else:
-                    pkg_vers.extend(versions[:-how_many_dev_versions_to_keep])
+                    # sort by the suffix casted to int to keep only the most recent builds
+                    sorted_versions = sorted(versions, key=lambda x: int(x.split('dev')[-1]))
+                    pkg_vers.extend(sorted_versions[:-how_many_dev_versions_to_keep])
 
             if not actually_delete:
                 print("Following pkg_vers can be deleted: ", pkg_vers)

@@ -21,17 +21,46 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	return result.ToUnique();
 }
 
-static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics &input, const LogicalType &target) {
+bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const LogicalType &target) {
+	if (source == target) {
+		return true;
+	}
+	// we can only propagate numeric -> numeric
+	switch (source.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		break;
+	default:
+		return false;
+	}
+	switch (target.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		break;
+	default:
+		return false;
+	}
+	// for time/timestamps/dates - there are various limitations on what we can propagate
 	//	Downcasting timestamps to times is not a truncation operation
 	switch (target.id()) {
 	case LogicalTypeId::TIME: {
-		switch (input.GetType().id()) {
+		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
-			return nullptr;
+			return false;
 		default:
 			break;
 		}
@@ -43,22 +72,22 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP;
 		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ;
 		//  Casting to timestamp[_tz] (us) from a different unit can not re-use stats
-		switch (input.GetType().id()) {
+		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_SEC:
-			return nullptr;
+			return false;
 		case LogicalTypeId::TIMESTAMP: {
 			if (to_timestamp_tz) {
 				// Both use INT64 physical type, but should not be treated equal
-				return nullptr;
+				return false;
 			}
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
 			if (to_timestamp) {
 				// Both use INT64 physical type, but should not be treated equal
-				return nullptr;
+				return false;
 			}
 			break;
 		}
@@ -69,12 +98,12 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
 		// Same as above ^
-		switch (input.GetType().id()) {
+		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_SEC:
-			return nullptr;
+			return false;
 		default:
 			break;
 		}
@@ -82,12 +111,12 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		// Same as above ^
-		switch (input.GetType().id()) {
+		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_SEC:
-			return nullptr;
+			return false;
 		default:
 			break;
 		}
@@ -95,12 +124,12 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	}
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		// Same as above ^
-		switch (input.GetType().id()) {
+		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:
-			return nullptr;
+			return false;
 		default:
 			break;
 		}
@@ -109,36 +138,16 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	default:
 		break;
 	}
-
-	switch (target.InternalType()) {
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return StatisticsOperationsNumericNumericCast(input, target);
-	default:
-		return nullptr;
-	}
+	// we can propagate!
+	return true;
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(BaseStatistics &stats, const LogicalType &source,
                                                                   const LogicalType &target) {
-	unique_ptr<BaseStatistics> result_stats;
-	switch (source.InternalType()) {
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return StatisticsNumericCastSwitch(stats, target);
-	default:
+	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}
+	return StatisticsOperationsNumericNumericCast(stats, target);
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,

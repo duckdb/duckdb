@@ -34,6 +34,7 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/original/std/memory.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -43,6 +44,12 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+
+#ifndef DUCKDB_BASE_STD
+namespace duckdb_base_std {
+	using ::std::unique_ptr;
+}
+#endif
 
 #ifdef __clang__
 #  define FMT_CLANG_VERSION (__clang_major__ * 100 + __clang_minor__)
@@ -3052,7 +3059,7 @@ typename Context::iterator vformat_to(
 // Example:
 //   auto s = format("{}", ptr(p));
 template <typename T> inline const void* ptr(const T* p) { return p; }
-template <typename T> inline const void* ptr(const std::unique_ptr<T>& p) {
+template <typename T> inline const void* ptr(const duckdb_base_std::unique_ptr<T>& p) {
   return p.get();
 }
 template <typename T> inline const void* ptr(const std::shared_ptr<T>& p) {

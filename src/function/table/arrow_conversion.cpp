@@ -1,3 +1,5 @@
+#include "duckdb/common/operator/cast_operators.hpp"
+
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -333,56 +335,6 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, ArrowArrayScan
 		} else {
 			ColumnArrowToDuckDB(child_vector, child_array, child_state, child_count, child_type,
 			                    NumericCast<int64_t>(child_offset));
-		}
-	}
-}
-
-static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
-                              const ArrowType &arrow_type, int64_t nested_offset, int64_t parent_offset) {
-	SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
-	auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
-	auto size_type = string_info.GetSizeType();
-	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
-		auto fixed_size = string_info.FixedSize();
-		//! Have to check validity mask before setting this up
-		idx_t offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset) * fixed_size;
-		auto cdata = ArrowBufferData<char>(array, 1);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				continue;
-			}
-			auto bptr = cdata + offset;
-			auto blob_len = fixed_size;
-			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
-			offset += blob_len;
-		}
-	} else if (size_type == ArrowVariableSizeType::NORMAL) {
-		auto offsets =
-		    ArrowBufferData<uint32_t>(array, 1) + GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
-		auto cdata = ArrowBufferData<char>(array, 2);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				continue;
-			}
-			auto bptr = cdata + offsets[row_idx];
-			auto blob_len = offsets[row_idx + 1] - offsets[row_idx];
-			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
-		}
-	} else {
-		//! Check if last offset is higher than max uint32
-		if (ArrowBufferData<uint64_t>(array, 1)[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-			throw ConversionException("DuckDB does not support Blobs over 4GB");
-		} // LCOV_EXCL_STOP
-		auto offsets =
-		    ArrowBufferData<uint64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
-		auto cdata = ArrowBufferData<char>(array, 2);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				continue;
-			}
-			auto bptr = cdata + offsets[row_idx];
-			auto blob_len = offsets[row_idx + 1] - offsets[row_idx];
-			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
 		}
 	}
 }
@@ -763,6 +715,83 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToString(physical_type));
 	}
 }
+template <class SRC>
+void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, int64_t nested_offset,
+                    uint64_t parent_offset, ArrowScanLocalState &scan_state, ValidityMask &val_mask,
+                    DecimalBitWidth arrow_bit_width) {
+
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::INT16: {
+		auto tgt_ptr = FlatVector::GetData<int16_t>(vector);
+		for (idx_t row = 0; row < size; row++) {
+			if (val_mask.RowIsValid(row)) {
+				auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+				D_ASSERT(result);
+				(void)result;
+			}
+		}
+		break;
+	}
+	case PhysicalType::INT32: {
+		if (arrow_bit_width == DecimalBitWidth::DECIMAL_32) {
+			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
+			                                GetTypeIdSize(vector.GetType().InternalType()) *
+			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
+			                                                       scan_state, nested_offset));
+		} else {
+			auto tgt_ptr = FlatVector::GetData<int32_t>(vector);
+			for (idx_t row = 0; row < size; row++) {
+				if (val_mask.RowIsValid(row)) {
+					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+					D_ASSERT(result);
+					(void)result;
+				}
+			}
+		}
+		break;
+	}
+	case PhysicalType::INT64: {
+		if (arrow_bit_width == DecimalBitWidth::DECIMAL_64) {
+			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
+			                                GetTypeIdSize(vector.GetType().InternalType()) *
+			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
+			                                                       scan_state, nested_offset));
+		} else {
+			auto tgt_ptr = FlatVector::GetData<int64_t>(vector);
+			for (idx_t row = 0; row < size; row++) {
+				if (val_mask.RowIsValid(row)) {
+					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+					D_ASSERT(result);
+					(void)result;
+				}
+			}
+		}
+		break;
+	}
+	case PhysicalType::INT128: {
+		if (arrow_bit_width == DecimalBitWidth::DECIMAL_128) {
+			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
+			                                GetTypeIdSize(vector.GetType().InternalType()) *
+			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
+			                                                       scan_state, nested_offset));
+		} else {
+			auto tgt_ptr = FlatVector::GetData<hugeint_t>(vector);
+			for (idx_t row = 0; row < size; row++) {
+				if (val_mask.RowIsValid(row)) {
+					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
+					D_ASSERT(result);
+					(void)result;
+				}
+			}
+		}
+
+		break;
+	}
+	default:
+		throw NotImplementedException("Unsupported physical type for Decimal: %s",
+		                              TypeIdToString(vector.GetType().InternalType()));
+	}
+}
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
@@ -833,6 +862,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::UUID:
 		UUIDConversion(vector, array, scan_state, nested_offset, NumericCast<int64_t>(parent_offset), size);
 		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::VARCHAR: {
 		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
 		auto size_type = string_info.GetSizeType();
@@ -844,8 +876,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			SetVectorString(vector, size, cdata, offsets);
 			break;
 		}
-		case ArrowVariableSizeType::NORMAL:
-		case ArrowVariableSizeType::FIXED_SIZE: {
+		case ArrowVariableSizeType::NORMAL: {
 			auto cdata = ArrowBufferData<char>(array, 2);
 			auto offsets = ArrowBufferData<uint32_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
@@ -857,6 +888,25 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			    vector, size, array,
 			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset));
 			break;
+		}
+		case ArrowVariableSizeType::FIXED_SIZE: {
+			SetValidityMask(vector, array, scan_state, size, NumericCast<int64_t>(parent_offset), nested_offset);
+			auto fixed_size = string_info.FixedSize();
+			// Have to check validity mask before setting this up
+			idx_t offset =
+			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset) * fixed_size;
+			auto cdata = ArrowBufferData<char>(array, 1);
+			auto blob_len = fixed_size;
+			auto result = FlatVector::GetData<string_t>(vector);
+			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+				if (FlatVector::IsNull(vector, row_idx)) {
+					offset += blob_len;
+					continue;
+				}
+				auto bptr = cdata + offset;
+				result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+				offset += blob_len;
+			}
 		}
 		}
 		break;
@@ -998,61 +1048,33 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	}
 	case LogicalTypeId::DECIMAL: {
 		auto val_mask = FlatVector::Validity(vector);
-		//! We have to convert from INT128
-		auto src_ptr = ArrowBufferData<hugeint_t>(array, 1) +
-		               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
-		switch (vector.GetType().InternalType()) {
-		case PhysicalType::INT16: {
-			auto tgt_ptr = FlatVector::GetData<int16_t>(vector);
-			for (idx_t row = 0; row < size; row++) {
-				if (val_mask.RowIsValid(row)) {
-					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
-					(void)result;
-				}
-			}
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDecimalInfo>();
+		auto bit_width = datetime_info.GetBitWidth();
+
+		switch (bit_width) {
+		case DecimalBitWidth::DECIMAL_32: {
+			auto src_ptr = ArrowBufferData<int32_t>(array, 1) +
+			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
+			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, scan_state, val_mask, bit_width);
 			break;
 		}
-		case PhysicalType::INT32: {
-			auto tgt_ptr = FlatVector::GetData<int32_t>(vector);
-			for (idx_t row = 0; row < size; row++) {
-				if (val_mask.RowIsValid(row)) {
-					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
-					(void)result;
-				}
-			}
+
+		case DecimalBitWidth::DECIMAL_64: {
+			auto src_ptr = ArrowBufferData<int64_t>(array, 1) +
+			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
+			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, scan_state, val_mask, bit_width);
 			break;
 		}
-		case PhysicalType::INT64: {
-			auto tgt_ptr = FlatVector::GetData<int64_t>(vector);
-			for (idx_t row = 0; row < size; row++) {
-				if (val_mask.RowIsValid(row)) {
-					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
-					(void)result;
-				}
-			}
-			break;
-		}
-		case PhysicalType::INT128: {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       scan_state, nested_offset));
+
+		case DecimalBitWidth::DECIMAL_128: {
+			auto src_ptr = ArrowBufferData<hugeint_t>(array, 1) +
+			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
+			ConvertDecimal(src_ptr, vector, array, size, nested_offset, parent_offset, scan_state, val_mask, bit_width);
 			break;
 		}
 		default:
-			throw NotImplementedException("Unsupported physical type for Decimal: %s",
-			                              TypeIdToString(vector.GetType().InternalType()));
+			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
 		}
-		break;
-	}
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT: {
-		ArrowToDuckDBBlob(vector, array, scan_state, size, arrow_type, nested_offset,
-		                  NumericCast<int64_t>(parent_offset));
 		break;
 	}
 	case LogicalTypeId::LIST: {

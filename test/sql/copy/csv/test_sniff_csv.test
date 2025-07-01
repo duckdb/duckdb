@@ -8,6 +8,17 @@ PRAGMA enable_verification
 # requires notwindows because tests will return \r\n to be used in the parameters
 require notwindows
 
+# This has a row with an extra column, so with ignore_errors we give preference to that
+query II
+SELECT quote, escape from sniff_csv('data/csv/16857.csv', ignore_errors = true);
+----
+"	"
+
+query II
+SELECT quote, escape from sniff_csv('data/csv/16857.csv');
+----
+"	"
+
 query III
 SELECT escape,quote, delimiter from sniff_csv('data/csv/later_quotes.csv');
 ----
@@ -84,10 +95,10 @@ FROM read_csv('data/csv/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=fa
 query IIIIIIIIIIII
 FROM sniff_csv('data/csv/inconsistent_cells.csv')
 ----
-,	(empty)	(empty)	\n	(empty)	3	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}, {'name': column3, 'type': BIGINT}, {'name': column4, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=3, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+,	(empty)	(empty)	\n	(empty)	5	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}, {'name': column3, 'type': BIGINT}, {'name': column4, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=5, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 
 query IIIII
-FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=3, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 ----
 1	2	3	4	5
 1	2	3	4	5
@@ -120,11 +131,11 @@ FROM read_csv('data/csv/auto/backslash_escape.csv', auto_detect=false, delim='|'
 query IIIIIIIIIIII
 FROM sniff_csv('data/csv/comments/simple.csv');
 ----
-;	(empty)	(empty)	\n	#	2	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=2, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
+;	(empty)	(empty)	\n	#	0	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 
 # Test Prompt
 query II
-FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='"', escape='"', new_line='\n', skip=2, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
+FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 ----
 1	3
 6	7

@@ -53,7 +53,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 		}
 		if (function.in_out_function) {
 			has_in_out_function = true;
-		} else if (function.function || function.bind_replace) {
+		} else if (function.function || function.bind_replace || function.bind_operator) {
 			has_standard_table_function = true;
 		} else {
 			throw InternalException("Function \"%s\" has neither in_out_function nor function defined",
@@ -197,9 +197,28 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
-	if (table_function.bind || table_function.bind_replace) {
+	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
+		if (table_function.bind_operator) {
+			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
+			if (new_plan) {
+				new_plan->ResolveOperatorTypes();
+				if (new_plan->types.size() != return_names.size()) {
+					throw InternalException("Failed to bind \"%s\": return_types/names must have same size",
+					                        table_function.name);
+				}
+				for (auto &binding : new_plan->GetColumnBindings()) {
+					if (binding.table_index != bind_index) {
+						throw InternalException(
+						    "Failed to bind \"%s\": root bind index must be the passed in bind index",
+						    table_function.name);
+					}
+				}
+				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
+				return new_plan;
+			}
+		}
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan) {
@@ -210,15 +229,19 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 					new_plan->column_name_alias = ref.column_name_alias;
 				}
 				return CreatePlan(*Bind(*new_plan));
-			} else if (!table_function.bind) {
-				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
-				                      table_function.name);
 			}
+		}
+		if (!table_function.bind) {
+			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
+			                      table_function.name);
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
+	}
+	if (bind_data && !bind_data->SupportStatementCache()) {
+		SetAlwaysRequireRebind();
 	}
 	if (return_types.size() != return_names.size()) {
 		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
@@ -247,7 +270,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
-	if (table_function.in_out_function && !table_function.projection_pushdown) {
+	if (table_function.in_out_function) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}

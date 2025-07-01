@@ -2,7 +2,6 @@
 
 #include "duckdb/function/window/window_shared_expressions.hpp"
 
-#include "duckdb/common/array.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -41,6 +40,10 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
+}
+
+bool WindowExecutor::IgnoreNulls() const {
+	return wexpr.ignore_nulls;
 }
 
 void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &eval_chunk, Vector &result, WindowExecutorLocalState &lstate,

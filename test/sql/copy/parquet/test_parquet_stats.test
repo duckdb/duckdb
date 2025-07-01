@@ -4,9 +4,6 @@
 
 require parquet
 
-require skip_reload
-
-
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY
 
@@ -35,9 +32,10 @@ query I nosort empty
 explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where salary < 12380;
 ----
 
-query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where salary > 286593;
-----
+# max is nan because of parquet's unique setup - so we can't prune here
+# query I nosort empty
+# explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where salary > 286593 and salary < 286594;
+# ----
 
 # verify min/max stats on timestamp cols work
 query I nosort empty

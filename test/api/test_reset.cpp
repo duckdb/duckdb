@@ -54,6 +54,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
+	    {"wal_encryption", {Value(false)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
@@ -61,6 +62,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
+	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
 #else
@@ -87,6 +90,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
+	    {"debug_verify_vector", {"dictionary_expression"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
@@ -109,12 +113,16 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
+	    {"enable_http_logging", {false}},
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
-	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}}};
+	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
+	    {"arrow_output_version", {"1.5"}},
+	    {"enable_external_file_cache", {false}},
+	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -146,12 +154,13 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",         // cant change this while db is running
-	    "disabled_filesystems",       // cant change this while db is running
-	    "enable_external_access",     // cant change this while db is running
-	    "allow_unsigned_extensions",  // cant change this while db is running
-	    "allow_community_extensions", // cant change this while db is running
-	    "allow_unredacted_secrets",   // cant change this while db is running
+	    "lock_configuration",            // cant change this while db is running
+	    "disabled_filesystems",          // cant change this while db is running
+	    "enable_external_access",        // cant change this while db is running
+	    "allow_unsigned_extensions",     // cant change this while db is running
+	    "allow_community_extensions",    // cant change this while db is running
+	    "allow_unredacted_secrets",      // cant change this while db is running
+	    "disable_database_invalidation", // cant change this while db is running
 	    "enable_object_cache",
 	    "streaming_buffer_size",
 	    "log_query_path",
@@ -166,6 +175,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
+	    "scheduler_process_partial",
 	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }

@@ -189,17 +189,31 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+void FileNameSegment::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<FileNameSegmentType>(200, "type", type);
+	serializer.WritePropertyWithDefault<string>(201, "data", data);
+}
+
+FileNameSegment FileNameSegment::Deserialize(Deserializer &deserializer) {
+	FileNameSegment result;
+	deserializer.ReadProperty<FileNameSegmentType>(200, "type", result.type);
+	deserializer.ReadPropertyWithDefault<string>(201, "data", result.data);
+	return result;
+}
+
 void FilenamePattern::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(200, "base", base);
-	serializer.WritePropertyWithDefault<idx_t>(201, "pos", pos);
-	serializer.WritePropertyWithDefault<bool>(202, "uuid", uuid);
+	serializer.WritePropertyWithDefault<string>(200, "base", SerializeBase());
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", SerializePos());
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", HasUUID());
+	serializer.WritePropertyWithDefault<vector<FileNameSegment>>(203, "segments", SerializeSegments());
 }
 
 FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
-	FilenamePattern result;
-	deserializer.ReadPropertyWithDefault<string>(200, "base", result.base);
-	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result.pos);
-	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result.uuid);
+	auto base = deserializer.ReadPropertyWithDefault<string>(200, "base");
+	auto pos = deserializer.ReadPropertyWithDefault<idx_t>(201, "pos");
+	auto uuid = deserializer.ReadPropertyWithDefault<bool>(202, "uuid");
+	auto segments = deserializer.ReadPropertyWithDefault<vector<FileNameSegment>>(203, "segments");
+	FilenamePattern result(std::move(base), pos, uuid, std::move(segments));
 	return result;
 }
 
@@ -291,6 +305,7 @@ void LogicalComparisonJoin::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "mark_types", mark_types);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", duplicate_eliminated_columns);
 	serializer.WritePropertyWithDefault<bool>(207, "delim_flipped", delim_flipped, false);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(208, "predicate", predicate);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &deserializer) {
@@ -303,6 +318,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(208, "predicate", result->predicate);
 	return std::move(result);
 }
 
@@ -555,6 +571,7 @@ void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
 	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
+	serializer.WritePropertyWithDefault<CTEMaterialize>(203, "materialize", materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
 
 unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &deserializer) {
@@ -562,6 +579,7 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
+	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return std::move(result);
 }
 

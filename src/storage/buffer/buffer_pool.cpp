@@ -10,6 +10,33 @@
 
 namespace duckdb {
 
+static idx_t FileBufferTypeToEvictionQueueTypeIdx(const FileBufferType &type) {
+	switch (type) {
+	case FileBufferType::BLOCK:
+	case FileBufferType::EXTERNAL_FILE:
+		return 0; // Evict these first (cheap, just free)
+	case FileBufferType::MANAGED_BUFFER:
+		return 1; // Then these (have to write to storage)
+	case FileBufferType::TINY_BUFFER:
+		return 2; // Evict tiny buffers last (last resort)
+	default:
+		throw InternalException("Unknown FileBufferType in FileBufferTypeToEvictionQueueTypeIdx");
+	}
+}
+
+static vector<FileBufferType> EvictionQueueTypeIdxToFileBufferTypes(const idx_t &queue_type_idx) {
+	switch (queue_type_idx) {
+	case 0:
+		return {FileBufferType::BLOCK, FileBufferType::EXTERNAL_FILE};
+	case 1:
+		return {FileBufferType::MANAGED_BUFFER};
+	case 2:
+		return {FileBufferType::TINY_BUFFER};
+	default:
+		throw InternalException("Unknown queue type index in EvictionQueueTypeIdxToFileBufferTypes");
+	}
+}
+
 BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
     : handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
 	D_ASSERT(!handle.expired());
@@ -41,8 +68,8 @@ typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 
 struct EvictionQueue {
 public:
-	explicit EvictionQueue(const FileBufferType file_buffer_type_p)
-	    : file_buffer_type(file_buffer_type_p), evict_queue_insertions(0), total_dead_nodes(0) {
+	explicit EvictionQueue(const vector<FileBufferType> &file_buffer_types_p)
+	    : file_buffer_types(file_buffer_types_p), evict_queue_insertions(0), total_dead_nodes(0) {
 	}
 
 public:
@@ -70,8 +97,11 @@ private:
 	void PurgeIteration(const idx_t purge_size);
 
 public:
-	//! The type of the buffers in this queue
-	const FileBufferType file_buffer_type;
+	//! The type of the buffers in this queue and helper function (both for verification only)
+	const vector<FileBufferType> file_buffer_types;
+	bool HasFileBufferType(const FileBufferType &type) const {
+		return std::find(file_buffer_types.begin(), file_buffer_types.end(), type) != file_buffer_types.end();
+	}
 	//! The concurrent queue
 	eviction_queue_t q;
 
@@ -113,10 +143,10 @@ bool EvictionQueue::TryDequeueWithLock(BufferEvictionNode &node) {
 
 void EvictionQueue::Purge() {
 	// only one thread purges the queue, all other threads early-out
-	if (!purge_lock.try_lock()) {
+	unique_lock<mutex> guard(purge_lock, std::try_to_lock);
+	if (!guard.owns_lock()) {
 		return;
 	}
-	lock_guard<mutex> lock {purge_lock, std::adopt_lock};
 
 	// we purge INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER nodes
 	idx_t purge_size = INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER;
@@ -181,7 +211,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	}
 
 	// bulk purge
-	idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
+	const idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
 
 	// retrieve all alive nodes that have been wrongly dequeued
 	idx_t alive_nodes = 0;
@@ -189,26 +219,28 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		auto &node = purge_nodes[i];
 		auto handle = node.TryGetBlockHandle();
 		if (handle) {
-			q.enqueue(std::move(node));
-			alive_nodes++;
+			purge_nodes[alive_nodes++] = std::move(node);
 		}
 	}
+
+	// bulk re-add (TODO order them by timestamp to better retain the LRU behavior)
+	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
 BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
                        idx_t allocator_bulk_deallocation_flush_threshold)
-    : eviction_queue_sizes({BLOCK_QUEUE_SIZE, MANAGED_BUFFER_QUEUE_SIZE, TINY_BUFFER_QUEUE_SIZE}),
+    : eviction_queue_sizes({BLOCK_AND_EXTERNAL_FILE_QUEUE_SIZE, MANAGED_BUFFER_QUEUE_SIZE, TINY_BUFFER_QUEUE_SIZE}),
       maximum_memory(maximum_memory),
       allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
       track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
-	for (uint8_t type_idx = 0; type_idx < FILE_BUFFER_TYPE_COUNT; type_idx++) {
-		const auto type = static_cast<FileBufferType>(type_idx + 1);
-		const auto &type_queue_size = eviction_queue_sizes[type_idx];
+	for (idx_t queue_type_idx = 0; queue_type_idx < EVICTION_QUEUE_TYPES; queue_type_idx++) {
+		const auto types = EvictionQueueTypeIdxToFileBufferTypes(queue_type_idx);
+		const auto &type_queue_size = eviction_queue_sizes[queue_type_idx];
 		for (idx_t queue_idx = 0; queue_idx < type_queue_size; queue_idx++) {
-			queues.push_back(make_uniq<EvictionQueue>(type));
+			queues.push_back(make_uniq<EvictionQueue>(types));
 		}
 	}
 }
@@ -243,23 +275,19 @@ EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &han
 
 	// Get offset into eviction queues for this FileBufferType
 	idx_t queue_index = 0;
-	for (uint8_t type_idx = 0; type_idx < FILE_BUFFER_TYPE_COUNT; type_idx++) {
-		const auto queue_buffer_type = static_cast<FileBufferType>(type_idx + 1);
-		if (handle_buffer_type == queue_buffer_type) {
-			break;
-		}
-		const auto &type_queue_size = eviction_queue_sizes[type_idx];
-		queue_index += type_queue_size;
+	const auto handle_queue_type_idx = FileBufferTypeToEvictionQueueTypeIdx(handle_buffer_type);
+	for (idx_t type_idx = 0; type_idx < handle_queue_type_idx; type_idx++) {
+		queue_index += eviction_queue_sizes[type_idx];
 	}
 
-	const auto &queue_size = eviction_queue_sizes[static_cast<uint8_t>(handle_buffer_type) - 1];
+	const auto &queue_size = eviction_queue_sizes[handle_queue_type_idx];
 	// Adjust if eviction_queue_idx is set (idx == 0 -> add at back, idx >= queue_size -> add at front)
 	auto eviction_queue_idx = handle.GetEvictionQueueIndex();
 	if (eviction_queue_idx < queue_size) {
 		queue_index += queue_size - eviction_queue_idx - 1;
 	}
 
-	D_ASSERT(queues[queue_index]->file_buffer_type == handle_buffer_type);
+	D_ASSERT(queues[queue_index]->HasFileBufferType(handle_buffer_type));
 	return *queues[queue_index];
 }
 
@@ -271,8 +299,8 @@ void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 	memory_usage.UpdateUsedMemory(tag, size);
 }
 
-idx_t BufferPool::GetUsedMemory() const {
-	return memory_usage.GetUsedMemory(MemoryUsageCaches::FLUSH);
+idx_t BufferPool::GetUsedMemory(bool flush) const {
+	return memory_usage.GetUsedMemory(flush ? MemoryUsageCaches::FLUSH : MemoryUsageCaches::NO_FLUSH);
 }
 
 idx_t BufferPool::GetMaxMemory() const {

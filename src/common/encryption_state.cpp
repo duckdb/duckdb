@@ -2,36 +2,32 @@
 
 namespace duckdb {
 
-EncryptionState::EncryptionState() {
+EncryptionState::EncryptionState(const_data_ptr_t key, idx_t key_len) {
 	// abstract class, no implementation needed
 }
 
 EncryptionState::~EncryptionState() {
 }
 
-bool EncryptionState::IsOpenSSL() {
+void EncryptionState::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len,
+                                           const_data_ptr_t aad, idx_t aad_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-void EncryptionState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {
+void EncryptionState::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len,
+                                           const_data_ptr_t aad, idx_t aad_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-void EncryptionState::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {
+size_t EncryptionState::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-size_t EncryptionState::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
-                                duckdb::idx_t out_len) {
+size_t EncryptionState::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-size_t EncryptionState::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
-                                 duckdb::idx_t tag_len) {
-	throw NotImplementedException("EncryptionState Abstract Class is called");
-}
-
-void EncryptionState::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+void EncryptionState::GenerateRandomData(data_ptr_t data, idx_t len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 

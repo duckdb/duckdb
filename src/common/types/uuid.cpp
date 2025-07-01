@@ -1,4 +1,5 @@
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
@@ -6,7 +7,7 @@ namespace duckdb {
 //////////////////
 // Base UUID
 //////////////////
-bool BaseUUID::FromString(const string &str, hugeint_t &result) {
+bool BaseUUID::FromString(const string &str, hugeint_t &result, bool strict) {
 	auto hex2char = [](char ch) -> unsigned char {
 		if (ch >= '0' && ch <= '9') {
 			return UnsafeNumericCast<unsigned char>(ch - '0');
@@ -32,6 +33,17 @@ bool BaseUUID::FromString(const string &str, hugeint_t &result) {
 	}
 	if (has_braces && str.back() != '}') {
 		return false;
+	}
+
+	if (strict) {
+		// 32 characters and 4 hyphens
+		if (str.length() != 36) {
+			return false;
+		}
+		const auto c_str = str.c_str();
+		if (c_str[8] != '-' || c_str[13] != '-' || c_str[18] != '-' || c_str[23] != '-') {
+			return false;
+		}
 	}
 
 	result.lower = 0;
@@ -199,7 +211,10 @@ hugeint_t UUIDv7::GenerateRandomUUID(RandomEngine &engine) {
 	// Fill in variant field.
 	bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
-	return Convert(bytes);
+	// Flip the top byte
+	auto result = Convert(bytes);
+	result.upper ^= NumericLimits<int64_t>::Minimum();
+	return result;
 }
 
 hugeint_t UUIDv7::GenerateRandomUUID() {

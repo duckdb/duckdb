@@ -29,6 +29,13 @@ void DatabaseManager::InitializeSystemCatalog() {
 	system->Initialize();
 }
 
+void DatabaseManager::FinalizeStartup() {
+	auto databases = GetDatabases();
+	for (auto &db : databases) {
+		db.get().FinalizeLoad(nullptr);
+	}
+}
+
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
@@ -39,11 +46,25 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
-                                                               const AttachOptions &options) {
+optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
+                                                               AttachOptions &options) {
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
+	string extension = "";
+	if (FileSystem::IsRemoteFile(info.path, extension)) {
+		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
+			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", info.path,
+			                                extension);
+		}
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
+	}
+
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
@@ -77,10 +98,18 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
-	if (!databases->DropEntry(context, name, false, true)) {
+	auto entry = databases->GetEntry(context, name);
+	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
+		return;
+	}
+	auto &db = entry->Cast<AttachedDatabase>();
+	db.OnDetach(context);
+
+	if (!databases->DropEntry(context, name, false, true)) {
+		throw InternalException("Failed to drop attached database");
 	}
 }
 
@@ -167,15 +196,21 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
 	}
 
-	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
-	if (!options.db_type.empty()) {
-		if (!Catalog::TryAutoLoad(context, options.db_type)) {
-			// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
-			// so that either there will be success or a message to throw, and load will be
-			// attempted only once respecting the auto-loading options
-			ExtensionHelper::LoadExternalExtension(context, options.db_type);
-		}
+	if (options.db_type.empty()) {
 		return;
+	}
+
+	if (config.storage_extensions.find(options.db_type) != config.storage_extensions.end()) {
+		// If the database type is already registered, we don't need to load it again.
+		return;
+	}
+
+	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
+	if (!Catalog::TryAutoLoad(context, options.db_type)) {
+		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
+		// so that either there will be success or a message to throw, and load will be
+		// attempted only once respecting the auto-loading options
+		ExtensionHelper::LoadExternalExtension(context, options.db_type);
 	}
 }
 
@@ -208,11 +243,33 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 }
 // LCOV_EXCL_STOP
 
-vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
+                                                                  const optional_idx max_db_count) {
 	vector<reference<AttachedDatabase>> result;
-	databases->Scan(context, [&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	idx_t count = 2;
+	databases->ScanWithReturn(context, [&](CatalogEntry &entry) {
+		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
+			return false;
+		}
+		result.push_back(entry.Cast<AttachedDatabase>());
+		count++;
+		return true;
+	});
+
+	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 1) {
+		result.push_back(*system);
+	}
+	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 2) {
+		result.push_back(*context.client_data->temporary_objects);
+	}
+
+	return result;
+}
+
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases() {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
 	result.push_back(*system);
-	result.push_back(*context.client_data->temporary_objects);
 	return result;
 }
 

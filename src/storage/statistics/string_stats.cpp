@@ -7,6 +7,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -190,7 +191,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                array_ptr<Value> constants) {
+                                                array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());
@@ -247,12 +248,9 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 	}
 }
 
-static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
-	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
+static uint32_t GetValidMinMaxSubstring(const_data_ptr_t data) {
+	for (uint32_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
-			return i;
-		}
-		if ((data[i] & 0x80) != 0) {
 			return i;
 		}
 	}
@@ -261,11 +259,11 @@ static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
 
 string StringStats::ToString(const BaseStatistics &stats) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
-	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
+	uint32_t min_len = GetValidMinMaxSubstring(string_data.min);
+	uint32_t max_len = GetValidMinMaxSubstring(string_data.max);
 	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]",
-	                          string(const_char_ptr_cast(string_data.min), min_len),
-	                          string(const_char_ptr_cast(string_data.max), max_len),
+	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)),
+	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)),
 	                          string_data.has_unicode ? "true" : "false",
 	                          string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
 }

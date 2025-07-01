@@ -24,6 +24,7 @@ on:
     paths-ignore:
       - '**'
       - '!.github/workflows/R.yml'
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -42,7 +43,7 @@ jobs:
   rstats-windows-extensions:
     # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
-    runs-on: windows-2019
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:

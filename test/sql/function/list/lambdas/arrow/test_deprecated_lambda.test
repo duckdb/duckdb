@@ -1,0 +1,27 @@
+# name: test/sql/function/list/lambdas/arrow/test_deprecated_lambda.test
+# description: Test deprecating the arrow operator for lambda functions.
+# group: [arrow]
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement ok
+CREATE TABLE varchars(v VARCHAR);
+
+statement ok
+INSERT INTO varchars VALUES ('>>%Test<<'), ('%FUNCTION%'), ('Chaining')
+
+statement ok
+DELETE FROM varchars
+
+statement ok
+INSERT INTO varchars VALUES ('Test Function Chaining Alias');
+
+statement error
+SELECT  v.split(' ') strings,
+        strings.apply(x -> x.lower()).filter(x -> x[1] == 't') lower,
+        strings.apply(x -> x.upper()).filter(x -> x[1] == 'T') upper,
+        lower + upper AS mix_case_srings
+FROM varchars
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*

@@ -25,8 +25,8 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -34,6 +34,8 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -301,6 +303,22 @@ ExportedTableInfo ExportedTableInfo::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void ExtraOperatorInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "file_filters", file_filters);
+	serializer.WriteProperty<optional_idx>(101, "total_files", total_files);
+	serializer.WriteProperty<optional_idx>(102, "filtered_files", filtered_files);
+	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", sample_options);
+}
+
+ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
+	ExtraOperatorInfo result;
+	deserializer.ReadPropertyWithDefault<string>(100, "file_filters", result.file_filters);
+	deserializer.ReadProperty<optional_idx>(101, "total_files", result.total_files);
+	deserializer.ReadProperty<optional_idx>(102, "filtered_files", result.filtered_files);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", result.sample_options);
+	return result;
+}
+
 void HivePartitioningIndex::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "value", value);
 	serializer.WritePropertyWithDefault<idx_t>(101, "index", index);
@@ -339,37 +357,37 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(100, "filename_idx", filename_idx);
-	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
-}
-
-MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
-	MultiFileReaderBindData result;
-	deserializer.ReadPropertyWithDefault<idx_t>(100, "filename_idx", result.filename_idx);
-	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
-	return result;
-}
-
-void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
+void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "filename", filename);
 	serializer.WritePropertyWithDefault<bool>(101, "hive_partitioning", hive_partitioning);
 	serializer.WritePropertyWithDefault<bool>(102, "auto_detect_hive_partitioning", auto_detect_hive_partitioning);
 	serializer.WritePropertyWithDefault<bool>(103, "union_by_name", union_by_name);
 	serializer.WritePropertyWithDefault<bool>(104, "hive_types_autocast", hive_types_autocast);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
-	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN);
+	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 }
 
-MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &deserializer) {
-	MultiFileReaderOptions result;
+MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
+	MultiFileOptions result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "filename", result.filename);
 	deserializer.ReadPropertyWithDefault<bool>(101, "hive_partitioning", result.hive_partitioning);
 	deserializer.ReadPropertyWithDefault<bool>(102, "auto_detect_hive_partitioning", result.auto_detect_hive_partitioning);
 	deserializer.ReadPropertyWithDefault<bool>(103, "union_by_name", result.union_by_name);
 	deserializer.ReadPropertyWithDefault<bool>(104, "hive_types_autocast", result.hive_types_autocast);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
-	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN);
+	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
+	return result;
+}
+
+void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<optional_idx>(100, "filename_idx", filename_idx);
+	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
+}
+
+MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
+	MultiFileReaderBindData result;
+	deserializer.ReadProperty<optional_idx>(100, "filename_idx", result.filename_idx);
+	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
 	return result;
 }
 
@@ -494,7 +512,7 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(112, "decimal_separator", options.decimal_separator);
 	serializer.WritePropertyWithDefault<bool>(113, "null_padding", options.null_padding);
 	/* [Deleted] (idx_t) "buffer_size" */
-	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
+	serializer.WriteProperty<MultiFileOptions>(115, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", options.force_quote);
 	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", options.rejects_table_name, "reject_errors");
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", options.rejects_limit);
@@ -541,7 +559,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	auto options_decimal_separator = deserializer.ReadPropertyWithDefault<string>(112, "decimal_separator");
 	auto options_null_padding = deserializer.ReadPropertyWithDefault<bool>(113, "null_padding");
 	deserializer.ReadDeletedProperty<idx_t>(114, "buffer_size");
-	auto file_options = deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options");
+	auto file_options = deserializer.ReadProperty<MultiFileOptions>(115, "file_options");
 	auto options_force_quote = deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote");
 	auto options_rejects_table_name = deserializer.ReadPropertyWithExplicitDefault<string>(117, "rejects_table_name", "reject_errors");
 	auto options_rejects_limit = deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit");
@@ -644,6 +662,18 @@ void StrpTimeFormat::Serialize(Serializer &serializer) const {
 StrpTimeFormat StrpTimeFormat::Deserialize(Deserializer &deserializer) {
 	auto format_specifier = deserializer.ReadPropertyWithDefault<string>(100, "format_specifier");
 	StrpTimeFormat result(format_specifier);
+	return result;
+}
+
+void TableColumn::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WriteProperty<LogicalType>(101, "type", type);
+}
+
+TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
+	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
+	TableColumn result(std::move(name), std::move(type));
 	return result;
 }
 

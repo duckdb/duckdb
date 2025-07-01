@@ -3,7 +3,6 @@
 #include "reader/boolean_column_reader.hpp"
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
-#include "reader/cast_column_reader.hpp"
 #include "reader/decimal_column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
@@ -290,7 +289,6 @@ void ColumnReader::ResetPage() {
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	bool uncompressed = false;
@@ -315,16 +313,18 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
 		                         "repetition_levels_byte_length + definition_levels_byte_length");
 	}
-	trans.read(block->ptr, uncompressed_bytes);
+	reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
-	ResizeableBuffer compressed_buffer;
-	compressed_buffer.resize(GetAllocator(), compressed_bytes);
-	reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
+	if (compressed_bytes > 0) {
+		ResizeableBuffer compressed_buffer;
+		compressed_buffer.resize(GetAllocator(), compressed_bytes);
+		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes, block->ptr + uncompressed_bytes,
-	                   page_hdr.uncompressed_page_size - uncompressed_bytes);
+		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
+		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
+	}
 }
 
 void ColumnReader::AllocateBlock(idx_t size) {
@@ -412,7 +412,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 	}
 
 	default: {
-		std::stringstream codec_name;
+		duckdb::stringstream codec_name;
 		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
 		                         "\". Supported options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd");
@@ -713,6 +713,12 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 
 	while (to_skip > 0) {
 		auto skip_now = ReadPageHeaders(to_skip);
+		if (page_is_filtered_out) {
+			// the page has been filtered out entirely - skip
+			page_rows_available -= skip_now;
+			to_skip -= skip_now;
+			continue;
+		}
 		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
 
 		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);

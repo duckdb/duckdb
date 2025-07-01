@@ -49,10 +49,13 @@ ALTER TABLE test DROP COLUMN i
 statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
 ----
+altered
 
-# but we can delete rows!
-statement ok con2
+# nor delete
+statement error con2
 DELETE FROM test WHERE i=1
+----
+altered
 
 query I con1
 SELECT * FROM test
@@ -63,6 +66,7 @@ SELECT * FROM test
 query II con2
 SELECT * FROM test
 ----
+1	1
 2	2
 
 # we can't update on tables that have been altered
@@ -85,6 +89,7 @@ COMMIT
 query I con1
 SELECT * FROM test
 ----
+100
 100
 
 statement ok con1

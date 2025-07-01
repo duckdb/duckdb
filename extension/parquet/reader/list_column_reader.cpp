@@ -184,6 +184,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, const ParquetColumnSch
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
 	ReadInternal<TemplatedListSkipper>(pending_skips, nullptr, nullptr, nullptr);
+	pending_skips = 0;
 }
 
 } // namespace duckdb

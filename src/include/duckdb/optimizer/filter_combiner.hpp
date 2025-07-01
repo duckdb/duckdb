@@ -53,7 +53,10 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
-	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids);
+	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
+	                                        vector<FilterPushdownResult> &pushdown_results);
+
+	FilterPushdownResult TryPushdownGenericExpression(LogicalGet &get, Expression &expr);
 
 private:
 	FilterResult AddFilter(Expression &expr);

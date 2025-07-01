@@ -46,6 +46,7 @@ CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation
 ORIGINAL_FUNCTION_GROUP_ORDER = [
     'open_connect',
     'configuration',
+    'error_data',
     'query_execution',
     'result_functions',
     'safe_fetch_functions',
@@ -342,8 +343,75 @@ def create_function_typedef(function_obj):
     return f'#define {function_name} {DUCKDB_EXT_API_VAR_NAME}.{function_name}\n'
 
 
+def headline_capitalize(s, i):
+    if i > 0 and s in [
+        "a",
+        "an",
+        "the",
+        "and",
+        "but",
+        "or",
+        "nor",
+        "for",
+        "so",
+        "yet",
+        "about",
+        "above",
+        "across",
+        "after",
+        "against",
+        "along",
+        "among",
+        "around",
+        "at",
+        "before",
+        "behind",
+        "below",
+        "beneath",
+        "beside",
+        "between",
+        "beyond",
+        "by",
+        "despite",
+        "down",
+        "during",
+        "except",
+        "for",
+        "from",
+        "in",
+        "inside",
+        "into",
+        "like",
+        "near",
+        "of",
+        "off",
+        "on",
+        "onto",
+        "out",
+        "outside",
+        "over",
+        "past",
+        "since",
+        "through",
+        "throughout",
+        "to",
+        "toward",
+        "under",
+        "underneath",
+        "until",
+        "up",
+        "upon",
+        "with",
+        "within",
+        "without",
+    ]:
+        return s
+    else:
+        return s.capitalize()
+
+
 def to_camel_case(snake_str):
-    return " ".join(x.capitalize() for x in snake_str.lower().split("_"))
+    return " ".join(headline_capitalize(s, i) for i, s in enumerate(snake_str.lower().split("_")))
 
 
 def parse_semver(version):
@@ -397,7 +465,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
             for function in curr_group['entries']:
                 function_is_deprecated = group_is_deprecated or ('deprecated' in function and function['deprecated'])
                 if deprecated_state and not function_is_deprecated:
-                    declarations += '#endif\n'
+                    declarations += '#endif\n\n'
                     deprecated_state = False
                 elif not deprecated_state and function_is_deprecated:
                     declarations += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
@@ -420,7 +488,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
                 declarations += '\n'
 
             if deprecated_state:
-                declarations += '#endif\n'
+                declarations += '#endif\n\n'
 
     declarations += '#endif\n'
 

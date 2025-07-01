@@ -16,6 +16,7 @@
 //
 // You can contact the authors via the FSST source repository : https://github.com/cwida/fsst
 #include "libfsst.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 Symbol concat(Symbol a, Symbol b) {
 	Symbol s;
@@ -320,7 +321,7 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 
 // quickly select a uniformly random set of lines such that we have between [FSST_SAMPLETARGET,FSST_SAMPLEMAXSZ) string bytes
 vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
-                                                    unique_ptr<vector<size_t>>& sample_len_out) {
+                                                    duckdb::unique_ptr<vector<size_t>>& sample_len_out) {
 	size_t totSize = 0;
 	vector<u8*> sample;
 
@@ -333,7 +334,7 @@ vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
 		size_t sampleRnd = FSST_HASH(4637947);
 		u8* sampleLim = sampleBuf + FSST_SAMPLETARGET;
 
-		sample_len_out = unique_ptr<vector<size_t>>(new vector<size_t>());
+		sample_len_out = duckdb::unique_ptr<vector<size_t>>(new vector<size_t>());
 		sample_len_out->reserve(nlines + FSST_SAMPLEMAXSZ/FSST_SAMPLELINE);
 
 		// This fails if we have a lot of small strings and a few big ones?
@@ -363,7 +364,7 @@ vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
 
 extern "C" duckdb_fsst_encoder_t* duckdb_fsst_create(size_t n, size_t lenIn[], u8 *strIn[], int zeroTerminated) {
 	u8* sampleBuf = new u8[FSST_SAMPLEMAXSZ];
-	unique_ptr<vector<size_t>> sample_sizes;
+	duckdb::unique_ptr<vector<size_t>> sample_sizes;
 	vector<u8*> sample = makeSample(sampleBuf, strIn, lenIn, n?n:1, sample_sizes); // careful handling of input to get a right-size and representative sample
 	Encoder *encoder = new Encoder();
 	size_t* sampleLen = sample_sizes ? sample_sizes->data() : &lenIn[0];

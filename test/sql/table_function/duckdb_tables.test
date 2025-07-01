@@ -2,8 +2,6 @@
 # description: Test duckdb_tables function
 # group: [table_function]
 
-require noforcestorage
-
 query I
 SELECT COUNT(*) FROM duckdb_tables();
 ----
@@ -34,3 +32,8 @@ memory	main	integers	False	False	0	1	0	0
 memory	myschema	mytable	False	False	0	1	0	0
 temp	main	mytemp	True	False	0	1	0	0
 memory	main	pk	False	True	0	2	1	1
+
+statement error
+SELECT * FROM temp.duckdb_tables
+----
+main.duckdb_tables

@@ -112,16 +112,11 @@ public:
 			auto entry = GetValidityEntry(entry_idx++);
 			// Handle ragged end (if not exactly multiple of BITS_PER_VALUE)
 			if (entry_idx == entry_count && count % BITS_PER_VALUE != 0) {
-				idx_t idx_in_entry;
-				GetEntryIndex(count, entry_idx, idx_in_entry);
-				for (idx_t i = 0; i < idx_in_entry; ++i) {
-					valid += idx_t(RowIsValid(entry, i));
-				}
-				break;
-			}
-
-			// Handle all set
-			if (AllValid(entry)) {
+				const auto shift = BITS_PER_VALUE - (count % BITS_PER_VALUE);
+				const auto mask = ValidityBuffer::MAX_ENTRY >> shift;
+				entry &= mask;
+			} else if (AllValid(entry)) {
+				// Handle all set
 				valid += BITS_PER_VALUE;
 				continue;
 			}

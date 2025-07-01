@@ -160,7 +160,13 @@ void Vector::Reinterpret(const Vector &other) {
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
 	AssignSharedPointer(buffer, other.buffer);
-	AssignSharedPointer(auxiliary, other.auxiliary);
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		Vector new_vector(GetType(), nullptr);
+		new_vector.Reinterpret(DictionaryVector::Child(other));
+		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
+	} else {
+		AssignSharedPointer(auxiliary, other.auxiliary);
+	}
 	data = other.data;
 	validity = other.validity;
 }
@@ -406,7 +412,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		}
 
 		// Copy the data buffer to a resized buffer.
-		auto new_data = make_unsafe_uniq_array_uninitialized<data_t>(target_size);
+		auto new_data = Allocator::DefaultAllocator().Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
@@ -918,6 +924,27 @@ void Vector::Flatten(idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
+		switch (GetType().InternalType()) {
+		case PhysicalType::STRUCT: {
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->Flatten(count);
+			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &entry = ListVector::GetEntry(*this);
+			entry.Flatten(ListVector::GetListSize(*this));
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &entry = ArrayVector::GetEntry(*this);
+			entry.Flatten(ArrayVector::GetTotalSize(*this));
+			break;
+		}
+		default:
+			break;
+		}
 		break;
 	case VectorType::FSST_VECTOR: {
 		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way

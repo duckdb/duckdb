@@ -20,7 +20,7 @@ struct CSVReaderOptions;
 
 class CSVFileHandle {
 public:
-	CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handle_p, const string &path_p,
+	CSVFileHandle(ClientContext &context, unique_ptr<FileHandle> file_handle_p, const OpenFileInfo &file,
 	              const CSVReaderOptions &options);
 
 	mutex main_mutex;
@@ -42,10 +42,10 @@ public:
 
 	string GetFilePath();
 
-	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
+	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
 	                                             FileCompressionType compression);
-	static unique_ptr<CSVFileHandle> OpenFile(DBConfig &config, FileSystem &fs, Allocator &allocator,
-	                                          const string &path, const CSVReaderOptions &options);
+	static unique_ptr<CSVFileHandle> OpenFile(ClientContext &context, const OpenFileInfo &file,
+	                                          const CSVReaderOptions &options);
 	FileCompressionType compression_type;
 
 	double GetProgress() const;
@@ -53,7 +53,7 @@ public:
 private:
 	unique_ptr<FileHandle> file_handle;
 	CSVEncoder encoder;
-	string path;
+	const OpenFileInfo file;
 	bool can_seek = false;
 	bool on_disk_file = false;
 	bool is_pipe = false;

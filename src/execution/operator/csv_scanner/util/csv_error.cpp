@@ -5,7 +5,7 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -60,7 +60,7 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 
 void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
+	if (!force_error && (ignore_errors || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex())))) {
 		// We store this error, we can't throw it now, or we are ignoring it
 		errors.push_back(csv_error);
 		return;
@@ -132,6 +132,16 @@ bool CSVErrorHandler::HasError(const CSVErrorType error_type) {
 	return false;
 }
 
+CSVError CSVErrorHandler::GetFirstError(CSVErrorType error_type) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	for (const auto &er : errors) {
+		if (er.type == error_type) {
+			return er;
+		}
+	}
+	throw InternalException("CSVErrorHandler::GetFirstError was called without having an appropriate error type");
+}
+
 idx_t CSVErrorHandler::GetSize() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return errors.size();
@@ -145,7 +155,7 @@ bool IsCSVErrorAcceptedReject(CSVErrorType type) {
 	case CSVErrorType::TOO_FEW_COLUMNS:
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::UNTERMINATED_QUOTES:
-	case CSVErrorType::INVALID_UNICODE:
+	case CSVErrorType::INVALID_ENCODING:
 		return true;
 	default:
 		return false;
@@ -163,8 +173,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 		return "LINE SIZE OVER MAXIMUM";
 	case CSVErrorType::UNTERMINATED_QUOTES:
 		return "UNQUOTED VALUE";
-	case CSVErrorType::INVALID_UNICODE:
-		return "INVALID UNICODE";
+	case CSVErrorType::INVALID_ENCODING:
+		return "INVALID ENCODING";
 	case CSVErrorType::INVALID_STATE:
 		return "INVALID STATE";
 	default:
@@ -273,6 +283,10 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
 	}
+	// Let's cap the csv row to 10k bytes. For performance reasons.
+	if (csv_row.size() > 10000) {
+		csv_row.erase(csv_row.begin() + 10000, csv_row.end());
+	}
 	error << error_message << '\n';
 	error << fixes << '\n';
 	error << reader_options.ToString(current_path);
@@ -316,10 +330,10 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, const string &colu
 	if (!options.WasTypeManuallySet(column_idx)) {
 		how_to_fix_it << "This type was auto-detected from the CSV file." << '\n';
 		how_to_fix_it << "Possible solutions:" << '\n';
-		how_to_fix_it << "* Override the type for this column manually by setting the type explicitly, e.g. types={'"
+		how_to_fix_it << "* Override the type for this column manually by setting the type explicitly, e.g., types={'"
 		              << column_name << "': 'VARCHAR'}" << '\n';
 		how_to_fix_it
-		    << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. "
+		    << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g., "
 		       "sample_size=-1"
 		    << '\n';
 		how_to_fix_it << "* Use a COPY statement to automatically derive types from an existing table." << '\n';
@@ -565,11 +579,15 @@ CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_co
                                const string &current_path) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Invalid unicode (byte sequence mismatch) detected." << '\n';
+	error << "Invalid unicode (byte sequence mismatch) detected. This file is not " << options.encoding << " encoded."
+	      << '\n';
 	std::ostringstream how_to_fix_it;
+	how_to_fix_it
+	    << "Possible Solution: Set the correct encoding, if available, to read this CSV File (e.g., encoding='UTF-16')"
+	    << '\n';
 	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
-	return CSVError(error.str(), INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position, byte_position,
-	                options, how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), INVALID_ENCODING, current_column, csv_row, error_info, row_byte_position,
+	                byte_position, options, how_to_fix_it.str(), current_path);
 }
 
 bool CSVErrorHandler::PrintLineNumber(const CSVError &error) const {
@@ -583,7 +601,7 @@ bool CSVErrorHandler::PrintLineNumber(const CSVError &error) const {
 	case TOO_MANY_COLUMNS:
 	case MAXIMUM_LINE_SIZE:
 	case NULLPADDED_QUOTED_NEW_VALUE:
-	case INVALID_UNICODE:
+	case INVALID_ENCODING:
 		return true;
 	default:
 		return false;

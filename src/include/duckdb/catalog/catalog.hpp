@@ -107,8 +107,10 @@ public:
 	virtual bool IsDuckCatalog() {
 		return false;
 	}
+
 	virtual void Initialize(bool load_builtin) = 0;
 	virtual void Initialize(optional_ptr<ClientContext> context, bool load_builtin);
+	virtual void FinalizeLoad(optional_ptr<ClientContext> context);
 
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
@@ -372,6 +374,9 @@ public:
 	//! Autoload the extension required for `function_name` or throw a CatalogException
 	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
+
+	//! Called when the catalog is detached
+	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
 protected:
 	//! Reference to the database

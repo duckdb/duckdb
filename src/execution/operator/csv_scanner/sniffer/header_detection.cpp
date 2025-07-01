@@ -103,7 +103,7 @@ static string NormalizeColumnName(const string &col_name) {
 
 static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
                          unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                         CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+                         CSVReaderOptions &options, const MultiFileOptions &file_options,
                          const vector<HeaderValue> &best_header_row, CSVErrorHandler &error_handler) {
 	auto &dialect_options = state_machine.dialect_options;
 	if (!options.columns_set) {
@@ -182,7 +182,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
 				if (!CSVSniffer::CanYouCastIt(context, best_header_row[col].value, sql_type, options.dialect_options,
-				                              best_header_row[col].IsNull(), options.decimal_separator[0])) {
+				                              best_header_row[col].IsNull(), options.decimal_separator[0],
+				                              options.thousands_separator)) {
 					first_row_consistent = false;
 				}
 			}
@@ -219,7 +220,7 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 vector<string> CSVSniffer::DetectHeaderInternal(
     ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
     const SetColumns &set_columns, unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-    CSVReaderOptions &options, const MultiFileReaderOptions &file_options, CSVErrorHandler &error_handler) {
+    CSVReaderOptions &options, const MultiFileOptions &file_options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
 	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();
@@ -270,7 +271,8 @@ vector<string> CSVSniffer::DetectHeaderInternal(
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
 				if (!CanYouCastIt(context, best_header_row[col].value, sql_type, dialect_options,
-				                  best_header_row[col].IsNull(), options.decimal_separator[0])) {
+				                  best_header_row[col].IsNull(), options.decimal_separator[0],
+				                  options.thousands_separator)) {
 					first_row_consistent = false;
 				}
 			}

@@ -6,12 +6,16 @@ require httpfs
 
 require parquet
 
+# need to disable this otherwise we just cache everything
+statement ok
+set enable_external_file_cache=false;
+
 statement ok
 set parquet_metadata_cache=true;
 
 # the constant comparison that is pushed down is longer than DuckDB's 8 bytes that are used in StringStatistics
 # its prefix is equal to the max up to the last byte
-# previously, we would read 5.4MB to figure our that we can prune the entire file
+# previously, we would read 5.4MB to figure out that we can prune the entire file
 # now, we can prune it based on the metadata
 query II
 explain analyze
@@ -19,4 +23,4 @@ select count(*)
 FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/event_baserunning_advance_attempt.parquet'
 where game_id > 'WS2197109301';
 ----
-analyzed_plan	<REGEX>:.*2.0 KiB.*
+analyzed_plan	<REGEX>:.*GET: 1.*

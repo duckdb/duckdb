@@ -23,7 +23,7 @@ namespace duckdb {
 //! NumericHelper is a static class that holds helper functions for integers/doubles
 class NumericHelper {
 public:
-	static constexpr uint8_t CACHED_POWERS_OF_TEN = 20;
+	static constexpr uint8_t CACHED_POWERS_OF_TEN = 19;
 	static const int64_t POWERS_OF_TEN[CACHED_POWERS_OF_TEN];
 	static const double DOUBLE_POWERS_OF_TEN[40];
 
@@ -192,54 +192,65 @@ struct UhugeintToStringCast {
 };
 
 struct DateToStringCast {
-	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
+	static idx_t YearLength(int32_t &year, idx_t &year_length, bool &add_bc) {
 		// format is YYYY-MM-DD with optional (BC) at the end
 		// regular length is 10
 		idx_t length = 6;
 		year_length = 4;
 		add_bc = false;
-		if (date[0] <= 0) {
+		if (year <= 0) {
 			// add (BC) suffix
 			length += 5;
-			date[0] = -date[0] + 1;
+			year = -year + 1;
 			add_bc = true;
 		}
 
 		// potentially add extra characters depending on length of year
-		year_length += date[0] >= 10000;
-		year_length += date[0] >= 100000;
-		year_length += date[0] >= 1000000;
-		year_length += date[0] >= 10000000;
+		year_length += year >= 10000;
+		year_length += year >= 100000;
+		year_length += year >= 1000000;
+		year_length += year >= 10000000;
 		length += year_length;
 		return length;
 	}
 
-	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
+	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
+		return YearLength(date[0], year_length, add_bc);
+	}
+
+	static void FormatComponent(char *&ptr, int32_t number) {
+		ptr[0] = '-';
+		if (number < 10) {
+			ptr[1] = '0';
+			ptr[2] = UnsafeNumericCast<char>('0' + number);
+		} else {
+			auto index = UnsafeNumericCast<idx_t>(number * 2);
+			ptr[1] = duckdb_fmt::internal::data::digits[index];
+			ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
+		}
+		ptr += 3;
+	}
+
+	static void Format(char *data, int32_t year, int32_t month, int32_t day, idx_t year_length, bool add_bc) {
 		// now we write the string, first write the year
 		auto endptr = data + year_length;
-		endptr = NumericHelper::FormatUnsigned(date[0], endptr);
+		endptr = NumericHelper::FormatUnsigned(year, endptr);
 		// add optional leading zeros
 		while (endptr > data) {
 			*--endptr = '0';
 		}
 		// now write the month and day
 		auto ptr = data + year_length;
-		for (int i = 1; i <= 2; i++) {
-			ptr[0] = '-';
-			if (date[i] < 10) {
-				ptr[1] = '0';
-				ptr[2] = UnsafeNumericCast<char>('0' + date[i]);
-			} else {
-				auto index = UnsafeNumericCast<idx_t>(date[i] * 2);
-				ptr[1] = duckdb_fmt::internal::data::digits[index];
-				ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
-			}
-			ptr += 3;
-		}
+		FormatComponent(ptr, month);
+		FormatComponent(ptr, day);
 		// optionally add BC to the end of the date
 		if (add_bc) {
 			memcpy(ptr, " (BC)", 5); // NOLINT
 		}
+	}
+
+	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
+		Format(data, date[0], date[1], date[2], year_length, add_bc);
 	}
 };
 
@@ -261,11 +272,11 @@ struct TimeToStringCast {
 		return UnsafeNumericCast<int32_t>(trailing_zeros);
 	}
 
-	static idx_t Length(int32_t time[], char micro_buffer[]) {
+	static idx_t MicrosLength(int32_t micros, char micro_buffer[]) {
 		// format is HH:MM:DD.MS
 		// microseconds come after the time with a period separator
 		idx_t length;
-		if (time[3] == 0) {
+		if (micros == 0) {
 			// no microseconds
 			// format is HH:MM:DD
 			length = 8;
@@ -276,9 +287,13 @@ struct TimeToStringCast {
 			// we write backwards and pad with zeros to the left
 			// now we figure out how many digits we need to include by looking backwards
 			// and checking how many zeros we encounter
-			length -= NumericCast<idx_t>(FormatMicros(time[3], micro_buffer));
+			length -= NumericCast<idx_t>(FormatMicros(micros, micro_buffer));
 		}
 		return length;
+	}
+
+	static idx_t Length(int32_t time[], char micro_buffer[]) {
+		return MicrosLength(time[3], micro_buffer);
 	}
 
 	static void FormatTwoDigits(char *ptr, int32_t value) {
@@ -293,20 +308,23 @@ struct TimeToStringCast {
 		}
 	}
 
-	static void Format(char *data, idx_t length, int32_t time[], char micro_buffer[]) {
+	static void Format(char *data, idx_t length, int32_t hour, int32_t minute, int32_t second, int32_t microsecond,
+	                   char micro_buffer[]) {
 		// first write hour, month and day
-		auto ptr = data;
-		ptr[2] = ':';
-		ptr[5] = ':';
-		for (int i = 0; i <= 2; i++) {
-			FormatTwoDigits(ptr, time[i]);
-			ptr += 3;
-		}
+		FormatTwoDigits(data, hour);
+		data[2] = ':';
+		FormatTwoDigits(data + 3, minute);
+		data[5] = ':';
+		FormatTwoDigits(data + 6, second);
 		if (length > 8) {
 			// write the micro seconds at the end
 			data[8] = '.';
 			memcpy(data + 9, micro_buffer, length - 9);
 		}
+	}
+
+	static void Format(char *data, idx_t length, int32_t time[], char micro_buffer[]) {
+		Format(data, length, time[0], time[1], time[2], time[3], micro_buffer);
 	}
 };
 
