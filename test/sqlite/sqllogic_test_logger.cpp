@@ -136,10 +136,9 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_l
 		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
 	}
 	const char *ci = std::getenv("CI");
-	if (ci) {
-		std::cout << "::warning::" << oss.str() << std::endl;
-	}
-	LogFailure(oss.str() + "\n");
+	// check the value is "true" otherwise you'll see the prefix in local run outputs
+	auto prefix = (ci && string(ci) == "true") ? "\n::warning::" : "";
+	LogFailure(prefix + oss.str() + "\n");
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {

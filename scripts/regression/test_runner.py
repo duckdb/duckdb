@@ -5,6 +5,7 @@ import shutil
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
 from typing import Optional, List, Union
+import subprocess
 
 print = functools.partial(print, flush=True)
 
@@ -209,25 +210,16 @@ if summary and not no_summary:
 ====================================================
 '''
     )
+    # check the value is "true" otherwise you'll see the prefix in local run outputs
+    prefix = "::warning::" if ('CI' in os.environ and os.getenv('CI') == 'true') else ""
     for i, failure_message in enumerate(summary, start=1):
-        print(f"{i}: ", failure_message["benchmark"])
+        prefix_str = f"{prefix}{i}" if len(prefix) > 0 else f"{i}"
+        print(f"{prefix_str}: ", failure_message["benchmark"])
         if failure_message["old_failure"] != failure_message["new_failure"]:
             print("Old:\n", failure_message["old_failure"])
             print("New:\n", failure_message["new_failure"])
-            # set warnings
-            if 'CI' in os.environ:
-                subprocess.run(
-                    f'echo "::warning::{i}: {failure_message["benchmark"]}::Old:: {failure_message["old_failure"]}::New:: {failure_message["new_failure"]}"',
-                    shell=True,
-                )
         else:
             print(failure_message["old_failure"])
-            # set warnings
-            if 'CI' in os.environ:
-                subprocess.run(
-                    f'echo "::warning::{i}: {failure_message["benchmark"]}::"Old:: {failure_message["old_failure"]}"',
-                    shell=True,
-                )
         print("-", 52)
 
 exit(exit_code)
