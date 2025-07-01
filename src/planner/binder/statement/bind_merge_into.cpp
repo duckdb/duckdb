@@ -32,6 +32,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 		result->condition->alias = cond->ToString();
 		expressions.push_back(std::move(cond));
 	}
+	result->bound_constraints = BindConstraints(table);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE:
 		BindUpdateSet(proj_index, root, *action.update_info, table, result->columns, result->expressions, expressions);
@@ -140,7 +141,6 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
 	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name, schema_name);
-	merge_into->bound_constraints = BindConstraints(table);
 
 	// bind the merge actions
 	auto proj_index = GenerateTableIndex();

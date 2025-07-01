@@ -1,0 +1,26 @@
+# name: test/sql/merge/merge_into_constraint.test
+# description: Test MERGE INTO with constraints
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Stock(item_id int NOT NULL, balance int, CHECK (balance>0));
+
+statement error
+MERGE INTO Stock USING (VALUES (NULL, NULL)) new_accounts(item_id, balance) USING (item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (new_accounts.item_id, new_accounts.balance)
+----
+NOT NULL constraint
+
+statement ok
+MERGE INTO Stock USING (VALUES (1, 10)) new_accounts(item_id, balance) USING (item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (new_accounts.item_id, new_accounts.balance)
+
+# trying to delete too much
+statement error
+MERGE INTO Stock USING (VALUES (1, 15)) sales(item_id, volume) USING (item_id)
+WHEN MATCHED THEN UPDATE SET balance = balance - volume
+----
+CHECK constraint

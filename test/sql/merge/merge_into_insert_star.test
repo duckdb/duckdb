@@ -15,6 +15,12 @@ WHEN NOT MATCHED THEN INSERT *
 1
 
 query I
+MERGE INTO Stock USING (VALUES (6, 12)) new_accounts(item_id, balance) USING (item_id)
+WHEN NOT MATCHED THEN INSERT
+----
+1
+
+query I
 MERGE INTO Stock USING (VALUES (0, 7)) new_accounts(balance, item_id) USING (item_id)
 WHEN NOT MATCHED THEN INSERT BY NAME
 ----
@@ -38,5 +44,6 @@ query II
 FROM Stock
 ----
 5	10
+6	12
 7	0
 12	0

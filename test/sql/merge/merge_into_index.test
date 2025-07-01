@@ -1,3 +1,6 @@
 # name: test/sql/merge/merge_into_index.test
+# description: Test MERGE INTO with an index
 # group: [merge]
 
+statement ok
+PRAGMA enable_verification

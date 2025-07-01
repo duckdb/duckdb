@@ -29,6 +29,8 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	//! Column index map (for INSERT)
 	physical_index_vector_t<idx_t> column_index_map;
+	//! Bound constraints
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;
@@ -46,7 +48,6 @@ public:
 	//! projection index
 	idx_t table_index;
 	vector<unique_ptr<Expression>> bound_defaults;
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	idx_t row_id_start;
 
 	vector<unique_ptr<BoundMergeIntoAction>> when_matched_actions;
