@@ -65,7 +65,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		break;
 	}
 	case MergeActionType::MERGE_DO_NOTHING:
-	case MergeActionType::MERGE_ABORT:
+	case MergeActionType::MERGE_ERROR:
 		break;
 	default:
 		throw InternalException("Unsupported merge action");

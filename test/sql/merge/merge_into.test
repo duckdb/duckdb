@@ -67,11 +67,11 @@ INSERT INTO Sale VALUES (20, 1900);
 
 query I
 MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
-WHEN MATCHED AND Sale.volume > balance THEN ABORT
+WHEN MATCHED AND Sale.volume > balance THEN ERROR
 WHEN MATCHED AND Sale.volume = balance THEN DELETE
 WHEN MATCHED AND TRUE THEN UPDATE SET balance = balance - Sale.volume
-WHEN MATCHED THEN ABORT
-WHEN NOT MATCHED THEN ABORT
+WHEN MATCHED THEN ERROR
+WHEN NOT MATCHED THEN ERROR
 ----
 2
 
@@ -86,7 +86,7 @@ statement error
 MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
 WHEN MATCHED AND Sale.volume >= balance THEN DELETE
 WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
-WHEN NOT MATCHED THEN ABORT
+WHEN NOT MATCHED THEN ERROR
 ----
 Merge abort condition
 
@@ -102,7 +102,7 @@ statement error
 WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
 MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)
 WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
-WHEN NOT MATCHED THEN ABORT;
+WHEN NOT MATCHED THEN ERROR;
 ----
 only one unconditional WHEN NOT MATCHED clause
 

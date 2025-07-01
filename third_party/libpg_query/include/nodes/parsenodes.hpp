@@ -2281,7 +2281,7 @@ typedef enum {
 	MERGE_ACTION_TYPE_DELETE,		/* DELETE */
 	MERGE_ACTION_TYPE_INSERT,		/* INSERT */
 	MERGE_ACTION_TYPE_DO_NOTHING,	/* DO NOTHING */
-	MERGE_ACTION_TYPE_ABORT     	/* ABORT */
+	MERGE_ACTION_TYPE_ERROR     	/* ABORT */
 } MergeActionType;
 
 typedef struct PGMatchAction {

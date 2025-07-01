@@ -84,10 +84,10 @@ not_matched_clause_action:
 			n->actionType = MERGE_ACTION_TYPE_DO_NOTHING;
 			$$ = (PGNode *)n;
 		}
-	| ABORT_P
+	| ERROR_P
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
-			n->actionType = MERGE_ACTION_TYPE_ABORT;
+			n->actionType = MERGE_ACTION_TYPE_ERROR;
 			$$ = (PGNode *)n;
 		}
 	;

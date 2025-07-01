@@ -101,8 +101,8 @@ string MergeIntoAction::ToString() const {
 	case MergeActionType::MERGE_DO_NOTHING:
 		result += "DO NOTHING";
 		break;
-	case MergeActionType::MERGE_ABORT:
-		result += "ABORT";
+	case MergeActionType::MERGE_ERROR:
+		result += "ERROR";
 		break;
 	default:
 		throw InternalException("Unsupported merge action in ToString");

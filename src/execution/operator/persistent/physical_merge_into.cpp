@@ -81,7 +81,7 @@ public:
 				current_sel.Initialize(remaining_sel);
 			}
 			if (!action->op) {
-				if (action->action_type == MergeActionType::MERGE_ABORT) {
+				if (action->action_type == MergeActionType::MERGE_ERROR) {
 					// abort - generate an error message
 					string merge_condition = "WHEN";
 					if (!matched) {

@@ -74,7 +74,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 	}
 	case MergeActionType::MERGE_DELETE:
 	case MergeActionType::MERGE_DO_NOTHING:
-	case MergeActionType::MERGE_ABORT:
+	case MergeActionType::MERGE_ERROR:
 		// DELETE / DO NOTHING / ABORT have nothing extra to bind
 		break;
 	default:
