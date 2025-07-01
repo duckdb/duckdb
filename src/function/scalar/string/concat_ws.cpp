@@ -105,7 +105,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;
-		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
+		SelectionVector not_null_vector(args.size());
 		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {

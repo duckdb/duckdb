@@ -130,6 +130,8 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 
 	auto result_data = FlatVector::GetData<T>(result_vector);
+
+	// This initializes to "false"
 	auto result_has_value = make_unsafe_uniq_array<bool>(args.size());
 
 	// perform the operation column-by-column

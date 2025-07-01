@@ -60,14 +60,17 @@ static unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, c
 
 struct FinalizeState : public FunctionLocalState {
 	idx_t state_size;
+
+	idx_t state_buffer_count;
 	unsafe_unique_array<data_t> state_buffer;
+
 	Vector addresses;
 
 	ArenaAllocator allocator;
 
 	explicit FinalizeState(idx_t state_size_p)
-	    : state_size(state_size_p),
-	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	    : state_size(state_size_p), state_buffer_count(STANDARD_VECTOR_SIZE),
+	      state_buffer(make_unsafe_uniq_array<data_t>(state_buffer_count * AlignValue(state_size))),
 	      addresses(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
 };
@@ -81,6 +84,12 @@ static unique_ptr<FunctionLocalState> InitFinalizeState(ExpressionState &state, 
 static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &result) {
 	auto &bind_data = ExportAggregateBindData::GetFrom(state_p);
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<FinalizeState>();
+	if (input.size() > local_state.state_buffer_count) {
+		// Handle inputs larger than STANDARD_VECTOR_SIZE
+		local_state.state_buffer_count = input.size();
+		local_state.state_buffer =
+		    make_unsafe_uniq_array<data_t>(local_state.state_buffer_count * AlignValue(local_state.state_size));
+	}
 	local_state.allocator.Reset();
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size(bind_data.aggr));
