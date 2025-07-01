@@ -48,9 +48,9 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		db_instances.erase(entry);
 		return nullptr;
 	}
-	lock.unlock();
 	shared_ptr<DuckDB> db_instance;
 	{
+		lock.unlock();
 		std::unique_lock<mutex> create_db_lock(cache_entry->update_database_mutex);
 		db_instance = cache_entry->database.lock();
 	}
@@ -93,26 +93,24 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		auto tmp_fs = FileSystem::CreateLocal();
 		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
 	}
-	D_ASSERT(db_instances.find(abs_database_path) == db_instances.end());
 	// Creates new instance
 	string instance_path = abs_database_path;
 	if (abs_database_path.rfind(IN_MEMORY_PATH, 0) == 0) {
 		instance_path = IN_MEMORY_PATH;
 	}
-	shared_ptr<DatabaseCacheEntry> cache_entry;
-	if (cache_instance) {
-		cache_entry = make_shared_ptr<DatabaseCacheEntry>();
-		config.db_cache_entry = cache_entry;
-	}
 	shared_ptr<DuckDB> db_instance;
-	if (cache_entry) {
+	if (cache_instance) {
+		D_ASSERT(db_instances.find(abs_database_path) == db_instances.end());
+		shared_ptr<DatabaseCacheEntry> cache_entry = make_shared_ptr<DatabaseCacheEntry>();
+		config.db_cache_entry = cache_entry;
 		// Create the new instance after unlocking to avoid new ddb creation requests to be blocked
-		lock.unlock();
 		lock_guard<mutex> create_db_lock(cache_entry->update_database_mutex);
 		db_instances[abs_database_path] = cache_entry;
+		lock.unlock();
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 		cache_entry->database = db_instance;
 	} else {
+		lock.unlock();
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 	}
 	if (on_create) {
