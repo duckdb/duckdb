@@ -5,9 +5,9 @@ namespace duckdb {
 
 PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                      map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions_p,
-                                     idx_t row_id_index)
+                                     idx_t row_id_index, optional_idx source_marker)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_INTO, std::move(types), 1),
-      row_id_index(row_id_index) {
+      row_id_index(row_id_index), source_marker(source_marker) {
 	for (auto &entry : actions_p) {
 		MergeActionRange range;
 		range.condition = entry.first;
@@ -185,46 +185,74 @@ MergeActionRange PhysicalMergeInto::GetRange(MergeActionCondition condition) con
 	return entry->second;
 }
 
+struct MatchResult {
+	MatchResult() : sel(STANDARD_VECTOR_SIZE), count(0) {
+	}
+
+	SelectionVector sel;
+	idx_t count;
+};
+
 SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &global_state = input.global_state.Cast<MergeIntoGlobalState>();
 	auto &local_state = input.local_state.Cast<MergeIntoLocalState>();
 
 	// for each row, figure out if we have generated a match or not
-	SelectionVector matched(STANDARD_VECTOR_SIZE);
-	SelectionVector not_matched(STANDARD_VECTOR_SIZE);
+	vector<MatchResult> match_results;
+	match_results.resize(3);
+
+	auto &matched = match_results[0];
+	auto &not_matched = match_results[1];
+	auto &not_matched_by_source = match_results[2];
 
 	UnifiedVectorFormat row_id_data;
 	chunk.data[row_id_index].ToUnifiedFormat(chunk.size(), row_id_data);
-
-	idx_t matched_count = 0;
-	idx_t not_matched_count = 0;
-	for (idx_t i = 0; i < chunk.size(); i++) {
-		auto idx = row_id_data.sel->get_index(i);
-		if (row_id_data.validity.RowIsValid(idx)) {
-			// match
-			matched.set_index(matched_count++, i);
-		} else {
-			// no match
-			not_matched.set_index(not_matched_count++, i);
+	if (source_marker.IsValid()) {
+		// source marker - check both row id and source marker
+		UnifiedVectorFormat source_marker_data;
+		chunk.data[source_marker.GetIndex()].ToUnifiedFormat(chunk.size(), source_marker_data);
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			if (!source_marker_data.validity.RowIsValid(source_marker_data.sel->get_index(i))) {
+				// source marker is NULL - no source match
+				not_matched_by_source.sel.set_index(not_matched_by_source.count++, i);
+			} else if (!row_id_data.validity.RowIsValid(row_id_data.sel->get_index(i))) {
+				// target marker is NULL - no target match
+				not_matched.sel.set_index(not_matched.count++, i);
+			} else {
+				// match
+				matched.sel.set_index(matched.count++, i);
+			}
+		}
+	} else {
+		// no source marker - only check row-ids
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			auto idx = row_id_data.sel->get_index(i);
+			if (row_id_data.validity.RowIsValid(idx)) {
+				// match
+				matched.sel.set_index(matched.count++, i);
+			} else {
+				// no match
+				not_matched.sel.set_index(not_matched.count++, i);
+			}
 		}
 	}
 
-	// now slice and call sink for the relevant part
+	vector<MergeActionCondition> match_actions {MergeActionCondition::WHEN_MATCHED,
+	                                            MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET,
+	                                            MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE};
+
+	// now slice and call sink for each of the match conditions
 	// FIXME: deal with BLOCKED in Sink
-	if (matched_count > 0) {
+	for (idx_t i = 0; i < 3; i++) {
+		if (match_results[i].count == 0) {
+			// no matches for this action
+			continue;
+		}
 		DataChunk matched_chunk;
 		matched_chunk.Initialize(context.client, chunk.GetTypes());
-		matched_chunk.Slice(chunk, matched, matched_count);
-		global_state.Sink(context, matched_chunk, local_state, input, GetRange(MergeActionCondition::WHEN_MATCHED));
+		matched_chunk.Slice(chunk, match_results[i].sel, match_results[i].count);
+		global_state.Sink(context, matched_chunk, local_state, input, GetRange(match_actions[i]));
 	}
-	if (not_matched_count > 0) {
-		DataChunk not_matched_chunk;
-		not_matched_chunk.Initialize(context.client, chunk.GetTypes());
-		not_matched_chunk.Slice(chunk, not_matched, not_matched_count);
-		global_state.Sink(context, not_matched_chunk, local_state, input,
-		                  GetRange(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET));
-	}
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

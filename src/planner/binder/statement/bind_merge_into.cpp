@@ -149,14 +149,20 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 }
 
 void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings, idx_t new_table_index) {
-	throw InternalException("FIXME: rewrite merge bindings");
-	//	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
-	//		VisitExpression(child);
-	//	});
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
+		ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+		    *child, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
+			    for (idx_t i = 0; i < source_bindings.size(); i++) {
+				    if (bound_colref.binding == source_bindings[i]) {
+					    bound_colref.binding.table_index = new_table_index;
+					    bound_colref.binding.column_index = i;
+				    }
+			    }
+		    });
+	});
 }
 
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
-	JoinRef join;
 
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
@@ -182,6 +188,23 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	source_binder->bind_context.GetTypesAndNames(source_names, source_types);
 
 	// bind the join between the source and target
+	// our conditions determine the join type we need
+	// if we have WHEN NOT MATCHED BY SOURCE we need all source rows -> RIGHT join
+	// if we have WHEN NOT MATCHED BY TARGET we need all target rows -> LEFT join
+	// if we have both                                               -> FULL join
+	// if we only have WHEN MATCHED we only need matches             -> INNER join
+	JoinRef join;
+	auto has_not_matched_by_source = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) > 0;
+	auto has_not_matched_by_target = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) > 0;
+	if (has_not_matched_by_source && has_not_matched_by_target) {
+		join.type = JoinType::OUTER;
+	} else if (has_not_matched_by_source) {
+		join.type = JoinType::RIGHT;
+	} else if (has_not_matched_by_target) {
+		join.type = JoinType::LEFT;
+	} else {
+		join.type = JoinType::INNER;
+	}
 	join.left = make_uniq<BoundRefWrapper>(std::move(source_binding), std::move(source_binder));
 	join.right = make_uniq<BoundRefWrapper>(std::move(bound_table), std::move(target_binder));
 	if (stmt.join_condition) {
@@ -192,26 +215,12 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto bound_join_node = Bind(join);
 
 	auto root = CreatePlan(*bound_join_node);
-	auto &source = root->children[0];
-	auto &get = root->children[1]->Cast<LogicalGet>();
+	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
+	bool inverted = join.type == JoinType::RIGHT;
+	auto &source = root->children[inverted ? 1 : 0];
+	auto &get = root->children[inverted ? 0 : 1]->Cast<LogicalGet>();
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
-	// our conditions determine the join type we need
-	// if we have WHEN NOT MATCHED BY SOURCE we need all source rows -> RIGHT join
-	// if we have WHEN NOT MATCHED BY TARGET we need all target rows -> LEFT join
-	// if we have both                                               -> FULL join
-	// if we only have WHEN MATCHED we only need matches             -> INNER join
-	auto has_not_matched_by_source = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE);
-	auto has_not_matched_by_target = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET);
-	if (has_not_matched_by_source && has_not_matched_by_target) {
-		join.type = JoinType::OUTER;
-	} else if (has_not_matched_by_source) {
-		join.type = JoinType::RIGHT;
-	} else if (has_not_matched_by_target) {
-		join.type = JoinType::LEFT;
-	} else {
-		join.type = JoinType::INNER;
-	}
 
 	auto source_bindings = source->GetColumnBindings();
 	ColumnBinding source_marker;
@@ -224,20 +233,20 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		marker->alias = "source_marker";
 		select_list.push_back(std::move(marker));
 
-		// rewrite "column_bindings" in the join condition to refer to the new projection
-		RewriteMergeBindings(*source, source_bindings, proj_index);
-
 		// construct the new projection
 		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(select_list));
 		proj->children.push_back(std::move(source));
 		source = std::move(proj);
 
-		// rewrite the source bindings
+		// rewrite "column_bindings" in the join to refer to the new projection we have just pushed
+		RewriteMergeBindings(*root, source_bindings, proj_index);
+
+		// rewrite the source bindings to the new projection
 		for (idx_t i = 0; i < source_bindings.size(); i++) {
 			source_bindings[i].table_index = proj_index;
 			source_bindings[i].column_index = i;
 		}
-		source_marker = ColumnBinding(proj_index, select_list.size() - 1);
+		source_marker = ColumnBinding(proj_index, source_bindings.size());
 	}
 
 	merge_into->table_index = GenerateTableIndex();
@@ -260,10 +269,6 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		merge_into->actions.emplace(entry.first, std::move(bound_actions));
 	}
 
-	merge_into->row_id_start = projection_expressions.size();
-	// finally bind the row id column and add them to the projection list
-	BindRowIdColumns(table, get, projection_expressions);
-
 	if (has_not_matched_by_source) {
 		// if we have not matched by source - we need to check the marker
 		merge_into->source_marker = projection_expressions.size();
@@ -271,6 +276,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		marker->alias = "source_marker";
 		projection_expressions.push_back(std::move(marker));
 	}
+
+	merge_into->row_id_start = projection_expressions.size();
+	// finally bind the row id column and add them to the projection list
+	BindRowIdColumns(table, get, projection_expressions);
 
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
 	proj->AddChild(std::move(root));

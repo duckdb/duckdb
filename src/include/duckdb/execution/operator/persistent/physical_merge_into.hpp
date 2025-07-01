@@ -37,13 +37,15 @@ public:
 
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
-	                  map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions, idx_t row_id_index);
+	                  map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions, idx_t row_id_index,
+	                  optional_idx source_marker);
 
 	//! List of all actions
 	vector<unique_ptr<MergeIntoOperator>> actions;
 	//! List of all actions that apply to a given action condition
 	map<MergeActionCondition, MergeActionRange> action_ranges;
 	idx_t row_id_index;
+	optional_idx source_marker;
 
 public:
 	// Source interface
