@@ -129,7 +129,16 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
                                                         const std::function<void(DuckDB &)> &on_create) {
 	unique_lock<mutex> lock(cache_lock, std::defer_lock);
 	if (cache_instance) {
+
+		// While we do not own the lock, we cannot definitively say that the database instance does not exist.
 		while (!lock.owns_lock()) {
+			// The problem is, that we have to unlock the mutex in GetInstanceInternal, so we can non-blockingly wait
+			// for the database creation within the cache entry.
+			// Now even after unlocking and waiting for the DB creation we cannot guarantee that the database exists (it
+			// could have gone out of scope in the meantime). If that happened we have unlocked the global lock to wait,
+			// however we still return a nullptr. In this case we have to re-lock and try again until we either do not
+			// find a cache entry (can be done without unlocking) or we find a cache entry and the database is valid as
+			// well (in this case we can return that database)
 			lock.lock();
 			auto instance = GetInstanceInternal(database, config_dict, lock);
 			if (instance) {
