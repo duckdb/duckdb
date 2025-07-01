@@ -102,9 +102,12 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		// Set up the output
 		const auto &result_type = result.GetType();
 		dictionary_expression_vector = make_uniq<Vector>(result_type, input_dictionary_size.GetIndex());
+		auto &result_validity = FlatVector::Validity(*dictionary_expression_vector);
+		result_validity.Initialize(input_dictionary_size.GetIndex());
 
 		// Loop over the dictionary, executing at most STANDARD_VECTOR_SIZE at a time
 		auto &dict_child = DictionaryVector::Child(unary_input_col);
+		auto &dict_validity = FlatVector::Validity(dict_child);
 		const auto &dict_child_type = dict_child.GetType();
 		for (idx_t offset = 0; offset < input_dictionary_size.GetIndex(); offset += STANDARD_VECTOR_SIZE) {
 			const auto count = MinValue<idx_t>(input_dictionary_size.GetIndex() - offset, STANDARD_VECTOR_SIZE);
@@ -112,15 +115,24 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			// Offset the input dictionary
 			Vector offset_input_dictionary(dict_child_type, dict_child.GetData() +
 			                                                    offset * GetTypeIdSize(dict_child_type.InternalType()));
+			ValidityMask offset_input_validity(dict_validity.GetData() + offset / ValidityMask::BITS_PER_VALUE, count);
+			FlatVector::SetValidity(offset_input_dictionary, offset_input_validity);
 			input.data[input_col_idx.GetIndex()].Reference(offset_input_dictionary);
 			input.SetCardinality(count);
 
 			// Offset the output
 			Vector offset_dictionary_result(result_type, dictionary_expression_vector->GetData() +
 			                                                 offset * GetTypeIdSize(result_type.InternalType()));
+			ValidityMask offset_result_validity(result_validity.GetData() + offset / ValidityMask::BITS_PER_VALUE,
+			                                    count);
+			FlatVector::SetValidity(offset_input_dictionary, offset_result_validity);
 
 			// Execute
 			expr.function.function(input, state, offset_dictionary_result);
+
+			if (offset_dictionary_result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				return false; // Function always returns CONSTANT, bail
+			}
 		}
 
 		// Remember the dictionary ID
