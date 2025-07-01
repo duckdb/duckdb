@@ -13,7 +13,7 @@ INSERT INTO Stock (item_id) VALUES (5), (10), (20);
 
 # UPDATE star
 query I
-MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id, balance) USING (item_id)
+MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id) USING (item_id)
 WHEN MATCHED THEN UPDATE
 ----
 1

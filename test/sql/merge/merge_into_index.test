@@ -13,8 +13,14 @@ INSERT INTO Accounts VALUES (1, 'user1', NULL)
 
 query I
 MERGE INTO Accounts USING (
-	VALUES (1, 'user2')
-) new_account(id, username) USING (id)
+	VALUES (1, 'user2', [1, 2, 3])
+) new_account(id) USING (id)
 WHEN MATCHED THEN UPDATE
+WHEN NOT MATCHED THEN INSERT
 ----
 1
+
+query III
+FROM Accounts WHERE username='user2'
+----
+1	user2	[1, 2, 3]

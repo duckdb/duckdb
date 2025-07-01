@@ -84,7 +84,7 @@ not_matched_clause_action:
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
-			n->insert_column_order = PG_INSERT_BY_NAME;
+			n->insert_column_order = $2;
 			$$ = (PGNode *)n;
 		}
 	| INSERT DEFAULT VALUES

@@ -24,3 +24,25 @@ MERGE INTO Stock USING (VALUES (1, 15)) sales(item_id, volume) USING (item_id)
 WHEN MATCHED THEN UPDATE SET balance = balance - volume
 ----
 CHECK constraint
+
+# binding with check constraints
+statement ok
+CREATE TABLE Items(item_id int NOT NULL, total_cost INTEGER, base_cost INTEGER, tax_cost INTEGER, CHECK (total_cost = base_cost + tax_cost));
+
+statement ok
+INSERT INTO Items VALUES (1, 10, 8, 2);
+
+statement error
+MERGE INTO Items USING (VALUES (1, 15)) new_prices(item_id, total_cost) USING (item_id)
+WHEN MATCHED THEN UPDATE SET total_cost = new_prices.total_cost
+----
+CHECK constraint
+
+statement ok
+MERGE INTO Items USING (VALUES (1, 15)) new_prices(item_id, total_cost) USING (item_id)
+WHEN MATCHED THEN UPDATE SET total_cost = new_prices.total_cost, base_cost = new_prices.total_cost - 2
+
+query IIII
+FROM Items
+----
+1	15	13	2

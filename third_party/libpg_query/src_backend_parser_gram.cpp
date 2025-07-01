@@ -24619,7 +24619,7 @@ yyreduce:
     {
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
-			n->insert_column_order = PG_INSERT_BY_NAME;
+			n->insert_column_order = (yyvsp[(2) - (3)].bynameorposition);
 			(yyval.node) = (PGNode *)n;
 		;}
     break;

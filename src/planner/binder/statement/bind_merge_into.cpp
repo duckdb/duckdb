@@ -12,12 +12,14 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
 
-unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &table, idx_t proj_index,
+unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
+                                                         LogicalGet &get, idx_t proj_index,
                                                          vector<unique_ptr<Expression>> &expressions,
                                                          unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
                                                          LogicalOperator &source, const vector<string> &source_names,
@@ -34,7 +36,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 	}
 	result->bound_constraints = BindConstraints(table);
 	switch (action.action_type) {
-	case MergeActionType::MERGE_UPDATE:
+	case MergeActionType::MERGE_UPDATE: {
 		if (!action.update_info) {
 			// empty update list - generate it
 			action.update_info = make_uniq<UpdateSetInfo>();
@@ -60,7 +62,31 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 			}
 		}
 		BindUpdateSet(proj_index, root, *action.update_info, table, result->columns, result->expressions, expressions);
+
+		// bind any additional columns that need to be bound for update constraints
+		// FIXME: this is pretty hacky
+		// construct a dummy projection and update
+		LogicalProjection proj(proj_index, std::move(expressions));
+		LogicalUpdate update(table);
+		update.return_chunk = false;
+		update.columns = std::move(result->columns);
+		update.expressions = std::move(result->expressions);
+		update.bound_defaults = std::move(merge_into.bound_defaults);
+		update.bound_constraints = std::move(result->bound_constraints);
+		update.update_is_del_and_insert = false;
+
+		// call BindUpdateConstraints
+		table.BindUpdateConstraints(*this, get, proj, update, context);
+
+		// move all moved values back
+		merge_into.bound_defaults = std::move(update.bound_defaults);
+		expressions = std::move(proj.expressions);
+		result->columns = std::move(update.columns);
+		result->expressions = std::move(update.expressions);
+		result->bound_constraints = std::move(update.bound_constraints);
+		result->update_is_del_and_insert = update.update_is_del_and_insert;
 		break;
+	}
 	case MergeActionType::MERGE_INSERT: {
 		if (action.column_order == InsertColumnOrder::INSERT_BY_NAME) {
 			// INSERT BY NAME - get the name list from the source binder and push it into the table
@@ -171,12 +197,14 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	vector<unique_ptr<Expression>> projection_expressions;
 
 	for (auto &action : stmt.when_matched_actions) {
-		merge_into->when_matched_actions.push_back(BindMergeAction(table, proj_index, projection_expressions, root,
-		                                                           *action, source, source_names, source_types));
+		merge_into->when_matched_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index,
+		                                                           projection_expressions, root, *action, source,
+		                                                           source_names, source_types));
 	}
 	for (auto &action : stmt.when_not_matched_actions) {
-		merge_into->when_not_matched_actions.push_back(BindMergeAction(table, proj_index, projection_expressions, root,
-		                                                               *action, source, source_names, source_types));
+		merge_into->when_not_matched_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index,
+		                                                               projection_expressions, root, *action, source,
+		                                                               source_names, source_types));
 	}
 
 	// FIXME: need to handle when update is del and insert

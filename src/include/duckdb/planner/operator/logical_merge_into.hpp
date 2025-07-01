@@ -31,9 +31,8 @@ public:
 	physical_index_vector_t<idx_t> column_index_map;
 	//! Bound constraints
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
-
-	string ToString() const;
-	unique_ptr<MergeIntoAction> Copy() const;
+	//! Whether or not an UPDATE is a DELETE + INSERT
+	bool update_is_del_and_insert = false;
 };
 
 class LogicalMergeInto : public LogicalOperator {

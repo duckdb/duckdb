@@ -305,7 +305,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 				break;
 			}
 		}
-	};
+	}
 
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col_index : update.columns) {
