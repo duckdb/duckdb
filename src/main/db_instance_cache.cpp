@@ -85,6 +85,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
                                                            const bool cache_instance, std::unique_lock<std::mutex> lock,
                                                            const std::function<void(DuckDB &)> &on_create) {
+	D_ASSERT(lock.owns_lock());
 	string abs_database_path;
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
@@ -128,15 +129,18 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBCon
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
                                                         bool cache_instance,
                                                         const std::function<void(DuckDB &)> &on_create) {
-	unique_lock<mutex> lock(cache_lock);
+	unique_lock<mutex> lock(cache_lock, std::defer_lock);
 	if (cache_instance) {
-		auto instance = GetInstanceInternal(database, config_dict, lock);
-		if (instance) {
-			D_ASSERT(!lock.owns_lock());
-			return instance;
+		while (!lock.owns_lock()) {
+			lock.lock();
+			auto instance = GetInstanceInternal(database, config_dict, lock);
+			if (instance) {
+				return instance;
+			}
 		}
+	} else {
+		lock.lock();
 	}
-	D_ASSERT(lock.owns_lock());
 	return CreateInstanceInternal(database, config_dict, cache_instance, std::move(lock), on_create);
 }
 
