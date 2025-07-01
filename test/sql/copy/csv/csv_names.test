@@ -75,6 +75,12 @@ select l_orderkey, l_partkey, column02, column03 from read_csv_auto('data/csv/re
 ----
 Failed to cast value: Unimplemented type for cast (INTEGER -> VARCHAR[])
 
+# specify options delim and sep
+statement error
+select column00 from read_csv_auto('data/csv/real/lineitem_sample.csv', delim='|', sep='|') LIMIT 1;
+----
+CSV Reader function option delim and sep are aliases, only one can be supplied
+
 # duplicate names
 statement error
 select l_orderkey, l_partkey, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_orderkey']) LIMIT 1;

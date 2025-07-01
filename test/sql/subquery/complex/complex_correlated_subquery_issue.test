@@ -1,0 +1,47 @@
+# name: test/sql/subquery/complex/complex_correlated_subquery_issue.test
+# description: Test complex correlated subquery
+# group: [complex]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+CREATE TABLE t2(c0 INT);
+
+statement ok
+SELECT * FROM t2, t1, ( SELECT t2.c0 AS col_1, t1.c0 AS col_2) as subQuery0 INNER JOIN t0 ON ((subQuery0.col_2)) CROSS JOIN (SELECT t0.c0 AS col_1);
+
+statement ok
+INSERT INTO t2(c0) VALUES (2);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+query IIII
+SELECT * FROM t2, t0 LEFT JOIN Lateral(SELECT t0.c0 AS col_0, t2.c0 AS col_1) as subQuery1 ON ((subQuery1.col_1)<(t0.c0));
+----
+2	1	NULL	NULL
+
+statement ok
+drop table t0;
+
+statement ok
+drop table t1;
+
+statement ok
+CREATE TABLE t0(c0 DATE);
+
+statement ok
+CREATE TABLE t1(c0 DATETIME, c1 DOUBLE);
+
+statement ok
+SELECT * FROM t0, t1 CROSS JOIN (SELECT t0.c0 AS col_0 WHERE t1.c1) as subQuery0;
