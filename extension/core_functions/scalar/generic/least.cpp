@@ -130,10 +130,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 
 	auto result_data = FlatVector::GetData<T>(result_vector);
-
-	// This initializes to "false"
-	auto result_has_value = make_unsafe_uniq_array<bool>(args.size());
-
+	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		if (input.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR &&
@@ -172,7 +169,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 			}
 		}
 	}
-	BASE_OP::FinalizeResult(input.size(), result_has_value.get(), result, state);
+	BASE_OP::FinalizeResult(input.size(), result_has_value, result, state);
 	result.SetVectorType(result_type);
 }
 
