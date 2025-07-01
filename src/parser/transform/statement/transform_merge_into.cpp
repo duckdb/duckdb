@@ -12,7 +12,10 @@ unique_ptr<MergeIntoAction> Transformer::TransformMergeIntoAction(duckdb_libpgqu
 	switch (action.actionType) {
 	case duckdb_libpgquery::MERGE_ACTION_TYPE_UPDATE:
 		result->action_type = MergeActionType::MERGE_UPDATE;
-		result->update_info = TransformUpdateSetInfo(action.updateTargets, nullptr);
+		if (action.updateTargets) {
+			result->update_info = TransformUpdateSetInfo(action.updateTargets, nullptr);
+		}
+		result->column_order = TransformColumnOrder(action.insert_column_order);
 		break;
 	case duckdb_libpgquery::MERGE_ACTION_TYPE_DELETE:
 		result->action_type = MergeActionType::MERGE_DELETE;

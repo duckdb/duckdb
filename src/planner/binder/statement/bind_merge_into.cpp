@@ -35,6 +35,30 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(TableCatalogEntry &tabl
 	result->bound_constraints = BindConstraints(table);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE:
+		if (!action.update_info) {
+			// empty update list - generate it
+			action.update_info = make_uniq<UpdateSetInfo>();
+			if (action.column_order == InsertColumnOrder::INSERT_BY_NAME) {
+				// UPDATE BY NAME - get the name list from the source binder
+				action.update_info->columns = source_names;
+			} else {
+				// UPDATE BY POSITION - get the name list from the table
+				for (auto &col : table.GetColumns().Physical()) {
+					action.update_info->columns.push_back(col.Name());
+				}
+			}
+			auto column_bindings = source.GetColumnBindings();
+			if (column_bindings.size() != action.update_info->columns.size()) {
+				throw BinderException(
+				    "Data provided for UPDATE did not match column count in table - expected %d columns but got %d",
+				    action.update_info->columns.size(), column_bindings.size());
+			}
+			for (idx_t c = 0; c < column_bindings.size(); c++) {
+				auto expr = make_uniq<BoundColumnRefExpression>(source_types[c], column_bindings[c]);
+				auto bound_expr = make_uniq<BoundExpression>(std::move(expr));
+				action.update_info->expressions.push_back(std::move(bound_expr));
+			}
+		}
 		BindUpdateSet(proj_index, root, *action.update_info, table, result->columns, result->expressions, expressions);
 		break;
 	case MergeActionType::MERGE_INSERT: {

@@ -38,7 +38,22 @@ matched_clause_action:
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_UPDATE;
+			n->insert_column_order = PG_INSERT_BY_POSITION;
 			n->updateTargets = $3;
+			$$ = (PGNode *)n;
+		}
+	| UPDATE SET '*'
+		{
+			PGMatchAction *n = makeNode(PGMatchAction);
+			n->actionType = MERGE_ACTION_TYPE_UPDATE;
+			n->insert_column_order = PG_INSERT_BY_POSITION;
+			$$ = (PGNode *)n;
+		}
+	| UPDATE opt_by_name_or_position
+		{
+			PGMatchAction *n = makeNode(PGMatchAction);
+			n->actionType = MERGE_ACTION_TYPE_UPDATE;
+			n->insert_column_order = $2;
 			$$ = (PGNode *)n;
 		}
 	| DELETE_P

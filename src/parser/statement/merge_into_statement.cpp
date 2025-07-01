@@ -61,7 +61,12 @@ string MergeIntoAction::ToString() const {
 	switch (action_type) {
 	case MergeActionType::MERGE_UPDATE:
 		result += "UPDATE ";
-		result += update_info->ToString();
+		if (column_order == InsertColumnOrder::INSERT_BY_NAME) {
+			result += "BY NAME ";
+		}
+		if (update_info) {
+			result += update_info->ToString();
+		}
 		break;
 	case MergeActionType::MERGE_DELETE:
 		result += "DELETE";
