@@ -42,9 +42,9 @@ FROM Stock ORDER BY item_id
 
 # update and insert
 query I
-MERGE INTO Stock USING Buy ON Stock.item_id = Buy.item_id
-WHEN MATCHED THEN UPDATE SET balance = balance + Buy.volume
-WHEN NOT MATCHED THEN INSERT VALUES (Buy.item_id, Buy.volume)
+MERGE INTO Stock AS s USING Buy AS b ON s.item_id = b.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + b.volume
+WHEN NOT MATCHED THEN INSERT VALUES (b.item_id, b.volume)
 ----
 2
 
