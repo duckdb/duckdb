@@ -70,19 +70,18 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 
 PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
                                              LogicalMergeInto &op, PhysicalOperator &plan) {
-	vector<unique_ptr<MergeIntoOperator>> when_matched_actions;
-	vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions;
+	map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions;
 
 	// plan the merge into clauses
-	for (auto &action : op.when_matched_actions) {
-		when_matched_actions.push_back(PlanMergeIntoAction(context, op, planner, *action));
-	}
-	for (auto &action : op.when_not_matched_actions) {
-		when_not_matched_actions.push_back(PlanMergeIntoAction(context, op, planner, *action));
+	for (auto &entry : op.actions) {
+		vector<unique_ptr<MergeIntoOperator>> planned_actions;
+		for (auto &action : entry.second) {
+			planned_actions.push_back(PlanMergeIntoAction(context, op, planner, *action));
+		}
+		actions.emplace(entry.first, std::move(planned_actions));
 	}
 
-	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(when_matched_actions),
-	                                               std::move(when_not_matched_actions), op.row_id_start);
+	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start);
 	result.children.push_back(plan);
 	return result;
 }

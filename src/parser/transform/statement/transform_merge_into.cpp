@@ -1,6 +1,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "nodes/parsenodes.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -62,41 +63,41 @@ unique_ptr<SQLStatement> Transformer::TransformMergeInto(duckdb_libpgquery::PGMe
 	unique_ptr<MergeIntoAction> when_matched_action;
 	unique_ptr<MergeIntoAction> when_not_matched_action;
 
+	map<MergeActionCondition, unique_ptr<MergeIntoAction>> unconditional_actions;
 	for (auto cell = stmt.matchActions->head; cell; cell = cell->next) {
 		auto match_action = PGPointerCast<duckdb_libpgquery::PGMatchAction>(cell->data.ptr_value);
 		auto action = TransformMergeIntoAction(*match_action);
+		MergeActionCondition action_condition;
 		switch (match_action->when) {
 		case duckdb_libpgquery::MERGE_ACTION_WHEN_MATCHED:
-			if (!action->condition) {
-				if (when_matched_action) {
-					throw ParserException("Unconditional WHEN MATCHED clause was already defined - only one "
-					                      "unconditional WHEN MATCHED clause is supported");
-				}
-				when_matched_action = std::move(action);
-				break;
-			}
-			result->when_matched_actions.push_back(std::move(action));
+			action_condition = MergeActionCondition::WHEN_MATCHED;
 			break;
-		case duckdb_libpgquery::MERGE_ACTION_WHEN_NOT_MATCHED:
-			if (!action->condition) {
-				if (when_not_matched_action) {
-					throw ParserException("Unconditional WHEN NOT MATCHED clause was already defined - only one "
-					                      "unconditional WHEN NOT MATCHED clause is supported");
-				}
-				when_not_matched_action = std::move(action);
-				break;
-			}
-			result->when_not_matched_actions.push_back(std::move(action));
+		case duckdb_libpgquery::MERGE_ACTION_WHEN_NOT_MATCHED_BY_SOURCE:
+			action_condition = MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE;
+			break;
+		case duckdb_libpgquery::MERGE_ACTION_WHEN_NOT_MATCHED_BY_TARGET:
+			action_condition = MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET;
 			break;
 		default:
 			throw InternalException("Unknown merge action");
 		}
+		if (!action->condition) {
+			// unconditional action - check if we already have an unconditional action for this match
+			auto entry = unconditional_actions.find(action_condition);
+			if (entry != unconditional_actions.end()) {
+				string action_condition_str = MergeIntoStatement::ActionConditionToString(action_condition);
+				throw ParserException(
+				    "Unconditional %s clause was already defined - only one unconditional %s clause is supported",
+				    action_condition_str, action_condition_str);
+			}
+			unconditional_actions.emplace(action_condition, std::move(action));
+			continue;
+		}
+		result->actions[action_condition].push_back(std::move(action));
 	}
-	if (when_matched_action) {
-		result->when_matched_actions.push_back(std::move(when_matched_action));
-	}
-	if (when_not_matched_action) {
-		result->when_not_matched_actions.push_back(std::move(when_not_matched_action));
+	// finally add the unconditional actions
+	for (auto &entry : unconditional_actions) {
+		result->actions[entry.first].push_back(std::move(entry.second));
 	}
 	return std::move(result);
 }

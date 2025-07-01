@@ -48,9 +48,9 @@ public:
 	idx_t table_index;
 	vector<unique_ptr<Expression>> bound_defaults;
 	idx_t row_id_start;
+	optional_idx source_marker;
 
-	vector<unique_ptr<BoundMergeIntoAction>> when_matched_actions;
-	vector<unique_ptr<BoundMergeIntoAction>> when_not_matched_actions;
+	map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>> actions;
 
 public:
 	void Serialize(Serializer &serializer) const override;

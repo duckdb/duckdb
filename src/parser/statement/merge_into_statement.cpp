@@ -10,13 +10,26 @@ MergeIntoStatement::MergeIntoStatement(const MergeIntoStatement &other) : SQLSta
 	source = other.source->Copy();
 	join_condition = other.join_condition ? other.join_condition->Copy() : nullptr;
 	using_columns = other.using_columns;
-	for (auto &match_action : other.when_matched_actions) {
-		when_matched_actions.push_back(match_action->Copy());
-	}
-	for (auto &match_action : other.when_not_matched_actions) {
-		when_not_matched_actions.push_back(match_action->Copy());
+	for (auto &entry : other.actions) {
+		auto &action_list = actions[entry.first];
+		for (auto &action : entry.second) {
+			action_list.push_back(action->Copy());
+		}
 	}
 	cte_map = other.cte_map.Copy();
+}
+
+string MergeIntoStatement::ActionConditionToString(MergeActionCondition condition) {
+	switch (condition) {
+	case MergeActionCondition::WHEN_MATCHED:
+		return "WHEN MATCHED";
+	case MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET:
+		return "WHEN NOT MATCHED";
+	case MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE:
+		return "WHEN NOT MATCHED BY SOURCE";
+	default:
+		throw InternalException("Unknown match condition");
+	}
 }
 
 string MergeIntoStatement::ToString() const {
@@ -39,11 +52,13 @@ string MergeIntoStatement::ToString() const {
 		}
 		result += ")";
 	}
-	for (auto &action : when_matched_actions) {
-		result += " WHEN MATCHED " + action->ToString();
-	}
-	for (auto &action : when_not_matched_actions) {
-		result += " WHEN NOT MATCHED " + action->ToString();
+	for (auto &entry : actions) {
+		for (auto &action : entry.second) {
+			result += " ";
+			result += MergeIntoStatement::ActionConditionToString(entry.first);
+			result += " ";
+			result += action->ToString();
+		}
 	}
 	return result;
 }

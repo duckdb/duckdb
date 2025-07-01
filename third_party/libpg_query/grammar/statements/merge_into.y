@@ -33,6 +33,10 @@ opt_insert_column_list:
 	| /* EMPTY */					{ $$ = NULL; }
 	;
 
+opt_star_expr:
+	'*' | /* EMPTY */
+	;
+
 matched_clause_action:
 	UPDATE SET set_clause_list_opt_comma
 		{
@@ -62,16 +66,7 @@ matched_clause_action:
 			n->actionType = MERGE_ACTION_TYPE_DELETE;
 			$$ = (PGNode *)n;
 		}
-	| not_matched_clause_action
-	;
-;
-
-opt_star_expr:
-	'*' | /* EMPTY */
-	;
-
-not_matched_clause_action:
-	INSERT opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
+	| INSERT opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
@@ -119,14 +114,21 @@ matched_clause:
 		}
 	;
 
+opt_source_or_target:
+	BY SOURCE_P				{ $$ = MERGE_ACTION_WHEN_NOT_MATCHED_BY_SOURCE; }
+	| BY TARGET_P			{ $$ = MERGE_ACTION_WHEN_NOT_MATCHED_BY_TARGET; }
+	| /* empty */			{ $$ = MERGE_ACTION_WHEN_NOT_MATCHED_BY_TARGET; }
+	;
+
 not_matched_clause:
-	WHEN NOT MATCHED opt_and_clause THEN not_matched_clause_action
+	WHEN NOT MATCHED opt_and_clause opt_source_or_target THEN matched_clause_action
 		{
-			PGMatchAction *n = (PGMatchAction *) $6;
-			n->when = MERGE_ACTION_WHEN_NOT_MATCHED;
+			PGMatchAction *n = (PGMatchAction *) $7;
+			n->when = $5;
 			n->andClause = $4;
 			$$ = (PGNode *)n;
 		}
+	;
 
 matched_or_not_matched_clause:
 	matched_clause | not_matched_clause

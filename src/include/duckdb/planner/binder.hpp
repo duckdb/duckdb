@@ -467,12 +467,11 @@ private:
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
 	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
 	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);
-	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, idx_t proj_index,
-	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 LogicalOperator &source, const vector<string> &source_names,
-	                                                 const vector<LogicalType> &source_types);
+	unique_ptr<BoundMergeIntoAction>
+	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, idx_t proj_index,
+	                vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root,
+	                MergeIntoAction &action, const vector<ColumnBinding> &source_bindings,
+	                const vector<string> &source_names, const vector<LogicalType> &source_types);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

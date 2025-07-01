@@ -25,17 +25,24 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 };
 
+struct MergeActionRange {
+	MergeActionCondition condition;
+	idx_t start = 0;
+	idx_t end = 0;
+};
+
 class PhysicalMergeInto : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::MERGE_INTO;
 
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
-	                  vector<unique_ptr<MergeIntoOperator>> when_matched_actions,
-	                  vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions, idx_t row_id_index);
+	                  map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions, idx_t row_id_index);
 
-	vector<unique_ptr<MergeIntoOperator>> when_matched_actions;
-	vector<unique_ptr<MergeIntoOperator>> when_not_matched_actions;
+	//! List of all actions
+	vector<unique_ptr<MergeIntoOperator>> actions;
+	//! List of all actions that apply to a given action condition
+	map<MergeActionCondition, MergeActionRange> action_ranges;
 	idx_t row_id_index;
 
 public:
@@ -62,6 +69,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	MergeActionRange GetRange(MergeActionCondition condition) const;
 };
 
 } // namespace duckdb

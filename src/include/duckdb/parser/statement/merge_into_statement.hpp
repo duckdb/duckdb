@@ -51,8 +51,7 @@ public:
 	unique_ptr<ParsedExpression> join_condition;
 	vector<string> using_columns;
 
-	vector<unique_ptr<MergeIntoAction>> when_matched_actions;
-	vector<unique_ptr<MergeIntoAction>> when_not_matched_actions;
+	map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>> actions;
 
 	//! CTEs
 	CommonTableExpressionMap cte_map;
@@ -63,6 +62,8 @@ protected:
 public:
 	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
+
+	static string ActionConditionToString(MergeActionCondition condition);
 };
 
 } // namespace duckdb

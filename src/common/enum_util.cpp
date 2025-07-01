@@ -2599,24 +2599,44 @@ MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
 	return static_cast<MemoryTag>(StringUtil::StringToEnum(GetMemoryTagValues(), 14, "MemoryTag", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMergeActionConditionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MergeActionCondition::WHEN_MATCHED), "WHEN_MATCHED" },
+		{ static_cast<uint32_t>(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE), "WHEN_NOT_MATCHED_BY_SOURCE" },
+		{ static_cast<uint32_t>(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET), "WHEN_NOT_MATCHED_BY_TARGET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MergeActionCondition>(MergeActionCondition value) {
+	return StringUtil::EnumToString(GetMergeActionConditionValues(), 3, "MergeActionCondition", static_cast<uint32_t>(value));
+}
+
+template<>
+MergeActionCondition EnumUtil::FromString<MergeActionCondition>(const char *value) {
+	return static_cast<MergeActionCondition>(StringUtil::StringToEnum(GetMergeActionConditionValues(), 3, "MergeActionCondition", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMergeActionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MergeActionType::MERGE_UPDATE), "MERGE_UPDATE" },
 		{ static_cast<uint32_t>(MergeActionType::MERGE_DELETE), "MERGE_DELETE" },
 		{ static_cast<uint32_t>(MergeActionType::MERGE_INSERT), "MERGE_INSERT" },
-		{ static_cast<uint32_t>(MergeActionType::MERGE_DO_NOTHING), "MERGE_DO_NOTHING" }
+		{ static_cast<uint32_t>(MergeActionType::MERGE_DO_NOTHING), "MERGE_DO_NOTHING" },
+		{ static_cast<uint32_t>(MergeActionType::MERGE_ERROR), "MERGE_ERROR" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value) {
-	return StringUtil::EnumToString(GetMergeActionTypeValues(), 4, "MergeActionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMergeActionTypeValues(), 5, "MergeActionType", static_cast<uint32_t>(value));
 }
 
 template<>
 MergeActionType EnumUtil::FromString<MergeActionType>(const char *value) {
-	return static_cast<MergeActionType>(StringUtil::StringToEnum(GetMergeActionTypeValues(), 4, "MergeActionType", value));
+	return static_cast<MergeActionType>(StringUtil::StringToEnum(GetMergeActionTypeValues(), 5, "MergeActionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMetaPipelineTypeValues() {
@@ -4275,19 +4295,20 @@ const StringUtil::EnumStringLiteral *GetTableReferenceTypeValues() {
 		{ static_cast<uint32_t>(TableReferenceType::PIVOT), "PIVOT" },
 		{ static_cast<uint32_t>(TableReferenceType::SHOW_REF), "SHOW_REF" },
 		{ static_cast<uint32_t>(TableReferenceType::COLUMN_DATA), "COLUMN_DATA" },
-		{ static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" }
+		{ static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" },
+		{ static_cast<uint32_t>(TableReferenceType::BOUND_TABLE_REF), "BOUND_TABLE_REF" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
-	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 12, "TableReferenceType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 13, "TableReferenceType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
-	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 12, "TableReferenceType", value));
+	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 13, "TableReferenceType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableScanTypeValues() {
