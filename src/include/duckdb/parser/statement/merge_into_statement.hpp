@@ -14,6 +14,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,10 @@ public:
 	vector<string> insert_columns;
 	//! Set of expressions for INSERT
 	vector<unique_ptr<ParsedExpression>> expressions;
+	//! INSERT BY POSITION or INSERT BY NAME
+	InsertColumnOrder column_order = InsertColumnOrder::INSERT_BY_POSITION;
+	//! Whether or not this is a INSERT DEFAULT VALUES
+	bool default_values = false;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;

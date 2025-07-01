@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
+#include "duckdb/common/index_vector.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
@@ -26,6 +27,8 @@ public:
 	vector<PhysicalIndex> columns;
 	//! Set of expressions for INSERT or UPDATE
 	vector<unique_ptr<Expression>> expressions;
+	//! Column index map (for INSERT)
+	physical_index_vector_t<idx_t> column_index_map;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;

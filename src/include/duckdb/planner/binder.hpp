@@ -66,6 +66,9 @@ struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
+template <class T, class INDEX_TYPE>
+class IndexVector;
+
 enum class BindingMode : uint8_t {
 	STANDARD_BINDING,
 	EXTRACT_NAMES,
@@ -459,9 +462,14 @@ private:
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
+	void BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
+	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
+	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
+	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(TableCatalogEntry &table, idx_t proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action);
+	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
+	                                                 Binder &source_binder, LogicalOperator &source);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

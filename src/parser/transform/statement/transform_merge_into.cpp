@@ -22,7 +22,11 @@ unique_ptr<MergeIntoAction> Transformer::TransformMergeIntoAction(duckdb_libpgqu
 		if (action.insertCols) {
 			result->insert_columns = TransformInsertColumns(*action.insertCols);
 		}
-		TransformExpressionList(*action.insertValues, result->expressions);
+		if (action.insertValues) {
+			TransformExpressionList(*action.insertValues, result->expressions);
+		}
+		result->column_order = TransformColumnOrder(action.insert_column_order);
+		result->default_values = action.defaultValues;
 		break;
 	case duckdb_libpgquery::MERGE_ACTION_TYPE_DO_NOTHING:
 		result->action_type = MergeActionType::MERGE_DO_NOTHING;

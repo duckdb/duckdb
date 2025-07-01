@@ -40,10 +40,27 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		vector<LogicalType> set_types;
 		unordered_set<column_t> on_conflict_filter;
 		vector<column_t> columns_to_fetch;
+
 		result->op = planner.Make<PhysicalInsert>(
 		    op.types, op.table, std::move(op.bound_constraints), std::move(set_expressions), std::move(set_columns),
 		    std::move(set_types), 1ULL, false, true, OnConflictAction::THROW, nullptr, nullptr,
 		    std::move(on_conflict_filter), std::move(columns_to_fetch), false);
+		// transform expressions if required
+		if (!action.column_index_map.empty()) {
+			vector<unique_ptr<Expression>> new_expressions;
+			for (auto &col : op.table.GetColumns().Physical()) {
+				auto storage_idx = col.StorageOid();
+				auto mapped_index = action.column_index_map[col.Physical()];
+				if (mapped_index == DConstants::INVALID_INDEX) {
+					// push default value
+					new_expressions.push_back(op.bound_defaults[storage_idx]->Copy());
+				} else {
+					// push reference
+					new_expressions.push_back(std::move(action.expressions[mapped_index]));
+				}
+			}
+			action.expressions = std::move(new_expressions);
+		}
 		result->expressions = std::move(action.expressions);
 		break;
 	}

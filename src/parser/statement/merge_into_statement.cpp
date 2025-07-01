@@ -31,7 +31,7 @@ string MergeIntoStatement::ToString() const {
 		result += join_condition->ToString();
 	} else {
 		result += " USING (";
-		for(idx_t c = 0; c < using_columns.size(); c++) {
+		for (idx_t c = 0; c < using_columns.size(); c++) {
 			if (c > 0) {
 				result += ", ";
 			}
@@ -68,6 +68,9 @@ string MergeIntoAction::ToString() const {
 		break;
 	case MergeActionType::MERGE_INSERT:
 		result += "INSERT ";
+		if (column_order == InsertColumnOrder::INSERT_BY_NAME) {
+			result += "BY NAME ";
+		}
 		if (!insert_columns.empty()) {
 			result += "(";
 			for (idx_t c = 0; c < insert_columns.size(); c++) {
@@ -78,14 +81,22 @@ string MergeIntoAction::ToString() const {
 			}
 			result += ") ";
 		}
-		result += "VALUES (";
-		for (idx_t c = 0; c < expressions.size(); c++) {
-			if (c > 0) {
-				result += ", ";
+		if (expressions.empty()) {
+			if (default_values) {
+				result += "DEFAULT VALUES";
+			} else {
+				result += "*";
 			}
-			result += expressions[c]->ToString();
+		} else {
+			result += "VALUES (";
+			for (idx_t c = 0; c < expressions.size(); c++) {
+				if (c > 0) {
+					result += ", ";
+				}
+				result += expressions[c]->ToString();
+			}
+			result += ")";
 		}
-		result += ")";
 		break;
 	case MergeActionType::MERGE_DO_NOTHING:
 		result += "DO NOTHING";
@@ -105,6 +116,8 @@ unique_ptr<MergeIntoAction> MergeIntoAction::Copy() const {
 	result->condition = condition ? condition->Copy() : nullptr;
 	result->update_info = update_info ? update_info->Copy() : nullptr;
 	result->insert_columns = insert_columns;
+	result->default_values = default_values;
+	result->column_order = column_order;
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}

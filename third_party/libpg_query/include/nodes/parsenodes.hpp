@@ -2293,6 +2293,7 @@ typedef struct PGMatchAction {
 	PGInsertColumnOrder insert_column_order; /* BY NAME or BY POSITION */
 	PGList *insertCols;                      /* optional: names of the target columns for insert */
 	PGList *insertValues;                    /* values for insert */
+	bool defaultValues;                      /* DEFAULT VALUES */
 } PGMatchAction;
 
 }

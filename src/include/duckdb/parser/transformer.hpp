@@ -142,6 +142,7 @@ private:
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGDropStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt);
+	InsertColumnOrder TransformColumnOrder(duckdb_libpgquery::PGInsertColumnOrder insert_column_order);
 
 	vector<string> TransformInsertColumns(duckdb_libpgquery::PGList &cols);
 

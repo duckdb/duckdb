@@ -51,29 +51,31 @@ matched_clause_action:
 	;
 ;
 
-merge_insert_clause:
-	opt_by_name_or_position opt_star
-		{
-
-		}
-	opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
-		{
-
-		}
-	| DEFAULT VALUES
-		{
-		}
+opt_star_expr:
+	'*' | /* EMPTY */
 	;
-
-INSERT (item_id);
 
 not_matched_clause_action:
 	INSERT opt_insert_column_list VALUES '(' expr_list_opt_comma ')'
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
+			n->insert_column_order = PG_INSERT_BY_POSITION;
 			n->insertCols = $2;
 			n->insertValues = $5;
+			$$ = (PGNode *)n;
+		}
+	| INSERT opt_by_name_or_position opt_star_expr
+		{
+			PGMatchAction *n = makeNode(PGMatchAction);
+			n->actionType = MERGE_ACTION_TYPE_INSERT;
+			$$ = (PGNode *)n;
+		}
+	| INSERT DEFAULT VALUES
+		{
+			PGMatchAction *n = makeNode(PGMatchAction);
+			n->actionType = MERGE_ACTION_TYPE_INSERT;
+			n->defaultValues = true;
 			$$ = (PGNode *)n;
 		}
 	| DO NOTHING

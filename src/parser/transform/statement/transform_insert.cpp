@@ -31,6 +31,17 @@ vector<string> Transformer::TransformInsertColumns(duckdb_libpgquery::PGList &co
 	return result;
 }
 
+InsertColumnOrder Transformer::TransformColumnOrder(duckdb_libpgquery::PGInsertColumnOrder insert_column_order) {
+	switch (insert_column_order) {
+	case duckdb_libpgquery::PG_INSERT_BY_POSITION:
+		return InsertColumnOrder::INSERT_BY_POSITION;
+	case duckdb_libpgquery::PG_INSERT_BY_NAME:
+		return InsertColumnOrder::INSERT_BY_NAME;
+	default:
+		throw InternalException("Unrecognized insert column order in TransformInsert");
+	}
+}
+
 unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt) {
 	auto result = make_uniq<InsertStatement>();
 	if (stmt.withClause) {
@@ -70,16 +81,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 		result->on_conflict_info = DummyOnConflictClause(stmt.onConflictAlias, result->schema);
 		result->table_ref = TransformRangeVar(*stmt.relation);
 	}
-	switch (stmt.insert_column_order) {
-	case duckdb_libpgquery::PG_INSERT_BY_POSITION:
-		result->column_order = InsertColumnOrder::INSERT_BY_POSITION;
-		break;
-	case duckdb_libpgquery::PG_INSERT_BY_NAME:
-		result->column_order = InsertColumnOrder::INSERT_BY_NAME;
-		break;
-	default:
-		throw InternalException("Unrecognized insert column order in TransformInsert");
-	}
+	result->column_order = TransformColumnOrder(stmt.insert_column_order);
 	result->catalog = qname.catalog;
 	return result;
 }
