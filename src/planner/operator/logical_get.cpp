@@ -223,8 +223,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<OrdinalityType>(213, "ordinality_request", ordinality_data.ordinality_request,
 	                                                    OrdinalityType::WITHOUT_ORDINALITY);
 	serializer.WriteProperty(214, "column_id", ordinality_data.column_id);
-	bool testdings = ordinality_data.inout_correlation;
-	serializer.WritePropertyWithDefault<bool>(215, "inout_correlation", testdings, false);
+	serializer.WritePropertyWithDefault<bool>(215, "inout_correlation", ordinality_data.inout_correlation, false);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
