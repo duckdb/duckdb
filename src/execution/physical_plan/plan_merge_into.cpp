@@ -17,8 +17,12 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 	result->condition = std::move(action.condition);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
+		vector<unique_ptr<Expression>> defaults;
+		for (auto &def : op.bound_defaults) {
+			defaults.push_back(def->Copy());
+		}
 		result->op = planner.Make<PhysicalUpdate>(op.types, op.table, op.table.GetStorage(), std::move(action.columns),
-		                                          std::move(action.expressions), std::move(op.bound_defaults),
+		                                          std::move(action.expressions), std::move(defaults),
 		                                          std::move(action.bound_constraints), 1ULL, false);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
