@@ -50,9 +50,9 @@ private:
 
 private:
 	shared_ptr<DuckDB> GetInstanceInternal(const string &database, const DBConfig &config,
-	                                       std::unique_lock<std::mutex> &lock);
+	                                       std::unique_lock<std::mutex> &db_instances_lock);
 	shared_ptr<DuckDB> CreateInstanceInternal(const string &database, DBConfig &config_dict, bool cache_instance,
-	                                          std::unique_lock<std::mutex> lock,
+	                                          std::unique_lock<std::mutex> db_instances_lock,
 	                                          const std::function<void(DuckDB &)> &on_create);
 };
 } // namespace duckdb

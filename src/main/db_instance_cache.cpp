@@ -32,8 +32,8 @@ string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config,
-                                                        std::unique_lock<std::mutex> &lock) {
-	D_ASSERT(lock.owns_lock());
+                                                        std::unique_lock<std::mutex> &db_instances_lock) {
+	D_ASSERT(db_instances_lock.owns_lock());
 	auto local_fs = FileSystem::CreateLocal();
 	auto abs_database_path = GetDBAbsolutePath(database, *local_fs);
 	auto entry = db_instances.find(abs_database_path);
@@ -50,8 +50,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 	}
 	shared_ptr<DuckDB> db_instance;
 	{
-		lock.unlock();
-		std::unique_lock<mutex> create_db_lock(cache_entry->update_database_mutex);
+		db_instances_lock.unlock();
+		std::lock_guard<mutex> create_db_lock(cache_entry->update_database_mutex);
 		db_instance = cache_entry->database.lock();
 	}
 	// cache entry exists - check if the actual database still exists
@@ -64,9 +64,9 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		}
 		D_ASSERT(!cache_entry);
 		// the cache entry has now been deleted - clear it from the set of database instances and return
-		lock.lock();
+		db_instances_lock.lock();
 		db_instances.erase(abs_database_path);
-		lock.unlock();
+		db_instances_lock.unlock();
 		return nullptr;
 	}
 	// the database instance exists - check that the config matches
@@ -83,9 +83,9 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 }
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
-                                                           const bool cache_instance, std::unique_lock<std::mutex> lock,
+                                                           const bool cache_instance, std::unique_lock<std::mutex> db_instances_lock,
                                                            const std::function<void(DuckDB &)> &on_create) {
-	D_ASSERT(lock.owns_lock());
+	D_ASSERT(db_instances_lock.owns_lock());
 	string abs_database_path;
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
@@ -106,11 +106,11 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		// Create the new instance after unlocking to avoid new ddb creation requests to be blocked
 		lock_guard<mutex> create_db_lock(cache_entry->update_database_mutex);
 		db_instances[abs_database_path] = cache_entry;
-		lock.unlock();
+		db_instances_lock.unlock();
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 		cache_entry->database = db_instance;
 	} else {
-		lock.unlock();
+		db_instances_lock.unlock();
 		db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 	}
 	if (on_create) {
