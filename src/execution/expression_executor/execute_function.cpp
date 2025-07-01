@@ -12,6 +12,10 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
+	if (expr.return_type.IsNested()) {
+		return; // Non-nested types only
+	}
+
 	// We can only do this optimization if there is exactly one BOUND_REF child
 	idx_t bound_ref_count = 0;
 	ExpressionIterator::VisitExpressionClass(expr, ExpressionClass::BOUND_REF,
@@ -26,7 +30,8 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
 		auto &children = bound_function.children;
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-			if (children[child_idx]->GetExpressionClass() == ExpressionClass::BOUND_REF) {
+			auto &child = *children[child_idx];
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF && !child.return_type.IsNested()) {
 				input_col_idx = child_idx;
 			}
 		}
@@ -89,19 +94,35 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		// Set up the input
 		DataChunk input;
 		input.InitializeEmpty(args.GetTypes());
-		input.SetCapacity(input_dictionary_size.GetIndex());
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			if (col_idx == input_col_idx.GetIndex()) {
-				input.data[col_idx].Reference(DictionaryVector::Child(unary_input_col));
-			} else {
+			if (col_idx != input_col_idx.GetIndex()) {
 				input.data[col_idx].Reference(args.data[col_idx]);
 			}
 		}
-		input.SetCardinality(input_dictionary_size.GetIndex());
 
-		// Set up the output, then execute the function on the dict
-		dictionary_expression_vector = make_uniq<Vector>(result.GetType(), input_dictionary_size.GetIndex());
-		expr.function.function(input, state, *dictionary_expression_vector);
+		// Set up the output
+		const auto &result_type = result.GetType();
+		dictionary_expression_vector = make_uniq<Vector>(result_type, input_dictionary_size.GetIndex());
+
+		// Loop over the dictionary, executing at most STANDARD_VECTOR_SIZE at a time
+		auto &dict_child = DictionaryVector::Child(unary_input_col);
+		const auto &dict_child_type = dict_child.GetType();
+		for (idx_t offset = 0; offset < input_dictionary_size.GetIndex(); offset += STANDARD_VECTOR_SIZE) {
+			const auto count = MinValue<idx_t>(input_dictionary_size.GetIndex() - offset, STANDARD_VECTOR_SIZE);
+
+			// Offset the input dictionary
+			Vector offset_input_dictionary(dict_child_type, dict_child.GetData() +
+			                                                    offset * GetTypeIdSize(dict_child_type.InternalType()));
+			input.data[input_col_idx.GetIndex()].Reference(offset_input_dictionary);
+			input.SetCardinality(count);
+
+			// Offset the output
+			Vector offset_dictionary_result(result_type, dictionary_expression_vector->GetData() +
+			                                                 offset * GetTypeIdSize(result_type.InternalType()));
+
+			// Execute
+			expr.function.function(input, state, offset_dictionary_result);
+		}
 
 		// Remember the dictionary ID
 		dictionary_id = input_dictionary_id;
