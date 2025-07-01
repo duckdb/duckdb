@@ -116,8 +116,9 @@ public:
 	}
 	void Verify(idx_t count, idx_t vector_size) const;
 
-private:
 	sel_t *sel_vector;
+
+private:
 	buffer_ptr<SelectionData> selection_data;
 };
 

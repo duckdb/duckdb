@@ -86,8 +86,9 @@ public:
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
-private:
 	DuckTransactionManager &transaction_manager;
+
+private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;

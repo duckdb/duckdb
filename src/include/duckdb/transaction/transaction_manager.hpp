@@ -14,6 +14,10 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/atomic.hpp"
+#include <iostream>
+#include <vector>
+#include <unordered_map>
+#include <cstddef>
 
 namespace duckdb {
 
@@ -23,6 +27,78 @@ class Catalog;
 struct ClientLockWrapper;
 class DatabaseInstance;
 class Transaction;
+
+class Bitmap {
+    std::vector<unsigned char> data;
+	bool finalized = false;
+
+public:
+	std::vector<uint32_t> rids;
+
+    Bitmap() : data(2048, 0) {};
+
+    // Set bit at given index, auto-growing if needed
+    void set(size_t index) {
+        if (data.size() <= index) {
+            data.resize(std::max(index + 1, data.size() * 2), 0);
+        }
+		if (finalized) {
+			throw std::runtime_error("Cannot override bitmap after finalization");
+		}
+        data[index] = 1;
+    }
+
+	void finalize() {
+		// Find the indexes of the bits that are set to 1 and put them in rids
+		for (size_t i = 0; i < data.size(); ++i) {
+			if (data[i]) {
+				rids.push_back(i);
+			}
+		}
+		finalized = true;
+	}
+};
+
+class PredicateCache {
+public:
+	PredicateCache() = default;
+
+	void Add(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset, const Bitmap &bitmap) {
+		predicateCacheMutex.lock();
+		internalCache[table_name][filter_fingerprint][offset] = bitmap;
+		predicateCacheMutex.unlock();
+	}
+
+	// Get a bitmap from the cache by key
+	const Bitmap* Get(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset) const {
+		// 1) Locate the table bucket
+		auto tblIt = internalCache.find(table_name);
+		if (tblIt == internalCache.end()) {
+			return nullptr;
+		}
+
+		// 2) Locate the fingerprint bucket within that table
+		auto fpIt = tblIt->second.find(filter_fingerprint);
+		if (fpIt == tblIt->second.end()) {
+			return nullptr;
+		}
+
+		// 3) Locate the bitmap at the requested offset
+		auto offIt = fpIt->second.find(offset);
+		if (offIt == fpIt->second.end()) {
+			return nullptr;
+		}
+
+		return &offIt->second;   // Success
+	}
+
+private:
+	using TableName = std::string;
+	using FilterFingerprint = std::string;
+	using Offset = unsigned long;
+	std::unordered_map<TableName, std::unordered_map<FilterFingerprint, unordered_map<Offset, Bitmap>>> internalCache;
+	std::mutex predicateCacheMutex;
+};
 
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
@@ -49,6 +125,8 @@ public:
 	AttachedDatabase &GetDB() {
 		return db;
 	}
+
+	PredicateCache predicateCache;
 
 protected:
 	//! The attached database

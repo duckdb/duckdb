@@ -18,6 +18,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -36,7 +37,6 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
-class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
 struct ScanSamplingInfo;
@@ -131,6 +131,10 @@ struct ScanFilter {
 
 	bool IsAlwaysTrue() const {
 		return always_true;
+	}
+
+	std::string GetFingerprint() const {
+		return filter.ToString(std::to_string(table_column_index));
 	}
 };
 

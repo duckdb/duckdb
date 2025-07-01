@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include <iostream>
 
 #include <utility>
 
@@ -85,7 +86,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
                                                                     GlobalSourceState &gstate) const {
-	return make_uniq<TableScanLocalSourceState>(context, gstate.Cast<TableScanGlobalSourceState>(), *this);
+	return make_uniq<TableScanLocalSourceState>(context, gstate.Cast<TableScanGlobalSourceState>(), *this);;
 }
 
 unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
