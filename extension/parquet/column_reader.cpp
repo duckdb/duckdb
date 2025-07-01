@@ -763,6 +763,8 @@ unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const Parque
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	case PhysicalType::INT64:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+	case PhysicalType::INT128:
+		return make_uniq<TemplatedColumnReader<hugeint_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
