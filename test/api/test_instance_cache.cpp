@@ -56,11 +56,12 @@ TEST_CASE("Test db creation does not block instance cache", "[api]") {
 	using namespace std::chrono;
 
 	auto second_creation_was_quick = false;
-	std::thread t1 {[&instance_cache, &second_creation_was_quick]() {
+	shared_ptr<DuckDB> stick_around;
+	std::thread t1 {[&instance_cache, &second_creation_was_quick, &stick_around]() {
 		DBConfig db_config;
 
 		db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
-		auto stick_around = instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
+		stick_around = instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 
 		const auto start_time = steady_clock::now();
 		for (idx_t i = 0; i < 10; i++) {
