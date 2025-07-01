@@ -203,6 +203,10 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
+	idx_t ordinality_name_suffix = 0;
+	auto constexpr ordinality_name = "ordinality";
+	string ordinality_column_name = ordinality_name;
+	case_insensitive_set_t ci_return_names;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
@@ -245,9 +249,17 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		if (!correlated_columns.empty() && table_function.in_out_function) {
 			inout_correlation = true;
 		}
+
+		// check if name 'ordinality' already exists and if so, replace it iteratively until free name is found
+		for (auto &n : return_names) {
+			ci_return_names.insert(n);
+		}
+		while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
+			ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
+		}
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && inout_correlation) {
 			return_types.emplace_back(LogicalType::BIGINT);
-			return_names.emplace_back("ordinality");
+			return_names.emplace_back(ordinality_column_name);
 			D_ASSERT(return_names.size() == return_types.size());
 			ordinality_column_id = return_types.size() - 1;
 		}
@@ -305,7 +317,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->alias = column_name_alias[return_names.size()];
 		} else {
-			row_number->alias = "ordinality";
+			row_number->alias = ordinality_column_name;
 		}
 		window->expressions.push_back(std::move(row_number));
 		for (idx_t i = 0; i < return_types.size(); i++) {
@@ -327,7 +339,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		if (return_names.size() < column_name_alias.size()) {
 			return_names.push_back(column_name_alias[return_names.size()]);
 		} else {
-			return_names.push_back("ordinality");
+			return_names.push_back(ordinality_column_name);
 		}
 
 		return_types.push_back(LogicalType::BIGINT);
