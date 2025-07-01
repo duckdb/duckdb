@@ -531,20 +531,18 @@ case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 }
 
 // FIXME: this is extremely naive
-void VerifyNotExcluded(ParsedExpression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr.Cast<ColumnRefExpression>();
-		if (!column_ref.IsQualified()) {
-			return;
-		}
-		auto &table_name = column_ref.GetTableName();
-		if (table_name == "excluded") {
-			throw NotImplementedException("'excluded' qualified columns are not supported in the RETURNING clause yet");
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { VerifyNotExcluded((ParsedExpression &)child); });
+void VerifyNotExcluded(const ParsedExpression &root_expr) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
+	    root_expr, [&](const ColumnRefExpression &column_ref) {
+		    if (!column_ref.IsQualified()) {
+			    return;
+		    }
+		    auto &table_name = column_ref.GetTableName();
+		    if (table_name == "excluded") {
+			    throw NotImplementedException(
+			        "'excluded' qualified columns are not supported in the RETURNING clause yet");
+		    }
+	    });
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,

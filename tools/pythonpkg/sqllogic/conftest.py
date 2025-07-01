@@ -1,3 +1,4 @@
+import glob
 import itertools
 import pathlib
 import pytest
@@ -5,7 +6,6 @@ import random
 import re
 import typing
 import warnings
-import glob
 from .skipped_tests import SKIPPED_TESTS
 
 SQLLOGIC_TEST_CASE_NAME = "test_sqllogic"
@@ -38,6 +38,18 @@ def pytest_addoption(parser: pytest.Parser):
     )
     parser.addoption("--start-offset", type=int, dest="start_offset", help="Index of the first test to run")
     parser.addoption("--end-offset", type=int, dest="end_offset", help="Index of the last test to run")
+    parser.addoption(
+        "--start-offset-percentage",
+        type=int,
+        dest="start_offset_percentage",
+        help="Runs the tests starting at N % of the total test suite",
+    )
+    parser.addoption(
+        "--end-offset-percentage",
+        type=int,
+        dest="end_offset_percentage",
+        help="Runs the tests ending at N % of the total test suite, excluding the Nth % test",
+    )
     parser.addoption(
         "--order",
         choices=["decl", "lex", "rand"],
@@ -142,7 +154,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     for test_dir in test_dirs:
         # Create absolute & normalized path
         test_dir = test_dir.resolve()
-        assert test_dir.is_dir()
+        assert test_dir.is_dir(), f"{test_dir} is not a directory"
         parameters.extend(scan_for_test_scripts(test_dir, metafunc.config))
 
     if parameters == []:
@@ -151,6 +163,58 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
             parameters.extend(scan_for_test_scripts(DUCKDB_ROOT_DIR / "test", metafunc.config))
 
     metafunc.parametrize(SQLLOGIC_TEST_PARAMETER, parameters)
+
+
+def determine_test_offsets(config: pytest.Config, num_tests: int) -> typing.Tuple[int, int]:
+    """
+    If start_offset and end_offset are specified, then these are used.
+    start_offset defaults to 0. end_offset defaults to and is capped to the last test index.
+    start_offset_percentage and end_offset_percentage are used to calculate the start and end offsets based on the total number of tests.
+    This is done in a way that a test run to 25% and another test run starting at 25% do not overlap by excluding the 25th percent test.
+    """
+
+    start_offset = config.getoption("start_offset")
+    end_offset = config.getoption("end_offset")
+    start_offset_percentage = config.getoption("start_offset_percentage")
+    end_offset_percentage = config.getoption("end_offset_percentage")
+
+    index_specified = start_offset is not None or end_offset is not None
+    percentage_specified = start_offset_percentage is not None or end_offset_percentage is not None
+
+    if index_specified and percentage_specified:
+        raise ValueError("You can only specify either start/end offsets or start/end offset percentages, not both")
+
+    if start_offset is not None and start_offset < 0:
+        raise ValueError("--start-offset must be a non-negative integer")
+
+    if start_offset_percentage is not None and (start_offset_percentage < 0 or start_offset_percentage > 100):
+        raise ValueError("--start-offset-percentage must be between 0 and 100")
+
+    if end_offset_percentage is not None and (end_offset_percentage < 0 or end_offset_percentage > 100):
+        raise ValueError("--end-offset-percentage must be between 0 and 100")
+
+    if start_offset is None:
+        if start_offset_percentage is not None:
+            start_offset = start_offset_percentage * num_tests // 100
+        else:
+            start_offset = 0
+
+    if end_offset is not None and end_offset < start_offset:
+        raise ValueError(
+            f"--end-offset ({end_offset}) must be greater than or equal to the start offset ({start_offset})"
+        )
+
+    if end_offset is None:
+        if end_offset_percentage is not None:
+            end_offset = end_offset_percentage * num_tests // 100 - 1
+        else:
+            end_offset = num_tests - 1
+
+    max_end_offset = num_tests - 1
+    if end_offset > max_end_offset:
+        end_offset = max_end_offset
+
+    return start_offset, end_offset
 
 
 # Execute last, after pytest has already deselected tests based on -k and -m parameters
@@ -184,22 +248,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
         config.hook.pytest_deselected(items=deselected_items)
         items[:] = selected_items
 
-    start_offset = config.getoption("start_offset")
-    if start_offset is None:
-        start_offset = 0
-
-    end_offset = config.getoption("end_offset")
-    if end_offset is None:
-        end_offset = len(items) - 1
-
-    if start_offset < 0:
-        raise ValueError("--start-offset must be a non-negative integer")
-    elif end_offset < start_offset:
-        raise ValueError(f"--end-offset ({end_offset}) must be greater than or equal to --start-offset")
-
-    max_end_offset = len(items) - 1
-    if end_offset > max_end_offset:
-        end_offset = max_end_offset
+    start_offset, end_offset = determine_test_offsets(config, len(items))
 
     # Order tests based on --order option. Take as is if order is "decl".
     if config.getoption("order") == "rand":

@@ -57,16 +57,14 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	}
 }
 
-static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set_t &handled_columns) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &child_colref = expr.Cast<ColumnRefExpression>();
-		if (child_colref.IsQualified()) {
-			throw BinderException(expr, "PIVOT expression cannot contain qualified columns");
-		}
-		handled_columns.insert(child_colref.GetColumnName());
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { ExtractPivotExpressions(child, handled_columns); });
+static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitive_set_t &handled_columns) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
+	    root_expr, [&](const ColumnRefExpression &child_colref) {
+		    if (child_colref.IsQualified()) {
+			    throw BinderException(child_colref, "PIVOT expression cannot contain qualified columns");
+		    }
+		    handled_columns.insert(child_colref.GetColumnName());
+	    });
 }
 
 struct ExtractPivotAggregateOperator {
@@ -327,14 +325,9 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	return subquery_stage2;
 }
 
-void ReplacePivotColumnRef(ParsedExpression &expr, const string &name) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
-		colref.column_names[0] = name;
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(expr,
-	                                            [&](ParsedExpression &child) { ReplacePivotColumnRef(child, name); });
+void ReplacePivotColumnRef(ParsedExpression &root_expr, const string &name) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+	    root_expr, [&](ColumnRefExpression &colref) { colref.column_names[0] = name; });
 }
 
 static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, PivotRef &ref,
