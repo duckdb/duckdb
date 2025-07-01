@@ -55,7 +55,11 @@ IndexPointer FixedSizeAllocator::New() {
 		// Set and initialize the bitmask of the new buffer.
 		D_ASSERT(buffers.find(buffer_id) != buffers.end());
 		auto &buffer = buffers.find(buffer_id)->second;
-		ValidityMask mask(reinterpret_cast<validity_t *>(buffer->Get()), available_segments_per_buffer);
+
+		// Get a handle to the buffer's validity mask (offset 0).
+		SegmentHandle handle(*buffer, 0);
+		const auto bitmask_ptr = handle.GetPtr<validity_t>();
+		ValidityMask mask(bitmask_ptr, available_segments_per_buffer);
 		mask.SetAllValid(available_segments_per_buffer);
 	}
 
@@ -88,10 +92,15 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	D_ASSERT(buffer_it != buffers.end());
 	auto &buffer = buffer_it->second;
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer->Get());
-	ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
-	D_ASSERT(!mask.RowIsValid(offset));
-	mask.SetValid(offset);
+	{
+		// Get a handle to the buffer's validity mask (offset 0).
+		SegmentHandle handle(*buffer, 0);
+		const auto bitmask_ptr = handle.GetPtr<validity_t>();
+
+		ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
+		D_ASSERT(!mask.RowIsValid(offset));
+		mask.SetValid(offset);
+	}
 
 	D_ASSERT(total_segment_count > 0);
 	D_ASSERT(buffer->segment_count > 0);
@@ -250,7 +259,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 	vacuum_buffers.clear();
 }
 
-IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
+IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer old_ptr) {
 	// we do not need to adjust the bitmask of the old buffer, because we will free the entire
 	// buffer after the vacuum operation
 
@@ -258,7 +267,10 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	// new increases the allocation count, we need to counter that here
 	total_segment_count--;
 
-	memcpy(Get(new_ptr), Get(ptr), segment_size);
+	auto old_handle = GetHandle(old_ptr);
+	auto new_handle = GetHandle(new_ptr);
+
+	memcpy(new_handle.GetPtr(), old_handle.GetPtr(), segment_size);
 	return new_ptr;
 }
 
@@ -296,7 +308,10 @@ vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	vector<IndexBufferInfo> buffer_infos;
 	for (auto &buffer : buffers) {
 		buffer.second->SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
-		buffer_infos.emplace_back(buffer.second->Get(), buffer.second->allocation_size);
+
+		// Get a handle to the buffer's memory (offset 0).
+		SegmentHandle handle(*buffer.second, 0);
+		buffer_infos.emplace_back(handle.GetPtr(), buffer.second->allocation_size);
 	}
 	return buffer_infos;
 }

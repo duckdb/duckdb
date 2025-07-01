@@ -19,6 +19,7 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 	child_optimizer.materialized_cte_stats = materialized_cte_stats;
 	child_optimizer.delim_scan_stats = delim_scan_stats;
 	child_optimizer.depth = depth + 1;
+	child_optimizer.recursive_cte_indexes = recursive_cte_indexes;
 	return child_optimizer;
 }
 

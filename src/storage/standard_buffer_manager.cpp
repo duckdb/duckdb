@@ -114,6 +114,10 @@ uint64_t StandardBufferManager::GetTemporaryBlockHeaderSize() const {
 	return temp_block_manager->GetBlockHeaderSize();
 }
 
+idx_t StandardBufferManager::GetQueryMaxMemory() const {
+	return GetBufferPool().GetQueryMaxMemory();
+}
+
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta,
                                                                     unique_ptr<FileBuffer> *buffer, ARGS... args) {
@@ -518,8 +522,8 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
-	handle->Write(&buffer.size, sizeof(idx_t), 0);
-	buffer.Write(*handle, sizeof(idx_t));
+	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
+	buffer.Write(nullptr, *handle, sizeof(idx_t));
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,

@@ -434,6 +434,28 @@ void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
+// Disable Database Invalidation
+//===----------------------------------------------------------------------===//
+void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!OnGlobalSet(db, config, input)) {
+		return;
+	}
+	config.options.disable_database_invalidation = input.GetValue<bool>();
+}
+
+void DisableDatabaseInvalidationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!OnGlobalReset(db, config)) {
+		return;
+	}
+	config.options.disable_database_invalidation = DBConfig().options.disable_database_invalidation;
+}
+
+Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.disable_database_invalidation);
+}
+
+//===----------------------------------------------------------------------===//
 // Disable Timestamptz Casts
 //===----------------------------------------------------------------------===//
 void DisableTimestamptzCastsSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1024,6 +1046,23 @@ void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Pin Threads
+//===----------------------------------------------------------------------===//
+void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.pin_threads = EnumUtil::FromString<ThreadPinMode>(str_input);
+}
+
+void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.pin_threads = DBConfig().options.pin_threads;
+}
+
+Value PinThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.pin_threads)));
+}
+
+//===----------------------------------------------------------------------===//
 // Pivot Filter Threshold
 //===----------------------------------------------------------------------===//
 void PivotFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1155,6 +1194,22 @@ void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.scheduler_process_partial);
+}
+
+//===----------------------------------------------------------------------===//
+// Wal Encryption
+//===----------------------------------------------------------------------===//
+void WalEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.wal_encryption = input.GetValue<bool>();
+}
+
+void WalEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.wal_encryption = DBConfig().options.wal_encryption;
+}
+
+Value WalEncryptionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.wal_encryption);
 }
 
 //===----------------------------------------------------------------------===//

@@ -12,7 +12,7 @@ on:
       - '!.github/workflows/NightlyTests.yml'
       - '!.github/patches/duckdb-wasm/**'
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -29,8 +29,17 @@ env:
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+
   linux-memory-leaks:
      name: Linux Memory Leaks
+     needs: check-draft
      runs-on: ubuntu-24.04
      env:
        GEN: ninja
@@ -247,37 +256,6 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
-  linux-compile-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2_28_x86_64
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    needs: linux-memory-leaks
-    env:
-      CC: /usr/bin/gcc
-      CXX: /usr/bin/g++
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          glibc32: 1
-
-      - name: Build
-        shell: bash
-        run: |
-          mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-      - name: Test
-        shell: bash
-        run: build/release/test/unittest
-
   linux-tarball:
      name: Python 3 Tarball
      runs-on: ubuntu-22.04
@@ -319,6 +297,7 @@ jobs:
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
+     needs: check-draft
      runs-on: ubuntu-22.04
      env:
         GEN: ninja
@@ -616,7 +595,7 @@ jobs:
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
-    if: false
+    needs: check-draft
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -692,8 +671,6 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-22.04
     needs: linux-memory-leaks
-    strategy:
-      fail-fast: false
     env:
       GEN: ninja
     steps:
@@ -733,5 +710,6 @@ jobs:
           if-no-files-found: error
 
   pyodide:
+    needs: check-draft
     uses: ./.github/workflows/Pyodide.yml
     secrets: inherit

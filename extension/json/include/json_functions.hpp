@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {

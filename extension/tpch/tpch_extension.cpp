@@ -1,5 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
-
 #include "tpch_extension.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
@@ -7,7 +5,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #endif
 
@@ -164,9 +162,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 	return tpch::DBGenWrapper::GetQuery(index);
 }
 
-static void LoadInternal(DuckDB &db) {
-	auto &db_instance = *db.instance;
-
+static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
@@ -175,23 +171,23 @@ static void LoadInternal(DuckDB &db) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
-	ExtensionUtil::RegisterFunction(db_instance, dbgen_func);
+	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
 	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery, {LogicalType::BIGINT});
-	ExtensionUtil::RegisterFunction(db_instance, tpch_func);
+	loader.RegisterFunction(tpch_func);
 
 	// create the TPCH_QUERIES function that returns the query
 	TableFunction tpch_query_func("tpch_queries", {}, TPCHQueryFunction, TPCHQueryBind, TPCHInit);
-	ExtensionUtil::RegisterFunction(db_instance, tpch_query_func);
+	loader.RegisterFunction(tpch_query_func);
 
 	// create the TPCH_ANSWERS that returns the query result
 	TableFunction tpch_query_answer_func("tpch_answers", {}, TPCHQueryAnswerFunction, TPCHQueryAnswerBind, TPCHInit);
-	ExtensionUtil::RegisterFunction(db_instance, tpch_query_answer_func);
+	loader.RegisterFunction(tpch_query_answer_func);
 }
 
-void TpchExtension::Load(DuckDB &db) {
-	LoadInternal(db);
+void TpchExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string TpchExtension::GetQuery(int query) {
@@ -218,16 +214,7 @@ std::string TpchExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void tpch_init(duckdb::DatabaseInstance &db) {
-	duckdb::DuckDB db_wrapper(db);
-	duckdb::LoadInternal(db_wrapper);
-}
-
-DUCKDB_EXTENSION_API const char *tpch_version() {
-	return duckdb::DuckDB::LibraryVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(tpch, loader) {
+	duckdb::LoadInternal(loader);
 }
 }
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
-#endif

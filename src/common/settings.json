@@ -290,6 +290,16 @@
         "custom_implementation": true
     },
     {
+        "name": "disable_database_invalidation",
+        "description": "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, as DuckDB cannot guarantee correct behavior after a fatal error.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "disable_timestamptz_casts",
         "description": "Disable casting from timestamp to timestamptz ",
         "type": "BOOLEAN",
@@ -702,6 +712,13 @@
         ]
     },
     {
+        "name": "pin_threads",
+        "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
+        "type": "VARCHAR",
+        "return_type": "ThreadPinMode",
+        "scope": "global"
+    },
+    {
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
         "type": "UBIGINT",
@@ -747,6 +764,13 @@
         "aliases": [
             "profiling_output"
         ]
+    },
+    {
+        "name": "profiling_coverage",
+        "description": "The profiling coverage (SELECT or ALL)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "profiling_mode",
@@ -835,6 +859,12 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "wal_encryption",
+        "description": "Encrypt the WAL if the database is encrypted",
+        "type": "BOOLEAN",
+        "scope": "global"
     },
     {
         "name": "zstd_min_string_length",
