@@ -1,7 +1,6 @@
 # name: test/sql/ordinality/ordinality.test_slow
 # description: Tests with ordinality across chunk borders
-# group: [ordinalitos]
-
+# group: [ordinality]
 
 statement ok
 PRAGMA enable_verification;
