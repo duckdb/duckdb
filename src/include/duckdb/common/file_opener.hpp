@@ -27,7 +27,7 @@ struct FileOpenerInfo {
 //! Abstract type that provide client-specific context to FileSystem.
 class FileOpener {
 public:
-	FileOpener() {
+	explicit FileOpener(shared_ptr<HTTPUtilContainer> http_util_) : http_util_container(http_util_) {
 	}
 	virtual ~FileOpener() {};
 
@@ -63,6 +63,7 @@ public:
 		}
 		return lookup_result;
 	}
+	shared_ptr<HTTPUtilContainer> http_util_container;
 };
 
 } // namespace duckdb

@@ -18,7 +18,8 @@ class ClientContext;
 //! This object is owned by ClientContext and never outlives it.
 class ClientContextFileOpener : public FileOpener {
 public:
-	explicit ClientContextFileOpener(ClientContext &context_p) : context(context_p) {
+	explicit ClientContextFileOpener(shared_ptr<HTTPUtilContainer> http_util, ClientContext &context_p)
+	    : FileOpener(http_util), context(context_p) {
 	}
 
 	Logger &GetLogger() const override;

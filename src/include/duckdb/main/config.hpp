@@ -57,6 +57,7 @@ class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
+struct HTTPUtilContainer;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -354,7 +355,7 @@ public:
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
+	shared_ptr<HTTPUtilContainer> http_util_container;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 

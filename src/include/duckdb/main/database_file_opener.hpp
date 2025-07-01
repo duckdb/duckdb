@@ -18,7 +18,8 @@ class DatabaseInstance;
 
 class DatabaseFileOpener : public FileOpener {
 public:
-	explicit DatabaseFileOpener(DatabaseInstance &db_p) : db(db_p) {
+	explicit DatabaseFileOpener(shared_ptr<HTTPUtilContainer> http_util, DatabaseInstance &db_p)
+	    : FileOpener(http_util), db(db_p) {
 	}
 
 	Logger &GetLogger() const override {
@@ -43,7 +44,8 @@ private:
 
 class DatabaseFileSystem : public OpenerFileSystem {
 public:
-	explicit DatabaseFileSystem(DatabaseInstance &db_p) : db(db_p), database_opener(db_p) {
+	explicit DatabaseFileSystem(DatabaseInstance &db_p)
+	    : db(db_p), database_opener(db_p.config.http_util_container, db_p) {
 	}
 
 	FileSystem &GetFileSystem() const override {

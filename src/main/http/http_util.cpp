@@ -85,7 +85,7 @@ const string &HTTPResponse::GetError() const {
 }
 
 HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
-	return *db.config.http_util;
+	return *db.config.http_util_container->http_util;
 }
 
 string HTTPUtil::GetName() const {
@@ -448,14 +448,14 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 }
 
 unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(DatabaseInstance &db, const string &url) {
-	DatabaseFileOpener opener(db);
+	DatabaseFileOpener opener(parent.lock(), db);
 	FileOpenerInfo info;
 	info.file_path = url;
 	return InitializeParameters(&opener, &info);
 }
 
 unique_ptr<HTTPParams> HTTPUtil::InitializeParameters(ClientContext &context, const string &url) {
-	ClientContextFileOpener opener(context);
+	ClientContextFileOpener opener(parent.lock(), context);
 	FileOpenerInfo info;
 	info.file_path = url;
 	return InitializeParameters(&opener, &info);

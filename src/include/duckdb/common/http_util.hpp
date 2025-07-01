@@ -17,6 +17,7 @@ namespace duckdb {
 class DatabaseInstance;
 class Logger;
 class HTTPUtil;
+struct HTTPUtilContainer;
 class FileOpener;
 struct FileOpenerInfo;
 
@@ -220,9 +221,14 @@ public:
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 };
 
+struct HTTPUtilContainer;
+
 class HTTPUtil {
 public:
 	virtual ~HTTPUtil() = default;
+
+	explicit HTTPUtil(shared_ptr<HTTPUtilContainer> parent_) : parent(parent_) {
+	}
 
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
@@ -251,5 +257,12 @@ public:
 	static duckdb::unique_ptr<HTTPResponse>
 	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request,
 	                    const std::function<void(void)> &retry_cb);
+
+	weak_ptr<HTTPUtilContainer> parent;
 };
+
+struct HTTPUtilContainer {
+	shared_ptr<HTTPUtil> http_util;
+};
+
 } // namespace duckdb

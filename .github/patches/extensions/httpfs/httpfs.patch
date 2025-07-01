@@ -1,0 +1,46 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index 4881e9d..a031893 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -23,13 +23,10 @@ namespace duckdb {
+ 
+ shared_ptr<HTTPUtil> HTTPFSUtil::GetHTTPUtil(optional_ptr<FileOpener> opener) {
+ 	if (opener) {
+-		auto db = opener->TryGetDatabase();
+-		if (db) {
+-			auto &config = DBConfig::GetConfig(*db);
+-			return config.http_util;
+-		}
++		return opener->http_util_container.get()->http_util;
+ 	}
+-	return make_shared_ptr<HTTPFSUtil>();
++	// TODO: Actually provide a backup plan
++	throw InternalException("FileOpener not provided, can't get HTTPUtil");
+ }
+ 
+ unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener> opener,
+diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
+index c9bc985..dca3cb8 100644
+--- a/extension/httpfs/httpfs_extension.cpp
++++ b/extension/httpfs/httpfs_extension.cpp
+@@ -61,7 +61,7 @@ static void LoadInternal(DatabaseInstance &instance) {
+ 	// HuggingFace options
+ 	config.AddExtensionOption("hf_max_per_page", "Debug option to limit number of items returned in list requests",
+ 	                          LogicalType::UBIGINT, Value::UBIGINT(0));
+-	config.http_util = make_shared_ptr<HTTPFSUtil>();
++	config.http_util_container->http_util = make_shared_ptr<HTTPFSUtil>(config.http_util_container);
+ 
+ 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
+ 	provider->SetAll();
+diff --git a/extension/httpfs/include/httpfs_client.hpp b/extension/httpfs/include/httpfs_client.hpp
+index 1d7620c..f4a4148 100644
+--- a/extension/httpfs/include/httpfs_client.hpp
++++ b/extension/httpfs/include/httpfs_client.hpp
+@@ -26,6 +26,7 @@ struct HTTPFSParams : public HTTPParams {
+ 
+ class HTTPFSUtil : public HTTPUtil {
+ public:
++	explicit HTTPFSUtil(shared_ptr<HTTPUtilContainer> parent_) : HTTPUtil(parent_) {}
+ 	unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
+ 	                                            optional_ptr<FileOpenerInfo> info) override;
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;

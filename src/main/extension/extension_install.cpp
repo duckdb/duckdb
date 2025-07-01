@@ -359,12 +359,12 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
 
-	auto &http_util = HTTPUtil::Get(db);
+	auto &http_util_co = *db.config.http_util_container;
 	unique_ptr<HTTPParams> params;
 	if (context) {
-		params = http_util.InitializeParameters(*context, url);
+		params = http_util_co.http_util->InitializeParameters(*context, url);
 	} else {
-		params = http_util.InitializeParameters(db, url);
+		params = http_util_co.http_util->InitializeParameters(db, url);
 	}
 
 	// Unclear what's peculiar about extension install flow, but those two parameters are needed
@@ -375,7 +375,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	GetRequestInfo get_request(url, headers, *params, nullptr, nullptr);
 	get_request.try_request = true;
 
-	auto response = http_util.Request(get_request);
+	auto response = http_util_co.http_util->Request(get_request);
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error
 		string message;
