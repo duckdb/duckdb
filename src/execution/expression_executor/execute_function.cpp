@@ -20,7 +20,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return;
 	}
 
-	// Set the col_idx accordingly, marking the expression as eligible for dictionary optimization
+	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
@@ -43,11 +43,13 @@ ExecuteFunctionState::~ExecuteFunctionState() {
 bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
                                                           ExpressionState &state, Vector &result) {
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
+	static constexpr double CHUNK_FILL_RATIO_THRESHOLD = 0.5;
+
 	if (!input_col_idx.IsValid()) {
 		return false; // This expression is not eligible for dictionary optimization
 	}
 
-	// Figure out if we can
+	// Figure out if we can do the optimization
 	const auto &unary_input_col = args.data[input_col_idx.GetIndex()];
 
 	if (unary_input_col.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
@@ -68,9 +70,23 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		return false; // Dictionary is too large, bail
 	}
 
+	const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
+	if (input_dictionary_id != dictionary_id && input_dictionary_size.GetIndex() > STANDARD_VECTOR_SIZE &&
+	    chunk_fill_ratio < CHUNK_FILL_RATIO_THRESHOLD) {
+		// We haven't seen this dictionary before
+		// If the dictionary size is <= STANDARD_VECTOR_SIZE, we always do the optimization
+		// If it's greater, we only do the optimization if the chunk is 50% full or more
+		// This protects the optimization against selective filters
+		return false;
+	}
+
 	// We can do dictionary optimization!
 	if (input_dictionary_id != dictionary_id) {
-		// We haven't seen this dictionary before, set up the input
+		// We haven't seen this dictionary before, reset
+		dictionary_id = string();
+		dictionary_expression_vector.reset();
+
+		// Set up the input
 		DataChunk input;
 		input.InitializeEmpty(args.GetTypes());
 		input.SetCapacity(input_dictionary_size.GetIndex());
@@ -94,14 +110,12 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	// Create a dictionary result vector and give it an ID
 	const auto &input_sel_vector = DictionaryVector::SelVector(unary_input_col);
 	result.Dictionary(*dictionary_expression_vector, input_dictionary_size.GetIndex(), input_sel_vector, args.size());
-	DictionaryVector::SetDictionaryId(result, dictionary_id);
+	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		// Result can be non-dictionary if args.size() == 1, so we need to check before doing this
+		DictionaryVector::SetDictionaryId(result, dictionary_id);
+	}
 
 	return true;
-}
-
-void ExecuteFunctionState::ResetDictionaryState() {
-	dictionary_id = string();
-	dictionary_expression_vector.reset();
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
@@ -172,7 +186,6 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	D_ASSERT(expr.function.function);
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	if (!execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
-		execute_function_state.ResetDictionaryState();
 		expr.function.function(arguments, *state, result);
 	}
 

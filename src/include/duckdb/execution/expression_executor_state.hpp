@@ -66,7 +66,6 @@ public:
 
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
-	void ResetDictionaryState();
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
