@@ -1,4 +1,3 @@
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
