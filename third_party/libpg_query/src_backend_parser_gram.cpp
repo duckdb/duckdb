@@ -2705,7 +2705,7 @@ static const yytype_uint16 yyrline[] =
       87,    88,    89,    90,    95,    96,    97,    98,    99,   100,
      105,   106,   111,   112,   113,   118,   119,   120,     7,    27,
       28,    32,    33,    37,    44,    50,    55,    55,    59,    68,
-      74,    81,    87,    96,   106,   115,   115,   119,   120,     8,
+      75,    83,    89,    98,   108,   117,   117,   121,   122,     8,
       18,    29,    39,    49,    59,    71,    81,    91,    95,   102,
      106,   110,   119,   123,   130,   131,   135,   139,     7,     1,
       30,    49,    61,    62,    63,    67,    68,    73,    77,    82,
@@ -24503,22 +24503,24 @@ yyreduce:
     {
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
+			n->insert_column_order = PG_INSERT_BY_NAME;
 			(yyval.node) = (PGNode *)n;
 		;}
     break;
 
   case 480:
-#line 75 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 76 "third_party/libpg_query/grammar/statements/merge_into.y"
     {
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_INSERT;
+			n->insert_column_order = PG_INSERT_BY_POSITION;
 			n->defaultValues = true;
 			(yyval.node) = (PGNode *)n;
 		;}
     break;
 
   case 481:
-#line 82 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 84 "third_party/libpg_query/grammar/statements/merge_into.y"
     {
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_DO_NOTHING;
@@ -24527,7 +24529,7 @@ yyreduce:
     break;
 
   case 482:
-#line 88 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 90 "third_party/libpg_query/grammar/statements/merge_into.y"
     {
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_ERROR;
@@ -24536,7 +24538,7 @@ yyreduce:
     break;
 
   case 483:
-#line 97 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 99 "third_party/libpg_query/grammar/statements/merge_into.y"
     {
 			PGMatchAction *n = (PGMatchAction *) (yyvsp[(5) - (5)].node);
 			n->when = MERGE_ACTION_WHEN_MATCHED;
@@ -24546,7 +24548,7 @@ yyreduce:
     break;
 
   case 484:
-#line 107 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 109 "third_party/libpg_query/grammar/statements/merge_into.y"
     {
 			PGMatchAction *n = (PGMatchAction *) (yyvsp[(6) - (6)].node);
 			n->when = MERGE_ACTION_WHEN_NOT_MATCHED;
@@ -24556,12 +24558,12 @@ yyreduce:
     break;
 
   case 487:
-#line 119 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 121 "third_party/libpg_query/grammar/statements/merge_into.y"
     { (yyval.list) = list_make1((yyvsp[(1) - (1)].node)); ;}
     break;
 
   case 488:
-#line 120 "third_party/libpg_query/grammar/statements/merge_into.y"
+#line 122 "third_party/libpg_query/grammar/statements/merge_into.y"
     { (yyval.list) = list_concat(list_make1((yyvsp[(1) - (2)].node)), (yyvsp[(2) - (2)].list)); ;}
     break;
 
@@ -32370,7 +32372,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 32374 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 32376 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);

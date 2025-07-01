@@ -292,6 +292,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
 		break;
+	case TableReferenceType::BOUND_TABLE_REF:
+		result = Bind(ref.Cast<BoundRefWrapper>());
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:

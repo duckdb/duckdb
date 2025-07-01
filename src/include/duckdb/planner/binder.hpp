@@ -356,6 +356,7 @@ private:
 
 	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(BoundRefWrapper &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
@@ -469,7 +470,8 @@ private:
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(TableCatalogEntry &table, idx_t proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 Binder &source_binder, LogicalOperator &source);
+	                                                 LogicalOperator &source, const vector<string> &source_names,
+	                                                 const vector<LogicalType> &source_types);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
