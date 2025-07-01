@@ -1,13 +1,108 @@
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
+	// Check if the expression is eligible for dictionary optimization
+	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
+		return; // Needs to be consistent, non-volatile, and non-throwing
+	}
+
+	// We can only do this optimization if there is exactly one BOUND_REF child
+	idx_t bound_ref_count = 0;
+	ExpressionIterator::VisitExpressionClass(expr, ExpressionClass::BOUND_REF,
+	                                         [&bound_ref_count](const Expression &) { bound_ref_count++; });
+	if (bound_ref_count != 1) {
+		return;
+	}
+
+	// Set the col_idx accordingly, marking the expression as eligible for dictionary optimization
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &bound_function = expr.Cast<BoundFunctionExpression>();
+		auto &children = bound_function.children;
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			if (children[child_idx]->GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				input_col_idx = child_idx;
+			}
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 ExecuteFunctionState::~ExecuteFunctionState() {
+}
+
+bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
+                                                          ExpressionState &state, Vector &result) {
+	static constexpr double INPUT_FILL_RATIO_THRESHOLD = 0.9;
+	if (!input_col_idx.IsValid()) {
+		return false; // This expression is not eligible for dictionary optimization
+	}
+
+	// Figure out if we can
+	const auto &unary_input_col = args.data[input_col_idx.GetIndex()];
+
+	if (unary_input_col.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false; // Not a dictionary
+	}
+
+	const auto input_dictionary_size = DictionaryVector::DictionarySize(unary_input_col);
+	if (!input_dictionary_size.IsValid()) {
+		return false; // Not a dictionary that comes from the storage
+	}
+
+	const auto input_dictionary_id = DictionaryVector::DictionaryId(unary_input_col);
+	if (input_dictionary_id.empty()) {
+		return false; // Dictionary has no id, we can't cache across vectors, bail
+	}
+
+	if (input_dictionary_id != dictionary_id &&
+	    static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE < INPUT_FILL_RATIO_THRESHOLD) {
+		return false; // Chunk is filtered, not full enough to justify dictionary optimization
+	}
+
+	// We can do dictionary optimization!
+	if (input_dictionary_id != dictionary_id) {
+		// We haven't seen this dictionary before, set up the input
+		DataChunk input;
+		input.InitializeEmpty(args.GetTypes());
+		input.SetCapacity(input_dictionary_size.GetIndex());
+		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+			if (col_idx == input_col_idx.GetIndex()) {
+				input.data[col_idx].Reference(DictionaryVector::Child(unary_input_col));
+			} else {
+				input.data[col_idx].Reference(args.data[col_idx]);
+			}
+		}
+		input.SetCardinality(input_dictionary_size.GetIndex());
+
+		// Set up the output, then execute the function on the dict
+		dictionary_expression_vector = make_uniq<Vector>(result.GetType(), input_dictionary_size.GetIndex());
+		expr.function.function(input, state, *dictionary_expression_vector);
+
+		// Remember the dictionary ID
+		dictionary_id = input_dictionary_id;
+	}
+
+	// Create a dictionary result vector and give it an ID
+	const auto &input_sel_vector = DictionaryVector::SelVector(unary_input_col);
+	result.Dictionary(*dictionary_expression_vector, input_dictionary_size.GetIndex(), input_sel_vector, args.size());
+	DictionaryVector::SetDictionaryId(result, dictionary_id);
+
+	return true;
+}
+
+void ExecuteFunctionState::ResetDictionaryState() {
+	dictionary_id = string();
+	dictionary_expression_vector.reset();
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
@@ -76,8 +171,11 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.Verify();
 
 	D_ASSERT(expr.function.function);
-	// #ifdef DEBUG
-	expr.function.function(arguments, *state, result);
+	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
+	if (!execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
+		execute_function_state.ResetDictionaryState();
+		expr.function.function(arguments, *state, result);
+	}
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);

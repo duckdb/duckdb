@@ -13,7 +13,9 @@
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
+
 class Expression;
+class BoundFunctionExpression;
 class ExpressionExecutor;
 struct ExpressionExecutorState;
 struct FunctionLocalState;
@@ -53,15 +55,31 @@ public:
 };
 
 struct ExecuteFunctionState : public ExpressionState {
+public:
 	ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root);
 	~ExecuteFunctionState() override;
-
-	unique_ptr<FunctionLocalState> local_state;
 
 public:
 	static optional_ptr<FunctionLocalState> GetFunctionState(ExpressionState &state) {
 		return state.Cast<ExecuteFunctionState>().local_state.get();
 	}
+
+	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+	                                    Vector &result);
+	void ResetDictionaryState();
+
+public:
+	unique_ptr<FunctionLocalState> local_state;
+
+private:
+	//! The column index of the "unary" input column that may be a dictionary vector
+	//! Only valid when the expression is eligible for the dictionary expression optimization
+	//! This is the case when the input is "practically unary", i.e., only one non-const input column
+	optional_idx input_col_idx;
+	//! Storage ID of the dictionary vector
+	string dictionary_id;
+	//! Vector holding the expression executed on the entire dictionary
+	unique_ptr<Vector> dictionary_expression_vector;
 };
 
 struct ExpressionExecutorState {
