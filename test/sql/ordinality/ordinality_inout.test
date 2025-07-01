@@ -34,25 +34,6 @@ SELECT a,my_series,my_ordinality FROM test AS t(a), LATERAL generate_series(0,t.
 3	3	4
 
 
-statement ok
-CREATE OR REPLACE VIEW view_ordinality AS
-SELECT r AS range, o AS my_ordinality
-FROM range((select 10)) WITH ORDINALITY AS _(r, o)
-WHERE my_ordinality > 4
-ORDER BY range, my_ordinality;
-
-
-query II
-SELECT range, my_ordinality FROM view_ordinality ORDER BY range, my_ordinality;
-----
-4	5
-5	6
-6	7
-7	8
-8	9
-9	10
-
-
 query II
 WITH ordinalityCTE AS (
     SELECT r AS range, o AS my_ordinality

@@ -7,6 +7,16 @@ statement ok
 PRAGMA enable_verification;
 
 
+SELECT bool_and(ordinality - r == 1)
+FROM  (SELECT a, ro.r, ro.ordinality
+       FROM
+           VALUES (3000), (4000) AS t(a),
+           LATERAL range(t.a) WITH ORDINALITY AS ro(r, ordinality)
+      ) AS sub(a, r, ordinality);
+----
+true
+
+
 query II nosort read_csv_result
 SELECT drug_exposure_id, ordinality FROM read_csv('data/csv/drug_exposure.csv') WITH ORDINALITY ORDER BY ordinality,drug_exposure_id;
 
