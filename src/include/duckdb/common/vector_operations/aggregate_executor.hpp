@@ -42,8 +42,9 @@ private:
 #endif
 
 	template <class STATE_TYPE, class OP>
-	static inline void NullaryScatterLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
-	                                      const SelectionVector &ssel, idx_t count) {
+	static inline void NullaryScatterLoop(STATE_TYPE *__restrict const *__restrict const states,
+	                                      AggregateInputData &aggr_input_data, const SelectionVector &ssel,
+	                                      const idx_t count) {
 		if (ssel.IsSet()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto sidx = ssel.get_index_unsafe(i);
