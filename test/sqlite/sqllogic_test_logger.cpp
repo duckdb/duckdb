@@ -35,10 +35,6 @@ void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
 		LogFailure("\n" + failures_count + ". " + file_name + "\n");
 		PrintLineSep();
 	}
-	// const char *ci = std::getenv("CI");
-	// if (ci) {
-	// 	std::cout << "::warning::" << file_name << std::endl;
-	// }
 }
 
 void SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise) {
