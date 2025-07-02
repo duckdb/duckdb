@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstddef>
-
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -26,7 +24,8 @@ enum class USDInsertResult {
 
 // Unified String Dictionary is a per-query dictionary containing the most valuable strings in a particular query with
 // their pre-computed hashes. The strings and their hashes are materialized in the Data Region. A linear probing hash
-// table is used for fast look up.
+// table is used for fast look up. The idea is taken from "Optimistically Compressed Hash Tables & Strings in the
+// USSR" paper (https://ir.cwi.nl/pub/30820/30820.pdf) and further adopted for DuckDB's use case.
 class UnifiedStringsDictionary {
 public:
 	explicit UnifiedStringsDictionary(idx_t usd_sf);
@@ -39,22 +38,22 @@ public:
 private:
 	static constexpr const idx_t FAILED_ATTEMPT_THRESHOLD = 1000;
 	static constexpr const idx_t MAX_STRING_LENGTH = 512;
-	static constexpr const idx_t USD_SLOT_SIZE = 8;
-	// each 32-bit hash table bucket is consisted of (slot_bits) to index into data region and (32 - slot_bits) as
+	// The data region is consisted of 8-byte chunks.
+	static constexpr const idx_t DATA_REGION_SLOT_SIZE = 8;
+	// Each 32-bit hash table bucket is consisted of (slot_bits) to index into data region and (32 - slot_bits) as
 	// HT_bucket_salt
 	static constexpr const uint64_t HT_BUCKET_SIZE = 4;
-	// the baseline size of USD is 512kB (64k slots of 8bytes)
-	static constexpr const idx_t USD_BASELINE_SIZE = 65536;
+	// the baseline slot count of USD is 64k.
+	static constexpr const idx_t BASELINE_SLOT_COUNT = 65536;
 	static constexpr const idx_t PROBING_LIMIT = 32;
 	// This sentinel value is put into HT buckets as an indicator that the string is being inserted and not finalized
 	static constexpr const idx_t HT_DIRTY_SENTINEL = 1;
+	static constexpr const idx_t SLOT_BITS_BASELINE = 16;
 
-	// total number of 8-byte slots in data region,
-	idx_t usd_size;
-	// total number of 4-byte buckets in the linear probing hash table,
-	idx_t ht_size;
+	// Total of number slots in data region and hash table
+	idx_t total_slots;
 	// number of bits in HT bucket needed to index into the data region, initialized during construction
-	idx_t slot_bits = 16;
+	idx_t slot_bits;
 	uint64_t slot_mask;
 	// input parameter determines the usd total size (power of two multiplied by the baseline size)
 	idx_t usd_scale_factor;

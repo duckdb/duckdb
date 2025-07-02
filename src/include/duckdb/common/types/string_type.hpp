@@ -163,7 +163,6 @@ public:
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {
-
 		static inline bool Equals(const string_t &a, const string_t &b) {
 #ifdef DUCKDB_DEBUG_NO_INLINE
 			if (a.GetSize() != b.GetSize()) {

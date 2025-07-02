@@ -68,8 +68,7 @@ add_library_unity(
   types.cpp
   virtual_file_system.cpp
   windows_util.cpp
-  unified_string_dictionary.cpp
-)
+  unified_string_dictionary.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)
