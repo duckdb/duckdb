@@ -106,4 +106,12 @@ WHEN NOT MATCHED THEN ERROR;
 ----
 only one unconditional WHEN NOT MATCHED clause
 
-# error in WHEN MATCHED that should not get executed
+# we cannot merge into views
+statement ok
+CREATE VIEW my_view AS SELECT 42 item_id
+
+statement error
+MERGE INTO my_view USING Sale ON my_view.item_id = Sale.item_id
+WHEN NOT MATCHED THEN INSERT
+----
+base tables
