@@ -662,6 +662,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		DeleteDatabase(dbpath);
 	}
 
+	ignore_error_messages.clear();
+	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
+		ignore_error_messages.insert(ignore);
+	}
+
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
 
