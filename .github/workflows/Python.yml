@@ -158,8 +158,6 @@ jobs:
         exclude:
           # Speed things up a bit for non-releases
           - isRelease: false
-            python_build: 'cp39-*'
-          - isRelease: false
             python_build: 'cp310-*'
           - isRelease: false
             python_build: 'cp311-*'
