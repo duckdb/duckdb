@@ -626,7 +626,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			DumpSelVector(sel, approved_tuple_count, "Before bitmap pruning (approved count)");
 			if (cached_bitmap) {
 				approved_tuple_count = cached_bitmap->rids.size();
-				sel.sel_vector = const_cast<uint32_t*>(cached_bitmap->rids.data());
+				sel.Initialize(const_cast<uint32_t*>(cached_bitmap->rids.data()));
 				DumpSelVector(sel, approved_tuple_count, "After bitmap pruning");
 
 				if (approved_tuple_count == 0) {
