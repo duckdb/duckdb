@@ -130,7 +130,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		    flatten.PushDownDependentJoin(std::move(delim_join->children[1]), propagate_null_values, lateral_depth);
 		data_offset = flatten.data_offset;
 		auto left_offset = delim_join->children[0]->GetColumnBindings().size();
-		delim_offset = left_offset + flatten.delim_offset;
+		if (!parent) {
+			delim_offset = left_offset + flatten.delim_offset;
+		}
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
