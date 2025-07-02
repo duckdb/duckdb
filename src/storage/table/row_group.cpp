@@ -715,11 +715,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				std::string filters_fingerprint = get_filters_fingerprint(filter_list);
 				std::string table_name = GetTableInfo().GetTableName(); // FIXME
 				auto bitmap = std::make_shared<Bitmap>();
-				for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-					const auto rid = sel.get_index(sel_idx);
-					bitmap->set(rid);
-				}
-				bitmap->finalize();
+				bitmap->build(sel.data(), approved_tuple_count);
 				DumpSelVector(sel, approved_tuple_count, "After filter application");
 				transaction.transaction->transaction_manager.predicateCache.Add(
 					table_name, filters_fingerprint, this->start + current_row, bitmap

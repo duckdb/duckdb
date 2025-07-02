@@ -30,34 +30,20 @@ class DatabaseInstance;
 class Transaction;
 
 class Bitmap {
-    std::vector<unsigned char> data;
-	bool finalized = false;
-
 public:
 	std::vector<uint32_t> rids;
 
-    Bitmap() : data(2048, 0) {};
+	Bitmap() = default;
 
     // Set bit at given index, auto-growing if needed
-    void set(size_t index) {
-        if (data.size() <= index) {
-            data.resize(std::max(index + 1, data.size() * 2), 0);
-        }
-		if (finalized) {
-			throw std::runtime_error("Cannot override bitmap after finalization");
+    void build(uint32_t* data, size_t count) {
+        rids.resize(count);
+		if (count) {
+			std::memcpy(rids.data(), data, count * sizeof(uint32_t));
+		} else {
+			// std::cout << "Caching an empty bitmap !!!" << std::endl;
 		}
-        data[index] = 1;
     }
-
-	void finalize() {
-		// Find the indexes of the bits that are set to 1 and put them in rids
-		for (size_t i = 0; i < data.size(); ++i) {
-			if (data[i]) {
-				rids.push_back(i);
-			}
-		}
-		finalized = true;
-	}
 };
 
 class PredicateCache {
