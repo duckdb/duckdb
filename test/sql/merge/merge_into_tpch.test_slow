@@ -7,8 +7,14 @@ require tpch
 statement ok
 CALL dbgen(sf=1);
 
+foreach it no_index index
+
 statement ok
 CREATE TABLE random_lineitem AS FROM lineitem LIMIT 0
+
+onlyif it=index
+statement ok
+ALTER TABLE random_lineitem ADD PRIMARY KEY (l_orderkey, l_linenumber);
 
 # create lineitem but with a random subset of the rows
 statement ok
@@ -42,3 +48,9 @@ FROM lineitem EXCEPT FROM random_lineitem
 query IIIIIIIIIIIIIIII
 FROM random_lineitem EXCEPT FROM lineitem
 ----
+
+# clear all rows, then add the primary key constraints and rerun
+statement ok
+DROP TABLE random_lineitem
+
+endloop
