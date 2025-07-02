@@ -75,8 +75,11 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
-	SourceResultType MaterializeMerge(ExecutionContext &context, OperatorSourceInput &input) const;
-	unique_ptr<SortedRun> GetMaterialized(GlobalSourceState &global_state);
+	SourceResultType MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const;
+	unique_ptr<ColumnDataCollection> GetColumnData(OperatorSourceInput &input) const;
+
+	SourceResultType MaterializeSortedRun(ExecutionContext &context, OperatorSourceInput &input) const;
+	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 };
 
 } // namespace duckdb
