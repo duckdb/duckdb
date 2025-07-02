@@ -18,6 +18,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cstddef>
+#include <shared_mutex>
 
 namespace duckdb {
 
@@ -64,13 +65,13 @@ public:
 	PredicateCache() = default;
 
 	void Add(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset, std::shared_ptr<Bitmap> bitmap) {
-		std::lock_guard<std::mutex> lock(predicateCacheMutex); // TODO: Shared lock
+		std::unique_lock lock(predicateCacheMutex); // Exclusive write access
 		internalCache[table_name][filter_fingerprint][offset] = bitmap;
 	}
 
 	// Get a bitmap from the cache by key
 	const std::shared_ptr<Bitmap> Get(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset) {
-		std::lock_guard<std::mutex> lock(predicateCacheMutex); // TODO: Shared lock
+		std::shared_lock lock(predicateCacheMutex); // Shared read access
 
 		// 1) Locate the table bucket
 		auto tblIt = internalCache.find(table_name);
@@ -98,7 +99,7 @@ private:
 	using FilterFingerprint = std::string;
 	using Offset = unsigned long;
 	std::unordered_map<TableName, std::unordered_map<FilterFingerprint, unordered_map<Offset, std::shared_ptr<Bitmap>>>> internalCache;
-	std::mutex predicateCacheMutex;
+	mutable std::shared_mutex predicateCacheMutex;
 };
 
 //! The Transaction Manager is responsible for creating and managing
