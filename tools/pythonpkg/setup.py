@@ -35,6 +35,9 @@ def bump_version(base_version: str, distance: int, dirty: bool = False):
 
     major, minor, patch = map(int, base_version_match.groups())
 
+    # Make sure distance is set correctly
+    distance = int(distance or 0)
+
     # If we're exactly on a tag (distance = 0, dirty=False)
     if distance == 0 and not dirty:
         return f"{major}.{minor}.{patch}"
@@ -465,94 +468,6 @@ spark_packages = [
 ]
 
 packages.extend(spark_packages)
-
-from setuptools_scm import Configuration, ScmVersion
-from pathlib import Path
-import os
-
-######
-# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
-# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
-# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
-# - CMakeLists.txt
-# - scripts/amalgamation.py
-# - scripts/package_build.py
-# - tools/pythonpkg/setup.py
-######
-MAIN_BRANCH_VERSIONING = True
-if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
-    MAIN_BRANCH_VERSIONING = False
-if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
-    MAIN_BRANCH_VERSIONING = True
-
-
-def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
-    from setuptools_scm.git import parse as git_parse
-    from setuptools_scm.version import meta
-
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        parts = override.split('-')
-        if len(parts) == 3:
-            # Already in correct format tag-distance-gnode
-            tag, distance, node = parts
-            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
-        elif len(parts) == 1:
-            # Just tag, add -0-gnode
-            tag = parts[0]
-            distance = 0
-        elif len(parts) == 2:
-            # tag-distance, need to add -gnode
-            tag, distance = parts
-        else:
-            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
-        return meta(tag=tag, distance=int(distance), config=config)
-
-    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
-    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
-
-    try:
-        return git_parse(root, config, describe_command=git_describe_command)
-    except Exception:
-        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
-
-
-def version_scheme(version):
-    def prefix_version(version):
-        """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
-        if version.startswith('v'):
-            return version
-        return 'v' + version
-
-    print("Version is", version)
-
-    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
-    if override:
-        formatted_version = version.format_with("{tag}")
-        print("formatted_version = ", formatted_version)
-        print("Early return due to OVERRIDE_GIT_DESCRIBE")
-        return formatted_version
-
-    # If we're exactly on a tag (dev_iteration = 0, dirty=False)
-    if version.exact:
-        formatted_version = version.format_with("{tag}")
-        print("formatted_version = ", formatted_version)
-        print("Early return due to version.exact")
-        return formatted_version
-
-    major, minor, patch = [int(x) for x in str(version.tag).split('.')]
-    # Increment minor version if main_branch_versioning is enabled (default),
-    # otherwise increment patch version
-    if MAIN_BRANCH_VERSIONING == True:
-        minor += 1
-        patch = 0
-    else:
-        patch += 1
-
-    # Format as v{major}.{minor}.{patch}-dev{distance}
-    next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
-    return prefix_version(next_version)
-
 
 setup(
     name="duckdb",  # Needed to make SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB work

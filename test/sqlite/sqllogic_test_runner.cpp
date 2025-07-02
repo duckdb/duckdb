@@ -30,10 +30,6 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
 	}
-	auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
-	if (verify_vector) {
-		config->options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(verify_vector);
-	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -101,10 +97,14 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	try {
 		db = make_uniq<DuckDB>(dbpath, config.get());
 		// always load core functions
-		ExtensionHelper::LoadExtension(*db, "core_functions");
+
+		auto &test_config = TestConfiguration::Get();
+		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
+			ExtensionHelper::LoadExtension(*db, ext);
+		}
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
-		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		SQLLogicTestLogger::LoadDatabaseFail(file_name, dbpath, err.Message());
 		FAIL();
 	}
 	Reconnect();
@@ -135,6 +135,16 @@ void SQLLogicTestRunner::Reconnect() {
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
+	}
+
+	auto &test_config = TestConfiguration::Get();
+	auto init_cmd = test_config.OnInitCommand() + test_config.OnConnectionCommand();
+	if (!init_cmd.empty()) {
+		test_config.ProcessPath(init_cmd, file_name);
+		auto res = con->Query(ReplaceKeywords(init_cmd));
+		if (res->HasError()) {
+			FAIL("Startup queries provided via on_init failed: " + res->GetError());
+		}
 	}
 }
 
@@ -390,7 +400,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "noforcestorage") {
-		if (TestForceStorage()) {
+		if (TestConfiguration::TestForceStorage()) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
@@ -516,8 +526,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_vector_verification") {
-		auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
-		if (verify_vector) {
+		auto &test_config = TestConfiguration::Get();
+		if (test_config.GetVectorVerification() != DebugVectorVerification::NONE) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
@@ -628,6 +638,13 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	auto &test_config = TestConfiguration::Get();
+	if (test_config.ShouldSkipTest(script)) {
+		SKIP_TEST("config skip_tests");
+		return;
+	}
+
+	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 
@@ -643,6 +660,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!dbpath.empty()) {
 		// delete the target database file, if it exists
 		DeleteDatabase(dbpath);
+	}
+
+	ignore_error_messages.clear();
+	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
+		ignore_error_messages.insert(ignore);
 	}
 
 	// initialize the database with the default dbpath
@@ -982,6 +1004,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
+			auto &test_config = TestConfiguration::Get();
+			if (test_config.OnLoadCommand() == "skip") {
+				SKIP_TEST("config on_load skip");
+				return;
+			}
 			bool is_read_only = false;
 			if (token.parameters.size() > 1) {
 				auto param = token.parameters[1];

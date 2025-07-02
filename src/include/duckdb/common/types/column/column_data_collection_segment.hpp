@@ -36,11 +36,13 @@ struct VectorDataIndex {
 };
 
 struct SwizzleMetaData {
-	SwizzleMetaData(VectorDataIndex child_index_p, uint16_t offset_p, uint16_t count_p)
-	    : child_index(child_index_p), offset(offset_p), count(count_p) {
+	SwizzleMetaData(VectorDataIndex child_index_p, data_ptr_t ptr_p, uint16_t offset_p, uint16_t count_p)
+	    : child_index(child_index_p), ptr(ptr_p), offset(offset_p), count(count_p) {
 	}
 	//! Index of block storing heap
 	VectorDataIndex child_index;
+	//! Last-known pointer
+	data_ptr_t ptr;
 	//! Offset into the string_t vector
 	uint16_t offset;
 	//! Number of strings starting at 'offset' that have strings stored in the block with index 'child_index'

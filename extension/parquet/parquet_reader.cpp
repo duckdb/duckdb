@@ -48,18 +48,13 @@ using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFileProtocol(CachingFileHandle &file_handle,
                                                                                        bool prefetch_mode) {
-	auto transport = std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
 	Value disable_prefetch = false;
-	Value prefetch_all_files =
-#ifdef DUCKDB_PREFETCH_ALL_PARQUET_FILES
-	    true; // For debugging purposes we can toggle this to always enable
-#else
-	    false; // Defaults to false
-#endif
+	Value prefetch_all_files = false;
 	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 	context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
 	bool should_prefetch = !file_handle.OnDiskFile() || prefetch_all_files.GetValue<bool>();
@@ -502,7 +497,7 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}
-	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
+	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, reader.parquet_options.can_have_nan);
 }
 
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
@@ -1053,7 +1048,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 			} else if (!is_generated_column && has_min_max &&
 			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-			            column_reader.Type().id() == LogicalTypeId::DOUBLE)) {
+			            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+			           parquet_options.can_have_nan) {
 				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 				// based on nan

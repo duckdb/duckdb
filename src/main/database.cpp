@@ -30,6 +30,7 @@
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -65,7 +66,7 @@ DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_o
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() {
+DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 }
@@ -292,6 +293,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
+	extension_manager = make_uniq<ExtensionManager>(*this);
 
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
@@ -333,6 +335,7 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_pt
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}
+	instance->db_manager->FinalizeStartup();
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
@@ -386,6 +389,10 @@ ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
 	return *connection_manager;
+}
+
+ExtensionManager &DatabaseInstance::GetExtensionManager() {
+	return *extension_manager;
 }
 
 FileSystem &DuckDB::GetFileSystem() {
@@ -481,38 +488,16 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
-const unordered_map<string, ExtensionInfo> &DatabaseInstance::GetExtensions() {
-	return loaded_extensions_info;
-}
-
-void DatabaseInstance::AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info) {
-	loaded_extensions_info[name].load_info = make_uniq<ExtensionLoadedInfo>(info);
-}
-
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
-	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	auto it = loaded_extensions_info.find(extension_name);
-	return it != loaded_extensions_info.end() && it->second.is_loaded;
+bool DatabaseInstance::ExtensionIsLoaded(const string &name) {
+	return extension_manager->ExtensionIsLoaded(name);
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
-}
-
-void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallInfo &install_info) {
-	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	loaded_extensions_info[extension_name].is_loaded = true;
-	loaded_extensions_info[extension_name].install_info = make_uniq<ExtensionInstallInfo>(install_info);
-
-	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
-	for (auto &callback : callbacks) {
-		callback->OnExtensionLoaded(*this, name);
-	}
-	DUCKDB_LOG_INFO(*this, name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
@@ -527,6 +512,14 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 	}
 	result = global_value->second;
 	return SettingLookupResult(SettingScope::GLOBAL);
+}
+
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+	if (config.encryption_util) {
+		return config.encryption_util;
+	}
+
+	return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

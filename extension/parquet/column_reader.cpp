@@ -412,7 +412,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 	}
 
 	default: {
-		std::stringstream codec_name;
+		duckdb::stringstream codec_name;
 		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
 		                         "\". Supported options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd");
@@ -713,6 +713,12 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 
 	while (to_skip > 0) {
 		auto skip_now = ReadPageHeaders(to_skip);
+		if (page_is_filtered_out) {
+			// the page has been filtered out entirely - skip
+			page_rows_available -= skip_now;
+			to_skip -= skip_now;
+			continue;
+		}
 		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
 
 		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);

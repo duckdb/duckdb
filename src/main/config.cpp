@@ -72,6 +72,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ArrowLargeBufferSizeSetting),
     DUCKDB_GLOBAL(ArrowLosslessConversionSetting),
     DUCKDB_GLOBAL(ArrowOutputListViewSetting),
+    DUCKDB_GLOBAL(ArrowOutputVersionSetting),
     DUCKDB_LOCAL(AsofLoopJoinThresholdSetting),
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
@@ -95,6 +96,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
     DUCKDB_GLOBAL(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_GLOBAL(DisableDatabaseInvalidationSetting),
     DUCKDB_LOCAL(DisableTimestamptzCastsSetting),
     DUCKDB_GLOBAL(DisabledCompressionMethodsSetting),
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
@@ -153,6 +155,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(PartitionedWriteMaxOpenFilesSetting),
     DUCKDB_GLOBAL(PasswordSetting),
     DUCKDB_LOCAL(PerfectHtThresholdSetting),
+    DUCKDB_GLOBAL(PinThreadsSetting),
     DUCKDB_LOCAL(PivotFilterThresholdSetting),
     DUCKDB_LOCAL(PivotLimitSetting),
     DUCKDB_LOCAL(PreferRangeJoinsSetting),
@@ -176,6 +179,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
+    DUCKDB_GLOBAL(WalEncryptionSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 

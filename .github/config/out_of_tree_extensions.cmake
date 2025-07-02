@@ -22,7 +22,6 @@ duckdb_extension_load(httpfs
     GIT_URL https://github.com/duckdb/duckdb-httpfs
     GIT_TAG 217ec8e04f6ed419c866a6d2496aa15aace4382f
     INCLUDE_DIR extension/httpfs/include
-    APPLY_PATCHES
     )
 
 ################# AVRO
@@ -52,7 +51,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             APPLY_PATCHES
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
-            GIT_TAG 86a5acb33afe50ea57086ed997472551320c9820
+            GIT_TAG 8bac45ad4bb858a4b46e9eb3e03cf3a59e3f8df4
             )
 endif()
 
@@ -119,7 +118,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
 endif()
 
 # mingw CI with all extensions at once is somehow not happy
-if (NOT MINGW AND NOT ${BUILD_COMPLETE_EXTENSION_SET})
+if (NOT MINGW AND ${BUILD_COMPLETE_EXTENSION_SET})
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
@@ -185,7 +184,7 @@ duckdb_extension_load(fts
 )
 
 ################# ENCODINGS
-if (NOT ${WASM_ENABLED} AND NOT ${BUILD_COMPLETE_EXTENSION_SET})
+if (NOT ${WASM_ENABLED} AND ${BUILD_COMPLETE_EXTENSION_SET})
 duckdb_extension_load(encodings
         LOAD_TESTS
         DONT_LINK

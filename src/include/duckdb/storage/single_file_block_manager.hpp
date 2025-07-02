@@ -16,11 +16,29 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 namespace duckdb {
 
 class DatabaseInstance;
 struct MetadataHandle;
+
+struct EncryptionOptions {
+	//! indicates whether the db is encrypted
+	bool encryption_enabled = false;
+	//! Whether Additional Authenticated Data is used
+	bool additional_authenticated_data = false;
+	//! derived encryption key id
+	string derived_key_id;
+	//! Cipher used for encryption
+	EncryptionTypes::CipherType cipher;
+	//! key derivation function (kdf) used
+	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
+	//! Key Length
+	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
+	//! User key pointer (to StorageOptions)
+	shared_ptr<string> user_key;
+};
 
 struct StorageManagerOptions {
 	bool read_only = false;
@@ -31,12 +49,7 @@ struct StorageManagerOptions {
 	optional_idx version_number;
 	optional_idx block_header_size;
 
-	//! indicates whether db is encrypted
-	bool encryption = false;
-
-	bool NeedsEncryption() const {
-		return encryption;
-	}
+	EncryptionOptions encryption_options;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -75,6 +88,9 @@ public:
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
 	void Read(Block &block) override;
+	//! Read individual blocks
+	void ReadBlock(Block &block, bool skip_block_header = false) const;
+	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
 	//! Read the content of a range of blocks into a buffer
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
 	//! Write the given block to disk
@@ -103,11 +119,24 @@ private:
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
+	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
+	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
+
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 	void ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
 
-	idx_t GetBlockLocation(block_id_t block_id);
+	idx_t GetBlockLocation(block_id_t block_id) const;
+
+	// Encrypt, Store, Decrypt the canary
+	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
+	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
+	void StoreEncryptionMetadata(MainHeader &main_header) const;
+
+	//! Check and adding Encryption Keys
+	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);
+	void CheckAndAddEncryptionKey(MainHeader &main_header);
+	void CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();

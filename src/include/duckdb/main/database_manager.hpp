@@ -43,6 +43,8 @@ public:
 
 	//! Initializes the system catalog of the attached SYSTEM_DATABASE.
 	void InitializeSystemCatalog();
+	//! Finalize starting up the system
+	void FinalizeStartup();
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
@@ -66,7 +68,8 @@ public:
 	void GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config, AttachOptions &options);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
-	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
+	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context,
+	                                                 const optional_idx max_db_count = optional_idx());
 	//! Scans the catalog set and returns each committed database entry
 	vector<reference<AttachedDatabase>> GetDatabases();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,

@@ -10,6 +10,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
 #include <list>
@@ -29,7 +30,17 @@ static Connection *GetConnection(DuckDB &db,
 	if (entry == named_connection_map.end()) {
 		// not found: create a new connection
 		auto con = make_uniq<Connection>(db);
+
+		auto &test_config = TestConfiguration::Get();
+		auto init_cmd = test_config.OnConnectionCommand();
+		if (!init_cmd.empty()) {
+			auto res = con->Query(init_cmd);
+			if (res->HasError()) {
+				FAIL("Startup queries provided via on_init failed: " + res->GetError());
+			}
+		}
 		auto res = con.get();
+
 		named_connection_map[con_name] = std::move(con);
 		return res;
 	}
@@ -46,9 +57,20 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 	if (connection_name.empty()) {
 		if (context.is_parallel) {
 			D_ASSERT(context.con);
+
+			auto &test_config = TestConfiguration::Get();
+			auto init_cmd = test_config.OnConnectionCommand();
+			if (!init_cmd.empty()) {
+				auto res = context.con->Query(init_cmd);
+				if (res->HasError()) {
+					FAIL("Startup queries provided via on_init failed: " + res->GetError());
+				}
+			}
+
 			return context.con;
 		}
 		D_ASSERT(!context.con);
+
 		return runner.con.get();
 	} else {
 		if (context.is_parallel) {
@@ -140,9 +162,10 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
                                                           string file_name, idx_t query_line) const {
 	query_break(query_line);
-	if (TestForceReload() && TestForceStorage()) {
+	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
@@ -529,7 +552,6 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
@@ -545,6 +567,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			return;
 		}
 	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
@@ -579,7 +602,7 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 
 	// read the compressed data from the file
 	while (true) {
-		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		duckdb::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
 		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
 		if (bytes_read == 0) {
 			break;
@@ -615,7 +638,7 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
-				SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());
 				FAIL();
 			}
 		}

@@ -110,6 +110,13 @@ public:
 	CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
 	              const vector<MultiFileColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
 	              optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
+	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns,
+	              MultiFileColumnMappingMode mapping_mode);
+
+	DUCKDB_API virtual ReaderInitializeType
+	CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
+	              const vector<MultiFileColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
+	              optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
 	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns);
 
 	//! Finalize the reading of a chunk - applying any constants that are required

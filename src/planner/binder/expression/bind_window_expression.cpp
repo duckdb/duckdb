@@ -1,17 +1,16 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -107,6 +106,10 @@ static bool IsRangeType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+static bool IsFillType(const LogicalType &type) {
+	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
@@ -379,8 +382,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->arg_orders.emplace_back(type, null_order, std::move(expression));
 	}
 
-	//	Check FILL orderings support subtraction
+	//	Check FILL arguments support subtraction
 	if (window.GetExpressionType() == ExpressionType::WINDOW_FILL) {
+		D_ASSERT(!result->children.empty());
+		if (!IsFillType(result->children[0]->return_type)) {
+			throw BinderException(error_context, "FILL argument must support subtraction");
+		}
 		LogicalType order_type;
 		if (window.arg_orders.empty()) {
 			D_ASSERT(!result->orders.empty());
@@ -388,8 +395,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		} else {
 			order_type = result->arg_orders[0].expression->return_type;
 		}
-		if (!order_type.IsNumeric() && (!order_type.IsTemporal() || order_type.id() == LogicalTypeId::TIME_TZ)) {
-			throw BinderException(error_context, "FILL orderings must support subtraction");
+		if (!IsFillType(order_type)) {
+			throw BinderException(error_context, "FILL ordering must support subtraction");
 		}
 	}
 

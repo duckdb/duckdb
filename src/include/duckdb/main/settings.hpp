@@ -24,7 +24,7 @@ enum class SettingScope : uint8_t {
 	GLOBAL,
 	//! Setting is from the local Setting scope
 	LOCAL,
-	//! Setting was not feteched from settings, but it was fetched from a secret instead
+	//! Setting was not fetched from settings, but it was fetched from a secret instead
 	SECRET,
 	//! The setting was not found or invalid in some other way
 	INVALID
@@ -213,6 +213,17 @@ struct ArrowOutputListViewSetting {
 	static constexpr const char *Description =
 	    "Whether export to Arrow format should use ListView as the physical layout for LIST columns";
 	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ArrowOutputVersionSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "arrow_output_version";
+	static constexpr const char *Description =
+	    "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8";
+	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -437,6 +448,20 @@ struct DefaultSecretStorageSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DisableDatabaseInvalidationSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "disable_database_invalidation";
+	static constexpr const char *Description =
+	    "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, "
+	    "as DuckDB cannot guarantee correct behavior after a fatal error.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -1045,6 +1070,17 @@ struct PerfectHtThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct PinThreadsSetting {
+	using RETURN_TYPE = ThreadPinMode;
+	static constexpr const char *Name = "pin_threads";
+	static constexpr const char *Description =
+	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct PivotFilterThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "pivot_filter_threshold";
@@ -1252,6 +1288,16 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct WalEncryptionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "wal_encryption";
+	static constexpr const char *Description = "Encrypt the WAL if the database is encrypted";
+	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

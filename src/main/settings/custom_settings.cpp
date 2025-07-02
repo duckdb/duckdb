@@ -185,6 +185,23 @@ bool AllowUnredactedSecretsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig
 }
 
 //===----------------------------------------------------------------------===//
+// Disable Database Invalidation
+//===----------------------------------------------------------------------===//
+bool DisableDatabaseInvalidationSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db && input.GetValue<bool>()) {
+		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
+	}
+	return true;
+}
+
+bool DisableDatabaseInvalidationSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
+	}
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
 bool AllowUnsignedExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -280,6 +297,57 @@ Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
 	return Value::BOOLEAN(export_large_buffers_arrow);
+}
+
+//===----------------------------------------------------------------------===//
+// Arrow Output Format Version
+//===----------------------------------------------------------------------===//
+void ArrowOutputVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_version = input.ToString();
+	if (arrow_version == "1.0") {
+		config.options.arrow_output_version = V1_0;
+	} else if (arrow_version == "1.1") {
+		config.options.arrow_output_version = V1_1;
+	} else if (arrow_version == "1.2") {
+		config.options.arrow_output_version = V1_2;
+	} else if (arrow_version == "1.3") {
+		config.options.arrow_output_version = V1_3;
+	} else if (arrow_version == "1.4") {
+		config.options.arrow_output_version = V1_4;
+	} else if (arrow_version == "1.5") {
+		config.options.arrow_output_version = V1_5;
+	} else {
+		throw NotImplementedException("Unrecognized parameter for option arrow_output_version, expected either "
+		                              "\'1.0\', \'1.1\', \'1.2\', \'1.3\', \'1.4\', \'1.5\'");
+	}
+}
+
+Value ArrowOutputVersionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	string arrow_version;
+	switch (config.options.arrow_output_version) {
+	case V1_0:
+		arrow_version = "1.0";
+		break;
+	case V1_1:
+		arrow_version = "1.1";
+		break;
+	case V1_2:
+		arrow_version = "1.2";
+		break;
+	case V1_3:
+		arrow_version = "1.3";
+		break;
+	case V1_4:
+		arrow_version = "1.4";
+		break;
+	case V1_5:
+		arrow_version = "1.5";
+		break;
+	default:
+		throw InternalException("Unrecognized arrow output version");
+	}
+	return Value(arrow_version);
 }
 
 //===----------------------------------------------------------------------===//
