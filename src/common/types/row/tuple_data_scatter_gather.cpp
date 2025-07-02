@@ -21,24 +21,25 @@ constexpr idx_t TupleDataWithinListFixedSize<string_t>() {
 }
 
 template <class T>
-static void TupleDataValueStore(const T &source, const data_ptr_t &row_location, const idx_t offset_in_row,
-                                data_ptr_t &) {
+static void TupleDataValueStore(const T &source, data_t *__restrict const &row_location, const idx_t &offset_in_row,
+                                data_t *__restrict &) {
 	Store<T>(source, row_location + offset_in_row);
 }
 
 template <>
-inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_location, const idx_t offset_in_row,
-                                data_ptr_t &heap_location) {
+inline void TupleDataValueStore(const string_t &source, data_t *__restrict const &row_location,
+                                const idx_t &offset_in_row, data_t *__restrict &heap_location) {
 #ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
 	if (source.IsInlined()) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
-		FastMemcpy(heap_location, source.GetData(), source.GetSize());
-		Store<string_t>(string_t(const_char_ptr_cast(heap_location), UnsafeNumericCast<uint32_t>(source.GetSize())),
-		                row_location + offset_in_row);
-		heap_location += source.GetSize();
+		FastMemcpy(heap_location, source.GetPointer(), source.GetSize());
+		auto source_copy = source;
+		source_copy.SetPointer(char_ptr_cast(heap_location));
+		Store<string_t>(source_copy, row_location + offset_in_row);
+		heap_location += source_copy.GetSize();
 	}
 }
 
