@@ -49,7 +49,6 @@ query IIIIIIIIIIIIIIII
 FROM random_lineitem EXCEPT FROM lineitem
 ----
 
-# clear all rows, then add the primary key constraints and rerun
 statement ok
 DROP TABLE random_lineitem
 
