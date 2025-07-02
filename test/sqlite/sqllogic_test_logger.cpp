@@ -138,7 +138,7 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_l
 void SQLLogicTestLogger::LogFailureAnnotation(const string header) {
 	const char *ci = std::getenv("CI");
 	// check the value is "true" otherwise you'll see the prefix in local run outputs
-	auto prefix = (ci && string(ci) == "true") ? "\n::warning::" : "";
+	auto prefix = (ci && string(ci) == "true") ? "\n::error::" : "";
 	std::cout << prefix << header << std::endl;
 }
 

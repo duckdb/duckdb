@@ -211,7 +211,7 @@ if summary and not no_summary:
 '''
     )
     # check the value is "true" otherwise you'll see the prefix in local run outputs
-    prefix = "::warning::" if ('CI' in os.environ and os.getenv('CI') == 'true') else ""
+    prefix = "::error::" if ('CI' in os.environ and os.getenv('CI') == 'true') else ""
     for i, failure_message in enumerate(summary, start=1):
         prefix_str = f"{prefix}{i}" if len(prefix) > 0 else f"{i}"
         print(f"{prefix_str}: ", failure_message["benchmark"])
