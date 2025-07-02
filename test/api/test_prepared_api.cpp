@@ -512,3 +512,31 @@ TEST_CASE("Test prepared statements that require rebind", "[api]") {
 	REQUIRE_NO_FAIL(con2.Query("CREATE OR REPLACE TABLE t1 (c1 varchar)"));
 	REQUIRE_NO_FAIL(prepared->Execute());
 }
+
+class TestExtensionState : public ClientContextState {
+public:
+	bool CanRequestRebind() override {
+		return true;
+	}
+};
+
+TEST_CASE("Test prepared statements with extension that can request a rebind", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE t1 (c1 INTEGER)"));
+
+	// https://github.com/duckdb/duckdb/pull/11096
+	con.context->registered_state->Insert("test_extension", make_shared_ptr<TestExtensionState>());
+
+	// SelectStatement
+	REQUIRE_NO_FAIL(con.Prepare("SELECT ?")->Execute(42));
+
+	// InsertStatement
+	REQUIRE_NO_FAIL(con.Prepare("INSERT INTO t1 VALUES(?)")->Execute(42));
+
+	// UpdateStatement
+	REQUIRE_NO_FAIL(con.Prepare("UPDATE t1 SET c1 = ?")->Execute(43));
+
+	// SetVariableStatement
+	REQUIRE_NO_FAIL(con.Prepare("SET VARIABLE test_var = ?")->Execute(42));
+}
