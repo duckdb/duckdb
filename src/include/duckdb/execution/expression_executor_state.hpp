@@ -78,7 +78,7 @@ private:
 	//! Storage ID of the dictionary vector
 	string dictionary_id;
 	//! Vector holding the expression executed on the entire dictionary
-	unique_ptr<Vector> dictionary_expression_vector;
+	unique_ptr<Vector> dictionary;
 };
 
 struct ExpressionExecutorState {
