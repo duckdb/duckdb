@@ -64,38 +64,33 @@ public:
 	PredicateCache() = default;
 
 	void Add(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset, std::shared_ptr<Bitmap> bitmap) {
-		predicateCacheMutex.lock();
+		std::lock_guard<std::mutex> lock(predicateCacheMutex); // TODO: Shared lock
 		internalCache[table_name][filter_fingerprint][offset] = bitmap;
-		predicateCacheMutex.unlock();
 	}
 
 	// Get a bitmap from the cache by key
 	const std::shared_ptr<Bitmap> Get(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset) {
-		predicateCacheMutex.lock(); // TODO: Optimize locking. Readers can share
+		std::lock_guard<std::mutex> lock(predicateCacheMutex); // TODO: Shared lock
+
 		// 1) Locate the table bucket
 		auto tblIt = internalCache.find(table_name);
 		if (tblIt == internalCache.end()) {
-			predicateCacheMutex.unlock();
 			return nullptr;
 		}
 
 		// 2) Locate the fingerprint bucket within that table
 		auto fpIt = tblIt->second.find(filter_fingerprint);
 		if (fpIt == tblIt->second.end()) {
-			predicateCacheMutex.unlock();
 			return nullptr;
 		}
 
 		// 3) Locate the bitmap at the requested offset
 		auto offIt = fpIt->second.find(offset);
 		if (offIt == fpIt->second.end()) {
-			predicateCacheMutex.unlock();
 			return nullptr;
 		}
 
-		auto &bitmap = offIt->second;
-		predicateCacheMutex.unlock();
-		return bitmap;   // Success
+		return offIt->second;   // Success
 	}
 
 private:
