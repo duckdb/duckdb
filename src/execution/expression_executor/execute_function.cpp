@@ -129,10 +129,14 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			ValidityMask offset_result_validity(output_validity.GetData() + validity_offset, count);
 			FlatVector::SetValidity(offset_output, offset_result_validity);
 
-			// Execute, ensuring the aux gets shared properly
+			// Execute, while ensuring the aux gets shared properly
 			offset_output.SetAuxiliary(output.GetAuxiliary());
 			expr.function.function(input_chunk, state, offset_output);
 			output.SetAuxiliary(offset_output.GetAuxiliary());
+
+			if (offset_output.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				return false; // Function always returns CONSTANT, bail
+			}
 
 			// Output validity may change during function execution, this copies it back over
 			const auto function_validity_data = FlatVector::Validity(offset_output).GetData();
@@ -142,10 +146,6 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 				for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 					offset_result_validity_data[entry_idx] = function_validity_data[entry_idx];
 				}
-			}
-
-			if (count != 1 && offset_output.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				return false; // Function always returns CONSTANT, bail
 			}
 		}
 	}
