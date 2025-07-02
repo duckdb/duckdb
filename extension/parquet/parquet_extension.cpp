@@ -225,6 +225,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	//! This is huge but we grow it starting from 1 MB
 	idx_t string_dictionary_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
+	bool enable_bloom_filters = true;
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
 
@@ -371,6 +372,8 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				    PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE);
 			}
 			bind_data->string_dictionary_page_size_limit = val;
+		} else if (loption == "write_bloom_filter") {
+			bind_data->enable_bloom_filters = BooleanValue::Get(option.second[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else if (loption == "bloom_filter_false_positive_ratio") {
 			auto val = option.second[0].GetValue<double>();
 			if (val <= 0) {
@@ -434,8 +437,8 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_size_limit, parquet_bind.string_dictionary_page_size_limit,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
-	    parquet_bind.parquet_version);
+	    parquet_bind.enable_bloom_filters, parquet_bind.bloom_filter_false_positive_ratio,
+	    parquet_bind.compression_level, parquet_bind.debug_use_openssl, parquet_bind.parquet_version);
 	return std::move(global_state);
 }
 

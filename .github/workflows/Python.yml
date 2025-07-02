@@ -69,11 +69,12 @@ env:
 
 jobs:
   check-draft:
-    name: Don't trigger further jobs to run on draft PR
-    runs-on: ubuntu-24.04
+    # We run all other jobs on PRs only if they are not draft PR
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
     steps:
-      - run: echo ${{ github.event.pull_request.draft }}
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
       
 # This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
@@ -156,8 +157,6 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           # Speed things up a bit for non-releases
-          - isRelease: false
-            python_build: 'cp39-*'
           - isRelease: false
             python_build: 'cp310-*'
           - isRelease: false
