@@ -37,6 +37,7 @@ static const TestConfigOption test_config_options[] = {
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
+    {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
@@ -197,6 +198,22 @@ vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
 		}
 	} else {
 		res.push_back("core_functions");
+	}
+	return res;
+}
+
+vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
+	vector<string> res;
+	auto entry = options.find("skip_error_messages");
+	if (entry != options.end()) {
+		vector<Value> ext_list = ListValue::GetChildren(entry->second);
+
+		for (auto ext : ext_list) {
+			res.push_back(ext.GetValue<string>());
+		}
+	} else {
+		res.push_back("HTTP");
+		res.push_back("Unable to connect");
 	}
 	return res;
 }
