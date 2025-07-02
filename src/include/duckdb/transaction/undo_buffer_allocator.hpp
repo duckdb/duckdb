@@ -71,6 +71,7 @@ struct UndoBufferAllocator {
 
 	UndoBufferReference Allocate(idx_t alloc_len);
 
+	mutex lock;
 	BufferManager &buffer_manager;
 	unique_ptr<UndoBufferEntry> head;
 	optional_ptr<UndoBufferEntry> tail;
