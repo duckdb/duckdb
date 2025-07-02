@@ -45,12 +45,6 @@ EXPLAIN SELECT * FROM integers WHERE i>j ORDER BY i;
 ----
 logical_opt	<REGEX>:.*constant_or_null.*
 
-# t2.c0>=t2.c0 means always true or null which is equals to is not null
-query II
-EXPLAIN SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
-----
-logical_opt	<REGEX>:.*IS NOT NULL.*
-
 # now verify that the results are correct
 query I
 SELECT i=j FROM integers ORDER BY i;
@@ -90,6 +84,12 @@ SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
 
 statement ok
 INSERT INTO t2 VALUES(1);
+
+# t2.c0>=t2.c0 means always true or null which is equals to is not null
+query II
+EXPLAIN SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
+----
+logical_opt	<REGEX>:.*IS NOT NULL.*
 
 query II
 SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
