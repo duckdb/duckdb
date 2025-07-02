@@ -222,7 +222,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
 	serializer.WritePropertyWithDefault<OrdinalityType>(213, "ordinality_request", ordinality_data.ordinality_request,
 	                                                    OrdinalityType::WITHOUT_ORDINALITY);
-	serializer.WriteProperty(214, "column_id", ordinality_data.column_id);
+	serializer.WritePropertyWithDefault<idx_t>(214, "column_id", ordinality_data.column_id);
 	serializer.WritePropertyWithDefault<bool>(215, "inout_correlation", ordinality_data.inout_correlation, false);
 }
 
@@ -255,7 +255,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
 	    213, "ordinality_request", result->ordinality_data.ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
-	deserializer.ReadProperty(214, "column_id", result->ordinality_data.column_id);
+	deserializer.ReadPropertyWithDefault(214, "column_id", result->ordinality_data.column_id);
 	deserializer.ReadPropertyWithExplicitDefault(215, "inout_correlation", result->ordinality_data.inout_correlation,
 	                                             false);
 	if (!legacy_column_ids.empty()) {
