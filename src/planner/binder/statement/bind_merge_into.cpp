@@ -14,7 +14,7 @@
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-
+#include "duckdb/planner/expression_binder/projection_binder.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -41,12 +41,10 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
-		WhereBinder where_binder(*this, context);
-		auto cond = where_binder.Bind(action.condition);
-		result->condition =
-		    make_uniq<BoundColumnRefExpression>(cond->return_type, ColumnBinding(proj_index, expressions.size()));
-		result->condition->alias = cond->ToString();
-		expressions.push_back(std::move(cond));
+		ProjectionBinder proj_binder(*this, context, proj_index, expressions);
+		proj_binder.target_type = LogicalType::BOOLEAN;
+		auto cond = proj_binder.Bind(action.condition);
+		result->condition = std::move(cond);
 	}
 	result->bound_constraints = BindConstraints(table);
 	switch (action.action_type) {
