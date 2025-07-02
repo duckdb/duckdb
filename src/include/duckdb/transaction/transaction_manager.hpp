@@ -63,14 +63,14 @@ class PredicateCache {
 public:
 	PredicateCache() = default;
 
-	void Add(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset, const Bitmap &bitmap) {
+	void Add(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset, std::shared_ptr<Bitmap> bitmap) {
 		predicateCacheMutex.lock();
 		internalCache[table_name][filter_fingerprint][offset] = bitmap;
 		predicateCacheMutex.unlock();
 	}
 
 	// Get a bitmap from the cache by key
-	const Bitmap* Get(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset) const {
+	const std::shared_ptr<Bitmap> Get(const std::string &table_name, const std::string &filter_fingerprint, const unsigned long offset) const {
 		// 1) Locate the table bucket
 		auto tblIt = internalCache.find(table_name);
 		if (tblIt == internalCache.end()) {
@@ -89,14 +89,14 @@ public:
 			return nullptr;
 		}
 
-		return &offIt->second;   // Success
+		return offIt->second;   // Success
 	}
 
 private:
 	using TableName = std::string;
 	using FilterFingerprint = std::string;
 	using Offset = unsigned long;
-	std::unordered_map<TableName, std::unordered_map<FilterFingerprint, unordered_map<Offset, Bitmap>>> internalCache;
+	std::unordered_map<TableName, std::unordered_map<FilterFingerprint, unordered_map<Offset, std::shared_ptr<Bitmap>>>> internalCache;
 	std::mutex predicateCacheMutex;
 };
 

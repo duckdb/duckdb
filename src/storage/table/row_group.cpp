@@ -586,7 +586,6 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		}
 
 		bool has_filters = filter_info.HasFilters();
-		D_ASSERT(!has_filters); // bitmap -> filters IOW !filters -> !bitmap
 		if (count == max_count && !has_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -609,37 +608,28 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			// partial scan: we have deletions or table filters
 			idx_t approved_tuple_count = count;
 			SelectionVector sel;
-
-			// std::cout << "Initializing selection vector" << std::endl;
 			if (count != max_count) {
 				sel.Initialize(state.valid_sel);
 			} else {
 				sel.Initialize(nullptr);
 			}
-			// std::cout << "Finished initializing selection vector" << std::endl;
 
-			/* ---------- bitmap pruning (optional) ---------------------------- */
-			// lookup cache entry
-			// std::cout << "Looking up bitmap" << std::endl;
+			/* ---------- cached bitmap pruning ---------------------------- */
 			auto &table_filters = filter_info.GetFilterList();
 			std::string table_name = GetTableInfo().GetTableName(); // FIXME !!!
 			std::string filters_fingerprint = get_filters_fingerprint(table_filters);
-			const Bitmap* cached_bitmap = transaction.transaction->transaction_manager.predicateCache.Get(
+			const std::shared_ptr<Bitmap> cached_bitmap = transaction.transaction->transaction_manager.predicateCache.Get(
 				table_name, filters_fingerprint, this->start + current_row
 			);
-			// std::cout << "Finished looking up bitmap" << std::endl;
 
 			DumpSelVector(sel, count, "Before bitmap pruning");
 			DumpSelVector(sel, approved_tuple_count, "Before bitmap pruning (approved count)");
 			if (cached_bitmap) {
 				approved_tuple_count = cached_bitmap->rids.size();
 				sel.sel_vector = const_cast<uint32_t*>(cached_bitmap->rids.data());
-				// for (idx_t i = 0; i < approved_tuple_count; i++) {
-				// 	sel.set_index(i, cached_bitmap->rids[i]);
-				// }
 				DumpSelVector(sel, approved_tuple_count, "After bitmap pruning");
 
-				if (approved_tuple_count == 0) { // TODO: Make sure even fully pruned data chunks' bitmaps are cached
+				if (approved_tuple_count == 0) {
 					/* no surviving rows – skip the vector altogether */
 					result.Reset();
 					for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -658,7 +648,6 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			//! get runtime statistics
 			auto adaptive_filter = filter_info.GetAdaptiveFilter();
 			auto filter_state = filter_info.BeginFilter();
-			// std::cout << "Starting evaluating filters" << std::endl;
 			if (has_filters && !cached_bitmap) {
 				D_ASSERT(ALLOW_UPDATES);
 				auto &filter_list = filter_info.GetFilterList();
@@ -718,21 +707,19 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
 				}
-				// std::cout << "Started computing bitmap to cache it" << std::endl;
 				// Now that we have evaluated the filters, we cache the bitmap index
 				std::string filters_fingerprint = get_filters_fingerprint(filter_list);
 				std::string table_name = GetTableInfo().GetTableName(); // FIXME
-				Bitmap bitmap;
+				auto bitmap = std::make_shared<Bitmap>();
 				for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
 					const auto rid = sel.get_index(sel_idx);
-					bitmap.set(rid);
+					bitmap->set(rid);
 				}
-				bitmap.finalize();
+				bitmap->finalize();
 				DumpSelVector(sel, approved_tuple_count, "After filter application");
 				transaction.transaction->transaction_manager.predicateCache.Add(
 					table_name, filters_fingerprint, this->start + current_row, bitmap
 				);
-				// std::cout << "Successfully cached bitmap" << std::endl;
 			}
 			if (approved_tuple_count == 0) {
 				// all rows were filtered out by the table filters
@@ -788,7 +775,6 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		state.vector_index++;
 		break;
 	}
-	// std::cout << "Left scan function" << std::endl;
 }
 
 void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
