@@ -121,11 +121,11 @@ opt_source_or_target:
 	;
 
 not_matched_clause:
-	WHEN NOT MATCHED opt_and_clause opt_source_or_target THEN matched_clause_action
+	WHEN NOT MATCHED opt_source_or_target opt_and_clause THEN matched_clause_action
 		{
 			PGMatchAction *n = (PGMatchAction *) $7;
-			n->when = $5;
-			n->andClause = $4;
+			n->when = $4;
+			n->andClause = $5;
 			$$ = (PGNode *)n;
 		}
 	;

@@ -77,15 +77,26 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 	map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions;
 
 	// plan the merge into clauses
+	// FIXME: disable parallelism when we have multiple INSERTs because they do not work nicely together currently
+	idx_t append_count = 0;
 	for (auto &entry : op.actions) {
 		vector<unique_ptr<MergeIntoOperator>> planned_actions;
 		for (auto &action : entry.second) {
+			if (action->action_type == MergeActionType::MERGE_INSERT) {
+				append_count++;
+			}
+			if (action->action_type == MergeActionType::MERGE_UPDATE && action->update_is_del_and_insert) {
+				append_count++;
+			}
 			planned_actions.push_back(PlanMergeIntoAction(context, op, planner, *action));
 		}
 		actions.emplace(entry.first, std::move(planned_actions));
 	}
 
-	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker);
+	bool parallel = append_count <= 1;
+
+	auto &result =
+	    planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker, parallel);
 	result.children.push_back(plan);
 	return result;
 }

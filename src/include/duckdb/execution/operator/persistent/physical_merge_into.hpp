@@ -38,7 +38,7 @@ public:
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
 	                  map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions, idx_t row_id_index,
-	                  optional_idx source_marker);
+	                  optional_idx source_marker, bool parallel);
 
 	//! List of all actions
 	vector<unique_ptr<MergeIntoOperator>> actions;
@@ -46,6 +46,7 @@ public:
 	map<MergeActionCondition, MergeActionRange> action_ranges;
 	idx_t row_id_index;
 	optional_idx source_marker;
+	bool parallel;
 
 public:
 	// Source interface
@@ -69,7 +70,7 @@ public:
 		return true;
 	}
 	bool ParallelSink() const override {
-		return true;
+		return parallel;
 	}
 
 private:

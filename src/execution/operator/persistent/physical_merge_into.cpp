@@ -5,9 +5,9 @@ namespace duckdb {
 
 PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                      map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions_p,
-                                     idx_t row_id_index, optional_idx source_marker)
+                                     idx_t row_id_index, optional_idx source_marker, bool parallel_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_INTO, std::move(types), 1),
-      row_id_index(row_id_index), source_marker(source_marker) {
+      row_id_index(row_id_index), source_marker(source_marker), parallel(parallel_p) {
 	for (auto &entry : actions_p) {
 		MergeActionRange range;
 		range.condition = entry.first;
@@ -69,6 +69,7 @@ public:
 			auto &action = op.actions[i];
 			auto &local_action_state = local_state.states[i];
 			DataChunk new_chunk;
+			bool use_new_chunk = false;
 			if (action->condition) {
 				auto &executor = *local_action_state.executor;
 				SelectionVector selected_sel(chunk.size());
@@ -86,6 +87,11 @@ public:
 				// for the next chunk - update the matches
 				current_count = current_count - match_count;
 				current_sel.Initialize(remaining_sel);
+				use_new_chunk = true;
+			} else if (current_count != chunk.size()) {
+				new_chunk.Initialize(context.client, chunk.GetTypes());
+				new_chunk.Slice(chunk, current_sel, current_count);
+				use_new_chunk = true;
 			}
 			if (!action->op) {
 				if (action->action_type == MergeActionType::MERGE_ERROR) {
@@ -100,7 +106,7 @@ public:
 				D_ASSERT(action->action_type == MergeActionType::MERGE_DO_NOTHING);
 				continue;
 			}
-			auto &input_chunk = action->condition ? new_chunk : chunk;
+			auto &input_chunk = use_new_chunk ? new_chunk : chunk;
 			auto &gstate = sink_states[i];
 			auto &lstate = *local_action_state.local_state;
 			OperatorSinkInput sink_input {*gstate, lstate, input.interrupt_state};
