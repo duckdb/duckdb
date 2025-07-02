@@ -10,6 +10,8 @@
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -69,6 +71,41 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 	}
 }
 
+static bool IsConstantOrNullFilter(TableFilter &table_filter) {
+	if (table_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		return false;
+	}
+	auto &expr_filter = table_filter.Cast<ExpressionFilter>();
+	if (expr_filter.expr->type != ExpressionType::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
+	return ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true));
+}
+
+static bool CanReplaceConstantOrNull(TableFilter &table_filter) {
+	if (!IsConstantOrNullFilter(table_filter)) {
+		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
+	}
+	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
+	auto &expr_filter = table_filter.Cast<ExpressionFilter>();
+	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
+	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
+		for (auto child = ++func.children.begin(); child != func.children.end(); child++) {
+			switch (child->get()->type) {
+			case ExpressionType::BOUND_REF:
+			case ExpressionType::VALUE_CONSTANT:
+				continue;
+			default:
+				// expression type could be a function like Coalesce
+				return false;
+			}
+		}
+	}
+	// all children of constant or null are bound refs to the table filter column
+	return true;
+}
+
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	if (get.function.cardinality) {
@@ -122,10 +159,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			// erase this condition
 			get.table_filters.filters.erase(table_filter_column);
 			break;
-		case FilterPropagateResult::FILTER_TRUE_OR_NULL:
+		case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
+			if (IsConstantOrNullFilter(*get.table_filters.filters[table_filter_column]) &&
+			    !CanReplaceConstantOrNull(*get.table_filters.filters[table_filter_column])) {
+				break;
+			}
 			// filter is true or null; we can replace this with a not null filter
 			get.table_filters.filters[table_filter_column] = make_uniq<IsNotNullFilter>();
 			break;
+		}
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 			// filter is always false; this entire filter should be replaced by an empty result block
