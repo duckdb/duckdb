@@ -122,8 +122,8 @@ void ComputeStringHeapSizesInternal(idx_t *const heap_sizes, const UnifiedVector
 	const auto &source_sel = *source_vector_data.sel;
 	const auto &source_validity = source_vector_data.validity;
 
+	// Fully branchless loop
 	const auto null_string_size = StringHeapSize(NullValue<string_t>());
-
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto append_idx = HAS_APPEND_SEL ? append_sel.get_index_unsafe(i) : i;
 		const auto source_idx = HAS_SOURCE_SEL ? source_sel.get_index_unsafe(append_idx) : append_idx;
@@ -725,16 +725,20 @@ static void TupleDataTemplatedScatterInternal(const Vector &, const TupleDataVec
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
+	const auto column_count = layout.ColumnCount();
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
+
+	const auto null_value = NullValue<T>();
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto append_idx = HAS_APPEND_SEL ? append_sel.get_index_unsafe(i) : i;
 		const auto source_idx = HAS_SOURCE_SEL ? source_sel.get_index_unsafe(append_idx) : append_idx;
+		const auto &target_location = target_locations[i];
 		if (ALL_VALID || validity.RowIsValidUnsafe(source_idx)) {
-			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+			TupleDataValueStore<T>(data[source_idx], target_location, offset_in_row, target_heap_locations[i]);
 		} else {
 			D_ASSERT(!layout.AllValid());
-			TupleDataValueStore<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
-			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
+			TupleDataValueStore<T>(null_value, target_location, offset_in_row, target_heap_locations[i]);
+			ValidityBytes(target_location, column_count).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
 	}
 }
