@@ -111,7 +111,24 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
 }
 
 static idx_t StringHeapSize(const string_t &val) {
-	return val.IsInlined() ? 0 : val.GetSize();
+	return !val.IsInlined() * val.GetSize();
+}
+
+template <bool ALL_VALID, bool HAS_APPEND_SEL, bool HAS_SOURCE_SEL>
+void ComputeStringHeapSizesInternal(idx_t *const heap_sizes, const UnifiedVectorFormat &source_vector_data,
+                                    const SelectionVector &append_sel, const idx_t append_count) {
+	const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
+	const auto &source_sel = *source_vector_data.sel;
+	const auto &source_validity = source_vector_data.validity;
+
+	const auto null_string_size = StringHeapSize(NullValue<string_t>());
+
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto append_idx = HAS_APPEND_SEL ? append_sel.get_index_unsafe(i) : i;
+		const auto source_idx = HAS_SOURCE_SEL ? source_sel.get_index_unsafe(append_idx) : append_idx;
+		const auto valid = ALL_VALID || source_validity.RowIsValidUnsafe(source_idx);
+		heap_sizes[i] += valid * StringHeapSize(source_data[source_idx]) + !valid * null_string_size;
+	}
 }
 
 void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
@@ -123,7 +140,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		return;
 	}
 
-	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	const auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
 	// Source
 	const auto &source_vector_data = source_format.unified;
@@ -133,26 +150,40 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	switch (type) {
 	case PhysicalType::VARCHAR: {
 		// Only non-inlined strings are stored in the heap
-		const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
 		if (source_validity.AllValid()) {
-			if (!append_sel.IsSet() && !source_sel.IsSet()) {
-				// Fast path
-				for (idx_t i = 0; i < append_count; i++) {
-					heap_sizes[i] += StringHeapSize(source_data[i]);
+			if (append_sel.IsSet()) {
+				if (source_sel.IsSet()) {
+					ComputeStringHeapSizesInternal<true, true, true>(heap_sizes, source_vector_data, append_sel,
+					                                                 append_count);
+				} else {
+					ComputeStringHeapSizesInternal<true, true, false>(heap_sizes, source_vector_data, append_sel,
+					                                                  append_count);
 				}
 			} else {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+				if (source_sel.IsSet()) {
+					ComputeStringHeapSizesInternal<true, false, true>(heap_sizes, source_vector_data, append_sel,
+					                                                  append_count);
+				} else {
+					ComputeStringHeapSizesInternal<true, false, false>(heap_sizes, source_vector_data, append_sel,
+					                                                   append_count);
 				}
 			}
 		} else {
-			for (idx_t i = 0; i < append_count; i++) {
-				const auto source_idx = source_sel.get_index(append_sel.get_index(i));
-				if (source_validity.RowIsValidUnsafe(source_idx)) {
-					heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+			if (append_sel.IsSet()) {
+				if (source_sel.IsSet()) {
+					ComputeStringHeapSizesInternal<false, true, true>(heap_sizes, source_vector_data, append_sel,
+					                                                  append_count);
 				} else {
-					heap_sizes[i] += StringHeapSize(NullValue<string_t>());
+					ComputeStringHeapSizesInternal<false, true, false>(heap_sizes, source_vector_data, append_sel,
+					                                                   append_count);
+				}
+			} else {
+				if (source_sel.IsSet()) {
+					ComputeStringHeapSizesInternal<false, false, true>(heap_sizes, source_vector_data, append_sel,
+					                                                   append_count);
+				} else {
+					ComputeStringHeapSizesInternal<false, false, false>(heap_sizes, source_vector_data, append_sel,
+					                                                    append_count);
 				}
 			}
 		}
