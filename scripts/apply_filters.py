@@ -5,7 +5,7 @@ import fnmatch
 import os 
 import subprocess
 
-ci = True if 'CI' in os.environ and os.environ('CI') == 'true' else False
+ci = True if 'CI' in os.environ and os.getenv('CI') == 'true' else False
 
 # load paths to ignore
 with open('.github/ci_filters.yaml', 'r') as f:
@@ -34,13 +34,6 @@ def get_changed_files_push():
         files = result.decode().splitlines()
     return files
 
-# returns False when there 
-def should_run_workflow(changed_files, paths_ignore):
-    for file in changed_files:
-        if not any(fnmatch.fnmatch(file, path) for path in paths_ignore):
-            return True
-    return False
-
 def get_changed_files():
     event_name = os.getenv("GITHUB_EVENT_NAME")
     if event_name == "pull_request":
@@ -50,6 +43,13 @@ def get_changed_files():
     else:
         print("Unknown event")
         return []
+
+# returns True to trigger runs when changed files not found in CI filters
+def should_run_workflow(changed_files, paths_ignore):
+    for file in changed_files:
+        if not any(fnmatch.fnmatch(file, path) for path in paths_ignore):
+            return True
+    return False
 
 result_config = {}
 changed_files = get_changed_files()
