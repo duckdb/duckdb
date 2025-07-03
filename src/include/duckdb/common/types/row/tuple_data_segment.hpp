@@ -153,14 +153,7 @@ public:
 
 	~TupleDataSegment();
 
-	//! Disable copy constructors
-	TupleDataSegment(const TupleDataSegment &other) = delete;
-	TupleDataSegment &operator=(const TupleDataSegment &) = delete;
-
-	//! Enable move constructors
-	TupleDataSegment(TupleDataSegment &&other) noexcept;
-	TupleDataSegment &operator=(TupleDataSegment &&) noexcept;
-
+public:
 	//! The number of chunks in this segment
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of this segment
@@ -174,9 +167,9 @@ public:
 	void VerifyEverythingPinned() const;
 
 public:
-	//! The allocator for this segment
+	//! The allocator and layout for this segment
 	shared_ptr<TupleDataAllocator> allocator;
-	reference<const TupleDataLayout> layout;
+	const TupleDataLayout &layout;
 	//! The chunks of this segment
 	unsafe_vector<TupleDataChunk> chunks;
 	//! The chunk parts of this segment

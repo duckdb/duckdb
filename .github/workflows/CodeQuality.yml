@@ -13,6 +13,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
@@ -20,9 +21,10 @@ on:
       - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
@@ -37,10 +39,18 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+
   format-check:
     name: Format Check
     runs-on: ubuntu-22.04
-
+    needs: check-draft
     env:
       CC: gcc-10
       CXX: g++-10

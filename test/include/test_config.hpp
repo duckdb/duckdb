@@ -39,9 +39,15 @@ public:
 	bool GetCheckpointOnShutdown();
 	bool GetTestMemoryLeaks();
 	bool GetSummarizeFailures();
+	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
-	string OnConnectCommand();
+	bool ShouldSkipTest(const string &test_name);
+	string OnInitCommand();
+	string OnLoadCommand();
+	string OnConnectionCommand();
+	vector<string> ExtensionToBeLoadedOnLoad();
+	vector<string> ErrorMessagesToBeSkipped();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
@@ -51,6 +57,7 @@ public:
 
 private:
 	case_insensitive_map_t<Value> options;
+	unordered_set<string> tests_to_be_skipped;
 
 private:
 	template <class T, class VAL_T = T>

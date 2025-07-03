@@ -155,7 +155,7 @@ idx_t CachingFileHandle::GetFileSize() {
 	return cached_file.FileSize(guard);
 }
 
-time_t CachingFileHandle::GetLastModifiedTime() {
+timestamp_t CachingFileHandle::GetLastModifiedTime() {
 	if (file_handle || validate) {
 		GetFileHandle();
 		return last_modified;

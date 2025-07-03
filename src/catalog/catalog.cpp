@@ -662,7 +662,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			break;
 		}
 		auto &catalog = database.get().GetCatalog();
-		auto current_schemas = catalog.GetAllSchemas(context);
+		auto current_schemas = catalog.GetSchemas(context);
 		for (auto &current_schema : current_schemas) {
 			if (unseen_schemas.size() >= max_schema_count) {
 				break;

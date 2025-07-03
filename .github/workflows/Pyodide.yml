@@ -59,6 +59,10 @@ jobs:
             pyodide-build: "0.27.2"
             node: "20"
             perform_tests: false # It's unclear why this fails in test setup, possibly missing dependencies, not investigated yet
+          - python: "3.13"
+            pyodide-build: "0.30.5"
+            node: "22"
+            perform_tests: true
 
     steps:
       - uses: actions/checkout@v4

@@ -43,25 +43,19 @@ def _pl_operation_to_sql(op: str) -> str:
         >>> _pl_operation_to_sql("Eq")
         '='
     """
-    match op:
-        case "Lt":
-            return "<"
-        case "LtEq":
-            return "<="
-        case "Gt":
-            return ">"
-        case "GtEq":
-            return ">="
-        case "Eq":
-            return "="
-        case "Modulus":
-            return "%"
-        case "And":
-            return "AND"
-        case "Or":
-            return "OR"
-        case _:
-            raise NotImplementedError(op)
+    try:
+        return {
+            "Lt": "<",
+            "LtEq": "<=",
+            "Gt": ">",
+            "GtEq": ">=",
+            "Eq": "=",
+            "Modulus": "%",
+            "And": "AND",
+            "Or": "OR",
+        }[op]
+    except KeyError:
+        raise NotImplementedError(op)
 
 
 def _pl_tree_to_sql(tree: dict) -> str:
@@ -88,11 +82,9 @@ def _pl_tree_to_sql(tree: dict) -> str:
     [node_type] = tree.keys()
     subtree = tree[node_type]
 
-    match node_type:
-
-        case "BinaryExpr":
-            # Binary expressions: left OP right
-            return (
+    if node_type == "BinaryExpr":
+        # Binary expressions: left OP right
+        return (
                 "(" +
                 " ".join((
                     _pl_tree_to_sql(subtree['left']),
@@ -100,98 +92,92 @@ def _pl_tree_to_sql(tree: dict) -> str:
                     _pl_tree_to_sql(subtree['right'])
                 )) +
                 ")"
-            )
+        )
+    if node_type == "Column":
+        # A reference to a column name
+        return subtree
 
-        case "Column":
-            # A reference to a column name
-            return subtree
+    if node_type in ("Literal", "Dyn"):
+        # Recursively process dynamic or literal values
+        return _pl_tree_to_sql(subtree)
 
-        case "Literal" | "Dyn":
-            # Recursively process dynamic or literal values
-            return _pl_tree_to_sql(subtree)
+    if node_type == "Int":
+        # Direct integer literals
+        return str(subtree)
 
-        case "Int":
-            # Direct integer literals
-            return str(subtree)
+    if node_type == "Function":
+        # Handle boolean functions like IsNull, IsNotNull
+        inputs = subtree["input"]
+        func_dict = subtree["function"]
 
-        case "Function":
-            # Handle boolean functions like IsNull, IsNotNull
-            inputs = subtree["input"]
-            func_dict = subtree["function"]
+        if "Boolean" in func_dict:
+            func = func_dict["Boolean"]
+            arg_sql = _pl_tree_to_sql(inputs[0])
 
-            if "Boolean" in func_dict:
-                func = func_dict["Boolean"]
-                arg_sql = _pl_tree_to_sql(inputs[0])
+            if func == "IsNull":
+                return f"({arg_sql} IS NULL)"
+            if func == "IsNotNull":
+                return f"({arg_sql} IS NOT NULL)"
+            raise NotImplementedError(f"Boolean function not supported: {func}")
 
-                match func:
-                    case "IsNull":
-                        return f"({arg_sql} IS NULL)"
-                    case "IsNotNull":
-                        return f"({arg_sql} IS NOT NULL)"
-                    case _:
-                        raise NotImplementedError(f"Boolean function not supported: {func}")
-            else:
-                raise NotImplementedError(f"Unsupported function type: {func_dict}")
+        raise NotImplementedError(f"Unsupported function type: {func_dict}")
 
-        case "Scalar":
-            # Handle scalar values with typed representations
-            dtype = subtree["dtype"]
-            value = subtree["value"]
+    if node_type == "Scalar":
+        # Handle scalar values with typed representations
+        dtype = str(subtree["dtype"])
+        value = subtree["value"]
 
-            # Decimal support
-            if str(dtype).startswith("{'Decimal'"):
-                decimal_value = value['Decimal']
-                decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
-                return str(decimal_value)
+        # Decimal support
+        if dtype.startswith("{'Decimal'"):
+            decimal_value = value['Decimal']
+            decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
+            return str(decimal_value)
 
-            # Datetime with microseconds since epoch
-            if str(dtype).startswith("{'Datetime'"):
-                micros = value['Datetime'][0]
-                dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
-                return f"'{str(dt_timestamp)}'::TIMESTAMP"
+        # Datetime with microseconds since epoch
+        if dtype.startswith("{'Datetime'"):
+            micros = value['Datetime'][0]
+            dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
+            return f"'{str(dt_timestamp)}'::TIMESTAMP"
 
-            # Match simple types
-            match dtype:
-                case "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64" | "Float32" | "Float64"|"Boolean":
-                    return str(value[str(dtype)])
-                
-                case "Time":
-                    # Convert nanoseconds to TIME
-                    nanoseconds = value["Time"]
-                    seconds = nanoseconds // 1_000_000_000
-                    microseconds = (nanoseconds % 1_000_000_000) // 1_000
-                    dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
-                    return f"'{str(dt_time)}'::TIME"
+        # Match simple types
+        if dtype in ("Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64", "Boolean"):
+            return str(value[dtype])
 
-                case "Date":
-                    # Convert days since Unix epoch to SQL DATE
-                    days_since_epoch = value["Date"]
-                    date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)
-                    return f"'{str(date)}'::DATE"
-                case "Binary":
-                    # Convert binary data to hex string for BLOB
-                    binary_data = bytes(value["Binary"])
-                    escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
-                    return f"'{escaped}'::BLOB"
+        if dtype == "Time":
+            # Convert nanoseconds to TIME
+            nanoseconds = value["Time"]
+            seconds = nanoseconds // 1_000_000_000
+            microseconds = (nanoseconds % 1_000_000_000) // 1_000
+            dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
+            return f"'{str(dt_time)}'::TIME"
 
-                case "String":
-                    return f"'{value['StringOwned']}'"
+        if dtype == "Date":
+            # Convert days since Unix epoch to SQL DATE
+            days_since_epoch = value["Date"]
+            date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)
+            return f"'{str(date)}'::DATE"
+        if dtype == "Binary":
+            # Convert binary data to hex string for BLOB
+            binary_data = bytes(value["Binary"])
+            escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
+            return f"'{escaped}'::BLOB"
 
-                case _:
-                    raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
+        if dtype == "String":
+            return f"'{value['StringOwned']}'"
 
-        case _:
-            raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
+        raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
+
+    raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
     """
     A polars IO plugin for DuckDB.
     """
     def source_generator(
-        with_columns: list[str] | None,
-        predicate: pl.Expr | None,
-        n_rows: int | None,
-        batch_size: int | None,
+        with_columns: Optional[list[str]],
+        predicate: Optional[pl.Expr],
+        n_rows: Optional[int],
+        batch_size: Optional[int],
     ) -> Iterator[pl.DataFrame]:
         duck_predicate = None
         relation_final = relation

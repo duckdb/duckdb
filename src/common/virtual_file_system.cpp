@@ -73,7 +73,7 @@ int64_t VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_by
 int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 	return handle.file_system.GetFileSize(handle);
 }
-time_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
 string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
