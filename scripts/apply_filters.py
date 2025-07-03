@@ -23,10 +23,10 @@ def get_changed_files_pr():
     return files
 
 def get_changed_files_push():
-    previous_head = "HEAD^1"
-    current_head = "HEAD"
-    before = subprocess.run(['git', 'rev-parse', previous_head], text=True).strip()
-    after = subprocess.run(['git', 'rev-parse', current_head_head], text=True).strip()
+    previous_head = 'HEAD^1'
+    current_head = 'HEAD'
+    before = subprocess.check_output(['git', 'rev-parse', previous_head], text=True).strip()
+    after = subprocess.check_output(['git', 'rev-parse', current_head], text=True).strip()
 
     files = []
     git_ref = os.environ['GITHUB_REF']
