@@ -20,10 +20,9 @@ PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<Logical
 		range.end = actions.size();
 		ranges.emplace(entry.first, range);
 	}
-	match_actions = {MergeActionCondition::WHEN_MATCHED,
-					MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET,
-					MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE};
-	for(idx_t i = 0; i < match_actions.size(); i++) {
+	match_actions = {MergeActionCondition::WHEN_MATCHED, MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET,
+	                 MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE};
+	for (idx_t i = 0; i < match_actions.size(); i++) {
 		auto entry = ranges.find(match_actions[i]);
 		MergeActionRange range;
 		if (entry != ranges.end()) {
@@ -38,7 +37,8 @@ PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<Logical
 // Sink
 //===--------------------------------------------------------------------===//
 struct MergeSinkState {
-	MergeSinkState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {}
+	MergeSinkState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
+	}
 
 	bool computed_matches = false;
 	bool match_initialized = false;
@@ -93,7 +93,7 @@ public:
 
 			states.push_back(std::move(state));
 		}
-		for(idx_t i = 0; i < 3; i++) {
+		for (idx_t i = 0; i < 3; i++) {
 			match_results.emplace_back(context.client, op.children[0].get().types);
 		}
 	}
@@ -118,7 +118,9 @@ public:
 	vector<unique_ptr<GlobalSinkState>> sink_states;
 	atomic<idx_t> merged_count;
 
-	optional_ptr<DataChunk> ComputeActionInput(ClientContext &context, MergeIntoOperator &action, DataChunk &chunk, MergeIntoLocalState &local_state, MergeLocalExecutionState &local_action_state) {
+	optional_ptr<DataChunk> ComputeActionInput(ClientContext &context, MergeIntoOperator &action, DataChunk &chunk,
+	                                           MergeIntoLocalState &local_state,
+	                                           MergeLocalExecutionState &local_action_state) {
 		auto &current_count = local_state.sink_state.current_count;
 		auto &current_sel = local_state.sink_state.current_sel;
 		auto &sliced_chunk = local_state.sink_state.sliced_chunk;
@@ -138,7 +140,7 @@ public:
 			// if we have a condition we need to evaluate it
 			auto &executor = *local_action_state.condition_executor;
 			idx_t match_count =
-				executor.SelectExpression(chunk, selected_sel, remaining_sel, current_sel, current_count);
+			    executor.SelectExpression(chunk, selected_sel, remaining_sel, current_sel, current_count);
 			if (match_count == 0) {
 				// no matches - move to next action
 				return nullptr;
@@ -172,7 +174,7 @@ public:
 
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, MergeIntoLocalState &local_state,
 	                    OperatorSinkInput &input, MergeActionRange range, idx_t &index_in_match) {
-	    auto &input_chunk = local_state.sink_state.input_chunk;
+		auto &input_chunk = local_state.sink_state.input_chunk;
 		for (; range.start + index_in_match < range.end; index_in_match++) {
 			idx_t i = range.start + index_in_match;
 			auto &action = op.actions[i];
@@ -259,7 +261,7 @@ unique_ptr<LocalSinkState> PhysicalMergeInto::GetLocalSinkState(ExecutionContext
 }
 
 idx_t PhysicalMergeInto::GetIndex(MergeActionCondition condition) const {
-	for(idx_t i = 0; i < match_actions.size(); ++i) {
+	for (idx_t i = 0; i < match_actions.size(); ++i) {
 		if (match_actions[i] == condition) {
 			return i;
 		}
@@ -312,7 +314,7 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	}
 
 	// reset and slice chunks
-	for(auto &match : match_results) {
+	for (auto &match : match_results) {
 		if (match.count == 0) {
 			continue;
 		}
@@ -355,7 +357,8 @@ SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chu
 			match_initialized = true;
 		}
 		auto match_range_index = GetIndex(match_actions[match_idx]);
-		auto result = global_state.Sink(context, *match_result.chunk, local_state, input, action_ranges[match_range_index], index_in_match);
+		auto result = global_state.Sink(context, *match_result.chunk, local_state, input,
+		                                action_ranges[match_range_index], index_in_match);
 		if (result == SinkResultType::BLOCKED) {
 			return SinkResultType::BLOCKED;
 		}

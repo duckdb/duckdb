@@ -46,7 +46,6 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 		auto cond = proj_binder.Bind(action.condition);
 		result->condition = std::move(cond);
 	}
-	result->bound_constraints = BindConstraints(table);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
 		if (!action.update_info) {
@@ -79,7 +78,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 		update.columns = std::move(result->columns);
 		update.expressions = std::move(result->expressions);
 		update.bound_defaults = std::move(merge_into.bound_defaults);
-		update.bound_constraints = std::move(result->bound_constraints);
+		update.bound_constraints = std::move(merge_into.bound_constraints);
 		update.update_is_del_and_insert = false;
 
 		// call BindUpdateConstraints
@@ -87,10 +86,10 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 
 		// move all moved values back
 		merge_into.bound_defaults = std::move(update.bound_defaults);
+		merge_into.bound_constraints = std::move(update.bound_constraints);
 		expressions = std::move(proj.expressions);
 		result->columns = std::move(update.columns);
 		result->expressions = std::move(update.expressions);
-		result->bound_constraints = std::move(update.bound_constraints);
 		result->update_is_del_and_insert = update.update_is_del_and_insert;
 		break;
 	}
@@ -234,6 +233,8 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
 	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name, schema_name);
+
+	merge_into->bound_constraints = BindConstraints(table);
 
 	// bind the merge actions
 	auto proj_index = GenerateTableIndex();

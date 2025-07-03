@@ -15,6 +15,11 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 
 	result->action_type = action.action_type;
 	result->condition = std::move(action.condition);
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	for (auto &constraint : op.bound_constraints) {
+		bound_constraints.push_back(constraint->Copy());
+	}
+
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
 		vector<unique_ptr<Expression>> defaults;
@@ -23,14 +28,14 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		}
 		result->op = planner.Make<PhysicalUpdate>(op.types, op.table, op.table.GetStorage(), std::move(action.columns),
 		                                          std::move(action.expressions), std::move(defaults),
-		                                          std::move(action.bound_constraints), 1ULL, false);
+		                                          std::move(bound_constraints), 1ULL, false);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
 		break;
 	}
 	case MergeActionType::MERGE_DELETE: {
 		result->op = planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(),
-		                                          std::move(action.bound_constraints), op.row_id_start, 1ULL, false);
+		                                          std::move(bound_constraints), op.row_id_start, 1ULL, false);
 		break;
 	}
 	case MergeActionType::MERGE_INSERT: {
@@ -41,7 +46,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		vector<column_t> columns_to_fetch;
 
 		result->op = planner.Make<PhysicalInsert>(
-		    op.types, op.table, std::move(action.bound_constraints), std::move(set_expressions), std::move(set_columns),
+		    op.types, op.table, std::move(bound_constraints), std::move(set_expressions), std::move(set_columns),
 		    std::move(set_types), 1ULL, false, true, OnConflictAction::THROW, nullptr, nullptr,
 		    std::move(on_conflict_filter), std::move(columns_to_fetch), false);
 		// transform expressions if required

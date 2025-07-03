@@ -1,4 +1,6 @@
 #include "duckdb/planner/operator/logical_merge_into.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
@@ -6,12 +8,12 @@ LogicalMergeInto::LogicalMergeInto(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_MERGE_INTO), table(table) {
 }
 
-void LogicalMergeInto::Serialize(Serializer &serializer) const {
-	throw NotImplementedException("FIXME: DeSerialize");
-}
-
-unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserializer) {
-	throw NotImplementedException("FIXME: DeSerialize");
+LogicalMergeInto::LogicalMergeInto(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_MERGE_INTO),
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
+                                                 table_info->Cast<CreateTableInfo>().table)) {
+	auto binder = Binder::CreateBinder(context);
+	bound_constraints = binder->BindConstraints(table);
 }
 
 idx_t LogicalMergeInto::EstimateCardinality(ClientContext &context) {

@@ -29,10 +29,11 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	//! Column index map (for INSERT)
 	physical_index_vector_t<idx_t> column_index_map;
-	//! Bound constraints
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Whether or not an UPDATE is a DELETE + INSERT
 	bool update_is_del_and_insert = false;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BoundMergeIntoAction> Deserialize(Deserializer &deserializer);
 };
 
 class LogicalMergeInto : public LogicalOperator {
@@ -49,6 +50,8 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 	idx_t row_id_start;
 	optional_idx source_marker;
+	//! Bound constraints
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 
 	map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>> actions;
 
@@ -61,6 +64,9 @@ public:
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void ResolveTypes() override;
+
+private:
+	LogicalMergeInto(ClientContext &context, const unique_ptr<CreateInfo> &table_info);
 };
 
 } // namespace duckdb
