@@ -28,3 +28,12 @@ SELECT total_blocks FROM pragma_database_size();
 
 statement ok
 CHECKPOINT
+
+# ALMOST nop update
+statement ok
+UPDATE integers SET i=CASE WHEN i=9999997 THEN 42 ELSE i END
+
+query I
+select sum(i) from integers
+----
+49999995000045
