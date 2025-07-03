@@ -36,7 +36,7 @@ jobs:
         env:
           GITHUB_OUTPUT: ${{ github.output }}
         run: |
-            python apply_filters.py 
+            python scripts/apply_filters.py
     
   code-quality:
     uses: ./.github/workflows/CodeQuality.yml
