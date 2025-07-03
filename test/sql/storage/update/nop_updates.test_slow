@@ -1,4 +1,4 @@
-# name: test/sql/storage/update/update_same_value.test_slow
+# name: test/sql/storage/update/nop_updates.test_slow
 # description: Test nop updates
 # group: [update]
 

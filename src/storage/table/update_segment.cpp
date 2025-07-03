@@ -1290,6 +1290,18 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	auto first_id = ids[sel.get_index(0)];
 	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
+
+	if (!root || vector_index >= root->info.size() || !root->info[vector_index].IsSet()) {
+		// get a list of effective updates - i.e. updates that actually change rows
+		// if updates have the same value as the base row we can skip them
+		// we only do that if we have no updates for this vector
+		// we could do it otherwise - but that would require merging updates in order to find the current values
+		count = get_effective_updates(update_format, ids, count, sel, base_data, vector_offset);
+		if (count == 0) {
+			return;
+		}
+	}
+
 	InitializeUpdateInfo(vector_index);
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
@@ -1344,12 +1356,6 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		base_info.Verify();
 		node->Verify();
 	} else {
-		// get a list of effective updates - i.e. updates that actually change rows
-		// if updates have the same value as the base row we can skip them
-		count = get_effective_updates(update_format, ids, count, sel, base_data, vector_offset);
-		if (count == 0) {
-			return;
-		}
 
 		// there is no version info yet: create the top level update info and fill it with the updates
 		// allocate space for the UpdateInfo in the allocator
