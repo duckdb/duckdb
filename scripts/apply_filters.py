@@ -43,7 +43,7 @@ def should_run_workflow(changed_files, paths_ignore):
     return False
 
 def get_changed_files():
-    event_name = os.getenv["GITHUB_EVENT_NAME"]
+    event_name = os.getenv("GITHUB_EVENT_NAME")
     if event_name == "pull_request":
         return get_changed_files_pr()
     elif event_name == "push":
