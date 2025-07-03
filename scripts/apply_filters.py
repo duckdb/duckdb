@@ -5,6 +5,8 @@ import fnmatch
 import os 
 import subprocess
 
+ci = True if 'CI' in os.environ and os.environ('CI') == 'true' else False
+
 # load paths to ignore
 with open('.github/ci_filters.yaml', 'r') as f:
     config = yaml.safe_load(f)
@@ -14,23 +16,20 @@ def get_paths_ignore_for(workflow):
 
 # check updated files in PR
 def get_changed_files_pr():
-    # pr_number = os.environ["PR_NUMBER"] if "PR_NUMBER" in os.environ else None
-    gh_pr_diff = ['gh', 'pr', 'diff', '18132', '--name-only']
-    # gh_pr_diff = ['gh', 'pr', 'diff', str(pr_number), '--name-only']
+    pr_number = os.environ["PR_NUMBER"] if "PR_NUMBER" in os.environ else None
+    gh_pr_diff = ['gh', 'pr', 'diff', str(pr_number), '--name-only'] if ci else ['gh', 'pr', 'diff', '18132', '--name-only']
     result = subprocess.run(gh_pr_diff, text=True, check=True, capture_output=True)
     files = result.stdout.splitlines()
     return files
 
 def get_changed_files_push():
-    # before = os.environ.get('GITHUB_EVENT_BEFORE')
-    # after = os.environ.get('GITHUB_SHA')
-    before = 'fb97862'
-    after = 'ad80307'
+    before = os.environ.get('GITHUB_EVENT_BEFORE') if ci else 'fb97862'
+    after = os.environ.get('GITHUB_SHA') if ci else 'ad80307'
 
     files = []
     if before and after:
-        # subprocess.run(['git', 'fetch', '--no-tags', '--depth=100', 'origin', os.environ['GITHUB_REF']], check=True)
-        subprocess.run(['git', 'fetch', '--no-tags', '--depth=100', 'origin', 'refs/heads/main'], check=True)
+        command = ['git', 'fetch', '--no-tags', '--depth=100', 'origin', os.environ['GITHUB_REF']] if ci else ['git', 'fetch', '--no-tags', '--depth=100', 'origin', 'refs/heads/main']
+        subprocess.run(command, check=True)
         result = subprocess.check_output(['git', 'diff', '--name-only', before, after])
         files = result.decode().splitlines()
     return files
@@ -59,9 +58,8 @@ for workflow, filters in config['workflows'].items():
     result = should_run_workflow(changed_files, filters.get('paths-ignore', []))
     result_config[workflow] = result
 
-print(changed_files)
-print(filters.get('paths-ignore', []))
-print(result_config)
+print("Files changed:", changed_files)
+print("Should run:", result_config)
 
 # write result config to the GH Output
 with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
