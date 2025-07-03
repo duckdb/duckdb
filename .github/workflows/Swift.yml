@@ -2,6 +2,7 @@ name: Swift
 on:
   workflow_dispatch:
   repository_dispatch:
+  workflow_call:
   merge_group:
 
 concurrency:

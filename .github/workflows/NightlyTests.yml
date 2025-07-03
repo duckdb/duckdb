@@ -2,21 +2,7 @@ name: NightlyTests
 on:
   workflow_dispatch:
   repository_dispatch:
-  # push:
-  #   branches-ignore:
-  #     - 'main'
-  #     - 'feature'
-  #     - 'v*.*-*'
-  #   paths-ignore:
-  #     - '**'
-  #     - '!.github/workflows/NightlyTests.yml'
-  #     - '!.github/patches/duckdb-wasm/**'
-  # pull_request:
-  #   types: [opened, reopened, ready_for_review, converted_to_draft]
-  #   paths-ignore:
-  #     - '**'
-  #     - '!.github/workflows/NightlyTests.yml'
-  #     - '!.github/patches/duckdb-wasm/**'
+  workflow_call:
 
 concurrency:
   group: nightlytests-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}

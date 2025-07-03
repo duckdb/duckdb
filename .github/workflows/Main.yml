@@ -2,30 +2,8 @@ name: Main
 on:
   workflow_dispatch:
   repository_dispatch:
-  # push:
-  #   branches-ignore:
-  #     - 'main'
-  #     - 'feature'
-  #     - 'v*.*-*'
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'tools/**'
-  #     - '!tools/shell/**'
-  #     - '.github/patches/duckdb-wasm/**'
-  #     - '.github/workflows/**'
-  #     - '!.github/workflows/Main.yml'
-  #     - '.github/config/out_of_tree_extensions.cmake'
+  workflow_call:
   merge_group:
-  # pull_request:
-  #   types: [opened, reopened, ready_for_review, converted_to_draft]
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'tools/**'
-  #     - '!tools/shell/**'
-  #     - '.github/patches/duckdb-wasm/**'
-  #     - '.github/workflows/**'
-  #     - '!.github/workflows/Main.yml'
-  #     - '.github/config/out_of_tree_extensions.cmake'
 
 
 concurrency:
