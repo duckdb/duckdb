@@ -595,6 +595,8 @@ jobs:
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
+    # disable in NightlyTests triggered by workflow_dispatch
+    if: github.event_name != 'workflow_dispatch'
     needs: check-draft
     runs-on: ubuntu-22.04
     steps:
