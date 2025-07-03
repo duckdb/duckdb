@@ -43,9 +43,41 @@ jobs:
   code-quality:
     uses: ./.github/workflows/CodeQuality.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).code-quality == true }}
-
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).CodeQuality == true }}
+  ci-fuzz:
+    uses: ./.github/workflows/cifuzz.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).CIFuzz == true }}
   julia:
     uses: ./.github/workflows/Julia.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).julia == true }}
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Julia == true }}
+  linux-release:
+    uses: ./.github/workflows/LinuxRelease.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).LinuxRelease == true }}
+  main:
+    uses: ./.github/workflows/Main.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Main == true }}
+  osx:
+    uses: ./.github/workflows/OSX.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).OSX == true }}
+  python:
+    uses: ./.github/workflows/Python.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Python == true }}
+  regression:
+    uses: ./.github/workflows/Regression.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Regression == true }}
+  swift:
+    uses: ./.github/workflows/Swift.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Swift == true }}
+  windows:
+    uses: ./.github/workflows/Windows.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Windows == true }}
+  
