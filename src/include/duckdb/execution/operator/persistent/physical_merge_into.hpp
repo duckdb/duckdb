@@ -42,8 +42,10 @@ public:
 
 	//! List of all actions
 	vector<unique_ptr<MergeIntoOperator>> actions;
+	//! Sequence of match actions
+	vector<MergeActionCondition> match_actions;
 	//! List of all actions that apply to a given action condition
-	map<MergeActionCondition, MergeActionRange> action_ranges;
+	vector<MergeActionRange> action_ranges;
 	idx_t row_id_index;
 	optional_idx source_marker;
 	bool parallel;
@@ -74,7 +76,7 @@ public:
 	}
 
 private:
-	MergeActionRange GetRange(MergeActionCondition condition) const;
+	idx_t GetIndex(MergeActionCondition condition) const;
 };
 
 } // namespace duckdb
