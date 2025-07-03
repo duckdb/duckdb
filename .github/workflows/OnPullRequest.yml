@@ -28,7 +28,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          path: 'duckdb/duckdb'
+          path: 'hmeriann/duckdb'
           ref: 'rearrange-ci'
           fetch-depth: 0
       
