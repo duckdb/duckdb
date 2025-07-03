@@ -8,15 +8,13 @@ workflows:
       - '!.github/workflows/lcov_exclude'
       - '!.github/workflows/CodeQuality.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-  Main:
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+  # CIFuzz:
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'tools/**'
+  #     - '.github/patches/duckdb-wasm/**'
+  #     - '.github/workflows/**'
+  #     - '!.github/workflows/cifuzz.yml'
   Julia:
     paths-ignore:
       - '**.md'
@@ -28,15 +26,8 @@ workflows:
       - '.github/workflows/**'
       - '!.github/workflows/Julia.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-  CIFuzz:
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/cifuzz.yml'
   LinuxRelease:
-      paths-ignore:
+    paths-ignore:
       - '**.md'
       - 'test/configs/**'
       - 'tools/**'
@@ -44,6 +35,35 @@ workflows:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+  Main:
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  # OSX:
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'test/configs/**'
+  #     - 'tools/**'
+  #     - '!tools/shell/**'
+  #     - '.github/patches/duckdb-wasm/**'
+  #     - '.github/workflows/**'
+  #     - '!.github/workflows/OSX.yml'
+  Python:
+    paths-ignore:
+    - '**.md'
+    - 'examples/**'
+    - 'test/**'
+    - 'tools/**'
+    - '!tools/pythonpkg/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Python.yml'
+    - '.github/config/out_of_tree_extensions.cmake'
   Regression:
     paths-ignore:
       - '**.md'
@@ -54,43 +74,23 @@ workflows:
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-  OSX:
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/OSX.yml'
-  Python:
-      paths-ignore:
-      - '**.md'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/**'
-      - '!tools/pythonpkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Python.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
-  Windows:
-      paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Windows.yml'
   Swift:
-      paths-ignore:
-      - '**.md'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/**'
-      - '!tools/swift/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Swift.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+    paths-ignore:
+    - '**.md'
+    - 'examples/**'
+    - 'test/**'
+    - 'tools/**'
+    - '!tools/swift/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Swift.yml'
+    - '.github/config/out_of_tree_extensions.cmake'
+  Windows:
+    paths-ignore:
+    - '**.md'
+    - 'test/configs/**'
+    - 'tools/**'
+    - '!tools/shell/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Windows.yml'

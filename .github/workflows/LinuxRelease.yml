@@ -20,7 +20,15 @@ on:
         description: 'Pass "true" to skip tests'
         type: string
   merge_group:
-
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
 
 concurrency:
   group: linuxrelease-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}

@@ -20,6 +20,15 @@ on:
         type: string
       run_all:
         type: string
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/OSX.yml'
 
 
 concurrency:

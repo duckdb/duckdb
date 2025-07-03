@@ -4,7 +4,17 @@ on:
   repository_dispatch:
   workflow_call:
   merge_group:
-
+  push:
+    paths-ignore:
+    - '**.md'
+    - 'examples/**'
+    - 'test/**'
+    - 'tools/**'
+    - '!tools/swift/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Swift.yml'
+    - '.github/config/out_of_tree_extensions.cmake'
 concurrency:
   group: swift-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true

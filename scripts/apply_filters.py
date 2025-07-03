@@ -44,8 +44,8 @@ def get_changed_files():
     print("Event name: ", event_name)
     if event_name == "pull_request":
         return get_changed_files_pr()
-    elif event_name == "push":
-        return get_changed_files_push()
+    # elif event_name == "push":
+    #     return get_changed_files_push()
     else:
         print("Unknown event: Returning empty list.\nDon not trigger workflow runs.")
         return []

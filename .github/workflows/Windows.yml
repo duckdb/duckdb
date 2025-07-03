@@ -21,6 +21,15 @@ on:
       run_all:
         type: string
   merge_group:
+  push:
+    paths-ignore:
+    - '**.md'
+    - 'test/configs/**'
+    - 'tools/**'
+    - '!tools/shell/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Windows.yml'
 
 
 concurrency:
