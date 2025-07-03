@@ -560,6 +560,8 @@ typedef struct {
 	duckdb_base_expression (*duckdb_expression_get_base_expression)(duckdb_expression expr);
 	duckdb_logical_type (*duckdb_expression_get_return_type)(duckdb_expression expr);
 	duckdb_value (*duckdb_constant_expression_get_value)(duckdb_expression expr);
+	idx_t (*duckdb_bind_get_argument_count)(duckdb_bind_info info);
+	duckdb_expression (*duckdb_bind_get_argument)(duckdb_bind_info info, idx_t index);
 #endif
 
 // New functions around the client context

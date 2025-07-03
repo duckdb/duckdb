@@ -101,6 +101,41 @@
         },
         "return_value": "The constant value. Must be destroyed with `duckdb_destroy_value`."
       }
+    },
+    {
+      "name": "duckdb_bind_get_argument_count",
+      "return_type": "idx_t",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": "Returns the number of input arguments of the scalar function.\n\n",
+      "param_comments": {
+        "info": "The bind info."
+      },
+      "return_value": "The number of input arguments."
+    },
+    {
+      "name": "duckdb_bind_get_argument",
+      "return_type": "duckdb_expression",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "idx_t",
+          "name": "index"
+        }
+      ],
+      "comment": "Returns the input argument at index of the scalar function.\n\n",
+      "param_comments": {
+        "info": "The bind info.",
+        "index": "The argument index."
+      },
+      "return_value": "The input argument at index. Must be destroyed with `duckdb_destroy_expression`."
     }
   ]
 }
