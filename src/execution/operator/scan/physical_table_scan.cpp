@@ -82,8 +82,6 @@ public:
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
-	//! Where to continue the ordinality sequence in between chunks
-	idx_t ordinality_idx = 1;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,

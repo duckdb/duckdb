@@ -53,8 +53,6 @@ public:
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Virtual columns
 	virtual_column_map_t virtual_columns;
-	//! Information for WITH ORDINALITY
-	OrdinalityData ordinality_data;
 
 public:
 	string GetName() const override;
