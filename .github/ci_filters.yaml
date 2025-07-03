@@ -1,0 +1,30 @@
+workflows:
+  CodeQuality:
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/lcov_exclude'
+      - '!.github/workflows/CodeQuality.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  Main:
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  Julia:
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/juliapkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Julia.yml'
+      - '.github/config/out_of_tree_extensions.cmake'

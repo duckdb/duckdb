@@ -1,0 +1,47 @@
+name: OnPullRequest
+on:
+  push:
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft]
+      
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    outputs:
+        should_run: ${{ steps.ci-filters.outputs.should_run }}
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+
+      - uses: actions/checkout@v4
+        with:
+          path: 'duckdb/duckdb'
+          fetch-depth: 0
+      
+      - id: ci-filters
+        run: |
+            echo "should_run=$(python apply_filters.py)" >> $GITHUB_OUTPUT
+        
+    
+  code-quality:
+    uses: ./.github/workflows/CodeQuality.yml
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.should_run.code-quality }}
+
+  julia:
+    uses: ./.github/workflows/Julia.yml
+    needs: check-draft
+    if: ${{ needs.check-draft.outputs.should_run.julia }}
