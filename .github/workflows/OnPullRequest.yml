@@ -47,7 +47,7 @@ jobs:
   ci-fuzz:
     uses: ./.github/workflows/cifuzz.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).CIFuzz == true || github.event_name != 'pull_request' }}
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).CIFuzz == true && github.event_name != 'pull_request' }}
   julia:
     uses: ./.github/workflows/Julia.yml
     needs: check-draft
@@ -63,7 +63,7 @@ jobs:
   osx:
     uses: ./.github/workflows/OSX.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).OSX == true || github.event_name != 'pull_request' }}
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).OSX == true && github.event_name != 'pull_request' }}
   python:
     uses: ./.github/workflows/Python.yml
     needs: check-draft
