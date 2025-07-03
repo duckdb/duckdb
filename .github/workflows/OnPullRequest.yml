@@ -1,4 +1,4 @@
-name: OnPullRequest
+name: OnPushOnPullRequest
 on:
   push:
     branches-ignore:
