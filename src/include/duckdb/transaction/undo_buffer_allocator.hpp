@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class BufferManager;
