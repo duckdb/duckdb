@@ -75,7 +75,7 @@ data['vcpkg-configuration']['registries'] = [
         "kind": "git",
         "repository": "https://github.com/duckdb/vcpkg-duckdb-ports",
         "baseline": REGISTRY_BASELINE,
-        "packages": ['avro-c', 'vcpkg-cmake'],
+        "packages": ['vcpkg-cmake'],
     }
 ]
 
