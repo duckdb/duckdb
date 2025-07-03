@@ -4945,6 +4945,73 @@ Destroys the cast function object.
 */
 DUCKDB_C_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
 
+//===--------------------------------------------------------------------===//
+// Expression Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Destroys the expression and de-allocates its memory.
+
+* @param expr A pointer to the expression.
+*/
+DUCKDB_C_API void duckdb_destroy_expression(duckdb_expression *expr);
+
+/*!
+Destroys the base expression and de-allocates its memory.
+
+* @param expr A pointer to the base expression.
+*/
+DUCKDB_C_API void duckdb_destroy_base_expression(duckdb_base_expression *expr);
+
+/*!
+Returns the expression class of the base expression.
+
+* @param expr The base expression.
+* @return The expression class of the base expression.
+*/
+DUCKDB_C_API duckdb_expression_class duckdb_base_expression_get_class(duckdb_base_expression expr);
+
+/*!
+Returns the base expression of an expression.
+
+* @param expr The expression.
+* @return The base expression. Must be destroyed with `duckdb_destroy_base_expression.
+*/
+DUCKDB_C_API duckdb_base_expression duckdb_expression_get_base_expression(duckdb_expression expr);
+
+/*!
+Returns the return type of an expression.
+
+* @param expr The expression.
+* @return The return type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_C_API duckdb_logical_type duckdb_expression_get_return_type(duckdb_expression expr);
+
+/*!
+Returns the value of a constant expression.
+
+* @param expr The expression. The expression class of the expression must be DUCKDB_EXPR_CLASS_CONSTANT.
+* @return The constant value. Must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_C_API duckdb_value duckdb_constant_expression_get_value(duckdb_expression expr);
+
+/*!
+Returns the number of input arguments of the scalar function.
+
+* @param info The bind info.
+* @return The number of input arguments.
+*/
+DUCKDB_C_API idx_t duckdb_bind_get_argument_count(duckdb_bind_info info);
+
+/*!
+Returns the input argument at index of the scalar function.
+
+* @param info The bind info.
+* @param index The argument index.
+* @return The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
+*/
+DUCKDB_C_API duckdb_expression duckdb_bind_get_argument(duckdb_bind_info info, idx_t index);
+
 #endif
 
 #ifdef __cplusplus

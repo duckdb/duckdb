@@ -1039,6 +1039,16 @@ typedef struct {
 #define duckdb_error_data_message    duckdb_ext_api.duckdb_error_data_message
 #define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
 
+// Version unstable_new_expression_functions
+#define duckdb_destroy_expression             duckdb_ext_api.duckdb_destroy_expression
+#define duckdb_destroy_base_expression        duckdb_ext_api.duckdb_destroy_base_expression
+#define duckdb_base_expression_get_class      duckdb_ext_api.duckdb_base_expression_get_class
+#define duckdb_expression_get_base_expression duckdb_ext_api.duckdb_expression_get_base_expression
+#define duckdb_expression_get_return_type     duckdb_ext_api.duckdb_expression_get_return_type
+#define duckdb_constant_expression_get_value  duckdb_ext_api.duckdb_constant_expression_get_value
+#define duckdb_bind_get_argument_count        duckdb_ext_api.duckdb_bind_get_argument_count
+#define duckdb_bind_get_argument              duckdb_ext_api.duckdb_bind_get_argument
+
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
 #define duckdb_client_context_get_connection_id duckdb_ext_api.duckdb_client_context_get_connection_id
