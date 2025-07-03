@@ -36,6 +36,7 @@ def get_changed_files_push():
 
 def get_changed_files():
     event_name = os.getenv("GITHUB_EVENT_NAME")
+    print("Event name: ", event_name)
     if event_name == "pull_request":
         return get_changed_files_pr()
     elif event_name == "push":
