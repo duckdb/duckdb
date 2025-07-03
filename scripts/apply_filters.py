@@ -1,9 +1,9 @@
 import github
-import yaml
-import json
-import fnmatch
+import json # to write into a GITHUB_OUTPUT 
 import os 
+import pathspec # for git wildmatch
 import subprocess
+import yaml # because it much more readable than json
 
 ci = True if 'CI' in os.environ and os.getenv('CI') == 'true' else False
 
@@ -22,6 +22,7 @@ def get_changed_files_pr():
     files = result.stdout.splitlines()
     return files
 
+# on 'push' event we want get diff of previous(before) and current(after) commits in current branch
 def get_changed_files_push():
     previous_head = 'HEAD^1'
     current_head = 'HEAD'
@@ -46,21 +47,42 @@ def get_changed_files():
     elif event_name == "push":
         return get_changed_files_push()
     else:
-        print("Unknown event")
+        print("Unknown event: Returning empty list.\nDon not trigger workflow runs.")
         return []
 
-# returns True to trigger runs when changed files not found in CI filters
-def should_run_workflow(changed_files, paths_ignore):
-    for file in changed_files:
-        if not any(fnmatch.fnmatch(file, path) for path in paths_ignore):
+'''
+filters beginning with '!' must not being ignored = include patterns
+filters NOT beginning with '!' are ignored = exclude patterns 
+'''
+def should_run_workflow(changed_files, filters):
+    patterns = filters.get('paths-ignore', [])
+
+    include_patterns = [p[1:] for p in patterns if p.startswith('!')]
+    exclude_patterns = [p for p in patterns if not p.startswith('!')]
+    # preparing lists of exclude and include paths
+    exclude_spec = pathspec.PathSpec.from_lines('gitwildmatch', exclude_patterns)
+    include_spec = pathspec.PathSpec.from_lines('gitwildmatch', include_patterns)
+    # run file_path through the lists of excluded paths and included paths
+    # if at least one file found being NOT excluded or included, immediately return True to run the workflow
+    for file_path in changed_files:
+        print("FILE PATH:", file_path)
+        if not exclude_spec.match_file(file_path):
             return True
+        if include_spec.match_file(file_path):
+            return True
+
+    # if didn't hit to any of filters => don't run the workflow
     return False
+
+
 
 result_config = {}
 changed_files = get_changed_files()
-# print("🦑", changed_files)
 for workflow, filters in config['workflows'].items():
-    result = should_run_workflow(changed_files, filters.get('paths-ignore', []))
+    print("WORKFLOW: ", workflow)
+    print("FILTERS: ", filters)
+    changed_files = ['tools/sqlite3_api_wrapper/include/duckdb_shell_wrapper.h', '.github/workflows/Julia.yml', 'README.md', '.github/workflows/Blabla.yml']
+    result = should_run_workflow(changed_files, filters)
     result_config[workflow] = result
 
 print("Files changed:", changed_files)
