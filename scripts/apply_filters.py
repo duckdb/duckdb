@@ -81,7 +81,7 @@ changed_files = get_changed_files()
 for workflow, filters in config['workflows'].items():
     print("WORKFLOW: ", workflow)
     print("FILTERS: ", filters)
-    changed_files = ['tools/sqlite3_api_wrapper/include/duckdb_shell_wrapper.h', '.github/workflows/Julia.yml', 'README.md', '.github/workflows/Blabla.yml']
+    # changed_files = ['tools/sqlite3_api_wrapper/include/duckdb_shell_wrapper.h', '.github/workflows/Julia.yml', 'README.md', '.github/workflows/Blabla.yml']
     result = should_run_workflow(changed_files, filters)
     result_config[workflow] = result
 
