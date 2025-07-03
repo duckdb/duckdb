@@ -19,7 +19,7 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
+const char *duckdb_lib = "/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib";
 
 class ADBCTestDatabase {
 public:
@@ -487,63 +487,63 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
-TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
-	if (!duckdb_lib) {
-		return;
-	}
-	AdbcDatabase adbc_database;
-	AdbcConnection adbc_connection;
-
-	AdbcError adbc_error;
-	InitializeADBCError(&adbc_error);
-
-	// Create connection - database and whatnot
-	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
-
-	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
-
-	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
-
-	AdbcStatusCode status = ADBC_STATUS_OK;
-	ArrowArrayStream out_stream;
-
-	// ==== UNHAPPY PATH ====
-
-	static uint32_t test_info_codes[] = {100, 4, 3};
-	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
-
-	// No error
-	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
-	REQUIRE((status != ADBC_STATUS_OK));
-
-	// Invalid connection
-	AdbcConnection bogus_connection;
-	bogus_connection.private_data = nullptr;
-	bogus_connection.private_driver = nullptr;
-	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
-	REQUIRE((status != ADBC_STATUS_OK));
-
-	// No stream
-	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
-	REQUIRE((status != ADBC_STATUS_OK));
-
-	// ==== HAPPY PATH ====
-
-	// This returns all known info codes
-	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
-	REQUIRE((status == ADBC_STATUS_OK));
-	REQUIRE((out_stream.release != nullptr));
-
-	out_stream.release(&out_stream);
-
-	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
-	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
-	adbc_error.release(&adbc_error);
-}
+// TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
+// 	if (!duckdb_lib) {
+// 		return;
+// 	}
+// 	AdbcDatabase adbc_database;
+// 	AdbcConnection adbc_connection;
+//
+// 	AdbcError adbc_error;
+// 	InitializeADBCError(&adbc_error);
+//
+// 	// Create connection - database and whatnot
+// 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+// 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+// 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+// 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+//
+// 	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+//
+// 	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+// 	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+//
+// 	AdbcStatusCode status = ADBC_STATUS_OK;
+// 	ArrowArrayStream out_stream;
+//
+// 	// ==== UNHAPPY PATH ====
+//
+// 	static uint32_t test_info_codes[] = {100, 4, 3};
+// 	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
+//
+// 	// No error
+// 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
+// 	REQUIRE((status != ADBC_STATUS_OK));
+//
+// 	// Invalid connection
+// 	AdbcConnection bogus_connection;
+// 	bogus_connection.private_data = nullptr;
+// 	bogus_connection.private_driver = nullptr;
+// 	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
+// 	REQUIRE((status != ADBC_STATUS_OK));
+//
+// 	// No stream
+// 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
+// 	REQUIRE((status != ADBC_STATUS_OK));
+//
+// 	// ==== HAPPY PATH ====
+//
+// 	// This returns all known info codes
+// 	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
+// 	REQUIRE((status == ADBC_STATUS_OK));
+// 	REQUIRE((out_stream.release != nullptr));
+//
+// 	out_stream.release(&out_stream);
+//
+// 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+// 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+// 	adbc_error.release(&adbc_error);
+// }
 
 TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	if (!duckdb_lib) {

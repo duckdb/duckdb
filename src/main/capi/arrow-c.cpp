@@ -74,10 +74,14 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 		// TODO : catch actual exception
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
 	}
+	const idx_t column_count = names.size();
+	*out_column_count = column_count;
+	out_types = (duckdb_logical_type *)malloc(sizeof(duckdb_logical_type) * column_count);
+    out_names = (char **)malloc(sizeof(char *) * column_count);
 
-	*out_column_count = names.size();
-	for (idx_t i = 0; i < *out_column_count; i ++) {
-		// duckdb_type LogicalTypeIdToC(const LogicalTypeId type)
+	for (idx_t i = 0; i < column_count; i ++) {
+		auto duck_type =  duckdb::LogicalTypeIdToC(return_types[i].id());
+		out_types[i] = duckdb_create_logical_type(duck_type);
 	}
 	return nullptr;
 }
