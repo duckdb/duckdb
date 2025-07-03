@@ -27,7 +27,7 @@ jobs:
         run: echo "Event name is ${{ github.event_name }}"
 
       - name: Install dependencies
-        run: pip install PyGithub
+        run: pip install PyGithub pathspec
 
       - uses: actions/checkout@v4
         with:
