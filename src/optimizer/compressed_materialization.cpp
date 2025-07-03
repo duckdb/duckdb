@@ -330,7 +330,7 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 	auto min = NumericStats::Min(stats);
 	auto max = NumericStats::Max(stats);
 	if (max < min) {
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+		return Value::UHUGEINT(NumericLimits<uhugeint_t>::Maximum());
 	}
 
 	vector<unique_ptr<Expression>> arguments;
@@ -342,8 +342,8 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 	if (ExpressionExecutor::TryEvaluateScalar(context, sub, result)) {
 		return result;
 	} else {
-		// Couldn't evaluate: Return max hugeint as range so GetIntegralCompress will return nullptr
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+		// Couldn't evaluate: Return max uhugeint as range so GetIntegralCompress will return nullptr
+		return Value::UHUGEINT(NumericLimits<uhugeint_t>::Maximum());
 	}
 }
 
@@ -354,7 +354,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 		return nullptr;
 	}
 
-	// Get range and cast to UBIGINT (might fail for HUGEINT, in which case we just return)
+	// Get range and cast to UBIGINT (might fail for UHUGEINT, in which case we just return)
 	Value range_value = GetIntegralRangeValue(context, type, stats);
 	if (!range_value.DefaultTryCastAs(LogicalType::UBIGINT)) {
 		return nullptr;
