@@ -27,8 +27,10 @@ def get_changed_files_push():
     after = os.environ.get('GITHUB_SHA') if ci else 'ad80307'
 
     files = []
+    git_ref = os.environ['GITHUB_REF']
+    print("Git Ref: ", git_ref, "Before: ", before, "After: ", after)
     if before and after:
-        command = ['git', 'fetch', '--no-tags', '--depth=100', 'origin', os.environ['GITHUB_REF']] if ci else ['git', 'fetch', '--no-tags', '--depth=100', 'origin', 'refs/heads/main']
+        command = ['git', 'fetch', '--no-tags', '--depth=100', 'origin', git_ref] if ci else ['git', 'fetch', '--no-tags', '--depth=100', 'origin', 'refs/heads/main']
         subprocess.run(command, check=True)
         result = subprocess.check_output(['git', 'diff', '--name-only', before, after])
         files = result.decode().splitlines()
