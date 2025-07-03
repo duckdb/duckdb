@@ -10,32 +10,32 @@ on:
         description: 'Base hash'
         type: string
   repository_dispatch:
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/pythonpkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Regression.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+  # push:
+  #   branches-ignore:
+  #     - 'main'
+  #     - 'feature'
+  #     - 'v*.*-*'
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'test/configs/**'
+  #     - 'tools/**'
+  #     - '!tools/pythonpkg/**'
+  #     - '.github/patches/duckdb-wasm/**'
+  #     - '.github/workflows/**'
+  #     - '!.github/workflows/Regression.yml'
+  #     - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
-  pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/pythonpkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Regression.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+  # pull_request:
+  #   types: [opened, reopened, ready_for_review, converted_to_draft]
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'test/configs/**'
+  #     - 'tools/**'
+  #     - '!tools/pythonpkg/**'
+  #     - '.github/patches/duckdb-wasm/**'
+  #     - '.github/workflows/**'
+  #     - '!.github/workflows/Regression.yml'
+  #     - '.github/config/out_of_tree_extensions.cmake'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
