@@ -32,16 +32,17 @@ jobs:
           fetch-depth: 0
       
       - id: ci-filters
+        env:
+          GITHUB_OUTPUT: ${{ github.output }}
         run: |
-            echo "should_run=$(python apply_filters.py)" >> $GITHUB_OUTPUT
-        
+            python apply_filters.py 
     
   code-quality:
     uses: ./.github/workflows/CodeQuality.yml
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.should_run.code-quality }}
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).code-quality == true }}
 
   julia:
     uses: ./.github/workflows/Julia.yml
     needs: check-draft
-    if: ${{ needs.check-draft.outputs.should_run.julia }}
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).julia == true }}
