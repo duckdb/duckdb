@@ -195,17 +195,14 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
                                                               vector<string> input_table_names) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
-
 	auto bind_index = GenerateTableIndex();
-	idx_t ordinality_column_id;
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
-	idx_t ordinality_name_suffix = 0;
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
-	case_insensitive_set_t ci_return_names;
+	idx_t ordinality_column_id;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
@@ -245,21 +242,24 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			                      table_function.name);
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-
-		// check if name 'ordinality' already exists and if so, replace it iteratively until free name is found
-		for (auto &n : return_names) {
-			ci_return_names.insert(n);
+		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
+			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
+			// found
+			case_insensitive_set_t ci_return_names;
+			idx_t ordinality_name_suffix = 0;
+			for (auto &n : return_names) {
+				ci_return_names.insert(n);
+			}
+			while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
+				ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
+			}
+			if (!correlated_columns.empty()) {
+				return_types.emplace_back(LogicalType::BIGINT);
+				return_names.emplace_back(ordinality_column_name);
+				D_ASSERT(return_names.size() == return_types.size());
+				ordinality_column_id = return_types.size() - 1;
+			}
 		}
-		while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
-			ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
-		}
-		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !correlated_columns.empty()) {
-			return_types.emplace_back(LogicalType::BIGINT);
-			return_names.emplace_back(ordinality_column_name);
-			D_ASSERT(return_names.size() == return_types.size());
-			ordinality_column_id = return_types.size() - 1;
-		}
-
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
@@ -294,8 +294,9 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
-	get->ordinality_data.ordinality_request = ref.with_ordinality;
-	get->ordinality_data.column_id = ordinality_column_id;
+	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !correlated_columns.empty()) {
+		get->ordinality_idx = ordinality_column_id;
+	}
 	if (table_function.in_out_function) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);

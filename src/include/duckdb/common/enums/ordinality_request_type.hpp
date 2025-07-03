@@ -17,27 +17,13 @@ namespace duckdb {
 
 enum class OrdinalityType : uint8_t { WITHOUT_ORDINALITY = 0, WITH_ORDINALITY = 1 };
 
-struct OrdinalityData {
-
-	// If WITH ORDINALITY has been requested
-	OrdinalityType ordinality_request = OrdinalityType::WITHOUT_ORDINALITY;
-	// For correlated InOut-functions: where to insert the ordinality column
-	idx_t column_id;
-
-	void SetOrdinality(DataChunk &chunk, const idx_t &ordinality_idx, const idx_t &ordinality) const {
-		if (ordinality > 0) {
-			constexpr idx_t step = 1;
-			chunk.data[column_id].Sequence(static_cast<int64_t>(ordinality_idx), step, ordinality);
-		}
+inline void SetOrdinality(DataChunk &chunk, const optional_idx &ordinality_column_idx, const idx_t &ordinality_idx,
+                          const idx_t &ordinality) {
+	D_ASSERT(ordinality_column_idx.IsValid());
+	if (ordinality > 0) {
+		constexpr idx_t step = 1;
+		chunk.data[ordinality_column_idx.GetIndex()].Sequence(static_cast<int64_t>(ordinality_idx), step, ordinality);
 	}
-
-	bool operator==(const OrdinalityData &rhs) const {
-		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id);
-	}
-
-	bool operator!=(const OrdinalityData &rhs) const {
-		return !(this == &rhs);
-	}
-};
+}
 
 } // namespace duckdb

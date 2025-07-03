@@ -78,7 +78,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		                                     op.estimated_cardinality, std::move(op.projected_input));
 		table_in_out.children.push_back(child);
 		auto &cast_table_in_out = table_in_out.Cast<PhysicalTableInOutFunction>();
-		cast_table_in_out.ordinality_data = op.ordinality_data;
+		cast_table_in_out.ordinality_idx = op.ordinality_idx;
 		return table_in_out;
 	}
 
