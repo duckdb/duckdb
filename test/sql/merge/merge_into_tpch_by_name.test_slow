@@ -1,0 +1,60 @@
+# name: test/sql/merge/merge_into_tpch_by_name.test_slow
+# description: Test merge into by name TPC-H SF1
+# group: [merge]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1);
+
+foreach it index no_index
+
+# create random_lineitem with columns in random order
+statement ok
+CREATE TABLE random_lineitem AS SELECT l_tax, l_returnflag, l_partkey, l_shipmode, l_discount, l_quantity, l_shipdate, l_extendedprice, l_receiptdate, l_suppkey, l_comment, l_linenumber, l_commitdate, l_orderkey, l_linestatus, l_shipinstruct
+FROM lineitem LIMIT 0
+
+onlyif it=index
+statement ok
+ALTER TABLE random_lineitem ADD PRIMARY KEY (l_orderkey, l_linenumber);
+
+# create lineitem but with a random subset of the rows
+statement ok
+MERGE INTO random_lineitem USING lineitem USING (l_orderkey, l_linenumber)
+WHEN NOT MATCHED AND random() < 0.2 THEN INSERT BY NAME
+
+# insert a bunch of rows with unchanged values
+statement ok
+MERGE INTO random_lineitem USING (SELECT * REPLACE (l_orderkey + 10000000 AS l_orderkey) FROM lineitem) USING (l_orderkey, l_linenumber)
+WHEN MATCHED THEN ERROR
+WHEN NOT MATCHED AND random() < 0.2 THEN INSERT BY NAME
+
+# randomly update a bunch of rows
+statement ok
+MERGE INTO random_lineitem USING lineitem USING (l_orderkey, l_linenumber)
+WHEN MATCHED AND random() < 0.1 THEN UPDATE SET l_discount = random()
+WHEN MATCHED AND random() < 0.1 THEN UPDATE SET l_tax = random()
+
+# run a merge that should fully equalize the tables
+statement ok
+MERGE INTO random_lineitem USING lineitem USING (l_orderkey, l_linenumber)
+WHEN MATCHED THEN UPDATE BY NAME
+WHEN NOT MATCHED BY TARGET THEN INSERT BY NAME
+WHEN NOT MATCHED BY SOURCE THEN DELETE
+
+# both tables should now be identical - despite all the random stuff we did
+query IIIIIIIIIIIIIIII
+FROM lineitem
+EXCEPT
+SELECT l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment FROM random_lineitem
+----
+
+query IIIIIIIIIIIIIIII
+SELECT l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment FROM random_lineitem
+EXCEPT FROM lineitem
+----
+
+statement ok
+DROP TABLE random_lineitem
+
+endloop

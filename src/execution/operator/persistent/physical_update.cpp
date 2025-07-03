@@ -56,7 +56,7 @@ public:
 	}
 
 	mutex lock;
-	idx_t updated_count;
+	atomic<idx_t> updated_count;
 	unordered_set<row_t> updated_rows;
 	ColumnDataCollection return_collection;
 };
@@ -128,7 +128,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		update_chunk.data[i].Reference(chunk.data[binding.index]);
 	}
 
-	lock_guard<mutex> glock(g_state.lock);
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
 	DataChunk &mock_chunk = l_state.mock_chunk;
 
@@ -144,6 +143,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		table.Update(update_state, context.client, row_ids, columns, update_chunk);
 
 		if (return_chunk) {
+			lock_guard<mutex> glock(g_state.lock);
 			g_state.return_collection.Append(mock_chunk);
 		}
 		g_state.updated_count += chunk.size();
@@ -159,6 +159,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	idx_t update_count = 0;
 	auto row_id_data = FlatVector::GetData<row_t>(row_ids);
 
+	lock_guard<mutex> glock(g_state.lock);
 	for (idx_t i = 0; i < update_chunk.size(); i++) {
 		auto row_id = row_id_data[i];
 		if (g_state.updated_rows.find(row_id) == g_state.updated_rows.end()) {
@@ -249,7 +250,7 @@ SourceResultType PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &c
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count)));
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
 		return SourceResultType::FINISHED;
 	}
 

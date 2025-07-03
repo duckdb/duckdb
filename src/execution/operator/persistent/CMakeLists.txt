@@ -9,6 +9,7 @@ add_library_unity(
   physical_delete.cpp
   physical_export.cpp
   physical_insert.cpp
+  physical_merge_into.cpp
   physical_update.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_persistent>

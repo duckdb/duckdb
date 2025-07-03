@@ -136,6 +136,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		result = LogicalMaterializedCTE::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		result = LogicalMergeInto::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		result = LogicalOrder::Deserialize(deserializer);
 		break;
@@ -186,6 +189,26 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	}
 	deserializer.Unset<LogicalOperatorType>();
 	result->children = std::move(children);
+	return result;
+}
+
+void BoundMergeIntoAction::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<MergeActionType>(200, "action_type", action_type);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(202, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
+	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map);
+	serializer.WritePropertyWithDefault<bool>(205, "update_is_del_and_insert", update_is_del_and_insert);
+}
+
+unique_ptr<BoundMergeIntoAction> BoundMergeIntoAction::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<BoundMergeIntoAction>(new BoundMergeIntoAction());
+	deserializer.ReadProperty<MergeActionType>(200, "action_type", result->action_type);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "condition", result->condition);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(202, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
+	deserializer.ReadProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", result->column_index_map);
+	deserializer.ReadPropertyWithDefault<bool>(205, "update_is_del_and_insert", result->update_is_del_and_insert);
 	return result;
 }
 
@@ -580,6 +603,27 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	return std::move(result);
+}
+
+void LogicalMergeInto::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
+	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(202, "bound_defaults", bound_defaults);
+	serializer.WritePropertyWithDefault<idx_t>(203, "row_id_start", row_id_start);
+	serializer.WriteProperty<optional_idx>(204, "source_marker", source_marker);
+	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", actions);
+}
+
+unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserializer) {
+	auto table_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info");
+	auto result = duckdb::unique_ptr<LogicalMergeInto>(new LogicalMergeInto(deserializer.Get<ClientContext &>(), table_info));
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "table_index", result->table_index);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(202, "bound_defaults", result->bound_defaults);
+	deserializer.ReadPropertyWithDefault<idx_t>(203, "row_id_start", result->row_id_start);
+	deserializer.ReadProperty<optional_idx>(204, "source_marker", result->source_marker);
+	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", result->actions);
 	return std::move(result);
 }
 
