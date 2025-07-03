@@ -96,12 +96,18 @@ matched_clause_action:
 			n->actionType = MERGE_ACTION_TYPE_DO_NOTHING;
 			$$ = (PGNode *)n;
 		}
-	| ERROR_P
+	| ERROR_P opt_error_message
 		{
 			PGMatchAction *n = makeNode(PGMatchAction);
 			n->actionType = MERGE_ACTION_TYPE_ERROR;
+			n->errorMessage = $2;
 			$$ = (PGNode *)n;
 		}
+	;
+
+opt_error_message:
+	a_expr					{ $$ = $1; }
+	| /* EMPTY */			{ $$ = NULL; }
 	;
 
 matched_clause:

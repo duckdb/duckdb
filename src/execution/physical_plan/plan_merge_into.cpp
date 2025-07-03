@@ -68,8 +68,10 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		result->expressions = std::move(action.expressions);
 		break;
 	}
-	case MergeActionType::MERGE_DO_NOTHING:
 	case MergeActionType::MERGE_ERROR:
+		result->expressions = std::move(action.expressions);
+		break;
+	case MergeActionType::MERGE_DO_NOTHING:
 		break;
 	default:
 		throw InternalException("Unsupported merge action");

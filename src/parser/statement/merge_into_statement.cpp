@@ -123,6 +123,9 @@ string MergeIntoAction::ToString() const {
 		break;
 	case MergeActionType::MERGE_ERROR:
 		result += "ERROR";
+		if (!expressions.empty()) {
+			result += " " + expressions[0]->ToString();
+		}
 		break;
 	default:
 		throw InternalException("Unsupported merge action in ToString");

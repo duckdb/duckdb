@@ -2287,13 +2287,14 @@ typedef enum {
 
 typedef struct PGMatchAction {
 	PGNodeTag type;
-	PGMergeAction when;                        /* WHEN MATCHED or WHEN NOT MATCHED */
+	PGMergeAction when;                      /* WHEN MATCHED or WHEN NOT MATCHED */
 	PGNode *andClause;                       /* AND condition, if any */
-	PGMergeActionType actionType;              /* UPDATE, DELETE, etc */
+	PGMergeActionType actionType;            /* UPDATE, DELETE, etc */
 	PGList *updateTargets;                   /* the target list for UPDATE */
 	PGInsertColumnOrder insert_column_order; /* BY NAME or BY POSITION */
 	PGList *insertCols;                      /* optional: names of the target columns for insert */
 	PGList *insertValues;                    /* values for insert */
+	PGNode *errorMessage;                    /* Expression to generate the error message, if any */
 	bool defaultValues;                      /* DEFAULT VALUES */
 } PGMatchAction;
 

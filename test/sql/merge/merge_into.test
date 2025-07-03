@@ -86,9 +86,9 @@ statement error
 MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
 WHEN MATCHED AND Sale.volume >= balance THEN DELETE
 WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
-WHEN NOT MATCHED THEN ERROR
+WHEN NOT MATCHED THEN ERROR CONCAT('Sale item with item id ', Sale.item_id, ' not found');
 ----
-Merge abort condition
+Sale item with item id 20 not found
 
 # we need to specify at least one match action
 statement error

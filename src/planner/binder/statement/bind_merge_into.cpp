@@ -132,10 +132,19 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 		}
 		break;
 	}
+	case MergeActionType::MERGE_ERROR: {
+		// bind the error message (if any)
+		for (auto &expr : action.expressions) {
+			ProjectionBinder proj_binder(*this, context, proj_index, expressions);
+			proj_binder.target_type = LogicalType::VARCHAR;
+			auto error_msg = proj_binder.Bind(expr);
+			result->expressions.push_back(std::move(error_msg));
+		}
+		break;
+	}
 	case MergeActionType::MERGE_DELETE:
 	case MergeActionType::MERGE_DO_NOTHING:
-	case MergeActionType::MERGE_ERROR:
-		// DELETE / DO NOTHING / ABORT have nothing extra to bind
+		// DELETE / DO NOTHING have nothing extra to bind
 		break;
 	default:
 		throw InternalException("Unsupported merge action type");

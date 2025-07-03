@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
 
@@ -192,11 +193,15 @@ public:
 				if (action->action_type == MergeActionType::MERGE_ERROR) {
 					// abort - generate an error message
 					string merge_condition;
-					merge_condition += EnumUtil::ToString(range.condition);
+					merge_condition += MergeIntoStatement::ActionConditionToString(range.condition);
 					if (action->condition) {
 						merge_condition += " AND " + action->condition->ToString();
 					}
-					throw ConstraintException("Merge abort condition %s", merge_condition);
+					if (!action->expressions.empty()) {
+						// if there are any user-provided error messages: add the first error message encountered
+						merge_condition += ": " + input_chunk->data[0].GetValue(0).ToString();
+					}
+					throw ConstraintException("Merge error condition %s", merge_condition);
 				}
 				D_ASSERT(action->action_type == MergeActionType::MERGE_DO_NOTHING);
 				input_chunk = nullptr;
