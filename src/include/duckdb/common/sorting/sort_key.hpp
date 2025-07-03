@@ -80,6 +80,16 @@ public:
 	}
 };
 
+template <idx_t REMAINING>
+static bool SortKeyLessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
+	return (*lhs < *rhs) || ((*lhs == *rhs) && SortKeyLessThan<REMAINING - 1>(lhs + 1, rhs + 1));
+}
+
+template <>
+inline bool SortKeyLessThan<1>(const uint64_t *const &lhs, const uint64_t *const &rhs) {
+	return *lhs < *rhs;
+}
+
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct FixedSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
@@ -145,25 +155,8 @@ public:
 		throw InternalException("GetHeapSize() called on a FixedSortKey");
 	}
 
-	static bool LessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
-		switch (SORT_KEY::PARTS) {
-		case 1:
-			return lhs[0] < rhs[0];
-		case 2:
-			return lhs[0] == rhs[0] ? lhs[1] < rhs[1] : lhs[0] < rhs[0];
-		case 3:
-			return lhs[0] == rhs[0] ? (lhs[1] == rhs[1] ? lhs[2] < rhs[2] : lhs[1] < rhs[1]) : lhs[0] < rhs[0];
-		case 4:
-			return lhs[0] == rhs[0]
-			           ? (lhs[1] == rhs[1] ? (lhs[2] == rhs[2] ? lhs[3] < rhs[3] : lhs[2] < rhs[2]) : lhs[1] < rhs[1])
-			           : lhs[0] < rhs[0];
-		default:
-			throw NotImplementedException("FixedSortKey::LessThan for %llu parts", SORT_KEY::PARTS);
-		}
-	}
-
 	friend bool operator<(const SORT_KEY &lhs, const SORT_KEY &rhs) {
-		return LessThan(&lhs.part0, &rhs.part0);
+		return SortKeyLessThan<SORT_KEY::PARTS>(&lhs.part0, &rhs.part0);
 	}
 };
 
