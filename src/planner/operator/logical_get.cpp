@@ -223,7 +223,6 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<OrdinalityType>(213, "ordinality_request", ordinality_data.ordinality_request,
 	                                                    OrdinalityType::WITHOUT_ORDINALITY);
 	serializer.WritePropertyWithDefault<idx_t>(214, "column_id", ordinality_data.column_id);
-	serializer.WritePropertyWithDefault<bool>(215, "inout_correlation", ordinality_data.inout_correlation, false);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -256,8 +255,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
 	    213, "ordinality_request", result->ordinality_data.ordinality_request, OrdinalityType::WITHOUT_ORDINALITY);
 	deserializer.ReadPropertyWithDefault(214, "column_id", result->ordinality_data.column_id);
-	deserializer.ReadPropertyWithExplicitDefault(215, "inout_correlation", result->ordinality_data.inout_correlation,
-	                                             false);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -281,8 +278,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
-		if (result->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY &&
-		    result->ordinality_data.inout_correlation) {
+		if (result->ordinality_data.ordinality_request == OrdinalityType::WITH_ORDINALITY) {
 			auto ordinality_pos = bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_data.column_id);
 			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
 		}
