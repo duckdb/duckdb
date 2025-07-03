@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/afl/test_fuzz_5194.test
 # description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
-# group: [csv]
+# group: [afl]
 
 require json
 
