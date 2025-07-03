@@ -162,6 +162,18 @@ bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> ar
 	auto duck_collection = duck->TakeCollection();
 	auto duck_rel = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), duck->names, "duck");
 
+	if (materialized_arrow.types != duck->types) {
+		printf("-------------------------------------\n");
+		printf("Arrow round-trip type comparison failed\n");
+		printf("-------------------------------------\n");
+		printf("Query: %s\n", query.c_str());
+		printf("-----------------DuckDB-------------------\n");
+		Printer::Print(duck_rel->ToString(0));
+		printf("-----------------Arrow--------------------\n");
+		Printer::Print(arrow_rel->ToString(0));
+		printf("-------------------------------------\n");
+		return false;
+	}
 	// We perform a SELECT * FROM "duck_rel" EXCEPT ALL SELECT * FROM "arrow_rel"
 	// this will tell us if there are tuples missing from 'arrow_rel' that are present in 'duck_rel'
 	auto except_rel = make_shared_ptr<SetOpRelation>(duck_rel, arrow_rel, SetOperationType::EXCEPT, /*setop_all=*/true);
