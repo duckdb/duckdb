@@ -37,11 +37,25 @@ PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<Logical
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+struct MergeSinkState {
+	MergeSinkState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {}
+
+	bool computed_matches = false;
+	bool match_initialized = false;
+	idx_t match_idx = 0;
+	idx_t index_in_match = 0;
+	SelectionVector current_sel;
+	SelectionVector selected_sel;
+	SelectionVector remaining_sel;
+	idx_t current_count;
+	unique_ptr<DataChunk> sliced_chunk;
+	optional_ptr<DataChunk> input_chunk;
+};
+
 struct MergeLocalExecutionState {
 	unique_ptr<LocalSinkState> local_state;
 	unique_ptr<ExpressionExecutor> condition_executor;
 	unique_ptr<ExpressionExecutor> insert_executor;
-	unique_ptr<DataChunk> sliced_chunk;
 	unique_ptr<DataChunk> insert_chunk;
 };
 
@@ -84,14 +98,7 @@ public:
 		}
 	}
 
-
-	bool computed_matches = false;
-	bool match_initialized = false;
-	idx_t match_idx = 0;
-	idx_t index_in_match = 0;
-	SelectionVector current_sel;
-	idx_t current_count;
-	optional_ptr<DataChunk> input_chunk;
+	MergeSinkState sink_state;
 	vector<MatchResult> match_results;
 	idx_t combine_idx = 0;
 	vector<MergeLocalExecutionState> states;
@@ -111,59 +118,74 @@ public:
 	vector<unique_ptr<GlobalSinkState>> sink_states;
 	atomic<idx_t> merged_count;
 
+	optional_ptr<DataChunk> ComputeActionInput(ClientContext &context, MergeIntoOperator &action, DataChunk &chunk, MergeIntoLocalState &local_state, MergeLocalExecutionState &local_action_state) {
+		auto &current_count = local_state.sink_state.current_count;
+		auto &current_sel = local_state.sink_state.current_sel;
+		auto &sliced_chunk = local_state.sink_state.sliced_chunk;
+		auto &selected_sel = local_state.sink_state.selected_sel;
+		auto &remaining_sel = local_state.sink_state.remaining_sel;
+		if (current_count == 0) {
+			return nullptr;
+		}
+		if (!sliced_chunk) {
+			sliced_chunk = make_uniq<DataChunk>();
+			sliced_chunk->Initialize(context, chunk.GetTypes());
+		} else {
+			sliced_chunk->Reset();
+		}
+		optional_ptr<DataChunk> result;
+		if (action.condition) {
+			// if we have a condition we need to evaluate it
+			auto &executor = *local_action_state.condition_executor;
+			idx_t match_count =
+				executor.SelectExpression(chunk, selected_sel, remaining_sel, current_sel, current_count);
+			if (match_count == 0) {
+				// no matches - move to next action
+				return nullptr;
+			}
+			// slice the chunk for this action with the matching sel
+			sliced_chunk->Slice(chunk, selected_sel, match_count);
+			result = sliced_chunk;
+
+			// for the next chunk - update the matches
+			current_count = current_count - match_count;
+			current_sel.Initialize(remaining_sel);
+		} else if (current_count != chunk.size()) {
+			// if we have previously processed rows - remove them
+			sliced_chunk->Slice(chunk, current_sel, current_count);
+			result = sliced_chunk;
+		} else {
+			result = chunk;
+		}
+		// if we have any expressions - execute them to generate the new input chunk
+		if (!action.expressions.empty()) {
+			auto &insert_chunk = local_action_state.insert_chunk;
+			insert_chunk->Reset();
+			local_action_state.insert_executor->Execute(*result, *insert_chunk);
+			result = insert_chunk.get();
+		}
+		if (action.op) {
+			local_state.merged_count += result->size();
+		}
+		return result;
+	}
+
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, MergeIntoLocalState &local_state,
 	                    OperatorSinkInput &input, MergeActionRange range, idx_t &index_in_match) {
+	    auto &input_chunk = local_state.sink_state.input_chunk;
 		for (; range.start + index_in_match < range.end; index_in_match++) {
 			idx_t i = range.start + index_in_match;
 			auto &action = op.actions[i];
 			auto &local_action_state = local_state.states[i];
-			if (!local_state.input_chunk) {
-				if (local_state.current_count == 0) {
-					// finished processing actions
-					return SinkResultType::NEED_MORE_INPUT;
-				}
-				// no input chunk yet - we need to figure out what data to push for this action
-				if (!local_action_state.sliced_chunk) {
-					local_action_state.sliced_chunk = make_uniq<DataChunk>();
-					local_action_state.sliced_chunk->Initialize(context.client, chunk.GetTypes());
-				} else {
-					local_action_state.sliced_chunk->Reset();
-				}
-				if (action->condition) {
-					// if we have a condition we need to evaluate it
-					auto &executor = *local_action_state.condition_executor;
-					SelectionVector selected_sel(chunk.size());
-					SelectionVector remaining_sel(chunk.size());
-					idx_t match_count =
-						executor.SelectExpression(chunk, selected_sel, remaining_sel, local_state.current_sel, local_state.current_count);
-					if (match_count == 0) {
-						// no matches - move to next action
-						local_state.input_chunk = nullptr;
-						continue;
-					}
-					// slice the chunk for this action with the matching sel
-					local_action_state.sliced_chunk->Slice(chunk, selected_sel, match_count);
-					local_state.input_chunk = local_action_state.sliced_chunk;
-
-					// for the next chunk - update the matches
-					local_state.current_count = local_state.current_count - match_count;
-					local_state.current_sel.Initialize(remaining_sel);
-				} else if (local_state.current_count != chunk.size()) {
-					local_action_state.sliced_chunk->Slice(chunk, local_state.current_sel, local_state.current_count);
-					local_state.input_chunk = local_action_state.sliced_chunk;
-				} else {
-					local_state.input_chunk = chunk;
-				}
-				// if we have any expressions - execute them
-				if (!action->expressions.empty()) {
-					local_action_state.insert_chunk->Reset();
-					local_action_state.insert_executor->Execute(*local_state.input_chunk, *local_action_state.insert_chunk);
-					local_state.input_chunk = local_action_state.insert_chunk.get();
-				}
-				if (action->op) {
-					local_state.merged_count += local_state.input_chunk->size();
+			if (!input_chunk) {
+				// first time processing this action - compute the input chunk
+				input_chunk = ComputeActionInput(context.client, *action, chunk, local_state, local_action_state);
+				if (!input_chunk) {
+					// no data for this action - move to next action
+					continue;
 				}
 			}
+			// process the action
 			if (!action->op) {
 				if (action->action_type == MergeActionType::MERGE_ERROR) {
 					// abort - generate an error message
@@ -175,18 +197,18 @@ public:
 					throw ConstraintException("Merge abort condition %s", merge_condition);
 				}
 				D_ASSERT(action->action_type == MergeActionType::MERGE_DO_NOTHING);
-				local_state.input_chunk = nullptr;
+				input_chunk = nullptr;
 				continue;
 			}
 			auto &gstate = sink_states[i];
 			auto &lstate = *local_action_state.local_state;
 			OperatorSinkInput sink_input {*gstate, lstate, input.interrupt_state};
-			auto result = action->op->Sink(context, *local_state.input_chunk, sink_input);
+			auto result = action->op->Sink(context, *input_chunk, sink_input);
 			if (result == SinkResultType::BLOCKED) {
 				return SinkResultType::BLOCKED;
 			}
 			// move to next action
-			local_state.input_chunk = nullptr;
+			input_chunk = nullptr;
 		}
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -245,91 +267,104 @@ idx_t PhysicalMergeInto::GetIndex(MergeActionCondition condition) const {
 	throw InternalException("Unsupported match action condition");
 }
 
+void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChunk &chunk) const {
+	auto &match_results = local_state.match_results;
+
+	// for each row, figure out if we have generated a match or not
+	auto &matched = match_results[0];
+	auto &not_matched = match_results[1];
+	auto &not_matched_by_source = match_results[2];
+
+	matched.count = 0;
+	not_matched.count = 0;
+	not_matched_by_source.count = 0;
+
+	UnifiedVectorFormat row_id_data;
+	chunk.data[row_id_index].ToUnifiedFormat(chunk.size(), row_id_data);
+	if (source_marker.IsValid()) {
+		// source marker - check both row id and source marker
+		UnifiedVectorFormat source_marker_data;
+		chunk.data[source_marker.GetIndex()].ToUnifiedFormat(chunk.size(), source_marker_data);
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			if (!source_marker_data.validity.RowIsValid(source_marker_data.sel->get_index(i))) {
+				// source marker is NULL - no source match
+				not_matched_by_source.sel.set_index(not_matched_by_source.count++, i);
+			} else if (!row_id_data.validity.RowIsValid(row_id_data.sel->get_index(i))) {
+				// target marker is NULL - no target match
+				not_matched.sel.set_index(not_matched.count++, i);
+			} else {
+				// match
+				matched.sel.set_index(matched.count++, i);
+			}
+		}
+	} else {
+		// no source marker - only check row-ids
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			auto idx = row_id_data.sel->get_index(i);
+			if (row_id_data.validity.RowIsValid(idx)) {
+				// match
+				matched.sel.set_index(matched.count++, i);
+			} else {
+				// no match
+				not_matched.sel.set_index(not_matched.count++, i);
+			}
+		}
+	}
+
+	// reset and slice chunks
+	for(auto &match : match_results) {
+		if (match.count == 0) {
+			continue;
+		}
+		match.chunk->Reset();
+		match.chunk->Slice(chunk, match.sel, match.count);
+	}
+}
+
 SinkResultType PhysicalMergeInto::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &global_state = input.global_state.Cast<MergeIntoGlobalState>();
 	auto &local_state = input.local_state.Cast<MergeIntoLocalState>();
 
 	auto &match_results = local_state.match_results;
-	if (!local_state.computed_matches) {
-		// first execution for this sink
-		// for each row, figure out if we have generated a match or not
+	auto &computed_matches = local_state.sink_state.computed_matches;
+	auto &match_idx = local_state.sink_state.match_idx;
+	auto &index_in_match = local_state.sink_state.index_in_match;
+	auto &match_initialized = local_state.sink_state.match_initialized;
+	auto &current_sel = local_state.sink_state.current_sel;
+	auto &current_count = local_state.sink_state.current_count;
+	if (!computed_matches) {
+		// we haven't figured out which rows have which types of matches - compute them
+		ComputeMatches(local_state, chunk);
 
-		auto &matched = match_results[0];
-		auto &not_matched = match_results[1];
-		auto &not_matched_by_source = match_results[2];
-
-		matched.count = 0;
-		not_matched.count = 0;
-		not_matched_by_source.count = 0;
-
-		UnifiedVectorFormat row_id_data;
-		chunk.data[row_id_index].ToUnifiedFormat(chunk.size(), row_id_data);
-		if (source_marker.IsValid()) {
-			// source marker - check both row id and source marker
-			UnifiedVectorFormat source_marker_data;
-			chunk.data[source_marker.GetIndex()].ToUnifiedFormat(chunk.size(), source_marker_data);
-			for (idx_t i = 0; i < chunk.size(); i++) {
-				if (!source_marker_data.validity.RowIsValid(source_marker_data.sel->get_index(i))) {
-					// source marker is NULL - no source match
-					not_matched_by_source.sel.set_index(not_matched_by_source.count++, i);
-				} else if (!row_id_data.validity.RowIsValid(row_id_data.sel->get_index(i))) {
-					// target marker is NULL - no target match
-					not_matched.sel.set_index(not_matched.count++, i);
-				} else {
-					// match
-					matched.sel.set_index(matched.count++, i);
-				}
-			}
-		} else {
-			// no source marker - only check row-ids
-			for (idx_t i = 0; i < chunk.size(); i++) {
-				auto idx = row_id_data.sel->get_index(i);
-				if (row_id_data.validity.RowIsValid(idx)) {
-					// match
-					matched.sel.set_index(matched.count++, i);
-				} else {
-					// no match
-					not_matched.sel.set_index(not_matched.count++, i);
-				}
-			}
-		}
-
-		// reset and slice chunks
-		for(auto &match : match_results) {
-			if (match.count == 0) {
-				continue;
-			}
-			match.chunk->Reset();
-			match.chunk->Slice(chunk, match.sel, match.count);
-		}
-		local_state.computed_matches = true;
-		local_state.match_idx = 0;
-		local_state.index_in_match = 0;
-		local_state.match_initialized = false;
+		// set up the state so we can prepare sinking into the relevant operators
+		computed_matches = true;
+		match_idx = 0;
+		index_in_match = 0;
+		match_initialized = false;
 	}
 	// now slice and call sink for each of the match conditions
-	for (; local_state.match_idx < 3; local_state.match_idx++) {
-		auto &match_result = match_results[local_state.match_idx];
+	for (; match_idx < 3; match_idx++) {
+		auto &match_result = match_results[match_idx];
 		if (match_result.count == 0) {
 			// no matches for this action
 			continue;
 		}
-		if (!local_state.match_initialized) {
-			local_state.current_sel = SelectionVector();
-			local_state.current_count = match_result.count;
-			local_state.match_initialized = true;
+		if (!match_initialized) {
+			current_sel = SelectionVector();
+			current_count = match_result.count;
+			match_initialized = true;
 		}
-		auto match_range_index = GetIndex(match_actions[local_state.match_idx]);
-		auto result = global_state.Sink(context, *match_result.chunk, local_state, input, action_ranges[match_range_index], local_state.index_in_match);
+		auto match_range_index = GetIndex(match_actions[match_idx]);
+		auto result = global_state.Sink(context, *match_result.chunk, local_state, input, action_ranges[match_range_index], index_in_match);
 		if (result == SinkResultType::BLOCKED) {
 			return SinkResultType::BLOCKED;
 		}
 		// move to next match action
-		local_state.index_in_match = 0;
-		local_state.match_initialized = false;
+		index_in_match = 0;
+		match_initialized = false;
 	}
-	// finished
-	local_state.computed_matches = false;
+	// finished - prepare for next match
+	computed_matches = false;
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

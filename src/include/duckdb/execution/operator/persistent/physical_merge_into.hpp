@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/merge_action_type.hpp"
 
 namespace duckdb {
+class MergeIntoLocalState;
 
 class MergeIntoOperator {
 public:
@@ -77,6 +78,7 @@ public:
 
 private:
 	idx_t GetIndex(MergeActionCondition condition) const;
+	void ComputeMatches(MergeIntoLocalState &local_state, DataChunk &chunk) const;
 };
 
 } // namespace duckdb
