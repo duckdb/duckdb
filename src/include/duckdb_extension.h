@@ -552,6 +552,16 @@ typedef struct {
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
 #endif
 
+// API to create and manipulate expressions
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_destroy_expression)(duckdb_expression *expr);
+	void (*duckdb_destroy_base_expression)(duckdb_base_expression *expr);
+	duckdb_expression_class (*duckdb_base_expression_get_class)(duckdb_base_expression expr);
+	duckdb_base_expression (*duckdb_expression_get_base_expression)(duckdb_expression expr);
+	duckdb_logical_type (*duckdb_expression_get_return_type)(duckdb_expression expr);
+	duckdb_value (*duckdb_constant_expression_get_value)(duckdb_expression expr);
+#endif
+
 // New functions around the client context
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);

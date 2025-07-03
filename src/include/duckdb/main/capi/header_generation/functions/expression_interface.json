@@ -14,8 +14,92 @@
       "comment": {
         "description": "Destroys the expression and de-allocates its memory.\n\n",
         "param_comments": {
-          "vector": "A pointer to the expression."
+          "expr": "A pointer to the expression."
         }
+      }
+    },
+    {
+      "name": "duckdb_destroy_base_expression",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_base_expression *",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the base expression and de-allocates its memory.\n\n",
+        "param_comments": {
+          "expr": "A pointer to the base expression."
+        }
+      }
+    },
+    {
+      "name": "duckdb_base_expression_get_class",
+      "return_type": "duckdb_expression_class",
+      "params": [
+        {
+          "type": "duckdb_base_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns the expression class of the base expression.\n\n",
+        "param_comments": {
+          "expr": "The base expression."
+        },
+        "return_value": "The expression class of the base expression."
+      }
+    },
+    {
+      "name": "duckdb_expression_get_base_expression",
+      "return_type": "duckdb_base_expression",
+      "params": [
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns the base expression of an expression.\n\n",
+        "param_comments": {
+          "expr": "The expression."
+        },
+        "return_value": "The base expression. Must be destroyed with `duckdb_destroy_base_expression."
+      }
+    },
+    {
+      "name": "duckdb_expression_get_return_type",
+      "return_type": "duckdb_logical_type",
+      "params": [
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns the return type of an expression.\n\n",
+        "param_comments": {
+          "expr": "The expression."
+        },
+        "return_value": "The return type. Must be destroyed with `duckdb_destroy_logical_type`."
+      }
+    },
+    {
+      "name": "duckdb_constant_expression_get_value",
+      "return_type": "duckdb_value",
+      "params": [
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns the value of a constant expression.\n\n",
+        "param_comments": {
+          "expr": "The expression. The expression class of the expression must be DUCKDB_EXPR_CLASS_CONSTANT."
+        },
+        "return_value": "The constant value. Must be destroyed with `duckdb_destroy_value`."
       }
     }
   ]

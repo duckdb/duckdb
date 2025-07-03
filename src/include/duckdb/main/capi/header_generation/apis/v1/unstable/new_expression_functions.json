@@ -5,6 +5,7 @@
     "duckdb_destroy_expression",
     "duckdb_destroy_base_expression",
     "duckdb_base_expression_get_class",
+    "duckdb_expression_get_base_expression",
     "duckdb_expression_get_return_type",
     "duckdb_constant_expression_get_value"
   ]

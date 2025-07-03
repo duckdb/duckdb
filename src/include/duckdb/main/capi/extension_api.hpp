@@ -479,6 +479,14 @@ typedef struct {
 	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
 	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
+	// API to create and manipulate expressions
+
+	void (*duckdb_destroy_expression)(duckdb_expression *expr);
+	void (*duckdb_destroy_base_expression)(duckdb_base_expression *expr);
+	duckdb_expression_class (*duckdb_base_expression_get_class)(duckdb_base_expression expr);
+	duckdb_base_expression (*duckdb_expression_get_base_expression)(duckdb_expression expr);
+	duckdb_logical_type (*duckdb_expression_get_return_type)(duckdb_expression expr);
+	duckdb_value (*duckdb_constant_expression_get_value)(duckdb_expression expr);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
@@ -935,6 +943,12 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;
 	result.duckdb_error_data_message = duckdb_error_data_message;
 	result.duckdb_error_data_has_error = duckdb_error_data_has_error;
+	result.duckdb_destroy_expression = duckdb_destroy_expression;
+	result.duckdb_destroy_base_expression = duckdb_destroy_base_expression;
+	result.duckdb_base_expression_get_class = duckdb_base_expression_get_class;
+	result.duckdb_expression_get_base_expression = duckdb_expression_get_base_expression;
+	result.duckdb_expression_get_return_type = duckdb_expression_get_return_type;
+	result.duckdb_constant_expression_get_value = duckdb_constant_expression_get_value;
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
