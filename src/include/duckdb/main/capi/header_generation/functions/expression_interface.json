@@ -1,0 +1,22 @@
+{
+  "group": "expression_interface",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_destroy_expression",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_expression *",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the expression and de-allocates its memory.\n\n",
+        "param_comments": {
+          "vector": "A pointer to the expression."
+        }
+      }
+    }
+  ]
+}

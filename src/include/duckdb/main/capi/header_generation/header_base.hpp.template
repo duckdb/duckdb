@@ -564,6 +564,18 @@ typedef struct _duckdb_error_data {
 	void *internal_ptr;
 } * duckdb_error_data;
 
+//! Holds a base expression.
+//! Must be destroyed with `duckdb_destroy_base_expression`.
+typedef struct _duckdb_base_expression {
+	void *internal_ptr;
+} * duckdb_base_expression;
+
+//! Holds a bound expression.
+//! Must be destroyed with `duckdb_destroy_expression`.
+typedef struct _duckdb_expression {
+	void *internal_ptr;
+} * duckdb_expression;
+
 //===--------------------------------------------------------------------===//
 // C API extension information
 //===--------------------------------------------------------------------===//
