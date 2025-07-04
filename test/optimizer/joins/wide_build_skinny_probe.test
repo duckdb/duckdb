@@ -1,3 +1,6 @@
+# name: test/optimizer/joins/wide_build_skinny_probe.test
+# group: [joins]
+
 ## name: test/optimizer/joins/wide_build_skinny_probe.test
 ## description: If the build side is wide, and the probe side is skinny, the children of the hash join should flip
 ## group: [joins]

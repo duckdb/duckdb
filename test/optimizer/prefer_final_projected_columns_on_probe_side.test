@@ -1,3 +1,6 @@
+# name: test/optimizer/prefer_final_projected_columns_on_probe_side.test
+# group: [optimizer]
+
 ## name: test/optimizer/prefer_final_projected_columns_on_probe_side.test
 ## description: Test Limit Pushdown optimization
 ## group: [optimizer]
