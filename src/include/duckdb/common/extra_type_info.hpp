@@ -50,6 +50,7 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	virtual shared_ptr<ExtraTypeInfo> Copy() const;
+	virtual shared_ptr<ExtraTypeInfo> DeepCopy() const;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -110,6 +111,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -127,6 +129,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &deserializer);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -214,6 +217,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &reader);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -229,6 +233,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;

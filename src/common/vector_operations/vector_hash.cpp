@@ -351,21 +351,21 @@ static inline void TightLoopCombineHashConstant(const T *__restrict ldata, hash_
 	}
 }
 
-template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict hash_data,
-                                        const SelectionVector *rsel, idx_t count,
-                                        const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
+template <bool HAS_RSEL, bool HAS_SEL, class T>
+static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict const hash_data,
+                                        const SelectionVector *__restrict const rsel, const idx_t count,
+                                        const SelectionVector *__restrict const sel_vector, const ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto idx = sel_vector->get_index(ridx);
-			auto other_hash = HashOp::Operation(ldata[idx], !mask.RowIsValid(idx));
+			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
+			auto idx = HAS_SEL ? sel_vector->get_index_unsafe(ridx) : ridx;
+			auto other_hash = HashOp::Operation(ldata[idx], !mask.RowIsValidUnsafe(idx));
 			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto idx = sel_vector->get_index(ridx);
+			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
+			auto idx = HAS_SEL ? sel_vector->get_index_unsafe(ridx) : ridx;
 			auto other_hash = duckdb::Hash<T>(ldata[idx]);
 			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
 		}
@@ -393,9 +393,15 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 			                                          idata.validity);
 		} else {
 			D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-			TightLoopCombineHash<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata),
-			                                  FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
-			                                  idata.validity);
+			if (idata.sel->IsSet()) {
+				TightLoopCombineHash<HAS_RSEL, true, T>(UnifiedVectorFormat::GetData<T>(idata),
+				                                        FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
+				                                        idata.validity);
+			} else {
+				TightLoopCombineHash<HAS_RSEL, false, T>(UnifiedVectorFormat::GetData<T>(idata),
+				                                         FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
+				                                         idata.validity);
+			}
 		}
 	}
 }

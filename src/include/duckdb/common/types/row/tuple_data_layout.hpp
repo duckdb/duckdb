@@ -29,11 +29,11 @@ public:
 
 public:
 	//! Initializes the TupleDataLayout with the specified types and aggregates to an empty TupleDataLayout
-	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true, bool heap_offset = true);
+	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool all_valid, bool heap_offset = true);
 	//! Initializes the TupleDataLayout with the specified types to an empty TupleDataLayout
-	void Initialize(vector<LogicalType> types, bool align = true, bool heap_offset = true);
+	void Initialize(vector<LogicalType> types, bool all_valid, bool heap_offset = true);
 	//! Initializes the TupleDataLayout with the specified aggregates to an empty TupleDataLayout
-	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
+	void Initialize(Aggregates aggregates_p);
 	//! Initializes a TupleDataLayout with the specified ORDER BY to an empty TupleDataLayout
 	void Initialize(const vector<BoundOrderByNode> &orders, const LogicalType &type, bool has_payload);
 
@@ -119,6 +119,10 @@ public:
 	inline const vector<idx_t> &GetAggregateDestructorIndices() const {
 		return aggr_destructor_idxs;
 	}
+	//! Returns whether none of the columns have NULLs
+	inline bool AllValid() const {
+		return all_valid;
+	}
 
 private:
 	//! The types of the data columns
@@ -151,6 +155,8 @@ private:
 	idx_t heap_size_offset;
 	//! Indices of aggregate functions that have a destructor
 	vector<idx_t> aggr_destructor_idxs;
+	//! Whether none of the columns have NULLs
+	bool all_valid;
 };
 
 } // namespace duckdb
