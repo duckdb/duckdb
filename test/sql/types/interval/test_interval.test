@@ -120,22 +120,24 @@ select '999999999:54:32.101234'::INTERVAL, '-999999999:54:32.101234'::INTERVAL;
 statement error
 select '9999999999:54:32.101234'::INTERVAL;
 ----
-Conversion Error: Could not convert string '9999999999:54:32.101234' to INTERVAL
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 select '-9999999999:54:32.101234'::INTERVAL;
 ----
-Conversion Error: Could not convert string '-9999999999:54:32.101234' to INTERVAL
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # FIXME: we can also use the ISO 8601 interval format
 statement error
 SELECT INTERVAL 'P2MT1H1M';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # FIXME: or this format
 statement error
 SELECT INTERVAL 'P00-02-00T01:00:01';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 query T
 SELECT INTERVAL '90' DAY;
@@ -188,6 +190,7 @@ SELECT INTERVAL '2 month' - INTERVAL '1 month 3 days';
 statement error
 SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';
 ----
+<REGEX>:Binder Error.*No function matches.*
 
 # we can, however, multiply/divide intervals by integers
 query T
@@ -210,6 +213,7 @@ SELECT INTERVAL '1 year 2 days 2 seconds' / 2;
 statement error
 SELECT 2 / INTERVAL '1 year 2 days 2 seconds';
 ----
+<REGEX>:Binder Error.*No function matches.*
 
 # division by zero
 query T
@@ -222,38 +226,46 @@ NULL
 statement error
 SELECT INTERVAL '';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT INTERVAL '   	';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # no number
 statement error
 SELECT INTERVAL 'years';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT INTERVAL '-years';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # gibberish
 statement error
 SELECT INTERVAL 'aergjaerghiuaehrgiuhaerg';
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 # overflow in year
 statement error
 SELECT INTERVAL '100000000000000000year';
 ----
+<REGEX>:Invalid Input Error.*can't be cast.*
 
 # overflow in months
 statement error
 SELECT INTERVAL '100000000000000000months';
 ----
+<REGEX>:Invalid Input Error.*can't be cast.*
 
 statement error
 SELECT INTERVAL '4294967296months';
 ----
+<REGEX>:Invalid Input Error.*can't be cast.*
 
 query T
 SELECT INTERVAL '1294967296months';
@@ -263,6 +275,7 @@ SELECT INTERVAL '1294967296months';
 statement error
 SELECT INTERVAL '1294967296months 1294967296months';
 ----
+<REGEX>:Out of Range Error.*out of range.*
 
 query T
 SELECT INTERVAL '1294967296months -1294967296months';
@@ -272,24 +285,29 @@ SELECT INTERVAL '1294967296months -1294967296months';
 statement error
 SELECT INTERVAL '-1294967296months -1294967296months';
 ----
+<REGEX>:Out of Range Error.*out of range.*
 
 # overflow in days
 statement error
 SELECT INTERVAL '100000000000000000days';
 ----
+<REGEX>:Invalid Input Error.*can't be cast.*
 
 statement error
 SELECT INTERVAL '1294967296days 1294967296days';
 ----
+<REGEX>:Out of Range Error.*out of range.*
 
 # overflow in micro seconds
 statement error
 SELECT INTERVAL '100000000000000000000msecs';
 ----
+<REGEX>:Invalid Input Error.*Could not convert string.*
 
 statement error
 SELECT INTERVAL '100000000000000000hours';
 ----
+<REGEX>:Out of Range Error.*out of range.*
 
 query T
 SELECT INTERVAL '2562047788 hours';
@@ -299,6 +317,7 @@ SELECT INTERVAL '2562047788 hours';
 statement error
 SELECT INTERVAL '2562047788 hours 2562047788 hours';
 ----
+<REGEX>:Out of Range Error.*out of range.*
 
 query T
 SELECT INTERVAL '-9223372036854775msecs';
@@ -348,40 +367,50 @@ SELECT INTERVAL '2147483647 months 2147483647 days 9223372036854775msecs';
 statement error
 SELECT INTERVAL '9223372036854775810msecs';
 ----
+<REGEX>:Invalid Input Error.*Could not convert string.*
 
 statement error
 SELECT INTERVAL '-9223372036854775810msecs';
 ----
+<REGEX>:Invalid Input Error.*Could not convert string.*
 
 # need a number here
 statement error
 SELECT INTERVAL 'aa' DAY;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT INTERVAL '100 months' DAY;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '100'::INTERVAL;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '100 unknowns'::INTERVAL;
 ----
+<REGEX>:Conversion Error.*not recognized.*
 
 statement error
 SELECT '100 months a'::INTERVAL;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '100 months axo'::INTERVAL;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '100 months agb'::INTERVAL;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
 
 statement error
 SELECT '100 months agob'::INTERVAL;
 ----
+<REGEX>:Conversion Error.*Could not convert string.*
