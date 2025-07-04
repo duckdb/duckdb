@@ -177,6 +177,10 @@ void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
 		ReplaceTableIndex<LogicalUpdate>(op);
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+		ReplaceTableIndex<LogicalMergeInto>(op);
+		break;
+	}
 
 	default:
 		break;
