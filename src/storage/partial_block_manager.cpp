@@ -34,9 +34,11 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-                                         optional_idx max_partial_block_size_p, uint32_t max_use_count)
-    : block_manager(block_manager), partial_block_type(partial_block_type), max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &block_manager,
+                                         PartialBlockType partial_block_type, optional_idx max_partial_block_size_p,
+                                         uint32_t max_use_count)
+    : context(context.GetClientContext()), block_manager(block_manager), partial_block_type(partial_block_type),
+      max_use_count(max_use_count) {
 
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
@@ -132,7 +134,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 	}
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
-		block_to_free->Flush(free_space);
+		block_to_free->Flush(context, free_space);
 	}
 }
 
@@ -173,13 +175,17 @@ void PartialBlockManager::ClearBlocks() {
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(e.first);
+		e.second->Flush(context, e.first);
 	}
 	partially_filled_blocks.clear();
 }
 
 BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
+}
+
+optional_ptr<ClientContext> PartialBlockManager::GetClientContext() const {
+	return context;
 }
 
 void PartialBlockManager::Rollback() {

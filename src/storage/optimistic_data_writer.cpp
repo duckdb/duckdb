@@ -5,10 +5,11 @@
 
 namespace duckdb {
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
+OptimisticDataWriter::OptimisticDataWriter(ClientContext &context, DataTable &table) : context(context), table(table) {
 }
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent) : table(table) {
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
+    : context(parent.GetClientContext()), table(table) {
 	if (parent.partial_manager) {
 		parent.partial_manager->ClearBlocks();
 	}
@@ -26,7 +27,8 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(block_manager, PartialBlockType::APPEND_TO_TABLE);
+		partial_manager =
+		    make_uniq<PartialBlockManager>(QueryContext(context), block_manager, PartialBlockType::APPEND_TO_TABLE);
 	}
 	return true;
 }

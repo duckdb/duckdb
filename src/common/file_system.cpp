@@ -703,7 +703,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	// FIXME: Add profiling.
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }

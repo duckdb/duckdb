@@ -61,7 +61,7 @@ public:
 	//! Add regions that need zero-initialization to avoid leaking memory
 	void AddUninitializedRegion(const idx_t start, const idx_t end);
 	//! Flush the block to disk and zero-initialize any free space and uninitialized regions
-	virtual void Flush(const idx_t free_space_left) = 0;
+	virtual void Flush(QueryContext context, const idx_t free_space_left) = 0;
 	void FlushInternal(const idx_t free_space_left);
 	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size) = 0;
 	virtual void Clear() = 0;
@@ -99,7 +99,7 @@ public:
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
-	PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
+	PartialBlockManager(QueryContext context, BlockManager &block_manager, PartialBlockType partial_block_type,
 	                    optional_idx max_partial_block_size = optional_idx(),
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
@@ -128,8 +128,15 @@ public:
 
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
+	//! Returns the optional client context.
+	optional_ptr<ClientContext> GetClientContext() const;
 
 protected:
+	//! The optional client context in which we use the partial block manager.
+	//! The SingleFileCheckpointWriter contains a partial block manager, and the destructor of
+	//! AttachedDatabase invokes CreateCheckpoint with that checkpoint writer.
+	//! Thus, we're using the optional client context instead of a reference.
+	optional_ptr<ClientContext> context;
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;
 	mutex partial_block_lock;

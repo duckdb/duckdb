@@ -25,7 +25,7 @@ public:
 	~PartialBlockForIndex() override {};
 
 public:
-	void Flush(const idx_t free_space_left) override;
+	void Flush(QueryContext context, const idx_t free_space_left) override;
 	void Clear() override;
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 };

@@ -85,7 +85,7 @@ public:
 	//! Get the combined column ids of the indexes in this list.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of this table.
-	vector<IndexStorageInfo> GetStorageInfos(const case_insensitive_map_t<Value> &options);
+	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
 
 private:
 	//! A lock to prevent any concurrent changes to the indexes.
