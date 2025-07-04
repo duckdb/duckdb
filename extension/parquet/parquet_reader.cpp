@@ -1015,7 +1015,7 @@ static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
+void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
 	auto column_id = column_ids[col_idx];
@@ -1181,7 +1181,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto col_idx = MultiFileLocalIndex(i);
-			PrepareRowGroupBuffer(state, col_idx);
+			PrepareRowGroupBuffer(context, state, col_idx);
 
 			auto file_col_idx = column_ids[col_idx];
 
@@ -1190,6 +1190,12 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		}
 
 		auto &group = GetGroup(state);
+		if (state.op) {
+			const auto event = state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup";
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader", event,
+			           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
+		}
+
 		if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
 			uint64_t total_row_group_span = GetGroupSpan(state);
 

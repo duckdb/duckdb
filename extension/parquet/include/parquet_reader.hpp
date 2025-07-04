@@ -77,6 +77,9 @@ struct ParquetReaderScanState {
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
+
+	//! (optional) pointer to the PhysicalOperator for logging
+	optional_ptr<const PhysicalOperator> op;
 };
 
 struct ParquetColumnDefinition {
@@ -216,7 +219,7 @@ private:
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
-	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
