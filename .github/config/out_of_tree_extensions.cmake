@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 64f3bfa2743c0d10b05e0e2e137520a5e2e182b3
+    GIT_TAG da2821906eb42f7255d969be3e073bc1b45a71a8
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -92,7 +92,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
            ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 06d499cf1c7568fd496f55c34586a419084e2e52
+            GIT_TAG 74f0b1d8f385ae82265b62d59c05fcd76ac2564b
             )
 endif()
 
