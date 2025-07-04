@@ -56,8 +56,16 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	}
 }
 
+unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
+	auto log_storage = LogManager::Get(context).GetLogStorage();
+
+	// Attempt to let the storage BindReplace the scan function
+	return log_storage->BindReplaceEntries(context, input);
+}
+
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
+	logs_fun.bind_replace = DuckDBLogBindReplace;
 	set.AddFunction(logs_fun);
 }
 
