@@ -3,6 +3,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/exception/list.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
@@ -49,10 +50,10 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 	return ExceptionFormatValue::Format(error, values);
 }
 
-InvalidInputException ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
+InvalidInputException ErrorManager::InvalidUnicodeError(const String &input, const string &context) {
 	UnicodeInvalidReason reason;
 	size_t pos;
-	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.size(), &reason, &pos);
+	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.GetSize(), &reason, &pos);
 	if (unicode != UnicodeType::INVALID) {
 		return InvalidInputException("Invalid unicode error thrown but no invalid unicode detected in " + context);
 	}

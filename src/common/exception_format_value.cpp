@@ -6,6 +6,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,9 @@ ExceptionFormatValue::ExceptionFormatValue(uhugeint_t uhuge_val)
 }
 ExceptionFormatValue::ExceptionFormatValue(string str_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val)) {
+}
+ExceptionFormatValue::ExceptionFormatValue(String str_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val.ToStdString())) {
 }
 
 template <>
@@ -44,6 +48,10 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
+	return ExceptionFormatValue(std::move(value));
+}
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value) {
 	return ExceptionFormatValue(std::move(value));
 }
 
