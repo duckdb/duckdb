@@ -6,6 +6,8 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
+require httpfs
+
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_current_setting'
 

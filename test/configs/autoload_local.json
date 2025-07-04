@@ -1,0 +1,6 @@
+{
+  "description": "Run test in autoloading mode, local extensions only",
+  "extension_loading": "all",
+  "extension_install": "local",
+  "skip_compiled": "true"
+}

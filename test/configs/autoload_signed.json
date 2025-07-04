@@ -1,0 +1,6 @@
+{
+  "description": "Run test in autoloading mode on remote deployed extensions",
+  "extension_loading": "all",
+  "extension_install": "remote",
+  "skip_compiled": "true"
+}
