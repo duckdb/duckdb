@@ -7,7 +7,15 @@ import glob
 os.chdir(os.path.dirname(__file__))
 
 # Dont generate serialization for these enums
-blacklist = ["RegexOptions", "Flags", "ContainerType", "Type", "DictionaryAppendState", "DictFSSTMode"]
+blacklist = [
+    "RegexOptions",
+    "Flags",
+    "ContainerType",
+    "Type",
+    "DictionaryAppendState",
+    "DictFSSTMode",
+    "ComplexJSONType",
+]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
 enum_util_source_file = os.path.join("..", "src", "common", "enum_util.cpp")

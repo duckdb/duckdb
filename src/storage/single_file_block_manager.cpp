@@ -1,5 +1,6 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -294,13 +295,11 @@ void SingleFileBlockManager::StoreSalt(MainHeader &main_header, data_ptr_t salt)
 }
 
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
-
 	//! first byte is the key derivation function used (kdf)
 	//! second byte is for the usage of AAD
 	//! third byte is for the cipher used
 	//! the subsequent byte is empty
 	//! the last 4 bytes are the key length
-
 	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
 	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
 	data_ptr_t offset = metadata;
@@ -316,6 +315,36 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	main_header.SetEncryptionMetadata(metadata);
 }
 
+void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
+	//! Get the stored salt
+	uint8_t salt[MainHeader::SALT_LEN];
+	memset(salt, 0, MainHeader::SALT_LEN);
+	memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+
+	//! Check if the correct key is used to decrypt the database
+	// Derive the encryption key and add it to cache
+	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
+	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
+
+	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+	    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
+		throw IOException("Wrong encryption key used to open the database file");
+	}
+
+	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+	auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
+	catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+	catalog.SetIsEncrypted();
+
+	std::fill(user_key.begin(), user_key.end(), 0);
+	user_key.clear();
+}
+
+void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
+	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
+}
+
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
@@ -329,20 +358,27 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	// Derive the encryption key and add it to cache
+	// Unused for plain databases
+	uint8_t salt[MainHeader::SALT_LEN];
+	memset(salt, 0, MainHeader::SALT_LEN);
+	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 
 	if (options.encryption_options.encryption_enabled) {
-		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-
+		//! key given with ATTACH, use the user key pointer in encryption options
 		//! we generate a random salt for each password
-		uint8_t salt[MainHeader::SALT_LEN];
 		GenerateSalt(db, salt, options);
-
-		// Derive the encryption key and add it to cache
-		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
 		options.encryption_options.user_key = nullptr;
 
+		// set the encrypted db bit to 0
+		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+
+		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+		auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
+		catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+		catalog.SetIsEncrypted();
 
 		//! Store all metadata in the main header
 		StoreEncryptionMetadata(main_header);
@@ -413,35 +449,23 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 
-	if (main_header.IsEncrypted() && !options.encryption_options.encryption_enabled) {
-		// Todo; look if keys are stored in DuckDB secrets
-		// then automatically derive that key
-		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
+	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
+		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
+		// database is not encrypted, but is tried to be opened with a key
 	}
 
-	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
-		// database is not encrypted, but is tried to be opened with a key
-		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
-
-	} else if (main_header.IsEncrypted()) {
-		//! Get the stored salt
-		uint8_t salt[MainHeader::SALT_LEN];
-		memset(salt, 0, MainHeader::SALT_LEN);
-		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
-
-		//! Check if the correct key is used to decrypt the database
-		// Derive the encryption key and add it to cache
-		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
-		// delete user key
-		options.encryption_options.user_key = nullptr;
-		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		if (!DecryptCanary(main_header, encryption_state, derived_key)) {
-			throw IOException("Wrong encryption key used to open the database file");
+	if (main_header.IsEncrypted()) {
+		if (options.encryption_options.encryption_enabled) {
+			//! Encryption is set
+			//! Check if the given key upon attach is correct
+			// Derive the encryption key and add it to cache
+			CheckAndAddEncryptionKey(main_header);
+			// delete user key ptr
+			options.encryption_options.user_key = nullptr;
+		} else {
+			// if encrypted, but no encryption key given
+			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
-
-		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 	}
 
 	options.version_number = main_header.version_number;

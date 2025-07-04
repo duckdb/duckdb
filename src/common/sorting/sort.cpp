@@ -298,11 +298,9 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	gstate.UpdateLocalState(lstate);
 	guard.unlock(); // Can unlock now, local state is definitely up-to-date
 
-	// We should always succeed this time
-	const auto success = TryFinishSink(gstate, lstate, guard);
-	if (!success) {
-		throw InternalException("Unable to finish Sort::Sink");
-	}
+	// This can return false if we somehow still don't have enough memory
+	// We'll likely run into an OOM exception
+	TryFinishSink(gstate, lstate, guard);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

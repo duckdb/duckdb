@@ -17,6 +17,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/pythonpkg/**'
       - '.github/patches/duckdb-wasm/**'
@@ -25,9 +26,10 @@ on:
       - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/pythonpkg/**'
       - '.github/patches/duckdb-wasm/**'
@@ -45,8 +47,17 @@ env:
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+      
   regression-test-benchmark-runner:
     name: Regression Tests
+    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -184,6 +195,7 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
+    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -264,6 +276,7 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
+    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -306,6 +319,7 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
+    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10

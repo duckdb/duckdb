@@ -167,6 +167,10 @@ SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 
+	if (gstate.child == 0 && gstate.tables[1]->global_sort_state.sorted_blocks.empty() && EmptyResultIfRHSIsEmpty()) {
+		return SinkResultType::FINISHED;
+	}
+
 	gstate.Sink(chunk, lstate);
 
 	if (filter_pushdown && !gstate.skip_filter_pushdown) {
@@ -208,15 +212,19 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 		// for FULL/LEFT/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		table.IntializeMatches();
 	}
+
+	SinkFinalizeType res;
 	if (gstate.child == 1 && global_sort_state.sorted_blocks.empty() && EmptyResultIfRHSIsEmpty()) {
 		// Empty input!
-		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+		res = SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	} else {
+		res = SinkFinalizeType::READY;
 	}
 
 	// Move to the next input child
 	gstate.Finalize(pipeline, event);
 
-	return SinkFinalizeType::READY;
+	return res;
 }
 
 //===--------------------------------------------------------------------===//
