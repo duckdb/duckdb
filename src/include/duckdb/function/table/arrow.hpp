@@ -181,6 +181,11 @@ struct ArrowScanGlobalState : public GlobalTableFunctionState {
 	}
 };
 
+struct ArrowToDuckDBConversion {
+	static void SetValidityMask(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
+	                            int64_t parent_offset, int64_t nested_offset, bool add_null = false);
+};
+
 struct ArrowTableFunction {
 public:
 	static void RegisterFunction(BuiltinFunctions &set);
@@ -227,12 +232,10 @@ protected:
 
 	//! Specify if a given type can be pushed-down by the arrow engine
 	static bool ArrowPushdownType(const LogicalType &type);
+
 	//! -----Utility Functions:-----
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);
-	//! Gets the progress on the table scan, used for Progress Bars
-	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data,
-	                            const GlobalTableFunctionState *global_state);
 };
 
 } // namespace duckdb

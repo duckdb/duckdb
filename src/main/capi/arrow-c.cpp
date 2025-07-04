@@ -3,6 +3,7 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "fmt/format.h"
 
 using duckdb::ArrowConverter;
 using duckdb::ArrowResultWrapper;
@@ -92,26 +93,35 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array, duckdb_arrow_schema arrow_schema,
+duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
                                              duckdb_arrow_converted_schema converted_schema,
                                              duckdb_data_chunk *out_chunk) {
+	auto arrow_array_cpp = reinterpret_cast<ArrowArray *>(arrow_array);
+	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk);
 
-	// auto array_physical_type = GetArrowArrayPhysicalType(arrow_type);
-	//
-	// switch (array_physical_type) {
-	// case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-	// 	ColumnArrowToDuckDBDictionary(output.data[idx], array, array_state, output.size(), arrow_type);
-	// 	break;
-	// case ArrowArrayPhysicalType::RUN_END_ENCODED:
-	// 	ColumnArrowToDuckDBRunEndEncoded(output.data[idx], array, array_state, output.size(), arrow_type);
-	// 	break;
-	// case ArrowArrayPhysicalType::DEFAULT:
-	// 	SetValidityMask(output.data[idx], array, scan_state, output.size(), parent_array.offset, -1);
-	// 	ColumnArrowToDuckDB(output.data[idx], array, array_state, output.size(), arrow_type);
-	// 	break;
-	// default:
-	// 	throw NotImplementedException("ArrowArrayPhysicalType not recognized");
-	// }
+	auto &arrow_types = arrow_table->GetColumns();
+	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
+		auto &parent_array = *arrow_array_cpp;
+		auto &array = parent_array.children[i];
+		if (array->length > STANDARD_VECTOR_SIZE) {
+			return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
+			                                "We only support Arrow chunks of up to 2048 rows");
+		}
+		auto arrow_type = arrow_types.at(i);
+		auto array_physical_type = arrow_type->GetPhysicalType();
+		switch (array_physical_type) {
+		case duckdb::ArrowArrayPhysicalType::DEFAULT:
+			duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
+			                                                 parent_array.offset, -1);
+			// ColumnArrowToDuckDB(dchunk->data[i], array, array_state, dchunk->size(), arrow_type);
+			break;
+		default:
+			return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
+			                                "Only Default Physical Types are currently supported");
+		}
+	}
+	return nullptr;
 }
 
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {

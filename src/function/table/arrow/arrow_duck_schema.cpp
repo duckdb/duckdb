@@ -377,6 +377,16 @@ bool ArrowType::HasExtension() const {
 	return extension_data.get() != nullptr;
 }
 
+ArrowArrayPhysicalType ArrowType::GetPhysicalType() const {
+	if (HasDictionary()) {
+		return ArrowArrayPhysicalType::DICTIONARY_ENCODED;
+	}
+	if (RunEndEncoded()) {
+		return ArrowArrayPhysicalType::RUN_END_ENCODED;
+	}
+	return ArrowArrayPhysicalType::DEFAULT;
+}
+
 unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type

@@ -117,10 +117,6 @@
               "name": "arrow_array"
             },
             {
-              "type": "duckdb_arrow_schema",
-              "name": "arrow_schema"
-            },
-            {
               "type": "duckdb_arrow_converted_schema",
               "name": "converted_schema"
             },
@@ -133,7 +129,6 @@
             "description": "Transforms an Arrow array into a DuckDB data chunk.\n\n",
             "param_comments": {
               "arrow_array": "The input Arrow array.",
-              "arrow_schema": "The schema describing the Arrow array.",
               "converted_schema" : "The Arrow converted schema with extra information about the Arrow Types",
               "out_chunk": "The resulting DuckDB data chunk."
             },

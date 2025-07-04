@@ -96,6 +96,8 @@ public:
 
 	bool HasExtension() const;
 
+	ArrowArrayPhysicalType GetPhysicalType() const;
+
 	//! The Arrow Type Extension data, if any
 	shared_ptr<ArrowTypeExtensionData> extension_data;
 
