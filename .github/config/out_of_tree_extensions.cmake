@@ -19,16 +19,16 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 64f3bfa2743c0d10b05e0e2e137520a5e2e182b3
+    GIT_TAG da2821906eb42f7255d969be3e073bc1b45a71a8
     INCLUDE_DIR extension/httpfs/include
     )
 
-################# AVRO
+################## AVRO
 if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG 1b53c8af9973b0267406ca5a24d7e0b52f22cec3
+            GIT_TAG 180e41e8ad13b8712d207785a6bca0aa39341040
     )
 endif()
 
@@ -90,10 +90,9 @@ endif()
 
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
-#            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
            ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 76fd8b092f9986f994ece37bb396dc89adf7b2cc
+            GIT_TAG 74f0b1d8f385ae82265b62d59c05fcd76ac2564b
             )
 endif()
 
