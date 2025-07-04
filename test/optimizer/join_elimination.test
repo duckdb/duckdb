@@ -1,0 +1,229 @@
+# name: test/optimizer/join_elimination.test
+# description: test join elimination
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+create table a(ida int, valuea int);
+
+statement ok
+create table b(idb int, valueb int);
+
+statement ok
+create table c(idc int, valuec int);
+
+statement ok
+insert into a values (1,1), (2,2), (1,1),(NUll, NULL),(3, NULL),(NULL,4);
+
+statement ok
+insert into b values (1,1), (2,2), (3,3),(4,4),(3,3),(NUll, NULL),(3, NULL),(NULL,4);
+
+statement ok
+insert into c values (1,1), (2,2), (3,3),(4,4),(3,3),(NUll, NULL),(3, NULL),(NULL,4);
+
+query II
+explain select distinct b.* from b left join a on a.ida=b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select distinct b.* from b left join a on a.ida=b.idb where b.valueb=1;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select distinct b.* from b left join a on a.ida=b.idb where a.valuea=1;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select * from a group by all) as a1 on b.idb=a1.ida;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select a.ida from a group by ida) as a1 on b.idb=a1.ida;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select b.idb,sum(b.valueb) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.idb,sum(a.valuea) from b left join a on b.idb=a.ida group by b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = 1;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb ;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida, valuea as valuea from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb and a1.valuea = b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida, valuea as valuea from a) as a1 on a1.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb or a1.ida = 1 ;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.*, a.* from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.* from b left join a on a.ida=b.idb+1;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select tan(b.idb) from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.valueb from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# this should eliminate inner join but keep outer one
+query II
+explain SELECT c.* 
+  FROM c 
+  LEFT JOIN (
+      SELECT DISTINCT b.* 
+      FROM b 
+      LEFT JOIN a ON a.ida = b.idb
+  ) AS ab ON c.idc = ab.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# this should eliminate all join
+query II
+explain SELECT c.* 
+  FROM c 
+  LEFT JOIN (
+      SELECT DISTINCT b.* 
+      FROM b 
+      LEFT JOIN a ON a.ida = b.idb
+  ) AS ab ON c.idc = ab.idb and c.valuec = ab.valueb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# just verify results are same that optimized plan compare to original.
+statement ok
+select distinct b.* from b left join a on a.ida=b.idb;
+
+statement ok
+select distinct b.* from b left join a on a.ida=b.idb where b.valueb=1;
+
+statement ok
+select distinct b.* from b left join a on a.ida=b.idb where a.valuea=1;
+
+statement ok
+select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb;
+
+statement ok
+select  b.* from b left join (select * from a group by all) as a1 on b.idb=a1.ida;
+
+statement ok
+select  b.* from b left join (select a.ida from a group by ida) as a1 on b.idb=a1.ida;
+
+statement ok
+select b.idb,sum(b.valueb) from b left join a on b.idb=a.ida group by b.idb;
+
+statement ok
+select b.idb,sum(a.valuea) from b left join a on b.idb=a.ida group by b.idb;
+
+statement ok
+select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = 1;
+
+statement ok
+select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb ;
+
+statement ok
+select  b.* from b left join (select distinct ida as ida, valuea as valuea from a) as a1 on a1.ida=b.idb and a1.ida = b.valueb and a1.valuea = b.idb;
+
+statement ok
+select  b.* from b left join (select distinct ida as ida, valuea as valuea from a) as a1 on a1.ida=b.idb;
+
+statement ok
+select  b.* from b left join (select distinct ida as ida from a) as a1 on a1.ida=b.idb or a1.ida = 1 ;
+
+statement ok
+select b.*, a.* from b left join a on a.ida=b.idb;
+
+statement ok
+select b.* from b left join a on a.ida=b.idb+1;
+
+statement ok
+select tan(b.idb) from b left join a on a.ida=b.idb;
+
+statement ok
+select b.valueb from b left join a on a.ida=b.idb;
+
+statement ok
+select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
+
+statement ok
+SELECT c.* 
+  FROM c 
+  LEFT JOIN (
+      SELECT DISTINCT b.* 
+      FROM b 
+      LEFT JOIN a ON a.ida = b.idb
+  ) AS ab ON c.idc = ab.idb;
+
+statement ok
+SELECT c.* 
+  FROM c 
+  LEFT JOIN (
+      SELECT DISTINCT b.* 
+      FROM b 
+      LEFT JOIN a ON a.ida = b.idb
+  ) AS ab ON c.idc = ab.idb and c.valuec = ab.valueb;
+
+statement ok
+select b.*, tan(a.ida) from b left join a on a.ida=b.idb;
+
+# union intersect unnest, pivot, delim scan, inline cte, materialized 
+query II
+explain 
+  select b.* from b left join (select distinct a.ida from a ) as a on a.ida=b.idb union all select b.*  from b left join (select distinct a.ida from a ) as a on a.ida=b.idb;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+statement ok
+select b.* from b left join (select distinct a.ida from a ) as a on a.ida=b.idb union all select b.*  from b left join (select distinct a.ida from a ) as a on a.ida=b.idb;
