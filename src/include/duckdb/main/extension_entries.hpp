@@ -516,6 +516,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"regr_syy", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"repeat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"replace", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"replace_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"reservoir_quantile", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"reverse", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"right", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
