@@ -717,6 +717,12 @@ typedef struct _duckdb_arrow_schema {
 	void *internal_ptr;
 } * duckdb_arrow_schema;
 
+//! Holds an arrow converted schema (i.e., duckdb::ArrowTableType)
+// Remember to release the respective ArrowConvertedSchema object.
+typedef struct _duckdb_arrow_converted_schema {
+	void *internal_ptr;
+} * duckdb_arrow_converted_schema;
+
 //! Holds an arrow array. Remember to release the respective ArrowArray object.
 typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
@@ -4533,22 +4539,26 @@ Transforms an Arrow Schema into a DuckDB Schema.
 * @param out_types The resulting DuckDB Logical Types array.
 * @param out_names The resulting column names array.
 * @param out_column_count The number of columns extracted from the Arrow schema.
+* @param out_converted_schema The Arrow converted schema with extra information about the Arrow Types
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
                                                       duckdb_logical_type *out_types, char **out_names,
-                                                      idx_t *out_column_count);
+                                                      idx_t *out_column_count,
+                                                      duckdb_arrow_converted_schema *out_converted_schema);
 
 /*!
 Transforms an Arrow array into a DuckDB data chunk.
 
 * @param arrow_array The input Arrow array.
 * @param arrow_schema The schema describing the Arrow array.
+* @param converted_schema The Arrow converted schema with extra information about the Arrow Types
 * @param out_chunk The resulting DuckDB data chunk.
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
                                                           duckdb_arrow_schema arrow_schema,
+                                                          duckdb_arrow_converted_schema converted_schema,
                                                           duckdb_data_chunk *out_chunk);
 
 #ifndef DUCKDB_API_NO_DEPRECATED

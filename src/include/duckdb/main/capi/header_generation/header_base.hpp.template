@@ -716,6 +716,12 @@ typedef struct _duckdb_arrow_schema {
 	void *internal_ptr;
 } * duckdb_arrow_schema;
 
+//! Holds an arrow converted schema (i.e., duckdb::ArrowTableType)
+// Remember to release the respective ArrowConvertedSchema object.
+typedef struct _duckdb_arrow_converted_schema {
+	void *internal_ptr;
+} * duckdb_arrow_converted_schema;
+
 //! Holds an arrow array. Remember to release the respective ArrowArray object.
 typedef struct _duckdb_arrow_array {
 	void *internal_ptr;

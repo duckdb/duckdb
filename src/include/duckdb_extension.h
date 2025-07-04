@@ -551,8 +551,10 @@ typedef struct {
 	                                                duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
 	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, duckdb_arrow_schema schema,
 	                                            duckdb_logical_type *out_types, char **out_names,
-	                                            idx_t *out_column_count);
+	                                            idx_t *out_column_count,
+	                                            duckdb_arrow_converted_schema *out_converted_schema);
 	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_arrow_array arrow_array, duckdb_arrow_schema arrow_schema,
+	                                                duckdb_arrow_converted_schema converted_schema,
 	                                                duckdb_data_chunk *out_chunk);
 #endif
 

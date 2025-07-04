@@ -650,6 +650,21 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		SetError(error, "Temporary option is not supported with schema");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	duckdb_logical_type *out_types = nullptr;
+	char **out_names = nullptr;
+	idx_t out_column_count;
+	duckdb_arrow_converted_schema out_converted_schema;
+	auto arrow_schema = new ArrowSchema();
+	duckdb_arrow_schema c_arrow_schema = reinterpret_cast<duckdb_arrow_schema>(arrow_schema);
+
+	input->get_schema(input, arrow_schema);
+
+	try {
+		arrow_to_duckdb_schema(connection, c_arrow_schema, out_types, out_names, &out_column_count,
+		                       &out_converted_schema);
+	} catch (...) {
+		return ADBC_STATUS_INTERNAL;
+	}
 
 	auto cconn = reinterpret_cast<duckdb::Connection *>(connection);
 
