@@ -76,6 +76,14 @@ struct CopyFunctionBindInput {
 	string file_extension;
 };
 
+struct CopyFromFunctionBindInput {
+	explicit CopyFromFunctionBindInput(const CopyInfo &info_p, TableFunction &tf_p) : info(info_p), tf(tf_p) {
+	}
+
+	const CopyInfo &info;
+	TableFunction &tf;
+};
+
 struct CopyToSelectInput {
 	ClientContext &context;
 	case_insensitive_map_t<vector<Value>> &options;
@@ -102,7 +110,7 @@ typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &
 
 typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
-typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
+typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyFromFunctionBindInput &info,
                                                      vector<string> &expected_names,
                                                      vector<LogicalType> &expected_types);
 typedef CopyFunctionExecutionMode (*copy_to_execution_mode_t)(bool preserve_insertion_order, bool supports_batch_index);
