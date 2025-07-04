@@ -1,0 +1,75 @@
+name: OnPullRequest
+# This workflow orchestrates the CI running on pull request events.
+# It applies paths-ignore from .github/ci_filters.yaml to file names found
+# in PR diff and triggers the downstream worfklows when not ignored files got updated
+on:
+  push:
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft]
+      
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    outputs:
+        should_run: ${{ steps.ci-filters.outputs.should_run }}
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+
+      - name: Install dependencies
+        run: pip install PyGithub pathspec
+
+      - uses: actions/checkout@v4
+        with:
+          ref: 'rearrange-ci'
+          fetch-depth: 2
+      
+      - id: ci-filters
+        env:
+          GITHUB_OUTPUT: ${{ github.output }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+            python scripts/apply_filters.py
+    
+  code-quality:
+    uses: ./.github/workflows/CodeQuality.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).CodeQuality == true }}
+  julia:
+    uses: ./.github/workflows/Julia.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Julia == true }}
+  linux-release:
+    uses: ./.github/workflows/LinuxRelease.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).LinuxRelease == true }}
+  main:
+    uses: ./.github/workflows/Main.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Main == true }}
+  python:
+    uses: ./.github/workflows/Python.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Python == true }}
+  regression:
+    uses: ./.github/workflows/Regression.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Regression == true }}
+  swift:
+    uses: ./.github/workflows/Swift.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Swift == true }}
+  windows:
+    uses: ./.github/workflows/Windows.yml
+    needs: check-draft
+    if: ${{ fromJson(needs.check-draft.outputs.should_run).Windows == true }}
+  

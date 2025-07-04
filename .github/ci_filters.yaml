@@ -1,0 +1,80 @@
+workflows:
+  CodeQuality:
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/lcov_exclude'
+      - '!.github/workflows/CodeQuality.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  Julia:
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/juliapkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Julia.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  LinuxRelease:
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
+  Main:
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  Python:
+    paths-ignore:
+    - '**.md'
+    - 'examples/**'
+    - 'test/**'
+    - 'tools/**'
+    - '!tools/pythonpkg/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Python.yml'
+    - '.github/config/out_of_tree_extensions.cmake'
+  Regression:
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Regression.yml'
+      - '.github/config/out_of_tree_extensions.cmake'
+  Swift:
+    paths-ignore:
+    - '**.md'
+    - 'examples/**'
+    - 'test/**'
+    - 'tools/**'
+    - '!tools/swift/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Swift.yml'
+    - '.github/config/out_of_tree_extensions.cmake'
+  Windows:
+    paths-ignore:
+    - '**.md'
+    - 'test/configs/**'
+    - 'tools/**'
+    - '!tools/shell/**'
+    - '.github/patches/duckdb-wasm/**'
+    - '.github/workflows/**'
+    - '!.github/workflows/Windows.yml'

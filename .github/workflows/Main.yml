@@ -2,22 +2,9 @@ name: Main
 on:
   workflow_dispatch:
   repository_dispatch:
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+  workflow_call:
   merge_group:
-  pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+  push:
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -26,28 +13,18 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: main-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
-jobs:
- check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI 
-        run: echo "Event name is ${{ github.event_name }}"
-      
+jobs: 
  linux-debug:
     name: Linux DEBUG + sanitizers
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -96,7 +73,6 @@ jobs:
 
  linux-release:
     name: Linux Release (full suite)
-    needs: check-draft
     runs-on: ubuntu-24.04
     env:
       GEN: ninja
@@ -289,7 +265,6 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     runs-on: ubuntu-22.04
-    needs: check-draft
     env:
       CC: clang
       CXX: clang++
@@ -318,7 +293,6 @@ jobs:
  linux-configs:
     name: Tests with different configurations
     runs-on: ubuntu-24.04
-    needs: check-draft
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 
