@@ -358,6 +358,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	auto &config = DBConfig::GetConfig(db.GetDatabase());
 	// Derive the encryption key and add it to cache
 	// Unused for plain databases
 	uint8_t salt[MainHeader::SALT_LEN];
@@ -373,6 +374,10 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 
 		// set the encrypted db bit to 0
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+
+		// automatically encrypt temp files (and WAL)
+		//! TODO; this needs to be set explicitly
+		config.options.temp_file_encryption = true;
 
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -455,6 +460,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	if (main_header.IsEncrypted()) {
+		auto &config = DBConfig::GetConfig(db.GetDatabase());
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 			//! Check if the given key upon attach is correct
@@ -466,6 +472,9 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			// if encrypted, but no encryption key given
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
+
+		// automatically encrypt the temp files if we deal with an encrypted database
+		config.options.temp_file_encryption = true;
 	}
 
 	options.version_number = main_header.version_number;
@@ -825,10 +834,12 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id);
+	// FIXME; maybe we should pass the block header size explicitly
+	return make_uniq<Block>(source_buffer, block_id, GetBlockHeaderSize());
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	// FIXME; maybe we should pass the block header size explicitly
 	unique_ptr<Block> result;
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);

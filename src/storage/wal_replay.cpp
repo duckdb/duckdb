@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -125,16 +126,17 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			if (offset + MainHeader::AES_NONCE_LEN + ciphertext_size + MainHeader::AES_TAG_LEN > file_size) {
+			EncryptionNonce nonce;
+			EncryptionTag tag;
+
+			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
 				throw SerializationException(
 				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
 				    "(found entry with size %llu bytes, file size %llu bytes)",
 				    offset, size, file_size);
 			}
 
-			uint8_t nonce[MainHeader::AES_IV_LEN];
-			memset(nonce, 0, MainHeader::AES_IV_LEN);
-			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
+			stream.ReadData(nonce.data(), nonce.size());
 
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
 			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
@@ -142,7 +144,7 @@ public:
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
 			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, derived_key,
+			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 			//! Allocate a decryption buffer
@@ -153,11 +155,9 @@ public:
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
 
 			//! read and verify the stored tag
-			uint8_t tag[MainHeader::AES_TAG_LEN];
-			memset(tag, 0, MainHeader::AES_TAG_LEN);
-			stream.ReadData(tag, MainHeader::AES_TAG_LEN);
+			stream.ReadData(tag.data(), tag.size());
 
-			encryption_state->Finalize(buffer.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
+			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());
