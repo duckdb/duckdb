@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index 8589edb..8cc98cc 100644
+index 8589edb..da1d595 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -231,7 +231,7 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
@@ -7,7 +7,7 @@ index 8589edb..8cc98cc 100644
  }
  
 -IndexStorageInfo RTreeIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
-+IndexStorageInfo RTreeIndex::SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) {
++IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
  
  	IndexStorageInfo info;
  	info.name = name;
@@ -54,7 +54,7 @@ index 8589edb..8cc98cc 100644
  	info.allocator_infos.push_back(leaf_allocator.GetInfo());
  	info.allocator_infos.push_back(node_allocator.GetInfo());
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 5e1ae9c..51b4e80 100644
+index 5e1ae9c..c861953 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
 @@ -47,7 +47,11 @@ public:
@@ -63,7 +63,7 @@ index 5e1ae9c..51b4e80 100644
  
 -	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool get_buffers) override;
 +	//! Serializes RTree memory to disk and returns the index storage information.
-+	IndexStorageInfo SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) override;
++	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
 +	//! Serializes RTree memory to the WAL and returns the index storage information.
 +	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 +

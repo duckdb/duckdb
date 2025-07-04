@@ -332,7 +332,7 @@ class QueryContext {
 public:
 	QueryContext() : context(nullptr) {
 	}
-	QueryContext(optional_ptr<ClientContext> context) : context(context) {
+	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
 	}
 
 public:

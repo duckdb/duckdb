@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index ce89f08..c6a5cb5 100644
+index ce89f08..5ef1fc1 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -523,7 +523,7 @@ void HNSWIndex::PersistToDisk() {
@@ -7,7 +7,7 @@ index ce89f08..c6a5cb5 100644
  }
  
 -IndexStorageInfo HNSWIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
-+IndexStorageInfo HNSWIndex::SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) {
++IndexStorageInfo HNSWIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
  
  	PersistToDisk();
  
@@ -268,7 +268,7 @@ index 5f0b55e..c5dd550 100644
  	static void RegisterJoinOptimizer(DatabaseInstance &db);
  };
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index 75783a0..a195319 100644
+index 75783a0..b9ce61a 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
 @@ -77,7 +77,11 @@ public:
@@ -277,7 +277,7 @@ index 75783a0..a195319 100644
  
 -	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) override;
 +	//! Serializes HNSW memory to disk and returns the index storage information.
-+	IndexStorageInfo SerializeToDisk(optional_ptr<ClientContext> context, const case_insensitive_map_t<Value> &options) override;
++	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
 +	//! Serializes HNSW memory to the WAL and returns the index storage information.
 +	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 +
