@@ -87,7 +87,7 @@ public:
 
 	char *GetDataWriteable() const {
 		return IsInlined()
-		           ? (char *)value.inlined.inlined
+		           ? (char *)value.inlined.inlined // NOLINT
 		           : reinterpret_cast<char *>(reinterpret_cast<uint64_t>(value.pointer.ptr) & POINTER_MASK); // NOLINT
 	}
 
