@@ -1,4 +1,7 @@
-name: PullRequest
+name: OnPullRequest
+# This workflow orchestrates the CI running on pull request events.
+# It applies paths-ignore from .github/ci_filters.yaml to file names found
+# in PR diff and triggers the downstream worfklows when not ignored files got updated
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft]
