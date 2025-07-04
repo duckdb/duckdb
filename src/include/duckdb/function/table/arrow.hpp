@@ -89,12 +89,9 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	// explicit ArrowArrayScanState(ArrowScanLocalState &state, ClientContext &context);
-
 	explicit ArrowArrayScanState(ClientContext &context);
 
 public:
-	// ArrowScanLocalState &state;
 	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
 	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
@@ -186,6 +183,21 @@ struct ArrowScanGlobalState : public GlobalTableFunctionState {
 struct ArrowToDuckDBConversion {
 	static void SetValidityMask(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
 	                            int64_t parent_offset, int64_t nested_offset, bool add_null = false);
+
+	static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array, idx_t chunk_offset,
+	                                             ArrowArrayScanState &array_state, idx_t size,
+	                                             const ArrowType &arrow_type, int64_t nested_offset = -1,
+	                                             ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
+
+	static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset,
+	                                ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
+	                                int64_t nested_offset = -1, ValidityMask *parent_mask = nullptr,
+	                                uint64_t parent_offset = 0, bool ignore_extensions = false);
+
+	static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
+	                                          ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
+	                                          int64_t nested_offset = -1, const ValidityMask *parent_mask = nullptr,
+	                                          uint64_t parent_offset = 0);
 };
 
 struct ArrowTableFunction {

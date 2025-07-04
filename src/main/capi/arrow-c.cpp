@@ -93,12 +93,13 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
+duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckdb_arrow_array arrow_array,
                                              duckdb_arrow_converted_schema converted_schema,
                                              duckdb_data_chunk *out_chunk) {
 	auto arrow_array_cpp = reinterpret_cast<ArrowArray *>(arrow_array);
 	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk);
+	auto conn = reinterpret_cast<Connection *>(connection);
 
 	auto &arrow_types = arrow_table->GetColumns();
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
@@ -110,12 +111,14 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
 		}
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
-		// auto child_p = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*this, context);
+		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);
 		switch (array_physical_type) {
 		case duckdb::ArrowArrayPhysicalType::DEFAULT:
 			duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
 			                                                 parent_array.offset, -1);
-			// ColumnArrowToDuckDB(dchunk->data[i], array, array_state, dchunk->size(), arrow_type);
+
+			duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
+			                                                     dchunk->size(), *arrow_type);
 			break;
 		default:
 			return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,

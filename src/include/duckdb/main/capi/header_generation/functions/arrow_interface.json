@@ -98,7 +98,7 @@
           "comment": {
             "description": "Transforms an Arrow Schema into a DuckDB Schema.\n\n",
             "param_comments": {
-                "connection": "The connection to get the transformation settings from.",
+              "connection": "The connection to get the transformation settings from.",
               "schema": "The input Arrow schema.",
               "out_types": "The resulting DuckDB Logical Types array.",
               "out_names": "The resulting column names array.",
@@ -112,6 +112,10 @@
           "name": "arrow_to_duckdb_data_chunk",
           "return_type": "duckdb_error_data",
           "params": [
+            {
+                "type": "duckdb_connection",
+                "name": "connection"
+            },
             {
               "type": "duckdb_arrow_array",
               "name": "arrow_array"
@@ -128,6 +132,7 @@
           "comment": {
             "description": "Transforms an Arrow array into a DuckDB data chunk.\n\n",
             "param_comments": {
+              "connection": "The connection to get the transformation settings from.",
               "arrow_array": "The input Arrow array.",
               "converted_schema" : "The Arrow converted schema with extra information about the Arrow Types",
               "out_chunk": "The resulting DuckDB data chunk."

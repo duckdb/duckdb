@@ -98,21 +98,6 @@ void ArrowToDuckDBConversion::SetValidityMask(Vector &vector, ArrowArray &array,
 	GetValidityMask(mask, array, chunk_offset, size, parent_offset, nested_offset, add_null);
 }
 
-static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array, idx_t chunk_offset,
-                                             ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
-                                             int64_t nested_offset = -1, ValidityMask *parent_mask = nullptr,
-                                             uint64_t parent_offset = 0);
-
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset, ArrowArrayScanState &array_state,
-                                idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
-                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0,
-                                bool ignore_extensions = false);
-
-static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
-                                          ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
-                                          int64_t nested_offset = -1, const ValidityMask *parent_mask = nullptr,
-                                          uint64_t parent_offset = 0);
-
 namespace {
 
 struct ArrowListOffsetData {
@@ -242,7 +227,8 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 
 	if (list_size == 0 && start_offset == 0) {
 		D_ASSERT(!child_array.dictionary);
-		ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, list_size, child_type, -1);
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, list_size,
+		                                             child_type, -1);
 		return;
 	}
 
@@ -250,16 +236,18 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 	switch (array_physical_type) {
 	case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
 		// TODO: add support for offsets
-		ColumnArrowToDuckDBDictionary(child_vector, child_array, chunk_offset, child_state, list_size, child_type,
-		                              NumericCast<int64_t>(start_offset));
+		ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child_vector, child_array, chunk_offset, child_state,
+		                                                       list_size, child_type,
+		                                                       NumericCast<int64_t>(start_offset));
 		break;
 	case ArrowArrayPhysicalType::RUN_END_ENCODED:
-		ColumnArrowToDuckDBRunEndEncoded(child_vector, child_array, chunk_offset, child_state, list_size, child_type,
-		                                 NumericCast<int64_t>(start_offset));
+		ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child_vector, child_array, chunk_offset, child_state,
+		                                                          list_size, child_type,
+		                                                          NumericCast<int64_t>(start_offset));
 		break;
 	case ArrowArrayPhysicalType::DEFAULT:
-		ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, list_size, child_type,
-		                    NumericCast<int64_t>(start_offset));
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, list_size,
+		                                             child_type, NumericCast<int64_t>(start_offset));
 		break;
 	default:
 		throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -311,14 +299,16 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	auto &child_type = array_info.GetChild();
 	if (child_count == 0 && child_offset == 0) {
 		D_ASSERT(!child_array.dictionary);
-		ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, child_count, child_type, -1);
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, child_count,
+		                                             child_type, -1);
 	} else {
 		if (child_array.dictionary) {
-			ColumnArrowToDuckDBDictionary(child_vector, child_array, chunk_offset, child_state, child_count, child_type,
-			                              NumericCast<int64_t>(child_offset));
+			ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child_vector, child_array, chunk_offset, child_state,
+			                                                       child_count, child_type,
+			                                                       NumericCast<int64_t>(child_offset));
 		} else {
-			ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state, child_count, child_type,
-			                    NumericCast<int64_t>(child_offset));
+			ArrowToDuckDBConversion::ColumnArrowToDuckDB(child_vector, child_array, chunk_offset, child_state,
+			                                             child_count, child_type, NumericCast<int64_t>(child_offset));
 		}
 	}
 }
@@ -702,9 +692,11 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 	}
 }
 
-static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array, idx_t chunk_offset,
-                                             ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
-                                             int64_t nested_offset, ValidityMask *parent_mask, uint64_t parent_offset) {
+void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array,
+                                                               idx_t chunk_offset, ArrowArrayScanState &array_state,
+                                                               idx_t size, const ArrowType &arrow_type,
+                                                               int64_t nested_offset, ValidityMask *parent_mask,
+                                                               uint64_t parent_offset) {
 	// Scan the 'run_ends' array
 	D_ASSERT(array.n_children == 2);
 	auto &run_ends_array = *array.children[0];
@@ -729,12 +721,13 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 		run_end_encoding.run_ends = make_uniq<Vector>(run_ends_type.GetDuckType(), compressed_size);
 		run_end_encoding.values = make_uniq<Vector>(values_type.GetDuckType(), compressed_size);
 
-		ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, chunk_offset, array_state, compressed_size,
-		                    run_ends_type);
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, chunk_offset,
+		                                             array_state, compressed_size, run_ends_type);
 		auto &values = *run_end_encoding.values;
 		ArrowToDuckDBConversion::SetValidityMask(values, values_array, chunk_offset, compressed_size,
 		                                         NumericCast<int64_t>(parent_offset), nested_offset);
-		ColumnArrowToDuckDB(values, values_array, chunk_offset, array_state, compressed_size, values_type);
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(values, values_array, chunk_offset, array_state, compressed_size,
+		                                             values_type);
 	}
 
 	idx_t scan_offset = GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
@@ -831,9 +824,11 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 }
 
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset, ArrowArrayScanState &array_state,
-                                idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
-                                ValidityMask *parent_mask, uint64_t parent_offset, bool ignore_extensions) {
+void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset,
+                                                  ArrowArrayScanState &array_state, idx_t size,
+                                                  const ArrowType &arrow_type, int64_t nested_offset,
+                                                  ValidityMask *parent_mask, uint64_t parent_offset,
+                                                  bool ignore_extensions) {
 	D_ASSERT(!array.dictionary);
 	if (!ignore_extensions && arrow_type.HasExtension()) {
 		if (arrow_type.extension_data->arrow_to_duckdb) {
@@ -1144,9 +1139,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_o
 			auto array_physical_type = child_type.GetPhysicalType();
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-				ColumnArrowToDuckDBDictionary(child_entry, child_array, chunk_offset, child_state, size, child_type,
-				                              nested_offset, &struct_validity_mask,
-				                              NumericCast<uint64_t>(array.offset));
+				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(
+				    child_entry, child_array, chunk_offset, child_state, size, child_type, nested_offset,
+				    &struct_validity_mask, NumericCast<uint64_t>(array.offset));
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
 				ColumnArrowToDuckDBRunEndEncoded(child_entry, child_array, chunk_offset, child_state, size, child_type,
@@ -1183,14 +1178,16 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_o
 
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-				ColumnArrowToDuckDBDictionary(child, child_array, chunk_offset, child_state, size, child_type);
+				ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(child, child_array, chunk_offset, child_state,
+				                                                       size, child_type);
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
-				ColumnArrowToDuckDBRunEndEncoded(child, child_array, chunk_offset, child_state, size, child_type);
+				ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(child, child_array, chunk_offset, child_state,
+				                                                          size, child_type);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
-				ColumnArrowToDuckDB(child, child_array, chunk_offset, child_state, size, child_type, nested_offset,
-				                    &validity_mask, false);
+				ArrowToDuckDBConversion::ColumnArrowToDuckDB(child, child_array, chunk_offset, child_state, size,
+				                                             child_type, nested_offset, &validity_mask, false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1351,10 +1348,10 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 	return !parent_mask->AllValid();
 }
 
-static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
-                                          ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
-                                          int64_t nested_offset, const ValidityMask *parent_mask,
-                                          uint64_t parent_offset) {
+void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
+                                                            ArrowArrayScanState &array_state, idx_t size,
+                                                            const ArrowType &arrow_type, int64_t nested_offset,
+                                                            const ValidityMask *parent_mask, uint64_t parent_offset) {
 	if (vector.GetBuffer()) {
 		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
@@ -1462,18 +1459,18 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		;
 		switch (array_physical_type) {
 		case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state.chunk_offset, array_state, output.size(),
-			                              arrow_type);
+			ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state.chunk_offset,
+			                                                       array_state, output.size(), arrow_type);
 			break;
 		case ArrowArrayPhysicalType::RUN_END_ENCODED:
-			ColumnArrowToDuckDBRunEndEncoded(output.data[idx], array, scan_state.chunk_offset, array_state,
-			                                 output.size(), arrow_type);
+			ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(output.data[idx], array, scan_state.chunk_offset,
+			                                                          array_state, output.size(), arrow_type);
 			break;
 		case ArrowArrayPhysicalType::DEFAULT:
 			ArrowToDuckDBConversion::SetValidityMask(output.data[idx], array, scan_state.chunk_offset, output.size(),
 			                                         parent_array.offset, -1);
-			ColumnArrowToDuckDB(output.data[idx], array, scan_state.chunk_offset, array_state, output.size(),
-			                    arrow_type);
+			ArrowToDuckDBConversion::ColumnArrowToDuckDB(output.data[idx], array, scan_state.chunk_offset, array_state,
+			                                             output.size(), arrow_type);
 			break;
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");

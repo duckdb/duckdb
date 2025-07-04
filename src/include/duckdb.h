@@ -4550,12 +4550,13 @@ DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connecti
 /*!
 Transforms an Arrow array into a DuckDB data chunk.
 
+* @param connection The connection to get the transformation settings from.
 * @param arrow_array The input Arrow array.
 * @param converted_schema The Arrow converted schema with extra information about the Arrow Types
 * @param out_chunk The resulting DuckDB data chunk.
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckdb_arrow_array arrow_array,
                                                           duckdb_arrow_converted_schema converted_schema,
                                                           duckdb_data_chunk *out_chunk);
 
