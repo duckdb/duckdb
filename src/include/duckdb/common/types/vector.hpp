@@ -219,7 +219,7 @@ public:
 	inline const LogicalType &GetType() const {
 		return type;
 	}
-	inline data_ptr_t GetData() {
+	inline data_ptr_t GetData() const {
 		return data;
 	}
 
