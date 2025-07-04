@@ -8,13 +8,6 @@ workflows:
       - '!.github/workflows/lcov_exclude'
       - '!.github/workflows/CodeQuality.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-  # CIFuzz:
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'tools/**'
-  #     - '.github/patches/duckdb-wasm/**'
-  #     - '.github/workflows/**'
-  #     - '!.github/workflows/cifuzz.yml'
   Julia:
     paths-ignore:
       - '**.md'
@@ -44,15 +37,6 @@ workflows:
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-  # OSX:
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'test/configs/**'
-  #     - 'tools/**'
-  #     - '!tools/shell/**'
-  #     - '.github/patches/duckdb-wasm/**'
-  #     - '.github/workflows/**'
-  #     - '!.github/workflows/OSX.yml'
   Python:
     paths-ignore:
     - '**.md'
