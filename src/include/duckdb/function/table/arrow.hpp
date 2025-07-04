@@ -89,10 +89,12 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	explicit ArrowArrayScanState(ArrowScanLocalState &state, ClientContext &context);
+	// explicit ArrowArrayScanState(ArrowScanLocalState &state, ClientContext &context);
+
+	explicit ArrowArrayScanState(ClientContext &context);
 
 public:
-	ArrowScanLocalState &state;
+	// ArrowScanLocalState &state;
 	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
 	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
@@ -153,7 +155,7 @@ public:
 	ArrowArrayScanState &GetState(idx_t child_idx) {
 		auto it = array_states.find(child_idx);
 		if (it == array_states.end()) {
-			auto child_p = make_uniq<ArrowArrayScanState>(*this, context);
+			auto child_p = make_uniq<ArrowArrayScanState>(context);
 			auto &child = *child_p;
 			array_states.emplace(child_idx, std::move(child_p));
 			return child;

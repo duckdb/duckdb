@@ -110,6 +110,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_arrow_array arrow_array,
 		}
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
+		// auto child_p = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*this, context);
 		switch (array_physical_type) {
 		case duckdb::ArrowArrayPhysicalType::DEFAULT:
 			duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
