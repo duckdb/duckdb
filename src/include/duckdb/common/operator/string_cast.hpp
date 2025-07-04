@@ -9,9 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
