@@ -11,6 +11,7 @@
 #include "writer/parquet_write_stats.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -201,16 +202,8 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		TGT result;
-		uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
-		uint64_t low_bytes = input.lower;
-		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-			result.bytes[i] = (high_bytes >> shift_count) & 0xFF;
-		}
-		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-			auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
-			result.bytes[sizeof(uint64_t) + i] = (low_bytes >> shift_count) & 0xFF;
-		}
+		// Use the utility function from BaseUUID
+		BaseUUID::ToBlob(input, result.bytes);
 		return result;
 	}
 
