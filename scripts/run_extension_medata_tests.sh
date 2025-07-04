@@ -66,8 +66,8 @@ EOL
   # Install the extension from the initial config
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; set custom_extension_repository='$LOCAL_EXTENSION_REPO_UPDATED'; install tpch; install json; INSTALL icu;"
 
-  # Delete the info file from the inet extension
-  rm $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/inet.duckdb_extension.info
+  # Delete the info file from the icu extension
+  rm $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/icu.duckdb_extension.info
 
   # Install tpcds directly
   cp $DUCKDB_BUILD_DIR/extension/tpcds/tpcds.duckdb_extension $DIRECT_INSTALL_DIR/tpcds.duckdb_extension
