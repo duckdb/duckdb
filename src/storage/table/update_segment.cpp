@@ -21,6 +21,7 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
+static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
     : column_data(column_data), stats(column_data.type), heap(BufferAllocator::Get(column_data.GetDatabase())) {
@@ -36,6 +37,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
+	this->get_effective_updates = GetEffectiveUpdatesFunction(physical_type);
 }
 
 UpdateSegment::~UpdateSegment() {
@@ -1053,6 +1055,9 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 				}
 			}
 		}
+		if (not_null_count == count) {
+			sel.Initialize(nullptr);
+		}
 		return not_null_count;
 	}
 }
@@ -1090,6 +1095,96 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 		return TemplatedUpdateNumericStatistics<interval_t>;
 	case PhysicalType::VARCHAR:
 		return UpdateStringStatistics;
+	default:
+		throw NotImplementedException("Unimplemented type for uncompressed segment");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Get Effective Updates
+//===--------------------------------------------------------------------===//
+idx_t GetEffectiveUpdatesValidity(UnifiedVectorFormat &update, row_t *ids, idx_t count, SelectionVector &sel,
+                                  Vector &base_data, idx_t id_offset) {
+	auto &original_validity = FlatVector::Validity(base_data);
+
+	SelectionVector new_sel;
+	new_sel.Initialize(STANDARD_VECTOR_SIZE);
+
+	idx_t effective_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto sel_idx = sel.get_index(i);
+		auto update_idx = update.sel->get_index(sel_idx);
+		auto original_idx = UnsafeNumericCast<idx_t>(ids[sel_idx]) - id_offset;
+		if (original_validity.RowIsValid(original_idx) == update.validity.RowIsValid(update_idx)) {
+			continue;
+		}
+		new_sel.set_index(effective_count++, sel_idx);
+	}
+	sel.Initialize(new_sel);
+	return effective_count;
+}
+
+template <class T>
+idx_t TemplatedGetEffectiveUpdates(UnifiedVectorFormat &update, row_t *ids, idx_t count, SelectionVector &sel,
+                                   Vector &base_data, idx_t id_offset) {
+	auto data = UnifiedVectorFormat::GetData<T>(update);
+
+	auto original_data = FlatVector::GetData<T>(base_data);
+	auto &original_validity = FlatVector::Validity(base_data);
+
+	SelectionVector new_sel;
+	new_sel.Initialize(STANDARD_VECTOR_SIZE);
+
+	idx_t effective_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto sel_idx = sel.get_index(i);
+		auto update_idx = update.sel->get_index(sel_idx);
+		auto original_idx = UnsafeNumericCast<idx_t>(ids[sel_idx]) - id_offset;
+		// NULL values in the updates should have been filtered out before
+		D_ASSERT(update.validity.RowIsValid(update_idx));
+		if (original_validity.RowIsValid(original_idx) && data[update_idx] == original_data[original_idx]) {
+			// data is equivalent - skip
+			continue;
+		}
+		new_sel.set_index(effective_count++, sel_idx);
+	}
+	sel.Initialize(new_sel);
+	return effective_count;
+}
+
+UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BIT:
+		return GetEffectiveUpdatesValidity;
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedGetEffectiveUpdates<int8_t>;
+	case PhysicalType::INT16:
+		return TemplatedGetEffectiveUpdates<int16_t>;
+	case PhysicalType::INT32:
+		return TemplatedGetEffectiveUpdates<int32_t>;
+	case PhysicalType::INT64:
+		return TemplatedGetEffectiveUpdates<int64_t>;
+	case PhysicalType::UINT8:
+		return TemplatedGetEffectiveUpdates<uint8_t>;
+	case PhysicalType::UINT16:
+		return TemplatedGetEffectiveUpdates<uint16_t>;
+	case PhysicalType::UINT32:
+		return TemplatedGetEffectiveUpdates<uint32_t>;
+	case PhysicalType::UINT64:
+		return TemplatedGetEffectiveUpdates<uint64_t>;
+	case PhysicalType::INT128:
+		return TemplatedGetEffectiveUpdates<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedGetEffectiveUpdates<uhugeint_t>;
+	case PhysicalType::FLOAT:
+		return TemplatedGetEffectiveUpdates<float>;
+	case PhysicalType::DOUBLE:
+		return TemplatedGetEffectiveUpdates<double>;
+	case PhysicalType::INTERVAL:
+		return TemplatedGetEffectiveUpdates<interval_t>;
+	case PhysicalType::VARCHAR:
+		return TemplatedGetEffectiveUpdates<string_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -1195,6 +1290,18 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	auto first_id = ids[sel.get_index(0)];
 	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
+
+	if (!root || vector_index >= root->info.size() || !root->info[vector_index].IsSet()) {
+		// get a list of effective updates - i.e. updates that actually change rows
+		// if updates have the same value as the base row we can skip them
+		// we only do that if we have no updates for this vector
+		// we could do it otherwise - but that would require merging updates in order to find the current values
+		count = get_effective_updates(update_format, ids, count, sel, base_data, vector_offset);
+		if (count == 0) {
+			return;
+		}
+	}
+
 	InitializeUpdateInfo(vector_index);
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
@@ -1249,6 +1356,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		base_info.Verify();
 		node->Verify();
 	} else {
+
 		// there is no version info yet: create the top level update info and fill it with the updates
 		// allocate space for the UpdateInfo in the allocator
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
