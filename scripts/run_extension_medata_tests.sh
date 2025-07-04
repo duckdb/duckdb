@@ -53,13 +53,7 @@ else
   duckdb_extension_load(json DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpch DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpcds DONT_LINK EXTENSION_VERSION v0.0.1)
-  duckdb_extension_load(inet
-      DONT_LINK
-      GIT_URL https://github.com/duckdb/duckdb_inet
-      GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
-      INCLUDE_DIR src/include
-      EXTENSION_VERSION v0.0.1
-      )
+  duckdb_extension_load(icu DONT_LINK EXTENSION_VERSION v0.0.1)
 EOL
 
   # Build the extensions using the first config
@@ -83,20 +77,13 @@ EOL
   cat > $TEST_DIR/extension_config_after.cmake <<EOL
   duckdb_extension_load(json DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpch DONT_LINK EXTENSION_VERSION v0.0.2)
-  duckdb_extension_load(inet
-      DONT_LINK
-      GIT_URL https://github.com/duckdb/duckdb_inet
-      GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
-      INCLUDE_DIR src/include
-      EXTENSION_VERSION v0.0.2
-   )
 EOL
 
   # Build the extensions using the second config
   LOCAL_EXTENSION_REPO=$LOCAL_EXTENSION_REPO_UPDATED EXTENSION_CONFIGS=$TEST_DIR/extension_config_after.cmake BUILD_EXTENSIONS_ONLY=1 make debug
 
   # For good measure, we also gzip one of the files in the repo to ensure we can do both gzipped and non gzipped
-  gzip -1 $LOCAL_EXTENSION_REPO_UPDATED/$DUCKDB_VERSION/$DUCKDB_PLATFORM/inet.duckdb_extension
+  gzip -1 $LOCAL_EXTENSION_REPO_UPDATED/$DUCKDB_VERSION/$DUCKDB_PLATFORM/json.duckdb_extension
 
   ##########################################
   ### Second repo: Incorrect DuckDB platform
