@@ -69,7 +69,7 @@ endif()
 duckdb_extension_load(ducklake
     DONT_LINK
     GIT_URL https://github.com/duckdb/ducklake
-    GIT_TAG 2d890446b33fe648c2d2135fe2e2f3b78419b6b7
+    GIT_TAG 9cc2d903c51d360ff3fc6afb10cf38f8eac2e25b
 )
 
 ################# EXCEL
