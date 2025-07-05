@@ -506,23 +506,6 @@ Value EnableFSSTVectorsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Enable H T T P Logging
-//===----------------------------------------------------------------------===//
-void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_http_logging = input.GetValue<bool>();
-}
-
-void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
-}
-
-Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_http_logging);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable H T T P Metadata Cache
 //===----------------------------------------------------------------------===//
 void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -676,23 +659,6 @@ void HomeDirectorySetting::ResetLocal(ClientContext &context) {
 Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.home_directory);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Logging Output
-//===----------------------------------------------------------------------===//
-void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.http_logging_output = input.GetValue<string>();
-}
-
-void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
-}
-
-Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.http_logging_output);
 }
 
 //===----------------------------------------------------------------------===//
