@@ -55,6 +55,7 @@ env:
   AZURE_CODESIGN_ENDPOINT: https://eus.codesigning.azure.net/
   AZURE_CODESIGN_ACCOUNT: duckdb-signing-2
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
+  _CL_: /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR
 
 jobs:
  win-release-64:
