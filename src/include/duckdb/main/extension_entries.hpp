@@ -42,7 +42,6 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"!__postfix", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"**", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<->", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -625,6 +624,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_linestring2dfromwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_linesubstring", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_m", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_makebox2d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makeenvelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makeline", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makepolygon", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -772,6 +772,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 }; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {
+    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "['ANY[]','ANY[]']>BOOLEAN"},
+    {"&&", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY, "[BOX_2D,GEOMETRY]>BOOLEAN"},
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>INTERVAL"},
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP,TIMESTAMP]>INTERVAL"},
     {"age", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ]>INTERVAL"},
