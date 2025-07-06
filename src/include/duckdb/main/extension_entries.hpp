@@ -42,6 +42,7 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"!__postfix", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"**", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<->", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -772,8 +773,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 }; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {
-    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "['ANY[]','ANY[]']>BOOLEAN"},
-    {"&&", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY, "[BOX_2D,GEOMETRY]>BOOLEAN"},
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>INTERVAL"},
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP,TIMESTAMP]>INTERVAL"},
     {"age", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ]>INTERVAL"},
@@ -1060,7 +1059,7 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_TYPES[] = {
-    {"json", "json"}, {"inet", "inet"}, {"geometry", "spatial"}, {"box_2d", "spatial"}}; // END_OF_EXTENSION_TYPES
+    {"json", "json"}, {"inet", "inet"}, {"geometry", "spatial"}}; // END_OF_EXTENSION_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
