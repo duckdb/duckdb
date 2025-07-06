@@ -151,6 +151,8 @@ unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
 		sql = PragmaShowDatabases();
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
+	} else if (ref.show_type == ShowType::SHOW_FROM) {
+		sql = PragmaShowTables(ref.catalog_name, ref.schema_name);
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {
