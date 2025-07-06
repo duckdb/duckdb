@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG da2821906eb42f7255d969be3e073bc1b45a71a8
+    GIT_TAG af7bcaf40c775016838fef4823666bd18b89b36b
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -76,7 +76,7 @@ duckdb_extension_load(ducklake
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
-    GIT_TAG 7e97933214d0c7de2315668ec68589ae85651afb
+    GIT_TAG cf00672f2d16685d9aefcca48c6a04d8c37d7015
     INCLUDE_DIR src/excel/include
     )
 
@@ -92,7 +92,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(iceberg
            ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 74f0b1d8f385ae82265b62d59c05fcd76ac2564b
+            GIT_TAG 003a93fbb005a7fa2469400967a77db509595271
             )
 endif()
 
