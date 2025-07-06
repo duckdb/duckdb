@@ -2,12 +2,8 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
 
