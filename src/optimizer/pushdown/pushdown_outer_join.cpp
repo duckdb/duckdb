@@ -7,7 +7,6 @@
 
 namespace duckdb {
 
-
 using Filter = FilterPushdown::Filter;
 
 //! A representation of a coalesce expression that removes unnecessary usages of
@@ -35,21 +34,18 @@ public:
 	}
 
 	static FlattenedCoalesce Of(const vector<reference<Expression>> &expressions) {
-		vector<reference<Expression>> args{};
+		vector<reference<Expression>> args {};
 		for (auto expr : expressions) {
-			EnumerateFlattenedCoalesceArgs(expr, [&](Expression &arg) {
-				args.push_back(arg);
-			});
+			EnumerateFlattenedCoalesceArgs(expr, [&](Expression &arg) { args.push_back(arg); });
 		}
 		return {args};
 	}
+
 private:
-    static void EnumerateFlattenedCoalesceArgs(Expression &expr,
-										       const std::function<void(Expression &arg)> &callback) {
+	static void EnumerateFlattenedCoalesceArgs(Expression &expr, const std::function<void(Expression &arg)> &callback) {
 		if (expr.GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
-			ExpressionIterator::EnumerateChildren(expr, [&](Expression &arg) {
-				EnumerateFlattenedCoalesceArgs(arg, callback);
-			});
+			ExpressionIterator::EnumerateChildren(
+			    expr, [&](Expression &arg) { EnumerateFlattenedCoalesceArgs(arg, callback); });
 		} else {
 			callback(expr);
 		}
@@ -67,9 +63,8 @@ struct FlattenedCoalesceHash {
 };
 
 //! Replace all occurrences of `exprs_to_replace` in `expr` with `replacement_expr`
-static unique_ptr<Expression> ReplaceIn(unique_ptr<Expression> expr,
-					                    const expression_set_t &exprs_to_replace,
-					                    const Expression &replacement_expr) {
+static unique_ptr<Expression> ReplaceIn(unique_ptr<Expression> expr, const expression_set_t &exprs_to_replace,
+                                        const Expression &replacement_expr) {
 	ExpressionIterator::EnumerateExpression(expr, [&](unique_ptr<Expression> &sub_expr) {
 		if (exprs_to_replace.find(*sub_expr) != exprs_to_replace.end()) {
 			sub_expr = replacement_expr.Copy();
@@ -99,14 +94,15 @@ static bool ExprIsFunctionOnlyOf(const Expression &expr, const expression_set_t 
 //! is a join condition of the form `l = r` where `l` and `r` are join keys for
 //! the left and right table respectively, then pushdown `P(l)` to the left
 //! table, `P(r)` to the right table, and remove the original filter.
-static bool PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters,
-											        const vector<JoinCondition> &join_conditions,
-											        const std::function<void (unique_ptr<Expression> filter)> &pushdown_left,
-											        const std::function<void (unique_ptr<Expression> filter)> &pushdown_right) {
+static bool
+PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters,
+                                        const vector<JoinCondition> &join_conditions,
+                                        const std::function<void(unique_ptr<Expression> filter)> &pushdown_left,
+                                        const std::function<void(unique_ptr<Expression> filter)> &pushdown_right) {
 	// Generate set of all possible coalesced join keys expressions to later
 	// discover filters on such expressions which are candidates for pushdown
 	unordered_map<FlattenedCoalesce, reference<const JoinCondition>, FlattenedCoalesceHash>
-	join_cond_by_coalesced_join_keys;
+	    join_cond_by_coalesced_join_keys;
 
 	for (auto &cond : join_conditions) {
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
@@ -133,13 +129,13 @@ static bool PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &
 		// occurrences of equivalent coalesce expressions on the same join keys
 		// which need to be replaced if the filter is to be pushed down
 		expression_set_t coalesce_exprs_to_replace;
-		const JoinCondition* join_cond_ptr = nullptr;
+		const JoinCondition *join_cond_ptr = nullptr;
 		bool many_non_equivalent_coalesce_exprs = false;
 
 		ExpressionIterator::EnumerateExpression(filter, [&](Expression &sub_expr) {
 			if (many_non_equivalent_coalesce_exprs ||
 			    sub_expr.GetExpressionType() != ExpressionType::OPERATOR_COALESCE) {
-			    return;
+				return;
 			}
 
 			auto sub_expr_flattened_coalesce = FlattenedCoalesce::Of({sub_expr});
@@ -158,10 +154,8 @@ static bool PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &
 			coalesce_exprs_to_replace.insert(sub_expr);
 		});
 
-		if (coalesce_exprs_to_replace.size() == 0 ||
-			many_non_equivalent_coalesce_exprs ||
-			!ExprIsFunctionOnlyOf(*filter, coalesce_exprs_to_replace)
-		) {
+		if (coalesce_exprs_to_replace.size() == 0 || many_non_equivalent_coalesce_exprs ||
+		    !ExprIsFunctionOnlyOf(*filter, coalesce_exprs_to_replace)) {
 			continue;
 		}
 
@@ -190,10 +184,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<Logical
 
 	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	auto has_applied_pushdown = PushDownFiltersOnCoalescedEqualJoinKeys(
-		filters,
-		join.conditions,
-		[&](unique_ptr<Expression> filter) { left_pushdown.AddFilter(std::move(filter)); },
-		[&](unique_ptr<Expression> filter) { right_pushdown.AddFilter(std::move(filter)); });
+	    filters, join.conditions, [&](unique_ptr<Expression> filter) { left_pushdown.AddFilter(std::move(filter)); },
+	    [&](unique_ptr<Expression> filter) { right_pushdown.AddFilter(std::move(filter)); });
 
 	if (!has_applied_pushdown) {
 		return FinishPushdown(std::move(op));
