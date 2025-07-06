@@ -14,10 +14,10 @@ namespace duckdb {
 
 class JoinBloomFilter {
 public:
-	JoinBloomFilter(size_t expected_cardinality, vector<column_t> column_ids) : JoinBloomFilter(expected_cardinality, /*desired_false_positive_rate=*/0.01, std::move(column_ids)) {};
-	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate) : JoinBloomFilter(expected_cardinality, desired_false_positive_rate, /*column_ids=*/{}) {};
-	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids);
-	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size);
+	JoinBloomFilter(size_t expected_cardinality, vector<column_t> column_ids, std::string fingerprint) : JoinBloomFilter(expected_cardinality, /*desired_false_positive_rate=*/0.01, std::move(column_ids), fingerprint) {};
+	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, std::string fingerprint) : JoinBloomFilter(expected_cardinality, desired_false_positive_rate, /*column_ids=*/{}, fingerprint) {};
+	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids, std::string fingerprint);
+	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size, std::string fingerprint);
 	~JoinBloomFilter();
 
 	//! Merge another Bloom-filter into this one
@@ -65,12 +65,21 @@ public:
 		return bloom_filter_size;
 	}
 
+	const std::string GetFingerprint() const {
+		std::string fp = fingerprint + ", probe:[";
+		for (size_t i = 0; i < column_ids.size(); ++i) {
+			if (i) fp.push_back(',');
+			fp += std::to_string(column_ids[i]);
+		}
+		return fp + "]}";
+	}
+
 	size_t GetNumHashFunctions() const {
 		return num_hash_functions;
 	}
 
 	JoinBloomFilter Copy() const {
-		JoinBloomFilter bf(column_ids, num_hash_functions, bloom_filter_size);
+		JoinBloomFilter bf(column_ids, num_hash_functions, bloom_filter_size, fingerprint);
 		bf.bloom_filter_bits = bloom_filter_bits;
 		bf.bloom_data_buffer = bloom_data_buffer;
 		bf.num_inserted_keys = num_inserted_keys;
@@ -95,6 +104,8 @@ private:
 	size_t num_probed_keys = 0;
 	size_t num_filtered_keys = 0;
 	bool probing_started = false;
+
+	std::string fingerprint;
 
 public:
 	double build_time = 0;

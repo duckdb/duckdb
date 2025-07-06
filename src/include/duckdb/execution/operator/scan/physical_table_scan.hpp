@@ -59,6 +59,10 @@ public:
 
 	bool Equals(const PhysicalOperator &other) const override;
 
+	std::string GetFingerprint() const {
+		return "PhysicalTableScan(" + GetName() + ", " + table_filters->GetFingerprint() + ")";
+	}
+
 public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;

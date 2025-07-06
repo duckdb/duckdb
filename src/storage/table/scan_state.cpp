@@ -7,6 +7,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 #include <iostream>
 
 namespace duckdb {
@@ -17,11 +18,6 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 	auto &info = GetFilterInfo();
 	auto &bfs = info.GetBloomFilterList();
-	
-	//std::cout << "    \"num_bloom_filters_in_scan\": " << bfs.size() << "," << std::endl;
-	for (auto &bf : bfs) {
-		//bf->PrintProbeStats();
-	}		
 }
 
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters, optional_ptr<vector<unique_ptr<JoinBloomFilter>>> bloom_filters,
@@ -37,6 +33,7 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
 		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
 	}
+
 }
 
 const vector<StorageIndex> &TableScanState::GetColumnIds() {
@@ -206,6 +203,38 @@ TableScanOptions &CollectionScanState::GetOptions() {
 
 ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
+}
+
+std::string get_filter_fingerprint(const duckdb::vector<duckdb::ScanFilter> &table_filters, const duckdb::vector<duckdb::unique_ptr<duckdb::JoinBloomFilter>> &bloom_filters) {
+	std::string filters_fingerprint = "";
+	for (auto &table_filter : table_filters) {
+		if (table_filter.IsAlwaysTrue()) {
+			continue;
+		}
+		if (!filters_fingerprint.empty()) {
+			filters_fingerprint.append(", ");
+		}
+		filters_fingerprint.append(table_filter.GetFingerprint());
+	}
+	for (auto &bloom_filter : bloom_filters) {
+		if (!filters_fingerprint.empty()) {
+			filters_fingerprint.append(", ");
+		}
+		filters_fingerprint.append(bloom_filter->GetFingerprint());
+	}
+	return filters_fingerprint;
+}
+
+void CollectionScanState::FetchPrunableChunks() {
+	std::lock_guard<std::mutex> lock(_mutex);
+
+	if (fetched_prunable_chunks) {
+		return; // already fetched
+	}
+
+	const auto predicate_fingerprint = get_filter_fingerprint(GetFilterInfo().GetFilterList(), GetFilterInfo().GetBloomFilterList());
+	prunableDataChunkOffsets = PredicateCache::Instance().Get(std::make_pair("", predicate_fingerprint));
+	fetched_prunable_chunks = true;
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)

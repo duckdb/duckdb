@@ -85,6 +85,17 @@ public:
 public:
 	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
 
+	std::string GetFingerprint() const {
+		string result;
+		for (auto &entry : filters) {
+			if (!result.empty()) {
+				result += " AND ";
+			}
+			result += entry.second->ToString(std::to_string(entry.first));
+		}
+		return result;
+	};
+
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {
 			return false;

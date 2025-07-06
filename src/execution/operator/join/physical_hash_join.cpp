@@ -27,9 +27,53 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include <iostream>
 
 namespace duckdb {
+
+// -------------------------------------------------------------------------
+// Recursively serialise the build-side plan -------------------------------
+	static void AppendOperatorFingerprint(const duckdb::PhysicalOperator &node,
+		std::string &out) {
+	// Operator type
+	out += duckdb::EnumUtil::ToString(node.type);
+
+	// Table scan specific info
+	if (node.type == duckdb::PhysicalOperatorType::TABLE_SCAN) {
+		auto &scan = node.Cast<duckdb::PhysicalTableScan>();
+		out.push_back(':');
+		out += scan.GetFingerprint();                      // schema.catalog.table
+	}
+
+	// Recurse
+	for (auto &child : node.children) {
+		out.push_back('{');
+		AppendOperatorFingerprint(*child, out);
+		out.push_back('}');
+	}
+}
+
+// -------------------------------------------------------------------------
+// Produce the full fingerprint string -------------------------------------
+static std::string MakeJoinBloomFingerprint(const duckdb::PhysicalHashJoin &join_op
+		  /**, const std::vector<duckdb::column_t> &probe_cols*/) {
+	std::string fp;
+	fp.reserve(256);
+
+	// 1. probe-side column ids (always sort for determinism)
+	// auto cols = probe_cols;
+	// std::sort(cols.begin(), cols.end());
+
+	fp += "{build:{";
+	AppendOperatorFingerprint(*join_op.children[1], fp);  // build side is child[1]
+	fp += '}';
+
+	return fp;          // already deterministic, readable & cheap
+}
+
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
@@ -38,6 +82,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
       delim_types(std::move(delim_types)) {
+		// std::cout << "Initializing Hash Join 1" << std::endl;
 
 	filter_pushdown = std::move(pushdown_info_p);
 
@@ -109,6 +154,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    idx_t estimated_cardinality)
     : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
                        estimated_cardinality, nullptr) {
+						// std::cout << "Initializing Hash Join 2" << std::endl;
 }
 
 //===--------------------------------------------------------------------===//
@@ -166,7 +212,7 @@ public:
 		}
 	}
 
-	void ScheduleFinalize(Pipeline &pipeline, Event &event);
+	void ScheduleFinalize(Pipeline &pipeline, Event &event, const PhysicalHashJoin &op);
 	void InitializeProbeSpill();
 
 public:
@@ -444,7 +490,7 @@ private:
 
 class HashJoinFinalizeEvent : public BasePipelineEvent {
 public:
-	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
+	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink, const PhysicalOperator &op)
 	    : BasePipelineEvent(pipeline_p), sink(sink) {
 	}
 
@@ -471,8 +517,9 @@ public:
 		                         !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			optional_ptr<JoinBloomFilter> bf = nullptr;
+			// std::cout << "Single-threaded finalize for hash join " << sink.global_filter_state->should_build_bloom_filter << std::endl; // TODO: Why did this become 0?
 			if (sink.global_filter_state && sink.global_filter_state->should_build_bloom_filter) {
-				sink.global_filter_state->local_ht_bloom_filters.push_back(make_uniq<JoinBloomFilter>(approx_ndv, 0.01));
+				sink.global_filter_state->local_ht_bloom_filters.push_back(make_uniq<JoinBloomFilter>(approx_ndv, 0.01, MakeJoinBloomFingerprint(sink.op)));
 				bf = sink.global_filter_state->local_ht_bloom_filters.back();
 			}
 
@@ -480,13 +527,14 @@ public:
 			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op, bf));
 		} else {
 			// Parallel finalize
+			// std::cout << "Multi-threaded finalize for hash join " << sink.global_filter_state->should_build_bloom_filter << std::endl;
 			const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
 			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx += chunks_per_task) {
 				auto chunk_idx_to = MinValue<idx_t>(chunk_idx + chunks_per_task, chunk_count);
 				
 				optional_ptr<JoinBloomFilter> bf = nullptr;
 				if (sink.global_filter_state && sink.global_filter_state->should_build_bloom_filter) {
-					sink.global_filter_state->local_ht_bloom_filters.push_back(make_uniq<JoinBloomFilter>(approx_ndv, 0.01));
+					sink.global_filter_state->local_ht_bloom_filters.push_back(make_uniq<JoinBloomFilter>(approx_ndv, 0.01, MakeJoinBloomFingerprint(sink.op)));
 					bf = sink.global_filter_state->local_ht_bloom_filters.back();
 				}
 
@@ -565,13 +613,15 @@ public:
 	static constexpr double SKEW_SINGLE_THREADED_THRESHOLD = 0.33;
 };
 
-void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
+void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event, const PhysicalHashJoin &op) {
+	// std::cout << "Calling HashJoinGlobalSinkState::ScheduleFinalize" << std::endl;
 	if (hash_table->Count() == 0) {
 		hash_table->finalized = true;
 		return;
 	}
 	hash_table->InitializePointerTable();
-	auto new_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
+	// std::cout << "Starting HashJoinFinalizeEvent" << std::endl;
+	auto new_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this, op);
 	event.InsertEvent(std::move(new_event));
 }
 
@@ -672,7 +722,7 @@ public:
 		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 		                                         sink.probe_side_requirement);
-		sink.ScheduleFinalize(*pipeline, *this);
+		sink.ScheduleFinalize(*pipeline, *this, op);
 	}
 };
 
@@ -721,32 +771,33 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
-                                          const PhysicalOperator &op, vector<column_t> column_ids) const {
-	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids));
+// void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
+//                                           const PhysicalOperator &op, vector<column_t> column_ids) const {
+// 	std::cout << "Starting to build a Bloom filter for the join condition: " << std::endl;
+// 	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids), MakeJoinBloomFingerprint(this, info.columns));
 
-	// FIXME: this code is duplicated from building the hash table.
-	auto &data_collection = ht.GetDataCollection();
+// 	// FIXME: this code is duplicated from building the hash table.
+// 	auto &data_collection = ht.GetDataCollection();
 
-	Vector hashes(LogicalType::HASH);
-	auto hash_data = FlatVector::GetData<hash_t>(hashes);
+// 	Vector hashes(LogicalType::HASH);
+// 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 
-	TupleDataChunkIterator iterator(data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, 0,
-	                                data_collection.ChunkCount(), false);
-	const auto row_locations = iterator.GetRowLocations();
+// 	TupleDataChunkIterator iterator(data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, 0,
+// 	                                data_collection.ChunkCount(), false);
+// 	const auto row_locations = iterator.GetRowLocations();
 
-	do {
-		const auto count = iterator.GetCurrentChunkCount();
-		for (idx_t i = 0; i < count; i++) {
-			hash_data[i] = Load<hash_t>(row_locations[i] + ht.pointer_offset);
-		}
+// 	do {
+// 		const auto count = iterator.GetCurrentChunkCount();
+// 		for (idx_t i = 0; i < count; i++) {
+// 			hash_data[i] = Load<hash_t>(row_locations[i] + ht.pointer_offset);
+// 		}
 
-		const SelectionVector sel;  // Default selection, because we collected from the data collection.
-		bf->BuildWithPrecomputedHashes(hashes, sel, count);	
-	} while (iterator.Next());
+// 		const SelectionVector sel;  // Default selection, because we collected from the data collection.
+// 		bf->BuildWithPrecomputedHashes(hashes, sel, count);	
+// 	} while (iterator.Next());
 
-	info.dynamic_filters->PushBloomFilter(op, std::move(bf));
-}
+// 	info.dynamic_filters->PushBloomFilter(op, std::move(bf));
+// }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
                                                        JoinFilterGlobalState &gstate,
@@ -804,6 +855,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 
 	// Build Bloom-filters for sideways-information-passing
 	auto hash_join_bloom_filter = ClientConfig::GetSetting<HashJoinBloomFilterSetting>(context);
+	// std::cout << "WE SHOULD BUILD A BLOOM FILTER! " << hash_join_bloom_filter << std::endl;
 	if (hash_join_bloom_filter) {
 
 		/*
@@ -819,7 +871,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 		double build_side_selectivity = 1.0 - (static_cast<double>(ht.Count()) / static_cast<double>(build_side_original_cardinality));
 		*/
 
-		if (ht.Count() > dynamic_or_filter_threshold) {
+		if (true) { // This is to make sure that 
 			gstate.should_build_bloom_filter = true;
 
 			//for (auto &info : probe_info) {
@@ -840,6 +892,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
+	// std::cout << "Called finalize on PhysicalHashJoin" << std::endl;
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
 
@@ -869,7 +922,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);
-			sink.ScheduleFinalize(pipeline, event);
+			sink.ScheduleFinalize(pipeline, event, const_cast<const PhysicalHashJoin&>(*this));
 		}
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
@@ -901,9 +954,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
 	}
 	// In case of a large build side or duplicates, use regular hash join
-	if (!use_perfect_hash) {
+	// std::cout << "Perfect? " << use_perfect_hash << std::endl;
+	if (true) {
 		sink.perfect_join_executor.reset();
-		sink.ScheduleFinalize(pipeline, event);
+		sink.ScheduleFinalize(pipeline, event, const_cast<const PhysicalHashJoin&>(*this));
 	}
 	sink.finalized = true;
 	if (ht.Count() == 0 && EmptyResultIfRHSIsEmpty()) {

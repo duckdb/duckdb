@@ -23,8 +23,30 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include <iostream>
 
 namespace duckdb {
+
+std::string get_filters_fingerprint(const duckdb::vector<duckdb::ScanFilter> &table_filters, const duckdb::vector<duckdb::unique_ptr<duckdb::JoinBloomFilter>> &bloom_filters) {
+	std::string filters_fingerprint = "";
+	for (auto &table_filter : table_filters) {
+		if (table_filter.IsAlwaysTrue()) {
+			continue;
+		}
+		if (!filters_fingerprint.empty()) {
+			filters_fingerprint.append(", ");
+		}
+		filters_fingerprint.append(table_filter.GetFingerprint());
+	}
+	for (auto &bloom_filter : bloom_filters) {
+		if (!filters_fingerprint.empty()) {
+			filters_fingerprint.append(", ");
+		}
+		filters_fingerprint.append(bloom_filter->GetFingerprint());
+	}
+	return filters_fingerprint;
+}
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
     : SegmentBase<RowGroup>(start, count), collection(collection_p), version_info(nullptr), allocation_size(0) {
@@ -498,6 +520,16 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	return true;
 }
 
+void DumpSelVector(const SelectionVector &sel, idx_t count, std::string prefix) {
+#ifdef DUCKDB_DEBUG
+	std::string rows = "";
+	for (idx_t sel_idx = 0; sel_idx < count; sel_idx++) {
+		rows += std::to_string(sel.get_index(sel_idx)) + " ";
+	}
+	std::cout << "Selection Vector " << prefix << " : " << rows << std::endl;
+#endif
+}
+
 template <TableScanType TYPE>
 void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
@@ -523,6 +555,27 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
 			continue;
+		}
+
+		/* ---------- cached bitmap pruning ---------------------------- */
+		if (!state.fetched_prunable_chunks) {
+			state.FetchPrunableChunks();
+		}
+		if (state.CanPruneDataChunk((this->start + current_row) >> 11)) {
+			std::cout << "#";
+			/* no surviving rows – skip the vector altogether */
+			result.Reset();
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_idx = column_ids[i];
+				if (col_idx.IsRowIdColumn()) {
+					continue;
+				}
+				GetColumn(col_idx).Skip(state.column_scans[i]);
+			}
+			state.vector_index++;
+			continue;
+		} else {
+			std::cout << "?";
 		}
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
@@ -593,6 +646,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			} else {
 				sel.Initialize(nullptr);
 			}
+
 			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
 			auto adaptive_filter = filter_info.GetAdaptiveFilter();
@@ -702,6 +756,14 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					if (filter_info.ColumnHasBloomFilters(i) || filter_info.ColumnHasFilters(i)) {
 						result.data[i].Slice(sel, approved_tuple_count);
 					}
+				}
+
+				if (approved_tuple_count == 0) {
+					std::string filters_fingerprint = get_filters_fingerprint(filter_list, bloom_filter_list);
+					std::string table_name = GetTableInfo().GetTableName(); // FIXME
+					// std::cout << "Inserted for table: " << table_name <<  " at index " << this->start + current_row << std::endl;
+					PredicateCache::Instance().Add(
+					    std::make_pair("", filters_fingerprint), (this->start + current_row) >> 11);
 				}
 			}
 			if (approved_tuple_count == 0) {

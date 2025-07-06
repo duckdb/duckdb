@@ -19,6 +19,9 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/execution/join_bloom_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include <iostream>
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -37,7 +40,6 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
-class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
 struct ScanSamplingInfo;
@@ -133,6 +135,10 @@ struct ScanFilter {
 	bool IsAlwaysTrue() const {
 		return always_true;
 	}
+
+	std::string GetFingerprint() const {
+		return filter.ToString(std::to_string(table_column_index));
+	}
 };
 
 class ScanFilterInfo {
@@ -195,8 +201,6 @@ public:
 
 	~CollectionScanState();
 
-	//! The current row_group we are scanning
-	RowGroup *row_group;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
@@ -223,9 +227,27 @@ public:
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
+	void FetchPrunableChunks();
+
+	bool CanPruneDataChunk(size_t offset) const {
+		if (!prunableDataChunkOffsets) {
+			return false;
+		}
+		return prunableDataChunkOffsets->size() > offset && prunableDataChunkOffsets->at(offset) == 1;
+	};
+
+	//! The current row_group we are scanning
+	RowGroup *row_group = nullptr;
+	bool fetched_prunable_chunks = false;
+
+	bool has_prunable_chunks() const {
+		return prunableDataChunkOffsets != nullptr;
+	}
 
 private:
 	TableScanState &parent;
+	const std::vector<unsigned char>* prunableDataChunkOffsets;
+	std::mutex _mutex;
 };
 
 struct ScanSamplingInfo {
