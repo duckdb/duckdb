@@ -38,7 +38,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             ### TODO: re-enable LOAD_TESTS
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG ce6a0965f4f67e82a7dc82ea0378b8b839a2a9aa
+            GIT_TAG b73faadeaa4d2c880deb949771baf570f42fe8cc
             )
 endif()
 
@@ -145,7 +145,7 @@ duckdb_extension_load(sqlite_scanner
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlsmith
-        GIT_TAG 06e8da8a95710c996fcd62f385962ccd36a363f6
+        GIT_TAG 3b1ad2bd7234c1143b4a819517873f4b465168d2
         )
 
 ################# VSS
