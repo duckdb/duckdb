@@ -20,6 +20,8 @@ if(POLICY CMP0063)
   cmake_policy(SET CMP0063 NEW)
 endif()
 
+set(ENV{_CL_} "")
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
