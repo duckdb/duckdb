@@ -1,6 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -53,21 +53,17 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 
 	const auto input_dictionary_size_opt = DictionaryVector::DictionarySize(unary_input);
-	if (!input_dictionary_size_opt.IsValid()) {
-		return false; // Not a dictionary that comes from the storage
+	const auto &input_dictionary_id = DictionaryVector::DictionaryId(unary_input);
+	if (!input_dictionary_size_opt.IsValid() || input_dictionary_id.empty()) {
+		return false; // Not a dictionary that comes from storage
 	}
+
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
-
-	auto input_dictionary_id = DictionaryVector::DictionaryId(unary_input);
-	if (input_dictionary_id.empty()) {
-		return false; // Dictionary has no id, we can't cache across vectors, bail
-	}
-
 	if (input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
 		return false; // Dictionary is too large, bail
 	}
 
-	if (input_dictionary_id != dictionary_id) {
+	if (input_dictionary_id != current_input_dictionary_id) {
 		// We haven't seen this dictionary before
 		const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
 		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio <= CHUNK_FILL_RATIO_THRESHOLD) {
@@ -78,10 +74,11 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		}
 
 		// We can do dictionary optimization! Re-initialize
-		dictionary_id = std::move(input_dictionary_id);
-		dictionary = make_uniq<Vector>(result.GetType(), input_dictionary_size);
+		current_input_dictionary_id = input_dictionary_id;
+		output_dictionary = make_uniq<Vector>(result.GetType(), input_dictionary_size);
+		output_dictionary_id = UUID::ToString(UUID::GenerateRandomUUID());
 
-		// Set up the input chunk and input/output dictionaries
+		// Set up the input chunk
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(args.GetTypes());
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
@@ -89,29 +86,27 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 				input_chunk.data[col_idx].Reference(args.data[col_idx]);
 			}
 		}
-		auto &input_dictionary = DictionaryVector::Child(unary_input);
-		auto &output_dictionary = *dictionary;
 
 		// Loop over the dictionary, executing at most STANDARD_VECTOR_SIZE at a time
 		for (idx_t offset = 0; offset < input_dictionary_size; offset += STANDARD_VECTOR_SIZE) {
 			const auto count = MinValue<idx_t>(input_dictionary_size - offset, STANDARD_VECTOR_SIZE);
 
 			// Offset the input dictionary
-			Vector offset_input(input_dictionary, offset, offset + count);
+			Vector offset_input(DictionaryVector::Child(unary_input), offset, offset + count);
 			input_chunk.data[input_col_idx.GetIndex()].Reference(offset_input);
 			input_chunk.SetCardinality(count);
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
-			Vector output_intermediate(output_dictionary.GetType());
+			Vector output_intermediate(output_dictionary->GetType());
 			expr.function.function(input_chunk, state, output_intermediate);
-			VectorOperations::Copy(output_intermediate, output_dictionary, count, 0, offset);
+			VectorOperations::Copy(output_intermediate, *output_dictionary, count, 0, offset);
 		}
 	}
 
 	// Create a dictionary result vector and give it an ID
 	const auto &input_sel_vector = DictionaryVector::SelVector(unary_input);
-	result.Dictionary(*dictionary, input_dictionary_size, input_sel_vector, args.size());
-	DictionaryVector::SetDictionaryId(result, dictionary_id);
+	result.Dictionary(*output_dictionary, input_dictionary_size, input_sel_vector, args.size());
+	DictionaryVector::SetDictionaryId(result, output_dictionary_id);
 
 	return true;
 }
