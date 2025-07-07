@@ -57,7 +57,8 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);
 	auto value_intermediate_data = FlatVector::GetData<string_t>(value_intermediate);
 	for (idx_t i = 0; i < num_values; i++) {
-		result_data[i] = decoder.Decode(metadata_intermediate_data[i], value_intermediate_data[i]);
+		auto decode_result = decoder.Decode(metadata_intermediate_data[i], value_intermediate_data[i]);
+		//! TODO: handle the returned json object, stringify it and return a JSON value
 	}
 
 	read_count = child_num_values;

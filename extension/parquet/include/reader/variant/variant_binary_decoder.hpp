@@ -1,6 +1,9 @@
 #pragma once
 
 #include "duckdb/common/types/string_type.hpp"
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson;
 
 namespace duckdb {
 
@@ -89,12 +92,17 @@ public:
 	uint8_t header;
 };
 
-struct VariantValue {
+struct VariantDecodeResult {
 public:
-	VariantValue() {
+	VariantDecodeResult() = default;
+	~VariantDecodeResult() {
+		if (doc) {
+			yyjson_mut_doc_free(doc);
+		}
 	}
 
 public:
+	yyjson_mut_doc *doc = nullptr;
 };
 
 class VariantBinaryDecoder {
@@ -102,17 +110,17 @@ public:
 	VariantBinaryDecoder();
 
 public:
-	string_t Decode(const string_t &metadata, const string_t &blob);
+	VariantDecodeResult Decode(const string_t &metadata, const string_t &blob);
 
 public:
-	string_t PrimitiveTypeDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                             const string_t &blob);
-	string_t ShortStringDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                           const string_t &blob);
-	string_t ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                      const string_t &blob);
-	string_t ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                     const string_t &blob);
+	yyjson_mut_val *PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
+	                                    const VariantValueMetadata &value_metadata, const string_t &blob);
+	yyjson_mut_val *ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
+	                                  const VariantValueMetadata &value_metadata, const string_t &blob);
+	yyjson_mut_val *ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
+	                             const VariantValueMetadata &value_metadata, const string_t &blob);
+	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
+	                            const VariantValueMetadata &value_metadata, const string_t &blob);
 };
 
 } // namespace duckdb
