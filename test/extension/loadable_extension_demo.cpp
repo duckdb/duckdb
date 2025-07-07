@@ -18,15 +18,15 @@ using namespace duckdb;
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-inline int32_t hello_fun(string_t what) {
+static inline int32_t hello_fun(string_t what) {
 	return what.GetSize() + 5;
 }
 
-inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"));
 }
 
-inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -67,7 +67,7 @@ inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	result.Verify(count);
 }
 
-inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -238,7 +238,7 @@ class QuackLoadExtension : public ExtensionCallback {
 	}
 };
 
-inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	string result_str;
 	for (auto &ext : test_loaded_extension_list) {
 		if (!result_str.empty()) {
