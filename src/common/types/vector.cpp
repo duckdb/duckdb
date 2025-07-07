@@ -412,7 +412,9 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		}
 
 		// Copy the data buffer to a resized buffer.
-		auto new_data = Allocator::DefaultAllocator().Allocate(target_size);
+		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
+		auto new_data = stored_allocator ? stored_allocator->Allocate(target_size)
+		                                 : Allocator::DefaultAllocator().Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
@@ -2075,7 +2077,12 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		auto stored_allocator = vector.buffer->GetAllocator();
+		if (stored_allocator) {
+			vector.auxiliary = make_buffer<VectorStringBuffer>(*stored_allocator);
+		} else {
+			vector.auxiliary = make_buffer<VectorStringBuffer>();
+		}
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	return vector.auxiliary.get()->Cast<VectorStringBuffer>();

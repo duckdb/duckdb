@@ -673,7 +673,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 		throw InvalidInputException("Column %s not found in %s", column_name, file.path);
 	}
 
-	auto &allocator = Allocator::DefaultAllocator();
+	auto &allocator = BufferAllocator::Get(context);
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
