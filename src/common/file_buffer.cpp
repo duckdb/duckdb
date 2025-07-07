@@ -4,8 +4,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/storage/storage_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <cstring>
 
