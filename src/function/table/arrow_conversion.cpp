@@ -313,59 +313,6 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 }
 
-static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
-                              const ArrowType &arrow_type, int64_t nested_offset, int64_t parent_offset) {
-	ArrowToDuckDBConversion::SetValidityMask(vector, array, chunk_offset, size, parent_offset, nested_offset);
-	auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
-	auto size_type = string_info.GetSizeType();
-	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
-		auto fixed_size = string_info.FixedSize();
-		//! Have to check validity mask before setting this up
-		idx_t offset = GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset) * fixed_size;
-		auto cdata = ArrowBufferData<char>(array, 1);
-		auto blob_len = fixed_size;
-		auto result = FlatVector::GetData<string_t>(vector);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				offset += blob_len;
-				continue;
-			}
-			auto bptr = cdata + offset;
-			result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
-			offset += blob_len;
-		}
-	} else if (size_type == ArrowVariableSizeType::NORMAL) {
-		auto offsets =
-		    ArrowBufferData<uint32_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-		auto cdata = ArrowBufferData<char>(array, 2);
-		auto result = FlatVector::GetData<string_t>(vector);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				continue;
-			}
-			auto bptr = cdata + offsets[row_idx];
-			auto blob_len = offsets[row_idx + 1] - offsets[row_idx];
-			result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
-		}
-	} else {
-		//! Check if last offset is higher than max uint32
-		if (ArrowBufferData<uint64_t>(array, 1)[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-			throw ConversionException("DuckDB does not support Blobs over 4GB");
-		} // LCOV_EXCL_STOP
-		auto offsets =
-		    ArrowBufferData<uint64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-		auto cdata = ArrowBufferData<char>(array, 2);
-		auto result = FlatVector::GetData<string_t>(vector);
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				continue;
-			}
-			auto bptr = cdata + offsets[row_idx];
-			auto blob_len = offsets[row_idx + 1] - offsets[row_idx];
-			result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
-		}
-	}
-}
 
 static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
 	auto valid_check = MapVector::CheckMapValidity(vector, count);
@@ -922,11 +869,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		case ArrowVariableSizeType::FIXED_SIZE: {
-			SetValidityMask(vector, array, scan_state, size, NumericCast<int64_t>(parent_offset), nested_offset);
+			SetValidityMask(vector, array, chunk_offset, size, NumericCast<int64_t>(parent_offset), nested_offset);
 			auto fixed_size = string_info.FixedSize();
 			// Have to check validity mask before setting this up
 			idx_t offset =
-			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset) * fixed_size;
+			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset) * fixed_size;
 			auto cdata = ArrowBufferData<char>(array, 1);
 			auto blob_len = fixed_size;
 			auto result = FlatVector::GetData<string_t>(vector);
@@ -1110,13 +1057,6 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		default:
 			throw NotImplementedException("Unsupported precision for Arrow Decimal Type.");
 		}
-		break;
-	}
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT: {
-		ArrowToDuckDBBlob(vector, array, chunk_offset, size, arrow_type, nested_offset,
-		                  NumericCast<int64_t>(parent_offset));
 		break;
 	}
 	case LogicalTypeId::LIST: {
