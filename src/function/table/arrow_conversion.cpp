@@ -1456,7 +1456,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 			array_state.owned_data = scan_state.chunk;
 		}
 		auto array_physical_type = arrow_type.GetPhysicalType();
-		;
+
 		switch (array_physical_type) {
 		case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
 			ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state.chunk_offset,

@@ -748,7 +748,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
-	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	int64_t rows_affected;
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));

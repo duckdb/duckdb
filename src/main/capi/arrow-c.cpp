@@ -103,6 +103,9 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
 	auto conn = reinterpret_cast<Connection *>(connection);
 
 	auto &arrow_types = arrow_table->GetColumns();
+	auto output_size =
+				    duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array_cpp->length));
+	dchunk->SetCardinality(output_size);
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array_cpp;
 		auto &array = parent_array.children[i];
@@ -113,6 +116,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
 		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);
+
 		switch (array_physical_type) {
 		case duckdb::ArrowArrayPhysicalType::DEFAULT:
 			duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
