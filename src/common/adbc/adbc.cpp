@@ -894,21 +894,41 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	}
 	if (has_stream) {
 		// A stream was bound to the statement, use that to bind parameters
-		duckdb::unique_ptr<duckdb::QueryResult> result;
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 		wrapper->ingestion_stream.release = nullptr;
-		auto adbc_res = GetPreparedParameters(wrapper->connection, result, &stream, error);
-		if (adbc_res != ADBC_STATUS_OK) {
-			return adbc_res;
+		// auto adbc_res = GetPreparedParameters(wrapper->connection, result, &stream, error);
+		// if (adbc_res != ADBC_STATUS_OK) {
+		// return adbc_res;
+		// }
+
+		duckdb_logical_type *out_types = nullptr;
+		char **out_names = nullptr;
+		idx_t out_column_count;
+		duckdb_arrow_converted_schema out_converted_schema;
+		auto arrow_schema = new ArrowSchema();
+		duckdb_arrow_schema c_arrow_schema = reinterpret_cast<duckdb_arrow_schema>(arrow_schema);
+
+		stream.get_schema(&stream, arrow_schema);
+		try {
+			arrow_to_duckdb_schema(wrapper->connection, c_arrow_schema, &out_types, &out_names, &out_column_count,
+			                       &out_converted_schema);
+		} catch (...) {
+			return ADBC_STATUS_INTERNAL;
 		}
-		if (!result) {
-			return ADBC_STATUS_INVALID_ARGUMENT;
-		}
-		duckdb::unique_ptr<duckdb::DataChunk> chunk;
+
+		// duckdb::unique_ptr<duckdb::DataChunk> chunk;
 		auto prepared_statement_params =
 		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
-		while ((chunk = result->Fetch()) != nullptr) {
+		auto arrow_array = new ArrowArray();
+		auto out_chunk = duckdb_create_data_chunk(out_types, out_column_count);
+		stream.get_next(&stream, arrow_array);
+		while (arrow_array->release) {
+			// This is a valid arrow array, let's make it into a data chunk
+			arrow_to_duckdb_data_chunk(wrapper->connection, *reinterpret_cast<duckdb_arrow_array *>(&arrow_array),
+			                           out_converted_schema, &out_chunk);
+			stream.get_next(&stream, arrow_array);
+			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk);
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
 				return ADBC_STATUS_INVALID_ARGUMENT;

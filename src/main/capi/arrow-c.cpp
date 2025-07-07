@@ -104,7 +104,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
 
 	auto &arrow_types = arrow_table->GetColumns();
 	auto output_size =
-				    duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array_cpp->length));
+	    duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array_cpp->length));
 	dchunk->SetCardinality(output_size);
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array_cpp;
