@@ -315,4 +315,5 @@ if summarize_failures and len(error_container):
     for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
+
 exit(1)

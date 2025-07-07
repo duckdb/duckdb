@@ -4,7 +4,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/common/types/varint.hpp"
 
@@ -467,6 +466,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIME:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_t, duckdb::TryCastErrorMessage>);
+	case LogicalTypeId::TIME_NS:
+		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_ns_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIME_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_tz_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP:
