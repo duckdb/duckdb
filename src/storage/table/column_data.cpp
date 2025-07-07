@@ -498,6 +498,9 @@ void ColumnData::RevertAppend(row_t start_row) {
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
+	if (!last_segment) {
+		return;
+	}
 	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
 		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);

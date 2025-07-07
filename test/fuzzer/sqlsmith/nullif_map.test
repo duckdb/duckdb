@@ -23,3 +23,28 @@ SELECT nullif(ref_2."map", ref_2."map") FROM tbl AS ref_2 ORDER BY rowid;
 NULL
 NULL
 NULL
+
+# internal issue 5232
+statement ok
+ATTACH '__TEST_DIR__/nullif_maplatest_storage.db' as db (STORAGE_VERSION 'latest');
+
+statement ok
+USE db;
+
+statement ok
+SET storage_compatibility_version='latest';
+
+statement ok
+SET max_memory='1234kb';
+
+statement ok
+CREATE TABLE tbl(map MAP(VARCHAR, VARCHAR));;
+
+statement ok
+INSERT INTO tbl VALUES(MAP([], []));
+
+# should not segv
+statement error
+INSERT INTO tbl VALUES(MAP(['key1', 'key2'], ['🦆🦆🦆🦆🦆🦆', 'goose']));
+----
+TransactionContext Error: Failed to commit: could not allocate block
