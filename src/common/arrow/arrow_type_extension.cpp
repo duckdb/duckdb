@@ -382,7 +382,7 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 
 	// Types that are 1:n
 	config.RegisterArrowExtension({"arrow.json", &ArrowJson::PopulateSchema, &ArrowJson::GetType,
-	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARCHAR)});
+	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::JSON())});
 
 	config.RegisterArrowExtension({"DuckDB", "bit", &ArrowBit::PopulateSchema, &ArrowBit::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIT), nullptr, nullptr});

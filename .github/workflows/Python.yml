@@ -73,9 +73,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
-      - name: Preliminary checks on CI 
+      - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
-      
+
 # This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
     name: Python 3.10 Linux
@@ -392,7 +392,7 @@ jobs:
 
   linux-release-cleanup:
      name: PyPi Release Cleanup
-     needs: 
+     needs:
       - twine-upload
      if: ${{ github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main' }}
      runs-on: ubuntu-22.04

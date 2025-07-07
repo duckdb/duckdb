@@ -24,7 +24,7 @@ duckdb_extension_load(httpfs
     INCLUDE_DIR extension/httpfs/include
     )
 
-################# AVRO
+################## AVRO
 if (NOT MINGW)
     duckdb_extension_load(avro
             APPLY_PATCHES
