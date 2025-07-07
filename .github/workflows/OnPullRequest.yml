@@ -8,11 +8,11 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft]
       
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: github.workflow-github.ref-github.head_ref || ''-github.base_ref || ''-github.ref != 'refs/heads/main' || github.sha
   cancel-in-progress: true
 
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: secrets.GH_TOKEN
 
 jobs:
   check-draft:
@@ -20,56 +20,59 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     outputs:
-        should_run: ${{ steps.ci-filters.outputs.should_run }}
+        codequality: steps.filter.outputs.codequality
+        julia: steps.filter.outputs.julia
+        linuxrelease: steps.filter.outputs.linuxrelease
+        main: steps.filter.outputs.main
+        python: steps.filter.outputs.python}}
+        regression: steps.filter.outputs.regression
+        swift: steps.filter.outputs.swift
+        windows: steps.filter.outputs.windows
+        # should_run: steps.ci-filters.outputs.should_run
     steps:
       - name: Preliminary checks on CI 
-        run: echo "Event name is ${{ github.event_name }}"
-
-      - name: Install dependencies
-        run: pip install PyGithub pathspec
+        run: echo "Event name is github.event_name"
 
       - uses: actions/checkout@v4
+        # with:
+        #   ref: 'rearrange-ci'
+        #   fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: filter
         with:
-          ref: 'rearrange-ci'
-          fetch-depth: 2
-      
-      - id: ci-filters
-        env:
-          GITHUB_OUTPUT: ${{ github.output }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: |
-            python scripts/apply_filters.py
+          filters: .github/filters.yaml
     
-  code-quality:
+  codequality:
     uses: ./.github/workflows/CodeQuality.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).CodeQuality == true }}
+    if: needs.check-draft.outputs.codequality == 'true' 
   julia:
     uses: ./.github/workflows/Julia.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Julia == true }}
-  linux-release:
+    if: needs.check-draft.outputs.julia == 'true'
+  linuxrelease:
     uses: ./.github/workflows/LinuxRelease.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).LinuxRelease == true }}
+    if: needs.check-draft.outputs.linuxrelease == 'true'
   main:
     uses: ./.github/workflows/Main.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Main == true }}
+    if: needs.check-draft.outputs.main == 'true'
   python:
     uses: ./.github/workflows/Python.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Python == true }}
+    if: needs.check-draft.outputs.python == 'true'
   regression:
     uses: ./.github/workflows/Regression.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Regression == true }}
+    if: needs.check-draft.outputs.regression == 'true'
   swift:
     uses: ./.github/workflows/Swift.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Swift == true }}
+    if: needs.check-draft.outputs.swift == 'true'
   windows:
     uses: ./.github/workflows/Windows.yml
     needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Windows == true }}
+    if: needs.check-draft.outputs.windows == 'true'
   
