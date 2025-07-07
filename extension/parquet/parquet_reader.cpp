@@ -14,6 +14,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
 #include "reader/string_column_reader.hpp"
+#include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
@@ -433,6 +434,17 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			throw InternalException("Unsupported schema type for schema with children");
 		}
 	}
+	case ParquetColumnSchemaType::VARIANT: {
+		if (schema.children.size() < 2) {
+			throw InternalException("VARIANT schema type used for a non-variant type column");
+		}
+		vector<unique_ptr<ColumnReader>> children;
+		children.resize(schema.children.size());
+		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
+			children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
+		}
+		return make_uniq<VariantColumnReader>(*this, schema, std::move(children));
+	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
 	}
@@ -500,6 +512,40 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx
 	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, reader.parquet_options.can_have_nan);
 }
 
+static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnSchema> &children) {
+	if (children.size() < 2) {
+		return false;
+	}
+	auto &metadata = children[0];
+	auto &value = children[1];
+
+	//! Verify names
+	if (metadata.name != "metadata") {
+		return false;
+	}
+	if (value.name != "value") {
+		return false;
+	}
+
+	//! Verify types
+	if (metadata.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+		return false;
+	}
+	if (value.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+		return false;
+	}
+	if (children.size() == 3) {
+		auto &typed_value = children[2];
+		if (typed_value.name != "typed_value") {
+			return false;
+		}
+		throw NotImplementedException("Shredded Variants are not supported yet");
+	} else if (children.size() != 2) {
+		return false;
+	}
+	return true;
+}
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx) {
 
@@ -556,9 +602,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		}
 
 		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
-		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
-		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
+		const bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+		const bool is_variant = IsVariantType(s_ele, child_schemas);
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
 			auto &p_ele = file_meta_data->schema[this_idx - 1];
@@ -591,10 +638,18 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 				struct_types.emplace_back(make_pair(child_schema.name, child_schema.type));
 			}
 
-			auto result_type = LogicalType::STRUCT(std::move(struct_types));
+			LogicalType result_type;
+			if (is_variant) {
+				result_type = LogicalType::JSON();
+			} else {
+				result_type = LogicalType::STRUCT(std::move(struct_types));
+			}
 			ParquetColumnSchema struct_schema(s_ele.name, std::move(result_type), max_define, max_repeat, this_idx,
 			                                  next_file_idx);
 			struct_schema.children = std::move(child_schemas);
+			if (is_variant) {
+				struct_schema.schema_type = ParquetColumnSchemaType::VARIANT;
+			}
 			result = std::move(struct_schema);
 		} else {
 			// if we have a struct with only a single type, pull up

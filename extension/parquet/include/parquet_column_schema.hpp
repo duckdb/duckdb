@@ -13,7 +13,7 @@
 namespace duckdb {
 class ParquetReader;
 
-enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, GEOMETRY, EXPRESSION };
+enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, GEOMETRY, EXPRESSION, VARIANT };
 
 enum class ParquetExtraTypeInfo {
 	NONE,
