@@ -115,7 +115,7 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters,
 		}
 	}
 
-	if (join_cond_by_coalesced_join_keys.size() == 0) {
+	if (join_cond_by_coalesced_join_keys.empty()) {
 		return false;
 	}
 
@@ -154,7 +154,7 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters,
 			coalesce_exprs_to_replace.insert(sub_expr);
 		});
 
-		if (coalesce_exprs_to_replace.size() == 0 || many_non_equivalent_coalesce_exprs ||
+		if (coalesce_exprs_to_replace.empty() || many_non_equivalent_coalesce_exprs ||
 		    !ExprIsFunctionOnlyOf(*filter, coalesce_exprs_to_replace)) {
 			continue;
 		}
