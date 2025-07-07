@@ -894,6 +894,9 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	case LogicalTypeId::UUID:
 		UUIDConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size);
 		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::VARCHAR: {
 		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
 		auto size_type = string_info.GetSizeType();
@@ -905,8 +908,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			SetVectorString(vector, size, cdata, offsets);
 			break;
 		}
-		case ArrowVariableSizeType::NORMAL:
-		case ArrowVariableSizeType::FIXED_SIZE: {
+		case ArrowVariableSizeType::NORMAL: {
 			auto cdata = ArrowBufferData<char>(array, 2);
 			auto offsets = ArrowBufferData<uint32_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
@@ -918,6 +920,25 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			    vector, size, array,
 			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset));
 			break;
+		}
+		case ArrowVariableSizeType::FIXED_SIZE: {
+			SetValidityMask(vector, array, scan_state, size, NumericCast<int64_t>(parent_offset), nested_offset);
+			auto fixed_size = string_info.FixedSize();
+			// Have to check validity mask before setting this up
+			idx_t offset =
+			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset) * fixed_size;
+			auto cdata = ArrowBufferData<char>(array, 1);
+			auto blob_len = fixed_size;
+			auto result = FlatVector::GetData<string_t>(vector);
+			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+				if (FlatVector::IsNull(vector, row_idx)) {
+					offset += blob_len;
+					continue;
+				}
+				auto bptr = cdata + offset;
+				result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+				offset += blob_len;
+			}
 		}
 		}
 		break;

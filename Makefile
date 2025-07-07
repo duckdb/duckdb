@@ -101,10 +101,10 @@ endif
 ifeq (${GENERATE_EXTENSION_ENTRIES}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DGENERATE_EXTENSION_ENTRIES=1
 endif
-ifneq (${ENABLE_EXTENSION_AUTOLOADING}, "")
+ifneq ("${ENABLE_EXTENSION_AUTOLOADING}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOLOADING=${ENABLE_EXTENSION_AUTOLOADING}
 endif
-ifneq (${ENABLE_EXTENSION_AUTOINSTALL}, "")
+ifneq ("${ENABLE_EXTENSION_AUTOINSTALL}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
 ifneq (${UNSAFE_NUMERIC_CAST}, )
@@ -231,9 +231,6 @@ ifeq (${RUN_SLOW_VERIFIERS}, 1)
 endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
-endif
-ifeq (${PREFETCH_ALL_PARQUET_FILES}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DPREFETCH_ALL_PARQUET_FILES=1
 endif
 ifeq (${DISABLE_POINTER_SALT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_POINTER_SALT=1
@@ -518,6 +515,7 @@ generate-files:
 	python3 scripts/generate_storage_info.py
 	python3 scripts/generate_enum_util.py
 	python3 scripts/generate_metric_enums.py
+	python3 scripts/generate_builtin_types.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

@@ -69,7 +69,7 @@ const idx_t &TupleDataCollection::Count() const {
 idx_t TupleDataCollection::ChunkCount() const {
 	idx_t total_chunk_count = 0;
 	for (const auto &segment : segments) {
-		total_chunk_count += segment.ChunkCount();
+		total_chunk_count += segment->ChunkCount();
 	}
 	return total_chunk_count;
 }
@@ -80,7 +80,7 @@ idx_t TupleDataCollection::SizeInBytes() const {
 
 void TupleDataCollection::Unpin() {
 	for (auto &segment : segments) {
-		segment.Unpin();
+		segment->Unpin();
 	}
 }
 
@@ -93,7 +93,7 @@ void TupleDataCollection::SetPartitionIndex(const idx_t index) {
 
 vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
 	D_ASSERT(segments.size() == 1);
-	const auto &segment = segments[0];
+	const auto &segment = *segments[0];
 	vector<data_ptr_t> result;
 	result.reserve(segment.pinned_row_handles.size());
 	for (const auto &pinned_row_handle : segment.pinned_row_handles) {
@@ -105,7 +105,7 @@ vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
 void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t chunk_idx_end) {
 	D_ASSERT(segments.size() == 1); // Assume 1 segment for now (multi-segment destroys can be implemented if needed)
 	D_ASSERT(chunk_idx_begin <= chunk_idx_end && chunk_idx_end <= ChunkCount());
-	auto &segment = segments[0];
+	auto &segment = *segments[0];
 	auto &chunk_begin = segment.chunks[chunk_idx_begin];
 
 	const auto row_block_begin = chunk_begin.row_block_ids.Start();
@@ -170,7 +170,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
 void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDataPinProperties properties) {
 	pin_state.properties = properties;
 	if (segments.empty()) {
-		segments.emplace_back(allocator);
+		segments.emplace_back(make_unsafe_uniq<TupleDataSegment>(allocator));
 	}
 }
 
@@ -341,7 +341,7 @@ void TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state, 
 
 void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                 const idx_t append_offset, const idx_t append_count) {
-	auto &segment = segments.back();
+	auto &segment = *segments.back();
 	const auto size_before = segment.SizeInBytes();
 	segment.allocator->Build(segment, pin_state, chunk_state, append_offset, append_count);
 	data_size += segment.SizeInBytes() - size_before;
@@ -459,9 +459,9 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	other.Reset();
 }
 
-void TupleDataCollection::AddSegment(TupleDataSegment &&segment) {
-	count += segment.count;
-	data_size += segment.data_size;
+void TupleDataCollection::AddSegment(unsafe_unique_ptr<TupleDataSegment> segment) {
+	count += segment->count;
+	data_size += segment->data_size;
 	segments.emplace_back(std::move(segment));
 	Verify();
 }
@@ -554,7 +554,7 @@ void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vect
 
 idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, const idx_t segment_idx, const idx_t chunk_idx,
                                       const bool init_heap) {
-	auto &segment = segments[segment_idx];
+	auto &segment = *segments[segment_idx];
 	allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
 	return segment.chunks[chunk_idx].count;
 }
@@ -565,13 +565,13 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 	idx_t chunk_index;
 	if (!NextScanIndex(state, segment_index, chunk_index)) {
 		if (!segments.empty()) {
-			FinalizePinState(state.pin_state, segments[segment_index_before]);
+			FinalizePinState(state.pin_state, *segments[segment_index_before]);
 		}
 		result.SetCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
-		FinalizePinState(state.pin_state, segments[segment_index_before]);
+		FinalizePinState(state.pin_state, *segments[segment_index_before]);
 	}
 	ScanAtIndex(state.pin_state, state.chunk_state, state.chunk_state.column_ids, segment_index, chunk_index, result);
 	return true;
@@ -585,14 +585,14 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 		lock_guard<mutex> guard(gstate.lock);
 		if (!NextScanIndex(gstate.scan_state, lstate.segment_index, lstate.chunk_index)) {
 			if (!segments.empty()) {
-				FinalizePinState(lstate.pin_state, segments[segment_index_before]);
+				FinalizePinState(lstate.pin_state, *segments[segment_index_before]);
 			}
 			result.SetCardinality(0);
 			return false;
 		}
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index_before != lstate.segment_index) {
-		FinalizePinState(lstate.pin_state, segments[lstate.segment_index]);
+		FinalizePinState(lstate.pin_state, *segments[lstate.segment_index]);
 	}
 	ScanAtIndex(lstate.pin_state, lstate.chunk_state, gstate.scan_state.chunk_state.column_ids, lstate.segment_index,
 	            lstate.chunk_index, result);
@@ -603,7 +603,7 @@ bool TupleDataCollection::ScanComplete(const TupleDataScanState &state) const {
 	if (Count() == 0) {
 		return true;
 	}
-	return state.segment_index == segments.size() - 1 && state.chunk_index == segments.back().ChunkCount();
+	return state.segment_index == segments.size() - 1 && state.chunk_index == segments.back()->ChunkCount();
 }
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment) {
@@ -612,7 +612,7 @@ void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDa
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
 	D_ASSERT(!segments.empty());
-	FinalizePinState(pin_state, segments.back());
+	FinalizePinState(pin_state, *segments.back());
 }
 
 bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) {
@@ -622,7 +622,7 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 		return false;
 	}
 	// Check within the current segment if we still have chunks to scan
-	while (state.chunk_index >= segments[state.segment_index].ChunkCount()) {
+	while (state.chunk_index >= segments[state.segment_index]->ChunkCount()) {
 		// Exhausted all chunks for this segment: Move to the next one
 		state.segment_index++;
 		state.chunk_index = 0;
@@ -637,7 +637,7 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                       const vector<column_t> &column_ids, idx_t segment_index, idx_t chunk_index,
                                       DataChunk &result) {
-	auto &segment = segments[segment_index];
+	auto &segment = *segments[segment_index];
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(segment, pin_state, chunk_state, chunk_index, false);
 	result.Reset();
@@ -687,9 +687,9 @@ void TupleDataCollection::Verify() const {
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (const auto &segment : segments) {
-		segment.Verify();
-		total_count += segment.count;
-		total_size += segment.data_size;
+		segment->Verify();
+		total_count += segment->count;
+		total_size += segment->data_size;
 	}
 	D_ASSERT(total_count == this->count);
 	D_ASSERT(total_size == this->data_size);
@@ -699,7 +699,7 @@ void TupleDataCollection::Verify() const {
 void TupleDataCollection::VerifyEverythingPinned() const {
 #ifdef D_ASSERT_IS_ENABLED
 	for (const auto &segment : segments) {
-		segment.VerifyEverythingPinned();
+		segment->VerifyEverythingPinned();
 	}
 #endif
 }

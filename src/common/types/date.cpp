@@ -2,23 +2,20 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/common/limits.hpp"
 #include <cstring>
 #include <cctype>
-#include <algorithm>
 
 namespace duckdb {
 
 static_assert(sizeof(date_t) == sizeof(int32_t), "date_t was padded");
 
-const char *Date::PINF = "infinity";  // NOLINT
-const char *Date::NINF = "-infinity"; // NOLINT
-const char *Date::EPOCH = "epoch";    // NOLINT
+const DateSpecial Date::PINF = {"infinity", 3};  // NOLINT
+const DateSpecial Date::NINF = {"-infinity", 4}; // NOLINT
+const DateSpecial Date::EPOCH = {"epoch", 5};    // NOLINT
 
 const string_t Date::MONTH_NAMES_ABBREVIATED[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -190,15 +187,16 @@ bool Date::ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &res
 	return false;
 }
 
-bool Date::TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special) {
+bool Date::TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const DateSpecial &s) {
 	auto p = pos;
+	auto special = s.str;
 	for (; p < len && *special; ++p) {
 		const auto s = *special++;
 		if (!s || StringUtil::CharacterToLower(buf[p]) != s) {
 			return false;
 		}
 	}
-	if (*special) {
+	if (*special && (p - pos) != s.abbr) {
 		return false;
 	}
 	pos = p;
@@ -371,9 +369,9 @@ string Date::ToString(date_t date) {
 	// PG displays temporal infinities in lowercase,
 	// but numerics in Titlecase.
 	if (date == date_t::infinity()) {
-		return PINF;
+		return PINF.str;
 	} else if (date == date_t::ninfinity()) {
-		return NINF;
+		return NINF.str;
 	}
 	int32_t date_units[3];
 	idx_t year_length;

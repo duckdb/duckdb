@@ -205,7 +205,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_DELETE: {
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
 		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
 		//! We still need to project all values from these operators so the projection
 		//! on top of them can select from only the table values being inserted.
@@ -256,6 +257,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
+				if (filter_expr->IsScalar()) {
+					filter_expr = std::move(column_ref);
+				}
 				VisitExpression(&filter_expr);
 				filter_expressions.push_back(std::move(filter_expr));
 			}

@@ -392,7 +392,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	if (!state.current) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	state.segment_checked = true;
+	// for dynamic filters we never consider the segment being "checked" as it can always change
+	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);

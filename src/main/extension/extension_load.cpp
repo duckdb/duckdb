@@ -7,6 +7,7 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -515,7 +516,9 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
-	if (db.ExtensionIsLoaded(extension)) {
+	auto &manager = ExtensionManager::Get(db);
+	auto info = manager.BeginLoad(extension);
+	if (!info) {
 		return;
 	}
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -534,7 +537,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			ExtensionLoader loader(db, extension);
+			ExtensionLoader loader(*info);
 			(*init_fun)(loader);
 			loader.FinalizeLoad();
 		} catch (std::exception &e) {
@@ -545,7 +548,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info->FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
@@ -585,7 +588,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info->FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 

@@ -26,6 +26,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -33,9 +34,10 @@ on:
       - '!.github/workflows/LinuxRelease.yml'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -52,8 +54,18 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
+ check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+      
  linux-release-cli:
-    needs: linux-extensions-64
+    needs: 
+      - linux-extensions-64
+      - check-draft
 
     strategy:
       fail-fast: false
@@ -109,6 +121,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
+        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
         zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -141,9 +154,31 @@ jobs:
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
+ upload-libduckdb-src:
+    name: Upload libduckdb-src.zip
+    needs: linux-release-cli
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
+
  linux-extensions-64:
     # Builds extensions for linux_amd64
     name: Linux Extensions (x64)
+    needs: check-draft
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -190,7 +225,9 @@ jobs:
     # Builds extensions for linux_amd64_musl
     name: Linux Extensions (musl + x64)
     runs-on: ubuntu-latest
-    needs: linux-extensions-64
+    needs: 
+      - linux-extensions-64
+      - check-draft
     strategy:
       matrix:
         duckdb_arch: [linux_amd64_musl]
@@ -235,7 +272,9 @@ jobs:
     # Builds extensions for linux_arm64
     name: Linux Extensions (aarch64)
     runs-on: ubuntu-24.04-arm
-    needs: linux-extensions-64
+    needs: 
+      - linux-extensions-64
+      - check-draft
     strategy:
       matrix:
         duckdb_arch: [linux_arm64]
@@ -277,9 +316,9 @@ jobs:
           
  check-load-install-extensions:
     name: Checks extension entries
-    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-22.04
     needs: linux-extensions-64
+    if: ${{ inputs.skip_tests != 'true' }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -348,10 +387,9 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
-    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-22.04
     needs: linux-extensions-64
-
+    if: ${{ inputs.skip_tests != 'true' }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -379,6 +417,7 @@ jobs:
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-22.04
+    needs: linux-extensions-64
     env:
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
       S3_TEST_SERVER_AVAILABLE: 1

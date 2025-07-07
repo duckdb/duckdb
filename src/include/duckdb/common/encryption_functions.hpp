@@ -18,12 +18,14 @@ public:
 	~EncryptionEngine();
 
 public:
+	//! General key management wrapper functions
 	static const_data_ptr_t GetKeyFromCache(DatabaseInstance &db, const string &key_name);
-	bool ContainsKey(DatabaseInstance &db, const string &key_name) const;
+	static bool ContainsKey(DatabaseInstance &db, const string &key_name);
 	static void AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe = true);
 	static string AddKeyToCache(DatabaseInstance &db, data_ptr_t key);
 	static void AddTempKeyToCache(DatabaseInstance &db);
 
+	//! Encryption Functions
 	static void EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
 	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,

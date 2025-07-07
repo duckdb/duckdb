@@ -449,7 +449,6 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
-option(PREFETCH_ALL_PARQUET_FILES "Debug setting: always prefetch all Parquet files" FALSE)
 option(DISABLE_POINTER_SALT "Debug setting: verify correct results without pointer salt" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
@@ -538,10 +537,6 @@ endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
-endif()
-
-if(PREFETCH_ALL_PARQUET_FILES)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_PREFETCH_ALL_PARQUET_FILES")
 endif()
 
 if(DISABLE_POINTER_SALT)
@@ -644,8 +639,11 @@ if(NOT MSVC)
     message(WARNING "Please use a recent compiler for debug builds")
   endif()
 else()
+  # we don't use "constexpr static std::mutex", so we can use the
+  # _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR definition that is required
+  # to keep the compatibility with C++ stdlib version 14.29 from MSVC 2019
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR /utf-8")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
@@ -1515,7 +1513,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   add_custom_command(
           OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
           DEPENDS duckdb_platform_binary
-          COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+	  COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
 else()

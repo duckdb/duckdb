@@ -16,6 +16,7 @@ add_library_unity(
   extension_statement.cpp
   insert_statement.cpp
   load_statement.cpp
+  merge_into_statement.cpp
   multi_statement.cpp
   pragma_statement.cpp
   prepare_statement.cpp

@@ -279,8 +279,13 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		return dataset_scalar(constant.GetValue<double>());
 	case LogicalTypeId::VARCHAR:
 		return dataset_scalar(constant.ToString());
-	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BLOB: {
+		if (type.GetTypeInfo<ArrowStringInfo>().GetSizeType() == ArrowVariableSizeType::VIEW) {
+			py::object binary_view_type = py::module_::import("pyarrow").attr("binary_view");
+			return dataset_scalar(scalar(py::bytes(constant.GetValueUnsafe<string>()), binary_view_type()));
+		}
 		return dataset_scalar(py::bytes(constant.GetValueUnsafe<string>()));
+	}
 	case LogicalTypeId::DECIMAL: {
 		py::object decimal_type;
 		auto &datetime_info = type.GetTypeInfo<ArrowDecimalInfo>();

@@ -122,7 +122,6 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_LATEST_STORAGE_VERSION) {
 			config.options.serialization_compatibility = SerializationCompatibility::FromString("latest");
 		}
-
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,
 		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "

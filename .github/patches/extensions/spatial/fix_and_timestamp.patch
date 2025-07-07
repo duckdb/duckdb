@@ -112,7 +112,7 @@ index 532ba4f..808f7ca 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index c3c7c7c..b1509dc 100644
+index c3c7c7c..081a1b5 100644
 --- a/src/spatial/modules/gdal/gdal_module.cpp
 +++ b/src/spatial/modules/gdal/gdal_module.cpp
 @@ -12,7 +12,7 @@
@@ -124,6 +124,15 @@ index c3c7c7c..b1509dc 100644
  #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
  #include "duckdb/common/types/uuid.hpp"
  #include "duckdb/function/copy_function.hpp"
+@@ -291,7 +291,7 @@ public:
+ 		}
+ 
+ 		pstatbuf->st_size = static_cast<off_t>(fs.GetFileSize(*file));
+-		pstatbuf->st_mtime = fs.GetLastModifiedTime(*file);
++		pstatbuf->st_mtime = Timestamp::ToTimeT(fs.GetLastModifiedTime(*file));
+ 
+ 		auto type = file->GetType();
+ 		switch (type) {
 @@ -1086,7 +1086,7 @@ struct ST_Read : ArrowTableFunction {
  	//------------------------------------------------------------------------------------------------------------------
  	// Register
@@ -226,8 +235,9 @@ index c3c7c7c..b1509dc 100644
 +	ST_Write::Register(loader);
  }
  
- } // namespace duckdb
+-} // namespace duckdb
 \ No newline at end of file
++} // namespace duckdb
 diff --git a/src/spatial/modules/gdal/gdal_module.hpp b/src/spatial/modules/gdal/gdal_module.hpp
 index 8485d52..0a1af37 100644
 --- a/src/spatial/modules/gdal/gdal_module.hpp

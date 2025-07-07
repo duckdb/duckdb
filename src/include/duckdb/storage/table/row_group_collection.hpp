@@ -164,7 +164,7 @@ private:
 	//! Table statistics
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends
-	idx_t allocation_size;
+	atomic<idx_t> allocation_size;
 };
 
 } // namespace duckdb
