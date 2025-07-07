@@ -11,10 +11,6 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
-	if (expr.return_type.IsNested()) {
-		return; // Non-nested types only
-	}
-
 	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -25,7 +21,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			if (child.IsFoldable()) {
 				continue; // Constant
 			}
-			if (input_col_idx.IsValid() || !child.return_type.IsNested()) {
+			if (input_col_idx.IsValid()) {
 				input_col_idx.SetInvalid(); // Found more than 1 non-constant
 				break;
 			}
@@ -45,10 +41,6 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
                                                           ExpressionState &state, Vector &result) {
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	static constexpr double CHUNK_FILL_RATIO_THRESHOLD = 0.5;
-
-	if (STANDARD_VECTOR_SIZE < ValidityMask::BITS_PER_VALUE) {
-		return false; // This is needed to properly offset the validity mask
-	}
 
 	if (!input_col_idx.IsValid()) {
 		return false; // This expression is not eligible for dictionary optimization
@@ -78,9 +70,9 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	if (input_dictionary_id != dictionary_id) {
 		// We haven't seen this dictionary before
 		const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
-		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio < CHUNK_FILL_RATIO_THRESHOLD) {
+		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio <= CHUNK_FILL_RATIO_THRESHOLD) {
 			// If the dictionary size is <= STANDARD_VECTOR_SIZE, we always do the optimization
-			// If it's greater, we only do the optimization if the chunk is 50% full or more
+			// If it's greater, we only do the optimization if the chunk is more than 50% full
 			// This protects the optimization against selective filters
 			return false;
 		}
@@ -89,7 +81,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		dictionary_id = std::move(input_dictionary_id);
 		dictionary = make_uniq<Vector>(result.GetType(), input_dictionary_size);
 
-		// Set up the input chunk and dictionary
+		// Set up the input chunk and input/output dictionaries
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(args.GetTypes());
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
@@ -97,63 +89,29 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 				input_chunk.data[col_idx].Reference(args.data[col_idx]);
 			}
 		}
-		auto &input = DictionaryVector::Child(unary_input);
-		auto &input_validity = FlatVector::Validity(input);
-		const auto &input_type = input.GetType();
-		const auto input_type_width = GetTypeIdSize(input_type.InternalType());
-
-		// Set up the output dictionary
-		auto &output = *dictionary;
-		auto &output_validity = FlatVector::Validity(output);
-		output_validity.SetAllValid(input_dictionary_size);
-		const auto &output_type = output.GetType();
-		const auto output_type_width = GetTypeIdSize(output_type.InternalType());
+		auto &input_dictionary = DictionaryVector::Child(unary_input);
+		auto &output_dictionary = *dictionary;
 
 		// Loop over the dictionary, executing at most STANDARD_VECTOR_SIZE at a time
 		for (idx_t offset = 0; offset < input_dictionary_size; offset += STANDARD_VECTOR_SIZE) {
 			const auto count = MinValue<idx_t>(input_dictionary_size - offset, STANDARD_VECTOR_SIZE);
-			const auto validity_offset = offset / ValidityMask::BITS_PER_VALUE;
 
 			// Offset the input dictionary
-			Vector offset_input(input_type, input.GetData() + offset * input_type_width);
-			ValidityMask offset_input_validity(input_validity.GetData() + validity_offset, count);
-			FlatVector::SetValidity(offset_input, offset_input_validity);
+			Vector offset_input(input_dictionary, offset, offset + count);
 			input_chunk.data[input_col_idx.GetIndex()].Reference(offset_input);
 			input_chunk.SetCardinality(count);
 
-			// Offset the output
-			Vector offset_output(output_type, output.GetData() + offset * output_type_width);
-			ValidityMask offset_result_validity(output_validity.GetData() + validity_offset, count);
-			FlatVector::SetValidity(offset_output, offset_result_validity);
-
-			// Execute, while ensuring the aux gets shared properly
-			offset_output.SetAuxiliary(output.GetAuxiliary());
-			expr.function.function(input_chunk, state, offset_output);
-			output.SetAuxiliary(offset_output.GetAuxiliary());
-
-			if (offset_output.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				return false; // Function always returns CONSTANT, bail
-			}
-
-			// Output validity may change during function execution, this copies it back over
-			const auto function_validity_data = FlatVector::Validity(offset_output).GetData();
-			const auto offset_result_validity_data = offset_result_validity.GetData();
-			if (function_validity_data != offset_result_validity_data) {
-				const auto entry_count = ValidityData::EntryCount(count);
-				for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-					offset_result_validity_data[entry_idx] = function_validity_data[entry_idx];
-				}
-			}
+			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
+			Vector output_intermediate(output_dictionary.GetType());
+			expr.function.function(input_chunk, state, output_intermediate);
+			VectorOperations::Copy(output_intermediate, output_dictionary, count, 0, offset);
 		}
 	}
 
 	// Create a dictionary result vector and give it an ID
 	const auto &input_sel_vector = DictionaryVector::SelVector(unary_input);
 	result.Dictionary(*dictionary, input_dictionary_size, input_sel_vector, args.size());
-	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// Result can be non-dictionary if args.size() == 1, so we need to check before doing this
-		DictionaryVector::SetDictionaryId(result, dictionary_id);
-	}
+	DictionaryVector::SetDictionaryId(result, dictionary_id);
 
 	return true;
 }
