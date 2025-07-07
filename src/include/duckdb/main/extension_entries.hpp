@@ -625,6 +625,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_linestring2dfromwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_linesubstring", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_m", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_makebox2d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makeenvelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makeline", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makepolygon", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
