@@ -12,7 +12,7 @@ public:
 	}
 	// keeps track of unique dictionary IDs per incoming column to make sure each dictionary is inserted once only.
 	vector<string> current_dict_ids;
-	// statistics from dictionary insertion. We use them to stop insertion if the domain cardinality is too high.
+	// statistics from dictionary insertion. We use them to stop inserting if the domain cardinality is too high.
 	idx_t n_success = 0;
 	idx_t n_already_exists = 0;
 	idx_t n_rejected_full = 0;

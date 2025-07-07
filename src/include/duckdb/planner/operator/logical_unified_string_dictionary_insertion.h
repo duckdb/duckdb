@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-// Inserts variable strings into Unified String Dictionary. Constant vectors are always inserted. Dictionary vectors are
+// Inserts strings into Unified String Dictionary. Constant vectors are always inserted. Dictionary vectors are
 // only inserted if they are from a low to medium cardinality domain. Flat vectors are only inserted if they belong to
 // the build side of the join on a primary-foreign key relation.
 class LogicalUnifiedStringDictionaryInsertion : public LogicalOperator {
