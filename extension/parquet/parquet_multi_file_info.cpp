@@ -33,6 +33,8 @@ struct ParquetReadBindData : public TableFunctionData {
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
+	ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : op(op_p) {
+	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
@@ -540,9 +542,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 
 unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
                                                                                  MultiFileGlobalState &global_state) {
-	auto result = make_uniq<ParquetReadGlobalState>();
-	result->op = global_state.op;
-	return result;
+	return make_uniq<ParquetReadGlobalState>(global_state.op);
 }
 
 unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
