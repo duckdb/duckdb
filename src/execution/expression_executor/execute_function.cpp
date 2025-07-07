@@ -15,14 +15,6 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Non-nested types only
 	}
 
-	// We can only do this optimization if there is exactly one BOUND_REF child
-	idx_t bound_ref_count = 0;
-	ExpressionIterator::VisitExpressionClass(expr, ExpressionClass::BOUND_REF,
-	                                         [&bound_ref_count](const Expression &) { bound_ref_count++; });
-	if (bound_ref_count != 1) {
-		return;
-	}
-
 	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -30,9 +22,14 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		auto &children = bound_function.children;
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = *children[child_idx];
-			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF && !child.return_type.IsNested()) {
-				input_col_idx = child_idx;
+			if (child.IsFoldable()) {
+				continue; // Constant
 			}
+			if (input_col_idx.IsValid() || !child.return_type.IsNested()) {
+				input_col_idx.SetInvalid(); // Found more than 1 non-constant
+				break;
+			}
+			input_col_idx = child_idx;
 		}
 		break;
 	}
