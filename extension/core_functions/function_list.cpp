@@ -318,6 +318,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(RegrSYYFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RepeatFun),
 	DUCKDB_SCALAR_FUNCTION(ReplaceFun),
+	DUCKDB_SCALAR_FUNCTION(ReplaceTypeFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ReservoirQuantileFun),
 	DUCKDB_SCALAR_FUNCTION(ReverseFun),
 	DUCKDB_SCALAR_FUNCTION(RightFun),
