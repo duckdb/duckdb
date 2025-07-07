@@ -430,6 +430,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
+		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
+			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+		}
 	}
 	return row_group_stats;
 }
