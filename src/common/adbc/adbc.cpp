@@ -660,7 +660,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	input->get_schema(input, arrow_schema);
 
 	try {
-		arrow_to_duckdb_schema(connection, c_arrow_schema, out_types, out_names, &out_column_count,
+		arrow_to_duckdb_schema(connection, c_arrow_schema, &out_types, &out_names, &out_column_count,
 		                       &out_converted_schema);
 	} catch (...) {
 		return ADBC_STATUS_INTERNAL;
@@ -669,14 +669,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	if (ingestion_mode == IngestionMode::CREATE) {
 		// We must construct the create table SQL query
 		std::ostringstream create_table;
-
 		create_table << "CREATE TABLE ";
 		if (schema) {
 			create_table << schema << ".";
 		}
 		create_table << table_name << " (";
-
-		for (idx_t i = 0 ; i < out_column_count; i ++) {
+		for (idx_t i = 0; i < out_column_count; i++) {
 			create_table << out_names[i] << " ";
 			auto d_type = *(reinterpret_cast<duckdb::LogicalType *>(out_types[i]));
 			create_table << d_type.ToString();
@@ -686,20 +684,31 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		}
 		create_table << ");";
 
-		if (duckdb_query(connection, create_table.str().c_str(), NULL) == DuckDBError) {
+		if (duckdb_query(connection, create_table.str().c_str(), nullptr) == DuckDBError) {
+			// Destroy all things
 			return ADBC_STATUS_INTERNAL;
 		}
 	}
 
 	duckdb_appender appender;
 	if (duckdb_appender_create(connection, schema, table_name, &appender) == DuckDBError) {
-	  return ADBC_STATUS_INTERNAL;
+		return ADBC_STATUS_INTERNAL;
 	}
-	auto arrow_array = new ArrowArray();
-	input->get_next(input, arrow_array);
-	// for ()
 	// We have to convert all arrow arrays to data chunks and append them
-	return ADBC_STATUS_OK;
+	auto arrow_array = new ArrowArray();
+	auto out_chunk = duckdb_create_data_chunk(out_types, out_column_count);
+	input->get_next(input, arrow_array);
+	while (arrow_array->release) {
+		// This is a valid arrow array, let's make it into a data chunk
+		arrow_to_duckdb_data_chunk(connection, *reinterpret_cast<duckdb_arrow_array *>(&arrow_array),
+		                           out_converted_schema, &out_chunk);
+		input->get_next(input, arrow_array);
+		if (duckdb_append_data_chunk(appender, out_chunk) != DuckDBSuccess) {
+			return ADBC_STATUS_INTERNAL;
+		}
+	}
+	bool success = duckdb_appender_destroy(&appender) == DuckDBSuccess;
+	return success ? ADBC_STATUS_OK : ADBC_STATUS_INTERNAL;
 }
 
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,

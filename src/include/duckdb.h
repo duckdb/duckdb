@@ -4543,7 +4543,7 @@ Transforms an Arrow Schema into a DuckDB Schema.
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
-                                                      duckdb_logical_type *out_types, char **out_names,
+                                                      duckdb_logical_type **out_types, char ***out_names,
                                                       idx_t *out_column_count,
                                                       duckdb_arrow_converted_schema *out_converted_schema);
 

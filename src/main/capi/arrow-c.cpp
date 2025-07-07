@@ -61,7 +61,7 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_pr
 }
 
 duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
-                                         duckdb_logical_type *out_types, char **out_names, idx_t *out_column_count,
+                                         duckdb_logical_type **out_types, char ***out_names, idx_t *out_column_count,
                                          duckdb_arrow_converted_schema *out_converted_schema) {
 	duckdb::vector<std::string> names;
 	duckdb::vector<LogicalType> return_types;
@@ -74,6 +74,7 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 	try {
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
 		                                                   schema_wrapper, names, return_types);
+		QueryResult::DeduplicateColumns(names);
 	} catch (...) {
 		// TODO : catch actual exception
 		delete arrow_table;
@@ -81,14 +82,14 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 	}
 	const idx_t column_count = names.size();
 	*out_column_count = column_count;
-	out_types = new duckdb_logical_type[column_count];
-	out_names = new char *[column_count];
+	*out_types = new duckdb_logical_type[column_count];
+	*out_names = new char *[column_count];
 
 	for (idx_t i = 0; i < column_count; i++) {
 		auto duck_type = duckdb::LogicalTypeIdToC(return_types[i].id());
-		out_types[i] = duckdb_create_logical_type(duck_type);
-		out_names[i] = new char[names[i].size() + 1];
-		std::strcpy(out_names[i], names[i].c_str());
+		*out_types[i] = duckdb_create_logical_type(duck_type);
+		*out_names[i] = new char[names[i].size() + 1];
+		std::strcpy(*out_names[i], names[i].c_str());
 	}
 	return nullptr;
 }
@@ -98,7 +99,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
                                              duckdb_data_chunk *out_chunk) {
 	auto arrow_array_cpp = reinterpret_cast<ArrowArray *>(arrow_array);
 	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
-	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk);
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*out_chunk);
 	auto conn = reinterpret_cast<Connection *>(connection);
 
 	auto &arrow_types = arrow_table->GetColumns();

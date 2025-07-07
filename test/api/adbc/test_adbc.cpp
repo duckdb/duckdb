@@ -310,7 +310,7 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 	// Insert some data
 	// Create Arrow Result
 	ADBCTestDatabase db;
-	auto &input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	string table_name = "my_table";
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
@@ -706,7 +706,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto &input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	string table_name = "test";
 	string query = "select count(*) from test";
 
@@ -748,7 +748,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
-	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
 	int64_t rows_affected;
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));

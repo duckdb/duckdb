@@ -79,11 +79,11 @@
               "name": "schema"
             },
             {
-              "type": "duckdb_logical_type *",
+              "type": "duckdb_logical_type **",
               "name": "out_types"
             },
             {
-              "type": "char **",
+              "type": "char ***",
               "name": "out_names"
             },
             {
