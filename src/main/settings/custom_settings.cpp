@@ -786,7 +786,10 @@ void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 
 	if (input.type() == LogicalType::VARCHAR) {
 		// Backward compatibility: This options once was a single string.
-		config.options.extension_directory.emplace_back(input.GetValue<string>());
+		auto value = input.GetValue<string>();
+		if (!value.empty()) {
+			config.options.extension_directory.emplace_back(value);
+		}
 	} else {
 		auto &list = ListValue::GetChildren(input);
 		for (auto &val : list) {
