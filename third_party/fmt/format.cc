@@ -11,7 +11,7 @@ FMT_BEGIN_NAMESPACE
 namespace internal {
 
 template <typename T>
-static int format_float(char* buf, std::size_t size, const char* format, int precision,
+int format_float(char* buf, std::size_t size, const char* format, int precision,
                  T value) {
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
   if (precision > 100000)
@@ -37,7 +37,7 @@ struct sprintf_specs {
 
 // This is deprecated and is kept only to preserve ABI compatibility.
 template <typename Double>
-static char* sprintf_format(Double value, internal::buffer<char>& buf,
+char* sprintf_format(Double value, internal::buffer<char>& buf,
                      sprintf_specs specs) {
   // Buffer capacity must be non-zero, otherwise MSVC's vsnprintf_s will fail.
   FMT_ASSERT(buf.capacity() != 0, "empty buffer");
@@ -124,7 +124,7 @@ template FMT_API char* internal::sprintf_format(long double,
 template struct FMT_API internal::basic_data<void>;
 
 // Workaround a bug in MSVC2013 that prevents instantiation of format_float.
-static int (*instantiate_format_float)(double, int, internal::float_specs,
+int (*instantiate_format_float)(double, int, internal::float_specs,
                                 internal::buffer<char>&) =
     internal::format_float;
 

@@ -8,14 +8,14 @@ namespace internal {
 
 // Used for uint8_t, uint16_t and uint32_t
 template <uint8_t DELTA, uint8_t SHR, class TYPE, uint8_t TYPE_SIZE = sizeof(TYPE) * 8>
-static typename std::enable_if<(DELTA + SHR) < TYPE_SIZE>::type unpack_single_out(const TYPE *__restrict in,
+typename std::enable_if<(DELTA + SHR) < TYPE_SIZE>::type unpack_single_out(const TYPE *__restrict in,
                                                                            TYPE *__restrict out) {
 	*out = ((*in) >> SHR) % (1 << DELTA);
 }
 
 // Used for uint8_t, uint16_t and uint32_t
 template <uint8_t DELTA, uint8_t SHR, class TYPE, uint8_t TYPE_SIZE = sizeof(TYPE) * 8>
-static typename std::enable_if<(DELTA + SHR) >= TYPE_SIZE>::type unpack_single_out(const TYPE *__restrict &in,
+typename std::enable_if<(DELTA + SHR) >= TYPE_SIZE>::type unpack_single_out(const TYPE *__restrict &in,
                                                                             TYPE *__restrict out) {
 	*out = (*in) >> SHR;
 	++in;
@@ -25,13 +25,13 @@ static typename std::enable_if<(DELTA + SHR) >= TYPE_SIZE>::type unpack_single_o
 }
 
 template <uint8_t DELTA, uint8_t SHR>
-static typename std::enable_if<(DELTA + SHR) < 32>::type unpack_single_out(const uint32_t *__restrict in,
+typename std::enable_if<(DELTA + SHR) < 32>::type unpack_single_out(const uint32_t *__restrict in,
                                                                     uint64_t *__restrict out) {
 	*out = ((static_cast<uint64_t>(*in)) >> SHR) % (1ULL << DELTA);
 }
 
 template <uint8_t DELTA, uint8_t SHR>
-static typename std::enable_if<(DELTA + SHR) >= 32 && (DELTA + SHR) < 64>::type
+typename std::enable_if<(DELTA + SHR) >= 32 && (DELTA + SHR) < 64>::type
 unpack_single_out(const uint32_t *__restrict &in, uint64_t *__restrict out) {
 	*out = static_cast<uint64_t>(*in) >> SHR;
 	++in;
@@ -42,7 +42,7 @@ unpack_single_out(const uint32_t *__restrict &in, uint64_t *__restrict out) {
 }
 
 template <uint8_t DELTA, uint8_t SHR>
-static typename std::enable_if<(DELTA + SHR) >= 64>::type unpack_single_out(const uint32_t *__restrict &in,
+typename std::enable_if<(DELTA + SHR) >= 64>::type unpack_single_out(const uint32_t *__restrict &in,
                                                                      uint64_t *__restrict out) {
 	*out = static_cast<uint64_t>(*in) >> SHR;
 	++in;
@@ -58,7 +58,7 @@ static typename std::enable_if<(DELTA + SHR) >= 64>::type unpack_single_out(cons
 
 // Used for uint8_t, uint16_t and uint32_t
 template <class TYPE, uint16_t DELTA, uint16_t SHL, TYPE MASK, uint8_t TYPE_SIZE = sizeof(TYPE) * 8>
-    static typename std::enable_if < DELTA + SHL<TYPE_SIZE>::type pack_single_in(const TYPE in, TYPE *__restrict out) {
+    typename std::enable_if < DELTA + SHL<TYPE_SIZE>::type pack_single_in(const TYPE in, TYPE *__restrict out) {
 	if (SHL == 0) {
 		*out = in & MASK;
 	} else {
@@ -68,7 +68,7 @@ template <class TYPE, uint16_t DELTA, uint16_t SHL, TYPE MASK, uint8_t TYPE_SIZE
 
 // Used for uint8_t, uint16_t and uint32_t
 template <class TYPE, uint16_t DELTA, uint16_t SHL, TYPE MASK, uint8_t TYPE_SIZE = sizeof(TYPE) * 8>
-static typename std::enable_if<DELTA + SHL >= TYPE_SIZE>::type pack_single_in(const TYPE in, TYPE *__restrict &out) {
+typename std::enable_if<DELTA + SHL >= TYPE_SIZE>::type pack_single_in(const TYPE in, TYPE *__restrict &out) {
 	*out |= in << SHL;
 	++out;
 
@@ -78,7 +78,7 @@ static typename std::enable_if<DELTA + SHL >= TYPE_SIZE>::type pack_single_in(co
 }
 
 template <uint16_t DELTA, uint16_t SHL, uint64_t MASK>
-    static typename std::enable_if < DELTA + SHL<32>::type pack_single_in64(const uint64_t in, uint32_t *__restrict out) {
+    typename std::enable_if < DELTA + SHL<32>::type pack_single_in64(const uint64_t in, uint32_t *__restrict out) {
 	if (SHL == 0) {
 		*out = static_cast<uint32_t>(in & MASK);
 	} else {
@@ -86,7 +86,7 @@ template <uint16_t DELTA, uint16_t SHL, uint64_t MASK>
 	}
 }
 template <uint16_t DELTA, uint16_t SHL, uint64_t MASK>
-        static typename std::enable_if < DELTA + SHL >= 32 &&
+        typename std::enable_if < DELTA + SHL >= 32 &&
     DELTA + SHL<64>::type pack_single_in64(const uint64_t in, uint32_t *__restrict &out) {
 	if (SHL == 0) {
 		*out = static_cast<uint32_t>(in & MASK);
@@ -101,7 +101,7 @@ template <uint16_t DELTA, uint16_t SHL, uint64_t MASK>
 	}
 }
 template <uint16_t DELTA, uint16_t SHL, uint64_t MASK>
-static typename std::enable_if<DELTA + SHL >= 64>::type pack_single_in64(const uint64_t in, uint32_t *__restrict &out) {
+typename std::enable_if<DELTA + SHL >= 64>::type pack_single_in64(const uint64_t in, uint32_t *__restrict &out) {
 	*out |= in << SHL;
 	++out;
 

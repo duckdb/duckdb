@@ -405,7 +405,7 @@ struct hllhdr {
 /* Our hash function is MurmurHash2, 64 bit version.
  * It was modified for Redis in order to provide the same result in
  * big and little endian archs (endian neutral). */
-static uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
+uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
     const uint64_t m = 0xc6a4a7935bd1e995;
     const int r = 47;
     uint64_t h = seed ^ (len * m);
@@ -460,7 +460,7 @@ static uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
 /* Given a string element to add to the HyperLogLog, returns the length
  * of the pattern 000..1 of the element hash. As a side effect 'regp' is
  * set to the register index this element hashes to. */
-static int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
+int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
     uint64_t hash, bit, index;
     int count;
 
@@ -520,7 +520,7 @@ static inline int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
  *
  * This is just a wrapper to hllDenseSet(), performing the hashing of the
  * element in order to retrieve the index and zero-run count. */
-static int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
+int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
     long index;
     uint8_t count = hllPatLen(ele,elesize,&index);
     /* Update the register if this element produced a longer run of zeroes. */
@@ -528,7 +528,7 @@ static int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
 }
 
 /* Compute the register histogram in the dense representation. */
-static void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
+void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
     int j;
 
     /* Redis default is to use 16384 registers 6 bits each. The code works
@@ -662,7 +662,7 @@ int hllSparseToDense(robj *o) {
  * sparse to dense: this happens when a register requires to be set to a value
  * not representable with the sparse representation, or when the resulting
  * size would be greater than server.hll_sparse_max_bytes. */
-static int hllSparseSet(robj *o, long index, uint8_t count) {
+int hllSparseSet(robj *o, long index, uint8_t count) {
     struct hllhdr *hdr;
     uint8_t oldcount, *sparse, *end, *p, *prev, *next;
     long first, span;
@@ -916,7 +916,7 @@ promote: /* Promote to dense representation. */
  *
  * This function is actually a wrapper for hllSparseSet(), it only performs
  * the hashshing of the elmenet to obtain the index and zeros run length. */
-static int hllSparseAdd(robj *o, unsigned char *ele, size_t elesize) {
+int hllSparseAdd(robj *o, unsigned char *ele, size_t elesize) {
     long index;
     uint8_t count = hllPatLen(ele,elesize,&index);
     /* Update the register if this element produced a longer run of zeroes. */
@@ -924,7 +924,7 @@ static int hllSparseAdd(robj *o, unsigned char *ele, size_t elesize) {
 }
 
 /* Compute the register histogram in the sparse representation. */
-static void hllSparseRegHisto(uint8_t *sparse, int sparselen, int *invalid, int* reghisto) {
+void hllSparseRegHisto(uint8_t *sparse, int sparselen, int *invalid, int* reghisto) {
     int idx = 0, runlen, regval;
     uint8_t *end = sparse+sparselen, *p = sparse;
 
@@ -958,7 +958,7 @@ static void hllSparseRegHisto(uint8_t *sparse, int sparselen, int *invalid, int*
 
 /* Implements the register histogram calculation for uint8_t data type
  * which is only used internally as speedup for PFCOUNT with multiple keys. */
-static void hllRawRegHisto(uint8_t *registers, int* reghisto) {
+void hllRawRegHisto(uint8_t *registers, int* reghisto) {
     uint64_t *word = (uint64_t*) registers;
     uint8_t *bytes;
     int j;
@@ -991,7 +991,7 @@ static void hllRawRegHisto(uint8_t *registers, int* reghisto) {
 /* Helper function sigma as defined in
  * "New cardinality estimation algorithms for HyperLogLog sketches"
  * Otmar Ertl, arXiv:1702.01284 */
-static double hllSigma(double x) {
+double hllSigma(double x) {
     if (x == 1.) return INFINITY;
     double zPrime;
     double y = 1;
@@ -1008,7 +1008,7 @@ static double hllSigma(double x) {
 /* Helper function tau as defined in
  * "New cardinality estimation algorithms for HyperLogLog sketches"
  * Otmar Ertl, arXiv:1702.01284 */
-static double hllTau(double x) {
+double hllTau(double x) {
     if (x == 0. || x == 1.) return 0.;
     double zPrime;
     double y = 1.0;
@@ -1033,7 +1033,7 @@ static double hllTau(double x) {
  * is, hdr->registers will point to an uint8_t array of HLL_REGISTERS element.
  * This is useful in order to speedup PFCOUNT when called against multiple
  * keys (no need to work with 6-bit integers encoding). */
-static uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
+uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
     double m = HLL_REGISTERS;
     double E;
     int j;
@@ -1085,7 +1085,7 @@ int hll_add(robj *o, unsigned char *ele, size_t elesize) {
  *
  * If the HyperLogLog is sparse and is found to be invalid, C_ERR
  * is returned, otherwise the function always succeeds. */
-static int hllMerge(uint8_t *max, robj *hll) {
+int hllMerge(uint8_t *max, robj *hll) {
     struct hllhdr *hdr = (struct hllhdr *) hll->ptr;
     int i;
 
@@ -1127,13 +1127,13 @@ static int hllMerge(uint8_t *max, robj *hll) {
 }
 
 /* ========================== robj creation ========================== */
-static robj *createObject(void *ptr) {
+robj *createObject(void *ptr) {
 	robj *result = (robj*) malloc(sizeof(robj));
 	result->ptr = ptr;
 	return result;
 }
 
-static void destroyObject(robj *obj) {
+void destroyObject(robj *obj) {
 	free(obj);
 }
 

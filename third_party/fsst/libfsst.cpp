@@ -18,7 +18,7 @@
 #include "libfsst.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 
-static Symbol concat(Symbol a, Symbol b) {
+Symbol concat(Symbol a, Symbol b) {
 	Symbol s;
 	u32 length = a.length()+b.length();
 	if (length > Symbol::maxLength) length = Symbol::maxLength;
@@ -49,15 +49,15 @@ public:
 };
 }
 
-static bool isEscapeCode(u16 pos) { return pos < FSST_CODE_BASE; }
+bool isEscapeCode(u16 pos) { return pos < FSST_CODE_BASE; }
 
-static std::ostream& operator<<(std::ostream& out, const Symbol& s) {
+std::ostream& operator<<(std::ostream& out, const Symbol& s) {
 	for (u32 i=0; i<s.length(); i++)
 		out << s.val.str[i];
 	return out;
 }
 
-static SymbolTable *buildSymbolTable(Counters& counters, vector<u8*> line, size_t len[], bool zeroTerminated=false) {
+SymbolTable *buildSymbolTable(Counters& counters, vector<u8*> line, size_t len[], bool zeroTerminated=false) {
 	SymbolTable *st = new SymbolTable(), *bestTable = new SymbolTable();
 	int bestGain = (int) -FSST_SAMPLEMAXSZ; // worst case (everything exception)
 	size_t sampleFrac = 128;
@@ -320,7 +320,7 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 #define FSST_SAMPLELINE ((size_t) 512)
 
 // quickly select a uniformly random set of lines such that we have between [FSST_SAMPLETARGET,FSST_SAMPLEMAXSZ) string bytes
-static vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
+vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
                                                     duckdb::unique_ptr<vector<size_t>>& sample_len_out) {
 	size_t totSize = 0;
 	vector<u8*> sample;
@@ -459,7 +459,7 @@ extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
 }
 
 // runtime check for simd
-static inline size_t _compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int) {
+inline size_t _compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int) {
 	return compressBulk(*e->symbolTable, nlines, lenIn, strIn, size, output, lenOut, strOut, noSuffixOpt, avoidBranch);
 }
 size_t compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd) {
@@ -467,7 +467,7 @@ size_t compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size
 }
 
 // adaptive choosing of scalar compression method based on symbol length histogram
-static inline size_t _compressAuto(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], int simd) {
+inline size_t _compressAuto(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], int simd) {
 	bool avoidBranch = false, noSuffixOpt = false;
 	if (100*e->symbolTable->lenHisto[1] > 65*e->symbolTable->nSymbols && 100*e->symbolTable->suffixLim > 95*e->symbolTable->lenHisto[1]) {
 		noSuffixOpt = true;
