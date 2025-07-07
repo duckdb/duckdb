@@ -26,10 +26,10 @@ NULL
 
 # internal issue 5232
 statement ok
-ATTACH '__TEST_DIR__/issue5232.db' as db (STORAGE_VERSION 'latest');
+ATTACH '__TEST_DIR__/issue5232.db' as issue5232 (STORAGE_VERSION 'latest');
 
 statement ok
-USE db;
+USE issue5232;
 
 statement ok
 SET storage_compatibility_version='latest';
