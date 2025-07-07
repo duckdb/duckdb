@@ -20,7 +20,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     outputs:
-        should_run: ${{ steps.ci-filters.outputs.should_run }}
+        codequality: ${{ steps.filter.outputs.codequality }}
+        julia: ${{ steps.filter.outputs.julia }}
+        # should_run: ${{ steps.ci-filters.outputs.should_run }}
     steps:
       - name: Preliminary checks on CI 
         run: echo "Event name is ${{ github.event_name }}"
@@ -33,43 +35,75 @@ jobs:
           ref: 'rearrange-ci'
           fetch-depth: 2
       
-      - id: ci-filters
-        env:
-          GITHUB_OUTPUT: ${{ github.output }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: |
-            python scripts/apply_filters.py
-    
+      # - id: ci-filters
+      #   env:
+      #     GITHUB_OUTPUT: ${{ github.output }}
+      #     PR_NUMBER: ${{ github.event.number }}
+      #   run: |
+      #       python scripts/apply_filters.py
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            codequality:
+            - '**.md'
+            - 'test/configs/**'
+            - '.github/patches/duckdb-wasm/**'
+            - '.github/workflows/**'
+            - '!.github/workflows/lcov_exclude'
+            - '!.github/workflows/CodeQuality.yml'
+            - '.github/config/out_of_tree_extensions.cmake'
+            julia:
+            - '**.md'
+            - 'examples/**'
+            - 'test/**'
+            - 'tools/**'
+            - '!tools/juliapkg/**'
+            - '.github/patches/duckdb-wasm/**'
+            - '.github/workflows/**'
+            - '!.github/workflows/Julia.yml'
+            - '.github/config/out_of_tree_extensions.cmake'
+
   code-quality:
+    needs: check-draft
+    if: needs.check-draft.outputs.codequality == 'true'
     uses: ./.github/workflows/CodeQuality.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).CodeQuality == true }}
   julia:
+    if: needs.check-draft.outputs.julia == 'true'
+    needs: check-draft
     uses: ./.github/workflows/Julia.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Julia == true }}
-  linux-release:
-    uses: ./.github/workflows/LinuxRelease.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).LinuxRelease == true }}
-  main:
-    uses: ./.github/workflows/Main.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Main == true }}
-  python:
-    uses: ./.github/workflows/Python.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Python == true }}
-  regression:
-    uses: ./.github/workflows/Regression.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Regression == true }}
-  swift:
-    uses: ./.github/workflows/Swift.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Swift == true }}
-  windows:
-    uses: ./.github/workflows/Windows.yml
-    needs: check-draft
-    if: ${{ fromJson(needs.check-draft.outputs.should_run).Windows == true }}
+    
+  # code-quality:
+  #   uses: ./.github/workflows/CodeQuality.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).CodeQuality == true }}
+  # julia:
+  #   uses: ./.github/workflows/Julia.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).Julia == true }}
+  # linux-release:
+  #   uses: ./.github/workflows/LinuxRelease.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).LinuxRelease == true }}
+  # main:
+  #   uses: ./.github/workflows/Main.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).Main == true }}
+  # python:
+  #   uses: ./.github/workflows/Python.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).Python == true }}
+  # regression:
+  #   uses: ./.github/workflows/Regression.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).Regression == true }}
+  # swift:
+  #   uses: ./.github/workflows/Swift.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).Swift == true }}
+  # windows:
+  #   uses: ./.github/workflows/Windows.yml
+  #   needs: check-draft
+  #   if: ${{ fromJson(needs.check-draft.outputs.should_run).Windows == true }}
   
