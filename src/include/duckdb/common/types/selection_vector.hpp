@@ -172,9 +172,9 @@ public:
 	}
 
 public:
-	bool Initialized() const {
-		return initialized;
-	}
+	//	bool Initialized() const {
+	//		return initialized;
+	//	}
 	void Initialize(idx_t new_size) {
 		D_ASSERT(!initialized);
 		size = new_size;

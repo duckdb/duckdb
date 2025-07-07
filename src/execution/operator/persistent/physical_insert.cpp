@@ -431,7 +431,6 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	auto &conflict_target = op.conflict_target;
 	auto &columns_to_fetch = op.columns_to_fetch;
 	auto &data_table = table.GetStorage();
-
 	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
 
 	ConflictInfo conflict_info(conflict_target);
@@ -445,42 +444,72 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		DataTable::VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
 	}
 
-	conflict_manager.Finalize();
-	if (conflict_manager.ConflictCount() == 0) {
-		// No conflicts found, 0 updates performed
+	if (!conflict_manager.HasConflicts()) {
+		// No conflicts, i.e., no updates.
 		return 0;
 	}
-	idx_t affected_tuples = 0;
+	auto conflict_count = conflict_manager.ConflictCount(0);
+	auto secondary_conflict_count = conflict_manager.ConflictCount(1);
+	auto &row_ids = conflict_manager.GetRowIds(0);
 
-	auto &conflicts = conflict_manager.Conflicts();
-	auto &row_ids = conflict_manager.RowIds();
-
-	DataChunk conflict_chunk; // contains only the conflicting values
-	DataChunk scan_chunk;     // contains the original values, that caused the conflict
-	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
-
-	// Filter out everything but the conflicting rows
-	conflict_chunk.Initialize(context.client, tuples.GetTypes());
-	conflict_chunk.Reference(tuples);
-	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
-	conflict_chunk.SetCardinality(conflicts.Count());
-
-	// Holds the pins for the fetched rows
+	// Contains the original values causing the conflicts.
+	DataChunk scan_chunk;
+	// ColumnFetchState pins the fetched rows.
 	unique_ptr<ColumnFetchState> fetch_state;
+
 	if (!types_to_fetch.empty()) {
 		D_ASSERT(scan_chunk.size() == 0);
-		// When these values are required for the conditions or the SET expressions,
-		// then we scan the existing table for the conflicting tuples, using the rowids
+		// We scan the existing table for the conflicting tuples, if we
+		// need them for the conditions, or SET expressions.
 		scan_chunk.Initialize(context.client, types_to_fetch);
 		fetch_state = make_uniq<ColumnFetchState>();
+
+		DataChunk secondary_scan_chunk;
+		if (secondary_conflict_count) {
+			secondary_scan_chunk.Initialize(context.client, types_to_fetch);
+		}
+
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
+			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflict_count, *fetch_state);
+			if (secondary_conflict_count) {
+				auto &secondary_row_ids = conflict_manager.GetRowIds(1);
+				data_table.Fetch(transaction, secondary_scan_chunk, columns_to_fetch, secondary_row_ids,
+				                 secondary_conflict_count, *fetch_state);
+			}
+
 		} else {
-			local_storage.FetchChunk(data_table, row_ids, conflicts.Count(), columns_to_fetch, scan_chunk,
-			                         *fetch_state);
+			local_storage.FetchChunk(data_table, row_ids, conflict_count, columns_to_fetch, scan_chunk, *fetch_state);
+			if (secondary_conflict_count) {
+				auto &secondary_row_ids = conflict_manager.GetRowIds(1);
+				local_storage.FetchChunk(data_table, secondary_row_ids, secondary_conflict_count, columns_to_fetch,
+				                         secondary_scan_chunk, *fetch_state);
+			}
+		}
+
+		if (secondary_conflict_count) {
+			scan_chunk.Append(secondary_scan_chunk, true);
 		}
 	}
+
+	// Only contains the conflicting values.
+	DataChunk conflict_chunk;
+	conflict_chunk.InitializeEmpty(tuples.GetTypes());
+	conflict_chunk.Reference(tuples);
+	conflict_chunk.Slice(conflict_manager.GetInvertedSel(0), conflict_count);
+	conflict_chunk.SetCardinality(conflict_count);
+
+	if (secondary_conflict_count) {
+		DataChunk secondary_conflict_chunk;
+		secondary_conflict_chunk.InitializeEmpty(tuples.GetTypes());
+		secondary_conflict_chunk.Reference(tuples);
+		secondary_conflict_chunk.Slice(conflict_manager.GetInvertedSel(1), secondary_conflict_count);
+		secondary_conflict_chunk.SetCardinality(secondary_conflict_count);
+		conflict_chunk.Append(secondary_conflict_chunk, true);
+	}
+
+	// Contains the conflict chunk and the scanned chunk (wide).
+	DataChunk combined_chunk;
 
 	// Splice the Input chunk and the fetched chunk together
 	CombineExistingAndInsertTuples(combined_chunk, scan_chunk, conflict_chunk, context.client, op);
@@ -491,14 +520,20 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 
 	if (&tuples == &lstate.update_chunk) {
 		// Allow updating duplicate rows for the 'update_chunk'
-		RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
+		RegisterUpdatedRows(lstate, row_ids, conflict_count);
+		if (secondary_conflict_count) {
+			auto &secondary_row_ids = conflict_manager.GetRowIds(1);
+			RegisterUpdatedRows(lstate, secondary_row_ids, secondary_conflict_count);
+		}
 	}
 
-	affected_tuples += PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
+	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
 
 	// Remove the conflicting tuples from the insert chunk
+	// We can use only the primay data because the secondary data has the same indexes in the chunk.
 	SelectionVector sel_vec(tuples.size());
-	idx_t new_size = SelectionVector::Inverted(conflicts.Selection(), sel_vec, conflicts.Count(), tuples.size());
+	idx_t new_size =
+	    SelectionVector::Inverted(conflict_manager.GetInvertedSel(0), sel_vec, conflict_count, tuples.size());
 	tuples.Slice(sel_vec, new_size);
 	tuples.SetCardinality(new_size);
 	return affected_tuples;

@@ -39,18 +39,17 @@ public:
 	// These methods return a boolean indicating whether we should throw or not
 	bool AddHit(const idx_t index_in_chunk, const row_t row_id);
 	bool AddNull(const idx_t index_in_chunk);
-	// This should be called before using the conflicts selection vector
-	void Finalize();
 
-	Vector &RowIds();
-	const ConflictInfo &GetConflictInfo() const;
+	const ConflictInfo &GetConflictInfo() const {
+		return *conflict_info;
+	}
 	void FinishLookup();
 	void SetMode(const ConflictManagerMode mode_p);
 
-	//! Returns a reference to all conflicts in this conflict manager.
-	const ManagedSelection &Conflicts() const;
-	//! Returns the number of conflicts in this conflict manager.
-	idx_t ConflictCount() const;
+	//	//! Returns a reference to all conflicts in this conflict manager.
+	//	const ManagedSelection &Conflicts() const;
+	//	//! Returns the number of conflicts in this conflict manager.
+	//	idx_t ConflictCount() const;
 	//! Adds an index and its respective delete_index to the conflict manager's matches.
 	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index);
 	//! Returns true, if the index is in this conflict manager.
@@ -63,15 +62,33 @@ public:
 	VerifyExistenceType GetVerifyExistenceType() const {
 		return verify_existence_type;
 	}
+	bool HasConflicts() const {
+		return conflict_data[0].sel != nullptr;
+	}
+	idx_t ConflictCount(const idx_t i) const {
+		if (!conflict_data[i].sel) {
+			return 0;
+		}
+		return conflict_data[i].count;
+	}
+	Vector &GetRowIds(const idx_t i) {
+		return *conflict_data[i].row_ids;
+	}
+	SelectionVector &GetSel(const idx_t i) {
+		return *conflict_data[i].sel;
+	}
+	SelectionVector &GetInvertedSel(const idx_t i) {
+		return *conflict_data[i].inverted_sel;
+	}
 
 private:
 	bool IsConflict(LookupResultType type);
-	Vector &InternalRowIds();
-	Vector &InternalIntermediate();
-	ManagedSelection &InternalSelection();
+	//	Vector &InternalRowIds();
+	//	Vector &InternalIntermediate();
+	//	ManagedSelection &InternalSelection();
 	//! Returns true, if the conflict manager should throw an exception, else false.
 	bool ShouldThrow(const idx_t index_in_chunk) const;
-	void AddConflictInternal(const idx_t index_in_chunk, const row_t row_id);
+	//	void AddConflictInternal(const idx_t index_in_chunk, const row_t row_id);
 
 	//! Returns true, if we ignore NULLs, else false.
 	bool IgnoreNulls() const {
@@ -95,20 +112,84 @@ private:
 	//! Optional information to match indexes to the conflict target.
 	optional_ptr<ConflictInfo> conflict_info;
 
-	ManagedSelection conflicts;
+	struct ConflictData {
+		//! Links the conflicting rows to their row IDs.
+		unique_ptr<SelectionVector> sel;
+		//! Inverted selection vector to slice the input chunk.
+		unique_ptr<SelectionVector>
+		    inverted_sel; // TODO: maybe SelectionVector::Inverted?? Or maybe does something different
+		//! Conflict count.
+		idx_t count = 0;
+		//! Row IDs.
+		unique_ptr<Vector> row_ids;
+		//! Optional row ID data.
+		row_t *row_ids_data;
+
+		void Insert(const idx_t index_in_chunk, const row_t row_id) {
+			D_ASSERT(sel->get_index(index_in_chunk) == std::numeric_limits<sel_t>::max());
+			sel->set_index(index_in_chunk, count);
+			inverted_sel->set_index(count, index_in_chunk);
+			row_ids_data[count] = row_id;
+			count++;
+		}
+
+		row_t GetRowId(const idx_t index_in_chunk) {
+			auto idx = sel->get_index(index_in_chunk);
+			return row_ids_data[idx];
+		}
+	};
+
+	array<ConflictData, 2> conflict_data;
+	unordered_set<idx_t> conflict_rows;
+	bool finished = false;
+
+	ConflictData &GetConflictData(const idx_t i) {
+		auto &conflicts = conflict_data[i];
+		if (!conflicts.sel) {
+			D_ASSERT(!conflicts.row_ids);
+			conflicts.sel = make_uniq<SelectionVector>(chunk_size);
+			conflicts.inverted_sel = make_uniq<SelectionVector>(chunk_size);
+			conflicts.row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
+			conflicts.row_ids_data = FlatVector::GetData<row_t>(*conflicts.row_ids);
+		}
+		return conflicts;
+	}
+
+	void AddRowId(const idx_t index_in_chunk, const row_t row_id) {
+		auto elem = conflict_rows.find(index_in_chunk);
+		auto &primary_conflicts = GetConflictData(0);
+
+		if (elem == conflict_rows.end()) {
+			// We have not yet seen this conflict: insert.
+			conflict_rows.insert(index_in_chunk);
+			primary_conflicts.Insert(index_in_chunk, row_id);
+			return;
+		}
+
+		if (primary_conflicts.GetRowId(index_in_chunk) == row_id) {
+			// We have already seen this conflict.
+			return;
+		}
+
+		// We have seen a conflict for this index, but with a different row ID.
+		auto &secondary_conflicts = GetConflictData(1);
+		secondary_conflicts.Insert(index_in_chunk, row_id);
+	}
+
+	//	ManagedSelection conflicts;
 	ConflictManagerMode mode;
 
-	bool finalized = false;
-	unique_ptr<Vector> row_ids;
-	// Used to check if a given conflict is part of the conflict target or not
-	unique_ptr<unordered_set<idx_t>> conflict_set;
-	// Contains 'input_size' booleans, indicating if a given index in the input chunk has a conflict
-	unique_ptr<Vector> intermediate_vector;
-	//! Each row in the data chunk has a key. With that key, we can look up the row ID
-	//! in the index. row_to_rowid maps the row to its row ID.
-	unordered_map<idx_t, row_t> row_to_rowid;
-	// Whether we have already found the one conflict target we're interested in
-	bool single_index_finished = false;
+	//	bool finalized = false;
+	//	unique_ptr<Vector> row_ids;
+	//	// Used to check if a given conflict is part of the conflict target or not
+	//	unique_ptr<unordered_set<idx_t>> conflict_set;
+	//	// Contains 'input_size' booleans, indicating if a given index in the input chunk has a conflict
+	//	unique_ptr<Vector> intermediate_vector;
+	//	//! Each row in the data chunk has a key. With that key, we can look up the row ID
+	//	//! in the index. row_to_rowid maps the row to its row ID.
+	//	unordered_map<idx_t, row_t> row_to_rowid;
+	//	//! Whether we have already found the one conflict target we're interested in.
+	//	bool single_index_finished = false;
 
 	//! Indexes matching the conflict target.
 	vector<reference<BoundIndex>> matched_indexes;
