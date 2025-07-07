@@ -146,6 +146,7 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 }
 
 void DuckTransaction::ModifyTable(DataTable &tbl) {
+	lock_guard<mutex> guard(modified_tables_lock);
 	auto table_ref = reference<DataTable>(tbl);
 	auto entry = modified_tables.find(table_ref);
 	if (entry != modified_tables.end()) {

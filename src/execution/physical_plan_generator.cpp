@@ -120,6 +120,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalExpressionGet>());
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		return CreatePlan(op.Cast<LogicalUpdate>());
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return CreatePlan(op.Cast<LogicalMergeInto>());
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:

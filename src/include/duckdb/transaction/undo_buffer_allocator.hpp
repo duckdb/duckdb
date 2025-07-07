@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -71,6 +72,7 @@ struct UndoBufferAllocator {
 
 	UndoBufferReference Allocate(idx_t alloc_len);
 
+	mutex lock;
 	BufferManager &buffer_manager;
 	unique_ptr<UndoBufferEntry> head;
 	optional_ptr<UndoBufferEntry> tail;

@@ -1,0 +1,49 @@
+# name: test/sql/merge/merge_into_insert_star.test
+# description: Test MERGE INTO INSERT *
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int DEFAULT 0);
+
+query I
+MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id, balance) USING (item_id)
+WHEN NOT MATCHED THEN INSERT *
+----
+1
+
+query I
+MERGE INTO Stock USING (VALUES (6, 12)) new_accounts(item_id, balance) USING (item_id)
+WHEN NOT MATCHED THEN INSERT
+----
+1
+
+query I
+MERGE INTO Stock USING (VALUES (0, 7)) new_accounts(balance, item_id) USING (item_id)
+WHEN NOT MATCHED THEN INSERT BY NAME
+----
+1
+
+# name mismatch
+statement error
+MERGE INTO Stock USING (VALUES (0, 7)) new_accounts(balanc, item_id) USING (item_id)
+WHEN NOT MATCHED THEN INSERT BY NAME
+----
+balance
+
+# missing column
+query I
+MERGE INTO Stock USING (VALUES (12)) new_accounts(item_id) USING (item_id)
+WHEN NOT MATCHED THEN INSERT BY NAME
+----
+1
+
+query II
+FROM Stock
+----
+5	10
+6	12
+7	0
+12	0
