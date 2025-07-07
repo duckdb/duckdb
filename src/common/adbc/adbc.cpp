@@ -666,45 +666,39 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		return ADBC_STATUS_INTERNAL;
 	}
 
-	auto cconn = reinterpret_cast<duckdb::Connection *>(connection);
+	if (ingestion_mode == IngestionMode::CREATE) {
+		// We must construct the create table SQL query
+		std::ostringstream create_table;
 
-	auto arrow_scan =
-	    cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(input)),
-	                                        duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(stream_produce)),
-	                                        duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(stream_schema))});
-	try {
-		switch (ingestion_mode) {
-		case IngestionMode::CREATE:
-			if (schema) {
-				arrow_scan->Create(schema, table_name, temporary);
-			} else {
-				arrow_scan->Create(table_name, temporary);
+		create_table << "CREATE TABLE ";
+		if (schema) {
+			create_table << schema << ".";
+		}
+		create_table << table_name << " (";
+
+		for (idx_t i = 0 ; i < out_column_count; i ++) {
+			create_table << out_names[i] << " ";
+			auto d_type = *(reinterpret_cast<duckdb::LogicalType *>(out_types[i]));
+			create_table << d_type.ToString();
+			if (i + 1 < out_column_count) {
+				create_table << ", ";
 			}
-			break;
-		case IngestionMode::APPEND: {
-			arrow_scan->CreateView("temp_adbc_view", true, true);
-			std::string query = "insert into ";
-			if (schema) {
-				query += duckdb::KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-			}
-			query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name);
-			query += " select * from temp_adbc_view";
-			auto result = cconn->Query(query);
-			break;
 		}
+		create_table << ");";
+
+		if (duckdb_query(connection, create_table.str().c_str(), NULL) == DuckDBError) {
+			return ADBC_STATUS_INTERNAL;
 		}
-		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
-		// double-releasing it
-		input->release = nullptr;
-	} catch (std::exception &ex) {
-		if (error) {
-			duckdb::ErrorData parsed_error(ex);
-			error->message = strdup(parsed_error.RawMessage().c_str());
-		}
-		return ADBC_STATUS_INTERNAL;
-	} catch (...) {
-		return ADBC_STATUS_INTERNAL;
 	}
+
+	duckdb_appender appender;
+	if (duckdb_appender_create(connection, schema, table_name, &appender) == DuckDBError) {
+	  return ADBC_STATUS_INTERNAL;
+	}
+	auto arrow_array = new ArrowArray();
+	input->get_next(input, arrow_array);
+	// for ()
+	// We have to convert all arrow arrays to data chunks and append them
 	return ADBC_STATUS_OK;
 }
 
