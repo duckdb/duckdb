@@ -1,14 +1,24 @@
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
+static bool TypeContainsStruct(const LogicalType &type) {
+	return TypeVisitor::Contains(type,
+	                             [](const LogicalType &type) { return type.InternalType() == PhysicalType::STRUCT; });
+}
+
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
 	// Check if the expression is eligible for dictionary optimization
 	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
+	}
+
+	if (TypeContainsStruct(expr.return_type)) {
+		return; // Requires recursive slicing, does not work (yet)
 	}
 
 	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
@@ -24,6 +34,9 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			if (input_col_idx.IsValid()) {
 				input_col_idx.SetInvalid(); // Found more than 1 non-constant
 				break;
+			}
+			if (TypeContainsStruct(child.return_type)) {
+				break; // Requires recursive slicing, does not work (yet)
 			}
 			input_col_idx = child_idx;
 		}
