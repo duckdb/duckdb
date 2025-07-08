@@ -482,22 +482,24 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 }
 
 // Find the first non-NULL index without a match.
-static optional_idx FirstMissingMatch(ConflictManager &manager, const idx_t count) {
+static idx_t FirstMissingMatch(ConflictManager &manager, const idx_t count) {
 	if (!manager.HasConflicts(0)) {
 		return 0;
 	}
 
+	// We try to check for each index in the chunk.
 	auto &sel = manager.GetSel(0);
+	Printer::Print(sel.ToString(count));
 	for (idx_t i = 0; i < count; i++) {
 		if (sel.get_index(i) == std::numeric_limits<sel_t>::max()) {
 			// No match for this index.
 			return i;
 		}
 	}
-	return optional_idx();
+	throw InternalException("expected a missing match for the index");
 }
 
-optional_idx LocateErrorIndex(const bool is_append, ConflictManager &manager, const idx_t count) {
+idx_t LocateErrorIndex(const bool is_append, ConflictManager &manager, const idx_t count) {
 	// We expected to find nothing, so the first error is the first match.
 	if (!is_append) {
 		return manager.GetInvertedSel(0).get_index(0);
@@ -586,9 +588,10 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflict_manager);
 		local_error = IsForeignKeyConstraintError(is_append, count, local_conflict_manager);
 	}
+	// Global constraint verification.
+	auto global_error = IsForeignKeyConstraintError(is_append, count, global_conflict_manager);
 
 	// No constraint violation.
-	auto global_error = IsForeignKeyConstraintError(is_append, count, global_conflict_manager);
 	if (!global_error && !local_error) {
 		return;
 	}
@@ -602,8 +605,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Check whether we can insert into the foreign key table, or delete from the reference table.
 	index = data_table.info->indexes.FindForeignKeyIndex(dst_keys_ptr, fk_type);
 	if (!local_verification) {
-		auto failed_index = LocateErrorIndex(is_append, global_conflict_manager, count);
-		auto message = ConstructForeignKeyError(failed_index.GetIndex(), is_append, *index, dst_chunk);
+		auto conflict = LocateErrorIndex(is_append, global_conflict_manager, count);
+		auto message = ConstructForeignKeyError(conflict, is_append, *index, dst_chunk);
 		throw ConstraintException(message);
 	}
 
