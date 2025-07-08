@@ -444,13 +444,19 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		DataTable::VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
 	}
 
-	if (!conflict_manager.HasConflicts()) {
+	if (!conflict_manager.HasConflicts(0)) {
 		// No conflicts, i.e., no updates.
 		return 0;
 	}
-	auto conflict_count = conflict_manager.ConflictCount(0);
-	auto secondary_conflict_count = conflict_manager.ConflictCount(1);
+
+	if (GLOBAL) {
+		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
+		conflict_manager.Finalize(transaction, data_table);
+	} else {
+		conflict_manager.Finalize(data_table, local_storage);
+	}
 	auto &row_ids = conflict_manager.GetRowIds(0);
+	auto conflict_count = conflict_manager.ConflictCount(0);
 
 	// Contains the original values causing the conflicts.
 	DataChunk scan_chunk;
@@ -464,49 +470,21 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		scan_chunk.Initialize(context.client, types_to_fetch);
 		fetch_state = make_uniq<ColumnFetchState>();
 
-		DataChunk secondary_scan_chunk;
-		if (secondary_conflict_count) {
-			secondary_scan_chunk.Initialize(context.client, types_to_fetch);
-		}
-
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflict_count, *fetch_state);
-			if (secondary_conflict_count) {
-				auto &secondary_row_ids = conflict_manager.GetRowIds(1);
-				data_table.Fetch(transaction, secondary_scan_chunk, columns_to_fetch, secondary_row_ids,
-				                 secondary_conflict_count, *fetch_state);
-			}
-
 		} else {
 			local_storage.FetchChunk(data_table, row_ids, conflict_count, columns_to_fetch, scan_chunk, *fetch_state);
-			if (secondary_conflict_count) {
-				auto &secondary_row_ids = conflict_manager.GetRowIds(1);
-				local_storage.FetchChunk(data_table, secondary_row_ids, secondary_conflict_count, columns_to_fetch,
-				                         secondary_scan_chunk, *fetch_state);
-			}
-		}
-
-		if (secondary_conflict_count) {
-			scan_chunk.Append(secondary_scan_chunk, true);
 		}
 	}
 
 	// Only contains the conflicting values.
+	// To slice, we do not need the secondary conflicts.
 	DataChunk conflict_chunk;
 	conflict_chunk.InitializeEmpty(tuples.GetTypes());
 	conflict_chunk.Reference(tuples);
 	conflict_chunk.Slice(conflict_manager.GetInvertedSel(0), conflict_count);
 	conflict_chunk.SetCardinality(conflict_count);
-
-	if (secondary_conflict_count) {
-		DataChunk secondary_conflict_chunk;
-		secondary_conflict_chunk.InitializeEmpty(tuples.GetTypes());
-		secondary_conflict_chunk.Reference(tuples);
-		secondary_conflict_chunk.Slice(conflict_manager.GetInvertedSel(1), secondary_conflict_count);
-		secondary_conflict_chunk.SetCardinality(secondary_conflict_count);
-		conflict_chunk.Append(secondary_conflict_chunk, true);
-	}
 
 	// Contains the conflict chunk and the scanned chunk (wide).
 	DataChunk combined_chunk;
@@ -521,12 +499,9 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	if (&tuples == &lstate.update_chunk) {
 		// Allow updating duplicate rows for the 'update_chunk'
 		RegisterUpdatedRows(lstate, row_ids, conflict_count);
-		if (secondary_conflict_count) {
-			auto &secondary_row_ids = conflict_manager.GetRowIds(1);
-			RegisterUpdatedRows(lstate, secondary_row_ids, secondary_conflict_count);
-		}
 	}
 
+	// TODO: we need to also somehow know which (spliced) row IDs where the valid ones.
 	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
 
 	// Remove the conflicting tuples from the insert chunk

@@ -419,6 +419,11 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
+bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
+	auto lock = transaction.SharedLockTable(*info);
+	return row_groups->CanFetch(transaction, row_id);
+}
+
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
@@ -478,6 +483,10 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 
 // Find the first non-NULL index without a match.
 static optional_idx FirstMissingMatch(ConflictManager &manager, const idx_t count) {
+	if (!manager.HasConflicts(0)) {
+		return 0;
+	}
+
 	auto &sel = manager.GetSel(0);
 	for (idx_t i = 0; i < count; i++) {
 		if (sel.get_index(i) == std::numeric_limits<sel_t>::max()) {
@@ -604,18 +613,42 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	if (local_error && global_error && is_append) {
 		// For appends, we throw if the foreign key neither exists in the transaction nor the local storage.
 		optional_idx conflict;
-		auto &global_sel = global_conflict_manager.GetSel(0);
-		auto &local_sel = local_conflict_manager.GetSel(0);
-
-		for (idx_t i = 0; i < count; i++) {
-			auto global_match = global_sel.get_index(i) == std::numeric_limits<sel_t>::max();
-			auto local_match = local_sel.get_index(i) == std::numeric_limits<sel_t>::max();
-			if (!global_match && !local_match) {
-				// No match in the local and global storage.
-				conflict = i;
-				break;
+		if (!global_conflict_manager.HasConflicts(0) && !local_conflict_manager.HasConflicts(0)) {
+			conflict = 0;
+		} else if (!global_conflict_manager.HasConflicts(0) && local_conflict_manager.HasConflicts(0)) {
+			auto &local_sel = local_conflict_manager.GetSel(0);
+			for (idx_t i = 0; i < count; i++) {
+				auto local_match = local_sel.get_index(i) == std::numeric_limits<sel_t>::max();
+				if (!local_match) {
+					// No match in the local storage.
+					conflict = i;
+					break;
+				}
+			}
+		} else if (global_conflict_manager.HasConflicts(0) && !local_conflict_manager.HasConflicts(0)) {
+			auto &global_sel = global_conflict_manager.GetSel(0);
+			for (idx_t i = 0; i < count; i++) {
+				auto global_match = global_sel.get_index(i) == std::numeric_limits<sel_t>::max();
+				if (!global_match) {
+					// No match in the global storage.
+					conflict = i;
+					break;
+				}
+			}
+		} else {
+			auto &global_sel = global_conflict_manager.GetSel(0);
+			auto &local_sel = local_conflict_manager.GetSel(0);
+			for (idx_t i = 0; i < count; i++) {
+				auto global_match = global_sel.get_index(i) == std::numeric_limits<sel_t>::max();
+				auto local_match = local_sel.get_index(i) == std::numeric_limits<sel_t>::max();
+				if (!global_match && !local_match) {
+					// No match in the local and global storage.
+					conflict = i;
+					break;
+				}
 			}
 		}
+
 		if (!conflict.IsValid()) {
 			// We don't throw, every value was present in either regular or transaction storage
 			return;
@@ -631,7 +664,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 			throw ConstraintException(message);
 		}
 
-		D_ASSERT(local_conflict_manager.HasConflicts());
+		D_ASSERT(local_conflict_manager.HasConflicts(0));
 		auto conflict = LocateErrorIndex(false, local_conflict_manager, count);
 		auto message = ConstructForeignKeyError(conflict, false, *transaction_index, dst_chunk);
 		throw ConstraintException(message);

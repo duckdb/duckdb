@@ -40,16 +40,15 @@ public:
 	bool AddHit(const idx_t index_in_chunk, const row_t row_id);
 	bool AddNull(const idx_t index_in_chunk);
 
+	void Finalize(DuckTransaction &transaction, DataTable &table);
+	void Finalize(DataTable &table, LocalStorage &storage);
+
 	const ConflictInfo &GetConflictInfo() const {
 		return *conflict_info;
 	}
 	void FinishLookup();
 	void SetMode(const ConflictManagerMode mode_p);
 
-	//	//! Returns a reference to all conflicts in this conflict manager.
-	//	const ManagedSelection &Conflicts() const;
-	//	//! Returns the number of conflicts in this conflict manager.
-	//	idx_t ConflictCount() const;
 	//! Adds an index and its respective delete_index to the conflict manager's matches.
 	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index);
 	//! Returns true, if the index is in this conflict manager.
@@ -62,8 +61,8 @@ public:
 	VerifyExistenceType GetVerifyExistenceType() const {
 		return verify_existence_type;
 	}
-	bool HasConflicts() const {
-		return conflict_data[0].sel != nullptr;
+	bool HasConflicts(const idx_t i) const {
+		return conflict_data[i].sel != nullptr;
 	}
 	idx_t ConflictCount(const idx_t i) const {
 		if (!conflict_data[i].sel) {
@@ -83,12 +82,8 @@ public:
 
 private:
 	bool IsConflict(LookupResultType type);
-	//	Vector &InternalRowIds();
-	//	Vector &InternalIntermediate();
-	//	ManagedSelection &InternalSelection();
 	//! Returns true, if the conflict manager should throw an exception, else false.
 	bool ShouldThrow(const idx_t index_in_chunk) const;
-	//	void AddConflictInternal(const idx_t index_in_chunk, const row_t row_id);
 
 	//! Returns true, if we ignore NULLs, else false.
 	bool IgnoreNulls() const {
@@ -113,11 +108,10 @@ private:
 	optional_ptr<ConflictInfo> conflict_info;
 
 	struct ConflictData {
-		//! Links the conflicting rows to their row IDs.
+		//! Links the conflicting rows to their row IDs (index_in_chunk -> count).
 		unique_ptr<SelectionVector> sel;
-		//! Inverted selection vector to slice the input chunk.
-		unique_ptr<SelectionVector>
-		    inverted_sel; // TODO: maybe SelectionVector::Inverted?? Or maybe does something different
+		//! Inverted selection vector to slice the input chunk (count -> index_in_chunk).
+		unique_ptr<SelectionVector> inverted_sel;
 		//! Conflict count.
 		idx_t count = 0;
 		//! Row IDs.
@@ -136,6 +130,14 @@ private:
 		row_t GetRowId(const idx_t index_in_chunk) {
 			auto idx = sel->get_index(index_in_chunk);
 			return row_ids_data[idx];
+		}
+
+		void Reset() {
+			count = 0;
+			sel = nullptr;
+			inverted_sel = nullptr;
+			row_ids_data = nullptr;
+			row_ids = nullptr;
 		}
 	};
 
@@ -176,20 +178,7 @@ private:
 		secondary_conflicts.Insert(index_in_chunk, row_id);
 	}
 
-	//	ManagedSelection conflicts;
 	ConflictManagerMode mode;
-
-	//	bool finalized = false;
-	//	unique_ptr<Vector> row_ids;
-	//	// Used to check if a given conflict is part of the conflict target or not
-	//	unique_ptr<unordered_set<idx_t>> conflict_set;
-	//	// Contains 'input_size' booleans, indicating if a given index in the input chunk has a conflict
-	//	unique_ptr<Vector> intermediate_vector;
-	//	//! Each row in the data chunk has a key. With that key, we can look up the row ID
-	//	//! in the index. row_to_rowid maps the row to its row ID.
-	//	unordered_map<idx_t, row_t> row_to_rowid;
-	//	//! Whether we have already found the one conflict target we're interested in.
-	//	bool single_index_finished = false;
 
 	//! Indexes matching the conflict target.
 	vector<reference<BoundIndex>> matched_indexes;
