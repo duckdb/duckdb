@@ -65,18 +65,17 @@ enum class VariantPrimitiveType : uint8_t {
 };
 
 static VariantBasicType VariantBasicTypeFromByte(uint8_t byte) {
-	switch (byte) {
-	case 0:
-		return VariantBasicType::PRIMITIVE;
-	case 1:
-		return VariantBasicType::SHORT_STRING;
-	case 2:
-		return VariantBasicType::OBJECT;
-	case 3:
-		return VariantBasicType::ARRAY;
-	default:
+	if (byte >= 4) {
 		throw NotImplementedException("Variant BasicType (%d) is not supported", byte);
 	}
+	return static_cast<VariantBasicType>(byte);
+}
+
+static VariantPrimitiveType VariantPrimitiveTypeFromByte(uint8_t byte) {
+	if (byte >= 21) {
+		throw NotImplementedException("Variant PrimitiveType (%d) is not supported", byte);
+	}
+	return static_cast<VariantPrimitiveType>(byte);
 }
 
 struct VariantValueMetadata {
@@ -89,7 +88,24 @@ public:
 
 public:
 	VariantBasicType basic_type;
-	uint8_t header;
+
+public:
+	//! Primitive Type header
+	VariantPrimitiveType primitive_type;
+
+public:
+	//! Short String header
+	uint8_t string_size;
+
+public:
+	//! Object header | Array header
+
+	//! Size in bytes for each 'field_offset' entry
+	uint32_t field_offset_size;
+	//! Size in bytes for each 'field_id' entry
+	uint32_t field_id_size;
+	//! Whether the number of elements is encoded in 1 byte (false) or 4 bytes (true)
+	bool is_large;
 };
 
 struct VariantDecodeResult {
@@ -110,17 +126,18 @@ public:
 	VariantBinaryDecoder();
 
 public:
-	VariantDecodeResult Decode(const string_t &metadata, const string_t &blob);
+	yyjson_mut_val *Decode(yyjson_mut_doc *doc, const VariantMetadata &metadata, const_data_ptr_t data, idx_t length);
 
 public:
 	yyjson_mut_val *PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                    const VariantValueMetadata &value_metadata, const string_t &blob);
+	                                    const VariantValueMetadata &value_metadata, const_data_ptr_t data,
+	                                    idx_t length);
 	yyjson_mut_val *ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                  const VariantValueMetadata &value_metadata, const string_t &blob);
+	                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data, idx_t length);
 	yyjson_mut_val *ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                             const VariantValueMetadata &value_metadata, const string_t &blob);
+	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data, idx_t length);
 	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                            const VariantValueMetadata &value_metadata, const string_t &blob);
+	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data, idx_t length);
 };
 
 } // namespace duckdb

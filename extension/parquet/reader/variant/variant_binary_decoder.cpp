@@ -1,5 +1,6 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "duckdb/common/printer.hpp"
+#include "utf8proc_wrapper.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -10,6 +11,20 @@ static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 5;
 static constexpr uint8_t BASIC_TYPE_MASK = 0x1;
 static constexpr uint8_t VALUE_HEADER_MASK = 0x2;
 static constexpr uint8_t VALUE_HEADER_SHIFT = 1;
+
+//! Object and Array header
+static constexpr uint8_t FIELD_OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
+
+//! Object header
+static constexpr uint8_t FIELD_ID_SIZE_MINUS_ONE_MASK = 0x3;
+static constexpr uint8_t FIELD_ID_SIZE_MINUS_ONE_SHIFT = 2;
+
+static constexpr uint8_t OBJECT_IS_LARGE_MASK = 0x1;
+static constexpr uint8_t OBJECT_IS_LARGE_SHIFT = 4;
+
+//! Array header
+static constexpr uint8_t ARRAY_IS_LARGE_MASK = 0x1;
+static constexpr uint8_t ARRAY_IS_LARGE_SHIFT = 2;
 
 using namespace duckdb_yyjson;
 
@@ -64,7 +79,27 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 	VariantValueMetadata result;
 	result.basic_type = VariantBasicTypeFromByte(byte & BASIC_TYPE_MASK);
-	result.header = (byte >> VALUE_HEADER_SHIFT) & VALUE_HEADER_MASK;
+	switch (result.basic_type) {
+	case VariantBasicType::PRIMITIVE: {
+		result.primitive_type = VariantPrimitiveTypeFromByte((byte >> VALUE_HEADER_SHIFT) & VALUE_HEADER_MASK);
+		break;
+	}
+	case VariantBasicType::SHORT_STRING: {
+		result.string_size = (byte >> VALUE_HEADER_SHIFT) & VALUE_HEADER_MASK;
+		break;
+	}
+	case VariantBasicType::OBJECT: {
+		result.field_offset_size = (byte & FIELD_OFFSET_SIZE_MINUS_ONE_MASK) + 1;
+		result.field_id_size = ((byte >> FIELD_ID_SIZE_MINUS_ONE_SHIFT) & FIELD_ID_SIZE_MINUS_ONE_MASK) + 1;
+		result.is_large = (byte >> OBJECT_IS_LARGE_SHIFT) & OBJECT_IS_LARGE_MASK;
+		break;
+	}
+	case VariantBasicType::ARRAY: {
+		result.field_offset_size = (byte & FIELD_OFFSET_SIZE_MINUS_ONE_MASK) + 1;
+		result.is_large = (byte >> ARRAY_IS_LARGE_SHIFT) & ARRAY_IS_LARGE_MASK;
+		break;
+	}
+	}
 	return result;
 }
 
@@ -73,56 +108,107 @@ VariantBinaryDecoder::VariantBinaryDecoder() {
 
 yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
                                                           const VariantValueMetadata &value_metadata,
-                                                          const string_t &blob) {
+                                                          const_data_ptr_t data, idx_t length) {
 	throw NotImplementedException("VariantBinaryDecoder::PrimitiveTypeDecode");
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
                                                         const VariantValueMetadata &value_metadata,
-                                                        const string_t &blob) {
-	throw NotImplementedException("VariantBinaryDecoder::ShortStringDecode");
+                                                        const_data_ptr_t data, idx_t length) {
+	D_ASSERT(value_metadata.string_size < 64);
+	auto string_data = reinterpret_cast<const char *>(data);
+	if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
+		throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
+	}
+	return yyjson_mut_strncpy(doc, string_data, value_metadata.string_size);
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                   const VariantValueMetadata &value_metadata, const string_t &blob) {
+                                                   const VariantValueMetadata &value_metadata, const_data_ptr_t data,
+                                                   idx_t length) {
+	auto obj = yyjson_mut_obj(doc);
+
+	auto field_offset_size = value_metadata.field_offset_size;
+	auto field_id_size = value_metadata.field_id_size;
+	auto is_large = value_metadata.is_large;
+
+	idx_t num_elements;
+	if (is_large) {
+		num_elements = Load<uint32_t>(data);
+		data += sizeof(uint32_t);
+	} else {
+		num_elements = Load<uint8_t>(data);
+		data += sizeof(uint8_t);
+	}
+
+	auto field_ids = data;
+	auto field_offsets = data + (num_elements * field_id_size);
+	auto values = field_offsets + (num_elements * field_offset_size);
+
+	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
+	for (idx_t i = 0; i < num_elements; i++) {
+		auto field_id = ReadVariableLengthLittleEndian(field_id_size, field_ids);
+		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
+
+		auto value = Decode(doc, metadata, values + last_offset, next_offset - last_offset);
+		last_offset = next_offset;
+	}
+
 	throw NotImplementedException("VariantBinaryDecoder::ObjectDecode");
+	return obj;
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                  const VariantValueMetadata &value_metadata, const string_t &blob) {
-	throw NotImplementedException("VariantBinaryDecoder::ArrayDecode");
+                                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data,
+                                                  idx_t length) {
+	auto arr = yyjson_mut_arr(doc);
+
+	auto field_offset_size = value_metadata.field_offset_size;
+	auto is_large = value_metadata.is_large;
+
+	uint32_t num_elements;
+	if (is_large) {
+		num_elements = Load<uint32_t>(data);
+		data += sizeof(uint32_t);
+	} else {
+		num_elements = Load<uint8_t>(data);
+		data += sizeof(uint8_t);
+	}
+
+	auto field_offsets = data;
+	auto values = field_offsets + (num_elements * field_offset_size);
+
+	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
+	for (idx_t i = 0; i < num_elements; i++) {
+		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
+
+		auto value = Decode(doc, metadata, values + last_offset, next_offset - last_offset);
+		last_offset = next_offset;
+	}
+
+	return arr;
 }
 
-VariantDecodeResult VariantBinaryDecoder::Decode(const string_t &metadata, const string_t &blob) {
-	VariantMetadata variant_metadata(metadata);
-
-	auto value_length = blob.GetSize();
-	auto value_data = blob.GetData();
-	auto value_metadata = VariantValueMetadata::FromHeaderByte(value_data[0]);
-
-	VariantDecodeResult result;
-	result.doc = yyjson_mut_doc_new(nullptr);
-	auto root_obj = yyjson_mut_obj(result.doc);
+yyjson_mut_val *VariantBinaryDecoder::Decode(yyjson_mut_doc *doc, const VariantMetadata &variant_metadata,
+                                             const_data_ptr_t data, idx_t length) {
+	auto value_metadata = VariantValueMetadata::FromHeaderByte(data[0]);
 
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		auto decode_result = PrimitiveTypeDecode(result.doc, variant_metadata, value_metadata, blob);
-		break;
+		return PrimitiveTypeDecode(doc, variant_metadata, value_metadata, data, length);
 	}
 	case VariantBasicType::SHORT_STRING: {
-		auto decode_result = ShortStringDecode(result.doc, variant_metadata, value_metadata, blob);
-		break;
+		return ShortStringDecode(doc, variant_metadata, value_metadata, data, length);
 	}
 	case VariantBasicType::OBJECT: {
-		auto decode_result = ObjectDecode(result.doc, variant_metadata, value_metadata, blob);
-		break;
+		return ObjectDecode(doc, variant_metadata, value_metadata, data, length);
 	}
 	case VariantBasicType::ARRAY: {
-		auto decode_result = ArrayDecode(result.doc, variant_metadata, value_metadata, blob);
-		break;
+		return ArrayDecode(doc, variant_metadata, value_metadata, data, length);
 	}
+	default:
+		throw InternalException("Unexpected value for VariantBasicType");
 	}
-	return result;
 }
 
 } // namespace duckdb
