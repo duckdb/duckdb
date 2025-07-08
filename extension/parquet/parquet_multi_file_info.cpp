@@ -33,7 +33,8 @@ struct ParquetReadBindData : public TableFunctionData {
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : op(op_p) {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
+	    : row_group_index(0), batch_index(0), op(op_p) {
 	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
