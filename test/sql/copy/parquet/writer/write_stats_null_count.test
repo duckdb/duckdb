@@ -49,6 +49,20 @@ SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
 ----
 1
 
+statement ok
+COPY (SELECT * FROM VALUES (42), (NULL) tbl(i)) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+
+# we cannot filter out the IS NULL clause when there are mixed NULL/valid
+query II
+EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+----
+logical_opt	<REGEX>:.*IS.*NULL.*
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+----
+1
+
 # list null count not supported (i.e. we don't write the null count in this case)
 statement ok
 COPY (SELECT [42, NULL, 43] i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
