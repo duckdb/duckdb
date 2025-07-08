@@ -1076,14 +1076,30 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
-	if (table_type != nullptr) {
-		SetError(error, "Table types parameter not yet supported");
-		return ADBC_STATUS_NOT_IMPLEMENTED;
-	}
-
 	std::string catalog_filter = catalog ? catalog : "%";
 	std::string db_schema_filter = db_schema ? db_schema : "%";
 	std::string table_name_filter = table_name ? table_name : "%";
+	std::string table_type_condition = "";
+	if (table_type && table_type[0]) {
+		table_type_condition = " AND table_type IN (";
+		for (int i = 0; table_type[i]; ++i) {
+			if ((strcmp(table_type[i], "LOCAL TABLE") != 0) && (strcmp(table_type[i], "BASE TABLE") != 0) &&
+			    (strcmp(table_type[i], "VIEW") != 0)) {
+				duckdb::stringstream ss;
+				ss << "Table type must be \"LOCAL TABLE\", \"BASE TABLE\" or "
+				   << "\"VIEW\": \"" << table_type[i] << "\"";
+				SetError(error, ss.str());
+				return ADBC_STATUS_INVALID_ARGUMENT;
+			}
+			if (i > 0) {
+				table_type_condition += ", ";
+			}
+			table_type_condition += "'";
+			table_type_condition += table_type[i];
+			table_type_condition += "'";
+		}
+		table_type_condition += ")";
+	}
 	std::string column_name_filter = column_name ? column_name : "%";
 
 	std::string query;
@@ -1229,7 +1245,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 							)[],
 						}) db_schema_tables
 					FROM information_schema.tables
-					WHERE table_name LIKE '%s'
+					WHERE table_name LIKE '%s'%s
 					GROUP BY table_catalog, table_schema
 				),
 				db_schemas AS (
@@ -1256,7 +1272,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
-		                                   table_name_filter, db_schema_filter, catalog_filter);
+		                                   table_name_filter, table_type_condition, db_schema_filter, catalog_filter);
 		break;
 	case ADBC_OBJECT_DEPTH_COLUMNS:
 		// Return metadata on catalogs, schemas, tables, and columns.
@@ -1269,7 +1285,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						LIST({
 							column_name: column_name,
 							ordinal_position: ordinal_position,
-							remarks : '',
+							remarks: '',
 							xdbc_data_type: NULL::SMALLINT,
 							xdbc_type_name: NULL::VARCHAR,
 							xdbc_column_size: NULL::INTEGER,
@@ -1322,7 +1338,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					USING (table_catalog, table_schema, table_name)
 					LEFT JOIN constraints
 					USING (table_catalog, table_schema, table_name)
-					WHERE table_name LIKE '%s'
+					WHERE table_name LIKE '%s'%s
 					GROUP BY table_catalog, table_schema
 				),
 				db_schemas AS (
@@ -1349,7 +1365,8 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
-		                                   column_name_filter, table_name_filter, db_schema_filter, catalog_filter);
+		                                   column_name_filter, table_name_filter, table_type_condition,
+		                                   db_schema_filter, catalog_filter);
 		break;
 	default:
 		SetError(error, "Invalid value of Depth");
