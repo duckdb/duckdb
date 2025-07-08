@@ -92,9 +92,9 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 
 	for (idx_t i = 0; i < column_count; i++) {
 		auto duck_type = duckdb::LogicalTypeIdToC(return_types[i].id());
-		*out_types[i] = duckdb_create_logical_type(duck_type);
-		*out_names[i] = new char[names[i].size() + 1];
-		std::strcpy(*out_names[i], names[i].c_str());
+		(*out_types)[i] = duckdb_create_logical_type(duck_type);
+		(*out_names)[i] = new char[names[i].size() + 1];
+		std::strcpy((*out_names)[i], names[i].c_str());
 	}
 	return nullptr;
 }

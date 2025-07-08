@@ -140,7 +140,7 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
@@ -155,7 +155,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data, "", true);
@@ -170,7 +170,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Since this is temporary and has a schema, it will fail in a internal code path
 	db.CreateTable("my_table", input_data, "my_schema", true);
@@ -187,19 +187,19 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 		return;
 	}
 	ADBCTestDatabase db;
-	db.Query("CREATE SCHEMA \"my schema\";");
+	db.Query("CREATE SCHEMA \"my_schema\";");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create table with name requiring quoting
-	db.CreateTable("my table", input_data, "my schema");
+	db.CreateTable("my_table", input_data, "my_schema");
 
 	// Validate that we can get its schema
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
-	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my schema", "my table", &arrow_schema,
+	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my_schema", "my_table", &arrow_schema,
 	                                             &adbc_error)));
 	REQUIRE((arrow_schema.n_children == 1));
 	arrow_schema.release(&arrow_schema);
@@ -1099,7 +1099,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto input_data = db.QueryArrow("SELECT 42 as value");
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 	ArrowArrayStream arrow_stream;
@@ -1159,7 +1159,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_catalog_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1193,7 +1193,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1254,7 +1254,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_table_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1431,7 +1431,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_column_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'

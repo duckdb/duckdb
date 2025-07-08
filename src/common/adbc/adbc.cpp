@@ -573,13 +573,9 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	out->release = nullptr;
 	auto result_wrapper = static_cast<duckdb_result *>(stream->private_data);
 	auto duckdb_chunk = duckdb_fetch_chunk(*result_wrapper);
-	// auto fetch_success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
 	if (!duckdb_chunk) {
 		return DuckDBSuccess;
 	}
-	// if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
-	// 	return DuckDBSuccess;
-	// }
 	auto client_properties = duckdb_client_property(result_wrapper);
 
 	auto conversion_success =
@@ -663,7 +659,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		arrow_to_duckdb_schema(connection, c_arrow_schema, &out_types, &out_names, &out_column_count,
 		                       &out_converted_schema);
 	} catch (...) {
-		duckdb_destroy_arrow_schema(&c_arrow_schema);
+		// duckdb_destroy_arrow_schema(&c_arrow_schema);
 		return ADBC_STATUS_INTERNAL;
 	}
 
@@ -678,7 +674,13 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		for (idx_t i = 0; i < out_column_count; i++) {
 			create_table << out_names[i] << " ";
 			auto d_type = *(reinterpret_cast<duckdb::LogicalType *>(out_types[i]));
-			create_table << d_type.ToString();
+			if (d_type.id() == duckdb::LogicalTypeId::INVALID) {
+				create_table << "VARCHAR";
+				duckdb_destroy_logical_type(&out_types[i]);
+				out_types[i] = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+			} else {
+				create_table << d_type.ToString();
+			}
 			if (i + 1 < out_column_count) {
 				create_table << ", ";
 			}
@@ -691,29 +693,29 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 				delete[](out_names)[i];
 			}
 			delete[] out_names;
-			duckdb_destroy_arrow_schema(&c_arrow_schema);
+			// duckdb_destroy_arrow_schema(&c_arrow_schema);
 			return ADBC_STATUS_INTERNAL;
 		}
 	}
 
 	duckdb_appender appender;
 	if (duckdb_appender_create(connection, schema, table_name, &appender) == DuckDBError) {
-			delete[] out_types;
-			for (idx_t i = 0; i < out_column_count; i++) {
-				delete[](out_names)[i];
-			}
-			delete[] out_names;
-			duckdb_destroy_arrow_schema(&c_arrow_schema);
+		delete[] out_types;
+		for (idx_t i = 0; i < out_column_count; i++) {
+			delete[](out_names)[i];
+		}
+		delete[] out_names;
+		// duckdb_destroy_arrow_schema(&c_arrow_schema);
 		return ADBC_STATUS_INTERNAL;
 	}
 	// We have to convert all arrow arrays to data chunks and append them
 	auto arrow_array = new ArrowArray();
+	auto c_arrow_array = reinterpret_cast<duckdb_arrow_array>(arrow_array);
 	auto out_chunk = duckdb_create_data_chunk(out_types, out_column_count);
 	input->get_next(input, arrow_array);
 	while (arrow_array->release) {
 		// This is a valid arrow array, let's make it into a data chunk
-		arrow_to_duckdb_data_chunk(connection, *reinterpret_cast<duckdb_arrow_array *>(&arrow_array),
-		                           out_converted_schema, &out_chunk);
+		arrow_to_duckdb_data_chunk(connection, c_arrow_array, out_converted_schema, &out_chunk);
 		input->get_next(input, arrow_array);
 		if (duckdb_append_data_chunk(appender, out_chunk) != DuckDBSuccess) {
 			delete[] out_types;
@@ -721,12 +723,17 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 				delete[](out_names)[i];
 			}
 			delete[] out_names;
-			delete arrow_array;
-			duckdb_destroy_data_chunk(&out_chunk);
+
 			duckdb_destroy_arrow_converted_schema(&out_converted_schema);
-			duckdb_destroy_arrow_schema(&c_arrow_schema);
+			// duckdb_destroy_arrow_schema(&c_arrow_schema);
 			return ADBC_STATUS_INTERNAL;
 		}
+		duckdb_destroy_arrow_array(&c_arrow_array);
+		duckdb_destroy_data_chunk(&out_chunk);
+
+		arrow_array = new ArrowArray();
+		c_arrow_array = reinterpret_cast<duckdb_arrow_array>(arrow_array);
+		out_chunk = duckdb_create_data_chunk(out_types, out_column_count);
 	}
 
 	delete[] out_types;
@@ -735,10 +742,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	}
 	delete[] out_names;
 	const bool success = duckdb_appender_destroy(&appender) == DuckDBSuccess;
-	delete arrow_array;
 	duckdb_destroy_data_chunk(&out_chunk);
 	duckdb_destroy_arrow_converted_schema(&out_converted_schema);
-	duckdb_destroy_arrow_schema(&c_arrow_schema);
+	duckdb_destroy_arrow_array(&c_arrow_array);
+	// FIXME: THIS IS NOT GOOD
+	// duckdb_destroy_arrow_schema(&c_arrow_schema);
 
 	return success ? ADBC_STATUS_OK : ADBC_STATUS_INTERNAL;
 }
@@ -928,11 +936,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 		wrapper->ingestion_stream.release = nullptr;
-		// auto adbc_res = GetPreparedParameters(wrapper->connection, result, &stream, error);
-		// if (adbc_res != ADBC_STATUS_OK) {
-		// return adbc_res;
-		// }
-
 		duckdb_logical_type *out_types = nullptr;
 		char **out_names = nullptr;
 		idx_t out_column_count;
@@ -948,7 +951,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			return ADBC_STATUS_INTERNAL;
 		}
 
-		// duckdb::unique_ptr<duckdb::DataChunk> chunk;
 		auto prepared_statement_params =
 		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
