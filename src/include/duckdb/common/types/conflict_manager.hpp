@@ -79,6 +79,9 @@ public:
 	SelectionVector &GetInvertedSel(const idx_t i) {
 		return *conflict_data[i].inverted_sel;
 	}
+	ValidityArray &GetValidityArray(const idx_t i) {
+		return conflict_data[i].val_array;
+	}
 
 private:
 	bool IsConflict(LookupResultType type);
@@ -118,11 +121,15 @@ private:
 		unique_ptr<Vector> row_ids;
 		//! Optional row ID data.
 		row_t *row_ids_data;
+		//! Keeps track of the indexes in the chunk for which we've seen a conflict.
+		//! True (valid) indicates a conflict.
+		ValidityArray val_array;
 
 		void Insert(const idx_t index_in_chunk, const row_t row_id) {
-			D_ASSERT(sel->get_index(index_in_chunk) == std::numeric_limits<sel_t>::max());
+			D_ASSERT(!val_array.RowIsValid(index_in_chunk));
 			sel->set_index(index_in_chunk, count);
 			inverted_sel->set_index(count, index_in_chunk);
+			val_array.SetValid(index_in_chunk);
 			row_ids_data[count] = row_id;
 			count++;
 		}
@@ -151,6 +158,7 @@ private:
 			D_ASSERT(!conflicts.row_ids);
 			conflicts.sel = make_uniq<SelectionVector>(chunk_size);
 			conflicts.inverted_sel = make_uniq<SelectionVector>(chunk_size);
+			conflicts.val_array.Initialize(chunk_size, false);
 			conflicts.row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
 			conflicts.row_ids_data = FlatVector::GetData<row_t>(*conflicts.row_ids);
 		}

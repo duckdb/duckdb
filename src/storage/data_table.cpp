@@ -488,10 +488,9 @@ static idx_t FirstMissingMatch(ConflictManager &manager, const idx_t count) {
 	}
 
 	// We try to check for each index in the chunk.
-	auto &sel = manager.GetSel(0);
-	Printer::Print(sel.ToString(count));
+	auto &val_array = manager.GetValidityArray(0);
 	for (idx_t i = 0; i < count; i++) {
-		if (sel.get_index(i) == std::numeric_limits<sel_t>::max()) {
+		if (!val_array.RowIsValid(i)) {
 			// No match for this index.
 			return i;
 		}
@@ -619,31 +618,29 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		if (!global_conflict_manager.HasConflicts(0) && !local_conflict_manager.HasConflicts(0)) {
 			conflict = 0;
 		} else if (!global_conflict_manager.HasConflicts(0) && local_conflict_manager.HasConflicts(0)) {
-			auto &local_sel = local_conflict_manager.GetSel(0);
+			auto &val_array = local_conflict_manager.GetValidityArray(0);
 			for (idx_t i = 0; i < count; i++) {
-				auto local_match = local_sel.get_index(i) == std::numeric_limits<sel_t>::max();
-				if (!local_match) {
+				if (val_array.RowIsValid(i)) {
 					// No match in the local storage.
 					conflict = i;
 					break;
 				}
 			}
 		} else if (global_conflict_manager.HasConflicts(0) && !local_conflict_manager.HasConflicts(0)) {
-			auto &global_sel = global_conflict_manager.GetSel(0);
+			auto &val_array = global_conflict_manager.GetValidityArray(0);
 			for (idx_t i = 0; i < count; i++) {
-				auto global_match = global_sel.get_index(i) == std::numeric_limits<sel_t>::max();
-				if (!global_match) {
+				if (val_array.RowIsValid(i)) {
 					// No match in the global storage.
 					conflict = i;
 					break;
 				}
 			}
 		} else {
-			auto &global_sel = global_conflict_manager.GetSel(0);
-			auto &local_sel = local_conflict_manager.GetSel(0);
+			auto &global_val_array = global_conflict_manager.GetValidityArray(0);
+			auto &local_val_array = local_conflict_manager.GetValidityArray(0);
 			for (idx_t i = 0; i < count; i++) {
-				auto global_match = global_sel.get_index(i) == std::numeric_limits<sel_t>::max();
-				auto local_match = local_sel.get_index(i) == std::numeric_limits<sel_t>::max();
+				auto global_match = global_val_array.RowIsValid(i);
+				auto local_match = local_val_array.RowIsValid(i);
 				if (!global_match && !local_match) {
 					// No match in the local and global storage.
 					conflict = i;
