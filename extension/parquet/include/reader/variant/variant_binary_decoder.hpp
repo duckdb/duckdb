@@ -126,18 +126,17 @@ public:
 	VariantBinaryDecoder();
 
 public:
-	yyjson_mut_val *Decode(yyjson_mut_doc *doc, const VariantMetadata &metadata, const_data_ptr_t data, idx_t length);
+	yyjson_mut_val *Decode(yyjson_mut_doc *doc, const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
 	yyjson_mut_val *PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                    const VariantValueMetadata &value_metadata, const_data_ptr_t data,
-	                                    idx_t length);
+	                                    const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 	yyjson_mut_val *ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data, idx_t length);
+	                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 	yyjson_mut_val *ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data, idx_t length);
+	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data, idx_t length);
+	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 };
 
 } // namespace duckdb

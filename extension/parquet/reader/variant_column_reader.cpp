@@ -57,14 +57,14 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);
 	auto value_intermediate_data = FlatVector::GetData<string_t>(value_intermediate);
 	for (idx_t i = 0; i < num_values; i++) {
+		//! FIXME: deal with nulls
 		VariantMetadata variant_metadata(metadata_intermediate_data[i]);
 		auto value_data = reinterpret_cast<const_data_ptr_t>(value_intermediate_data[i].GetData());
-		auto value_length = value_intermediate_data[i].GetSize();
 
 		VariantDecodeResult result;
 		result.doc = yyjson_mut_doc_new(nullptr);
 
-		auto decode_result = decoder.Decode(result.doc, variant_metadata, value_data, value_length);
+		auto decode_result = decoder.Decode(result.doc, variant_metadata, value_data);
 		//! TODO: handle the returned json object, stringify it and return a JSON value
 	}
 

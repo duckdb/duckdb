@@ -68,10 +68,11 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 
 	offsets = ptr;
-	offsets_length = dictionary_size + 1;
-	for (idx_t i = 0; i < offsets_length; i++) {
-		auto offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
-		Printer::PrintF("Offset[%d] = %d", i, offset);
+	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+	for (idx_t i = 0; i < dictionary_size; i++) {
+		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+		Printer::PrintF("Offset[%d] = %d", i, last_offset);
+		last_offset = next_offset;
 	}
 	bytes = ptr;
 }
@@ -108,13 +109,13 @@ VariantBinaryDecoder::VariantBinaryDecoder() {
 
 yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
                                                           const VariantValueMetadata &value_metadata,
-                                                          const_data_ptr_t data, idx_t length) {
+                                                          const_data_ptr_t data) {
 	throw NotImplementedException("VariantBinaryDecoder::PrimitiveTypeDecode");
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
                                                         const VariantValueMetadata &value_metadata,
-                                                        const_data_ptr_t data, idx_t length) {
+                                                        const_data_ptr_t data) {
 	D_ASSERT(value_metadata.string_size < 64);
 	auto string_data = reinterpret_cast<const char *>(data);
 	if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
@@ -124,8 +125,7 @@ yyjson_mut_val *VariantBinaryDecoder::ShortStringDecode(yyjson_mut_doc *doc, con
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                   const VariantValueMetadata &value_metadata, const_data_ptr_t data,
-                                                   idx_t length) {
+                                                   const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
 	auto obj = yyjson_mut_obj(doc);
 
 	auto field_offset_size = value_metadata.field_offset_size;
@@ -143,14 +143,14 @@ yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const Va
 
 	auto field_ids = data;
 	auto field_offsets = data + (num_elements * field_id_size);
-	auto values = field_offsets + (num_elements * field_offset_size);
+	auto values = field_offsets + ((num_elements + 1) * field_offset_size);
 
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {
 		auto field_id = ReadVariableLengthLittleEndian(field_id_size, field_ids);
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
-		auto value = Decode(doc, metadata, values + last_offset, next_offset - last_offset);
+		auto value = Decode(doc, metadata, values + last_offset);
 		last_offset = next_offset;
 	}
 
@@ -159,8 +159,7 @@ yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const Va
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data,
-                                                  idx_t length) {
+                                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
 	auto arr = yyjson_mut_arr(doc);
 
 	auto field_offset_size = value_metadata.field_offset_size;
@@ -176,13 +175,13 @@ yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const Var
 	}
 
 	auto field_offsets = data;
-	auto values = field_offsets + (num_elements * field_offset_size);
+	auto values = field_offsets + ((num_elements + 1) * field_offset_size);
 
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
-		auto value = Decode(doc, metadata, values + last_offset, next_offset - last_offset);
+		auto value = Decode(doc, metadata, values + last_offset);
 		last_offset = next_offset;
 	}
 
@@ -190,21 +189,27 @@ yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const Var
 }
 
 yyjson_mut_val *VariantBinaryDecoder::Decode(yyjson_mut_doc *doc, const VariantMetadata &variant_metadata,
-                                             const_data_ptr_t data, idx_t length) {
+                                             const_data_ptr_t data) {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(data[0]);
+
+	//! FIXME: we don't actually know the length in arrays/objects?
+	//! > A field_offset represents the byte offset (relative to the first byte of the first value) where the i-th value
+	//! starts > The last field_offset points to the byte after the end of the last value
+	//! ...
+	//! > This implies that the field_offset values may not be monotonically increasing
 
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		return PrimitiveTypeDecode(doc, variant_metadata, value_metadata, data, length);
+		return PrimitiveTypeDecode(doc, variant_metadata, value_metadata, data);
 	}
 	case VariantBasicType::SHORT_STRING: {
-		return ShortStringDecode(doc, variant_metadata, value_metadata, data, length);
+		return ShortStringDecode(doc, variant_metadata, value_metadata, data);
 	}
 	case VariantBasicType::OBJECT: {
-		return ObjectDecode(doc, variant_metadata, value_metadata, data, length);
+		return ObjectDecode(doc, variant_metadata, value_metadata, data);
 	}
 	case VariantBasicType::ARRAY: {
-		return ArrayDecode(doc, variant_metadata, value_metadata, data, length);
+		return ArrayDecode(doc, variant_metadata, value_metadata, data);
 	}
 	default:
 		throw InternalException("Unexpected value for VariantBasicType");
