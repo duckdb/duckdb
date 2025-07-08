@@ -83,7 +83,7 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOptions &options) {
+void StorageManager::Initialize(QueryContext context, StorageOptions &options) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
@@ -125,7 +125,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
+void SingleFileStorageManager::LoadDatabase(QueryContext context, StorageOptions &storage_options) {
 
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
@@ -392,7 +392,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(optional_ptr<ClientContext> client_context, CheckpointOptions options) {
+void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
 	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
@@ -403,7 +403,7 @@ void SingleFileStorageManager::CreateCheckpoint(optional_ptr<ClientContext> clie
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(client_context, db, *block_manager, options.type);
+			SingleFileCheckpointWriter checkpointer(context, db, *block_manager, options.type);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
