@@ -143,8 +143,10 @@ public:
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
-	//! Returns index storage serialization information.
-	virtual IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal);
+	//! Serializes index memory to disk and returns the index storage information.
+	virtual IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	//! Serializes index memory to the WAL and returns the index storage information.
+	virtual IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

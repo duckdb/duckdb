@@ -1,3 +1,75 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index 8589edb..da1d595 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -231,7 +231,7 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+ 	}
+ }
+ 
+-IndexStorageInfo RTreeIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
++IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+ 
+ 	IndexStorageInfo info;
+ 	info.name = name;
+@@ -240,17 +240,30 @@ IndexStorageInfo RTreeIndex::GetStorageInfo(const case_insensitive_map_t<Value>
+ 	auto &leaf_allocator = tree->GetLeafAllocator();
+ 	auto &node_allocator = tree->GetNodeAllocator();
+ 
+-	if (!to_wal) {
+-		// use the partial block manager to serialize all allocator data
+-		auto &block_manager = table_io_manager.GetIndexBlockManager();
+-		PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
+-		leaf_allocator.SerializeBuffers(partial_block_manager);
+-		node_allocator.SerializeBuffers(partial_block_manager);
+-		partial_block_manager.FlushPartialBlocks();
+-	} else {
+-		info.buffers.push_back(leaf_allocator.InitSerializationToWAL());
+-		info.buffers.push_back(node_allocator.InitSerializationToWAL());
+-	}
++	// Use the partial block manager to serialize allocator data.
++	auto &block_manager = table_io_manager.GetIndexBlockManager();
++	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
++	leaf_allocator.SerializeBuffers(partial_block_manager);
++	node_allocator.SerializeBuffers(partial_block_manager);
++	partial_block_manager.FlushPartialBlocks();
++
++	info.allocator_infos.push_back(leaf_allocator.GetInfo());
++	info.allocator_infos.push_back(node_allocator.GetInfo());
++
++	return info;
++}
++
++IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
++
++	IndexStorageInfo info;
++	info.name = name;
++	info.root = tree->GetRoot().pointer.Get();
++
++	auto &leaf_allocator = tree->GetLeafAllocator();
++	auto &node_allocator = tree->GetNodeAllocator();
++
++	info.buffers.push_back(leaf_allocator.InitSerializationToWAL());
++	info.buffers.push_back(node_allocator.InitSerializationToWAL());
+ 
+ 	info.allocator_infos.push_back(leaf_allocator.GetInfo());
+ 	info.allocator_infos.push_back(node_allocator.GetInfo());
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index 5e1ae9c..c861953 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -47,7 +47,11 @@ public:
+ 	//! Insert a chunk of entries into the index
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+-	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool get_buffers) override;
++	//! Serializes RTree memory to disk and returns the index storage information.
++	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
++	//! Serializes RTree memory to the WAL and returns the index storage information.
++	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
+ 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 index e27fb02..dc6f5c2 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
