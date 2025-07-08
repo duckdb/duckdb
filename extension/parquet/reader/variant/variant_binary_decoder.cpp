@@ -68,13 +68,15 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 
 	offsets = ptr;
+	bytes = offsets + ((dictionary_size + 1) * header.offset_size);
 	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 		Printer::PrintF("Offset[%d] = %d", i, last_offset);
+		strings.push_back(reinterpret_cast<const char *>(bytes + last_offset));
+		lengths.push_back(next_offset - last_offset);
 		last_offset = next_offset;
 	}
-	bytes = ptr;
 }
 
 VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
@@ -112,8 +114,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
                                                           const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		auto val = yyjson_mut_obj(doc);
-		return val;
+		return yyjson_mut_null(doc);
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
 		return yyjson_mut_true(doc);
@@ -123,75 +124,75 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 	}
 	case VariantPrimitiveType::INT8: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT8");
 	}
 	case VariantPrimitiveType::INT16: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT16");
 	}
 	case VariantPrimitiveType::INT32: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT32");
 	}
 	case VariantPrimitiveType::INT64: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT64");
 	}
 	case VariantPrimitiveType::DOUBLE: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DOUBLE");
 	}
 	case VariantPrimitiveType::DECIMAL4: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DECIMAL4");
 	}
 	case VariantPrimitiveType::DECIMAL8: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DECIMAL8");
 	}
 	case VariantPrimitiveType::DECIMAL16: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DECIMAL16");
 	}
 	case VariantPrimitiveType::DATE: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DATE");
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_MICROS");
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NTZ_MICROS");
 	}
 	case VariantPrimitiveType::FLOAT: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::FLOAT");
 	}
 	case VariantPrimitiveType::BINARY: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::BINARY");
 	}
 	case VariantPrimitiveType::STRING: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::STRING");
 	}
 	case VariantPrimitiveType::TIME_NTZ: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIME_NTZ");
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NANOS");
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NTZ_NANOS");
 	}
 	case VariantPrimitiveType::UUID: {
 		auto val = yyjson_mut_obj(doc);
-		return val;
+		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::UUID");
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
@@ -271,6 +272,7 @@ yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const Var
 		last_offset = next_offset;
 	}
 
+	throw NotImplementedException("Variant ArrayDecode");
 	return arr;
 }
 

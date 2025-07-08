@@ -32,8 +32,10 @@ public:
 public:
 	VariantMetadataHeader header;
 	const_data_ptr_t offsets;
-	idx_t offsets_length;
 	const_data_ptr_t bytes;
+
+	vector<const char *> strings;
+	vector<idx_t> lengths;
 };
 
 //! ------------ Value ------------
