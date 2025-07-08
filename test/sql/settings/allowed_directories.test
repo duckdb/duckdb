@@ -19,7 +19,7 @@ statement ok
 RESET allowed_directories
 
 statement ok
-SET allowed_directories=['data/csv/glob', 'data/parquet-testing/glob', 'data/json', '__TEST_DIR__']
+SET allowed_directories=['data/csv/glob', 'data/csv/glob/1', 'data/parquet-testing/glob', 'data/json', '__TEST_DIR__']
 
 statement ok
 SET enable_external_access=false
