@@ -226,11 +226,6 @@ private:
 
 		// We have seen a conflict for this index, but with a different row ID.
 		auto &secondary_conflicts = GetConflictData(1);
-		if (secondary_conflicts.val_array.RowIsValid(index_in_chunk) &&
-		    secondary_conflicts.GetRowId(index_in_chunk) == row_id) {
-			// We have already seen this conflict.
-			return;
-		}
 		secondary_conflicts.Insert(index_in_chunk, row_id);
 	}
 };
