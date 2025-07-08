@@ -75,10 +75,15 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
 		                                                   schema_wrapper, names, return_types);
 		QueryResult::DeduplicateColumns(names);
-	} catch (...) {
-		// TODO : catch actual exception
+	} catch (const duckdb::Exception &ex) {
 		delete arrow_table;
-		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (const std::exception &ex) {
+		delete arrow_table;
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (...) {
+		delete arrow_table;
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 	}
 	const idx_t column_count = names.size();
 	*out_column_count = column_count;
@@ -131,6 +136,35 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
 		}
 	}
 	return nullptr;
+}
+void duckdb_destroy_arrow_schema(duckdb_arrow_schema *arrow_schema) {
+	if (arrow_schema && *arrow_schema) {
+		auto schema = reinterpret_cast<ArrowSchema *>(*arrow_schema);
+		if (schema->release) {
+			schema->release(schema);
+		}
+		delete schema;
+		*arrow_schema = nullptr;
+	}
+}
+
+void duckdb_destroy_arrow_converted_schema(duckdb_arrow_converted_schema *arrow_converted_schema) {
+	if (arrow_converted_schema && *arrow_converted_schema) {
+		auto converted_schema = reinterpret_cast<duckdb::ArrowTableType *>(*arrow_converted_schema);
+		delete converted_schema;
+		*arrow_converted_schema = nullptr;
+	}
+}
+
+void duckdb_destroy_arrow_array(duckdb_arrow_array *arrow_array) {
+	if (arrow_array && *arrow_array) {
+		auto array = reinterpret_cast<ArrowArray *>(*arrow_array);
+		if (array->release) {
+			array->release(array);
+		}
+		delete array;
+		*arrow_array = nullptr;
+	}
 }
 
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {

@@ -712,18 +712,18 @@ typedef struct _duckdb_arrow_stream {
 	void *internal_ptr;
 } * duckdb_arrow_stream;
 
-//! Holds an arrow schema. Remember to release the respective ArrowSchema object.
+//! Holds an arrow schema. Must be destroyed with `duckdb_destroy_arrow_schema`
 typedef struct _duckdb_arrow_schema {
 	void *internal_ptr;
 } * duckdb_arrow_schema;
 
-//! Holds an arrow converted schema (i.e., duckdb::ArrowTableType)
-// Remember to release the respective ArrowConvertedSchema object.
+//! Holds an arrow converted schema (i.e., duckdb::ArrowTableType).
+//! Must be destroyed with `duckdb_destroy_arrow_converted_schema`
 typedef struct _duckdb_arrow_converted_schema {
 	void *internal_ptr;
 } * duckdb_arrow_converted_schema;
 
-//! Holds an arrow array. Remember to release the respective ArrowArray object.
+//! Holds an arrow array. Must be destroyed with `duckdb_destroy_arrow_array`
 typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
@@ -4575,6 +4575,27 @@ Transforms an Arrow array into a DuckDB data chunk.
 DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckdb_arrow_array arrow_array,
                                                           duckdb_arrow_converted_schema converted_schema,
                                                           duckdb_data_chunk *out_chunk);
+
+/*!
+Destroys the arrow schema and de-allocates all memory allocated for that schema.
+
+* @param arrow_schema The arrow schema to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_arrow_schema(duckdb_arrow_schema *arrow_schema);
+
+/*!
+Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.
+
+* @param arrow_converted_schema The arrow converted schema to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_arrow_converted_schema(duckdb_arrow_converted_schema *arrow_converted_schema);
+
+/*!
+Destroys the arrow array and de-allocates all memory allocated for that arrow awway.
+
+* @param arrow_array The arrow_array to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_arrow_array(duckdb_arrow_array *arrow_array);
 
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!

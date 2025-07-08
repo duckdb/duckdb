@@ -556,6 +556,9 @@ typedef struct {
 	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_connection connection, duckdb_arrow_array arrow_array,
 	                                                duckdb_arrow_converted_schema converted_schema,
 	                                                duckdb_data_chunk *out_chunk);
+	void (*duckdb_destroy_arrow_schema)(duckdb_arrow_schema *arrow_schema);
+	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
+	void (*duckdb_destroy_arrow_array)(duckdb_arrow_array *arrow_array);
 #endif
 
 // New functions for duckdb error data
@@ -1044,10 +1047,13 @@ typedef struct {
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
 // Version unstable_new_arrow_functions
-#define duckdb_to_arrow_schema     duckdb_ext_api.duckdb_to_arrow_schema
-#define duckdb_data_chunk_to_arrow duckdb_ext_api.duckdb_data_chunk_to_arrow
-#define arrow_to_duckdb_schema     duckdb_ext_api.arrow_to_duckdb_schema
-#define arrow_to_duckdb_data_chunk duckdb_ext_api.arrow_to_duckdb_data_chunk
+#define duckdb_to_arrow_schema                duckdb_ext_api.duckdb_to_arrow_schema
+#define duckdb_data_chunk_to_arrow            duckdb_ext_api.duckdb_data_chunk_to_arrow
+#define arrow_to_duckdb_schema                duckdb_ext_api.arrow_to_duckdb_schema
+#define arrow_to_duckdb_data_chunk            duckdb_ext_api.arrow_to_duckdb_data_chunk
+#define duckdb_destroy_arrow_schema           duckdb_ext_api.duckdb_destroy_arrow_schema
+#define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
+#define duckdb_destroy_arrow_array            duckdb_ext_api.duckdb_destroy_arrow_array
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data

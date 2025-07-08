@@ -140,7 +140,54 @@
             "return_value": "The error data."
           }
         },
-
+        {
+            "name": "duckdb_destroy_arrow_schema",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow_schema *",
+                    "name": "arrow_schema"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the arrow schema and de-allocates all memory allocated for that schema.\n\n",
+                "param_comments": {
+                    "arrow_schema": "The arrow schema to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_destroy_arrow_converted_schema",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow_converted_schema *",
+                    "name": "arrow_converted_schema"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.\n\n",
+                "param_comments": {
+                    "arrow_converted_schema": "The arrow converted schema to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_destroy_arrow_array",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow_array *",
+                    "name": "arrow_array"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the arrow array and de-allocates all memory allocated for that arrow awway.\n\n",
+                "param_comments": {
+                    "arrow_array": "The arrow_array to destroy."
+                }
+            }
+        },
         {
             "name": "duckdb_query_arrow",
             "return_type": "duckdb_state",

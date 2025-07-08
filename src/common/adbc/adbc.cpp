@@ -663,6 +663,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		arrow_to_duckdb_schema(connection, c_arrow_schema, &out_types, &out_names, &out_column_count,
 		                       &out_converted_schema);
 	} catch (...) {
+		delete arrow_schema;
 		return ADBC_STATUS_INTERNAL;
 	}
 
@@ -685,7 +686,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		create_table << ");";
 
 		if (duckdb_query(connection, create_table.str().c_str(), nullptr) == DuckDBError) {
-			// Destroy all things
+			delete[] out_types;
+			for (idx_t i = 0; i < out_column_count; i++) {
+				delete[](out_names)[i];
+			}
+			delete[] out_names;
+			delete arrow_schema;
 			return ADBC_STATUS_INTERNAL;
 		}
 	}
@@ -704,10 +710,25 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		                           out_converted_schema, &out_chunk);
 		input->get_next(input, arrow_array);
 		if (duckdb_append_data_chunk(appender, out_chunk) != DuckDBSuccess) {
+			delete[] out_types;
+			for (idx_t i = 0; i < out_column_count; i++) {
+				delete[](out_names)[i];
+			}
+			delete[] out_names;
+			delete arrow_array;
+			duckdb_destroy_data_chunk(&out_chunk);
 			return ADBC_STATUS_INTERNAL;
 		}
 	}
-	bool success = duckdb_appender_destroy(&appender) == DuckDBSuccess;
+	delete[] out_types;
+	for (idx_t i = 0; i < out_column_count; i++) {
+		delete[](out_names)[i];
+	}
+	delete[] out_names;
+	const bool success = duckdb_appender_destroy(&appender) == DuckDBSuccess;
+	delete arrow_array;
+	duckdb_destroy_data_chunk(&out_chunk);
+
 	return success ? ADBC_STATUS_OK : ADBC_STATUS_INTERNAL;
 }
 

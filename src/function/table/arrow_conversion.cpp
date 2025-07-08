@@ -313,7 +313,6 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 }
 
-
 static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
 	auto valid_check = MapVector::CheckMapValidity(vector, count);
 	switch (valid_check) {
@@ -872,8 +871,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			SetValidityMask(vector, array, chunk_offset, size, NumericCast<int64_t>(parent_offset), nested_offset);
 			auto fixed_size = string_info.FixedSize();
 			// Have to check validity mask before setting this up
-			idx_t offset =
-			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset) * fixed_size;
+			idx_t offset = GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset) *
+			               fixed_size;
 			auto cdata = ArrowBufferData<char>(array, 1);
 			auto blob_len = fixed_size;
 			auto result = FlatVector::GetData<string_t>(vector);
