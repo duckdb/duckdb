@@ -5,11 +5,6 @@
 
 namespace duckdb {
 
-static bool TypeContainsStruct(const LogicalType &type) {
-	return TypeVisitor::Contains(type,
-	                             [](const LogicalType &type) { return type.InternalType() == PhysicalType::STRUCT; });
-}
-
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
 	// Check if the expression is eligible for dictionary optimization
@@ -17,8 +12,8 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
-	if (TypeContainsStruct(expr.return_type)) {
-		return; // Requires recursive slicing, does not work (yet)
+	if (expr.return_type.IsNested()) {
+		return; // FIXME: get this working for nested types
 	}
 
 	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
@@ -35,8 +30,8 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 				input_col_idx.SetInvalid(); // Found more than 1 non-constant
 				break;
 			}
-			if (TypeContainsStruct(child.return_type)) {
-				break; // Requires recursive slicing, does not work (yet)
+			if (child.return_type.IsNested()) {
+				break; // FIXME
 			}
 			input_col_idx = child_idx;
 		}
