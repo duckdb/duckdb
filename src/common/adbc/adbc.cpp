@@ -663,7 +663,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		arrow_to_duckdb_schema(connection, c_arrow_schema, &out_types, &out_names, &out_column_count,
 		                       &out_converted_schema);
 	} catch (...) {
-		delete arrow_schema;
+		duckdb_destroy_arrow_schema(&c_arrow_schema);
 		return ADBC_STATUS_INTERNAL;
 	}
 
@@ -691,13 +691,19 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 				delete[](out_names)[i];
 			}
 			delete[] out_names;
-			delete arrow_schema;
+			duckdb_destroy_arrow_schema(&c_arrow_schema);
 			return ADBC_STATUS_INTERNAL;
 		}
 	}
 
 	duckdb_appender appender;
 	if (duckdb_appender_create(connection, schema, table_name, &appender) == DuckDBError) {
+			delete[] out_types;
+			for (idx_t i = 0; i < out_column_count; i++) {
+				delete[](out_names)[i];
+			}
+			delete[] out_names;
+			duckdb_destroy_arrow_schema(&c_arrow_schema);
 		return ADBC_STATUS_INTERNAL;
 	}
 	// We have to convert all arrow arrays to data chunks and append them
@@ -717,9 +723,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			delete[] out_names;
 			delete arrow_array;
 			duckdb_destroy_data_chunk(&out_chunk);
+			duckdb_destroy_arrow_converted_schema(&out_converted_schema);
+			duckdb_destroy_arrow_schema(&c_arrow_schema);
 			return ADBC_STATUS_INTERNAL;
 		}
 	}
+
 	delete[] out_types;
 	for (idx_t i = 0; i < out_column_count; i++) {
 		delete[](out_names)[i];
@@ -728,6 +737,8 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	const bool success = duckdb_appender_destroy(&appender) == DuckDBSuccess;
 	delete arrow_array;
 	duckdb_destroy_data_chunk(&out_chunk);
+	duckdb_destroy_arrow_converted_schema(&out_converted_schema);
+	duckdb_destroy_arrow_schema(&c_arrow_schema);
 
 	return success ? ADBC_STATUS_OK : ADBC_STATUS_INTERNAL;
 }
