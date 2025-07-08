@@ -8,6 +8,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/date.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -77,7 +78,6 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
-		Printer::PrintF("Offset[%d] = %d", i, last_offset);
 		strings.emplace_back(reinterpret_cast<const char *>(bytes + last_offset), next_offset - last_offset);
 		last_offset = next_offset;
 	}
@@ -199,13 +199,17 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::DATE: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DATE");
+		date_t value;
+		value.days = Load<int32_t>(data);
+		auto value_str = Date::ToString(value);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
-		timestamp_t value;
-		memcpy(&value.value, data, sizeof(int64_t));
-		auto value_str = Timestamp::ToString(value);
+		timestamp_tz_t micros_tz_ts;
+		micros_tz_ts.value = Load<int64_t>(data);
+
+		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
+		auto value_str = value.ToString();
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
@@ -217,8 +221,9 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::FLOAT: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::FLOAT");
+		float value;
+		memcpy(&value, data, sizeof(float));
+		return yyjson_mut_real(doc, value);
 	}
 	case VariantPrimitiveType::BINARY:
 	case VariantPrimitiveType::STRING: {
@@ -233,7 +238,6 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
-		auto val = yyjson_mut_obj(doc);
 		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NANOS");
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
