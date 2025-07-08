@@ -21,15 +21,18 @@ VariableShowStmt:
 				n->is_summary = 1;
 				$$ = (PGNode *) n;
 			}
-		 | show_or_describe qualified_name opt_from
+		 | show_or_describe TABLES FROM qualified_name
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
-				if ($3) {
-					n->relation = $3;
-					n->set = (char*) "__show_tables_from_database";
-				} else {
-					n->relation = $2;
-				}
+				n->relation = $4;
+				n->set = (char*) "__show_tables_from_database";
+				n->is_summary = 0;
+				$$ = (PGNode *) n;
+			}
+		| show_or_describe qualified_name
+			{
+				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
+				n->relation = $2;
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}
