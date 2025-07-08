@@ -52,7 +52,7 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
-		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
+		link += "?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
 	}
 
 	return link;

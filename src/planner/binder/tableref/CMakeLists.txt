@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_bind_tableref
   OBJECT
   bind_basetableref.cpp
+  bind_bound_table_ref.cpp
   bind_delimgetref.cpp
   bind_emptytableref.cpp
   bind_expressionlistref.cpp

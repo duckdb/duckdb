@@ -15,23 +15,26 @@
     },
     {
         "name": "hash",
-        "parameters": "param",
-        "description": "Returns an integer with the hash of the value. Note that this is not a cryptographic hash",
+        "parameters": "value",
+        "description": "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.",
         "example": "hash('\uD83E\uDD86')",
+        "categories": ["string"],
         "type": "scalar_function"
     },
     {
         "name": "least",
         "parameters": "arg1, arg2, ...",
-        "description": "Returns the lowest value of the set of input parameters",
-        "example": "least(42, 84)",
+        "description": "Returns the smallest value. For strings lexicographical ordering is used. Note that uppercase characters are considered “smaller” than lowercase characters, and collations are not supported.",
+        "examples": ["least(42, 84)", "least('abc', 'bcd', 'cde', 'EFG')"],
+        "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
     },
     {
         "name": "greatest",
         "parameters": "arg1, arg2, ...",
-        "description": "Returns the highest value of the set of input parameters",
-        "example": "greatest(42, 84)",
+        "description": "Returns the largest value. For strings lexicographical ordering is used. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.",
+        "examples": ["greatest(42, 84)", "greatest('abc', 'bcd', 'cde', 'EFG')"],
+        "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
     },
     {
@@ -53,7 +56,7 @@
         "name": "can_cast_implicitly",
         "parameters": "source_type,target_type",
         "description": "Whether or not we can implicitly cast from the source type to the other type",
-        "example": "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)",
+        "example": "can_cast_implicitly(NULL::INTEGER, NULL::BIGINT)",
         "type": "scalar_function"
     },
     {
@@ -125,6 +128,13 @@
         "parameters": "param,type",
         "description": "Casts the first argument to the type of the second argument",
         "example": "cast_to_type('42', NULL::INTEGER)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "replace_type",
+        "parameters": "param,type1,type2",
+        "description": "Casts all fields of type1 to type2",
+        "example": "replace_type({duck: 3.141592653589793::DOUBLE}, NULL::DOUBLE, NULL::DECIMAL(15,2))",
         "type": "scalar_function"
     }
 ]

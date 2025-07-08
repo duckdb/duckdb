@@ -228,15 +228,17 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		auto &config = ClientConfig::GetConfig(*con.context);
 		// we can't have a too large number here because a multiple of this batch size is passed into an allocation
 		idx_t batch_size = big_result ? 1000000 : 10000;
+
 		// Set up the result collector to use
 		ScopedConfigSetting setting(
 		    config,
 		    [&batch_size](ClientConfig &config) {
-			    config.result_collector = [&batch_size](ClientContext &context, PreparedStatementData &data) {
+			    config.get_result_collector = [&batch_size](ClientContext &context,
+			                                                PreparedStatementData &data) -> PhysicalOperator & {
 				    return PhysicalArrowCollector::Create(context, data, batch_size);
 			    };
 		    },
-		    [](ClientConfig &config) { config.result_collector = nullptr; });
+		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 
 		// run the query
 		initial_result = con.context->Query(query, false);

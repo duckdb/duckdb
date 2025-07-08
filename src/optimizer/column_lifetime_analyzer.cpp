@@ -47,12 +47,9 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 }
 
-void ColumnLifetimeAnalyzer::ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_ref = expr.Cast<BoundColumnRefExpression>();
-		bindings.push_back(bound_ref.binding);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractColumnBindings(child, bindings); });
+void ColumnLifetimeAnalyzer::ExtractColumnBindings(const Expression &expr, vector<ColumnBinding> &bindings) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    expr, [&](const BoundColumnRefExpression &bound_ref) { bindings.push_back(bound_ref.binding); });
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
@@ -105,6 +102,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
 		//! We still need to project all values from these operators so the projection
 		//! on top of them can select from only the table values being inserted.

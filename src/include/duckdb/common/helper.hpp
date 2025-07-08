@@ -201,6 +201,11 @@ static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
 }
 
+template <class T>
+static T AlignValue(T n, T val) {
+	return ((n + (val - 1)) / val) * val;
+}
+
 template<uintptr_t alignment, class T>
 inline T *AlignPointer(T *addr) {
 	static_assert((alignment & (alignment - 1)) == 0, "'alignment' has to be a power of 2");

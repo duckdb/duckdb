@@ -313,11 +313,11 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	}
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		for (auto &child : bound_aggr.children) {
-			auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
-			types.push_back(child->return_type);
-			expressions.push_back(std::move(child));
-			child = std::move(ref);
+		for (auto &child_expr : bound_aggr.children) {
+			auto ref = make_uniq<BoundReferenceExpression>(child_expr->return_type, expressions.size());
+			types.push_back(child_expr->return_type);
+			expressions.push_back(std::move(child_expr));
+			child_expr = std::move(ref);
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;

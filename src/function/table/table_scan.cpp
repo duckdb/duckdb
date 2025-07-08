@@ -218,15 +218,24 @@ public:
 class DuckTableScanState : public TableScanGlobalState {
 public:
 	DuckTableScanState(ClientContext &context, const FunctionData *bind_data_p)
-	    : TableScanGlobalState(context, bind_data_p) {
+	    : TableScanGlobalState(context, bind_data_p), bind_data(bind_data_p->Cast<TableScanBindData>()),
+	      duck_table(bind_data.table.Cast<DuckTableEntry>()), tx(DuckTransaction::Get(context, duck_table.catalog)),
+	      storage(duck_table.GetStorage()), total_rows(storage.GetTotalRows()) {
 	}
 
+public:
 	ParallelTableScanState state;
+
+private:
+	const TableScanBindData &bind_data;
+	DuckTableEntry &duck_table;
+	DuckTransaction &tx;
+	DataTable &storage;
+	const idx_t total_rows;
 
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                   TableFunctionInitInput &input) override {
-		auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 		auto l_state = make_uniq<TableScanLocalState>();
 
 		vector<StorageIndex> storage_ids;
@@ -236,8 +245,6 @@ public:
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
-		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-		auto &storage = duck_table.GetStorage();
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
@@ -248,11 +255,6 @@ public:
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
-		auto &bind_data = data_p.bind_data->Cast<TableScanBindData>();
-		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-		auto &tx = DuckTransaction::Get(context, duck_table.catalog);
-		auto &storage = duck_table.GetStorage();
-
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
@@ -279,11 +281,6 @@ public:
 	}
 
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
-		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-		auto &storage = duck_table.GetStorage();
-		auto total_rows = storage.GetTotalRows();
-
 		// The table is empty or smaller than the standard vector size.
 		if (total_rows == 0) {
 			return 100;

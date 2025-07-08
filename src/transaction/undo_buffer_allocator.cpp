@@ -28,6 +28,7 @@ UndoBufferAllocator::UndoBufferAllocator(BufferManager &buffer_manager) : buffer
 }
 
 UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
+	lock_guard<mutex> guard(lock);
 	D_ASSERT(!head || head->position <= head->capacity);
 	BufferHandle handle;
 	if (!head || head->position + alloc_len > head->capacity) {

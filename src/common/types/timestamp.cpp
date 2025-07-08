@@ -330,10 +330,10 @@ timestamp_t Timestamp::FromString(const string &str) {
 
 string Timestamp::ToString(timestamp_t timestamp) {
 	if (timestamp == timestamp_t::infinity()) {
-		return Date::PINF;
+		return Date::PINF.str;
 	}
 	if (timestamp == timestamp_t::ninfinity()) {
-		return Date::NINF;
+		return Date::NINF.str;
 	}
 
 	date_t date;
@@ -359,6 +359,18 @@ dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	}
 	date_t date = Timestamp::GetDate(timestamp);
 	return dtime_t(timestamp.value - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
+}
+
+dtime_ns_t Timestamp::GetTimeNs(timestamp_ns_t input) {
+	if (!IsFinite(input)) {
+		throw ConversionException("Can't get TIME_NS of infinite TIMESTAMP");
+	}
+	date_t date = Timestamp::GetDate(Timestamp::FromEpochNanoSeconds(input.value));
+	int64_t nanos;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::NANOS_PER_DAY, nanos)) {
+		throw ConversionException("Overflow extracting TIME_NS of TIMESTAMP");
+	}
+	return dtime_ns_t(input.value - nanos);
 }
 
 bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) {

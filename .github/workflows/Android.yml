@@ -59,7 +59,7 @@ jobs:
       EXTENSION_STATIC_BUILD: 1
       DUCKDB_PLATFORM: android_${{ matrix.arch}}
       DUCKDB_CUSTOM_PLATFORM: android_${{ matrix.arch}}
-      CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake
+      CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
 
     steps:
     - uses: actions/checkout@v3
@@ -78,9 +78,9 @@ jobs:
     - name: Install Android NDK
       shell: bash
       run: |
-        wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
-        unzip android-ndk-r26d-linux.zip
-        mv android-ndk-r26d android-ndk
+        wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+        unzip android-ndk-r27-linux.zip
+        mv android-ndk-r27 android-ndk
 
     - name:  Build
       shell: bash

@@ -13,35 +13,38 @@
 
 namespace duckdb {
 
-PhysicalResultCollector::PhysicalResultCollector(PreparedStatementData &data)
-    : PhysicalOperator(PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
+PhysicalResultCollector::PhysicalResultCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
       statement_type(data.statement_type), properties(data.properties), plan(data.physical_plan->Root()),
       names(data.names) {
-	this->types = data.types;
+	types = data.types;
 }
 
-unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(ClientContext &context,
-                                                                                PreparedStatementData &data) {
-	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, data.physical_plan->Root())) {
-		// the plan is not order preserving, so we just use the parallel materialized collector
+PhysicalOperator &PhysicalResultCollector::GetResultCollector(ClientContext &context, PreparedStatementData &data) {
+	auto &physical_plan = *data.physical_plan;
+	auto &root = physical_plan.Root();
+
+	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
+		// Not an order-preserving plan: use the parallel materialized collector.
 		if (data.is_streaming) {
-			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, true);
+			return physical_plan.Make<PhysicalBufferedCollector>(data, true);
 		}
-		return make_uniq_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
-	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, data.physical_plan->Root())) {
-		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
-		if (data.is_streaming) {
-			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, false);
-		}
-		return make_uniq_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, false);
-	} else {
-		// we care about maintaining insertion order and the sources all support batch indexes
-		// use a batch collector
-		if (data.is_streaming) {
-			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedBatchCollector>(data);
-		}
-		return make_uniq_base<PhysicalResultCollector, PhysicalBatchCollector>(data);
+		return physical_plan.Make<PhysicalMaterializedCollector>(data, true);
 	}
+
+	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
+		// Order-preserving plan, and we cannot use the batch index: use single-threaded result collector.
+		if (data.is_streaming) {
+			return physical_plan.Make<PhysicalBufferedCollector>(data, false);
+		}
+		return physical_plan.Make<PhysicalMaterializedCollector>(data, false);
+	}
+
+	// Order-preserving plan, and we can use the batch index: use a batch collector.
+	if (data.is_streaming) {
+		return physical_plan.Make<PhysicalBufferedBatchCollector>(data);
+	}
+	return physical_plan.Make<PhysicalBatchCollector>(data);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {

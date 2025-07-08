@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
@@ -213,8 +214,9 @@ OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &c
 	return OperatorPartitionData(state.batch_index);
 }
 
-bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
-	switch (type.id()) {
+static bool CanPushdown(const ArrowType &type) {
+	auto duck_type = type.GetDuckType();
+	switch (duck_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
@@ -234,10 +236,12 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
 		return true;
+	case LogicalTypeId::BLOB:
+		// PyArrow doesn't support binary view filters yet
+		return type.GetTypeInfo<ArrowStringInfo>().GetSizeType() != ArrowVariableSizeType::VIEW;
 	case LogicalTypeId::DECIMAL: {
-		switch (type.InternalType()) {
+		switch (duck_type.InternalType()) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
@@ -249,9 +253,9 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 		}
 	}
 	case LogicalTypeId::STRUCT: {
-		auto struct_types = StructType::GetChildTypes(type);
-		for (auto &struct_type : struct_types) {
-			if (!ArrowPushdownType(struct_type.second)) {
+		const auto &struct_info = type.GetTypeInfo<ArrowStructInfo>();
+		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
+			if (!CanPushdown(struct_info.GetChild(i))) {
 				return false;
 			}
 		}
@@ -260,6 +264,12 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+bool ArrowTableFunction::ArrowPushdownType(const FunctionData &bind_data, idx_t col_idx) {
+	auto &arrow_bind_data = bind_data.Cast<ArrowScanFunctionData>();
+	const auto &column_info = arrow_bind_data.arrow_table.GetColumns();
+	auto column_type = column_info.at(col_idx);
+	return CanPushdown(*column_type);
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
