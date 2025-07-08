@@ -27,15 +27,15 @@ public:
 	}
 
 	// Non-owning constructors
-	static String CreateView(const char *ptr, const size_t len) {
+	static String Reference(const char *ptr, const size_t len) {
 		String str;
 		str.data = ptr;
 		str.size = len;
 		return str;
 	}
 
-	static String CreateView(const char *ptr) {
-		return CreateView(ptr, strlen(ptr));
+	static String Reference(const char *ptr) {
+		return Reference(ptr, strlen(ptr));
 	}
 
 public:
@@ -50,6 +50,10 @@ public:
 		const char *this_data = GetData();
 		const char *other_data = other.GetData();
 
+		if (memcmp(this_data, other_data, this_size) == 0) {
+			return true;
+		}
+      
 		for (idx_t i = 0; i < this_size; i++) {
 			if (this_data[i] != other_data[i]) {
 				return false;
@@ -79,10 +83,10 @@ public:
 		const idx_t length = MinValue<idx_t>(this_size, other_size);
 
 		for (idx_t i = 0; i < length; i++) {
-			if (this_data[i] < other_data[i]) {
+			if (memcmp(this_data, other_data, length) < 0) {
 				return true;
 			}
-			if (this_data[i] > other_data[i]) {
+			if (memcmp(this_data, other_data, length) > 0) {
 				return false;
 			}
 		}

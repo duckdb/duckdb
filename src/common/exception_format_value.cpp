@@ -54,7 +54,6 @@ template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value) {
 	return ExceptionFormatValue(std::move(value));
 }
-
 template <>
 ExceptionFormatValue
 ExceptionFormatValue::CreateFormatValue(SQLString value) { // NOLINT: templating requires us to copy value here

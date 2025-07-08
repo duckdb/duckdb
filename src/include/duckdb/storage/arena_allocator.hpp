@@ -88,7 +88,7 @@ public:
 		const auto mem = AllocateAligned(sizeof(char) * len);
 		memcpy(mem, data, len);
 
-		return String((char *)mem, len); // NOLINT
+		return String::Reference(reinterpret_cast<char *>(mem), len);
 	}
 
 	String MakeString(const std::string &data) {

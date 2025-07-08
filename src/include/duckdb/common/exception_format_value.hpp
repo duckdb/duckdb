@@ -86,7 +86,6 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value);
-
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
 template <>
