@@ -504,7 +504,8 @@ optional_idx GroupedAggregateHashTable::TryAddCompressedGroups(DataChunk &groups
 	if (groups.AllConstant()) {
 		return TryAddConstantGroups(groups, payload, filter);
 	}
-	if (groups.ColumnCount() == 1 && groups.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+	if (groups.ColumnCount() == 1 && groups.data[0].GetVectorType() == VectorType::DICTIONARY_VECTOR &&
+	    !groups.data[0].GetType().IsNested()) {
 		return TryAddDictionaryGroups(groups, payload, filter);
 	}
 	return optional_idx();
