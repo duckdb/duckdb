@@ -2077,7 +2077,7 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	if (!vector.auxiliary) {
-		auto stored_allocator = vector.buffer->GetAllocator();
+		auto stored_allocator = vector.buffer ? vector.buffer->GetAllocator() : nullptr;
 		if (stored_allocator) {
 			vector.auxiliary = make_buffer<VectorStringBuffer>(*stored_allocator);
 		} else {
