@@ -48,7 +48,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	Vector value_intermediate(LogicalType::BLOB, num_values);
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	auto metadata_num_values = child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
+	(void)child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
 	auto child_num_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
 
 	VariantBinaryDecoder decoder;

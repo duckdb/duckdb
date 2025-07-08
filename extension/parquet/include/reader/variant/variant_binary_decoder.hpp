@@ -34,8 +34,9 @@ public:
 	const_data_ptr_t offsets;
 	const_data_ptr_t bytes;
 
-	vector<const char *> strings;
-	vector<idx_t> lengths;
+	//! The json object keys have to be null-terminated
+	//! But we don't receive them null-terminated
+	vector<string> strings;
 };
 
 //! ------------ Value ------------
@@ -60,25 +61,11 @@ enum class VariantPrimitiveType : uint8_t {
 	FLOAT = 14,
 	BINARY = 15,
 	STRING = 16,
-	TIME_NTZ = 17,
+	TIME_NTZ_MICROS = 17,
 	TIMESTAMP_NANOS = 18,
 	TIMESTAMP_NTZ_NANOS = 19,
 	UUID = 20
 };
-
-static VariantBasicType VariantBasicTypeFromByte(uint8_t byte) {
-	if (byte >= 4) {
-		throw NotImplementedException("Variant BasicType (%d) is not supported", byte);
-	}
-	return static_cast<VariantBasicType>(byte);
-}
-
-static VariantPrimitiveType VariantPrimitiveTypeFromByte(uint8_t byte) {
-	if (byte >= 21) {
-		throw NotImplementedException("Variant PrimitiveType (%d) is not supported", byte);
-	}
-	return static_cast<VariantPrimitiveType>(byte);
-}
 
 struct VariantValueMetadata {
 public:
@@ -87,6 +74,19 @@ public:
 
 public:
 	static VariantValueMetadata FromHeaderByte(uint8_t byte);
+	static VariantBasicType VariantBasicTypeFromByte(uint8_t byte) {
+		if (byte >= 4) {
+			throw NotImplementedException("Variant BasicType (%d) is not supported", byte);
+		}
+		return static_cast<VariantBasicType>(byte);
+	}
+
+	static VariantPrimitiveType VariantPrimitiveTypeFromByte(uint8_t byte) {
+		if (byte >= 21) {
+			throw NotImplementedException("Variant PrimitiveType (%d) is not supported", byte);
+		}
+		return static_cast<VariantPrimitiveType>(byte);
+	}
 
 public:
 	VariantBasicType basic_type;
@@ -143,6 +143,8 @@ public:
 	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
 	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+
+public:
 };
 
 } // namespace duckdb

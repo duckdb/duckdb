@@ -2,15 +2,21 @@
 #include "duckdb/common/printer.hpp"
 #include "utf8proc_wrapper.hpp"
 
+#include "reader/uuid_column_reader.hpp"
+
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/time.hpp"
+
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
 static constexpr uint8_t SORTED_STRINGS_SHIFT = 4;
 static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
 static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 5;
 
-static constexpr uint8_t BASIC_TYPE_MASK = 0x1;
-static constexpr uint8_t VALUE_HEADER_MASK = 0x2;
-static constexpr uint8_t VALUE_HEADER_SHIFT = 1;
+static constexpr uint8_t BASIC_TYPE_MASK = 0x3;
+static constexpr uint8_t VALUE_HEADER_SHIFT = 2;
 
 //! Object and Array header
 static constexpr uint8_t FIELD_OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
@@ -59,7 +65,6 @@ VariantMetadataHeader VariantMetadataHeader::FromHeaderByte(uint8_t byte) {
 }
 
 VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) {
-	auto metadata_length = metadata.GetSize();
 	auto metadata_data = metadata.GetData();
 
 	header = VariantMetadataHeader::FromHeaderByte(metadata_data[0]);
@@ -73,8 +78,7 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 		Printer::PrintF("Offset[%d] = %d", i, last_offset);
-		strings.push_back(reinterpret_cast<const char *>(bytes + last_offset));
-		lengths.push_back(next_offset - last_offset);
+		strings.emplace_back(reinterpret_cast<const char *>(bytes + last_offset), next_offset - last_offset);
 		last_offset = next_offset;
 	}
 }
@@ -82,24 +86,25 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 	VariantValueMetadata result;
 	result.basic_type = VariantBasicTypeFromByte(byte & BASIC_TYPE_MASK);
+	uint8_t value_header = byte >> VALUE_HEADER_SHIFT;
 	switch (result.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		result.primitive_type = VariantPrimitiveTypeFromByte((byte >> VALUE_HEADER_SHIFT) & VALUE_HEADER_MASK);
+		result.primitive_type = VariantPrimitiveTypeFromByte(value_header);
 		break;
 	}
 	case VariantBasicType::SHORT_STRING: {
-		result.string_size = (byte >> VALUE_HEADER_SHIFT) & VALUE_HEADER_MASK;
+		result.string_size = value_header;
 		break;
 	}
 	case VariantBasicType::OBJECT: {
-		result.field_offset_size = (byte & FIELD_OFFSET_SIZE_MINUS_ONE_MASK) + 1;
-		result.field_id_size = ((byte >> FIELD_ID_SIZE_MINUS_ONE_SHIFT) & FIELD_ID_SIZE_MINUS_ONE_MASK) + 1;
-		result.is_large = (byte >> OBJECT_IS_LARGE_SHIFT) & OBJECT_IS_LARGE_MASK;
+		result.field_offset_size = (value_header & FIELD_OFFSET_SIZE_MINUS_ONE_MASK) + 1;
+		result.field_id_size = ((value_header >> FIELD_ID_SIZE_MINUS_ONE_SHIFT) & FIELD_ID_SIZE_MINUS_ONE_MASK) + 1;
+		result.is_large = (value_header >> OBJECT_IS_LARGE_SHIFT) & OBJECT_IS_LARGE_MASK;
 		break;
 	}
 	case VariantBasicType::ARRAY: {
-		result.field_offset_size = (byte & FIELD_OFFSET_SIZE_MINUS_ONE_MASK) + 1;
-		result.is_large = (byte >> ARRAY_IS_LARGE_SHIFT) & ARRAY_IS_LARGE_MASK;
+		result.field_offset_size = (value_header & FIELD_OFFSET_SIZE_MINUS_ONE_MASK) + 1;
+		result.is_large = (value_header >> ARRAY_IS_LARGE_SHIFT) & ARRAY_IS_LARGE_MASK;
 		break;
 	}
 	}
@@ -107,6 +112,32 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 }
 
 VariantBinaryDecoder::VariantBinaryDecoder() {
+}
+
+template <class T>
+static T DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
+	scale = Load<uint8_t>(data);
+	data++;
+
+	auto result = Load<T>(data);
+	//! FIXME: The spec says:
+	//! The implied precision of a decimal value is `floor(log_10(val)) + 1`
+	width = DecimalWidth<T>::max;
+	return result;
+}
+
+template <>
+hugeint_t DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
+	scale = Load<uint8_t>(data);
+	data++;
+
+	hugeint_t result;
+	result.lower = Load<uint64_t>(data);
+	result.upper = Load<int64_t>(data + sizeof(uint64_t));
+	//! FIXME: The spec says:
+	//! The implied precision of a decimal value is `floor(log_10(val)) + 1`
+	width = DecimalWidth<hugeint_t>::max;
+	return result;
 }
 
 yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
@@ -123,76 +154,100 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		return yyjson_mut_false(doc);
 	}
 	case VariantPrimitiveType::INT8: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT8");
+		auto value = Load<int8_t>(data);
+		return yyjson_mut_int(doc, value);
 	}
 	case VariantPrimitiveType::INT16: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT16");
+		auto value = Load<int16_t>(data);
+		return yyjson_mut_int(doc, value);
 	}
 	case VariantPrimitiveType::INT32: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT32");
+		auto value = Load<int32_t>(data);
+		return yyjson_mut_int(doc, value);
 	}
 	case VariantPrimitiveType::INT64: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::INT64");
+		auto value = Load<int64_t>(data);
+		return yyjson_mut_int(doc, value);
 	}
 	case VariantPrimitiveType::DOUBLE: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DOUBLE");
+		double value;
+		memcpy(&value, data, sizeof(double));
+		return yyjson_mut_real(doc, value);
 	}
 	case VariantPrimitiveType::DECIMAL4: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DECIMAL4");
+		uint8_t scale;
+		uint8_t width;
+
+		auto value = DecodeDecimal<int32_t>(data, scale, width);
+		auto value_str = Decimal::ToString(value, width, scale);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::DECIMAL8: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DECIMAL8");
+		uint8_t scale;
+		uint8_t width;
+
+		auto value = DecodeDecimal<int64_t>(data, scale, width);
+		auto value_str = Decimal::ToString(value, width, scale);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::DECIMAL16: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DECIMAL16");
+		uint8_t scale;
+		uint8_t width;
+
+		auto value = DecodeDecimal<hugeint_t>(data, scale, width);
+		auto value_str = Decimal::ToString(value, width, scale);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::DATE: {
 		auto val = yyjson_mut_obj(doc);
 		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::DATE");
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_MICROS");
+		timestamp_t value;
+		memcpy(&value.value, data, sizeof(int64_t));
+		auto value_str = Timestamp::ToString(value);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NTZ_MICROS");
+		timestamp_t micros_ts;
+		micros_ts.value = Load<int64_t>(data);
+
+		auto value = Value::TIMESTAMP(micros_ts);
+		auto value_str = value.ToString();
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::FLOAT: {
 		auto val = yyjson_mut_obj(doc);
 		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::FLOAT");
 	}
-	case VariantPrimitiveType::BINARY: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::BINARY");
-	}
+	case VariantPrimitiveType::BINARY:
 	case VariantPrimitiveType::STRING: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::STRING");
+		auto size = Load<uint32_t>(data);
+		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
+		return yyjson_mut_strncpy(doc, string_data, size);
 	}
-	case VariantPrimitiveType::TIME_NTZ: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIME_NTZ");
+	case VariantPrimitiveType::TIME_NTZ_MICROS: {
+		dtime_t micros_time;
+		micros_time.micros = Load<int64_t>(data);
+		auto value_str = Time::ToString(micros_time);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		auto val = yyjson_mut_obj(doc);
 		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NANOS");
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NTZ_NANOS");
+		timestamp_ns_t nanos_ts;
+		nanos_ts.value = Load<int64_t>(data);
+
+		auto value = Value::TIMESTAMPNS(nanos_ts);
+		auto value_str = value.ToString();
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::UUID: {
-		auto val = yyjson_mut_obj(doc);
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::UUID");
+		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data);
+		auto value_str = UUID::ToString(uuid_value);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
@@ -238,10 +293,10 @@ yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const Va
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
 		auto value = Decode(doc, metadata, values + last_offset);
+		auto &key = metadata.strings[field_id];
+		yyjson_mut_obj_add_val(doc, obj, key.c_str(), value);
 		last_offset = next_offset;
 	}
-
-	throw NotImplementedException("VariantBinaryDecoder::ObjectDecode");
 	return obj;
 }
 
@@ -269,10 +324,9 @@ yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const Var
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
 		auto value = Decode(doc, metadata, values + last_offset);
+		yyjson_mut_arr_add_val(arr, value);
 		last_offset = next_offset;
 	}
-
-	throw NotImplementedException("Variant ArrayDecode");
 	return arr;
 }
 
@@ -286,6 +340,7 @@ yyjson_mut_val *VariantBinaryDecoder::Decode(yyjson_mut_doc *doc, const VariantM
 	//! ...
 	//! > This implies that the field_offset values may not be monotonically increasing
 
+	data++;
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
 		return PrimitiveTypeDecode(doc, variant_metadata, value_metadata, data);
