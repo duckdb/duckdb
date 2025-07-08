@@ -1,6 +1,6 @@
-#include "duckdb/execution/operator/helper/physical_unified_string_dictionary_insertion.h"
+#include "duckdb/execution/operator/helper/physical_unified_string_dictionary_insertion.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.h"
+#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.hpp"
 
 namespace duckdb {
 

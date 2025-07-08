@@ -4,7 +4,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
-#include "duckdb/common/unified_string_dictionary.h"
+#include "duckdb/common/unified_string_dictionary.hpp"
 #include <functional>
 #include <cmath>
 

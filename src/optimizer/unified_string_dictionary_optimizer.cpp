@@ -1,7 +1,7 @@
-#include "duckdb/optimizer/unified_string_dictionary_optimizer.h"
+#include "duckdb/optimizer/unified_string_dictionary_optimizer.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.h"
+#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {

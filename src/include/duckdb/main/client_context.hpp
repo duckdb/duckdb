@@ -29,7 +29,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/unified_string_dictionary.h"
+#include "duckdb/common/unified_string_dictionary.hpp"
 
 namespace duckdb {
 class Appender;

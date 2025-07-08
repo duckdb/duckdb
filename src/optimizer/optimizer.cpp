@@ -37,7 +37,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
-#include "duckdb/optimizer/unified_string_dictionary_optimizer.h"
+#include "duckdb/optimizer/unified_string_dictionary_optimizer.hpp"
 
 namespace duckdb {
 

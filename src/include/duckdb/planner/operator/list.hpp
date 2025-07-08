@@ -46,4 +46,4 @@
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/operator/logical_vacuum.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.h"
+#include "duckdb/planner/operator/logical_unified_string_dictionary_insertion.hpp"

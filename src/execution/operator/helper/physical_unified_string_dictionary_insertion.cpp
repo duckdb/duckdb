@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/helper/physical_unified_string_dictionary_insertion.h"
+#include "duckdb/execution/operator/helper/physical_unified_string_dictionary_insertion.hpp"
 #include "duckdb/common/printer.hpp"
 
 namespace duckdb {

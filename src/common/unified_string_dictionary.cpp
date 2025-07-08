@@ -1,4 +1,4 @@
-#include "duckdb/common/unified_string_dictionary.h"
+#include "duckdb/common/unified_string_dictionary.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/helper.hpp"
 #include <cmath>

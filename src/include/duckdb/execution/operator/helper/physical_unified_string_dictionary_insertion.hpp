@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/common/unified_string_dictionary.h"
+#include "duckdb/common/unified_string_dictionary.hpp"
 #include "duckdb/main/client_context.hpp"
 namespace duckdb {
 
