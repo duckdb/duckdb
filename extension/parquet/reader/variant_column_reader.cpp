@@ -61,11 +61,18 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		VariantMetadata variant_metadata(metadata_intermediate_data[i]);
 		auto value_data = reinterpret_cast<const_data_ptr_t>(value_intermediate_data[i].GetData());
 
-		VariantDecodeResult result;
-		result.doc = yyjson_mut_doc_new(nullptr);
+		VariantDecodeResult decode_result;
+		decode_result.doc = yyjson_mut_doc_new(nullptr);
 
-		auto decode_result = decoder.Decode(result.doc, variant_metadata, value_data);
-		//! TODO: handle the returned json object, stringify it and return a JSON value
+		auto val = decoder.Decode(decode_result.doc, variant_metadata, value_data);
+
+		//! Write the result to a string
+		size_t len;
+		decode_result.data = yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
+		if (!decode_result.data) {
+			throw InvalidInputException("Could not serialize the JSON to string, yyjson failed");
+		}
+		result_data[i] = StringVector::AddString(result, decode_result.data, static_cast<idx_t>(len));
 	}
 
 	read_count = child_num_values;

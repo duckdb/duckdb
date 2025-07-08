@@ -115,10 +115,14 @@ public:
 		if (doc) {
 			yyjson_mut_doc_free(doc);
 		}
+		if (data) {
+			free(data);
+		}
 	}
 
 public:
 	yyjson_mut_doc *doc = nullptr;
+	char *data = nullptr;
 };
 
 class VariantBinaryDecoder {

@@ -110,7 +110,93 @@ VariantBinaryDecoder::VariantBinaryDecoder() {
 yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
                                                           const VariantValueMetadata &value_metadata,
                                                           const_data_ptr_t data) {
-	throw NotImplementedException("VariantBinaryDecoder::PrimitiveTypeDecode");
+	switch (value_metadata.primitive_type) {
+	case VariantPrimitiveType::NULL_TYPE: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::BOOLEAN_TRUE: {
+		return yyjson_mut_true(doc);
+	}
+	case VariantPrimitiveType::BOOLEAN_FALSE: {
+		return yyjson_mut_false(doc);
+	}
+	case VariantPrimitiveType::INT8: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::INT16: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::INT32: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::INT64: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::DOUBLE: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::DECIMAL4: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::DECIMAL8: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::DECIMAL16: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::DATE: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::TIMESTAMP_MICROS: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::FLOAT: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::BINARY: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::STRING: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::TIME_NTZ: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::TIMESTAMP_NANOS: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	case VariantPrimitiveType::UUID: {
+		auto val = yyjson_mut_obj(doc);
+		return val;
+	}
+	default:
+		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
+		                              static_cast<uint8_t>(value_metadata.primitive_type));
+	}
 }
 
 yyjson_mut_val *VariantBinaryDecoder::ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
