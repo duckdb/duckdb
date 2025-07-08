@@ -11,7 +11,6 @@
 
 #include <math.h>
 
-
 namespace duckdb {
 
 // The filter was made on top of a logical sample or other projection,
