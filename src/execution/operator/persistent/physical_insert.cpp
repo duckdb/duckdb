@@ -202,21 +202,22 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Table
 		do_update_filter_result.SetCardinality(chunk.size());
 		do_update_filter_result.Flatten();
 
-		ManagedSelection selection(chunk.size());
+		SelectionVector sel(chunk.size());
+		idx_t count = 0;
 
 		auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (where_data[i]) {
-				selection.Append(i);
+				sel.set_index(count, i);
+				count++;
 			}
 		}
-		if (selection.Count() != selection.Size()) {
-			// Not all conflicts met the condition, need to filter out the ones that don't
-			chunk.Slice(selection.Selection(), selection.Count());
-			chunk.SetCardinality(selection.Count());
-			// Also apply this Slice to the to-update row_ids
-			row_ids.Slice(selection.Selection(), selection.Count());
-			row_ids.Flatten(selection.Count());
+		if (count != chunk.size()) {
+			// Filter any conflicts not meeting the condition.
+			chunk.Slice(sel, count);
+			chunk.SetCardinality(count);
+			row_ids.Slice(sel, count);
+			row_ids.Flatten(count);
 		}
 	}
 
@@ -400,16 +401,19 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 		return;
 	}
 
-	// We need to throw. Filter all tuples that passed, and verify again with those that violate the constraint.
-	ManagedSelection sel(combined_chunk.size());
+	// We need to throw.
+	// Filter any passing tuples and verify again with those violating the constraint.
+	SelectionVector sel(combined_chunk.size());
+	idx_t count = 0;
 	auto data = FlatVector::GetData<bool>(conflict_condition_result.data[0]);
 	for (idx_t i = 0; i < combined_chunk.size(); i++) {
 		if (!data[i]) {
-			// This tuple did not meet the condition.
-			sel.Append(i);
+			// The tuple does not meet the condition.
+			sel.set_index(count, i);
+			count++;
 		}
 	}
-	combined_chunk.Slice(sel.Selection(), sel.Count());
+	combined_chunk.Slice(sel, count);
 
 	// Verify and throw.
 	if (GLOBAL) {
@@ -444,19 +448,19 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		DataTable::VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
 	}
 
-	if (!conflict_manager.HasConflicts(0)) {
+	if (!conflict_manager.HasConflicts()) {
 		// No conflicts, i.e., no updates.
 		return 0;
 	}
 
 	if (GLOBAL) {
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		conflict_manager.Finalize(transaction, data_table);
+		conflict_manager.FinalizeGlobal(transaction, data_table);
 	} else {
-		conflict_manager.Finalize(data_table, local_storage);
+		conflict_manager.FinalizeLocal(data_table, local_storage);
 	}
-	auto &row_ids = conflict_manager.GetRowIds(0);
-	auto conflict_count = conflict_manager.ConflictCount(0);
+	auto &row_ids = conflict_manager.GetRowIds();
+	auto conflict_count = conflict_manager.ConflictCount();
 
 	// Contains the original values causing the conflicts.
 	DataChunk scan_chunk;
@@ -483,7 +487,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	DataChunk conflict_chunk;
 	conflict_chunk.InitializeEmpty(tuples.GetTypes());
 	conflict_chunk.Reference(tuples);
-	conflict_chunk.Slice(conflict_manager.GetInvertedSel(0), conflict_count);
+	conflict_chunk.Slice(conflict_manager.GetInvertedSel(), conflict_count);
 	conflict_chunk.SetCardinality(conflict_count);
 
 	// Contains the conflict chunk and the scanned chunk (wide).
@@ -500,17 +504,16 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		// Allow updating duplicate rows for the 'update_chunk'
 		RegisterUpdatedRows(lstate, row_ids, conflict_count);
 	}
-
-	// TODO: we need to also somehow know which (spliced) row IDs where the valid ones.
 	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
 
 	// Remove the conflicting tuples from the insert chunk
 	// We can use only the primay data because the secondary data has the same indexes in the chunk.
 	SelectionVector sel_vec(tuples.size());
-	idx_t new_size =
-	    SelectionVector::Inverted(conflict_manager.GetInvertedSel(0), sel_vec, conflict_count, tuples.size());
+	auto &inverted_sel = conflict_manager.GetInvertedSel();
+	auto new_size = SelectionVector::Inverted(inverted_sel, sel_vec, conflict_count, tuples.size());
 	tuples.Slice(sel_vec, new_size);
 	tuples.SetCardinality(new_size);
+
 	return affected_tuples;
 }
 
@@ -562,7 +565,9 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	idx_t count = insert_chunk.size();
 	if (!inner_conflicts.empty()) {
 		// We have at least one inner conflict, filter it out
-		ManagedSelection sel_vec(count);
+		SelectionVector sel_vec(count);
+		idx_t sel_vec_count = 0;
+
 		ValidityMask not_a_conflict(count);
 		set<idx_t> last_occurrences_of_conflict;
 		for (idx_t i = 0; i < count; i++) {
@@ -580,7 +585,8 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 				}
 			}
 			if (not_a_conflict.RowIsValid(i)) {
-				sel_vec.Append(i);
+				sel_vec.set_index(sel_vec_count, i);
+				sel_vec_count++;
 			}
 		}
 		if (action_type == OnConflictAction::UPDATE) {
@@ -589,18 +595,21 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 				throw NotImplementedException("Inner conflicts detected with a conditional DO UPDATE on-conflict "
 				                              "action, not fully implemented yet");
 			}
-			ManagedSelection last_occurrences(last_occurrences_of_conflict.size());
+
+			SelectionVector last_occurrences(last_occurrences_of_conflict.size());
+			idx_t last_occurrences_count = 0;
 			for (auto &idx : last_occurrences_of_conflict) {
-				last_occurrences.Append(idx);
+				last_occurrences.set_index(last_occurrences_count, idx);
+				last_occurrences_count++;
 			}
 
 			lstate.update_chunk.Reference(insert_chunk);
-			lstate.update_chunk.Slice(last_occurrences.Selection(), last_occurrences.Count());
-			lstate.update_chunk.SetCardinality(last_occurrences.Count());
+			lstate.update_chunk.Slice(last_occurrences, last_occurrences_count);
+			lstate.update_chunk.SetCardinality(last_occurrences_count);
 		}
 
-		insert_chunk.Slice(sel_vec.Selection(), sel_vec.Count());
-		insert_chunk.SetCardinality(sel_vec.Count());
+		insert_chunk.Slice(sel_vec, sel_vec_count);
+		insert_chunk.SetCardinality(sel_vec_count);
 	}
 
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition

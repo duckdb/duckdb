@@ -483,7 +483,7 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 
 // Find the first non-NULL index without a match.
 static idx_t FirstMissingMatch(ConflictManager &manager, const idx_t count) {
-	if (!manager.HasConflicts(0)) {
+	if (!manager.HasConflicts()) {
 		return 0;
 	}
 
@@ -498,10 +498,10 @@ static idx_t FirstMissingMatch(ConflictManager &manager, const idx_t count) {
 	throw InternalException("expected a missing match for the index");
 }
 
-idx_t LocateErrorIndex(const bool is_append, ConflictManager &manager, const idx_t count) {
+idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx_t count) {
 	// We expected to find nothing, so the first error is the first match.
 	if (!is_append) {
-		return manager.GetInvertedSel(0).get_index(0);
+		return manager.GetFirstIndex();
 	}
 	// We expected to find matches for each row.
 	// Thus, the first missing match is the first error.
@@ -519,10 +519,10 @@ bool IsForeignKeyConstraintError(const bool is_append, const idx_t input_count, 
 	if (is_append) {
 		// We need to find a match for all values.
 		// Secondary matches do not matter, as we need to have any conflict for each value.
-		return manager.ConflictCount(0) != input_count;
+		return manager.ConflictCount() != input_count;
 	}
 	// Nothing should match.
-	return manager.ConflictCount(0) != 0;
+	return manager.ConflictCount() != 0;
 }
 
 static bool IsAppend(VerifyExistenceType verify_type) {
@@ -604,7 +604,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Check whether we can insert into the foreign key table, or delete from the reference table.
 	index = data_table.info->indexes.FindForeignKeyIndex(dst_keys_ptr, fk_type);
 	if (!local_verification) {
-		auto conflict = LocateErrorIndex(is_append, global_conflict_manager, count);
+		auto conflict = LocateErrorIndex(global_conflict_manager, is_append, count);
 		auto message = ConstructForeignKeyError(conflict, is_append, *index, dst_chunk);
 		throw ConstraintException(message);
 	}
@@ -615,9 +615,9 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	if (local_error && global_error && is_append) {
 		// For appends, we throw if the foreign key neither exists in the transaction nor the local storage.
 		optional_idx conflict;
-		if (!global_conflict_manager.HasConflicts(0) && !local_conflict_manager.HasConflicts(0)) {
+		if (!global_conflict_manager.HasConflicts() && !local_conflict_manager.HasConflicts()) {
 			conflict = 0;
-		} else if (!global_conflict_manager.HasConflicts(0) && local_conflict_manager.HasConflicts(0)) {
+		} else if (!global_conflict_manager.HasConflicts() && local_conflict_manager.HasConflicts()) {
 			auto &val_array = local_conflict_manager.GetValidityArray(0);
 			for (idx_t i = 0; i < count; i++) {
 				if (val_array.RowIsValid(i)) {
@@ -626,7 +626,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 					break;
 				}
 			}
-		} else if (global_conflict_manager.HasConflicts(0) && !local_conflict_manager.HasConflicts(0)) {
+		} else if (global_conflict_manager.HasConflicts() && !local_conflict_manager.HasConflicts()) {
 			auto &val_array = global_conflict_manager.GetValidityArray(0);
 			for (idx_t i = 0; i < count; i++) {
 				if (val_array.RowIsValid(i)) {
@@ -659,13 +659,13 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	if (!is_append) {
 		if (global_error) {
-			auto conflict = LocateErrorIndex(false, global_conflict_manager, count);
+			auto conflict = LocateErrorIndex(global_conflict_manager, false, count);
 			auto message = ConstructForeignKeyError(conflict, false, *index, dst_chunk);
 			throw ConstraintException(message);
 		}
 
-		D_ASSERT(local_conflict_manager.HasConflicts(0));
-		auto conflict = LocateErrorIndex(false, local_conflict_manager, count);
+		D_ASSERT(local_conflict_manager.HasConflicts());
+		auto conflict = LocateErrorIndex(local_conflict_manager, false, count);
 		auto message = ConstructForeignKeyError(conflict, false, *transaction_index, dst_chunk);
 		throw ConstraintException(message);
 	}
@@ -736,12 +736,12 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 	// Verify indexes matching the conflict target.
 	manager->SetMode(ConflictManagerMode::SCAN);
-	auto &matched_indexes = manager->MatchedIndexes();
-	auto &matched_delete_indexes = manager->MatchedDeleteIndexes();
+	auto &matching_indexes = manager->MatchingIndexes();
+	auto &matching_delete_indexes = manager->MatchingDeleteIndexes();
 	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, nullptr);
-	for (idx_t i = 0; i < matched_indexes.size(); i++) {
-		index_append_info.delete_index = matched_delete_indexes[i];
-		matched_indexes[i].get().VerifyAppend(chunk, index_append_info, *manager);
+	for (idx_t i = 0; i < matching_indexes.size(); i++) {
+		index_append_info.delete_index = matching_delete_indexes[i];
+		matching_indexes[i].get().VerifyAppend(chunk, index_append_info, *manager);
 	}
 
 	// Scan the other indexes and throw, if there are any conflicts.
@@ -750,7 +750,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 		if (!art.IsUnique()) {
 			return false;
 		}
-		if (manager->MatchedIndex(art)) {
+		if (manager->IndexMatches(art)) {
 			return false;
 		}
 

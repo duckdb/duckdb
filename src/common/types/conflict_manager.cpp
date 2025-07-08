@@ -21,13 +21,7 @@ void ConflictManager::FinishLookup() {
 
 	// We recorded conflicts of one of the indexes.
 	// We can skip any duplicate indexes matching the same conflict target.
-	finished = HasConflicts(0);
-}
-
-void ConflictManager::SetMode(const ConflictManagerMode mode_p) {
-	// Scanning requires conflict_info.
-	D_ASSERT(mode_p != ConflictManagerMode::SCAN || conflict_info != nullptr);
-	mode = mode_p;
+	finished = HasConflicts();
 }
 
 bool ConflictManager::IsConflict(LookupResultType type) {
@@ -41,9 +35,6 @@ bool ConflictManager::IsConflict(LookupResultType type) {
 	case LookupResultType::LOOKUP_HIT:
 		return true;
 	case LookupResultType::LOOKUP_MISS:
-		// FIXME: If we record a miss as a conflict when the verify type is APPEND_FK, then we can simplify the checks
-		// in VerifyForeignKeyConstraint This also means we should not record a hit as a conflict when the verify type
-		// is APPEND_FK
 		return false;
 	default:
 		throw NotImplementedException("Type not implemented for LookupResultType");
@@ -67,7 +58,7 @@ bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
 	// Add the conflict and don't throw.
 	D_ASSERT(mode == ConflictManagerMode::SCAN);
 	D_ASSERT(!ShouldThrow(index_in_chunk));
-	if (finished) { // TODO: correct here? do we need this?
+	if (finished) {
 		return false;
 	}
 	AddRowId(index_in_chunk, row_id);
@@ -83,59 +74,40 @@ bool ConflictManager::AddNull(const idx_t index_in_chunk) {
 	return AddHit(index_in_chunk, row_id);
 }
 
-void ConflictManager::Finalize(DuckTransaction &transaction, DataTable &table) {
-	if (!HasConflicts(1)) {
+void ConflictManager::FinalizeGlobal(DuckTransaction &transaction, DataTable &table) {
+	if (!conflict_data[SECOND].sel) {
 		return;
 	}
 
-	auto &primary_sel = *conflict_data[0].sel;
-	auto primary_row_ids_data = conflict_data[0].row_ids_data;
-
-	auto secondary_count = conflict_data[1].count;
-	auto &secondary_inverted_sel = *conflict_data[1].inverted_sel;
-	auto secondary_row_ids_data = conflict_data[1].row_ids_data;
-
-	for (idx_t i = 0; i < secondary_count; i++) {
-		auto secondary_row_id = secondary_row_ids_data[i];
-
-		// Try to fetch the row ID. True, if the transaction sees the row ID.
-		if (table.CanFetch(transaction, secondary_row_id)) {
+	for (idx_t i = 0; i < conflict_data[SECOND].count; i++) {
+		auto row_id = conflict_data[SECOND].row_ids_data[i];
+		if (table.CanFetch(transaction, row_id)) {
 			// Replace the primary row ID with the secondary row ID.
-			auto index_in_chunk = secondary_inverted_sel.get_index(i);
-			auto primary_count = primary_sel.get_index(index_in_chunk);
-			primary_row_ids_data[primary_count] = secondary_row_id;
+			auto index_in_chunk = conflict_data[SECOND].inverted_sel->get_index(i);
+			auto count = conflict_data[FIRST].sel->get_index(index_in_chunk);
+			conflict_data[FIRST].row_ids_data[count] = row_id;
 		}
 	}
 
-	conflict_data[1].Reset();
+	conflict_data[SECOND].Reset();
 }
 
-// TODO: unify
-void ConflictManager::Finalize(DataTable &table, LocalStorage &storage) {
-	if (!HasConflicts(1)) {
+void ConflictManager::FinalizeLocal(DataTable &table, LocalStorage &storage) {
+	if (!conflict_data[SECOND].sel) {
 		return;
 	}
 
-	auto &primary_sel = *conflict_data[0].sel;
-	auto primary_row_ids_data = conflict_data[0].row_ids_data;
-
-	auto secondary_count = conflict_data[1].count;
-	auto &secondary_inverted_sel = *conflict_data[1].inverted_sel;
-	auto secondary_row_ids_data = conflict_data[1].row_ids_data;
-
-	for (idx_t i = 0; i < secondary_count; i++) {
-		auto secondary_row_id = secondary_row_ids_data[i];
-
-		// Try to fetch the row ID. True, if the transaction sees the row ID.
-		if (storage.CanFetch(table, secondary_row_id)) {
+	for (idx_t i = 0; i < conflict_data[SECOND].count; i++) {
+		auto row_id = conflict_data[SECOND].row_ids_data[i];
+		if (storage.CanFetch(table, row_id)) {
 			// Replace the primary row ID with the secondary row ID.
-			auto index_in_chunk = secondary_inverted_sel.get_index(i);
-			auto primary_count = primary_sel.get_index(index_in_chunk);
-			primary_row_ids_data[primary_count] = secondary_row_id;
+			auto index_in_chunk = conflict_data[SECOND].inverted_sel->get_index(i);
+			auto count = conflict_data[FIRST].sel->get_index(index_in_chunk);
+			conflict_data[FIRST].row_ids_data[count] = row_id;
 		}
 	}
 
-	conflict_data[1].Reset();
+	conflict_data[SECOND].Reset();
 }
 
 bool ConflictManager::ShouldThrow(const idx_t index_in_chunk) const {
@@ -146,32 +118,7 @@ bool ConflictManager::ShouldThrow(const idx_t index_in_chunk) const {
 
 	// If we have already seen a conflict for this index, then we don't throw.
 	D_ASSERT(mode == ConflictManagerMode::THROW);
-	if (conflict_rows.find(index_in_chunk) != conflict_rows.end()) {
-		return false;
-	}
-
-	return true;
-}
-
-void ConflictManager::AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
-	matched_indexes.push_back(index);
-	matched_delete_indexes.push_back(delete_index);
-	matched_index_names.insert(index.name);
-}
-
-// TODO: better name?
-bool ConflictManager::MatchedIndex(BoundIndex &index) {
-	return matched_index_names.find(index.name) != matched_index_names.end();
-}
-
-// TODO: better name?
-const vector<reference<BoundIndex>> &ConflictManager::MatchedIndexes() const {
-	return matched_indexes;
-}
-
-// TODO: better name?
-const vector<optional_ptr<BoundIndex>> &ConflictManager::MatchedDeleteIndexes() const {
-	return matched_delete_indexes;
+	return conflict_rows.find(index_in_chunk) == conflict_rows.end();
 }
 
 } // namespace duckdb

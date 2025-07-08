@@ -32,52 +32,85 @@ enum class LookupResultType : uint8_t { LOOKUP_MISS, LOOKUP_HIT, LOOKUP_NULL };
 //! they match the ON CONFLICT DO target.
 class ConflictManager {
 public:
+	static constexpr uint8_t FIRST = 0;
+	static constexpr uint8_t SECOND = 1;
+
+public:
 	ConflictManager(const VerifyExistenceType lookup_type, const idx_t chunk_size,
 	                optional_ptr<ConflictInfo> conflict_info = nullptr);
 
 public:
-	// These methods return a boolean indicating whether we should throw or not
+	//! Returns true, if we need to throw, otherwise, adds the hit and returns false.
 	bool AddHit(const idx_t index_in_chunk, const row_t row_id);
+	//! Returns true, if we need to throw, otherwise, adds the NULL and returns false.
 	bool AddNull(const idx_t index_in_chunk);
 
-	void Finalize(DuckTransaction &transaction, DataTable &table);
-	void Finalize(DataTable &table, LocalStorage &storage);
+	//! Determine the row ID visible to the transaction for each index with two possible row IDs.
+	void FinalizeGlobal(DuckTransaction &transaction, DataTable &table);
+	//! Determine the row ID visible to the transaction for each index with two possible row IDs.
+	void FinalizeLocal(DataTable &table, LocalStorage &storage);
+	//! Determines if we are finished registering conflicts.
+	void FinishLookup();
 
+	//! Get the conflict information.
 	const ConflictInfo &GetConflictInfo() const {
 		return *conflict_info;
 	}
-	void FinishLookup();
-	void SetMode(const ConflictManagerMode mode_p);
+	//! Sets the mode of the conflict manager.
+	void SetMode(const ConflictManagerMode mode_p) {
+		D_ASSERT(mode_p != ConflictManagerMode::SCAN || conflict_info != nullptr);
+		mode = mode_p;
+	}
 
-	//! Adds an index and its respective delete_index to the conflict manager's matches.
-	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index);
+	//! Adds an index and its respective delete_index.
+	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
+		matching_indexes.push_back(index);
+		matching_delete_indexes.push_back(delete_index);
+		index_names.insert(index.name);
+	}
 	//! Returns true, if the index is in this conflict manager.
-	bool MatchedIndex(BoundIndex &index);
-	//! Returns a reference to the matched indexes.
-	const vector<reference<BoundIndex>> &MatchedIndexes() const;
-	//! Returns a reference to the matched delete indexes.
-	const vector<optional_ptr<BoundIndex>> &MatchedDeleteIndexes() const;
+	bool IndexMatches(BoundIndex &index) {
+		return index_names.find(index.name) != index_names.end();
+	}
+	//! Returns a reference to the matching indexes.
+	const vector<reference<BoundIndex>> &MatchingIndexes() const {
+		return matching_indexes;
+	}
+	//! Returns a reference to the matching delete indexes.
+	const vector<optional_ptr<BoundIndex>> &MatchingDeleteIndexes() const {
+		return matching_delete_indexes;
+	}
 
+	//! Returns the existence verification type.
 	VerifyExistenceType GetVerifyExistenceType() const {
 		return verify_existence_type;
 	}
-	bool HasConflicts(const idx_t i) const {
-		return conflict_data[i].sel != nullptr;
+	//! Returns true, if there are any conflicts, else false.
+	bool HasConflicts() const {
+		return conflict_data[FIRST].sel != nullptr;
 	}
-	idx_t ConflictCount(const idx_t i) const {
-		if (!conflict_data[i].sel) {
+	//! Returns the number of conflicts.
+	idx_t ConflictCount() const {
+		if (!conflict_data[FIRST].sel) {
 			return 0;
 		}
-		return conflict_data[i].count;
+		return conflict_data[FIRST].count;
 	}
-	Vector &GetRowIds(const idx_t i) {
-		return *conflict_data[i].row_ids;
+	//! Returns a reference to the row IDs.
+	//! Must be called after Finalize[Global|Local].
+	Vector &GetRowIds() {
+		D_ASSERT(!conflict_data[SECOND].sel);
+		return *conflict_data[FIRST].row_ids;
 	}
-	SelectionVector &GetSel(const idx_t i) {
-		return *conflict_data[i].sel;
+	//! Returns the first index in a chunk with a conflict.
+	idx_t GetFirstIndex() const {
+		return conflict_data[FIRST].inverted_sel->get_index(0);
 	}
-	SelectionVector &GetInvertedSel(const idx_t i) {
-		return *conflict_data[i].inverted_sel;
+	//! Returns a reference to the inverted selection vector.
+	//! Must be called after Finalize[Global|Local].
+	SelectionVector &GetInvertedSel() {
+		D_ASSERT(!conflict_data[SECOND].sel);
+		return *conflict_data[FIRST].inverted_sel;
 	}
 	ValidityArray &GetValidityArray(const idx_t i) {
 		return conflict_data[i].val_array;
@@ -109,6 +142,14 @@ private:
 	idx_t chunk_size;
 	//! Optional information to match indexes to the conflict target.
 	optional_ptr<ConflictInfo> conflict_info;
+	ConflictManagerMode mode;
+
+	//! Indexes matching the conflict target.
+	vector<reference<BoundIndex>> matching_indexes;
+	//! Delete indexes matching the conflict target.
+	vector<optional_ptr<BoundIndex>> matching_delete_indexes;
+	//! All matching indexes by their name (unique identifier).
+	case_insensitive_set_t index_names;
 
 	struct ConflictData {
 		//! Links the conflicting rows to their row IDs (index_in_chunk -> count).
@@ -149,7 +190,9 @@ private:
 	};
 
 	array<ConflictData, 2> conflict_data;
+	//! Registers all conflicting rows in a data chunk.
 	unordered_set<idx_t> conflict_rows;
+	//! True, if we can skip recording any further conflicts.
 	bool finished = false;
 
 	ConflictData &GetConflictData(const idx_t i) {
@@ -183,17 +226,13 @@ private:
 
 		// We have seen a conflict for this index, but with a different row ID.
 		auto &secondary_conflicts = GetConflictData(1);
+		if (secondary_conflicts.val_array.RowIsValid(index_in_chunk) &&
+		    secondary_conflicts.GetRowId(index_in_chunk) == row_id) {
+			// We have already seen this conflict.
+			return;
+		}
 		secondary_conflicts.Insert(index_in_chunk, row_id);
 	}
-
-	ConflictManagerMode mode;
-
-	//! Indexes matching the conflict target.
-	vector<reference<BoundIndex>> matched_indexes;
-	//! Delete indexes matching the conflict target.
-	vector<optional_ptr<BoundIndex>> matched_delete_indexes;
-	//! All matched indexes by their name, which is their unique identifier.
-	case_insensitive_set_t matched_index_names;
 };
 
 } // namespace duckdb
