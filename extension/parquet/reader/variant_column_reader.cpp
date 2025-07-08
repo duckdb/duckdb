@@ -44,8 +44,6 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	std::fill_n(define_out, num_values, MaxDefine());
 
 	optional_idx read_count;
-	auto &child = child_readers[1];
-
 	Vector value_intermediate(LogicalType::BLOB, num_values);
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
 	(void)child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);

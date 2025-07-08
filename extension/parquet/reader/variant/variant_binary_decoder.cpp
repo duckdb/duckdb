@@ -338,12 +338,6 @@ yyjson_mut_val *VariantBinaryDecoder::Decode(yyjson_mut_doc *doc, const VariantM
                                              const_data_ptr_t data) {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(data[0]);
 
-	//! FIXME: we don't actually know the length in arrays/objects?
-	//! > A field_offset represents the byte offset (relative to the first byte of the first value) where the i-th value
-	//! starts > The last field_offset points to the byte after the end of the last value
-	//! ...
-	//! > This implies that the field_offset values may not be monotonically increasing
-
 	data++;
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
