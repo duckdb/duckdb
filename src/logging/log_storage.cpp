@@ -129,6 +129,7 @@ static void WriteLogContextToCSVString(LogStorageCsvConfig &config, WriteStream 
 	WriteOptionalId(config, writer, context.context.transaction_id);
 	WriteOptionalId(config, writer, context.context.query_id);
 	WriteOptionalId(config, writer, context.context.thread_id, false);
+	writer.WriteData(const_data_ptr_cast(config.newline.c_str()), config.newline.size());
 }
 
 CSVLogStorage::CSVLogStorage(DatabaseInstance &db) {
@@ -388,17 +389,7 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context,
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
-// TODO: we can remove this once the CSV reader handles growing CSV files properly
-static void ThrowIfLogging(ClientContext &context) {
-	if (LogManager::Get(context).GetConfig().enabled) {
-		throw InvalidInputException("Please disable logging before scanning the logging csv file to avoid duckdb "
-		                            "getting stuck in infinite logging limbo");
-	}
-}
-
 unique_ptr<TableRef> FileLogStorage::BindReplaceEntries(ClientContext &context, TableFunctionBindInput &input) {
-	ThrowIfLogging(context);
-
 	lock_guard<mutex> lck(lock);
 	FlushInternal();
 
@@ -412,8 +403,6 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceEntries(ClientContext &context, 
 }
 
 unique_ptr<TableRef> FileLogStorage::BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) {
-	ThrowIfLogging(context);
-
 	lock_guard<mutex> lck(lock);
 	FlushInternal();
 	if (normalize_contexts) {

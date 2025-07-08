@@ -12,23 +12,22 @@ pragma enable_logging(['FileSystem'], storage='file', storage_config={'path': '_
 statement ok
 FROM "data/csv/big_number.csv"
 
-# WARNING: disable logging before querying the CSV file or get stuck in an infinite loop of growing CSV log file 
-# TODO: rework CSV reader to avoid this problem 
-statement ok
-pragma disable_logging;
-
 # Ensure we can reparse the structured log message from the csv
 query III
 SELECT 
 	scope, 
 	path: parse_duckdb_log_message('FileSystem', message)['path'],
 	op: parse_duckdb_log_message('FileSystem', message)['op'],
-FROM "__TEST_DIR__/logging_csv_log.csv";
+FROM "__TEST_DIR__/logging_csv_log.csv"
+WHERE path = 'data/csv/big_number.csv';
 ----
 CONNECTION	data/csv/big_number.csv	OPEN
 CONNECTION	data/csv/big_number.csv	READ
 CONNECTION	data/csv/big_number.csv	READ
 CONNECTION	data/csv/big_number.csv	CLOSE
+
+statement ok
+pragma disable_logging
 
 # Truncating the logs will clear the csv log file
 statement ok
@@ -47,18 +46,14 @@ pragma enable_logging(['FileSystem'], storage='file', storage_config={'entries_p
 statement ok
 FROM "data/csv/big_number.csv"
 
-# WARNING: disable logging before querying the CSV file or get stuck in an infinite loop of growing CSV log file 
-# TODO: rework CSV reader to avoid this problem 
-statement ok
-pragma disable_logging;
-
 # Ensure we can reparse the structured log message from the csv
 query III
 SELECT 
 	context_id is not null, 
 	path: parse_duckdb_log_message('FileSystem', message)['path'],
 	op: parse_duckdb_log_message('FileSystem', message)['op'],
-FROM "__TEST_DIR__/logging_csv_log_entries.csv";
+FROM "__TEST_DIR__/logging_csv_log_entries.csv"
+WHERE path = 'data/csv/big_number.csv';
 ----
 1	data/csv/big_number.csv	OPEN
 1	data/csv/big_number.csv	READ
@@ -71,6 +66,11 @@ SELECT scope
 FROM "__TEST_DIR__/logging_csv_log_contexts.csv";
 ----
 CONNECTION
+CONNECTION
+CONNECTION
+
+statement ok
+pragma disable_logging;
 
 # Truncating the logs will clear both csv files
 statement ok

@@ -12,23 +12,18 @@ pragma enable_logging(['FileSystem'], storage='file', storage_config={'path': '_
 statement ok
 FROM "data/csv/big_number.csv"
 
-# We can't currently scan this, because it would cause an infinite loop of log writing 
-statement error
-FROM duckdb_logs
-----
-Invalid Input Error: Please disable logging before scanning the logging csv file to avoid duckdb getting stuck in infinite logging limbo
+statement ok
+FROM duckdb_logs_parsed('FileSystem');
 
 statement ok
 pragma disable_logging;
-
-# mode output_result
 
 query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs;
 ----
 
 query IIII
-SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN';
+SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN' and path='data/csv/big_number.csv';
 ----
 CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
 
@@ -44,10 +39,8 @@ statement ok
 FROM "data/csv/big_number.csv"
 
 # We can't currently scan this, because it would cause an infinite loop of log writing 
-statement error
+statement ok
 FROM duckdb_logs
-----
-Invalid Input Error: Please disable logging before scanning the logging csv file to avoid duckdb getting stuck in infinite logging limbo
 
 statement ok
 pragma disable_logging;
@@ -57,7 +50,7 @@ DESCRIBE FROM duckdb_logs
 ----
 
 query IIII
-SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN';
+SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN' AND path='data/csv/big_number.csv';
 ----
 CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
 
