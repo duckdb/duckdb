@@ -28,7 +28,7 @@ static void TupleDataValueStore(const T &source, data_t *__restrict const &row_l
 
 template <>
 inline void TupleDataValueStore(const string_t &source, data_t *__restrict const &row_location,
-                                const idx_t &offset_in_row, data_t *__restrict &heap_location) {
+                                const idx_t &offset_in_row, data_ptr_t &heap_location) {
 #ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
@@ -40,7 +40,7 @@ inline void TupleDataValueStore(const string_t &source, data_t *__restrict const
 		// Copy first 8 bytes of string_t
 		memcpy(row_location + offset_in_row, &source, string_t::HEADER_SIZE);
 		// Copy new heap pointer into the correct offset
-		memcpy(row_location + offset_in_row + string_t::HEADER_SIZE, &heap_location, sizeof(heap_location));
+		Store<data_ptr_t>(heap_location, row_location + offset_in_row + string_t::HEADER_SIZE);
 		// Increment heap pointer
 		heap_location += source.GetSize();
 	}
