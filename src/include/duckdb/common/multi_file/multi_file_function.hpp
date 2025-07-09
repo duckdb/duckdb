@@ -610,11 +610,6 @@ public:
 	                                                     column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
-		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			// multiple files, no luck!
-			return nullptr;
-		}
 		if (!bind_data.initial_reader) {
 			// no reader
 			return nullptr;
@@ -623,7 +618,32 @@ public:
 		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
-		return bind_data.initial_reader->GetStatistics(context, bind_data.names[column_index]);
+
+		const auto &col_name = bind_data.names[column_index];
+
+		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
+		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+			if (!bind_data.file_options.union_by_name) {
+				// multiple files, but no union_by_name: no luck!
+				return nullptr;
+			}
+
+			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
+			if (!merged_stats) {
+				return nullptr;
+			}
+
+			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
+				auto &union_reader = *bind_data.union_readers[i];
+				auto stats = union_reader.GetStatistics(context, col_name);
+				if (!stats) {
+					return nullptr;
+				}
+				merged_stats->Merge(*stats);
+			}
+			return merged_stats;
+		}
+		return bind_data.initial_reader->GetStatistics(context, col_name);
 	}
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,
