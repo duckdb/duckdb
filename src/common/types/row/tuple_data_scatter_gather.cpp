@@ -40,7 +40,7 @@ inline void TupleDataValueStore(const string_t &source, data_t *__restrict const
 		// Copy first 8 bytes of string_t
 		memcpy(row_location + offset_in_row, &source, string_t::HEADER_SIZE);
 		// Copy new heap pointer into the correct offset
-		Store<data_ptr_t>(heap_location, row_location + offset_in_row + string_t::HEADER_SIZE);
+		memcpy(row_location + offset_in_row + string_t::HEADER_SIZE, &heap_location, sizeof(heap_location));
 		// Increment heap pointer
 		heap_location += source.GetSize();
 	}
