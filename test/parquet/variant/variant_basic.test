@@ -53,7 +53,7 @@ from 'data/parquet-testing/variant_int32.parquet';
 query II
 from 'data/parquet-testing/variant_binary.parquet';
 ----
-1	"\n\u000B\f\r"
+1	"CgsMDQ=="
 
 # Decimal16
 query II

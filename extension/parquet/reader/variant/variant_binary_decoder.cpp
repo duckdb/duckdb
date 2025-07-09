@@ -9,6 +9,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -227,14 +228,19 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		memcpy(&value, data, sizeof(float));
 		return yyjson_mut_real(doc, value);
 	}
-	case VariantPrimitiveType::BINARY:
+	case VariantPrimitiveType::BINARY: {
+		//! Follow the JSON serialization guide by converting BINARY to Base64:
+		//! For example: `"dmFyaWFudAo="`
+		auto size = Load<uint32_t>(data);
+		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
+		auto base64_string = Blob::ToBase64(string_t(string_data, size));
+		return yyjson_mut_strncpy(doc, base64_string.c_str(), base64_string.size());
+	}
 	case VariantPrimitiveType::STRING: {
 		auto size = Load<uint32_t>(data);
 		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
-		if (value_metadata.primitive_type == VariantPrimitiveType::STRING) {
-			if (!Utf8Proc::IsValid(string_data, size)) {
-				throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
-			}
+		if (!Utf8Proc::IsValid(string_data, size)) {
+			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
 		return yyjson_mut_strncpy(doc, string_data, size);
 	}
