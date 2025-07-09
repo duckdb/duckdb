@@ -22,7 +22,7 @@ constexpr idx_t TupleDataWithinListFixedSize<string_t>() {
 
 template <class T>
 static void TupleDataValueStore(const T &source, data_t *__restrict const &row_location, const idx_t &offset_in_row,
-                                data_t *__restrict &) {
+                                data_ptr_t &) {
 	Store<T>(source, row_location + offset_in_row);
 }
 
