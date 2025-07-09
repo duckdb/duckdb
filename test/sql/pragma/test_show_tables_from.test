@@ -44,7 +44,7 @@ SHOW TABLES FROM db1
 db1_table1
 
 query I
-SHOW TABLES FROM main.test_schema
+SHOW TABLES FROM test_schema
 ----
 schema_table1
 
