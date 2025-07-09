@@ -47,16 +47,25 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	optional_idx read_count;
 	Vector value_intermediate(LogicalType::BLOB, num_values);
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	(void)child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
-	auto child_num_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
+	auto metadata_values = child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
+	auto value_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
+	if (metadata_values != value_values) {
+		throw InvalidInputException(
+		    "The unshredded Variant column did not contain the same amount of values for 'metadata' and 'value'");
+	}
 
 	VariantBinaryDecoder decoder(context);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);
 	auto value_intermediate_data = FlatVector::GetData<string_t>(value_intermediate);
+
+	auto metadata_validity = FlatVector::Validity(metadata_intermediate);
+	auto value_validity = FlatVector::Validity(value_intermediate);
 	for (idx_t i = 0; i < num_values; i++) {
-		//! FIXME: deal with nulls
+		if (!metadata_validity.RowIsValid(i) || !value_validity.RowIsValid(i)) {
+			throw InvalidInputException("The Variant 'metadata' and 'value' columns can not produce NULL values");
+		}
 		VariantMetadata variant_metadata(metadata_intermediate_data[i]);
 		auto value_data = reinterpret_cast<const_data_ptr_t>(value_intermediate_data[i].GetData());
 
@@ -74,16 +83,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		result_data[i] = StringVector::AddString(result, decode_result.data, static_cast<idx_t>(len));
 	}
 
-	read_count = child_num_values;
-
-	// set the validity mask for this level
-	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
-		if (define_out[i] < MaxDefine()) {
-			validity.SetInvalid(i);
-		}
-	}
-
+	read_count = value_values;
 	return read_count.GetIndex();
 }
 
