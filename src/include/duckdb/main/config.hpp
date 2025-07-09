@@ -233,7 +233,7 @@ struct DBConfigOptions {
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
 	//! Directories to store extension binaries in
-	vector<string> extension_directory;
+	vector<string> extension_directories;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded

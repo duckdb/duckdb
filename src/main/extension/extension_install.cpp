@@ -15,9 +15,6 @@
 
 #include <fstream>
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x)  STRINGIFY(x)
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -61,38 +58,51 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	return link;
 }
 
-void stripTrailingNulls(std::string &str) {
-	while (!str.empty() && str.back() == '\0') {
-		str.pop_back();
-	}
-}
-
 vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) {
 	vector<duckdb::string> default_folders;
-
-	string home_directory = fs.GetHomeDirectory();
-	// exception if the home directory does not exist, don't create whatever we think is home
-	if (!fs.DirectoryExists(home_directory)) {
-#ifndef DUCKDB_SECONDARY_EXTENSION_DIRECTORY
-
-		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-		                  "home_directory='/path/to/dir' option.",
-		                  home_directory);
+// These fallbacks are necessary if the user doesn't use the CMake build.
+#ifndef DUCKDB_EXTENSION_DIRECTORIES
+#ifdef _WIN32
+#define DUCKDB_EXTENSION_DIRECTORIES "~\\.duckdb\\extensions"
+#else
+#define DUCKDB_EXTENSION_DIRECTORIES "~/.duckdb/extensions"
 #endif
-	} else {
-		string res = home_directory;
-		res = fs.JoinPath(res, ".duckdb");
-		res = fs.JoinPath(res, "extensions");
-		default_folders.push_back(res);
+#endif
+	string dirs_string(DUCKDB_EXTENSION_DIRECTORIES);
+
+	// Skip if empty
+	if (dirs_string.empty()) {
+		return default_folders;
 	}
 
-#ifdef DUCKDB_SECONDARY_EXTENSION_DIRECTORY
-	// TODO: Why do we get trailing nulls here (on Linux)?
-	const char *secondary_dir = TOSTRING(DUCKDB_SECONDARY_EXTENSION_DIRECTORY);
-	std::string s_secondary_dir(secondary_dir);
-	stripTrailingNulls(s_secondary_dir);
-	default_folders.push_back(s_secondary_dir);
+#ifdef _WIN32
+	const char separator = ';';
+#else
+	const char separator = ':';
 #endif
+
+	// Split the string by separator
+	auto directories = StringUtil::Split(dirs_string, separator);
+
+	for (auto &dir : directories) {
+		// Skip empty directories
+		if (dir.empty()) {
+			continue;
+		}
+
+		// Check if directory starts with "~/"
+		if (dir.length() >= 2 && dir[0] == '~' && dir[1] == '/') {
+			string home_directory = fs.GetHomeDirectory();
+			if (!fs.DirectoryExists(home_directory)) {
+				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+				                  "home_directory='/path/to/dir' option.",
+				                  home_directory);
+			}
+			// Replace ~ with home directory
+			dir = home_directory + dir.substr(1);
+		}
+		default_folders.push_back(dir);
+	}
 
 	return default_folders;
 }
@@ -107,9 +117,9 @@ vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, 
 	vector<string> extension_directories;
 	auto &config = db.config;
 
-	if (!config.options.extension_directory.empty()) {
+	if (!config.options.extension_directories.empty()) {
 		// Add all configured extension directories
-		for (const auto &dir : config.options.extension_directory) {
+		for (const auto &dir : config.options.extension_directories) {
 			extension_directories.push_back(dir);
 		}
 	} else {
