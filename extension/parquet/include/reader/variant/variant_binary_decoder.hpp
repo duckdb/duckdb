@@ -41,7 +41,7 @@ public:
 
 //! ------------ Value ------------
 
-enum class VariantBasicType : uint8_t { PRIMITIVE = 0, SHORT_STRING = 1, OBJECT = 2, ARRAY = 3 };
+enum class VariantBasicType : uint8_t { PRIMITIVE = 0, SHORT_STRING = 1, OBJECT = 2, ARRAY = 3, INVALID };
 
 enum class VariantPrimitiveType : uint8_t {
 	NULL_TYPE = 0,
@@ -64,7 +64,8 @@ enum class VariantPrimitiveType : uint8_t {
 	TIME_NTZ_MICROS = 17,
 	TIMESTAMP_NANOS = 18,
 	TIMESTAMP_NTZ_NANOS = 19,
-	UUID = 20
+	UUID = 20,
+	INVALID
 };
 
 struct VariantValueMetadata {
@@ -75,14 +76,14 @@ public:
 public:
 	static VariantValueMetadata FromHeaderByte(uint8_t byte);
 	static VariantBasicType VariantBasicTypeFromByte(uint8_t byte) {
-		if (byte >= 4) {
+		if (byte >= static_cast<uint8_t>(VariantBasicType::INVALID)) {
 			throw NotImplementedException("Variant BasicType (%d) is not supported", byte);
 		}
 		return static_cast<VariantBasicType>(byte);
 	}
 
 	static VariantPrimitiveType VariantPrimitiveTypeFromByte(uint8_t byte) {
-		if (byte >= 21) {
+		if (byte >= static_cast<uint8_t>(VariantPrimitiveType::INVALID)) {
 			throw NotImplementedException("Variant PrimitiveType (%d) is not supported", byte);
 		}
 		return static_cast<VariantPrimitiveType>(byte);

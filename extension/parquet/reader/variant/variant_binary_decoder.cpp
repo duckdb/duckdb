@@ -107,6 +107,8 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 		result.is_large = (value_header >> ARRAY_IS_LARGE_SHIFT) & ARRAY_IS_LARGE_MASK;
 		break;
 	}
+	default:
+		throw InternalException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
 	}
 	return result;
 }
