@@ -47,8 +47,10 @@ unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &col
 	}
 }
 
-void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column) {
-	D_ASSERT(expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT);
+void Binder::TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column) {
+	if (expr->GetExpressionType() != ExpressionType::VALUE_DEFAULT) {
+		return;
+	}
 	expr = ExpandDefaultExpression(column);
 }
 
@@ -474,6 +476,50 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	}
 }
 
+void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
+                                  vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
+                                  IndexVector<idx_t, PhysicalIndex> &column_index_map) {
+	if (!columns.empty() || default_values) {
+		// insertion statement specifies column list
+
+		// create a mapping of (list index) -> (column index)
+		case_insensitive_map_t<idx_t> column_name_map;
+		for (idx_t i = 0; i < columns.size(); i++) {
+			auto entry = column_name_map.insert(make_pair(columns[i], i));
+			if (!entry.second) {
+				throw BinderException("Duplicate column name \"%s\" in INSERT", columns[i]);
+			}
+			auto column_index = table.GetColumnIndex(columns[i]);
+			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
+				throw BinderException("Cannot explicitly insert values into rowid column");
+			}
+			auto &col = table.GetColumn(column_index);
+			if (col.Generated()) {
+				throw BinderException("Cannot insert into a generated column");
+			}
+			expected_types.push_back(col.Type());
+			named_column_map.push_back(column_index);
+		}
+		for (auto &col : table.GetColumns().Physical()) {
+			auto entry = column_name_map.find(col.Name());
+			if (entry == column_name_map.end()) {
+				// column not specified, set index to DConstants::INVALID_INDEX
+				column_index_map.push_back(DConstants::INVALID_INDEX);
+			} else {
+				// column was specified, set to the index
+				column_index_map.push_back(entry->second);
+			}
+		}
+	} else {
+		// insert by position and no columns specified - insertion into all columns of the table
+		// intentionally don't populate 'column_index_map' as an indication of this
+		for (auto &col : table.GetColumns().Physical()) {
+			named_column_map.push_back(col.Logical());
+			expected_types.push_back(col.Type());
+		}
+	}
+}
+
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -515,45 +561,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	vector<LogicalIndex> named_column_map;
-	if (!stmt.columns.empty() || stmt.default_values) {
-		// insertion statement specifies column list
-
-		// create a mapping of (list index) -> (column index)
-		case_insensitive_map_t<idx_t> column_name_map;
-		for (idx_t i = 0; i < stmt.columns.size(); i++) {
-			auto entry = column_name_map.insert(make_pair(stmt.columns[i], i));
-			if (!entry.second) {
-				throw BinderException("Duplicate column name \"%s\" in INSERT", stmt.columns[i]);
-			}
-			auto column_index = table.GetColumnIndex(stmt.columns[i]);
-			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
-				throw BinderException("Cannot explicitly insert values into rowid column");
-			}
-			auto &col = table.GetColumn(column_index);
-			if (col.Generated()) {
-				throw BinderException("Cannot insert into a generated column");
-			}
-			insert->expected_types.push_back(col.Type());
-			named_column_map.push_back(column_index);
-		}
-		for (auto &col : table.GetColumns().Physical()) {
-			auto entry = column_name_map.find(col.Name());
-			if (entry == column_name_map.end()) {
-				// column not specified, set index to DConstants::INVALID_INDEX
-				insert->column_index_map.push_back(DConstants::INVALID_INDEX);
-			} else {
-				// column was specified, set to the index
-				insert->column_index_map.push_back(entry->second);
-			}
-		}
-	} else {
-		// insert by position and no columns specified - insertion into all columns of the table
-		// intentionally don't populate 'column_index_map' as an indication of this
-		for (auto &col : table.GetColumns().Physical()) {
-			named_column_map.push_back(col.Logical());
-			insert->expected_types.push_back(col.Type());
-		}
-	}
+	BindInsertColumnList(table, stmt.columns, stmt.default_values, named_column_map, insert->expected_types,
+	                     insert->column_index_map);
 
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
@@ -589,10 +598,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-				if (expr_list.values[list_idx][col_idx]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-					// DEFAULT value! replace the entry
-					ReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
-				}
+				TryReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
 			}
 		}
 	}

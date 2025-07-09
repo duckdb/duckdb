@@ -255,6 +255,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	case TableReferenceType::INVALID:
 	case TableReferenceType::CTE:
+	case TableReferenceType::BOUND_TABLE_REF:
 		throw NotImplementedException("TableRef type not implemented for traversal");
 	}
 	ref_callback(ref);
