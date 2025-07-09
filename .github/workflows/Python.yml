@@ -391,10 +391,10 @@ jobs:
         ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
   linux-release-cleanup:
+     if: github.ref == 'refs/heads/v1.3-ossivalis' || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      needs: 
       - twine-upload
-     if: ${{ github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main' }}
      runs-on: ubuntu-22.04
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'

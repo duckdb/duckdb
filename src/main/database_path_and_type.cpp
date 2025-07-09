@@ -26,7 +26,7 @@ void DBPathAndType::CheckMagicBytes(FileSystem &fs, string &path, string &db_typ
 	case DataFileType::PARQUET_FILE:
 	case DataFileType::UNKNOWN_FILE: {
 		// FIXME: we should get this from the registered replacement scans instead of hardcoding it here
-		vector<string> supported_suffixes {"parquet", "csv", "json", "jsonl", "ndjson"};
+		vector<string> supported_suffixes {"parquet", "csv", "tsv", "json", "jsonl", "ndjson"};
 		if (ReplacementScan::CanReplace(path, supported_suffixes)) {
 			db_type = "__open_file__";
 			break;
