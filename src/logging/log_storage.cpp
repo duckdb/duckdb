@@ -113,7 +113,7 @@ static void WriteLogEntryToCSVString(LogStorageCsvConfig &config, WriteStream &w
 	WriteDelim(config, writer);
 
 	// Write message
-	CSVUtils::WriteQuotedString(writer, log_message.c_str(), log_message.size(), false, config.null_strings,
+	CSVWriter::WriteQuotedString(writer, log_message.c_str(), log_message.size(), false, config.null_strings,
 	                            config.requires_quotes, config.quote, config.escape);
 
 	writer.WriteData(const_data_ptr_cast(config.newline.c_str()), config.newline.size());

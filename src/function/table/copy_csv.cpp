@@ -116,6 +116,7 @@ void BaseCSVData::Finalize() {
 	}
 }
 
+// TODO: remove?
 string TransformNewLine(string new_line) {
 	new_line = StringUtil::Replace(new_line, "\\r", "\r");
 	return StringUtil::Replace(new_line, "\\n", "\n");
@@ -213,28 +214,20 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);
 
-	bind_data->requires_quotes = make_unsafe_uniq_array<bool>(256);
-	memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
-	bind_data->requires_quotes['\n'] = true;
-	bind_data->requires_quotes['\r'] = true;
-	bind_data->requires_quotes[NumericCast<idx_t>(
-	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
-	bind_data->requires_quotes[NumericCast<idx_t>(
-	    bind_data->options.dialect_options.state_machine_options.quote.GetValue())] = true;
+	// bind_data->writer_options.requires_quotes = make_unsafe_uniq_array<bool>(256);
+	// memset(bind_data->writer_options.requires_quotes.get(), 0, sizeof(bool) * 256);
+	// bind_data->writer_options.requires_quotes['\n'] = true;
+	// bind_data->writer_options.requires_quotes['\r'] = true;
+	// bind_data->writer_options.requires_quotes[NumericCast<idx_t>(
+	//     bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
+	// bind_data->writer_options.requires_quotes[NumericCast<idx_t>(
+	//     bind_data->options.dialect_options.state_machine_options.quote.GetValue())] = true;
+	//
+	// if (!bind_data->options.write_newline.empty()) {
+	// 	bind_data->writer_options.newline = TransformNewLine(bind_data->options.write_newline);
+	// }
 
-	if (!bind_data->options.write_newline.empty()) {
-		bind_data->newline = TransformNewLine(bind_data->options.write_newline);
-	}
 	return std::move(bind_data);
-}
-
-static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const char *str, idx_t len,
-                              bool force_quote) {
-	auto quote = csv_data.options.dialect_options.state_machine_options.quote.GetValue();
-	auto escape = csv_data.options.dialect_options.state_machine_options.escape.GetValue();
-	auto &null_str = csv_data.options.null_str;
-	auto &requires_quotes = csv_data.requires_quotes;
-	return CSVUtils::WriteQuotedString(writer, str, len, force_quote, null_str, requires_quotes, quote, escape);
 }
 
 //===--------------------------------------------------------------------===//
@@ -243,60 +236,27 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 struct LocalWriteCSVData : public LocalFunctionData {
 public:
 	LocalWriteCSVData(ClientContext &context, vector<unique_ptr<Expression>> &expressions)
-	    : executor(context, expressions), stream(Allocator::Get(context)) {
+	    : executor(context, expressions), writer_local_state(context) {
 	}
 
 public:
 	//! Used to execute the expressions that transform input -> string
 	ExpressionExecutor executor;
-	//! The thread-local buffer to write data into
-	MemoryStream stream;
 	//! A chunk with VARCHAR columns to cast intermediates into
 	DataChunk cast_chunk;
-	//! If we've written any rows yet, allows us to prevent a trailing comma when writing JSON ARRAY
-	bool written_anything = false;
+	//! Local state for the CSV writer
+	CSVWriterLocalState writer_local_state;
 };
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileCompressionType compression)
-	    : fs(fs), written_anything(false) {
-		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
-		                                    FileLockType::WRITE_LOCK | compression);
-	}
-
-	//! Write generic data, e.g., CSV header
-	void WriteData(const_data_ptr_t data, idx_t size) {
-		lock_guard<mutex> flock(lock);
-		handle->Write((void *)data, size);
-	}
-
-	void WriteData(const char *data, idx_t size) {
-		WriteData(const_data_ptr_cast(data), size);
-	}
-
-	//! Write rows
-	void WriteRows(const_data_ptr_t data, idx_t size, const string &newline) {
-		lock_guard<mutex> flock(lock);
-		if (written_anything) {
-			handle->Write((void *)newline.c_str(), newline.length());
-		} else {
-			written_anything = true;
-		}
-		handle->Write((void *)data, size);
+	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression) : writer(options, fs, file_path, compression) {
 	}
 
 	idx_t FileSize() {
-		lock_guard<mutex> flock(lock);
-		return handle->GetFileSize();
+		return writer.FileSize();
 	}
 
-	FileSystem &fs;
-	//! The mutex for writing to the physical file
-	mutex lock;
-	//! The file handle to write to
-	unique_ptr<FileHandle> handle;
-	//! If we've written any rows yet, allows us to prevent a trailing comma when writing JSON ARRAY
-	bool written_anything;
+	CSVWriter writer;
 };
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
@@ -316,37 +276,20 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 	auto global_data =
-	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
+	    make_uniq<GlobalWriteCSVData>(options, FileSystem::GetFileSystem(context), file_path, options.compression);
 
 	if (!options.prefix.empty()) {
-		global_data->WriteData(options.prefix.c_str(), options.prefix.size());
+		global_data->writer.WriteRawString(options.prefix);
 	}
 
 	if (!(options.dialect_options.header.IsSetByUser() && !options.dialect_options.header.GetValue())) {
-		MemoryStream stream(Allocator::Get(context));
-		// write the header line to the file
-		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
-			if (i != 0) {
-				CSVUtils::WriteQuoteOrEscape(stream,
-				                             options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
-			}
-			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
-			                  csv_data.options.name_list[i].size(), false);
-		}
-		stream.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
-
-		global_data->WriteData(stream.GetData(), stream.GetPosition());
+		global_data->writer.WriteHeader();
 	}
 
 	return std::move(global_data);
 }
 
-static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_data, DataChunk &cast_chunk,
-                                  MemoryStream &writer, DataChunk &input, bool &written_anything,
-                                  ExpressionExecutor &executor) {
-	auto &csv_data = bind_data.Cast<WriteCSVData>();
-	auto &options = csv_data.options;
-
+static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterLocalState &writer_local_state, DataChunk &cast_chunk, DataChunk &input, ExpressionExecutor &executor) {
 	// first cast the columns of the chunk to varchar
 	cast_chunk.Reset();
 	cast_chunk.SetCardinality(input);
@@ -354,54 +297,16 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 	executor.Execute(input, cast_chunk);
 
 	cast_chunk.Flatten();
-	// now loop over the vectors and output the values
-	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {
-		if (row_idx == 0 && !written_anything) {
-			written_anything = true;
-		} else {
-			writer.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
-		}
-		// write values
-		D_ASSERT(options.null_str.size() == 1);
-		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
-			if (col_idx != 0) {
-				CSVUtils::WriteQuoteOrEscape(writer,
-				                             options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
-			}
-			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
-				// write null value
-				writer.WriteData(const_data_ptr_cast(options.null_str[0].c_str()), options.null_str[0].size());
-				continue;
-			}
 
-			// non-null value, fetch the string value from the cast chunk
-			auto str_data = FlatVector::GetData<string_t>(cast_chunk.data[col_idx]);
-			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
-			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
-			// delimiter is a number or "." character)
-			WriteQuotedString(writer, csv_data, str_data[row_idx].GetData(), str_data[row_idx].GetSize(),
-			                  csv_data.options.force_quote[col_idx]);
-		}
-	}
+	writer.WriteChunk(cast_chunk, writer_local_state);
 }
 
 static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate, DataChunk &input) {
-	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &local_data = lstate.Cast<LocalWriteCSVData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
-	// write data into the local buffer
-	WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.stream, input,
-	                      local_data.written_anything, local_data.executor);
-
-	// check if we should flush what we have currently written
-	auto &writer = local_data.stream;
-	if (writer.GetPosition() >= csv_data.flush_size) {
-		global_state.WriteRows(writer.GetData(), writer.GetPosition(), csv_data.newline);
-		writer.Rewind();
-		local_data.written_anything = false;
-	}
+	WriteCSVChunkInternal(global_state.writer, local_data.writer_local_state, local_data.cast_chunk, input, local_data.executor);
 }
 
 //===--------------------------------------------------------------------===//
@@ -411,13 +316,7 @@ static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, 
                             LocalFunctionData &lstate) {
 	auto &local_data = lstate.Cast<LocalWriteCSVData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
-	auto &csv_data = bind_data.Cast<WriteCSVData>();
-	auto &writer = local_data.stream;
-	// flush the local writer
-	if (local_data.written_anything) {
-		global_state.WriteRows(writer.GetData(), writer.GetPosition(), csv_data.newline);
-		writer.Rewind();
-	}
+	global_state.writer.Flush(local_data.writer_local_state);
 }
 
 //===--------------------------------------------------------------------===//
@@ -428,16 +327,14 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
-	MemoryStream stream(Allocator::Get(context));
+	CSVWriterLocalState local_state(context);
 	if (!options.suffix.empty()) {
-		stream.WriteData(const_data_ptr_cast(options.suffix.c_str()), options.suffix.size());
-	} else if (global_state.written_anything) {
-		stream.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
+		global_state.writer.WriteRawString(options.suffix);
+	} else if (global_state.writer.WrittenAnything()) {
+		global_state.writer.WriteRawString(global_state.writer.writer_options.newline);
 	}
-	global_state.WriteData(stream.GetData(), stream.GetPosition());
-
-	global_state.handle->Close();
-	global_state.handle.reset();
+	global_state.writer.Flush(local_state);
+	global_state.writer.Close();
 }
 
 //===--------------------------------------------------------------------===//
@@ -456,11 +353,12 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
-	explicit WriteCSVBatchData(Allocator &allocator) : stream(allocator) {
+	explicit WriteCSVBatchData(ClientContext &context) : writer_local_state(make_uniq<CSVWriterLocalState>(context)) {
+		writer_local_state->require_manual_flush = true;
 	}
 
 	//! The thread-local buffer to write data into
-	MemoryStream stream;
+	unique_ptr<CSVWriterLocalState> writer_local_state;
 };
 
 unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,
@@ -477,12 +375,12 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	auto &original_types = collection->Types();
 	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
 	ExpressionExecutor executor(context, expressions);
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	// write CSV chunks to the batch data
-	bool written_anything = false;
-	auto batch = make_uniq<WriteCSVBatchData>(Allocator::Get(context));
+	auto batch = make_uniq<WriteCSVBatchData>(context);
 	for (auto &chunk : collection->Chunks()) {
-		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->stream, chunk, written_anything, executor);
+		WriteCSVChunkInternal(global_state.writer, *batch->writer_local_state, cast_chunk, chunk, executor);
 	}
 	return std::move(batch);
 }
@@ -494,10 +392,7 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
                         PreparedBatchData &batch) {
 	auto &csv_batch = batch.Cast<WriteCSVBatchData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
-	auto &csv_data = bind_data.Cast<WriteCSVData>();
-	auto &writer = csv_batch.stream;
-	global_state.WriteRows(writer.GetData(), writer.GetPosition(), csv_data.newline);
-	writer.Rewind();
+	global_state.writer.Flush(*csv_batch.writer_local_state);
 }
 
 //===--------------------------------------------------------------------===//
