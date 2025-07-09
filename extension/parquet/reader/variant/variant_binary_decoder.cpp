@@ -260,8 +260,11 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
 		auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 
-		auto parts = StringUtil::Split(value_str, '+');
-		value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
+		if (StringUtil::Contains(value_str, "+")) {
+			//! Don't attempt this for NaN/Inf timestamps
+			auto parts = StringUtil::Split(value_str, '+');
+			value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
+		}
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
