@@ -148,6 +148,25 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 	lock_guard<mutex> guard(lock);
 	SyncLocalPartition(local_partition, local_append);
 	fixed_bits = true;
+
+	//	We now know the number of hash_groups (some may be empty)
+	auto &groups = local_partition->GetPartitions();
+	if (hash_groups.empty()) {
+		hash_groups.resize(groups.size());
+	}
+
+	//	Create missing HashedSortGroups inside the mutex
+	for (idx_t group_idx = 0; group_idx < groups.size(); ++group_idx) {
+		auto &hash_group = hash_groups[group_idx];
+		if (hash_group) {
+			continue;
+		}
+
+		auto &group_data = groups[group_idx];
+		if (group_data->Count()) {
+			hash_group = make_uniq<HashedSortGroup>(context, partitions, orders, payload_types, group_idx);
+		}
+	}
 }
 
 void HashedSortGlobalSinkState::Finalize(ClientContext &context, InterruptState &interrupt_state) {
@@ -156,20 +175,8 @@ void HashedSortGlobalSinkState::Finalize(ClientContext &context, InterruptState 
 		return;
 	}
 
-	// OVER(PARTITION BY...)
-	if (hash_groups.empty()) {
-		auto &groups = grouping_data->GetPartitions();
-		hash_groups.resize(groups.size());
-		for (idx_t group_idx = 0; group_idx < groups.size(); ++group_idx) {
-			auto &group_data = groups[group_idx];
-			if (group_data->Count()) {
-				hash_groups[group_idx] =
-				    make_uniq<HashedSortGroup>(context, partitions, orders, payload_types, group_idx);
-			}
-		}
-	}
-
-	// OVER(ORDER BY...)
+	// OVER(...)
+	D_ASSERT(!hash_groups.empty());
 	for (auto &hash_group : hash_groups) {
 		if (!hash_group) {
 			continue;
@@ -407,6 +414,9 @@ void HashedSortMaterializeEvent::Schedule() {
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (auto &hash_group : gstate.hash_groups) {
+		if (!hash_group) {
+			continue;
+		}
 		auto &sort = *hash_group->sort;
 		auto &global_sink = *hash_group->sort_global;
 		hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
