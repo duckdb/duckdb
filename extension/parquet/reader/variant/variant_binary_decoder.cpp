@@ -231,6 +231,11 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 	case VariantPrimitiveType::STRING: {
 		auto size = Load<uint32_t>(data);
 		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
+		if (value_metadata.primitive_type == VariantPrimitiveType::STRING) {
+			if (!Utf8Proc::IsValid(string_data, size)) {
+				throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
+			}
+		}
 		return yyjson_mut_strncpy(doc, string_data, size);
 	}
 	case VariantPrimitiveType::TIME_NTZ_MICROS: {
