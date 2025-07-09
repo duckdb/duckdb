@@ -110,13 +110,10 @@ from 'data/parquet-testing/variant_decimal16_negative.parquet';
 ----
 1	"-9876543210.123456789"
 
-# "2024-11-07 12:33:54.123456789+00:00"
-# "1957-11-07 12:33:54.123456789+00:00"
-# FIXME: We don't support TIMESTAMPTZ_NS
-statement error
+query II
 from 'data/parquet-testing/variant_timestamp_nanos1.parquet';
 ----
-Not implemented Error: PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NANOS
+1	"1957-11-07 12:33:54.123456789+00"
 
 query II
 from 'data/parquet-testing/variant_decimal8_negative.parquet';
@@ -133,12 +130,10 @@ from 'data/parquet-testing/variant_int8_positive.parquet';
 ----
 1	34
 
-# "2024-11-07 12:33:54.123456789+00:00"
-# "1957-11-07 12:33:54.123456789+00:00"
-statement error
+query II
 from 'data/parquet-testing/variant_timestamp_nanos2.parquet';
 ----
-Not implemented Error: PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NANOS
+1	"2024-11-07 12:33:54.123456789+00"
 
 query II
 from 'data/parquet-testing/variant_int8_negative.parquet';

@@ -245,7 +245,24 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
-		throw NotImplementedException("PrimitiveTypeDecode for VariantPrimitiveType::TIMESTAMP_NANOS");
+		timestamp_ns_t nanos_ts;
+		nanos_ts.value = Load<int64_t>(data);
+
+		//! Convert the nanos timestamp to a micros timestamp
+		date_t out_date;
+		dtime_t out_time;
+		int32_t out_nanos;
+		Timestamp::Convert(nanos_ts, out_date, out_time, out_nanos);
+		auto micros_ts = Timestamp::FromDatetime(out_date, out_time);
+
+		//! Turn the micros timestamp into a micros_tz timestamp and serialize it
+		timestamp_tz_t micros_tz_ts(micros_ts.value);
+		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
+		auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+
+		auto parts = StringUtil::Split(value_str, '+');
+		value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
+		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
 		timestamp_ns_t nanos_ts;
