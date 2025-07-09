@@ -861,6 +861,12 @@
         ]
     },
     {
+        "name": "variant_legacy_encoding",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
         "name": "wal_encryption",
         "description": "Encrypt the WAL if the database is encrypted",
         "type": "BOOLEAN",

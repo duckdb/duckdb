@@ -1293,6 +1293,16 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct VariantLegacyEncodingSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "variant_legacy_encoding";
+	static constexpr const char *Description = "Enables the Parquet reader to identify a Variant structurally.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct WalEncryptionSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "wal_encryption";

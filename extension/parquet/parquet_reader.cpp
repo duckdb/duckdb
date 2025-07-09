@@ -605,7 +605,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
-		const bool is_variant = IsVariantType(s_ele, child_schemas);
+		const bool is_variant = parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas);
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
 			auto &p_ele = file_meta_data->schema[this_idx - 1];
@@ -771,9 +771,11 @@ void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
 }
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
-	Value binary_as_string_val;
-	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
-		binary_as_string = binary_as_string_val.GetValue<bool>();
+	Value lookup_value;
+	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
+		binary_as_string = lookup_value.GetValue<bool>();
+	} else if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
+		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
 
