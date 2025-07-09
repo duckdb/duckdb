@@ -8,13 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 
 namespace duckdb {
-
-class RadixPartitionedTupleData;
-class PartitionedTupleDataAppendState;
 
 // Formerly PartitionGlobalHashGroup
 class HashedSortGroup {
@@ -24,9 +22,9 @@ public:
 	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
 	HashedSortGroup(ClientContext &context, const Orders &partitions, const Orders &orders, const Types &payload_types,
-	                bool external);
+	                idx_t group_idx);
 
-	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
+	const idx_t group_idx;
 
 	//	Sink
 	unique_ptr<Sort> sort;
@@ -36,11 +34,11 @@ public:
 	//	Source
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
-	unique_ptr<ColumnDataCollection> rows;
+	unique_ptr<ColumnDataCollection> sorted;
 };
 
 // Formerly PartitionGlobalSinkState
-class HashedSortGroupGlobalSinkState {
+class HashedSortGlobalSinkState {
 public:
 	using HashGroupPtr = unique_ptr<HashedSortGroup>;
 	using Orders = vector<BoundOrderByNode>;
@@ -53,11 +51,9 @@ public:
 	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
 	                              const vector<unique_ptr<BaseStatistics>> &partitions_stats);
 
-	HashedSortGroupGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
-	                               const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
-	                               const vector<unique_ptr<BaseStatistics>> &partitions_stats,
-	                               idx_t estimated_cardinality);
-	virtual ~HashedSortGroupGlobalSinkState() = default;
+	HashedSortGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
+	                          const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
+	                          const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
 	bool HasMergeTasks() const;
 
@@ -65,6 +61,7 @@ public:
 	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+	void Finalize(ClientContext &context, InterruptState &interrupt_state);
 
 	//! System and query state
 	ClientContext &context;
@@ -84,15 +81,13 @@ public:
 	Orders orders;
 	const Types payload_types;
 	vector<HashGroupPtr> hash_groups;
-	bool external;
 	//	Reverse lookup from hash bins to non-empty hash groups
 	vector<size_t> bin_groups;
 
 	// OVER() (no sorting)
-	unique_ptr<ColumnDataCollection> rows;
+	unique_ptr<ColumnDataCollection> unsorted;
 
 	// Threading
-	idx_t memory_per_thread;
 	idx_t max_bits;
 	atomic<idx_t> count;
 
@@ -102,16 +97,16 @@ private:
 };
 
 // Formerly PartitionLocalSinkState
-class HashedSortGroupLocalSinkState {
+class HashedSortLocalSinkState {
 public:
 	using LocalSortStatePtr = unique_ptr<LocalSinkState>;
 	using GroupingPartition = unique_ptr<RadixPartitionedTupleData>;
 	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
-	HashedSortGroupLocalSinkState(ExecutionContext &context, HashedSortGroupGlobalSinkState &gstate);
+	HashedSortLocalSinkState(ExecutionContext &context, HashedSortGlobalSinkState &gstate);
 
 	//! Global state
-	HashedSortGroupGlobalSinkState &gstate;
+	HashedSortGlobalSinkState &gstate;
 	ExecutionContext &context;
 	Allocator &allocator;
 
@@ -137,18 +132,25 @@ public:
 	InterruptState interrupt;
 
 	// OVER() (no sorting)
-	TupleDataLayout payload_layout;
-	unique_ptr<ColumnDataCollection> rows;
-	ColumnDataAppendState rows_append;
+	unique_ptr<ColumnDataCollection> unsorted;
+	ColumnDataAppendState unsorted_append;
+};
+
+class HashedSortCallback {
+public:
+	virtual ~HashedSortCallback() = default;
+	virtual void OnSortedGroup(HashedSortGroup &hash_group) = 0;
 };
 
 // Formerly PartitionMergeEvent
 class HashedSortMaterializeEvent : public BasePipelineEvent {
 public:
-	HashedSortMaterializeEvent(HashedSortGroupGlobalSinkState &gstate, Pipeline &pipeline, const PhysicalOperator &op);
+	HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline, const PhysicalOperator &op,
+	                           HashedSortCallback *callback);
 
-	HashedSortGroupGlobalSinkState &gstate;
+	HashedSortGlobalSinkState &gstate;
 	const PhysicalOperator &op;
+	optional_ptr<HashedSortCallback> callback;
 
 public:
 	void Schedule() override;

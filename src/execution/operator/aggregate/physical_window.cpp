@@ -195,42 +195,49 @@ public:
 	idx_t batch_base;
 };
 
-class WindowPartitionGlobalSinkState;
-
 class WindowGlobalSinkState : public GlobalSinkState {
 public:
+	using WindowHashGroupPtr = unique_ptr<WindowHashGroup>;
 	using ExecutorPtr = unique_ptr<WindowExecutor>;
 	using Executors = vector<ExecutorPtr>;
 
+	class Callback : public HashedSortCallback {
+	public:
+		explicit Callback(GlobalSinkState &gsink) : gsink(gsink) {
+		}
+
+		void OnSortedGroup(HashedSortGroup &hash_group) override {
+			gsink.Cast<WindowGlobalSinkState>().OnSortedGroup(hash_group);
+		}
+
+		GlobalSinkState &gsink;
+	};
+
 	WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context);
+
+	void Finalize(ClientContext &context, InterruptState &interrupt_state) {
+		global_partition->Finalize(context, interrupt_state);
+		window_hash_groups.resize(global_partition->hash_groups.size());
+	}
+
+	void OnSortedGroup(HashedSortGroup &hash_group) {
+		window_hash_groups[hash_group.group_idx] = make_uniq<WindowHashGroup>(*this, hash_group.group_idx);
+	}
 
 	//! Parent operator
 	const PhysicalWindow &op;
 	//! Execution context
 	ClientContext &context;
 	//! The partitioned sunk data
-	unique_ptr<WindowPartitionGlobalSinkState> global_partition;
+	unique_ptr<HashedSortGlobalSinkState> global_partition;
+	//! The callback for completed hash groups
+	Callback callback;
+	//! The sorted hash groups
+	vector<WindowHashGroupPtr> window_hash_groups;
 	//! The execution functions
 	Executors executors;
 	//! The shared expressions library
 	WindowSharedExpressions shared;
-};
-
-class WindowPartitionGlobalSinkState : public HashedSortGroupGlobalSinkState {
-public:
-	using WindowHashGroupPtr = unique_ptr<WindowHashGroup>;
-
-	WindowPartitionGlobalSinkState(WindowGlobalSinkState &gsink, const BoundWindowExpression &wexpr)
-	    : HashedSortGroupGlobalSinkState(gsink.context, wexpr.partitions, wexpr.orders,
-	                                     gsink.op.children[0].get().GetTypes(), wexpr.partitions_stats,
-	                                     gsink.op.estimated_cardinality),
-	      gsink(gsink) {
-	}
-
-	//! Operator global sink state
-	WindowGlobalSinkState &gsink;
-	//! The sorted hash groups
-	vector<WindowHashGroupPtr> window_hash_groups;
 };
 
 //	Per-thread sink state
@@ -248,7 +255,7 @@ public:
 		local_group.Combine();
 	}
 
-	HashedSortGroupLocalSinkState local_group;
+	HashedSortLocalSinkState local_group;
 };
 
 // this implements a sorted window functions variant
@@ -309,7 +316,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 }
 
 WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context)
-    : op(op), context(context) {
+    : op(op), context(context), callback(*this) {
 
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
@@ -322,7 +329,9 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 		executors.emplace_back(std::move(wexec));
 	}
 
-	global_partition = make_uniq<WindowPartitionGlobalSinkState>(*this, wexpr);
+	global_partition =
+	    make_uniq<HashedSortGlobalSinkState>(context, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
+	                                         wexpr.partitions_stats, op.estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -362,10 +371,13 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// OVER()
-	if (state.global_partition->rows) {
+	if (state.global_partition->unsorted) {
 		D_ASSERT(!state.global_partition->grouping_data);
-		return state.global_partition->rows->Count() ? SinkFinalizeType::READY : SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+		return state.global_partition->unsorted->Count() ? SinkFinalizeType::READY
+		                                                 : SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
+
+	state.Finalize(context, input.interrupt_state);
 
 	// Find the first group to sort
 	if (!state.global_partition->HasMergeTasks()) {
@@ -374,7 +386,8 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	auto new_event = make_shared_ptr<HashedSortMaterializeEvent>(*state.global_partition, pipeline, *this);
+	auto new_event =
+	    make_shared_ptr<HashedSortMaterializeEvent>(*state.global_partition, pipeline, *this, &state.callback);
 	event.InsertEvent(std::move(new_event));
 
 	return SinkFinalizeType::READY;
@@ -391,9 +404,6 @@ public:
 	using PartitionBlock = std::pair<idx_t, idx_t>;
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
-
-	//! Build task list
-	void CreateTaskList();
 
 	//! Are there any more tasks?
 	bool HasMoreTasks() const {
@@ -436,6 +446,8 @@ public:
 	}
 
 protected:
+	//! Build task list
+	void CreateTaskList();
 	//! Finish a task
 	void FinishTask(TaskPtr task);
 };
@@ -444,17 +456,16 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
     : context(context_p), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false),
       returned(0) {
 	auto &gpart = gsink.global_partition;
-	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
+	auto &window_hash_groups = gsink.window_hash_groups;
 
 	if (window_hash_groups.empty()) {
 		//	OVER()
-		if (gpart->rows && !gpart->rows->ChunkCount()) {
+		if (gpart->unsorted && !gpart->unsorted->ChunkCount()) {
 			// We need to construct the single WindowHashGroup here because the sort tasks will not be run.
 			window_hash_groups.emplace_back(make_uniq<WindowHashGroup>(gsink, idx_t(0)));
-			total_blocks = gpart->rows->ChunkCount();
+			total_blocks = gpart->unsorted->ChunkCount();
 		}
 	} else {
-		idx_t batch_base = 0;
 		for (auto &window_hash_group : window_hash_groups) {
 			if (!window_hash_group) {
 				continue;
@@ -465,27 +476,17 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 			}
 
 			const auto block_count = window_hash_group->rows->ChunkCount();
-			window_hash_group->batch_base = batch_base;
-			batch_base += block_count;
+			window_hash_group->batch_base = total_blocks;
+			total_blocks += block_count;
 		}
-		total_blocks = batch_base;
 	}
+
+	CreateTaskList();
 }
 
 void WindowGlobalSourceState::CreateTaskList() {
-	//	Check whether we have a task list outside the mutex.
-	if (started.load()) {
-		return;
-	}
-
-	auto guard = Lock();
-
-	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
-	if (!partition_blocks.empty()) {
-		return;
-	}
-
 	//    Sort the groups from largest to smallest
+	auto &window_hash_groups = gsink.window_hash_groups;
 	if (window_hash_groups.empty()) {
 		return;
 	}
@@ -497,7 +498,9 @@ void WindowGlobalSourceState::CreateTaskList() {
 	std::sort(partition_blocks.begin(), partition_blocks.end(), std::greater<PartitionBlock>());
 
 	//	Schedule the largest group on as many threads as possible
-	const auto threads = locals.load();
+	auto &ts = TaskScheduler::GetScheduler(context);
+	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
+
 	const auto &max_block = partition_blocks.front();
 	const auto per_thread = (max_block.first + threads - 1) / threads;
 	if (!per_thread) {
@@ -523,7 +526,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	layout.Initialize(gpart.payload_types);
 	if (hash_bin < gpart.hash_groups.size() && gpart.hash_groups[hash_bin]) {
 		count = gpart.hash_groups[hash_bin]->count;
-	} else if (gpart.rows && !hash_bin) {
+	} else if (gpart.unsorted && !hash_bin) {
 		count = gpart.count;
 	} else {
 		return;
@@ -545,18 +548,19 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	}
 
 	// Scan the sorted data into new Collections
-	if (gpart.rows && !hash_bin) {
+	if (gpart.unsorted && !hash_bin) {
 		// Simple mask
 		partition_mask.SetValidUnsafe(0);
 		for (auto &order_mask : order_masks) {
 			order_mask.second.SetValidUnsafe(0);
 		}
-		//	No partition - align the heap blocks with the row blocks
-		rows = std::move(gpart.rows);
+		//	No partition - take ownership of the accumulated data
+		rows = std::move(gpart.unsorted);
 	} else if (hash_bin < gpart.hash_groups.size()) {
 		// Overwrite the collections with the sorted data
 		D_ASSERT(gpart.hash_groups[hash_bin].get());
 		hash_group = std::move(gpart.hash_groups[hash_bin]);
+		rows = std::move(hash_group->sorted);
 		ComputeMasks(gstate, partition_mask, order_masks);
 	}
 
@@ -574,7 +578,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
 }
 
-static LogicalType PrefixStructType(HashedSortGroupGlobalSinkState::Orders &orders, column_t end, column_t begin = 0) {
+static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin = 0) {
 	child_list_t<LogicalType> partition_children;
 	for (auto c = begin; c < end; ++c) {
 		auto name = std::to_string(c);
@@ -596,48 +600,95 @@ void WindowHashGroup::ComputeMasks(WindowGlobalSinkState &gstate, ValidityMask &
                                    OrderMasks &order_masks) {
 	D_ASSERT(count > 0);
 
-	auto &collection = *hash_group->rows;
+	//	Collection scanning
+	auto &collection = *rows;
 	ColumnDataScanState state;
-	DataChunk curr;
-	DataChunk next;
+	DataChunk scanned;
 	collection.InitializeScan(state);
-	collection.InitializeScanChunk(state, curr);
+	collection.InitializeScanChunk(state, scanned);
+
+	//	Shifted buffer for the next values
+	DataChunk next;
 	collection.InitializeScanChunk(state, next);
+
+	//	Delay buffer for the previous row
+	DataChunk delayed;
+	delayed.Initialize(collection.GetAllocator(), scanned.GetTypes(), 1);
 
 	//	Set up the partition compare structs
 	auto &partitions = gstate.global_partition->partitions;
 	auto partition_type = PrefixStructType(partitions, partitions.size());
 	Vector partition_curr(partition_type);
-	Vector partition_next(partition_type);
+	Vector partition_prev(partition_type);
 	partition_mask.SetValidUnsafe(0);
 
 	//	Set up the order data structures
+	auto &orders = gstate.global_partition->orders;
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
 		order_mask.second.SetValidUnsafe(0);
 		D_ASSERT(order_mask.first >= partitions.size());
-		auto order_type = PrefixStructType(partitions, order_mask.first, partitions.size());
+		auto order_type = PrefixStructType(orders, order_mask.first, orders.size());
 		vector<LogicalType> types(2, order_type);
-		auto &chunk = prefixes[order_mask.first];
-		chunk.InitializeEmpty(types);
+		auto &keys = prefixes[order_mask.first];
+		keys.InitializeEmpty(types);
+	}
+
+	//	Read the first chunk
+	if (!collection.Scan(state, scanned)) {
+		return;
 	}
 
 	//	Process chunks offset by 1
 	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
 	SelectionVector distinct(STANDARD_VECTOR_SIZE);
 	SelectionVector matching(STANDARD_VECTOR_SIZE);
-	for (idx_t row_idx = 0; collection.Scan(state, curr);) {
-		// Slice the current back one into the previous
-		const idx_t next_count = curr.size() - 1;
-		next.Slice(next_sel, next_count);
 
-		//	Reference the partition prefix
-		ReferenceStructColumns(curr, partition_curr);
-		ReferenceStructColumns(next, partition_next);
+	// In order to reuse the verbose `distinct from` logic for both the main vector comparisons
+	// and single element boundary comparisons, we alternate between single element compares
+	// and count-1 compares. We have already processed row 0, so we start with row 1/non-boundary.
+	bool boundary_compare = false;
+	for (idx_t row_idx = 1; row_idx < count;) {
+		//	Compare the current to the previous;
+		DataChunk *curr = nullptr;
+		DataChunk *prev = nullptr;
+
+		idx_t prev_count = 0;
+		if (boundary_compare) {
+			//	Save the last row of the scanned chunk
+			prev_count = 1;
+			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
+			SelectionVector sel(&last);
+			scanned.Copy(delayed, sel, prev_count);
+			prev = &delayed;
+
+			// Try to read the next chunk
+			if (!collection.Scan(state, scanned)) {
+				break;
+			}
+			curr = &scanned;
+		} else {
+			//	Compare the [1..size) values with the [0..size-1) values
+			prev_count = scanned.size() - 1;
+			if (!prev_count) {
+				//	1 row scanned, so just skip the rest of the loop.
+				boundary_compare = true;
+				continue;
+			}
+			prev = &scanned;
+
+			// Slice the current back one into the previous
+			next.Slice(scanned, next_sel, prev_count);
+			curr = &next;
+		}
+
+		//	Reference the partition prefix as a struct to simplify the compares.
+		ReferenceStructColumns(*prev, partition_prev);
+		ReferenceStructColumns(*curr, partition_curr);
 
 		//	Compare the partition subset first because if that differs, then so does the full ordering
 		const auto n =
-		    VectorOperations::DistinctFrom(partition_curr, partition_next, nullptr, next_count, &distinct, &matching);
+		    VectorOperations::DistinctFrom(partition_curr, partition_prev, nullptr, prev_count, &distinct, &matching);
 		//	Process the partition boundaries
 		for (idx_t i = 0; i < n; ++i) {
 			const idx_t curr_index = row_idx + distinct.get_index(i);
@@ -648,22 +699,26 @@ void WindowHashGroup::ComputeMasks(WindowGlobalSinkState &gstate, ValidityMask &
 		}
 
 		//	Process the peers with each partition
-		const auto remaining = next_count - n;
+		const auto remaining = prev_count - n;
 		if (remaining) {
 			for (auto &order_mask : order_masks) {
 				auto &prefix = prefixes[order_mask.first];
-				auto &order_curr = prefix.data[0];
-				auto &order_next = prefix.data[1];
-				ReferenceStructColumns(curr, order_curr, partitions.size());
-				ReferenceStructColumns(next, order_next, partitions.size());
+				auto &order_prev = prefix.data[0];
+				auto &order_curr = prefix.data[1];
+				ReferenceStructColumns(*prev, order_prev, partitions.size());
+				ReferenceStructColumns(*curr, order_curr, partitions.size());
 				const auto m =
-				    VectorOperations::DistinctFrom(order_curr, order_next, &matching, remaining, &distinct, nullptr);
+				    VectorOperations::DistinctFrom(order_curr, order_prev, &matching, remaining, &distinct, nullptr);
 				for (idx_t i = 0; i < m; ++i) {
 					const idx_t curr_index = row_idx + distinct.get_index(i);
 					order_mask.second.SetValidUnsafe(curr_index);
 				}
 			}
 		}
+
+		//	Transition between comparison ranges.
+		row_idx += prev_count;
+		boundary_compare = !boundary_compare;
 	}
 }
 
@@ -867,9 +922,8 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	}
 
 	//	Run through the active groups looking for one that can assign a task
-	auto &gpart = *gsink.global_partition;
 	for (const auto &group_idx : active_groups) {
-		auto &window_hash_group = gpart.window_hash_groups[group_idx];
+		auto &window_hash_group = gsink.window_hash_groups[group_idx];
 		if (window_hash_group->TryPrepareNextStage()) {
 			UnblockTasks(guard);
 		}
@@ -885,7 +939,7 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 		const auto group_idx = partition_blocks[next_group++].second;
 		active_groups.emplace_back(group_idx);
 
-		auto &window_hash_group = gpart.window_hash_groups[group_idx];
+		auto &window_hash_group = gsink.window_hash_groups[group_idx];
 		if (window_hash_group->TryPrepareNextStage()) {
 			UnblockTasks(guard);
 		}
@@ -909,9 +963,8 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 		return;
 	}
 
-	auto &gpart = *gsink.global_partition;
 	const auto group_idx = task->group_idx;
-	auto &finished_hash_group = gpart.window_hash_groups[group_idx];
+	auto &finished_hash_group = gsink.window_hash_groups[group_idx];
 	D_ASSERT(finished_hash_group);
 
 	if (++finished_hash_group->completed >= finished_hash_group->GetTaskCount()) {
@@ -942,7 +995,7 @@ void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
 	auto &gsink = gsource.gsink;
 
 	// Update the hash group
-	window_hash_group = gsink.global_partition->window_hash_groups[task->group_idx].get();
+	window_hash_group = gsink.window_hash_groups[task->group_idx].get();
 
 	// Process the new state
 	switch (task->stage) {
@@ -976,8 +1029,8 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 		batch_index = window_hash_group->batch_base + task->begin_idx;
 	}
 
-	auto &input_chunk = scanner->Scan();
 	const auto position = scanner->Scanned();
+	auto &input_chunk = scanner->Scan();
 
 	const auto &executors = gsource.gsink.executors;
 	auto &gestates = window_hash_group->gestates;
@@ -1082,8 +1135,6 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
                                          OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
-
-	gsource.CreateTaskList();
 
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
