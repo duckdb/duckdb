@@ -61,15 +61,15 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_pr
 }
 
 duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
-                                         duckdb_logical_type **out_types, char ***out_names, idx_t *out_column_count,
-                                         duckdb_arrow_converted_schema *out_converted_schema) {
+                                         duckdb_arrow_converted_schema *out_types, char ***out_names,
+                                         idx_t *out_column_count) {
 	duckdb::vector<std::string> names;
 	duckdb::vector<LogicalType> return_types;
 	duckdb::ArrowSchemaWrapper schema_wrapper;
 	schema_wrapper.arrow_schema = *reinterpret_cast<ArrowSchema *>(schema);
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto arrow_table = new duckdb::ArrowTableType();
-	*out_converted_schema = reinterpret_cast<duckdb_arrow_converted_schema>(arrow_table);
+	*out_types = reinterpret_cast<duckdb_arrow_converted_schema>(arrow_table);
 
 	try {
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
@@ -87,12 +87,8 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 	}
 	const idx_t column_count = names.size();
 	*out_column_count = column_count;
-	*out_types = new duckdb_logical_type[column_count];
 	*out_names = new char *[column_count];
-
 	for (idx_t i = 0; i < column_count; i++) {
-		auto duck_type = duckdb::LogicalTypeIdToC(return_types[i].id());
-		(*out_types)[i] = duckdb_create_logical_type(duck_type);
 		(*out_names)[i] = new char[names[i].size() + 1];
 		std::strcpy((*out_names)[i], names[i].c_str());
 	}

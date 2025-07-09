@@ -79,7 +79,7 @@
               "name": "schema"
             },
             {
-              "type": "duckdb_logical_type **",
+              "type": "duckdb_arrow_converted_schema *",
               "name": "out_types"
             },
             {
@@ -89,10 +89,6 @@
             {
               "type": "idx_t *",
               "name": "out_column_count"
-            },
-            {
-              "type": "duckdb_arrow_converted_schema *",
-              "name": "out_converted_schema"
             }
           ],
           "comment": {
@@ -100,10 +96,9 @@
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
               "schema": "The input Arrow schema.",
-              "out_types": "The resulting DuckDB Logical Types array.",
+              "out_types": "The Arrow converted schema with extra information about the Arrow Types",
               "out_names": "The resulting column names array.",
-              "out_column_count": "The number of columns extracted from the Arrow schema.",
-              "out_converted_schema" : "The Arrow converted schema with extra information about the Arrow Types"
+              "out_column_count": "The number of columns extracted from the Arrow schema."
             },
             "return_value": "The error data."
           }

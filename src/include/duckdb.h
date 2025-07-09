@@ -4552,16 +4552,14 @@ Transforms an Arrow Schema into a DuckDB Schema.
 
 * @param connection The connection to get the transformation settings from.
 * @param schema The input Arrow schema.
-* @param out_types The resulting DuckDB Logical Types array.
+* @param out_types The Arrow converted schema with extra information about the Arrow Types
 * @param out_names The resulting column names array.
 * @param out_column_count The number of columns extracted from the Arrow schema.
-* @param out_converted_schema The Arrow converted schema with extra information about the Arrow Types
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
-                                                      duckdb_logical_type **out_types, char ***out_names,
-                                                      idx_t *out_column_count,
-                                                      duckdb_arrow_converted_schema *out_converted_schema);
+                                                      duckdb_arrow_converted_schema *out_types, char ***out_names,
+                                                      idx_t *out_column_count);
 
 /*!
 Transforms an Arrow array into a DuckDB data chunk.
