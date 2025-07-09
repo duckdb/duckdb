@@ -969,7 +969,7 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	}
 
 	if (!deleted_leaf) {
-		if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {
+		if (manager.AddHit(i, row_ids[0]) || manager.AddSecondHit(i, row_ids[1])) {
 			conflict_idx = i;
 		}
 		return;
@@ -980,7 +980,7 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		return;
 	}
 
-	if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {
+	if (manager.AddHit(i, row_ids[0]) || manager.AddSecondHit(i, row_ids[1])) {
 		conflict_idx = i;
 	}
 }

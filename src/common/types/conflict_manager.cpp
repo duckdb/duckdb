@@ -41,7 +41,7 @@ bool ConflictManager::IsConflict(LookupResultType type) {
 	}
 }
 
-bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
+bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id, const std::function<void()> &callback) {
 	D_ASSERT(index_in_chunk < chunk_size);
 	if (ShouldThrow(index_in_chunk)) {
 		return true;
@@ -61,8 +61,16 @@ bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
 	if (finished) {
 		return false;
 	}
-	AddRowId(index_in_chunk, row_id);
+	callback();
 	return false;
+}
+
+bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
+	return AddHit(index_in_chunk, row_id, [&]() { AddRowId(index_in_chunk, row_id); });
+}
+
+bool ConflictManager::AddSecondHit(const idx_t index_in_chunk, const row_t row_id) {
+	return AddHit(index_in_chunk, row_id, [&]() { AddSecondRowId(index_in_chunk, row_id); });
 }
 
 bool ConflictManager::AddNull(const idx_t index_in_chunk) {

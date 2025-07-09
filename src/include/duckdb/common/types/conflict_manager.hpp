@@ -42,6 +42,8 @@ public:
 public:
 	//! Returns true, if we need to throw, otherwise, adds the hit and returns false.
 	bool AddHit(const idx_t index_in_chunk, const row_t row_id);
+	//! Returns true, if we need to throw, otherwise, adds the second hit and returns false.
+	bool AddSecondHit(const idx_t index_in_chunk, const row_t row_id);
 	//! Returns true, if we need to throw, otherwise, adds the NULL and returns false.
 	bool AddNull(const idx_t index_in_chunk);
 
@@ -117,6 +119,7 @@ public:
 	}
 
 private:
+	bool AddHit(const idx_t index_in_chunk, const row_t row_id, const std::function<void()> &callback);
 	bool IsConflict(LookupResultType type);
 	//! Returns true, if the conflict manager should throw an exception, else false.
 	bool ShouldThrow(const idx_t index_in_chunk) const;
@@ -196,37 +199,33 @@ private:
 	bool finished = false;
 
 	ConflictData &GetConflictData(const idx_t i) {
-		auto &conflicts = conflict_data[i];
-		if (!conflicts.sel) {
-			D_ASSERT(!conflicts.row_ids);
-			conflicts.sel = make_uniq<SelectionVector>(chunk_size);
-			conflicts.inverted_sel = make_uniq<SelectionVector>(chunk_size);
-			conflicts.val_array.Initialize(chunk_size, false);
-			conflicts.row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
-			conflicts.row_ids_data = FlatVector::GetData<row_t>(*conflicts.row_ids);
+		if (conflict_data[i].sel) {
+			return conflict_data[i];
 		}
-		return conflicts;
+
+		conflict_data[i].sel = make_uniq<SelectionVector>(chunk_size);
+		conflict_data[i].inverted_sel = make_uniq<SelectionVector>(chunk_size);
+		conflict_data[i].val_array.Initialize(chunk_size, false);
+		conflict_data[i].row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
+		conflict_data[i].row_ids_data = FlatVector::GetData<row_t>(*conflict_data[i].row_ids);
+		return conflict_data[i];
 	}
 
 	void AddRowId(const idx_t index_in_chunk, const row_t row_id) {
+		// Only ON CONFLICT DO NOTHING can have multiple conflict targets,
+		// which can cause multiple row IDs per index_in_chunk.
+		// We let them overwrite each other, as we don't need the row IDs later.
 		auto elem = conflict_rows.find(index_in_chunk);
-		auto &primary_conflicts = GetConflictData(0);
-
 		if (elem == conflict_rows.end()) {
 			// We have not yet seen this conflict: insert.
 			conflict_rows.insert(index_in_chunk);
-			primary_conflicts.Insert(index_in_chunk, row_id);
-			return;
+			GetConflictData(FIRST).Insert(index_in_chunk, row_id);
 		}
+	}
 
-		if (primary_conflicts.GetRowId(index_in_chunk) == row_id) {
-			// We have already seen this conflict.
-			return;
-		}
-
-		// We have seen a conflict for this index, but with a different row ID.
-		auto &secondary_conflicts = GetConflictData(1);
-		secondary_conflicts.Insert(index_in_chunk, row_id);
+	void AddSecondRowId(const idx_t index_in_chunk, const row_t row_id) {
+		D_ASSERT(conflict_rows.find(index_in_chunk) != conflict_rows.end());
+		GetConflictData(SECOND).Insert(index_in_chunk, row_id);
 	}
 };
 
