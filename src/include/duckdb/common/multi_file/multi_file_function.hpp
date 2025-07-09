@@ -636,7 +636,7 @@ public:
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];
 				auto stats = union_reader.GetStatistics(context, col_name);
-				if (!stats) {
+				if (!stats || merged_stats->GetType() != stats->GetType()) {
 					return nullptr;
 				}
 				merged_stats->Merge(*stats);
