@@ -12,8 +12,8 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
-	if (expr.return_type.IsNested()) {
-		return; // FIXME: get this working for nested types
+	if (expr.return_type.InternalType() == PhysicalType::STRUCT) {
+		return; // FIXME: get this working for STRUCT
 	}
 
 	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
@@ -30,7 +30,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 				input_col_idx.SetInvalid(); // Found more than 1 non-constant
 				break;
 			}
-			if (child.return_type.IsNested()) {
+			if (child.return_type.InternalType() == PhysicalType::STRUCT) {
 				break; // FIXME
 			}
 			input_col_idx = child_idx;
