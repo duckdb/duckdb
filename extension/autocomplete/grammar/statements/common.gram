@@ -29,14 +29,14 @@ Statement <-
 	InstallStatement /
 	AnalyzeStatement
 
-CatalogName <- ColIdOrString
-SchemaName <- ColIdOrString
-TableName <- ColIdOrString
-ColumnName <- ColId ('.' ColLabel)*
-IndexName <- ColId ('.' ColId)*
-SettingName <- ColId
-PragmaName <- ColId
-TableFunctionName <- ColIdOrString / FuncName
+CatalogName <- Identifier
+SchemaName <- Identifier
+TableName <- Identifier
+ColumnName <- Identifier
+IndexName <- Identifier
+SettingName <- Identifier
+PragmaName <- Identifier
+TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
 CollationName <- Identifier

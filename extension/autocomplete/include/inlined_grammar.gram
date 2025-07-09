@@ -724,7 +724,7 @@ WithData <- 'WITH'i 'NO'i? 'DATA'i
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- DottedIdentifier / (CatalogQualification? SchemaQualification? ColIdOrString)
+QualifiedName <- CatalogQualification? SchemaQualification? Identifier
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
 TableQualification <- TableName '.'
@@ -758,7 +758,7 @@ ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-DottedIdentifier <- ColId ('.' ColLabel)*
+DottedIdentifier <- Identifier ('.' Identifier)*
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
@@ -860,7 +860,6 @@ OnConflictNothing <- 'DO'i 'NOTHING'i
 ReturningClause <- 'RETURNING'i TargetList
 
 CreateSchemaStmt <- 'SCHEMA'i IfNotExists? QualifiedName
-
 SelectStatement <- SelectOrParens (SetopClause SelectStatement)* ResultModifiers
 
 SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
@@ -907,7 +906,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableName)
+BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
@@ -918,7 +917,7 @@ FunctionArgument <- NamedParameter / Expression
 NamedParameter <- TypeName NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'i? ColIdOrString ColumnAliases?
+TableAlias <- 'AS'i? Identifier ColumnAliases?
 
 AtClause <- 'AT'i Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
@@ -1152,14 +1151,14 @@ Statement <-
 	InstallStatement /
 	AnalyzeStatement
 
-CatalogName <- ColIdOrString
-SchemaName <- ColIdOrString
-TableName <- ColIdOrString
-ColumnName <- ColId ('.' ColLabel)*
-IndexName <- ColId ('.' ColId)*
-SettingName <- ColId
-PragmaName <- ColId
-TableFunctionName <- ColIdOrString / FuncName
+CatalogName <- Identifier
+SchemaName <- Identifier
+TableName <- Identifier
+ColumnName <- Identifier
+IndexName <- Identifier
+SettingName <- Identifier
+PragmaName <- Identifier
+TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
 CollationName <- Identifier

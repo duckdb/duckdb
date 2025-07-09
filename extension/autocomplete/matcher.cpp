@@ -304,34 +304,36 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
-
-		if (suggestion_type == SuggestionState::SUGGEST_TABLE_FUNCTION_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME) {
-			if (category == KeywordCategory::KEYWORD_RESERVED ||
-				category == GetBannedCategory()) {
-				// Printer::PrintF("%d %d: %s FAIL", suggestion_type, category, token_text);
-				return MatchResultType::FAIL;
-			}
+		if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
+			return MatchResultType::FAIL;
 		}
-		else if (suggestion_type == SuggestionState::SUGGEST_TYPE_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_TABLE_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_COLUMN_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_PRAGMA_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_SETTING_NAME) {
-			if (category == KeywordCategory::KEYWORD_RESERVED ||
-				category == KeywordCategory::KEYWORD_COL_NAME) {
-				// Printer::PrintF("%s %d: %s FAIL", ToString(), category, token_text);
-				return MatchResultType::FAIL;
-			}
-		}
-		else if (suggestion_type == SuggestionState::SUGGEST_VARIABLE) {
-			if (category == KeywordCategory::KEYWORD_RESERVED) {
-				// Printer::PrintF("%s %d: %s FAIL", ToString(), category, token_text);
-				return MatchResultType::FAIL;
-			}
-		}
+		// if (suggestion_type == SuggestionState::SUGGEST_TABLE_FUNCTION_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME) {
+		// 	if (category == KeywordCategory::KEYWORD_RESERVED ||
+		// 		category == GetBannedCategory()) {
+		// 		// Printer::PrintF("%d %d: %s FAIL", suggestion_type, category, token_text);
+		// 		return MatchResultType::FAIL;
+		// 	}
+		// }
+		// else if (suggestion_type == SuggestionState::SUGGEST_TYPE_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_TABLE_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_COLUMN_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_PRAGMA_NAME ||
+		// 	suggestion_type == SuggestionState::SUGGEST_SETTING_NAME) {
+		// 	if (category == KeywordCategory::KEYWORD_RESERVED ||
+		// 		category == KeywordCategory::KEYWORD_COL_NAME) {
+		// 		// Printer::PrintF("%s %d: %s FAIL", ToString(), category, token_text);
+		// 		return MatchResultType::FAIL;
+		// 	}
+		// }
+		// else if (suggestion_type == SuggestionState::SUGGEST_VARIABLE) {
+		// 	if (category == KeywordCategory::KEYWORD_RESERVED) {
+		// 		// Printer::PrintF("%s %d: %s FAIL", ToString(), category, token_text);
+		// 		return MatchResultType::FAIL;
+		// 	}
+		// }
 		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
 		}
