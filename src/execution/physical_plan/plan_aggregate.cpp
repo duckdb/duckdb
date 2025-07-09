@@ -250,9 +250,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	if (op.group_stats.empty()) {
 		op.group_stats.resize(op.groups.size());
 	}
-	bool all_groups_valid = true;
+	auto group_validity = TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
 	for (const auto &stats : op.group_stats) {
-		all_groups_valid &= stats && !stats->CanHaveNull();
+		if (stats && !stats->CanHaveNull()) {
+			continue;
+		}
+		group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
+		break;
 	}
 
 	if (op.groups.empty() && op.grouping_sets.size() <= 1) {
@@ -260,7 +264,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		// special case: aggregate entire columns together
 		if (can_use_simple_aggregation) {
 			auto &group_by = Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions),
-			                                                  op.estimated_cardinality, op.all_expr_inputs_valid);
+			                                                  op.estimated_cardinality, op.distinct_validity);
 			group_by.children.push_back(plan);
 			return group_by;
 		}
@@ -292,7 +296,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
-	                                             op.estimated_cardinality, all_groups_valid, op.all_expr_inputs_valid);
+	                                             op.estimated_cardinality, group_validity, op.distinct_validity);
 	group_by.children.push_back(plan);
 	return group_by;
 }

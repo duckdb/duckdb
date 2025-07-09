@@ -19,16 +19,18 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
-                                                     idx_t initial_capacity, idx_t radix_bits, bool all_groups_valid)
+                                                     idx_t initial_capacity, idx_t radix_bits,
+                                                     TupleDataValidityType group_validity)
     : GroupedAggregateHashTable(context, allocator, std::move(group_types), std::move(payload_types),
                                 AggregateObject::CreateAggregateObjects(bindings), initial_capacity, radix_bits,
-                                all_groups_valid) {
+                                group_validity) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
-                                                     vector<LogicalType> group_types, bool all_groups_valid)
+                                                     vector<LogicalType> group_types,
+                                                     TupleDataValidityType group_validity)
     : GroupedAggregateHashTable(context, allocator, std::move(group_types), {}, vector<AggregateObject>(),
-                                InitialCapacity(), 0, all_groups_valid) {
+                                InitialCapacity(), 0, group_validity) {
 }
 
 GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState(ArenaAllocator &allocator)
@@ -41,7 +43,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
                                                      vector<LogicalType> group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
-                                                     idx_t initial_capacity, idx_t radix_bits, bool all_groups_valid)
+                                                     idx_t initial_capacity, idx_t radix_bits,
+                                                     TupleDataValidityType group_validity)
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
@@ -50,7 +53,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	group_types_p.emplace_back(LogicalType::HASH);
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
-	layout->Initialize(std::move(group_types_p), std::move(aggregate_objects_p), all_groups_valid);
+	layout->Initialize(std::move(group_types_p), std::move(aggregate_objects_p), group_validity);
 	layout_ptr = std::move(layout);
 
 	hash_offset = layout_ptr->GetOffsets()[layout_ptr->ColumnCount() - 1];

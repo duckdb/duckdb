@@ -31,14 +31,14 @@ static inline void TightLoopHash(const T *__restrict ldata, hash_t *__restrict r
                                  idx_t count, const SelectionVector *__restrict sel_vector, const ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto idx = HAS_SEL_VECTOR ? (*sel_vector)[ridx] : ridx;
-			result_data[ridx] = HashOp::Operation(ldata[idx], !mask.RowIsValid(idx));
+			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
+			auto idx = HAS_SEL_VECTOR ? sel_vector->get_index_unsafe(ridx) : ridx;
+			result_data[ridx] = HashOp::Operation(ldata[idx], !mask.RowIsValidUnsafe(idx));
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto idx = HAS_SEL_VECTOR ? (*sel_vector)[ridx] : ridx;
+			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
+			auto idx = HAS_SEL_VECTOR ? sel_vector->get_index_unsafe(ridx) : ridx;
 			result_data[ridx] = duckdb::Hash<T>(ldata[idx]);
 		}
 	}

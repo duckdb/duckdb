@@ -17,6 +17,8 @@ const char* EnumUtil::ToChars<JSONScanType>(JSONScanType value) {
 		return "READ_JSON";
 	case JSONScanType::READ_JSON_OBJECTS:
 		return "READ_JSON_OBJECTS";
+	case JSONScanType::SAMPLE:
+		return "SAMPLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value of type JSONScanType: '%d' not implemented", value));
 	}
@@ -32,6 +34,9 @@ JSONScanType EnumUtil::FromString<JSONScanType>(const char *value) {
 	}
     if (StringUtil::Equals(value, "READ_JSON_OBJECTS")) {
 		return JSONScanType::READ_JSON_OBJECTS;
+	}
+    if (StringUtil::Equals(value, "SAMPLE")) {
+		return JSONScanType::SAMPLE;
 	}
    throw NotImplementedException(StringUtil::Format("Enum value of type JSONScanType: '%s' not implemented", value));
 }

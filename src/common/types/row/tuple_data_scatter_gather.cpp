@@ -35,11 +35,14 @@ inline void TupleDataValueStore(const string_t &source, data_t *__restrict const
 	if (source.IsInlined()) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
+		// Copy non-inlined part
 		FastMemcpy(heap_location, source.GetPointer(), source.GetSize());
-		auto source_copy = source;
-		source_copy.SetPointer(char_ptr_cast(heap_location));
-		Store<string_t>(source_copy, row_location + offset_in_row);
-		heap_location += source_copy.GetSize();
+		// Copy first 8 bytes of string_t
+		memcpy(row_location + offset_in_row, &source, string_t::HEADER_SIZE);
+		// Copy new heap pointer into the correct offset
+		Store<data_ptr_t>(heap_location, row_location + offset_in_row + string_t::HEADER_SIZE);
+		// Increment heap pointer
+		heap_location += source.GetSize();
 	}
 }
 
@@ -115,12 +118,20 @@ static idx_t StringHeapSize(const string_t &val) {
 	return !val.IsInlined() * val.GetSize();
 }
 
+#ifndef DUCKDB_SMALLER_BINARY
 template <bool ALL_VALID, bool HAS_APPEND_SEL, bool HAS_SOURCE_SEL>
+#endif
 void ComputeStringHeapSizesInternal(idx_t *const heap_sizes, const UnifiedVectorFormat &source_vector_data,
                                     const SelectionVector &append_sel, const idx_t append_count) {
 	const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
 	const auto &source_sel = *source_vector_data.sel;
 	const auto &source_validity = source_vector_data.validity;
+
+#ifdef DUCKDB_SMALLER_BINARY
+	const auto ALL_VALID = source_validity.AllValid();
+	const auto HAS_APPEND_SEL = append_sel.IsSet();
+	const auto HAS_SOURCE_SEL = source_sel.IsSet();
+#endif
 
 	// Fully branchless loop
 	const auto null_string_size = StringHeapSize(NullValue<string_t>());

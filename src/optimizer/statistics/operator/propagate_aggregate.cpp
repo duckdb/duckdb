@@ -1,3 +1,4 @@
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -115,33 +116,33 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	}
 
 	// check whether all inputs to the aggregate functions are valid
-	bool all_expr_inputs_valid = true;
+	TupleDataValidityType distinct_validity = TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
 	for (const auto &aggr_ref : aggr.expressions) {
-		if (!all_expr_inputs_valid) {
+		if (distinct_validity == TupleDataValidityType::CAN_HAVE_NULL_VALUES) {
 			break;
 		}
 		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			// Bail if it's not a bound aggregate
-			all_expr_inputs_valid = false;
-			continue;
+			distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
+			break;
 		}
 		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
 		for (const auto &child : aggr_expr.children) {
 			if (child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				// Bail if bound aggregate child is not a colref
-				all_expr_inputs_valid = false;
+				distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
 				break;
 			}
 			const auto &col_ref = child->Cast<BoundColumnRefExpression>();
 			auto it = statistics_map.find(col_ref.binding);
 			if (it == statistics_map.end() || !it->second || it->second->CanHaveNull()) {
 				// Bail if no stats or if there can be a NULL
-				all_expr_inputs_valid = false;
+				distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
 				break;
 			}
 		}
 	}
-	aggr.all_expr_inputs_valid = all_expr_inputs_valid;
+	aggr.distinct_validity = distinct_validity;
 
 	// after we propagate statistics - try to directly execute aggregates using statistics
 	TryExecuteAggregates(aggr, node_ptr);

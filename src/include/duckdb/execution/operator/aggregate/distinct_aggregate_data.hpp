@@ -44,9 +44,10 @@ private:
 
 struct DistinctAggregateData {
 public:
-	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, bool all_expr_inputs_valid);
+	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, TupleDataValidityType distinct_validity);
 	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, const GroupingSet &groups,
-	                      const vector<unique_ptr<Expression>> *group_expressions, bool all_groups_valid);
+	                      const vector<unique_ptr<Expression>> *group_expressions,
+	                      TupleDataValidityType distinct_validity);
 	//! The data used by the hashtables
 	vector<unique_ptr<GroupedAggregateData>> grouped_aggregate_data;
 	//! The hashtables
