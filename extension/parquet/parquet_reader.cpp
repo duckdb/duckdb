@@ -1190,6 +1190,12 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		}
 
 		auto &group = GetGroup(state);
+		if (state.op) {
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
+			           state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup",
+			           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
+		}
+
 		if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
 			uint64_t total_row_group_span = GetGroupSpan(state);
 

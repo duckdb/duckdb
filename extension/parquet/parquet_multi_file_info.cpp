@@ -33,10 +33,15 @@ struct ParquetReadBindData : public TableFunctionData {
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
+	    : row_group_index(0), batch_index(0), op(op_p) {
+	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
 	idx_t batch_index;
+	//! (Optional) pointer to physical operator performing the scan
+	optional_ptr<const PhysicalOperator> op;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -537,8 +542,8 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 }
 
 unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
-                                                                                 MultiFileGlobalState &) {
-	return make_uniq<ParquetReadGlobalState>();
+                                                                                 MultiFileGlobalState &global_state) {
+	return make_uniq<ParquetReadGlobalState>(global_state.op);
 }
 
 unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
@@ -568,7 +573,9 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 
 void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                          LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
+	local_state.scan_state.op = gstate.op;
 	Scan(context, local_state.scan_state, chunk);
 }
 
