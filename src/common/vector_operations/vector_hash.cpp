@@ -29,8 +29,8 @@ hash_t CombineHashScalar(hash_t a, hash_t b) {
 }
 
 template <bool HAS_RSEL, bool HAS_SEL_VECTOR, class T>
-void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
-                                 idx_t count, const SelectionVector *__restrict sel_vector, const ValidityMask &mask) {
+void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel, idx_t count,
+                   const SelectionVector *__restrict sel_vector, const ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
