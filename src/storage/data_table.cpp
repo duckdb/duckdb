@@ -481,19 +481,14 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	}
 }
 
-// Find the first non-NULL index without a match.
 static idx_t FirstMissingMatch(ConflictManager &manager, const idx_t count) {
+	// Find the first non-NULL index without a match.
 	if (!manager.HasConflicts()) {
 		return 0;
 	}
-
-	// We try to check for each index in the chunk.
-	auto &val_array = manager.GetValidityArray(0);
-	for (idx_t i = 0; i < count; i++) {
-		if (!val_array.RowIsValid(i)) {
-			// No match for this index.
-			return i;
-		}
+	auto conflict = manager.GetFirstInvalidIndex(count, true);
+	if (conflict.IsValid()) {
+		return conflict.GetIndex();
 	}
 	throw InternalException("expected a missing match for the index");
 }
@@ -615,34 +610,21 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	if (local_error && global_error && is_append) {
 		// For appends, we throw if the foreign key neither exists in the transaction nor the local storage.
 		optional_idx conflict;
-		if (!global_conflict_manager.HasConflicts() && !local_conflict_manager.HasConflicts()) {
+		auto global_conflicts = global_conflict_manager.HasConflicts();
+		auto local_conflicts = local_conflict_manager.HasConflicts();
+		if (!global_conflicts && !local_conflicts) {
 			conflict = 0;
-		} else if (!global_conflict_manager.HasConflicts() && local_conflict_manager.HasConflicts()) {
-			auto &val_array = local_conflict_manager.GetValidityArray(0);
-			for (idx_t i = 0; i < count; i++) {
-				if (val_array.RowIsValid(i)) {
-					// No match in the local storage.
-					conflict = i;
-					break;
-				}
-			}
-		} else if (global_conflict_manager.HasConflicts() && !local_conflict_manager.HasConflicts()) {
-			auto &val_array = global_conflict_manager.GetValidityArray(0);
-			for (idx_t i = 0; i < count; i++) {
-				if (val_array.RowIsValid(i)) {
-					// No match in the global storage.
-					conflict = i;
-					break;
-				}
-			}
+		} else if (!global_conflicts && local_conflicts) {
+			conflict = local_conflict_manager.GetFirstInvalidIndex(count);
+		} else if (global_conflicts && !local_conflicts) {
+			conflict = global_conflict_manager.GetFirstInvalidIndex(count);
 		} else {
-			auto &global_val_array = global_conflict_manager.GetValidityArray(0);
-			auto &local_val_array = local_conflict_manager.GetValidityArray(0);
+			auto &global_validity = global_conflict_manager.GetFirstValidity();
+			auto &local_validity = local_conflict_manager.GetFirstValidity();
 			for (idx_t i = 0; i < count; i++) {
-				auto global_match = global_val_array.RowIsValid(i);
-				auto local_match = local_val_array.RowIsValid(i);
+				auto global_match = global_validity.RowIsValid(i);
+				auto local_match = local_validity.RowIsValid(i);
 				if (!global_match && !local_match) {
-					// No match in the local and global storage.
 					conflict = i;
 					break;
 				}

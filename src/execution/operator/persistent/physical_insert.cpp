@@ -483,7 +483,6 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	}
 
 	// Only contains the conflicting values.
-	// To slice, we do not need the secondary conflicts.
 	DataChunk conflict_chunk;
 	conflict_chunk.InitializeEmpty(tuples.GetTypes());
 	conflict_chunk.Reference(tuples);
@@ -534,7 +533,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 	auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
 
-	unordered_set<BoundIndex *> matched_indexes;
+	unordered_set<BoundIndex *> matching_indexes;
 	if (conflict_info.column_ids.empty()) {
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
 		global_indexes.Scan([&](Index &index) {
@@ -544,7 +543,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			if (conflict_info.ConflictTargetMatches(index)) {
 				D_ASSERT(index.IsBound());
 				auto &bound_index = index.Cast<BoundIndex>();
-				matched_indexes.insert(&bound_index);
+				matching_indexes.insert(&bound_index);
 			}
 			return false;
 		});
@@ -555,18 +554,18 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			if (conflict_info.ConflictTargetMatches(index)) {
 				D_ASSERT(index.IsBound());
 				auto &bound_index = index.Cast<BoundIndex>();
-				matched_indexes.insert(&bound_index);
+				matching_indexes.insert(&bound_index);
 			}
 			return false;
 		});
 	}
 
-	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matched_indexes);
+	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matching_indexes);
 	idx_t count = insert_chunk.size();
 	if (!inner_conflicts.empty()) {
-		// We have at least one inner conflict, filter it out
-		SelectionVector sel_vec(count);
-		idx_t sel_vec_count = 0;
+		// We have at least one inner conflict to filter out.
+		SelectionVector sel(count);
+		idx_t sel_count = 0;
 
 		ValidityMask not_a_conflict(count);
 		set<idx_t> last_occurrences_of_conflict;
@@ -585,8 +584,8 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 				}
 			}
 			if (not_a_conflict.RowIsValid(i)) {
-				sel_vec.set_index(sel_vec_count, i);
-				sel_vec_count++;
+				sel.set_index(sel_count, i);
+				sel_count++;
 			}
 		}
 		if (action_type == OnConflictAction::UPDATE) {
@@ -608,8 +607,8 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			lstate.update_chunk.SetCardinality(last_occurrences_count);
 		}
 
-		insert_chunk.Slice(sel_vec, sel_vec_count);
-		insert_chunk.SetCardinality(sel_vec_count);
+		insert_chunk.Slice(sel, sel_count);
+		insert_chunk.SetCardinality(sel_count);
 	}
 
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
