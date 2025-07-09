@@ -443,7 +443,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 			children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
 		}
-		return make_uniq<VariantColumnReader>(*this, schema, std::move(children));
+		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");

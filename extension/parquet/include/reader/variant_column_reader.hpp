@@ -18,9 +18,10 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
 public:
-	VariantColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	VariantColumnReader(ClientContext &context, ParquetReader &reader, const ParquetColumnSchema &schema,
 	                    vector<unique_ptr<ColumnReader>> child_readers_p);
 
+	ClientContext &context;
 	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:

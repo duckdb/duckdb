@@ -6,9 +6,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
 //===--------------------------------------------------------------------===//
-VariantColumnReader::VariantColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+VariantColumnReader::VariantColumnReader(ClientContext &context, ParquetReader &reader,
+                                         const ParquetColumnSchema &schema,
                                          vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
+    : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::VARCHAR);
 }
 
@@ -49,7 +50,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	(void)child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
 	auto child_num_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
 
-	VariantBinaryDecoder decoder;
+	VariantBinaryDecoder decoder(context);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);

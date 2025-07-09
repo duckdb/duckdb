@@ -113,7 +113,7 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 	return result;
 }
 
-VariantBinaryDecoder::VariantBinaryDecoder() {
+VariantBinaryDecoder::VariantBinaryDecoder(ClientContext &context) : context(context) {
 }
 
 template <class T>
@@ -211,7 +211,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		micros_tz_ts.value = Load<int64_t>(data);
 
 		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
-		auto value_str = value.ToString();
+		auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 		return yyjson_mut_strcpy(doc, value_str.c_str());
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {

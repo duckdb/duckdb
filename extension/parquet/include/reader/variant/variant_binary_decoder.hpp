@@ -130,7 +130,7 @@ public:
 
 class VariantBinaryDecoder {
 public:
-	VariantBinaryDecoder();
+	explicit VariantBinaryDecoder(ClientContext &context);
 
 public:
 	yyjson_mut_val *Decode(yyjson_mut_doc *doc, const VariantMetadata &metadata, const_data_ptr_t data);
@@ -144,6 +144,9 @@ public:
 	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
 	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+
+public:
+	ClientContext &context;
 };
 
 } // namespace duckdb
