@@ -510,10 +510,9 @@ static string ConstructForeignKeyError(optional_idx conflict, bool is_append, In
 	return bound_index.GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
 }
 
-bool IsForeignKeyConstraintError(const bool is_append, const idx_t input_count, const ConflictManager &manager) {
+bool IsForeignKeyConstraintError(const ConflictManager &manager, const bool is_append, const idx_t input_count) {
 	if (is_append) {
 		// We need to find a match for all values.
-		// Secondary matches do not matter, as we need to have any conflict for each value.
 		return manager.ConflictCount() != input_count;
 	}
 	// Nothing should match.
@@ -580,10 +579,10 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	if (local_verification) {
 		auto &local_indexes = local_storage.GetIndexes(context, data_table);
 		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflict_manager);
-		local_error = IsForeignKeyConstraintError(is_append, count, local_conflict_manager);
+		local_error = IsForeignKeyConstraintError(local_conflict_manager, is_append, count);
 	}
 	// Global constraint verification.
-	auto global_error = IsForeignKeyConstraintError(is_append, count, global_conflict_manager);
+	auto global_error = IsForeignKeyConstraintError(global_conflict_manager, is_append, count);
 
 	// No constraint violation.
 	if (!global_error && !local_error) {
