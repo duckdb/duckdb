@@ -375,10 +375,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		// set the encrypted db bit to 0
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
-		// automatically encrypt temp files (and WAL)
-		//! TODO; this needs to be set explicitly
-		config.options.temp_file_encryption = true;
-
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 		auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
@@ -472,9 +468,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 			// if encrypted, but no encryption key given
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
-
-		// automatically encrypt the temp files if we deal with an encrypted database
-		config.options.temp_file_encryption = true;
 	}
 
 	options.version_number = main_header.version_number;
