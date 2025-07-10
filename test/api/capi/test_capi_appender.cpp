@@ -724,7 +724,7 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	             "lt30 timetz,"
 	             "lt31 timestamptz,"
 	             // lt34 any - not a valid type in SQL
-	             "lt35 varint," // no duckdb_create_varint (yet)
+	             "lt35 varint,"  // no duckdb_create_varint (yet)
 	             "lt36 integer," // for sqlnull
 	             "lt37 time_ns,"
 	             ")");
