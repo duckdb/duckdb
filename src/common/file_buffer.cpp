@@ -4,8 +4,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/storage/storage_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <cstring>
 
@@ -105,7 +106,7 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 	handle.Read(internal_buffer, internal_size, location);
 }
 
-void FileBuffer::Write(optional_ptr<ClientContext> context, FileHandle &handle, const uint64_t location) {
+void FileBuffer::Write(QueryContext context, FileHandle &handle, const uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	handle.Write(context, internal_buffer, internal_size, location);
 }

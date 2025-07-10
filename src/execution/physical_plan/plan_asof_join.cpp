@@ -95,8 +95,13 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 			asof_idx = i;
 			arg_min_max = "arg_min";
 			break;
-		default:
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
 			break;
+		default:
+			//	Unsupported NLJ comparison
+			return nullptr;
 		}
 	}
 

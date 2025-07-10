@@ -93,8 +93,8 @@ static scalar_function_t GetStringCompressFunctionSwitch(const LogicalType &resu
 		return GetStringCompressFunction<uint32_t>(result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetStringCompressFunction<uint64_t>(result_type);
-	case LogicalTypeId::HUGEINT:
-		return GetStringCompressFunction<hugeint_t>(result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetStringCompressFunction<uhugeint_t>(result_type);
 	default:
 		throw InternalException("Unexpected type in GetStringCompressFunctionSwitch");
 	}
@@ -189,8 +189,8 @@ static scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &in
 		return GetStringDecompressFunction<uint32_t>(input_type);
 	case LogicalTypeId::UBIGINT:
 		return GetStringDecompressFunction<uint64_t>(input_type);
-	case LogicalTypeId::HUGEINT:
-		return GetStringDecompressFunction<hugeint_t>(input_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetStringDecompressFunction<uhugeint_t>(input_type);
 	default:
 		throw InternalException("Unexpected type in GetStringDecompressFunctionSwitch");
 	}
@@ -262,8 +262,8 @@ ScalarFunction InternalCompressStringUbigintFun::GetFunction() {
 	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UBIGINT));
 }
 
-ScalarFunction InternalCompressStringHugeintFun::GetFunction() {
-	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::HUGEINT));
+ScalarFunction InternalCompressStringUhugeintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UHUGEINT));
 }
 
 ScalarFunctionSet InternalDecompressStringFun::GetFunctions() {

@@ -717,19 +717,15 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 			path += "/";
 		}
 	}
-	auto start_bound = options.allowed_directories.lower_bound(path);
-	if (start_bound != options.allowed_directories.begin()) {
-		--start_bound;
-	}
-	auto end_bound = options.allowed_directories.upper_bound(path);
 
 	string prefix;
-	for (auto it = start_bound; it != end_bound; ++it) {
-		if (StringUtil::StartsWith(path, *it)) {
-			prefix = *it;
+	for (const auto &allowed_directory : options.allowed_directories) {
+		if (StringUtil::StartsWith(path, allowed_directory)) {
+			prefix = allowed_directory;
 			break;
 		}
 	}
+
 	if (prefix.empty()) {
 		// no common prefix found - path is not inside an allowed directory
 		return false;

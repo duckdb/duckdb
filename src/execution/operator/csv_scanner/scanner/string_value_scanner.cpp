@@ -1373,7 +1373,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.escaped = true;
 		}
 		if (states.IsComment()) {
-			result.comment = true;
+			result.SetComment(result, j);
 		}
 		if (states.IsInvalid()) {
 			result.InvalidState(result);
@@ -1435,7 +1435,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.SetQuoted(result, j);
 		}
 		if (states.IsComment()) {
-			result.comment = true;
+			result.SetComment(result, j);
 		}
 		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			result.escaped = true;

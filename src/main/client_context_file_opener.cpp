@@ -24,6 +24,10 @@ optional_ptr<DatabaseInstance> ClientContextFileOpener::TryGetDatabase() {
 	return context.db.get();
 }
 
+shared_ptr<HTTPUtil> &ClientContextFileOpener::GetHTTPUtil() {
+	return TryGetDatabase()->config.http_util;
+}
+
 unique_ptr<CatalogTransaction> FileOpener::TryGetCatalogTransaction(optional_ptr<FileOpener> opener) {
 	if (!opener) {
 		return nullptr;
