@@ -81,6 +81,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		VariantDecodeResult decode_result;
 		decode_result.doc = yyjson_mut_doc_new(nullptr);
 
+		VariantValue val;
 		if (typed_value_validity && typed_value_validity->RowIsValid(i)) {
 			//! This row has a typed value, the variant is (potentially partially) shredded on this type.
 		} else if (value_validity.RowIsValid(i)) {
@@ -88,7 +89,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 			//! TODO: Do we want to create an intermediate representation, probably a Value ?
 			//! Since we need to union the shredded value and unshredded values
 			//! it's probably necessary to do this
-			auto val = decoder.Decode(decode_result.doc, variant_metadata, value_data);
+			val = decoder.Decode(variant_metadata, value_data);
 		} else {
 			//! Missing from both 'typed_value' and 'value', emit null
 			result_validity.SetInvalid(i);
@@ -96,7 +97,9 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 		//! Write the result to a string
 		size_t len;
-		decode_result.data = yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
+		auto json_val = val.ToJSON(decode_result.doc);
+		decode_result.data =
+		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
 		if (!decode_result.data) {
 			throw InvalidInputException("Could not serialize the JSON to string, yyjson failed");
 		}

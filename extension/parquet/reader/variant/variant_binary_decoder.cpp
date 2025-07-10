@@ -143,39 +143,42 @@ hugeint_t DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	return result;
 }
 
-yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                          const VariantValueMetadata &value_metadata,
-                                                          const_data_ptr_t data) {
+VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &metadata,
+                                                       const VariantValueMetadata &value_metadata,
+                                                       const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return yyjson_mut_null(doc);
+		return VariantValue(Value());
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
-		return yyjson_mut_true(doc);
+		return VariantValue(Value::BOOLEAN(true));
 	}
 	case VariantPrimitiveType::BOOLEAN_FALSE: {
-		return yyjson_mut_false(doc);
+		return VariantValue(Value::BOOLEAN(false));
 	}
 	case VariantPrimitiveType::INT8: {
 		auto value = Load<int8_t>(data);
-		return yyjson_mut_int(doc, value);
+		return VariantValue(Value::TINYINT(value));
 	}
 	case VariantPrimitiveType::INT16: {
 		auto value = Load<int16_t>(data);
-		return yyjson_mut_int(doc, value);
+		return VariantValue(Value::SMALLINT(value));
 	}
 	case VariantPrimitiveType::INT32: {
 		auto value = Load<int32_t>(data);
-		return yyjson_mut_int(doc, value);
+		return VariantValue(Value::INTEGER(value));
 	}
 	case VariantPrimitiveType::INT64: {
 		auto value = Load<int64_t>(data);
-		return yyjson_mut_int(doc, value);
+		return VariantValue(Value::BIGINT(value));
 	}
 	case VariantPrimitiveType::DOUBLE: {
-		double value;
-		memcpy(&value, data, sizeof(double));
-		return yyjson_mut_real(doc, value);
+		double value = Load<double>(data);
+		return VariantValue(Value::DOUBLE(value));
+	}
+	case VariantPrimitiveType::FLOAT: {
+		float value = Load<float>(data);
+		return VariantValue(Value::FLOAT(value));
 	}
 	case VariantPrimitiveType::DECIMAL4: {
 		uint8_t scale;
@@ -183,7 +186,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 
 		auto value = DecodeDecimal<int32_t>(data, scale, width);
 		auto value_str = Decimal::ToString(value, width, scale);
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::DECIMAL8: {
 		uint8_t scale;
@@ -191,7 +194,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 
 		auto value = DecodeDecimal<int64_t>(data, scale, width);
 		auto value_str = Decimal::ToString(value, width, scale);
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::DECIMAL16: {
 		uint8_t scale;
@@ -199,13 +202,13 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 
 		auto value = DecodeDecimal<hugeint_t>(data, scale, width);
 		auto value_str = Decimal::ToString(value, width, scale);
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::DATE: {
 		date_t value;
 		value.days = Load<int32_t>(data);
 		auto value_str = Date::ToString(value);
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
 		timestamp_tz_t micros_tz_ts;
@@ -213,7 +216,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 
 		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
 		auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
 		timestamp_t micros_ts;
@@ -221,12 +224,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 
 		auto value = Value::TIMESTAMP(micros_ts);
 		auto value_str = value.ToString();
-		return yyjson_mut_strcpy(doc, value_str.c_str());
-	}
-	case VariantPrimitiveType::FLOAT: {
-		float value;
-		memcpy(&value, data, sizeof(float));
-		return yyjson_mut_real(doc, value);
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::BINARY: {
 		//! Follow the JSON serialization guide by converting BINARY to Base64:
@@ -234,7 +232,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		auto size = Load<uint32_t>(data);
 		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
 		auto base64_string = Blob::ToBase64(string_t(string_data, size));
-		return yyjson_mut_strncpy(doc, base64_string.c_str(), base64_string.size());
+		return VariantValue(Value(base64_string));
 	}
 	case VariantPrimitiveType::STRING: {
 		auto size = Load<uint32_t>(data);
@@ -242,13 +240,13 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 		if (!Utf8Proc::IsValid(string_data, size)) {
 			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
-		return yyjson_mut_strncpy(doc, string_data, size);
+		return VariantValue(Value(string(string_data, size)));
 	}
 	case VariantPrimitiveType::TIME_NTZ_MICROS: {
 		dtime_t micros_time;
 		micros_time.micros = Load<int64_t>(data);
 		auto value_str = Time::ToString(micros_time);
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		timestamp_ns_t nanos_ts;
@@ -271,7 +269,7 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 			auto parts = StringUtil::Split(value_str, '+');
 			value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
 		}
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
 		timestamp_ns_t nanos_ts;
@@ -279,12 +277,12 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 
 		auto value = Value::TIMESTAMPNS(nanos_ts);
 		auto value_str = value.ToString();
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::UUID: {
 		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data);
 		auto value_str = UUID::ToString(uuid_value);
-		return yyjson_mut_strcpy(doc, value_str.c_str());
+		return VariantValue(Value(value_str));
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
@@ -292,20 +290,20 @@ yyjson_mut_val *VariantBinaryDecoder::PrimitiveTypeDecode(yyjson_mut_doc *doc, c
 	}
 }
 
-yyjson_mut_val *VariantBinaryDecoder::ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                        const VariantValueMetadata &value_metadata,
-                                                        const_data_ptr_t data) {
+VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantMetadata &metadata,
+                                                     const VariantValueMetadata &value_metadata,
+                                                     const_data_ptr_t data) {
 	D_ASSERT(value_metadata.string_size < 64);
 	auto string_data = reinterpret_cast<const char *>(data);
 	if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
 		throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
 	}
-	return yyjson_mut_strncpy(doc, string_data, value_metadata.string_size);
+	return VariantValue(Value(string(string_data, value_metadata.string_size)));
 }
 
-yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                   const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
-	auto obj = yyjson_mut_obj(doc);
+VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
+                                                const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
+	VariantValue ret(VariantValueType::OBJECT);
 
 	auto field_offset_size = value_metadata.field_offset_size;
 	auto field_id_size = value_metadata.field_id_size;
@@ -329,17 +327,18 @@ yyjson_mut_val *VariantBinaryDecoder::ObjectDecode(yyjson_mut_doc *doc, const Va
 		auto field_id = ReadVariableLengthLittleEndian(field_id_size, field_ids);
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
-		auto value = Decode(doc, metadata, values + last_offset);
+		auto value = Decode(metadata, values + last_offset);
 		auto &key = metadata.strings[field_id];
-		yyjson_mut_obj_add_val(doc, obj, key.c_str(), value);
+
+		ret.AddChild(key, std::move(value));
 		last_offset = next_offset;
 	}
-	return obj;
+	return ret;
 }
 
-yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-                                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
-	auto arr = yyjson_mut_arr(doc);
+VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
+                                               const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
+	VariantValue ret(VariantValueType::ARRAY);
 
 	auto field_offset_size = value_metadata.field_offset_size;
 	auto is_large = value_metadata.is_large;
@@ -360,33 +359,102 @@ yyjson_mut_val *VariantBinaryDecoder::ArrayDecode(yyjson_mut_doc *doc, const Var
 	for (idx_t i = 0; i < num_elements; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
-		auto value = Decode(doc, metadata, values + last_offset);
-		yyjson_mut_arr_add_val(arr, value);
+		ret.AddItem(Decode(metadata, values + last_offset));
 		last_offset = next_offset;
 	}
-	return arr;
+	return ret;
 }
 
-yyjson_mut_val *VariantBinaryDecoder::Decode(yyjson_mut_doc *doc, const VariantMetadata &variant_metadata,
-                                             const_data_ptr_t data) {
+VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadata, const_data_ptr_t data) {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(data[0]);
 
 	data++;
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		return PrimitiveTypeDecode(doc, variant_metadata, value_metadata, data);
+		return PrimitiveTypeDecode(variant_metadata, value_metadata, data);
 	}
 	case VariantBasicType::SHORT_STRING: {
-		return ShortStringDecode(doc, variant_metadata, value_metadata, data);
+		return ShortStringDecode(variant_metadata, value_metadata, data);
 	}
 	case VariantBasicType::OBJECT: {
-		return ObjectDecode(doc, variant_metadata, value_metadata, data);
+		return ObjectDecode(variant_metadata, value_metadata, data);
 	}
 	case VariantBasicType::ARRAY: {
-		return ArrayDecode(doc, variant_metadata, value_metadata, data);
+		return ArrayDecode(variant_metadata, value_metadata, data);
 	}
 	default:
 		throw InternalException("Unexpected value for VariantBasicType");
+	}
+}
+
+void VariantValue::SetPrimitiveValue(Value &&val) {
+	D_ASSERT(value_type == VariantValueType::PRIMITIVE);
+	primitive_value = std::move(val);
+}
+
+void VariantValue::AddChild(const string &key, VariantValue &&val) {
+	D_ASSERT(value_type == VariantValueType::OBJECT);
+	object_children.emplace(key, std::move(val));
+}
+
+void VariantValue::AddItem(VariantValue &&val) {
+	D_ASSERT(value_type == VariantValueType::ARRAY);
+	array_items.push_back(std::move(val));
+}
+
+yyjson_mut_val *VariantValue::ToJSON(yyjson_mut_doc *doc) const {
+	switch (value_type) {
+	case VariantValueType::PRIMITIVE: {
+		if (primitive_value.IsNull()) {
+			return yyjson_mut_null(doc);
+		}
+		switch (primitive_value.type().id()) {
+		case LogicalTypeId::BOOLEAN: {
+			if (primitive_value.GetValue<bool>()) {
+				return yyjson_mut_true(doc);
+			} else {
+				return yyjson_mut_false(doc);
+			}
+		}
+		case LogicalTypeId::TINYINT:
+			return yyjson_mut_int(doc, primitive_value.GetValue<int8_t>());
+		case LogicalTypeId::SMALLINT:
+			return yyjson_mut_int(doc, primitive_value.GetValue<int16_t>());
+		case LogicalTypeId::INTEGER:
+			return yyjson_mut_int(doc, primitive_value.GetValue<int32_t>());
+		case LogicalTypeId::BIGINT:
+			return yyjson_mut_int(doc, primitive_value.GetValue<int64_t>());
+		case LogicalTypeId::FLOAT:
+			return yyjson_mut_real(doc, primitive_value.GetValue<float>());
+		case LogicalTypeId::DOUBLE:
+			return yyjson_mut_real(doc, primitive_value.GetValue<double>());
+		case LogicalTypeId::VARCHAR: {
+			auto value = primitive_value.GetValue<string>();
+			return yyjson_mut_strncpy(doc, value.c_str(), value.size());
+		}
+		default:
+			throw InternalException("Unexpected primitive type: %s", primitive_value.type().ToString());
+		}
+	}
+	case VariantValueType::OBJECT: {
+		auto obj = yyjson_mut_obj(doc);
+		for (const auto &it : object_children) {
+			auto &key = it.first;
+			auto value = it.second.ToJSON(doc);
+			yyjson_mut_obj_add_val(doc, obj, key.c_str(), value);
+		}
+		return obj;
+	}
+	case VariantValueType::ARRAY: {
+		auto arr = yyjson_mut_arr(doc);
+		for (auto &item : array_items) {
+			auto value = item.ToJSON(doc);
+			yyjson_mut_arr_add_val(arr, value);
+		}
+		return arr;
+	}
+	default:
+		throw InternalException("Can't serialize this VariantValue type to JSON");
 	}
 }
 

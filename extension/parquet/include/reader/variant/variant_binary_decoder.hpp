@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson;
@@ -111,6 +112,40 @@ public:
 	bool is_large;
 };
 
+enum class VariantValueType : uint8_t { PRIMITIVE, OBJECT, ARRAY, INVALID };
+
+struct VariantValue {
+public:
+	VariantValue() : value_type(VariantValueType::INVALID) {
+	}
+	explicit VariantValue(VariantValueType type) : value_type(type) {
+	}
+	explicit VariantValue(Value &&val) : value_type(VariantValueType::PRIMITIVE), primitive_value(std::move(val)) {
+	}
+	// Delete copy constructor and copy assignment operator
+	VariantValue(const VariantValue &) = delete;
+	VariantValue &operator=(const VariantValue &) = delete;
+
+	// Default move constructor and move assignment operator
+	VariantValue(VariantValue &&) noexcept = default;
+	VariantValue &operator=(VariantValue &&) noexcept = default;
+
+public:
+	void SetPrimitiveValue(Value &&val);
+	void AddChild(const string &key, VariantValue &&val);
+	void AddItem(VariantValue &&val);
+
+public:
+	yyjson_mut_val *ToJSON(yyjson_mut_doc *doc) const;
+
+public:
+	VariantValueType value_type;
+	//! FIXME: how can we get a deterministic child order for a partially shredded object?
+	map<string, VariantValue> object_children;
+	vector<VariantValue> array_items;
+	Value primitive_value;
+};
+
 struct VariantDecodeResult {
 public:
 	VariantDecodeResult() = default;
@@ -133,17 +168,17 @@ public:
 	explicit VariantBinaryDecoder(ClientContext &context);
 
 public:
-	yyjson_mut_val *Decode(yyjson_mut_doc *doc, const VariantMetadata &metadata, const_data_ptr_t data);
+	VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
-	yyjson_mut_val *PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                    const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	yyjson_mut_val *ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	yyjson_mut_val *ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+	VariantValue PrimitiveTypeDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                 const_data_ptr_t data);
+	VariantValue ShortStringDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                               const_data_ptr_t data);
+	VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                          const_data_ptr_t data);
+	VariantValue ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                         const_data_ptr_t data);
 
 public:
 	ClientContext &context;
