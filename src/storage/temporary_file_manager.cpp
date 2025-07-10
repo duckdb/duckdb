@@ -216,8 +216,8 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(const TemporaryF
 	auto block_index = index_in_file.block_index.GetIndex();
 	auto block_header_size = index_in_file.block_header_size.GetIndex();
 
-	auto buffer = buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockSize(), block_header_size,
-	                                                    std::move(reusable_buffer));
+	auto buffer = buffer_manager.ConstructManagedBuffer(buffer_manager.GetBlockAllocSize() - block_header_size,
+	                                                    block_header_size, std::move(reusable_buffer));
 	AllocatedData compressed_buffer;
 	data_ptr_t read_buffer;
 	idx_t read_size;
