@@ -107,13 +107,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableFSSTVectorsSetting),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
-	// start Anybase changes
-	 DUCKDB_GLOBAL(KafkaWriter),
-	 DUCKDB_GLOBAL(KafkaRedoLog),
-	 DUCKDB_GLOBAL(KafkaBootstrapServerAndPort),
-	 DUCKDB_GLOBAL(KafkaTopicName),
-	 DUCKDB_GLOBAL(LogExtension),
-	// end Anybase changes
     DUCKDB_GLOBAL(EnableLogging),
     DUCKDB_GLOBAL(EnableMacroDependenciesSetting),
     DUCKDB_GLOBAL(EnableObjectCacheSetting),

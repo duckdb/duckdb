@@ -157,22 +157,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// create a new file
 
 		auto wal_path = GetWALPath();
-		// start Anybase changes
-		if (config.options.kafka_redo_log) {
-			wal_path = "kafka://";
-			wal_path += config.options.kafka_bootstrap_server_and_port;
-			wal_path += "/";
-			wal_path += config.options.kafka_topic_name;
-			wal_path += "/";
-			wal_path += config.options.kafka_writer ? "writer" : "reader";
-		}
-
-		// check if the WAL exists - JO/MV - Revisit
-		if (!config.options.kafka_redo_log) {
-			// try to remove the WAL file if it exists
-			fs.TryRemoveFile(wal_path);
-		}
-		// end Anybase changes
 
 		// Set the block allocation size for the new database file.
 		if (storage_options.block_alloc_size.IsValid()) {
