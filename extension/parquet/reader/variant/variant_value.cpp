@@ -38,9 +38,11 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 			return yyjson_mut_real(doc, primitive_value.GetValue<float>());
 		case LogicalTypeId::DOUBLE:
 			return yyjson_mut_real(doc, primitive_value.GetValue<double>());
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
 		case LogicalTypeId::VARCHAR: {
-			auto value = primitive_value.GetValue<string>();
-			return yyjson_mut_strncpy(doc, value.c_str(), value.size());
+			auto value_str = primitive_value.ToString();
+			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		case LogicalTypeId::TIMESTAMP: {
 			string value_str;

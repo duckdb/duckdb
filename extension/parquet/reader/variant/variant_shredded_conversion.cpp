@@ -283,9 +283,9 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 	auto &type = typed_value.GetType();
 	vector<VariantValue> ret;
 	if (type.id() == LogicalTypeId::STRUCT) {
-		return ret;
+		throw NotImplementedException("Variant shredded Object");
 	} else if (type.id() == LogicalTypeId::LIST) {
-		return ret;
+		throw NotImplementedException("Variant shredded Array");
 	} else {
 		return ConvertShreddedLeaf(metadata, value, typed_value, count);
 	}

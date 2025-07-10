@@ -204,8 +204,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 	case VariantPrimitiveType::DATE: {
 		date_t value;
 		value.days = Load<int32_t>(data);
-		auto value_str = Date::ToString(value);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DATE(value));
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
 		timestamp_t micros_ts;
@@ -239,8 +238,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 	case VariantPrimitiveType::TIME_NTZ_MICROS: {
 		dtime_t micros_time;
 		micros_time.micros = Load<int64_t>(data);
-		auto value_str = Time::ToString(micros_time);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::TIME(micros_time));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		timestamp_ns_t nanos_ts;

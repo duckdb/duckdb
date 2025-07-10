@@ -1,0 +1,307 @@
+# name: test/parquet/variant/variant_shredded.test
+# group: [variant]
+
+require parquet
+
+statement ok
+set variant_legacy_encoding=true;
+
+# Timestamp NS - positive (no timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-0cc5221d-e0e9-4942-b1d6-d62fd628a6bc.parquet';
+----
+1	"2024-11-07 12:33:54.123456789"
+
+# Float - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-3a9e41bf-9e71-43ef-8e44-5a24ea892e22.parquet';
+----
+1	-10.109999656677246
+
+## not shredded ???
+#query II
+#from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-5bcdeeb1-a3f2-4b3d-83f2-6bd83f86d3b7.parquet';
+#----
+#1	[]
+
+# Int64 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-5c966dad-07a8-4b5d-9308-7b28d002fc0a.parquet';
+----
+1	-9876543210
+
+# Decimal16 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-05c56718-4c26-4bbf-9866-e576bd2bdbcd.parquet';
+----
+1	"-9876543210.123456789"
+
+## not shredded ???
+#query II
+#from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-6cf79a7f-2666-45d1-8b55-27c6843c0476.parquet';
+#----
+#1	["iceberg","string",34]
+
+## not shredded ???
+#query II
+#from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-6e22d4bb-a142-44e7-9f09-94859b3fa750.parquet';
+#----
+#1	NULL
+
+# UUID
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-6fc02923-a5ed-4540-9873-7e329d9ae9c5.parquet';
+----
+1	"f24f9b64-81fa-49d1-b74e-8c09a6e31c56"
+
+## not shredded ???
+#query II
+#from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-7a7e8c09-cd76-4ee7-a28c-29542cd12eeb.parquet';
+#----
+#1	"f24f9b64-81fa-49d1-b74e-8c09a6e31c56"
+
+# Decimal4 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-7b597c87-7d7f-4c3b-a190-420bf2b8ca5d.parquet';
+----
+1	"-123456.789"
+
+# Decimal4 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-8c0c1212-8d69-419c-8c8b-1d9471b0b316.parquet';
+----
+1	"123456.789"
+
+# Timestamp Micros - negative (no timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-9c7f46c6-202b-4c97-8827-001aa37816a7.parquet';
+----
+1	"1957-11-07 12:33:54.123456"
+
+## not shredded ???
+#query II
+#from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-9e13a050-b45f-4c4e-a620-742f1b0d07f1.parquet';
+#----
+#1	"1957-11-07 12:33:54.123456"
+
+# Date - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-27df012e-271d-4979-93dc-7c67f14746f8.parquet';
+----
+1	"1957-11-07"
+
+# int8 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-56a1578a-5380-41f6-8747-6824b4a2bce3.parquet';
+----
+1	34
+
+# int16 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-88fdf782-cd48-42a6-b994-f258f1765eff.parquet';
+----
+1	1234
+
+# decimal8 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-505c64fb-ffea-4b7d-8535-1eb42b19a69f.parquet';
+----
+1	"-123456789.987654321"
+
+# string
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-603dba2b-4241-4030-88cc-2d30d422992c.parquet';
+----
+1	"iceberg"
+
+mode skip
+
+# Object
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-699b9815-0e12-4551-8078-18450efd8208.parquet';
+----
+1	"iceberg"
+
+mode unskip
+
+# Timestamp Micros - positive (with timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-715e9e3f-8b02-44b0-becc-588d91caa4a7.parquet';
+----
+1	"2024-11-07 12:33:54.123456+00"
+
+# binary
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-914ef973-e488-4722-b8cc-392554bcf96b.parquet';
+----
+1	"CgsMDQ=="
+
+# float - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-9402df0e-af1f-410b-b92f-741e3b260985.parquet';
+----
+1	10.109999656677246
+
+# double - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-11517da7-3d83-4af6-8865-62c8622566d1.parquet';
+----
+1	14.3
+
+mode skip
+
+# Array
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-94508b29-2091-4807-bd82-d3539a0f6710.parquet';
+----
+1	14.3
+
+mode unskip
+
+# decimal16 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-415712df-fa23-4aee-8a1b-acb72b3c77ff.parquet';
+----
+1	"9876543210.123456789"
+
+# Timestamp Micros - positive (no timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-53867435-224d-4891-b4dd-a79ce61c6a5e.parquet';
+----
+1	"2024-11-07 12:33:54.123456"
+
+# int16 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-88353762-4631-4923-a87b-5cc4e8289769.parquet';
+----
+1	-1234
+
+mode skip
+
+# Array
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-a2aea6a1-5eb5-40b2-98e4-bd318b50b8c3.parquet';
+----
+1	-1234
+
+mode unskip
+
+# Timestamp Micros - positive (with timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-a68add53-200b-4ef2-89f4-eaea6da1ca39.parquet';
+----
+1	"2024-11-07 12:33:54.123456+00"
+
+# Timestamp Micros - negative (with timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-a2484385-4c0a-42da-86c1-3d8d29b6373b.parquet';
+----
+1	"1957-11-07 12:33:54.123456+00"
+
+mode skip
+
+# Array
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-aafb4415-4562-41ad-ae84-4302f820b99c.parquet';
+----
+1	"1957-11-07 12:33:54.123456+00"
+
+mode unskip
+
+# decimal8 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-ae76a3cc-4ce3-4212-ad39-56efdad62583.parquet';
+----
+1	"123456789.987654321"
+
+mode skip
+
+# Object
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-b6e37dc1-08ff-45ba-ab5b-d67da265c7bd.parquet';
+----
+1	"123456789.987654321"
+
+mode unskip
+
+# Timestamp Nanos - negative (no timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-b856fc26-68e4-4e76-9156-c34d6e8edc63.parquet';
+----
+1	"1957-11-07 12:33:54.123456789"
+
+# int32 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-b9768983-4bef-46ff-9fe2-6fe3208ed80d.parquet';
+----
+1	12345
+
+# int32 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-baa3b42c-b408-4e41-b4a5-c777f30911a3.parquet';
+----
+1	-12345
+
+## not shredded ???
+#query II
+#from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-c0db32cc-68ec-418f-96cc-65b258e3c062.parquet';
+#----
+#1	-12345
+
+# Timestamp Micros - negative (with timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-c6c99105-bff8-43c7-8076-088e4d03e7d1.parquet';
+----
+1	"1957-11-07 12:33:54.123457+00"
+
+# int8 - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-c43eda00-4f2a-4c5e-af70-2a675e239aff.parquet';
+----
+1	-34
+
+mode skip
+
+# Object
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-c3951c0f-650a-423c-9ddd-3829aeb5c8ae.parquet';
+----
+1	-34
+
+mode unskip
+
+# Time Micros (no timezone)
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-c491009f-ed2d-412e-a015-9e12a3a98256.parquet';
+----
+1	"12:33:54.123456"
+
+# Date - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-d13de5d6-df68-46f4-99b2-249f61666b7c.parquet';
+----
+1	"2024-11-07"
+
+# bool - true
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-d0288d17-1b47-48cf-8d23-98ace96a09b3.parquet';
+----
+1	true
+
+# int64 - positive
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-ee09a5c4-5878-459c-9fbb-6ba224d090bb.parquet';
+----
+1	9876543210
+
+# double - negative
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-f4b6d47e-7c08-42f7-bb2f-a96a8a2c326b.parquet';
+----
+1	-14.3
+
+# bool - false
+query II
+from '/Users/thijs/DuckDBLabs/iceberg/parquet/target/shredded_variants/variant-debug-f33fd37e-c27a-4543-b7b0-db036a25d229.parquet';
+----
+1	false
