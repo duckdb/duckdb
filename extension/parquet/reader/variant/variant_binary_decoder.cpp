@@ -114,9 +114,6 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 	return result;
 }
 
-VariantBinaryDecoder::VariantBinaryDecoder() {
-}
-
 template <class T>
 static T DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	scale = Load<uint8_t>(data);

@@ -33,6 +33,11 @@ public:
 	VariantValue &operator=(VariantValue &&) noexcept = default;
 
 public:
+	bool IsNull() const {
+		return value_type == VariantValueType::PRIMITIVE && primitive_value.IsNull();
+	}
+
+public:
 	void AddChild(const string &key, VariantValue &&val);
 	void AddItem(VariantValue &&val);
 

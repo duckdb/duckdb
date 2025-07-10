@@ -68,7 +68,7 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 				//! Turn the micros timestamp into a micros_tz timestamp and serialize it
 				timestamp_tz_t micros_tz_ts(micros_ts.value);
 				auto value = Value::TIMESTAMPTZ(micros_tz_ts);
-				auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+				value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 
 				if (StringUtil::Contains(value_str, "+")) {
 					//! Don't attempt this for NaN/Inf timestamps
