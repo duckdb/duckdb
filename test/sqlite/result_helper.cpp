@@ -25,11 +25,11 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	SQLLogicTestLogger logger(context, query);
 	if (result.HasError()) {
-		logger.UnexpectedFailure(result);
 		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
 		}
+		logger.UnexpectedFailure(result);
 		return false;
 	}
 	idx_t row_count = result.RowCount();
@@ -289,8 +289,10 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
-					logger.ExpectedErrorMismatch(statement.expected_error, result);
-					return false;
+					if (!SkipErrorMessage(result.GetError())) {
+						logger.ExpectedErrorMismatch(statement.expected_error, result);
+						return false;
+					}
 				}
 				string success_log =
 				    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
@@ -302,11 +304,11 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
 		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
 		}
+		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
 		return false;
 	}
 	if (error) {
@@ -361,6 +363,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 bool TestResultHelper::SkipErrorMessage(const string &message) {
 	for (auto &error_message : runner.ignore_error_messages) {
 		if (StringUtil::Contains(message, error_message)) {
+			SKIP_TEST(string("skip on error_message matching '") + error_message + string("'"));
 			return true;
 		}
 	}

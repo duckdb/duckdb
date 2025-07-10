@@ -6,7 +6,6 @@
 
 #include "duckdb/common/uhugeint.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -222,6 +221,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::DATE(Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(0));
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(dtime_ns_t(0));
 	case LogicalTypeId::TIMESTAMP: {
 		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
 		return Value::TIMESTAMP(date, dtime_t(0));
@@ -317,6 +318,9 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 		//	24:00:00 according to PG
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
+	case LogicalTypeId::TIME_NS:
+		//	24:00:00 according to PG
+		return Value::TIME_NS(dtime_ns_t(Interval::NANOS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC: {
@@ -654,6 +658,13 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 Value Value::TIME(dtime_t value) {
 	Value result(LogicalType::TIME);
 	result.value_.time = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::TIME_NS(dtime_ns_t value) {
+	Value result(LogicalType::TIME_NS);
+	result.value_.time_ns = value;
 	result.is_null = false;
 	return result;
 }
@@ -1021,6 +1032,11 @@ Value Value::CreateValue(dtime_t value) {
 }
 
 template <>
+Value Value::CreateValue(dtime_ns_t value) {
+	return Value::TIME_NS(value);
+}
+
+template <>
 Value Value::CreateValue(dtime_tz_t value) {
 	return Value::TIMETZ(value);
 }
@@ -1113,6 +1129,8 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
 		return Cast::Operation<dtime_t, T>(value_.time);
+	case LogicalTypeId::TIME_NS:
+		return Cast::Operation<dtime_ns_t, T>(value_.time_ns);
 	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_tz_t, T>(value_.timetz);
 	case LogicalTypeId::TIMESTAMP:
@@ -1247,6 +1265,11 @@ dtime_t Value::GetValue() const {
 }
 
 template <>
+dtime_ns_t Value::GetValue() const {
+	return GetValueInternal<dtime_ns_t>();
+}
+
+template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
@@ -1336,6 +1359,8 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::DATE(date_t(NumericCast<int32_t>(value)));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(dtime_ns_t(value));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -1484,6 +1509,12 @@ template <>
 dtime_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.time;
+}
+
+template <>
+dtime_ns_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.time_ns;
 }
 
 template <>

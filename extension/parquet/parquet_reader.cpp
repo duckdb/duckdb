@@ -54,12 +54,7 @@ static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFilePr
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
 	Value disable_prefetch = false;
-	Value prefetch_all_files =
-#ifdef DUCKDB_PREFETCH_ALL_PARQUET_FILES
-	    true; // For debugging purposes we can toggle this to always enable
-#else
-	    false; // Defaults to false
-#endif
+	Value prefetch_all_files = false;
 	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 	context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
 	bool should_prefetch = !file_handle.OnDiskFile() || prefetch_all_files.GetValue<bool>();
@@ -1195,6 +1190,12 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		}
 
 		auto &group = GetGroup(state);
+		if (state.op) {
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
+			           state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup",
+			           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
+		}
+
 		if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
 			uint64_t total_row_group_span = GetGroupSpan(state);
 

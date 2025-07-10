@@ -763,6 +763,8 @@ unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const Parque
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	case PhysicalType::INT64:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+	case PhysicalType::INT128:
+		return make_uniq<TemplatedColumnReader<hugeint_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
@@ -834,11 +836,22 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::TIME:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetMsIntToTime>>(reader, schema);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(reader, schema);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetNsIntToTime>>(reader, schema);
+		default:
+			throw InternalException("TIME requires type info");
+		}
+	case LogicalTypeId::TIME_NS:
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int32_t, dtime_ns_t, ParquetMsIntToTimeNs>>(reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetUsIntToTimeNs>>(reader, schema);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetIntToTimeNs>>(reader, schema);
 		default:
 			throw InternalException("TIME requires type info");
 		}

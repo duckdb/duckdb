@@ -8,6 +8,7 @@ add_library_unity(
   current_setting.cpp
   hash.cpp
   least.cpp
+  replace_type.cpp
   stats.cpp
   typeof.cpp
   system_functions.cpp)

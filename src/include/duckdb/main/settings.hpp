@@ -574,7 +574,7 @@ struct EnableFSSTVectorsSetting {
 struct EnableHTTPLoggingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_logging";
-	static constexpr const char *Description = "Enables HTTP logging";
+	static constexpr const char *Description = "(deprecated) Enables HTTP logging";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -764,7 +764,7 @@ struct HTTPLoggingOutputSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_logging_output";
 	static constexpr const char *Description =
-	    "The file to which HTTP logging output should be saved, or empty to print to the terminal";
+	    "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -1067,6 +1067,17 @@ struct PerfectHtThresholdSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct PinThreadsSetting {
+	using RETURN_TYPE = ThreadPinMode;
+	static constexpr const char *Name = "pin_threads";
+	static constexpr const char *Description =
+	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 

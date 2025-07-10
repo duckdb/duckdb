@@ -240,6 +240,10 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MergeActionCondition : uint8_t;
+
+enum class MergeActionType : uint8_t;
+
 enum class MetaPipelineType : uint8_t;
 
 enum class MetricsType : uint8_t;
@@ -389,6 +393,8 @@ enum class TaskExecutionResult : uint8_t;
 enum class TemporaryBufferSize : uint64_t;
 
 enum class TemporaryCompressionLevel : int;
+
+enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
@@ -734,6 +740,12 @@ template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
+const char* EnumUtil::ToChars<MergeActionCondition>(MergeActionCondition value);
+
+template<>
+const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value);
+
+template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
@@ -957,6 +969,9 @@ const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
 
 template<>
 const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value);
+
+template<>
+const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
@@ -1317,6 +1332,12 @@ template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
+MergeActionCondition EnumUtil::FromString<MergeActionCondition>(const char *value);
+
+template<>
+MergeActionType EnumUtil::FromString<MergeActionType>(const char *value);
+
+template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
@@ -1540,6 +1561,9 @@ TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value)
 
 template<>
 TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value);
+
+template<>
+ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);

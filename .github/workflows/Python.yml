@@ -46,7 +46,7 @@ on:
       - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -68,9 +68,18 @@ env:
   CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+      
 # This is just a sanity check of Python 3.10 running with Arrow / Spark
   linux-python3-10:
     name: Python 3.10 Linux
+    needs: check-draft
     runs-on: ubuntu-22.04
 
     env:
@@ -148,8 +157,6 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           # Speed things up a bit for non-releases
-          - isRelease: false
-            python_build: 'cp39-*'
           - isRelease: false
             python_build: 'cp310-*'
           - isRelease: false
@@ -236,74 +243,74 @@ jobs:
         ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
   osx-python3:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true'
-      name: Python 3 OSX
-      needs: linux-python3-10
-      runs-on: macos-latest
-      strategy:
-       matrix:
+    name: Python 3 OSX
+    needs: linux-python3-10
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
         python_build: [cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
+    env:
+      CIBW_BUILD: ${{ matrix.python_build}}
+      CIBW_ARCHS: 'x86_64 universal2 arm64'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
+      CIBW_ENVIRONMENT: 'MACOSX_DEPLOYMENT_TARGET=12.0'
+      DUCKDB_BUILD_UNITY: 1
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - name: Check/Act on inputs.override_git_describe
+      shell: bash
+      run: |
+        if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+        elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+        else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+        fi
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install
+      shell: bash
+      run: pip install 'cibuildwheel>=2.16.2' build
+
+    - name: Build
+      shell: bash
+      run: |
+        cd tools/pythonpkg
+        pyproject-build . --sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+          export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+        fi
+        cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
+
+    - name: Deploy
       env:
-        CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_ARCHS: 'x86_64 universal2 arm64'
-        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
-        CIBW_ENVIRONMENT: 'MACOSX_DEPLOYMENT_TARGET=12.0'
-        DUCKDB_BUILD_UNITY: 1
-
-      steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - name: Check/Act on inputs.override_git_describe
-        shell: bash
-        run: |
-          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
-              echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
-              exit 1
-          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
-              echo "No override_git_describe provided"
-          else
-              echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
-              echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
-              git tag ${{ inputs.override_git_describe }}
-          fi
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install
-        shell: bash
-        run: pip install 'cibuildwheel>=2.16.2' build
-
-      - name: Build
-        shell: bash
-        run: |
-          cd tools/pythonpkg
-          pyproject-build . --sdist
-          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-          if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
-            export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
-          fi
-          cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
-
-      - name: Deploy
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        shell: bash
-        run: |
-          ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      shell: bash
+      run: |
+        ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
   win-python3:
-      name: Python 3 Windows
-      runs-on: windows-latest
-      needs: linux-python3-10
-      strategy:
-       matrix:
+    name: Python 3 Windows
+    runs-on: windows-latest
+    needs: linux-python3-10
+    strategy:
+      matrix:
         python_build: [cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
@@ -319,74 +326,75 @@ jobs:
           - isRelease: false
             python_build: 'cp312-*'
 
+    env:
+      CIBW_BUILD: ${{ matrix.python_build}}
+      DUCKDB_BUILD_UNITY: 1
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - name: Check/Act on inputs.override_git_describe
+      shell: bash
+      run: |
+        if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+        elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+        else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+        fi
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install
+      shell: bash
+      run: pip install 'cibuildwheel>=2.16.2' build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}-${{ matrix.python_build }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build source dist
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
+        pyproject-build . --sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
+    - name: Build wheels
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+          export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+        fi
+        cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
+
+    - name: Deploy
       env:
-        CIBW_BUILD: ${{ matrix.python_build}}
-        DUCKDB_BUILD_UNITY: 1
-
-      steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - name: Check/Act on inputs.override_git_describe
-        shell: bash
-        run: |
-          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
-              echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
-              exit 1
-          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
-              echo "No override_git_describe provided"
-          else
-              echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
-              echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
-              git tag ${{ inputs.override_git_describe }}
-          fi
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install
-        shell: bash
-        run: pip install 'cibuildwheel>=2.16.2' build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.python_build }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-      - name: Build source dist
-        shell: bash
-        working-directory: tools/pythonpkg
-        run: |
-          pyproject-build . --sdist
-          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-
-      - name: Build wheels
-        shell: bash
-        working-directory: tools/pythonpkg
-        run: |
-          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-          if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
-            export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
-          fi
-          cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
-
-      - name: Deploy
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-        shell: bash
-        run: |
-          ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      shell: bash
+      run: |
+        ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
   linux-release-cleanup:
-     if: github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main'
+     if: github.ref == 'refs/heads/v1.3-ossivalis' || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
-     needs: twine-upload
+     needs: 
+      - twine-upload
      runs-on: ubuntu-22.04
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
@@ -420,7 +428,9 @@ jobs:
     # Note that want to run this by default ONLY if no override_git_describe is provided
     # This means we are not staging a release, or we explicitly set `twine_upload`
     # Why? If present, it means we are staging releases, and we want to do the upload manually
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
+    if: |
+      ${{ ((( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) &&
+        (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))) }}
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
     with:

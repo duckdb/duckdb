@@ -264,13 +264,12 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 			EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
 			// first write 28 bytes of nonce + tag
-			handle->Write(nullptr, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
+			handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
 			              GetPositionInFile(block_index));
-			buffer.Write(nullptr, *handle, GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+			buffer.Write(QueryContext(), *handle, GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		} else {
-			buffer.Write(nullptr, *handle, GetPositionInFile(block_index));
+			buffer.Write(QueryContext(), *handle, GetPositionInFile(block_index));
 		}
-
 	} else {
 		if (identifier.encrypted) {
 			// write the compressed buffer to the file
@@ -280,13 +279,13 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 			                                                TemporaryBufferSizeToSize(identifier.size),
 			                                                encryption_metadata);
 
-			handle->Write(nullptr, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
+			handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
 			              GetPositionInFile(block_index));
-			handle->Write(nullptr, encrypted_compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
+			handle->Write(QueryContext(), encrypted_compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
 			              GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		} else {
 			// write compressed temp file
-			handle->Write(nullptr, compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
+			handle->Write(QueryContext(), compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
 			              GetPositionInFile(block_index));
 		}
 	}

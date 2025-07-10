@@ -70,7 +70,7 @@ string ErrorData::ConstructFinalMessage() const {
 		auto entry = extra_info.find("stack_trace_pointers");
 		if (entry != extra_info.end()) {
 			auto stack_trace = StackTrace::ResolveStacktraceSymbols(entry->second);
-			error += "\n\n" + stack_trace;
+			error += "\n\nStack Trace:\n" + stack_trace;
 		}
 	}
 	return error;

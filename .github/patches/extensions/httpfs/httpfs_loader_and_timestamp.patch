@@ -137,6 +137,81 @@ index 04bd795..3a3e89e 100644
  }
  
  size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index 686162f..cd43a64 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -7,6 +7,7 @@
+ #include "duckdb/common/http_util.hpp"
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/hash.hpp"
++#include "duckdb/common/types/time.hpp"
+ #include "duckdb/function/scalar/strftime_format.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/main/client_context.hpp"
+@@ -263,19 +264,6 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+ 	return response;
+ }
+ 
+-void TimestampToTimeT(timestamp_t timestamp, time_t &result) {
+-	auto components = Timestamp::GetComponents(timestamp);
+-	struct tm tm {};
+-	tm.tm_year = components.year - 1900;
+-	tm.tm_mon = components.month - 1;
+-	tm.tm_mday = components.day;
+-	tm.tm_hour = components.hour;
+-	tm.tm_min = components.minute;
+-	tm.tm_sec = components.second;
+-	tm.tm_isdst = 0;
+-	result = mktime(&tm);
+-}
+-
+ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
+                                unique_ptr<HTTPParams> params_p)
+     : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params->Cast<HTTPFSParams>()),
+@@ -286,7 +274,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpe
+ 		auto &info = file.extended_info->options;
+ 		auto lm_entry = info.find("last_modified");
+ 		if (lm_entry != info.end()) {
+-			TimestampToTimeT(lm_entry->second.GetValue<timestamp_t>(), last_modified);
++			last_modified = lm_entry->second.GetValue<timestamp_t>();
+ 		}
+ 		auto etag_entry = info.find("etag");
+ 		if (etag_entry != info.end()) {
+@@ -466,7 +454,7 @@ int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
+ 	return sfh.length;
+ }
+ 
+-time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
++timestamp_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
+ 	auto &sfh = handle.Cast<HTTPFileHandle>();
+ 	return sfh.last_modified;
+ }
+@@ -549,20 +537,14 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
+ 	}
+ }
+ 
+-bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, time_t &result) {
++bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp_t &result) {
+ 	StrpTimeFormat::ParseResult parse_result;
+ 	if (!StrpTimeFormat::TryParse("%a, %d %h %Y %T %Z", timestamp, parse_result)) {
+ 		return false;
+ 	}
+-	struct tm tm {};
+-	tm.tm_year = parse_result.data[0] - 1900;
+-	tm.tm_mon = parse_result.data[1] - 1;
+-	tm.tm_mday = parse_result.data[2];
+-	tm.tm_hour = parse_result.data[3];
+-	tm.tm_min = parse_result.data[4];
+-	tm.tm_sec = parse_result.data[5];
+-	tm.tm_isdst = 0;
+-	result = mktime(&tm);
++	if (!parse_result.TryToTimestamp(result)) {
++		return false;
++	}
+ 	return true;
+ }
+ 
 diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
 index c9bc985..c800ff2 100644
 --- a/extension/httpfs/httpfs_extension.cpp
@@ -280,6 +355,50 @@ index f819356..aa6ad70 100644
 +	};
 +}
 \ No newline at end of file
+diff --git a/extension/httpfs/include/http_metadata_cache.hpp b/extension/httpfs/include/http_metadata_cache.hpp
+index 8fc7909..83a05cc 100644
+--- a/extension/httpfs/include/http_metadata_cache.hpp
++++ b/extension/httpfs/include/http_metadata_cache.hpp
+@@ -17,7 +17,7 @@ namespace duckdb {
+ 
+ struct HTTPMetadataCacheEntry {
+ 	idx_t length;
+-	time_t last_modified;
++	timestamp_t last_modified;
+ 	string etag;
+ };
+ 
+diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
+index 62067d4..55c74cc 100644
+--- a/extension/httpfs/include/httpfs.hpp
++++ b/extension/httpfs/include/httpfs.hpp
+@@ -46,7 +46,7 @@ public:
+ 	// File handle info
+ 	FileOpenFlags flags;
+ 	idx_t length;
+-	time_t last_modified;
++	timestamp_t last_modified;
+ 	string etag;
+ 	bool force_full_download;
+ 	bool initialized = false;
+@@ -92,7 +92,7 @@ private:
+ 
+ class HTTPFileSystem : public FileSystem {
+ public:
+-	static bool TryParseLastModifiedTime(const string &timestamp, time_t &result);
++	static bool TryParseLastModifiedTime(const string &timestamp, timestamp_t &result);
+ 
+ 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
+ 		return {path}; // FIXME
+@@ -121,7 +121,7 @@ public:
+ 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+ 	void FileSync(FileHandle &handle) override;
+ 	int64_t GetFileSize(FileHandle &handle) override;
+-	time_t GetLastModifiedTime(FileHandle &handle) override;
++	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+ 	string GetVersionTag(FileHandle &handle) override;
+ 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
+ 	void Seek(FileHandle &handle, idx_t location) override;
 diff --git a/extension/httpfs/include/httpfs_extension.hpp b/extension/httpfs/include/httpfs_extension.hpp
 index 3c4f3a1..eeca2c9 100644
 --- a/extension/httpfs/include/httpfs_extension.hpp

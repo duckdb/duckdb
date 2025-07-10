@@ -549,16 +549,16 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
 	//! for very large buffers, we store the size of the buffer in plaintext.
-	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
+	handle->Write(QueryContext(), &buffer.size, sizeof(idx_t), 0);
 
 	if (db.config.options.temp_file_encryption) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
 		//! Write the nonce (and tag for GCM).
-		handle->Write(nullptr, encryption_metadata, delta, sizeof(idx_t));
+		handle->Write(QueryContext(), encryption_metadata, delta, sizeof(idx_t));
 	}
 
-	buffer.Write(nullptr, *handle, sizeof(idx_t) + delta);
+	buffer.Write(QueryContext(), *handle, sizeof(idx_t) + delta);
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
