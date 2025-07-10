@@ -488,8 +488,8 @@ StandardBufferManager::ReadTemporaryBufferInternalEncrypted(BufferManager &buffe
                                                             idx_t position, idx_t size,
                                                             unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
 
-	auto buffer =
-	    buffer_manager.ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, std::move(reusable_buffer));
+	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
+	                                                    std::move(reusable_buffer));
 
 	//! Read nonce and tag from file.
 	uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];

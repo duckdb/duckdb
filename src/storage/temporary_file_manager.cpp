@@ -266,7 +266,8 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 			// first write 28 bytes of nonce + tag
 			handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
 			              GetPositionInFile(block_index));
-			buffer.Write(QueryContext(), *handle, GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+			buffer.Write(QueryContext(), *handle,
+			             GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		} else {
 			buffer.Write(QueryContext(), *handle, GetPositionInFile(block_index));
 		}
@@ -274,14 +275,12 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 		if (identifier.encrypted) {
 			// write the compressed buffer to the file
 			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-			auto encrypted_compressed_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
-			EncryptionEngine::EncryptTemporaryAllocatedData(db, compressed_buffer, encrypted_compressed_buffer,
-			                                                TemporaryBufferSizeToSize(identifier.size),
-			                                                encryption_metadata);
+			EncryptionEngine::EncryptTemporaryAllocatedData(
+			    db, compressed_buffer, TemporaryBufferSizeToSize(identifier.size), encryption_metadata);
 
 			handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
 			              GetPositionInFile(block_index));
-			handle->Write(QueryContext(), encrypted_compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
+			handle->Write(QueryContext(), compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
 			              GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		} else {
 			// write compressed temp file

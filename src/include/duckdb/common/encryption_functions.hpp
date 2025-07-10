@@ -80,12 +80,17 @@ public:
 
 	// Encrypt Buffers (temp files)
 	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata);
-	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
-	                                          AllocatedData &out_buffer, idx_t nr_bytes, data_ptr_t metadata);
+	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
+	                                          data_ptr_t metadata);
 
 	static void DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata);
 	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
 	                                          data_ptr_t metadata);
+
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
+	static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
+	                          idx_t buffer_size, data_ptr_t metadata);
+	static void DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
 };
 
 class EncryptionTypes {

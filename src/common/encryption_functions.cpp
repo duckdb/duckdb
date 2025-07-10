@@ -57,10 +57,10 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 
 void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
                                     FileBuffer &temp_buffer_manager, uint64_t delta) {
-
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
-	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(GetKeyFromCache(db, key_id),
-	                                                                      MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encrypt_key = GetKeyFromCache(db, key_id);
+	auto encryption_state =
+	    db.GetEncryptionUtil()->CreateEncryptionState(encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	EncryptionTag tag;
 	EncryptionNonce nonce;
@@ -68,7 +68,7 @@ void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, 
 
 	//! store the nonce at the start of the block
 	memcpy(block_offset_internal, nonce.data(), nonce.size());
-	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), GetKeyFromCache(db, key_id),
+	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), encrypt_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	auto checksum_offset = block.InternalBuffer() + delta;
@@ -92,8 +92,9 @@ void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, 
 void EncryptionEngine::DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
                                     uint64_t block_size, uint64_t delta) {
 	//! initialize encryption state
-	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(GetKeyFromCache(db, key_id),
-	                                                                      MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto decrypt_key = GetKeyFromCache(db, key_id);
+	auto encryption_state =
+	    db.GetEncryptionUtil()->CreateEncryptionState(decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	//! load the stored nonce and tag
 	EncryptionTag tag;
@@ -102,7 +103,7 @@ void EncryptionEngine::DecryptBlock(DatabaseInstance &db, const string &key_id, 
 	memcpy(tag.data(), internal_buffer + nonce.size(), tag.size());
 
 	//! Initialize the decryption
-	encryption_state->InitializeDecryption(nonce.data(), nonce.size(), GetKeyFromCache(db, key_id),
+	encryption_state->InitializeDecryption(nonce.data(), nonce.size(), decrypt_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	auto checksum_offset = internal_buffer + delta;
@@ -119,8 +120,8 @@ void EncryptionEngine::DecryptBlock(DatabaseInstance &db, const string &key_id, 
 	aes_res = encryption_state->Finalize(internal_buffer + delta, 0, tag.data(), tag.size());
 }
 
-void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata) {
-
+void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size,
+                                              data_ptr_t metadata) {
 	if (!ContainsKey(db, "temp_key")) {
 		AddTempKeyToCache(db);
 	}
@@ -143,15 +144,14 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), temp_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
-	auto aes_res = encryption_state->Process(input_buffer.InternalBuffer(), input_buffer.AllocSize(),
-	                                         input_buffer.InternalBuffer(), input_buffer.AllocSize());
+	auto aes_res = encryption_state->Process(buffer, buffer_size, buffer, buffer_size);
 
-	if (aes_res != input_buffer.AllocSize()) {
+	if (aes_res != buffer_size) {
 		throw IOException("Encryption failure: in- and output size differ");
 	}
 
 	//! Finalize and extract the tag
-	encryption_state->Finalize(input_buffer.InternalBuffer(), 0, tag.data(), tag.size());
+	encryption_state->Finalize(buffer, 0, tag.data(), tag.size());
 
 	//! store the generated tag after consequetively the nonce
 	memcpy(metadata + nonce.size(), tag.data(), tag.size());
@@ -159,51 +159,17 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 	// check if tag is correctly stored
 	D_ASSERT(memcmp(tag.data(), metadata + nonce.size(), tag.size()) == 0);
 }
-
-void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
-                                                     AllocatedData &out_buffer, idx_t nr_bytes, data_ptr_t metadata) {
-
-	// this already expects an empty ("header" of delta bytes).
-	if (!ContainsKey(db, "temp_key")) {
-		AddTempKeyToCache(db);
-	}
-	auto temp_key = GetKeyFromCache(db, "temp_key");
-
-	auto encryption_util = db.GetEncryptionUtil();
-	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-
-	// zero-out the metadata buffer
-	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
-
-	EncryptionTag tag;
-	EncryptionNonce nonce;
-	encryption_state->GenerateRandomData(nonce.data(), nonce.size());
-
-	//! store the nonce at the the start of metadata buffer
-	memcpy(metadata, nonce.data(), nonce.size());
-	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), temp_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-
-	// for compressed data, there is already made some space in the header during the compression
-	auto aes_res = encryption_state->Process(input_buffer.get(), nr_bytes, out_buffer.get(), nr_bytes);
-
-	if (aes_res != nr_bytes) {
-		throw IOException("Encryption failure: in- and output size differ");
-	}
-
-	//! Finalize and extract the tag
-	encryption_state->Finalize(out_buffer.get(), 0, tag.data(), tag.size());
-	//! store the generated tag after consequetively the nonce
-	memcpy(metadata + nonce.size(), tag.data(), tag.size());
+void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata) {
+	EncryptTemporaryBuffer(db, input_buffer.InternalBuffer(), input_buffer.AllocSize(), metadata);
 }
 
-void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata) {
+void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
+                                                     data_ptr_t metadata) {
+	EncryptTemporaryBuffer(db, input_buffer.get(), nr_bytes, metadata);
+}
 
-	//! initialize encryption state
-	auto encryption_util = db.GetEncryptionUtil();
-	auto temp_key = GetKeyFromCache(db, "temp_key");
-	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-
+void EncryptionEngine::DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
+                                     idx_t buffer_size, data_ptr_t metadata) {
 	//! load the stored nonce and tag
 	EncryptionTag tag;
 	EncryptionNonce nonce;
@@ -211,43 +177,36 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 	memcpy(tag.data(), metadata + nonce.size(), tag.size());
 
 	//! Initialize the decryption
-	encryption_state->InitializeDecryption(nonce.data(), nonce.size(), temp_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	encryption_state.InitializeDecryption(nonce.data(), nonce.size(), temp_key,
+	                                      MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
-	auto aes_res = encryption_state->Process(input_buffer.InternalBuffer(), input_buffer.AllocSize(),
-	                                         input_buffer.InternalBuffer(), input_buffer.AllocSize());
+	auto aes_res = encryption_state.Process(buffer, buffer_size, buffer, buffer_size);
 
-	if (aes_res != input_buffer.AllocSize()) {
+	if (aes_res != buffer_size) {
 		throw IOException("Encryption failure: in- and output size differ");
 	}
 
 	//! check the tag
-	encryption_state->Finalize(input_buffer.InternalBuffer(), 0, tag.data(), tag.size());
+	encryption_state.Finalize(buffer, 0, tag.data(), tag.size());
+}
+
+void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size,
+                                              data_ptr_t metadata) {
+	//! initialize encryption state
+	auto encryption_util = db.GetEncryptionUtil();
+	auto temp_key = GetKeyFromCache(db, "temp_key");
+	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+
+	DecryptBuffer(*encryption_state, temp_key, buffer, buffer_size, metadata);
+}
+
+void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata) {
+	DecryptTemporaryBuffer(db, input_buffer.InternalBuffer(), input_buffer.AllocSize(), metadata);
 }
 
 void EncryptionEngine::DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
                                                      data_ptr_t metadata) {
-
-	//! initialize encryption state
-	auto encryption_util = db.GetEncryptionUtil();
-	auto temp_key = GetKeyFromCache(db, "temp_key");
-	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-
-	//! load the stored nonce and tag
-	EncryptionTag tag;
-	EncryptionNonce nonce;
-	memcpy(nonce.data(), metadata, nonce.size());
-	memcpy(tag.data(), metadata + nonce.size(), tag.size());
-
-	//! Initialize the decryption
-	encryption_state->InitializeDecryption(nonce.data(), nonce.size(), temp_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	auto aes_res = encryption_state->Process(input_buffer.get(), nr_bytes, input_buffer.get(), nr_bytes);
-	if (aes_res != nr_bytes) {
-		throw IOException("Encryption failure: in- and output size differ");
-	}
-	//! check the tag
-	encryption_state->Finalize(input_buffer.get(), 0, tag.data(), tag.size());
+	DecryptTemporaryBuffer(db, input_buffer.get(), nr_bytes, metadata);
 }
 
 } // namespace duckdb
