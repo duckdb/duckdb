@@ -175,6 +175,8 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
 
 	} else {
+		// Empty segment, which does not have to go to disk.
+		// We still need to change its type to persistent, because we need to write its metadata.
 		segment->segment_type = ColumnSegmentType::PERSISTENT;
 		segment->block.reset();
 	}
