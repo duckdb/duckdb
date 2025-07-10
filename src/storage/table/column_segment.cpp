@@ -35,10 +35,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	if (block_id == INVALID_BLOCK) {
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
-	} else {
-		function = config.GetCompressionFunction(compression_type, type.InternalType());
+	function = config.GetCompressionFunction(compression_type, type.InternalType());
+	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
 
