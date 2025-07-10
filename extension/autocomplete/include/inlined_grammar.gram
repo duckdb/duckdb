@@ -471,7 +471,6 @@ FuncNameKeyword <- 'ASOF'i /
 'JOIN'i /
 'LEFT'i /
 'LIKE'i /
-'MAP'i /
 'NATURAL'i /
 'NOTNULL'i /
 'OUTER'i /
@@ -479,7 +478,6 @@ FuncNameKeyword <- 'ASOF'i /
 'POSITIONAL'i /
 'RIGHT'i /
 'SIMILAR'i /
-'STRUCT'i /
 'TABLESAMPLE'i /
 'VERBOSE'i
 TypeNameKeyword <- 'ASOF'i /
@@ -487,7 +485,6 @@ TypeNameKeyword <- 'ASOF'i /
 'AUTHORIZATION'i /
 'BINARY'i /
 'COLLATION'i /
-'COLUMNS'i /
 'CONCURRENTLY'i /
 'CROSS'i /
 'FREEZE'i /
@@ -509,7 +506,6 @@ TypeNameKeyword <- 'ASOF'i /
 'UNPACK'i /
 'SIMILAR'i /
 'TABLESAMPLE'i /
-'TRY_CAST'i /
 'VERBOSE'i /
 'SEMI'i /
 'ANTI'i
@@ -724,9 +720,10 @@ WithData <- 'WITH'i 'NO'i? 'DATA'i
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- CatalogQualification? SchemaQualification? Identifier
+QualifiedName <- (CatalogQualification ReservedSchemaQualification ReservedTableName) / (SchemaQualification ReservedTableName) / (Identifier / StringLiteral)
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
+ReservedSchemaQualification <- ReservedSchemaName '.'
 TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
@@ -808,7 +805,8 @@ DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- 'MACRO'i 'TABLE'i IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA'i IfExists? List(QualifiedSchemaName)
-DropIndex <- 'INDEX'i IfExists? List(IndexName)
+DropIndex <- 'INDEX'i IfExists? List(QualifiedIndexName)
+QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
 DropSequence <- 'SEQUENCE'i IfExists? List(QualifiedSequenceName)
 DropCollation <- 'COLLATION'i IfExists? List(CollationName)
 DropType <- 'TYPE'i IfExists? List(QualifiedTypeName)
@@ -906,7 +904,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- CatalogQualification? SchemaQualification? TableName
+BaseTableName <- (CatalogQualification ReservedSchemaQualification ReservedTableName) / (SchemaQualification ReservedTableName) / TableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
@@ -917,7 +915,7 @@ FunctionArgument <- NamedParameter / Expression
 NamedParameter <- TypeName NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'i? Identifier ColumnAliases?
+TableAlias <- 'AS'i? (Identifier / StringLiteral) ColumnAliases?
 
 AtClause <- 'AT'i Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
@@ -1153,7 +1151,9 @@ Statement <-
 
 CatalogName <- Identifier
 SchemaName <- Identifier
+ReservedSchemaName <- Identifier
 TableName <- Identifier
+ReservedTableName <- Identifier
 ColumnName <- Identifier
 IndexName <- Identifier
 SettingName <- Identifier
@@ -1280,9 +1280,9 @@ AttachOptions <- Parens(GenericCopyOptionList)
 
 DetachStatement <- 'DETACH'i Database? IfExists? CatalogName
 
-UseStatement <- 'USE'i DottedIdentifier
+UseStatement <- 'USE'i UseTarget
 
-UseTarget <- (CatalogName '.' SchemaName) / SchemaName / CatalogName
+UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
 
 CallStatement <- 'CALL'i TableFunctionName TableFunctionArguments
 

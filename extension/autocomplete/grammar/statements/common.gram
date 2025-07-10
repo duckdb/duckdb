@@ -31,7 +31,9 @@ Statement <-
 
 CatalogName <- Identifier
 SchemaName <- Identifier
+ReservedSchemaName <- Identifier
 TableName <- Identifier
+ReservedTableName <- Identifier
 ColumnName <- Identifier
 IndexName <- Identifier
 SettingName <- Identifier

@@ -44,7 +44,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- CatalogQualification? SchemaQualification? TableName
+BaseTableName <- (CatalogQualification ReservedSchemaQualification ReservedTableName) / (SchemaQualification ReservedTableName) / TableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
@@ -55,7 +55,7 @@ FunctionArgument <- NamedParameter / Expression
 NamedParameter <- TypeName NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'i? Identifier ColumnAliases?
+TableAlias <- 'AS'i? (Identifier / StringLiteral) ColumnAliases?
 
 AtClause <- 'AT'i Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression

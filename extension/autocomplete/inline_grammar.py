@@ -24,7 +24,7 @@ contents = ""
 CATEGORY_MAP = {
     "reserved_keyword.list": "RESERVED_KEYWORD",
     "unreserved_keyword.list": "UNRESERVED_KEYWORD",
-    "colname_keyword.list": "COL_NAME_KEYWORD",
+    "column_name_keyword.list": "COL_NAME_KEYWORD",
     "func_name_keyword.list": "TYPE_FUNC_NAME_KEYWORD",
     "type_name_keyword.list": "TYPE_FUNC_NAME_KEYWORD",  # merged in C++
 }
