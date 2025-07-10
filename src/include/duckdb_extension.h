@@ -195,6 +195,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_double)(double input);
 	duckdb_value (*duckdb_create_date)(duckdb_date input);
 	duckdb_value (*duckdb_create_time)(duckdb_time input);
+	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_value (*duckdb_create_time_tz_value)(duckdb_time_tz value);
 	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
@@ -218,6 +219,7 @@ typedef struct {
 	double (*duckdb_get_double)(duckdb_value val);
 	duckdb_date (*duckdb_get_date)(duckdb_value val);
 	duckdb_time (*duckdb_get_time)(duckdb_value val);
+	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
 	duckdb_time_tz (*duckdb_get_time_tz)(duckdb_value val);
 	duckdb_timestamp (*duckdb_get_timestamp)(duckdb_value val);
 	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
@@ -718,6 +720,7 @@ typedef struct {
 #define duckdb_create_double                           duckdb_ext_api.duckdb_create_double
 #define duckdb_create_date                             duckdb_ext_api.duckdb_create_date
 #define duckdb_create_time                             duckdb_ext_api.duckdb_create_time
+#define duckdb_create_time_ns                          duckdb_ext_api.duckdb_create_time_ns
 #define duckdb_create_time_tz_value                    duckdb_ext_api.duckdb_create_time_tz_value
 #define duckdb_create_timestamp                        duckdb_ext_api.duckdb_create_timestamp
 #define duckdb_create_timestamp_tz                     duckdb_ext_api.duckdb_create_timestamp_tz
@@ -745,6 +748,7 @@ typedef struct {
 #define duckdb_get_double                              duckdb_ext_api.duckdb_get_double
 #define duckdb_get_date                                duckdb_ext_api.duckdb_get_date
 #define duckdb_get_time                                duckdb_ext_api.duckdb_get_time
+#define duckdb_get_time_ns                             duckdb_ext_api.duckdb_get_time_ns
 #define duckdb_get_time_tz                             duckdb_ext_api.duckdb_get_time_tz
 #define duckdb_get_timestamp                           duckdb_ext_api.duckdb_get_timestamp
 #define duckdb_get_timestamp_tz                        duckdb_ext_api.duckdb_get_timestamp_tz
