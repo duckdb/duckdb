@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/anonymize_partial.benchmark
+# description: Partial Anonymize Function
+# group: [string]
+
+name Partial Anonymize Function
+group string
+
+load benchmark/micro/string/anonymization_data.sql
+
+run
+SELECT COUNT(*) FROM (SELECT anonymize_partial(sensitive_data, 3, 4) FROM anonymization_test)
+
+result I
+100000

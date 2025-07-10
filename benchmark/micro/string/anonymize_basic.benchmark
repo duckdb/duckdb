@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/anonymize_basic.benchmark
+# description: Basic Anonymize Function
+# group: [string]
+
+name Basic Anonymize Function
+group string
+
+load benchmark/micro/string/anonymization_data.sql
+
+run
+SELECT COUNT(*) FROM (SELECT anonymize(short_string) FROM anonymization_test)
+
+result I
+100000
