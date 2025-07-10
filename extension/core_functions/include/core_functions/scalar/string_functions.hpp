@@ -481,4 +481,44 @@ struct UrlDecodeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct AnonymizeFun {
+	static constexpr const char *Name = "anonymize";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Replaces all characters in the string with 'x' for data anonymization.";
+	static constexpr const char *Example = "anonymize('SensitiveData')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AnonymizeAdvancedFun {
+	static constexpr const char *Name = "anonymize_advanced";
+	static constexpr const char *Parameters = "string,replacement_char";
+	static constexpr const char *Description = "Replaces all characters in the string with the specified replacement character.";
+	static constexpr const char *Example = "anonymize_advanced('SensitiveData', '*')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct AnonymizeEmailFun {
+	static constexpr const char *Name = "anonymize_email";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Anonymizes the local part of an email address while preserving the domain.";
+	static constexpr const char *Example = "anonymize_email('user@company.com')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AnonymizePartialFun {
+	static constexpr const char *Name = "anonymize_partial";
+	static constexpr const char *Parameters = "string,start_pos,length";
+	static constexpr const char *Description = "Anonymizes only a specified portion of the string starting at start_pos for the given length.";
+	static constexpr const char *Example = "anonymize_partial('SensitiveData', 3, 4)";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb
