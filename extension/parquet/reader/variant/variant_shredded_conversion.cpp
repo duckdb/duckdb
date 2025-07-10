@@ -321,6 +321,32 @@ public:
 
 } // namespace
 
+//! The field *is* shredded, but it doesn't have a 'typed_value', because for some reason the spec accepts this
+static vector<VariantValue> ConvertShreddedFieldWithoutType(Vector &metadata, Vector &value, idx_t offset, idx_t length,
+                                                            idx_t total_size) {
+	UnifiedVectorFormat value_format;
+	value.ToUnifiedFormat(total_size, value_format);
+	auto value_data = value_format.GetData<string_t>(value_format);
+	auto &validity = value_format.validity;
+
+	UnifiedVectorFormat metadata_format;
+	metadata.ToUnifiedFormat(length, metadata_format);
+	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
+
+	vector<VariantValue> ret(length);
+	for (idx_t i = 0; i < length; i++) {
+		auto index = value_format.sel->get_index(i + offset);
+
+		D_ASSERT(validity.RowIsValid(index));
+		auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+		VariantMetadata variant_metadata(metadata_value);
+		auto binary_value = value_data[index].GetData();
+		ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+	}
+
+	return ret;
+}
+
 vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &metadata, Vector &value,
                                                                       Vector &typed_value, idx_t offset, idx_t length,
                                                                       idx_t total_size) {
@@ -336,17 +362,20 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	for (idx_t i = 0; i < fields.size(); i++) {
 		auto &field = fields[i];
 		auto &field_name = field.first;
-		auto &field_type = field.second;
 		auto &field_vec = *entries[i];
-		VerifyVariantGroup(field_type);
 
 		auto &variant_group_children = StructVector::GetEntries(field_vec);
 		auto &field_value = *variant_group_children[0];
-		auto &field_typed_value = *variant_group_children[1];
 
 		shredded_fields.emplace_back(field_name);
 		auto &shredded_field = shredded_fields.back();
-		shredded_field.values = Convert(metadata, field_value, field_typed_value, offset, length, total_size);
+		if (variant_group_children.size() == 1) {
+			shredded_field.values = ConvertShreddedFieldWithoutType(metadata, field_value, offset, length, total_size);
+		} else {
+			D_ASSERT(variant_group_children.size() == 2);
+			auto &field_typed_value = *variant_group_children[1];
+			shredded_field.values = Convert(metadata, field_value, field_typed_value, offset, length, total_size);
+		}
 	}
 
 	UnifiedVectorFormat value_format;
