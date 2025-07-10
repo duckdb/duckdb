@@ -1,0 +1,152 @@
+# name: test/sql/function/string/test_anonymize_advanced.test
+# description: ANONYMIZE_ADVANCED function tests
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test anonymize_advanced on NULLs
+query T
+select ANONYMIZE_ADVANCED(NULL, '*')
+----
+NULL
+
+query T
+select ANONYMIZE_ADVANCED('test', NULL)
+----
+NULL
+
+query T
+select ANONYMIZE_ADVANCED(NULL, NULL)
+----
+NULL
+
+# test basic anonymize_advanced on scalars
+query T
+select ANONYMIZE_ADVANCED('Hello World', '*')
+----
+***********
+
+query T
+select ANONYMIZE_ADVANCED('SensitiveData', '#')
+----
+#############
+
+query T
+select ANONYMIZE_ADVANCED('', '*')
+----
+(empty)
+
+query T
+select ANONYMIZE_ADVANCED('a', '0')
+----
+0
+
+query T
+select ANONYMIZE_ADVANCED('123456789', '-')
+----
+---------
+
+# test anonymize_advanced with special characters as input
+query T
+select ANONYMIZE_ADVANCED('Hello@World.com', '?')
+----
+???????????????
+
+query T
+select ANONYMIZE_ADVANCED('Test-String_123', '=')
+----
+===============
+
+# test anonymize_advanced with special characters as replacement
+query T
+select ANONYMIZE_ADVANCED('Hello', '!')
+----
+!!!!!
+
+query T
+select ANONYMIZE_ADVANCED('Test', '@')
+----
+@@@@
+
+query T
+select ANONYMIZE_ADVANCED('Data', '$')
+----
+$$$$
+
+# test anonymize_advanced with mixed characters
+query T
+select ANONYMIZE_ADVANCED('Test123', '?')
+----
+???????
+
+query T
+select ANONYMIZE_ADVANCED('MixedCase', '=')
+----
+=========
+
+# test anonymize_advanced with unicode characters
+query T
+select ANONYMIZE_ADVANCED('MotörHead', '▓')
+----
+▓▓▓▓▓▓▓▓▓
+
+query T
+select ANONYMIZE_ADVANCED('你好世界', '█')
+----
+████
+
+query T
+select ANONYMIZE_ADVANCED('🦆🐱', '░')
+----
+░░
+
+query T
+select ANONYMIZE_ADVANCED('Test', '🔥')
+----
+🔥🔥🔥🔥
+
+# test anonymize_advanced on tables
+statement ok
+CREATE TABLE advanced_test_data(id INTEGER, data STRING, mask_char STRING)
+
+statement ok
+INSERT INTO advanced_test_data VALUES 
+(1, 'Confidential', '*'),
+(2, 'Secret123', '#'),
+(3, 'TopSecret', '-'),
+(4, '', '?'),
+(5, NULL, '*'),
+(6, 'Data', NULL)
+
+query IT
+select id, ANONYMIZE_ADVANCED(data, mask_char) FROM advanced_test_data ORDER BY id
+----
+1	************
+2	#########
+3	---------
+4	(empty)
+5	NULL
+6	NULL
+
+query T
+select ANONYMIZE_ADVANCED(data, '*') FROM advanced_test_data WHERE data IS NOT NULL
+----
+************
+*********
+*********
+(empty)
+****
+
+# test incorrect usage of anonymize_advanced
+statement error
+select ANONYMIZE_ADVANCED(123, '*')
+----
+
+statement error
+select ANONYMIZE_ADVANCED('test')
+----
+
+statement error
+select ANONYMIZE_ADVANCED('test', '*', 'extra')
+----

@@ -1,0 +1,144 @@
+# name: test/sql/function/string/test_anonymize_email.test
+# description: ANONYMIZE_EMAIL function tests
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test anonymize_email on NULLs
+query T
+select ANONYMIZE_EMAIL(NULL)
+----
+NULL
+
+# test basic anonymize_email on scalars
+query T
+select ANONYMIZE_EMAIL('user@company.com')
+----
+xxxx@company.com
+
+query T
+select ANONYMIZE_EMAIL('john.doe@example.org')
+----
+xxxxxxxx@example.org
+
+query T
+select ANONYMIZE_EMAIL('admin@test.co.uk')
+----
+xxxxx@test.co.uk
+
+query T
+select ANONYMIZE_EMAIL('simple@domain.edu')
+----
+xxxxxx@domain.edu
+
+# test anonymize_email with complex usernames
+query T
+select ANONYMIZE_EMAIL('user.name+tag@company.com')
+----
+xxxxxxxxxxxxx@company.com
+
+query T
+select ANONYMIZE_EMAIL('test-email_123@subdomain.example.org')
+----
+xxxxxxxxxxxxxx@subdomain.example.org
+
+# test anonymize_email with single character username
+query T
+select ANONYMIZE_EMAIL('a@domain.com')
+----
+x@domain.com
+
+# test anonymize_email with numbers in username
+query T
+select ANONYMIZE_EMAIL('user123@company.com')
+----
+xxxxxxx@company.com
+
+# test anonymize_email with special characters in username
+query T
+select ANONYMIZE_EMAIL('user.name+filter@example.com')
+----
+xxxxxxxxxxxxxxxx@example.com
+
+# test anonymize_email with mixed case
+query T
+select ANONYMIZE_EMAIL('TestUser@company.de')
+----
+xxxxxxxx@company.de
+
+# test anonymize_email with unicode characters
+query T
+select ANONYMIZE_EMAIL('müller@company.de')
+----
+xxxxxx@company.de
+
+query T
+select ANONYMIZE_EMAIL('你好@example.com')
+----
+xx@example.com
+
+query T
+select ANONYMIZE_EMAIL('user🐱@domain.org')
+----
+xxxxx@domain.org
+
+# test edge cases - no @ symbol (invalid email but should still process)
+query T
+select ANONYMIZE_EMAIL('notanemail')
+----
+xxxxxxxxxx
+
+query T
+select ANONYMIZE_EMAIL('')
+----
+(empty)
+
+# test multiple @ symbols (invalid email but should process first occurrence)
+query T
+select ANONYMIZE_EMAIL('user@wrong@company.com')
+----
+xxxx@wrong@company.com
+
+# test anonymize_email on tables
+statement ok
+CREATE TABLE email_data(id INTEGER, email_address STRING, department STRING)
+
+statement ok
+INSERT INTO email_data VALUES 
+(1, 'john.doe@company.com', 'Engineering'),
+(2, 'admin@system.org', 'IT'),
+(3, 'user123@test.co.uk', 'Marketing'),
+(4, '', 'Empty'),
+(5, NULL, 'Missing'),
+(6, 'a@b.c', 'Short'),
+(7, 'complex.email+tag@subdomain.example.com', 'Sales')
+
+query IT
+select id, ANONYMIZE_EMAIL(email_address) FROM email_data ORDER BY id
+----
+1	xxxxxxxx@company.com
+2	xxxxx@system.org
+3	xxxxxxx@test.co.uk
+4	(empty)
+5	NULL
+6	x@b.c
+7	xxxxxxxxxxxxxxxxx@subdomain.example.com
+
+query T
+select ANONYMIZE_EMAIL(email_address) FROM email_data WHERE email_address IS NOT NULL AND email_address != ''
+----
+xxxxxxxx@company.com
+xxxxx@system.org
+xxxxxxx@test.co.uk
+x@b.c
+xxxxxxxxxxxxxxxxx@subdomain.example.com
+
+# test incorrect usage of anonymize_email
+statement error
+select ANONYMIZE_EMAIL(123)
+----
+
+statement error
+select ANONYMIZE_EMAIL('test@example.com', 'extra')
+----

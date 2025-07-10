@@ -1,0 +1,125 @@
+# name: test/sql/function/string/test_anonymize.test
+# description: ANONYMIZE function tests
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test anonymize on NULLs
+query T
+select ANONYMIZE(NULL)
+----
+NULL
+
+# test basic anonymize on scalars
+query T
+select ANONYMIZE('Hello World')
+----
+xxxxxxxxxxx
+
+query T
+select ANONYMIZE('SensitiveData')
+----
+xxxxxxxxxxxxx
+
+query T
+select ANONYMIZE('')
+----
+(empty)
+
+query T
+select ANONYMIZE('a')
+----
+x
+
+query T
+select ANONYMIZE('123456789')
+----
+xxxxxxxxx
+
+# test anonymize with special characters
+query T
+select ANONYMIZE('Hello@World.com')
+----
+xxxxxxxxxxxxxxx
+
+query T
+select ANONYMIZE('Test-String_123')
+----
+xxxxxxxxxxxxxxx
+
+query T
+select ANONYMIZE('Special!@#$%^&*()')
+----
+xxxxxxxxxxxxxxxxx
+
+# test anonymize with special characters
+query T
+select ANONYMIZE('Test123')
+----
+xxxxxxx
+
+query T
+select ANONYMIZE('MixedCase')
+----
+xxxxxxxxx
+
+# test anonymize with unicode characters
+query T
+select ANONYMIZE('MotörHead')
+----
+xxxxxxxxx
+
+query T
+select ANONYMIZE('你好世界')
+----
+xxxx
+
+query T
+select ANONYMIZE('🦆🐱')
+----
+xx
+
+query T
+select ANONYMIZE('müller')
+----
+xxxxxx
+
+# test anonymize on tables
+statement ok
+CREATE TABLE test_data(id INTEGER, sensitive_data STRING, description STRING)
+
+statement ok
+INSERT INTO test_data VALUES 
+(1, 'John Doe', 'Customer Name'),
+(2, 'user@company.com', 'Email Address'),
+(3, '555-123-4567', 'Phone Number'),
+(4, '', 'Empty Field'),
+(5, NULL, 'Null Field'),
+(6, 'Secret123!@#', 'Password')
+
+query IT
+select id, ANONYMIZE(sensitive_data) FROM test_data ORDER BY id
+----
+1	xxxxxxxx
+2	xxxxxxxxxxxxxxxx
+3	xxxxxxxxxxxx
+4	(empty)
+5	NULL
+6	xxxxxxxxxxxx
+
+query T
+select ANONYMIZE(description) FROM test_data WHERE id <= 3
+----
+xxxxxxxxxxxxx
+xxxxxxxxxxxxx
+xxxxxxxxxxxx
+
+# test incorrect usage of anonymize
+statement error
+select ANONYMIZE(123)
+----
+
+statement error
+select ANONYMIZE('test', 'extra')
+----

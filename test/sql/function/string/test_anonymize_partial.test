@@ -1,0 +1,205 @@
+# name: test/sql/function/string/test_anonymize_partial.test
+# description: ANONYMIZE_PARTIAL function tests
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test anonymize_partial on NULLs
+query T
+select ANONYMIZE_PARTIAL(NULL, 3, 4)
+----
+NULL
+
+query T
+select ANONYMIZE_PARTIAL('test', NULL, 4)
+----
+NULL
+
+query T
+select ANONYMIZE_PARTIAL('test', 3, NULL)
+----
+NULL
+
+# test basic anonymize_partial on scalars
+query T
+select ANONYMIZE_PARTIAL('SensitiveData', 3, 4)
+----
+SenxxxxxxData
+
+query T
+select ANONYMIZE_PARTIAL('Hello World', 2, 3)
+----
+Hexxxxxxrld
+
+query T
+select ANONYMIZE_PARTIAL('Secret123', 1, 2)
+----
+Sxxxxxx23
+
+query T
+select ANONYMIZE_PARTIAL('Test', 1, 1)
+----
+Txxt
+
+# test anonymize_partial with edge cases - start/end larger than string
+query T
+select ANONYMIZE_PARTIAL('Short', 10, 10)
+----
+Short
+
+query T
+select ANONYMIZE_PARTIAL('Test', 2, 10)
+----
+Test
+
+query T
+select ANONYMIZE_PARTIAL('Test', 10, 2)
+----
+Test
+
+# test anonymize_partial with zero values
+query T
+select ANONYMIZE_PARTIAL('TestString', 0, 0)
+----
+xxxxxxxxxx
+
+query T
+select ANONYMIZE_PARTIAL('TestString', 0, 3)
+----
+xxxxxxxing
+
+query T
+select ANONYMIZE_PARTIAL('TestString', 3, 0)
+----
+Tesxxxxxxx
+
+# test anonymize_partial with negative values (should be treated as 0)
+query T
+select ANONYMIZE_PARTIAL('TestString', -1, 3)
+----
+xxxxxxxing
+
+query T
+select ANONYMIZE_PARTIAL('TestString', 3, -1)
+----
+Tesxxxxxxx
+
+# test anonymize_partial with equal start and end
+query T
+select ANONYMIZE_PARTIAL('TestString', 5, 5)
+----
+TestString
+
+# test anonymize_partial with overlapping start and end
+query T
+select ANONYMIZE_PARTIAL('Short', 3, 3)
+----
+Short
+
+# test anonymize_partial with single character string
+query T
+select ANONYMIZE_PARTIAL('A', 1, 1)
+----
+A
+
+query T
+select ANONYMIZE_PARTIAL('A', 0, 0)
+----
+x
+
+# test anonymize_partial with empty string
+query T
+select ANONYMIZE_PARTIAL('', 1, 1)
+----
+(empty)
+
+# test anonymize_partial with mixed characters
+query T
+select ANONYMIZE_PARTIAL('TestData', 2, 2)
+----
+Texxxxta
+
+query T
+select ANONYMIZE_PARTIAL('Numbers123', 3, 3)
+----
+Numxxxx123
+
+# test anonymize_partial with unicode characters
+query T
+select ANONYMIZE_PARTIAL('MotörHead', 2, 2)
+----
+Moxxxxxad
+
+query T
+select ANONYMIZE_PARTIAL('你好世界', 1, 1)
+----
+你xx界
+
+query T
+select ANONYMIZE_PARTIAL('🦆🐱🦆🐱', 1, 1)
+----
+🦆xx🐱
+
+# test anonymize_partial on tables
+statement ok
+CREATE TABLE partial_data(id INTEGER, data STRING, start_chars INTEGER, end_chars INTEGER)
+
+statement ok
+INSERT INTO partial_data VALUES 
+(1, 'CreditCardNumber', 4, 4),
+(2, 'SocialSecurityNumber', 3, 4),
+(3, 'PhoneNumber', 3, 3),
+(4, 'Short', 2, 2),
+(5, 'A', 1, 1),
+(6, '', 1, 1),
+(7, NULL, 2, 2),
+(8, 'AccountNumber123', 0, 5)
+
+query IT
+select id, ANONYMIZE_PARTIAL(data, start_chars, end_chars) FROM partial_data ORDER BY id
+----
+1	Credxxxxxxxxmber
+2	Socxxxxxxxxxxxxxmber
+3	Phoxxxxxber
+4	Shxrt
+5	A
+6	(empty)
+7	NULL
+8	xxxxxxxxxxxer123
+
+# test with consistent parameters
+query T
+select ANONYMIZE_PARTIAL(data, 2, 3) FROM partial_data WHERE data IS NOT NULL AND data != ''
+----
+Crxxxxxxxxxxxber
+Soxxxxxxxxxxxxxxxber
+Phxxxxxxber
+Short
+A
+Acxxxxxxxxxxx123
+
+# test incorrect usage of anonymize_partial
+statement error
+select ANONYMIZE_PARTIAL('test', 'invalid', 2)
+----
+
+statement error
+select ANONYMIZE_PARTIAL('test', 2, 'invalid')
+----
+
+statement error
+select ANONYMIZE_PARTIAL(123, 2, 3)
+----
+
+statement error
+select ANONYMIZE_PARTIAL('test')
+----
+
+statement error
+select ANONYMIZE_PARTIAL('test', 2)
+----
+
+statement error
+select ANONYMIZE_PARTIAL('test', 2, 3, 4)
+----
