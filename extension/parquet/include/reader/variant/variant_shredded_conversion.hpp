@@ -16,6 +16,8 @@ public:
 	                                                idx_t length, idx_t total_size);
 	static vector<VariantValue> ConvertShreddedArray(Vector &metadata, Vector &value, Vector &typed_value, idx_t offset,
 	                                                 idx_t length, idx_t total_size);
+	static vector<VariantValue> ConvertShreddedObject(Vector &metadata, Vector &value, Vector &typed_value,
+	                                                  idx_t offset, idx_t length, idx_t total_size);
 };
 
 } // namespace duckdb

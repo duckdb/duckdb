@@ -306,6 +306,87 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 	}
 }
 
+namespace {
+
+struct ShreddedVariantField {
+public:
+	explicit ShreddedVariantField(const string &field_name) : field_name(field_name) {
+	}
+
+public:
+	string field_name;
+	//! Values for the field, for all rows
+	vector<VariantValue> values;
+};
+
+} // namespace
+
+vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &metadata, Vector &value,
+                                                                      Vector &typed_value, idx_t offset, idx_t length,
+                                                                      idx_t total_size) {
+	auto &type = typed_value.GetType();
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	auto &fields = StructType::GetChildTypes(type);
+	auto &entries = StructVector::GetEntries(typed_value);
+	D_ASSERT(entries.size() == fields.size());
+
+	//! Process all fields to get the shredded field values
+	vector<ShreddedVariantField> shredded_fields;
+	shredded_fields.reserve(fields.size());
+	for (idx_t i = 0; i < fields.size(); i++) {
+		auto &field = fields[i];
+		auto &field_name = field.first;
+		auto &field_type = field.second;
+		auto &field_vec = *entries[i];
+		VerifyVariantGroup(field_type);
+
+		auto &variant_group_children = StructVector::GetEntries(field_vec);
+		auto &field_value = *variant_group_children[0];
+		auto &field_typed_value = *variant_group_children[1];
+
+		shredded_fields.emplace_back(field_name);
+		auto &shredded_field = shredded_fields.back();
+		shredded_field.values = Convert(metadata, field_value, field_typed_value, offset, length, total_size);
+	}
+
+	UnifiedVectorFormat value_format;
+	value.ToUnifiedFormat(total_size, value_format);
+	auto value_data = value_format.GetData<string_t>(value_format);
+	auto &validity = value_format.validity;
+
+	UnifiedVectorFormat metadata_format;
+	metadata.ToUnifiedFormat(length, metadata_format);
+	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
+
+	vector<VariantValue> ret(length);
+	for (idx_t i = 0; i < length; i++) {
+		ret[i] = VariantValue(VariantValueType::OBJECT);
+		auto index = value_format.sel->get_index(i + offset);
+
+		for (idx_t field_index = 0; field_index < shredded_fields.size(); field_index++) {
+			auto &shredded_field = shredded_fields[field_index];
+			auto &field_value = shredded_field.values[i];
+
+			ret[i].AddChild(shredded_field.field_name, std::move(field_value));
+		}
+
+		if (validity.RowIsValid(index)) {
+			//! Object is partially shredded, decode the object and merge the values
+			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+			VariantMetadata variant_metadata(metadata_value);
+			auto binary_value = value_data[index].GetData();
+			auto unshredded = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+			if (unshredded.value_type != VariantValueType::OBJECT) {
+				throw InvalidInputException("Partially shredded objects have to encode Object Variants in the 'value'");
+			}
+			for (auto &item : unshredded.object_children) {
+				ret[i].AddChild(item.first, std::move(item.second));
+			}
+		}
+	}
+	return ret;
+}
+
 vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &metadata, Vector &value,
                                                                      Vector &typed_value, idx_t offset, idx_t length,
                                                                      idx_t total_size) {
@@ -338,7 +419,7 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 	auto &type = typed_value.GetType();
 	vector<VariantValue> ret;
 	if (type.id() == LogicalTypeId::STRUCT) {
-		throw NotImplementedException("Variant shredded Object");
+		return ConvertShreddedObject(metadata, value, typed_value, offset, length, total_size);
 	} else if (type.id() == LogicalTypeId::LIST) {
 		return ConvertShreddedArray(metadata, value, typed_value, offset, length, total_size);
 	} else {
