@@ -114,16 +114,6 @@ from 'data/parquet-testing/variant_shredded_string.parquet';
 ----
 1	"iceberg"
 
-mode skip
-
-# Object
-query II
-from 'data/parquet-testing/variant_shredded_object1.parquet';
-----
-1	"iceberg"
-
-mode unskip
-
 # Timestamp Micros - positive (with timezone)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_positive.parquet';
@@ -148,16 +138,6 @@ from 'data/parquet-testing/variant_shredded_double_positive.parquet';
 ----
 1	14.3
 
-mode skip
-
-# Array
-query II
-from 'data/parquet-testing/variant_shredded_array1.parquet';
-----
-1	14.3
-
-mode unskip
-
 # decimal16 - positive
 query II
 from 'data/parquet-testing/variant_shredded_decimal16_positive.parquet';
@@ -176,16 +156,6 @@ from 'data/parquet-testing/variant_shredded_int16_negative.parquet';
 ----
 1	-1234
 
-mode skip
-
-# Array
-query II
-from 'data/parquet-testing/variant_shredded_array2.parquet';
-----
-1	-1234
-
-mode unskip
-
 # Timestamp Micros - positive (with timezone) (again ??)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_positive2.parquet';
@@ -198,31 +168,11 @@ from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_negative.parquet
 ----
 1	"1957-11-07 12:33:54.123456+00"
 
-mode skip
-
-# Array
-query II
-from 'data/parquet-testing/variant_shredded_array3.parquet';
-----
-1	"1957-11-07 12:33:54.123456+00"
-
-mode unskip
-
 # decimal8 - positive
 query II
 from 'data/parquet-testing/variant_shredded_decimal8_positive.parquet';
 ----
 1	"123456789.987654321"
-
-mode skip
-
-# Object
-query II
-from 'data/parquet-testing/variant_shredded_object2.parquet';
-----
-1	"123456789.987654321"
-
-mode unskip
 
 # Timestamp Nanos - negative (no timezone)
 query II
@@ -259,16 +209,6 @@ query II
 from 'data/parquet-testing/variant_shredded_int8_negative.parquet';
 ----
 1	-34
-
-mode skip
-
-# Object
-query II
-from 'data/parquet-testing/variant_shredded_object3.parquet';
-----
-1	-34
-
-mode unskip
 
 # Time Micros (no timezone)
 query II

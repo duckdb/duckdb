@@ -1,0 +1,43 @@
+# name: test/parquet/variant/variant_shredded_nested.test
+# group: [variant]
+
+require parquet
+
+statement ok
+set variant_legacy_encoding=true;
+
+# Array
+query II
+from 'data/parquet-testing/variant_shredded_array3.parquet';
+----
+1	["iceberg","string"]
+
+## Array
+#query II
+#from 'data/parquet-testing/variant_shredded_array2.parquet';
+#----
+#1	-1234
+
+## Array
+#query II
+#from 'data/parquet-testing/variant_shredded_array3.parquet';
+#----
+#1	"1957-11-07 12:33:54.123456+00"
+
+## Object
+#query II
+#from 'data/parquet-testing/variant_shredded_object1.parquet';
+#----
+#1	"iceberg"
+
+## Object
+#query II
+#from 'data/parquet-testing/variant_shredded_object2.parquet';
+#----
+#1	"123456789.987654321"
+
+## Object
+#query II
+#from 'data/parquet-testing/variant_shredded_object3.parquet';
+#----
+#1	-34

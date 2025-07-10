@@ -67,7 +67,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		Vector typed_value_intermediate(typed_value_reader->Type(), num_values);
 		(void)typed_value_reader->Read(num_values, define_out, repeat_out, typed_value_intermediate);
 		conversion_result = VariantShreddedConversion::Convert(metadata_intermediate, value_intermediate,
-		                                                       typed_value_intermediate, num_values);
+		                                                       typed_value_intermediate, 0, num_values, num_values);
 	} else {
 		conversion_result.resize(num_values);
 		auto &value_validity = FlatVector::Validity(value_intermediate);
