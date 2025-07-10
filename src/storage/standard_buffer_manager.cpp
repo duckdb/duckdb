@@ -470,34 +470,6 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	return result;
 }
 
-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
-                                                                          FileHandle &handle, idx_t position,
-                                                                          idx_t size, idx_t block_header_size,
-                                                                          unique_ptr<FileBuffer> reusable_buffer) {
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size, std::move(reusable_buffer));
-	buffer->Read(handle, position);
-	return buffer;
-}
-
-unique_ptr<FileBuffer>
-StandardBufferManager::ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager, FileHandle &handle,
-                                                            idx_t position, idx_t size, idx_t block_header_size,
-                                                            unique_ptr<FileBuffer> reusable_buffer) {
-
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size, std::move(reusable_buffer));
-
-	//! Read nonce and tag from file.
-	uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-	handle.Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, position);
-
-	//! Read and decrypt the buffer.
-	buffer->Read(handle, position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
-	EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), buffer->InternalBuffer(),
-	                                         buffer->AllocSize(), encryption_metadata);
-
-	return buffer;
-}
-
 string StandardBufferManager::GetTemporaryPath(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	return fs.JoinPath(temporary_directory.path, "duckdb_temp_block-" + to_string(id) + ".block");
@@ -584,13 +556,21 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	idx_t offset = sizeof(idx_t) * 2;
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	unique_ptr<FileBuffer> buffer;
+	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
+
 	if (db.config.options.temp_file_encryption) {
-		buffer = ReadTemporaryBufferInternalEncrypted(*this, *handle, offset, block_size, block_header_size,
-		                                              std::move(reusable_buffer));
+		// encrypted
+		//! Read nonce and tag from file.
+		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+		handle->Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+
+		//! Read and decrypt the buffer.
+		buffer->Read(*handle, offset + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		EncryptionEngine::DecryptTemporaryBuffer(GetDatabase(), buffer->InternalBuffer(), buffer->AllocSize(),
+		                                         encryption_metadata);
 	} else {
-		buffer = ReadTemporaryBufferInternal(*this, *handle, offset, block_size, block_header_size,
-		                                     std::move(reusable_buffer));
+		// unencrypted: read the data directly
+		buffer->Read(*handle, offset);
 	}
 
 	handle.reset();
