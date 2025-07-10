@@ -329,7 +329,7 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 		arrow_stream.release(&arrow_stream);
 	}
 
-	input_data = db.QueryArrow("SELECT 42");
+	input_data = db.QueryArrow("SELECT 42 as value");
 
 	StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error);
 
@@ -1468,7 +1468,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1496,7 +1496,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1627,7 +1627,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1676,7 +1676,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1712,7 +1712,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_all_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1748,7 +1748,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1776,7 +1776,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1907,7 +1907,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1955,7 +1955,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1990,7 +1990,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_errors");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 

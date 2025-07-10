@@ -714,7 +714,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	while (arrow_array->release) {
 		// This is a valid arrow array, let's make it into a data chunk
 		arrow_to_duckdb_data_chunk(connection, c_arrow_array, out_types, &out_chunk);
-		input->get_next(input, arrow_array);
+
 		if (duckdb_append_data_chunk(appender, out_chunk) != DuckDBSuccess) {
 			for (idx_t i = 0; i < out_column_count; i++) {
 				delete[](out_names)[i];
@@ -727,10 +727,10 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		}
 		duckdb_destroy_arrow_array(&c_arrow_array);
 		duckdb_destroy_data_chunk(&out_chunk);
-
 		arrow_array = new ArrowArray();
 		c_arrow_array = reinterpret_cast<duckdb_arrow_array>(arrow_array);
 		out_chunk = duckdb_create_data_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
+		input->get_next(input, arrow_array);
 	}
 
 	for (idx_t i = 0; i < out_column_count; i++) {
