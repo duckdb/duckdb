@@ -539,7 +539,6 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 		if (typed_value.name != "typed_value") {
 			return false;
 		}
-		throw NotImplementedException("Shredded Variants are not supported yet");
 	} else if (children.size() != 2) {
 		return false;
 	}
