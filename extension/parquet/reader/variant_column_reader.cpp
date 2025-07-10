@@ -1,5 +1,6 @@
 #include "reader/variant_column_reader.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
+#include "reader/variant/variant_shredded_conversion.hpp"
 
 namespace duckdb {
 
@@ -57,11 +58,10 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	}
 	if (metadata_values != value_values) {
 		throw InvalidInputException(
-		    "The unshredded Variant column did not contain the same amount of values for 'metadata' and 'value'");
+		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	VariantBinaryDecoder decoder(context);
-
+	VariantBinaryDecoder decoder;
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);
 	auto value_intermediate_data = FlatVector::GetData<string_t>(value_intermediate);
@@ -78,17 +78,16 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 			throw InvalidInputException("The Variant 'metadata' can not be NULL");
 		}
 		VariantMetadata variant_metadata(metadata_intermediate_data[i]);
-		VariantDecodeResult decode_result;
-		decode_result.doc = yyjson_mut_doc_new(nullptr);
 
 		VariantValue val;
 		if (typed_value_validity && typed_value_validity->RowIsValid(i)) {
 			//! This row has a typed value, the variant is (potentially partially) shredded on this type.
+			if (value_validity.RowIsValid(i)) {
+				//! Partially shredded
+			}
+
 		} else if (value_validity.RowIsValid(i)) {
 			auto value_data = reinterpret_cast<const_data_ptr_t>(value_intermediate_data[i].GetData());
-			//! TODO: Do we want to create an intermediate representation, probably a Value ?
-			//! Since we need to union the shredded value and unshredded values
-			//! it's probably necessary to do this
 			val = decoder.Decode(variant_metadata, value_data);
 		} else {
 			//! Missing from both 'typed_value' and 'value', emit null
@@ -96,8 +95,11 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		}
 
 		//! Write the result to a string
+		VariantDecodeResult decode_result;
+		decode_result.doc = yyjson_mut_doc_new(nullptr);
+		auto json_val = val.ToJSON(context, decode_result.doc);
+
 		size_t len;
-		auto json_val = val.ToJSON(decode_result.doc);
 		decode_result.data =
 		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
 		if (!decode_result.data) {

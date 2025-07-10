@@ -114,7 +114,7 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 	return result;
 }
 
-VariantBinaryDecoder::VariantBinaryDecoder(ClientContext &context) : context(context) {
+VariantBinaryDecoder::VariantBinaryDecoder() {
 }
 
 template <class T>
@@ -211,12 +211,9 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		return VariantValue(Value(value_str));
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
-		timestamp_tz_t micros_tz_ts;
-		micros_tz_ts.value = Load<int64_t>(data);
-
-		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
-		auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-		return VariantValue(Value(value_str));
+		timestamp_t micros_ts;
+		micros_ts.value = Load<int64_t>(data);
+		return VariantValue(Value::TIMESTAMP(micros_ts), LogicalTypeId::TIMESTAMP_TZ);
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
 		timestamp_t micros_ts;
@@ -251,25 +248,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		timestamp_ns_t nanos_ts;
 		nanos_ts.value = Load<int64_t>(data);
-
-		//! Convert the nanos timestamp to a micros timestamp
-		date_t out_date;
-		dtime_t out_time;
-		int32_t out_nanos;
-		Timestamp::Convert(nanos_ts, out_date, out_time, out_nanos);
-		auto micros_ts = Timestamp::FromDatetime(out_date, out_time);
-
-		//! Turn the micros timestamp into a micros_tz timestamp and serialize it
-		timestamp_tz_t micros_tz_ts(micros_ts.value);
-		auto value = Value::TIMESTAMPTZ(micros_tz_ts);
-		auto value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-
-		if (StringUtil::Contains(value_str, "+")) {
-			//! Don't attempt this for NaN/Inf timestamps
-			auto parts = StringUtil::Split(value_str, '+');
-			value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
-		}
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::TIMESTAMPNS(nanos_ts), LogicalTypeId::TIMESTAMP_TZ);
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
 		timestamp_ns_t nanos_ts;
@@ -384,77 +363,6 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 	}
 	default:
 		throw InternalException("Unexpected value for VariantBasicType");
-	}
-}
-
-void VariantValue::SetPrimitiveValue(Value &&val) {
-	D_ASSERT(value_type == VariantValueType::PRIMITIVE);
-	primitive_value = std::move(val);
-}
-
-void VariantValue::AddChild(const string &key, VariantValue &&val) {
-	D_ASSERT(value_type == VariantValueType::OBJECT);
-	object_children.emplace(key, std::move(val));
-}
-
-void VariantValue::AddItem(VariantValue &&val) {
-	D_ASSERT(value_type == VariantValueType::ARRAY);
-	array_items.push_back(std::move(val));
-}
-
-yyjson_mut_val *VariantValue::ToJSON(yyjson_mut_doc *doc) const {
-	switch (value_type) {
-	case VariantValueType::PRIMITIVE: {
-		if (primitive_value.IsNull()) {
-			return yyjson_mut_null(doc);
-		}
-		switch (primitive_value.type().id()) {
-		case LogicalTypeId::BOOLEAN: {
-			if (primitive_value.GetValue<bool>()) {
-				return yyjson_mut_true(doc);
-			} else {
-				return yyjson_mut_false(doc);
-			}
-		}
-		case LogicalTypeId::TINYINT:
-			return yyjson_mut_int(doc, primitive_value.GetValue<int8_t>());
-		case LogicalTypeId::SMALLINT:
-			return yyjson_mut_int(doc, primitive_value.GetValue<int16_t>());
-		case LogicalTypeId::INTEGER:
-			return yyjson_mut_int(doc, primitive_value.GetValue<int32_t>());
-		case LogicalTypeId::BIGINT:
-			return yyjson_mut_int(doc, primitive_value.GetValue<int64_t>());
-		case LogicalTypeId::FLOAT:
-			return yyjson_mut_real(doc, primitive_value.GetValue<float>());
-		case LogicalTypeId::DOUBLE:
-			return yyjson_mut_real(doc, primitive_value.GetValue<double>());
-		case LogicalTypeId::VARCHAR: {
-			auto value = primitive_value.GetValue<string>();
-			return yyjson_mut_strncpy(doc, value.c_str(), value.size());
-		}
-		default:
-			throw InternalException("Unexpected primitive type: %s", primitive_value.type().ToString());
-		}
-	}
-	case VariantValueType::OBJECT: {
-		auto obj = yyjson_mut_obj(doc);
-		for (const auto &it : object_children) {
-			auto &key = it.first;
-			auto value = it.second.ToJSON(doc);
-			yyjson_mut_obj_add_val(doc, obj, key.c_str(), value);
-		}
-		return obj;
-	}
-	case VariantValueType::ARRAY: {
-		auto arr = yyjson_mut_arr(doc);
-		for (auto &item : array_items) {
-			auto value = item.ToJSON(doc);
-			yyjson_mut_arr_add_val(arr, value);
-		}
-		return arr;
-	}
-	default:
-		throw InternalException("Can't serialize this VariantValue type to JSON");
 	}
 }
 
