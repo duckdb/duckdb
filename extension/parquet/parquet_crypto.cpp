@@ -377,7 +377,7 @@ bool ParquetCrypto::ValidKey(const std::string &key) {
 	}
 }
 
-string Base64Decode(const string &key) {
+static string Base64Decode(const string &key) {
 	auto result_size = Blob::FromBase64Size(key);
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);

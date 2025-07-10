@@ -6,7 +6,7 @@
 namespace duckdb {
 
 template <class SRC_TYPE, class RES_TYPE>
-bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
 	auto res_enum_type = result.GetType();
@@ -31,7 +31,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 }
 
 template <class SRC_TYPE>
-BoundCastInfo EnumEnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+static BoundCastInfo EnumEnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.InternalType()) {
 	case PhysicalType::UINT8:
 		return EnumEnumCast<SRC_TYPE, uint8_t>;
@@ -68,7 +68,8 @@ public:
 	}
 };
 
-unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+static unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source,
+                                              const LogicalType &target) {
 	auto to_varchar_cast = input.GetCastFunction(source, LogicalType::VARCHAR);
 	auto from_varchar_cast = input.GetCastFunction(LogicalType::VARCHAR, target);
 	return make_uniq<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));

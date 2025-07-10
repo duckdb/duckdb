@@ -23,7 +23,7 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
-idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
 	// returns a consecutive child list that fully flattens and repeats all required elements
 	auto &validity = FlatVector::Validity(list);
 	auto list_entries = FlatVector::GetData<list_entry_t>(list);
