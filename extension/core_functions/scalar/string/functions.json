@@ -400,5 +400,41 @@
         "example": "url_decode('https%3A%2F%2Fduckdb.org%2Fwhy_duckdb%23portable')",
         "categories": ["string"],
         "type": "scalar_function"
+    },
+    {
+        "name": "anonymize",
+        "parameters": "string",
+        "description": "Replaces all characters in the string with 'x' for data anonymization.",
+        "example": "anonymize('SensitiveData')",
+        "categories": ["string"],
+        "type": "scalar_function",
+        "struct": "AnonymizeFun"
+    },
+    {
+        "name": "anonymize_advanced",
+        "parameters": "string,replacement_char",
+        "description": "Replaces all characters in the string with the specified replacement character.",
+        "example": "anonymize_advanced('SensitiveData', '*')",
+        "categories": ["string"],
+        "type": "scalar_function_set",
+        "struct": "AnonymizeAdvancedFun"
+    },
+    {
+        "name": "anonymize_email",
+        "parameters": "string",
+        "description": "Anonymizes the local part of an email address while preserving the domain.",
+        "example": "anonymize_email('user@company.com')",
+        "categories": ["string"],
+        "type": "scalar_function",
+        "struct": "AnonymizeEmailFun"
+    },
+    {
+        "name": "anonymize_partial",
+        "parameters": "string,start_pos,length",
+        "description": "Anonymizes only a specified portion of the string starting at start_pos for the given length.",
+        "example": "anonymize_partial('SensitiveData', 3, 4)",
+        "categories": ["string"],
+        "type": "scalar_function_set",
+        "struct": "AnonymizePartialFun"
     }
 ]

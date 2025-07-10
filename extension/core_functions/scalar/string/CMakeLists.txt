@@ -24,7 +24,8 @@ add_library_unity(
   translate.cpp
   chr.cpp
   unicode.cpp
-  jaro_winkler.cpp)
+  jaro_winkler.cpp
+  anonymization.cpp)
 set(CORE_FUNCTION_FILES
     ${CORE_FUNCTION_FILES} $<TARGET_OBJECTS:duckdb_core_functions_string>
     PARENT_SCOPE)
