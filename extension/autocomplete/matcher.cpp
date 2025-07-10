@@ -304,36 +304,24 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
-		if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
-			return MatchResultType::FAIL;
+		if (suggestion_type == SuggestionState::SUGGEST_COLLABEL ||
+			suggestion_type == SuggestionState::SUGGEST_RESERVED_TABLE_NAME ||
+			suggestion_type == SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME) {
+			// no-op
+		} else if (suggestion_type == SuggestionState::SUGGEST_TABLE_NAME) {
+			// A ColId is invalid only if it's a reserved keyword or a type/function keyword.
+			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
+				return MatchResultType::FAIL;
+			}
+		} else if (suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME || suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME) {
+			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
+				return MatchResultType::FAIL;
+			}
+		} else {
+			if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
+				return MatchResultType::FAIL;
+			}
 		}
-		// if (suggestion_type == SuggestionState::SUGGEST_TABLE_FUNCTION_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME) {
-		// 	if (category == KeywordCategory::KEYWORD_RESERVED ||
-		// 		category == GetBannedCategory()) {
-		// 		// Printer::PrintF("%d %d: %s FAIL", suggestion_type, category, token_text);
-		// 		return MatchResultType::FAIL;
-		// 	}
-		// }
-		// else if (suggestion_type == SuggestionState::SUGGEST_TYPE_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_TABLE_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_COLUMN_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_PRAGMA_NAME ||
-		// 	suggestion_type == SuggestionState::SUGGEST_SETTING_NAME) {
-		// 	if (category == KeywordCategory::KEYWORD_RESERVED ||
-		// 		category == KeywordCategory::KEYWORD_COL_NAME) {
-		// 		// Printer::PrintF("%s %d: %s FAIL", ToString(), category, token_text);
-		// 		return MatchResultType::FAIL;
-		// 	}
-		// }
-		// else if (suggestion_type == SuggestionState::SUGGEST_VARIABLE) {
-		// 	if (category == KeywordCategory::KEYWORD_RESERVED) {
-		// 		// Printer::PrintF("%s %d: %s FAIL", ToString(), category, token_text);
-		// 		return MatchResultType::FAIL;
-		// 	}
-		// }
 		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
 		}
@@ -343,6 +331,8 @@ public:
 
 	bool SupportsStringLiteral() const {
 		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_COLLABEL:
+		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
 		case SuggestionState::SUGGEST_TABLE_NAME:
 		case SuggestionState::SUGGEST_FILE_NAME:
 			return true;
@@ -541,6 +531,9 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &ColLabel() const;
+	Matcher &ReservedTableName() const;
+	Matcher &ReservedSchemaName() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -583,6 +576,18 @@ Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
 
 Matcher &MatcherFactory::Variable() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
+}
+
+Matcher &MatcherFactory::ColLabel() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLLABEL));
+}
+
+Matcher &MatcherFactory::ReservedTableName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_RESERVED_TABLE_NAME));
+}
+
+Matcher &MatcherFactory::ReservedSchemaName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME));
 }
 
 Matcher &MatcherFactory::CatalogName() const {
@@ -1134,6 +1139,9 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride(".", 0, '\0');
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
+	AddRuleOverride("ColLabel", ColLabel());
+	AddRuleOverride("ReservedTableName" , ReservedTableName());
+	AddRuleOverride("ReservedSchemaName" , ReservedSchemaName());
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());

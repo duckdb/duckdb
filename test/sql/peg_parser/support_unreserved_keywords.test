@@ -5,6 +5,64 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE OR REPLACE TABLE 'everflow_daily' AS SELECT *$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE tmp.t1(id int);$TEST_PEG_PARSER$);
+
+require tpch
+
+statement ok
+CREATE SCHEMA abcdefgh;
+
+query II
+FROM sql_auto_complete('CREATE TABLE abcd') LIMIT 1;
+----
+abcdefgh.	13
+
+
+statement ok
+CALL dbgen(sf=0);
+
+query II
+FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
+----
+lineitem	12
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE database.schema.table(foo integer);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE MACRO foo(a,b) as TABLE select *;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO database.schema.table VALUES ({'field': 42});$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM database.schema.table;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select * from 'data/csv/nullbyte.csv';$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE foo(try_cast INTEGER);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT "hello world".i FROM foo AS 'hello world'$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM information_schema.schema$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM information_schema.columns$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$DROP TABLE IF EXISTS map;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE map(v INTEGER);$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$RESET VARIABLE foo$TEST_PEG_PARSER$);
 
 statement ok
@@ -112,12 +170,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$SELECT MAP{ 0 : 0 } FROM lineitem$TEST_PE
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT l_returnflag,       map {   '0': case when sum(1) filter(l_orderkey <= 0) is null then 0 end,       '1000000': sum(1) filter(l_orderkey > 0 and l_orderkey <= 1000000),         '2000000': sum(1) filter(l_orderkey > 1000000 and l_orderkey <= 2000000),       '3000000': sum(1) filter(l_orderkey > 2000000 and l_orderkey <= 3000000),   '4000000': sum(1) filter(l_orderkey > 3000000 and l_orderkey <= 4000000),       '5000000': sum(1) filter(l_orderkey > 4000000 and l_orderkey <= 5000000),   '6000000': sum(1) filter(l_orderkey > 5000000 and l_orderkey <= 6000000)        } FROM lineitem GROUP BY l_returnflag ORDER BY l_returnflag$TEST_PEG_PARSER$);
-
-# Non reserved keyword as implicit alias (should fail)
-statement error
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT c2 after;$TEST_PEG_PARSER$);
-----
-Binder Error: Failed to parse query "SELECT c2 after;" - did not consume all tokens (got to token 2 - after)
 
 # Non keyword as explicit alias
 statement ok

@@ -8,6 +8,12 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$use my_datalake.default;$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select * from my_datalake.default.empty_table;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$DROP INDEX simple.new_schema.i_index$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$DROP INDEX s.i_index;$TEST_PEG_PARSER$);
 
 statement ok
