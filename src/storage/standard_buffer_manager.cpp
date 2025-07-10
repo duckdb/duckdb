@@ -111,10 +111,6 @@ idx_t StandardBufferManager::GetBlockSize() const {
 	return temp_block_manager->GetBlockSize();
 }
 
-uint64_t StandardBufferManager::GetTemporaryBlockHeaderSize() const {
-	return temp_block_manager->GetBlockHeaderSize();
-}
-
 idx_t StandardBufferManager::GetQueryMaxMemory() const {
 	return GetBufferPool().GetQueryMaxMemory();
 }
@@ -183,7 +179,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
                                                                        bool can_destroy) {
-	return RegisterMemory(tag, block_size, GetTemporaryBlockHeaderSize(), can_destroy);
+	return RegisterMemory(tag, block_size, Storage::DEFAULT_BLOCK_HEADER_SIZE, can_destroy);
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateMemory(MemoryTag tag, BlockManager *block_manager,
@@ -474,22 +470,21 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	return result;
 }
 
-unique_ptr<FileBuffer>
-StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
-                                                   idx_t size, unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
-	                                                    std::move(reusable_buffer));
+unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
+                                                                          FileHandle &handle, idx_t position,
+                                                                          idx_t size, idx_t block_header_size,
+                                                                          unique_ptr<FileBuffer> reusable_buffer) {
+	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size, std::move(reusable_buffer));
 	buffer->Read(handle, position);
 	return buffer;
 }
 
 unique_ptr<FileBuffer>
 StandardBufferManager::ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager, FileHandle &handle,
-                                                            idx_t position, idx_t size,
-                                                            unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
+                                                            idx_t position, idx_t size, idx_t block_header_size,
+                                                            unique_ptr<FileBuffer> reusable_buffer) {
 
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
-	                                                    std::move(reusable_buffer));
+	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size, std::move(reusable_buffer));
 
 	//! Read nonce and tag from file.
 	uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
@@ -497,7 +492,8 @@ StandardBufferManager::ReadTemporaryBufferInternalEncrypted(BufferManager &buffe
 
 	//! Read and decrypt the buffer.
 	buffer->Read(handle, position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
-	EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), *buffer, encryption_metadata);
+	EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), buffer->InternalBuffer(),
+	                                         buffer->AllocSize(), encryption_metadata);
 
 	return buffer;
 }
@@ -537,9 +533,9 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	// These files are .block, and variable sized (larger then 256kb), as opposed to .tmp
 	auto path = GetTemporaryPath(block_id);
 
-	idx_t delta = 0;
+	idx_t header_size = sizeof(idx_t) * 2;
 	if (db.config.options.temp_file_encryption) {
-		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
@@ -547,18 +543,23 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) * 2 + header_size);
 	//! for very large buffers, we store the size of the buffer in plaintext.
+	idx_t block_header_size = buffer.GetHeaderSize();
 	handle->Write(QueryContext(), &buffer.size, sizeof(idx_t), 0);
+	handle->Write(QueryContext(), &block_header_size, sizeof(idx_t), sizeof(idx_t));
+
+	idx_t offset = sizeof(idx_t) * 2;
 
 	if (db.config.options.temp_file_encryption) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
+		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
 		//! Write the nonce (and tag for GCM).
-		handle->Write(QueryContext(), encryption_metadata, delta, sizeof(idx_t));
+		handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+		offset += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
-	buffer.Write(QueryContext(), *handle, sizeof(idx_t) + delta);
+	buffer.Write(QueryContext(), *handle, offset);
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
@@ -573,18 +574,23 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 
 	// This block contains data of variable size so we need to open it and read it to get its size.
 	idx_t block_size;
+	idx_t block_header_size;
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&block_size, sizeof(idx_t), 0);
+	handle->Read(&block_header_size, sizeof(idx_t), sizeof(idx_t));
+
+	idx_t offset = sizeof(idx_t) * 2;
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	unique_ptr<FileBuffer> buffer;
 	if (db.config.options.temp_file_encryption) {
-		buffer =
-		    ReadTemporaryBufferInternalEncrypted(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+		buffer = ReadTemporaryBufferInternalEncrypted(*this, *handle, offset, block_size, block_header_size,
+		                                              std::move(reusable_buffer));
 	} else {
-		buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+		buffer = ReadTemporaryBufferInternal(*this, *handle, offset, block_size, block_header_size,
+		                                     std::move(reusable_buffer));
 	}
 
 	handle.reset();

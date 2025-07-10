@@ -83,9 +83,6 @@ public:
 	idx_t GetBlockSize() const override {
 		return buffer_manager.GetBlockSize();
 	}
-	idx_t GetTemporaryBlockHeaderSize() const override {
-		return buffer_manager.GetTemporaryBlockHeaderSize();
-	}
 	idx_t GetQueryMaxMemory() const override {
 		return buffer_manager.GetQueryMaxMemory();
 	}

@@ -11,51 +11,34 @@
 
 namespace duckdb {
 
-template <idx_t input_size>
-struct EncryptionMetadata {
-	EncryptionMetadata() {
-		memset(metadata, 0, input_size);
-	}
-
-	data_ptr_t data() {
-		return metadata;
-	}
-
-	idx_t size() const {
-		return input_size;
-	}
-
-	data_t metadata[input_size];
-};
-
 struct EncryptionTag {
 	EncryptionTag() = default;
 
 	data_ptr_t data() {
-		return tag.data();
+		return tag;
 	}
 
 	idx_t size() const {
-		return tag.size();
+		return MainHeader::AES_TAG_LEN;
 	}
 
 private:
-	EncryptionMetadata<MainHeader::AES_TAG_LEN> tag;
+	data_t tag[MainHeader::AES_TAG_LEN];
 };
 
 struct EncryptionNonce {
 	EncryptionNonce() = default;
 
 	data_ptr_t data() {
-		return nonce.data();
+		return nonce;
 	}
 
 	idx_t size() const {
-		return nonce.size();
+		return MainHeader::AES_NONCE_LEN;
 	}
 
 private:
-	EncryptionMetadata<MainHeader::AES_NONCE_LEN> nonce;
+	data_t nonce[MainHeader::AES_NONCE_LEN];
 };
 
 class EncryptionEngine {
@@ -77,15 +60,6 @@ public:
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
 	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
 	                         uint64_t block_size, uint64_t delta);
-
-	// Encrypt Buffers (temp files)
-	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata);
-	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
-	                                          data_ptr_t metadata);
-
-	static void DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata);
-	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
-	                                          data_ptr_t metadata);
 
 	static void EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
 	static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,

@@ -76,8 +76,6 @@ public:
 	virtual idx_t GetBlockAllocSize() const = 0;
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
-	//! Returns the block header size for buffer-managed blocks.
-	virtual idx_t GetTemporaryBlockHeaderSize() const = 0;
 	//! Returns the maximum available memory for a given query.
 	virtual idx_t GetQueryMaxMemory() const = 0;
 

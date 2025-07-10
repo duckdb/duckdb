@@ -141,6 +141,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 
 	//! store the nonce at the start of metadata buffer
 	memcpy(metadata, nonce.data(), nonce.size());
+
 	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), temp_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
@@ -158,14 +159,6 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 
 	// check if tag is correctly stored
 	D_ASSERT(memcmp(tag.data(), metadata + nonce.size(), tag.size()) == 0);
-}
-void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata) {
-	EncryptTemporaryBuffer(db, input_buffer.InternalBuffer(), input_buffer.AllocSize(), metadata);
-}
-
-void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
-                                                     data_ptr_t metadata) {
-	EncryptTemporaryBuffer(db, input_buffer.get(), nr_bytes, metadata);
 }
 
 void EncryptionEngine::DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
@@ -198,15 +191,6 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	DecryptBuffer(*encryption_state, temp_key, buffer, buffer_size, metadata);
-}
-
-void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, data_ptr_t metadata) {
-	DecryptTemporaryBuffer(db, input_buffer.InternalBuffer(), input_buffer.AllocSize(), metadata);
-}
-
-void EncryptionEngine::DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
-                                                     data_ptr_t metadata) {
-	DecryptTemporaryBuffer(db, input_buffer.get(), nr_bytes, metadata);
 }
 
 } // namespace duckdb
