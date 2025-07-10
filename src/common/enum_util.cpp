@@ -3838,19 +3838,20 @@ SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 const StringUtil::EnumStringLiteral *GetShowTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ShowType::SUMMARY), "SUMMARY" },
-		{ static_cast<uint32_t>(ShowType::DESCRIBE), "DESCRIBE" }
+		{ static_cast<uint32_t>(ShowType::DESCRIBE), "DESCRIBE" },
+		{ static_cast<uint32_t>(ShowType::SHOW_FROM), "SHOW_FROM" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value) {
-	return StringUtil::EnumToString(GetShowTypeValues(), 2, "ShowType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetShowTypeValues(), 3, "ShowType", static_cast<uint32_t>(value));
 }
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value) {
-	return static_cast<ShowType>(StringUtil::StringToEnum(GetShowTypeValues(), 2, "ShowType", value));
+	return static_cast<ShowType>(StringUtil::StringToEnum(GetShowTypeValues(), 3, "ShowType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
