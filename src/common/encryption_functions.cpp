@@ -207,7 +207,7 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 	//! load the stored nonce and tag
 	EncryptionTag tag;
 	EncryptionNonce nonce;
-	memcpy(nonce.data(), metadata, tag.size());
+	memcpy(nonce.data(), metadata, nonce.size());
 	memcpy(tag.data(), metadata + nonce.size(), tag.size());
 
 	//! Initialize the decryption
