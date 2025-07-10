@@ -374,10 +374,11 @@
     },
     {
         "name": "enable_http_logging",
-        "description": "Enables HTTP logging",
+        "description": "(deprecated) Enables HTTP logging",
         "type": "BOOLEAN",
         "scope": "local",
-        "struct": "EnableHTTPLoggingSetting"
+        "struct": "EnableHTTPLoggingSetting",
+        "custom_implementation": true
     },
     {
         "name": "enable_http_metadata_cache",
@@ -510,10 +511,11 @@
     },
     {
         "name": "http_logging_output",
-        "description": "The file to which HTTP logging output should be saved, or empty to print to the terminal",
+        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
         "type": "VARCHAR",
         "scope": "local",
-        "struct": "HTTPLoggingOutputSetting"
+        "struct": "HTTPLoggingOutputSetting",
+        "custom_implementation": true
     },
     {
         "name": "http_proxy",

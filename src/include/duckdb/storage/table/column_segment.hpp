@@ -20,19 +20,21 @@
 #include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
-class ColumnSegment;
+
+class BaseStatistics;
 class BlockManager;
 class ColumnData;
+class ColumnSegment;
 class DatabaseInstance;
-class Transaction;
-class BaseStatistics;
-class UpdateSegment;
 class TableFilter;
-struct TableFilterState;
+class Transaction;
+class UpdateSegment;
+
+struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
-struct ColumnAppendState;
 struct PrefetchState;
+struct TableFilterState;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
@@ -99,7 +101,7 @@ public:
 
 	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
 	//! Only used during checkpointing.
-	void ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id);
+	void ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager, block_id_t block_id);
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
