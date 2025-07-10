@@ -1,4 +1,5 @@
 #include "duckdb/parser/tableref/showref.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -11,10 +12,15 @@ string ShowRef::ToString() const {
 		result += "SUMMARIZE ";
 	} else if (show_type == ShowType::SHOW_FROM) {
 		result += "SHOW TABLES FROM ";
-		result += catalog_name;
-		if (!schema_name.empty()) {
-			result += "." + schema_name;
+		string name = "";
+		if (!catalog_name.empty()) {
+			name += KeywordHelper::WriteOptionallyQuoted(catalog_name, '"');
+			if (!schema_name.empty()) {
+				name += ".";
+			}
 		}
+		name += KeywordHelper::WriteOptionallyQuoted(schema_name, '"');
+		result += name;
 	} else {
 		result += "DESCRIBE ";
 	}

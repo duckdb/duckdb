@@ -12,7 +12,7 @@ statement ok
 CREATE SCHEMA test_schema
 
 statement ok
-CREATE TABLE test_schema.schema_table1(k INTEGER)
+CREATE TABLE test_schema.test_schema_table1(k INTEGER)
 
 statement ok
 ATTACH DATABASE ':memory:' AS db1
@@ -21,7 +21,10 @@ statement ok
 CREATE TABLE db1.db1_table1(m INTEGER)
 
 statement ok
-CREATE SCHEMA db1_schema
+CREATE SCHEMA db1.db1_schema
+
+statement ok
+CREATE TABLE db1.db1_schema.db1_schema_table1(n INTEGER)
 
 statement ok
 ATTACH DATABASE ':memory:' AS "db_quo""ted"
@@ -46,7 +49,7 @@ db1_table1
 query I
 SHOW TABLES FROM test_schema
 ----
-schema_table1
+test_schema_table1
 
 query I
 SHOW TABLES FROM db1.main
@@ -82,13 +85,13 @@ statement ok
 CREATE TABLE "Quoted Schema"."Quoted Table"(r INTEGER)
 
 query I
-SHOW TABLES FROM main."Quoted Schema"
+SHOW TABLES FROM memory."Quoted Schema"
 ----
 Quoted Table
 
 # Test with quotes in identifiers
 query I
-SHOW TABLES FROM "db_quo""ted"
+SHOW TABLES FROM "db_quo""ted"."db_quo""ted_schema"
 ----
 db_quo"ted_table1
 
@@ -96,10 +99,10 @@ db_quo"ted_table1
 statement error
 SHOW TABLES FROM nonexistent_db
 ----
-database "nonexistent_db" does not exist
+Catalog Error: SHOW TABLES FROM: No catalog + schema named "nonexistent_db" found
 
 # Test non-existent schema
 statement error
 SHOW TABLES FROM main.nonexistent_schema
 ----
-schema "nonexistent_schema" does not exist
+Catalog Error: SHOW TABLES FROM: No catalog + schema named "main.nonexistent_schema" found

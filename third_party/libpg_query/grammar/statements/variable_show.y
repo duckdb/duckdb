@@ -72,9 +72,6 @@ show_or_describe: SHOW | describe_or_desc
 
 opt_tables: TABLES | /* empty */
 
-opt_from: FROM qualified_name			{ $$ = $2; }
-		| /* empty */					{ $$ = NULL; }
-
 var_name:	ColId								{ $$ = $1; }
 			| var_name '.' ColId
 				{ $$ = psprintf("%s.%s", $1, $3); }

@@ -23,10 +23,10 @@ string PragmaShowTables(const string &database, const string &schema) {
 	string where_clause = "";
 	vector<string> where_conditions;
 	if (!database.empty()) {
-		where_conditions.push_back(StringUtil::Format("database_name = %s", SQLString(database)));
+		where_conditions.push_back(StringUtil::Format("lower(database_name) = lower(%s)", SQLString(database)));
 	}
 	if (!schema.empty()) {
-		where_conditions.push_back(StringUtil::Format("schema_name = %s", SQLString(schema)));
+		where_conditions.push_back(StringUtil::Format("lower(schema_name) = lower(%s)", SQLString(schema)));
 	}
 	if (where_conditions.empty()) {
 		where_conditions.push_back("in_search_path(database_name, schema_name)");

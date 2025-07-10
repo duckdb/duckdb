@@ -19,10 +19,11 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 			showref->show_type = ShowType::SHOW_FROM;
 			auto qualified_name = TransformQualifiedName(*stmt.relation);
 			if (!IsInvalidCatalog(qualified_name.catalog)) {
-				throw ParserException("Expected \"SHOW TABLES FROM database\" or \"SHOW TABLES FROM database.schema\"");
+				throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
+				                      "\"SHOW TABLES FROM database.schema\"");
 			}
 			if (qualified_name.schema.empty()) {
-				showref->catalog_name = qualified_name.name;
+				showref->schema_name = qualified_name.name;
 			} else {
 				showref->catalog_name = qualified_name.schema;
 				showref->schema_name = qualified_name.name;

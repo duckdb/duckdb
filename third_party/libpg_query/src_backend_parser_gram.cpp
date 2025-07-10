@@ -2667,11 +2667,11 @@ static const yytype_int16 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   519,   519,   535,   547,   556,   557,   558,   559,   560,
-     561,   562,   563,   564,   565,   566,   567,   568,   569,   570,
-     571,   572,   573,   574,   575,   576,   577,   578,   579,   580,
-     581,   582,   583,   584,   585,   586,   587,   588,   589,   590,
-     591,   592,   593,   594,   595,   596,   597,   599,     9,    18,
+       0,   518,   518,   534,   546,   555,   556,   557,   558,   559,
+     560,   561,   562,   563,   564,   565,   566,   567,   568,   569,
+     570,   571,   572,   573,   574,   575,   576,   577,   578,   579,
+     580,   581,   582,   583,   584,   585,   586,   587,   588,   589,
+     590,   591,   592,   593,   594,   595,   596,   598,     9,    18,
       27,    36,    45,    54,    63,    72,    85,    87,    93,    94,
       99,   103,   107,   118,   126,   130,   138,   139,   143,   150,
      151,   156,   163,   173,   182,   191,   200,   209,   217,   225,
@@ -2826,7 +2826,7 @@ static const yytype_uint16 yyrline[] =
       19,     7,    16,    25,    37,    44,    51,    60,    61,    65,
       66,     2,     7,    12,    17,    22,    31,    38,    48,    49,
       56,     3,    10,    17,    24,    32,    39,    46,    53,    60,
-      69,    69,    71,    71,    73,    73,    78,    79,     6,     8,
+      69,    69,    71,    71,    73,    73,    75,    76,     6,     8,
       21,    34,    47,    65,    87,    88,    89,    90,    11,    24,
       37,    54,    55,    56,    61,    74,    74,    74,    74,    74,
       74,    74,    74,    74,    74,    74,    74,    74,    74,    74,
@@ -21167,14 +21167,14 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 520 "third_party/libpg_query/grammar/grammar.y"
+#line 519 "third_party/libpg_query/grammar/grammar.y"
     {
 				pg_yyget_extra(yyscanner)->parsetree = (yyvsp[(1) - (1)].list);
 			;}
     break;
 
   case 3:
-#line 536 "third_party/libpg_query/grammar/grammar.y"
+#line 535 "third_party/libpg_query/grammar/grammar.y"
     {
 					if ((yyvsp[(1) - (3)].list) != NIL)
 					{
@@ -21189,7 +21189,7 @@ yyreduce:
     break;
 
   case 4:
-#line 548 "third_party/libpg_query/grammar/grammar.y"
+#line 547 "third_party/libpg_query/grammar/grammar.y"
     {
 					if ((yyvsp[(1) - (1)].node) != NULL)
 						(yyval.list) = list_make1(makeRawStmt((yyvsp[(1) - (1)].node), 0));
@@ -21199,7 +21199,7 @@ yyreduce:
     break;
 
   case 47:
-#line 599 "third_party/libpg_query/grammar/grammar.y"
+#line 598 "third_party/libpg_query/grammar/grammar.y"
     { (yyval.node) = NULL; ;}
     break;
 
@@ -32375,12 +32375,12 @@ yyreduce:
     break;
 
   case 1596:
-#line 78 "third_party/libpg_query/grammar/statements/variable_show.y"
+#line 75 "third_party/libpg_query/grammar/statements/variable_show.y"
     { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
     break;
 
   case 1597:
-#line 80 "third_party/libpg_query/grammar/statements/variable_show.y"
+#line 77 "third_party/libpg_query/grammar/statements/variable_show.y"
     { (yyval.str) = psprintf("%s.%s", (yyvsp[(1) - (3)].str), (yyvsp[(3) - (3)].str)); ;}
     break;
 

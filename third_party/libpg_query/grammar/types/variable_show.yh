@@ -1,2 +1,1 @@
 %type <str> var_name
-%type <range> opt_from
