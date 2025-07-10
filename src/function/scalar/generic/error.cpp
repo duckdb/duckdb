@@ -4,12 +4,16 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ErrorOperator {
 	template <class TA, class TR>
 	static inline TR Operation(const TA &input) {
 		throw InvalidInputException(input.GetString());
 	}
 };
+
+} // namespace
 
 ScalarFunction ErrorFun::GetFunction() {
 	auto fun = ScalarFunction("error", {LogicalType::VARCHAR}, LogicalType::SQLNULL,

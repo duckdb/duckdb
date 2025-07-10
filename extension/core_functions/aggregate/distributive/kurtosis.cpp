@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct KurtosisState {
 	idx_t n;
 	double sum;
@@ -97,6 +99,8 @@ struct KurtosisOperation {
 		return true;
 	}
 };
+
+} // namespace
 
 AggregateFunction KurtosisFun::GetFunction() {
 	auto result =

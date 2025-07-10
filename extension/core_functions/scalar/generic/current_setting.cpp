@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog.hpp"
 namespace duckdb {
 
+namespace {
 struct CurrentSettingBindData : public FunctionData {
 	explicit CurrentSettingBindData(Value value_p) : value(std::move(value_p)) {
 	}
@@ -24,7 +25,7 @@ public:
 	}
 };
 
-static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<CurrentSettingBindData>();
 	result.Reference(info.value);
@@ -58,6 +59,8 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	bound_function.return_type = val.type();
 	return make_uniq<CurrentSettingBindData>(val);
 }
+
+} // namespace
 
 ScalarFunction CurrentSettingFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction, CurrentSettingBind);
