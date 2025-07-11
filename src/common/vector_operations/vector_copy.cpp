@@ -112,7 +112,18 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 
 	// now copy over the data
 	switch (source->GetType().InternalType()) {
-	case PhysicalType::BOOL:
+	case PhysicalType::BOOL: {
+		auto ldata = FlatVector::GetData<bool>(*source);
+		auto tdata = FlatVector::GetData<bool>(target);
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = sel->get_index(source_offset + i);
+			auto target_idx = target_offset + i;
+			if (tmask.RowIsValid(target_idx)) {
+				tdata[target_idx] = ldata[source_idx];
+			}
+		}
+		break;
+	}
 	case PhysicalType::INT8:
 		TemplatedCopy<int8_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;

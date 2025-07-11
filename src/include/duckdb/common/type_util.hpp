@@ -38,6 +38,8 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT32;
 	} else if (std::is_same<T, uint64_t>()) {
 		return PhysicalType::UINT64;
+	} else if (std::is_same<T, idx_t>() || std::is_same<T, const idx_t>()) {
+		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
 	} else if (std::is_same<T, uhugeint_t>()) {
@@ -45,6 +47,10 @@ PhysicalType GetTypeId() {
 	} else if (std::is_same<T, date_t>()) {
 		return PhysicalType::INT32;
 	} else if (std::is_same<T, dtime_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, dtime_tz_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, dtime_ns_t>()) {
 		return PhysicalType::INT64;
 	} else if (std::is_same<T, timestamp_t>()) {
 		return PhysicalType::INT64;
@@ -64,8 +70,18 @@ PhysicalType GetTypeId() {
 		return PhysicalType::VARCHAR;
 	} else if (std::is_same<T, interval_t>()) {
 		return PhysicalType::INTERVAL;
+	} else if (std::is_same<T, list_entry_t>()) {
+		return PhysicalType::LIST;
+	} else if (std::is_pointer<T>() || std::is_same<T, uintptr_t>()) {
+		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+			return PhysicalType::UINT32;
+		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+			return PhysicalType::UINT64;
+		} else {
+			throw InternalException("Unsupported pointer size in GetTypeId");
+		}
 	} else {
-		return PhysicalType::INVALID;
+		throw InternalException("Unsupported type in GetTypeId");
 	}
 }
 
