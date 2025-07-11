@@ -1424,7 +1424,7 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
                                          const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                          const vector<TupleDataGatherFunction> &) {
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto list_entries = FlatVector::GetDataUnsafe<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
@@ -1528,7 +1528,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
                                                       optional_ptr<Vector> list_vector,
                                                       const vector<TupleDataGatherFunction> &child_functions) {
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto list_entries = FlatVector::GetDataUnsafe<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
@@ -1542,7 +1542,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
 	Vector combined_list_vector(LogicalType::HUGEINT);
 	FlatVector::SetValidity(combined_list_vector, list_validity); // Has same validity as list parent
-	const auto combined_list_entries = FlatVector::GetData<list_entry_t>(combined_list_vector);
+	const auto combined_list_entries = FlatVector::GetDataUnsafe<list_entry_t>(combined_list_vector);
 
 	uint64_t target_offset = list_size_before;
 	uint64_t target_child_offset = child_list_size_before;
