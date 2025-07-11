@@ -1,6 +1,6 @@
 /* allows SET or RESET without LOCAL */
 VariableShowStmt:
-			show_or_describe SelectStmt {
+    	show_or_describe SelectStmt {
 				PGVariableShowSelectStmt *n = makeNode(PGVariableShowSelectStmt);
 				n->stmt = $2;
 				n->name = (char*) "select";
@@ -21,7 +21,15 @@ VariableShowStmt:
 				n->is_summary = 1;
 				$$ = (PGNode *) n;
 			}
-		 | show_or_describe qualified_name
+		 | show_or_describe TABLES FROM qualified_name
+			{
+				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
+				n->relation = $4;
+				n->set = (char*) "__show_tables_from_database";
+				n->is_summary = 0;
+				$$ = (PGNode *) n;
+			}
+		| show_or_describe qualified_name
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 				n->relation = $2;

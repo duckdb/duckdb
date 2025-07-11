@@ -251,6 +251,16 @@
         "id": 202,
         "name": "show_type",
         "type": "ShowType"
+      },
+      {
+        "id": 203,
+        "name": "catalog_name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "schema_name",
+        "type": "string"
       }
     ]
   },
