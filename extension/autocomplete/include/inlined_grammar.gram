@@ -1094,9 +1094,10 @@ AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / Chan
 
 AddConstraint <- 'ADD'i TopLevelConstraint
 AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
-DropColumn <- 'DROP'i 'COLUMN'i? IfExists? ColumnName DropBehavior?
-AlterColumn <- 'ALTER'i 'COLUMN'i? ColumnName AlterColumnEntry
-RenameColumn <- 'RENAME'i 'COLUMN'i? ColumnName 'TO'i Identifier
+DropColumn <- 'DROP'i 'COLUMN'i? IfExists? NestedColumnName DropBehavior?
+AlterColumn <- 'ALTER'i 'COLUMN'i? NestedColumnName AlterColumnEntry
+RenameColumn <- 'RENAME'i 'COLUMN'i? NestedColumnName 'TO'i Identifier
+NestedColumnName <- (Identifier '.')* ColumnName
 RenameAlter <- 'RENAME'i 'TO'i Identifier
 SetPartitionedBy <- 'SET'i 'PARTITIONED'i 'BY'i Parens(List(Expression))
 ResetPartitionedBy <- 'RESET'i 'PARTITIONED'i 'BY'i
