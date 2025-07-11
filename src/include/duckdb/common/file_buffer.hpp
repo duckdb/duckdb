@@ -10,13 +10,13 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
 class Allocator;
 class BlockManager;
-class ClientContext;
+class QueryContext;
+
 struct FileHandle;
 
 enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3, EXTERNAL_FILE = 4 };
@@ -32,7 +32,7 @@ public:
 	//! DIRECT_IO
 	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size);
 	FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager);
-	FileBuffer(FileBuffer &source, FileBufferType type);
+	FileBuffer(FileBuffer &source, FileBufferType type, idx_t block_header_size);
 
 	virtual ~FileBuffer();
 
@@ -47,7 +47,7 @@ public:
 	//! Read into the FileBuffer from the location.
 	void Read(FileHandle &handle, uint64_t location);
 	//! Write the FileBuffer to the location.
-	void Write(optional_ptr<ClientContext> context, FileHandle &handle, const uint64_t location);
+	void Write(QueryContext context, FileHandle &handle, const uint64_t location);
 
 	void Clear();
 
@@ -59,6 +59,10 @@ public:
 	// the requested user bytes. We then sector-align the result.
 	void Resize(uint64_t user_size, BlockManager &block_manager);
 	void Resize(BlockManager &block_manager);
+
+	idx_t GetHeaderSize() const {
+		return internal_size - size;
+	}
 
 	uint64_t AllocSize() const {
 		return internal_size;

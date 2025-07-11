@@ -77,6 +77,9 @@ struct ParquetReaderScanState {
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
+
+	//! (optional) pointer to the PhysicalOperator for logging
+	optional_ptr<const PhysicalOperator> op;
 };
 
 struct ParquetColumnDefinition {

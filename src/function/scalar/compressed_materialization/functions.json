@@ -56,7 +56,7 @@
         "type": "scalar_function"
     },
     {
-        "name": "__internal_compress_string_hugeint",
+        "name": "__internal_compress_string_uhugeint",
         "parameters": "",
         "description": "",
         "example": "",

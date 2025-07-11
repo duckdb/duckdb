@@ -31,6 +31,7 @@
 #include "duckdb/transaction/transaction_context.hpp"
 
 namespace duckdb {
+
 class Appender;
 class Catalog;
 class CatalogSearchPath;
@@ -323,6 +324,27 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
+};
+
+//! The QueryContext wraps an optional client context.
+//! It makes query-related information available to operations.
+class QueryContext {
+public:
+	QueryContext() : context(nullptr) {
+	}
+	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
+	}
+
+public:
+	bool Valid() const {
+		return context != nullptr;
+	}
+	optional_ptr<ClientContext> GetClientContext() const {
+		return context;
+	}
+
+private:
+	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

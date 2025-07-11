@@ -1,5 +1,4 @@
 #include "core_functions_extension.hpp"
-
 #include "core_functions/function_list.hpp"
 
 namespace duckdb {
