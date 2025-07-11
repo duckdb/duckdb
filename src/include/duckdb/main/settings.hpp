@@ -699,7 +699,7 @@ struct ExplainOutputSetting {
 };
 
 struct ExtensionDirectorySetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "extension_directory";
 	static constexpr const char *Description = "Set the directory to store extensions in";
 	static constexpr const char *InputType = "VARCHAR";
