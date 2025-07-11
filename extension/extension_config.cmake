@@ -10,8 +10,6 @@
 # these extensions are loaded by default on every build as they are an essential part of DuckDB
 duckdb_extension_load(core_functions)
 duckdb_extension_load(parquet)
-duckdb_extension_load(autocomplete)
-duckdb_extension_load(tpch)
 
 
 # The Linux allocator has issues so we use jemalloc, but only on x86 because page sizes are fixed at 4KB.
