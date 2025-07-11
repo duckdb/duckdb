@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/struct_identifier.test
-# description: Test lambda syntax in peg parser
+# name: test/sql/peg_parser/support_optional_not_null_constraint.test
+# description: Test optional not null constraint in peg parser
 # group: [peg_parser]
 
 require autocomplete

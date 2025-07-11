@@ -37,9 +37,11 @@ col_func_type_set = set()
 # Final output list
 kwlist = []
 
+
 def load_keywords(filepath):
     with open(filepath, "r") as f:
         return [line.strip() for line in f if line.strip()]
+
 
 # Validate and load all keywords
 for filename in os.listdir(keywords_dir):
@@ -95,7 +97,7 @@ with open(os.path.join(autocomplete_dir, "keyword_map.cpp"), "w") as f:
             "RESERVED_KEYWORD": "KeywordCategory::KEYWORD_RESERVED",
             "UNRESERVED_KEYWORD": "KeywordCategory::KEYWORD_UNRESERVED",
             "COL_NAME_KEYWORD": "KeywordCategory::KEYWORD_COL_NAME",
-            "TYPE_FUNC_NAME_KEYWORD": "KeywordCategory::KEYWORD_TYPE_FUNC"
+            "TYPE_FUNC_NAME_KEYWORD": "KeywordCategory::KEYWORD_TYPE_FUNC",
         }.get(category, "KeywordCategory::KEYWORD_NONE")
 
         f.write(f'    keyword_map["{kw.lower()}"] = {cpp_cat};\n')
@@ -103,10 +105,12 @@ with open(os.path.join(autocomplete_dir, "keyword_map.cpp"), "w") as f:
     f.write("}\n")
     f.write("}\n")
 
+
 def filename_to_upper_camel(file):
-    name, _ = os.path.splitext(file)          # column_name_keywords
-    parts = name.split('_')                   # ['column', 'name', 'keywords']
+    name, _ = os.path.splitext(file)  # column_name_keywords
+    parts = name.split('_')  # ['column', 'name', 'keywords']
     return ''.join(p.capitalize() for p in parts)
+
 
 for file in os.listdir(keywords_dir):
     if not file.endswith('.list'):

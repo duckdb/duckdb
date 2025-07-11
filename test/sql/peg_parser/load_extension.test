@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/struct_identifier.test
-# description: Test lambda syntax in peg parser
+# name: test/sql/peg_parser/load_extension.test
+# description: Test loading extensions in peg parser
 # group: [peg_parser]
 
 require autocomplete
@@ -18,3 +18,7 @@ CALL check_peg_parser($TEST_PEG_PARSER$FORCE INSTALL tpch FROM '${LOCAL_EXTENSIO
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$LOAD tpch;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$LOAD '${SPATIAL_EXTENSION}'$TEST_PEG_PARSER$);
+

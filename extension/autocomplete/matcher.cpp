@@ -305,15 +305,16 @@ public:
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
 		if (suggestion_type == SuggestionState::SUGGEST_COLLABEL ||
-			suggestion_type == SuggestionState::SUGGEST_RESERVED_TABLE_NAME ||
-			suggestion_type == SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME) {
+		    suggestion_type == SuggestionState::SUGGEST_RESERVED_TABLE_NAME ||
+		    suggestion_type == SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME) {
 			// no-op
 		} else if (suggestion_type == SuggestionState::SUGGEST_TABLE_NAME) {
 			// A ColId is invalid only if it's a reserved keyword or a type/function keyword.
 			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
 				return MatchResultType::FAIL;
 			}
-		} else if (suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME || suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME) {
+		} else if (suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME ||
+		           suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME) {
 			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
 				return MatchResultType::FAIL;
 			}
@@ -1140,8 +1141,8 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
 	AddRuleOverride("ColLabel", ColLabel());
-	AddRuleOverride("ReservedTableName" , ReservedTableName());
-	AddRuleOverride("ReservedSchemaName" , ReservedSchemaName());
+	AddRuleOverride("ReservedTableName", ReservedTableName());
+	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());

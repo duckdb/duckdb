@@ -13,7 +13,9 @@ parser.add_argument("--offset", type=int, help="File offset", default=None)
 parser.add_argument("--count", type=int, help="File count", default=None)
 parser.add_argument('--no-exit', action='store_true', help='Do not exit after a test fails', default=False)
 parser.add_argument('--print-failing-only', action='store_true', help='Print failing tests only', default=False)
-parser.add_argument('--include-extensions', action='store_true', help='Include test files of out-of-tree extensions', default=False)
+parser.add_argument(
+    '--include-extensions', action='store_true', help='Include test files of out-of-tree extensions', default=False
+)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
 group.add_argument(
@@ -22,13 +24,16 @@ group.add_argument(
 group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
 args = parser.parse_args()
 
+
 def extract_git_urls(script: str):
     pattern = r'GIT_URL\s+(https?://\S+)'
     return re.findall(pattern, script)
 
+
 import os
 import requests
 from urllib.parse import urlparse
+
 
 def download_directory_contents(api_url, local_path, headers):
     response = requests.get(api_url, headers=headers)
@@ -58,6 +63,7 @@ def download_directory_contents(api_url, local_path, headers):
             subdir_local_path = os.path.join(local_path, item_name)
             download_directory_contents(subdir_api_url, subdir_local_path, headers)
 
+
 def download_test_sql_folder(repo_url, base_folder="extension-test-files"):
     repo_name = urlparse(repo_url).path.strip("/").split("/")[-1]
     target_folder = os.path.join(base_folder, repo_name)
@@ -70,12 +76,10 @@ def download_test_sql_folder(repo_url, base_folder="extension-test-files"):
 
     api_url = f"https://api.github.com/repos/duckdb/{repo_name}/contents/test/sql?ref=main"
     GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-    headers = {
-        "Accept": "application/vnd.github.v3+json",
-        "Authorization": f"Bearer {GITHUB_TOKEN}"
-    }
+    headers = {"Accept": "application/vnd.github.v3+json", "Authorization": f"Bearer {GITHUB_TOKEN}"}
 
     download_directory_contents(api_url, target_folder, headers)
+
 
 def batch_download_all_test_sql():
     filename = ".github/config/out_of_tree_extensions.cmake"
@@ -134,12 +138,16 @@ def parse_test_file(filename):
         if type(stmt) is sqllogictest.statement.statement.Statement:
             # skip expected errors
             if stmt.expected_result.type == sqllogictest.ExpectedResult.Type.ERROR:
-                if any("parser error" in line.lower() or "syntax error" in line.lower() for line in stmt.expected_result.lines):
+                if any(
+                    "parser error" in line.lower() or "syntax error" in line.lower()
+                    for line in stmt.expected_result.lines
+                ):
                     continue
                 continue
         query = ' '.join(stmt.lines)
         statements.append(query)
     return statements
+
 
 def run_test_case(args_tuple):
     i, file, shell, print_failing_only = args_tuple
@@ -173,13 +181,14 @@ def run_test_case(args_tuple):
             break
     return results
 
+
 if __name__ == "__main__":
     files = []
     excluded_tests = {
-    'test/sql/peg_parser', # Fail for some reason
-    'test/sql/prepared/parameter_variants.test', # PostgreSQL parser bug with ?1
-    'test/sql/copy/s3/download_config.test', # Unknown why this passes in SQLLogicTest
-}
+        'test/sql/peg_parser',  # Fail for some reason
+        'test/sql/prepared/parameter_variants.test',  # PostgreSQL parser bug with ?1
+        'test/sql/copy/s3/download_config.test',  # Unknown why this passes in SQLLogicTest
+    }
     if args.all_tests:
         # run all tests
         test_dir = os.path.join('test', 'sql')

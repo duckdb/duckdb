@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/struct_identifier.test
-# description: Test struct identifier in peg parser
+# name: test/sql/peg_parser/colon_alias.test
+# description: Test colon alias in peg parser
 # group: [peg_parser]
 
 require autocomplete

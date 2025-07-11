@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/struct_identifier.test
-# description: Test lambda syntax in peg parser
+# name: test/sql/peg_parser/dollar_quoted.test
+# description: Test dollar quoted strings in peg parser
 # group: [peg_parser]
 
 require autocomplete

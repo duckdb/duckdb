@@ -30,4 +30,4 @@ private:
 	bool initialized;
 	case_insensitive_map_t<KeywordCategory> keyword_map;
 };
-}
+} // namespace duckdb

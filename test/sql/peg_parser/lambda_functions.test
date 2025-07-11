@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/struct_identifier.test
+# name: test/sql/peg_parser/lambda_functions.test
 # description: Test lambda syntax in peg parser
 # group: [peg_parser]
 
