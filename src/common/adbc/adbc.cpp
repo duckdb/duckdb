@@ -627,180 +627,237 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 // RAII wrappers for C-API resources used in Ingest
 class ArrowSchemaWrapper {
 public:
-    ArrowSchemaWrapper() : schema(new ArrowSchema) {}
-    ~ArrowSchemaWrapper() {
-        if (schema) {
-            // If a destroy function is needed, call it here
-            delete schema;
-        }
-    }
-    ArrowSchema *get() { return schema; }
-    ArrowSchema &operator*() { return *schema; }
-    ArrowSchema *operator->() { return schema; }
-    ArrowSchemaWrapper(const ArrowSchemaWrapper &) = delete;
-    ArrowSchemaWrapper &operator=(const ArrowSchemaWrapper &) = delete;
-    ArrowSchemaWrapper(ArrowSchemaWrapper &&other) noexcept : schema(other.schema) { other.schema = nullptr; }
-    ArrowSchemaWrapper &operator=(ArrowSchemaWrapper &&other) noexcept {
-        if (this != &other) {
-            delete schema;
-            schema = other.schema;
-            other.schema = nullptr;
-        }
-        return *this;
-    }
+	ArrowSchemaWrapper() : schema(new ArrowSchema) {
+	}
+	~ArrowSchemaWrapper() {
+		if (schema) {
+			// If a destroy function is needed, call it here
+			delete schema;
+		}
+	}
+	ArrowSchema *get() {
+		return schema;
+	}
+	ArrowSchema &operator*() {
+		return *schema;
+	}
+	ArrowSchema *operator->() {
+		return schema;
+	}
+	ArrowSchemaWrapper(const ArrowSchemaWrapper &) = delete;
+	ArrowSchemaWrapper &operator=(const ArrowSchemaWrapper &) = delete;
+	ArrowSchemaWrapper(ArrowSchemaWrapper &&other) noexcept : schema(other.schema) {
+		other.schema = nullptr;
+	}
+	ArrowSchemaWrapper &operator=(ArrowSchemaWrapper &&other) noexcept {
+		if (this != &other) {
+			delete schema;
+			schema = other.schema;
+			other.schema = nullptr;
+		}
+		return *this;
+	}
+
 private:
-    ArrowSchema *schema;
+	ArrowSchema *schema;
 };
 
 class ArrowArrayWrapper {
 public:
-    ArrowArrayWrapper() : array(new ArrowArray) {}
-    ~ArrowArrayWrapper() {
-        if (array) {
-            if (array->release) {
-                array->release(array);
-            }
-            delete array;
-        }
-    }
-    ArrowArray *get() { return array; }
-    ArrowArray &operator*() { return *array; }
-    ArrowArray *operator->() { return array; }
-    ArrowArrayWrapper(const ArrowArrayWrapper &) = delete;
-    ArrowArrayWrapper &operator=(const ArrowArrayWrapper &) = delete;
-    ArrowArrayWrapper(ArrowArrayWrapper &&other) noexcept : array(other.array) { other.array = nullptr; }
-    ArrowArrayWrapper &operator=(ArrowArrayWrapper &&other) noexcept {
-        if (this != &other) {
-            if (array && array->release) array->release(array);
-            delete array;
-            array = other.array;
-            other.array = nullptr;
-        }
-        return *this;
-    }
+	ArrowArrayWrapper() : array(new ArrowArray) {
+	}
+	~ArrowArrayWrapper() {
+		if (array) {
+			if (array->release) {
+				array->release(array);
+			}
+			delete array;
+		}
+	}
+	ArrowArray *get() {
+		return array;
+	}
+	ArrowArray &operator*() {
+		return *array;
+	}
+	ArrowArray *operator->() {
+		return array;
+	}
+	ArrowArrayWrapper(const ArrowArrayWrapper &) = delete;
+	ArrowArrayWrapper &operator=(const ArrowArrayWrapper &) = delete;
+	ArrowArrayWrapper(ArrowArrayWrapper &&other) noexcept : array(other.array) {
+		other.array = nullptr;
+	}
+	ArrowArrayWrapper &operator=(ArrowArrayWrapper &&other) noexcept {
+		if (this != &other) {
+			if (array && array->release)
+				array->release(array);
+			delete array;
+			array = other.array;
+			other.array = nullptr;
+		}
+		return *this;
+	}
+
 private:
-    ArrowArray *array;
+	ArrowArray *array;
 };
 
 class AppenderWrapper {
 public:
-    AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
-        if (duckdb_appender_create(conn, schema, table, &appender) != DuckDBSuccess) {
-            appender = nullptr;
-        }
-    }
-    ~AppenderWrapper() {
-        if (appender) {
-            duckdb_appender_destroy(&appender);
-        }
-    }
-    operator duckdb_appender() { return appender; }
-    bool valid() const { return appender != nullptr; }
-    AppenderWrapper(const AppenderWrapper &) = delete;
-    AppenderWrapper &operator=(const AppenderWrapper &) = delete;
-    AppenderWrapper(AppenderWrapper &&other) noexcept : appender(other.appender) { other.appender = nullptr; }
-    AppenderWrapper &operator=(AppenderWrapper &&other) noexcept {
-        if (this != &other) {
-            if (appender) duckdb_appender_destroy(&appender);
-            appender = other.appender;
-            other.appender = nullptr;
-        }
-        return *this;
-    }
+	AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
+		if (duckdb_appender_create(conn, schema, table, &appender) != DuckDBSuccess) {
+			appender = nullptr;
+		}
+	}
+	~AppenderWrapper() {
+		if (appender) {
+			duckdb_appender_destroy(&appender);
+		}
+	}
+	operator duckdb_appender() {
+		return appender;
+	}
+	bool valid() const {
+		return appender != nullptr;
+	}
+	AppenderWrapper(const AppenderWrapper &) = delete;
+	AppenderWrapper &operator=(const AppenderWrapper &) = delete;
+	AppenderWrapper(AppenderWrapper &&other) noexcept : appender(other.appender) {
+		other.appender = nullptr;
+	}
+	AppenderWrapper &operator=(AppenderWrapper &&other) noexcept {
+		if (this != &other) {
+			if (appender)
+				duckdb_appender_destroy(&appender);
+			appender = other.appender;
+			other.appender = nullptr;
+		}
+		return *this;
+	}
+
 private:
-    duckdb_appender appender;
+	duckdb_appender appender;
 };
 
 class DataChunkWrapper {
 public:
-    DataChunkWrapper(duckdb_logical_type *types, idx_t count) {
-        chunk = duckdb_create_data_chunk(types, count);
-    }
-    ~DataChunkWrapper() {
-        if (chunk) {
-            duckdb_destroy_data_chunk(&chunk);
-        }
-    }
-    operator duckdb_data_chunk() { return chunk; }
-    duckdb_data_chunk get() { return chunk; }
-    DataChunkWrapper(const DataChunkWrapper &) = delete;
-    DataChunkWrapper &operator=(const DataChunkWrapper &) = delete;
-    DataChunkWrapper(DataChunkWrapper &&other) noexcept : chunk(other.chunk) { other.chunk = nullptr; }
-    DataChunkWrapper &operator=(DataChunkWrapper &&other) noexcept {
-        if (this != &other) {
-            if (chunk) duckdb_destroy_data_chunk(&chunk);
-            chunk = other.chunk;
-            other.chunk = nullptr;
-        }
-        return *this;
-    }
+	DataChunkWrapper(duckdb_logical_type *types, idx_t count) {
+		chunk = duckdb_create_data_chunk(types, count);
+	}
+	~DataChunkWrapper() {
+		if (chunk) {
+			duckdb_destroy_data_chunk(&chunk);
+		}
+	}
+	operator duckdb_data_chunk() {
+		return chunk;
+	}
+	duckdb_data_chunk get() {
+		return chunk;
+	}
+	DataChunkWrapper(const DataChunkWrapper &) = delete;
+	DataChunkWrapper &operator=(const DataChunkWrapper &) = delete;
+	DataChunkWrapper(DataChunkWrapper &&other) noexcept : chunk(other.chunk) {
+		other.chunk = nullptr;
+	}
+	DataChunkWrapper &operator=(DataChunkWrapper &&other) noexcept {
+		if (this != &other) {
+			if (chunk)
+				duckdb_destroy_data_chunk(&chunk);
+			chunk = other.chunk;
+			other.chunk = nullptr;
+		}
+		return *this;
+	}
+
 private:
-    duckdb_data_chunk chunk;
+	duckdb_data_chunk chunk;
 };
 
 class ConvertedSchemaWrapper {
 public:
-    ConvertedSchemaWrapper() : schema(nullptr) {}
-    ~ConvertedSchemaWrapper() {
-        if (schema) {
-            duckdb_destroy_arrow_converted_schema(&schema);
-        }
-    }
-    duckdb_arrow_converted_schema *get_ptr() { return &schema; }
-    operator duckdb_arrow_converted_schema() { return schema; }
-    duckdb_arrow_converted_schema get() { return schema; }
-    void set(duckdb_arrow_converted_schema s) { schema = s; }
-    ConvertedSchemaWrapper(const ConvertedSchemaWrapper &) = delete;
-    ConvertedSchemaWrapper &operator=(const ConvertedSchemaWrapper &) = delete;
-    ConvertedSchemaWrapper(ConvertedSchemaWrapper &&other) noexcept : schema(other.schema) { other.schema = nullptr; }
-    ConvertedSchemaWrapper &operator=(ConvertedSchemaWrapper &&other) noexcept {
-        if (this != &other) {
-            if (schema) {
-	            duckdb_destroy_arrow_converted_schema(&schema);
-            }
-            schema = other.schema;
-            other.schema = nullptr;
-        }
-        return *this;
-    }
+	ConvertedSchemaWrapper() : schema(nullptr) {
+	}
+	~ConvertedSchemaWrapper() {
+		if (schema) {
+			duckdb_destroy_arrow_converted_schema(&schema);
+		}
+	}
+	duckdb_arrow_converted_schema *get_ptr() {
+		return &schema;
+	}
+	operator duckdb_arrow_converted_schema() {
+		return schema;
+	}
+	duckdb_arrow_converted_schema get() {
+		return schema;
+	}
+	void set(duckdb_arrow_converted_schema s) {
+		schema = s;
+	}
+	ConvertedSchemaWrapper(const ConvertedSchemaWrapper &) = delete;
+	ConvertedSchemaWrapper &operator=(const ConvertedSchemaWrapper &) = delete;
+	ConvertedSchemaWrapper(ConvertedSchemaWrapper &&other) noexcept : schema(other.schema) {
+		other.schema = nullptr;
+	}
+	ConvertedSchemaWrapper &operator=(ConvertedSchemaWrapper &&other) noexcept {
+		if (this != &other) {
+			if (schema) {
+				duckdb_destroy_arrow_converted_schema(&schema);
+			}
+			schema = other.schema;
+			other.schema = nullptr;
+		}
+		return *this;
+	}
+
 private:
-    duckdb_arrow_converted_schema schema;
+	duckdb_arrow_converted_schema schema;
 };
 
 class OutNamesWrapper {
 public:
-    OutNamesWrapper(char **names, idx_t count) : names(names), count(count) {}
-    ~OutNamesWrapper() {
-        if (names) {
-            for (idx_t i = 0; i < count; i++) {
-                delete[] names[i];
-            }
-            delete[] names;
-        }
-    }
-    char **get() { return names; }
-    OutNamesWrapper(const OutNamesWrapper &) = delete;
-    OutNamesWrapper &operator=(const OutNamesWrapper &) = delete;
-    OutNamesWrapper(OutNamesWrapper &&other) noexcept : names(other.names), count(other.count) {
-        other.names = nullptr;
-        other.count = 0;
-    }
-    OutNamesWrapper &operator=(OutNamesWrapper &&other) noexcept {
-        if (this != &other) {
-            if (names) {
-                for (idx_t i = 0; i < count; i++) delete[] names[i];
-                delete[] names;
-            }
-            names = other.names;
-            count = other.count;
-            other.names = nullptr;
-            other.count = 0;
-        }
-        return *this;
-    }
+	OutNamesWrapper(char **names, idx_t count) : names(names), count(count) {
+	}
+	~OutNamesWrapper() {
+		if (names) {
+			for (idx_t i = 0; i < count; i++) {
+				delete[] names[i];
+			}
+			delete[] names;
+		}
+	}
+	char **get() {
+		return names;
+	}
+	OutNamesWrapper(const OutNamesWrapper &) = delete;
+	OutNamesWrapper &operator=(const OutNamesWrapper &) = delete;
+	OutNamesWrapper(OutNamesWrapper &&other) noexcept : names(other.names), count(other.count) {
+		other.names = nullptr;
+		other.count = 0;
+	}
+	OutNamesWrapper &operator=(OutNamesWrapper &&other) noexcept {
+		if (this != &other) {
+			if (names) {
+				for (idx_t i = 0; i < count; i++)
+					delete[] names[i];
+				delete[] names;
+			}
+			names = other.names;
+			count = other.count;
+			other.names = nullptr;
+			other.count = 0;
+		}
+		return *this;
+	}
+	void SetColumnCount(idx_t count_p) {
+		count = count_p;
+	}
+
 private:
-    char **names;
-    idx_t count = 0;
+	char **names;
+	idx_t count = 0;
 };
 
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, const char *schema,
@@ -882,7 +939,8 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	input->get_next(input, arrow_array.get());
 	while (arrow_array.get()->release) {
 		auto c_chunk = out_chunk.get();
-		arrow_to_duckdb_data_chunk(connection, reinterpret_cast<duckdb_arrow_array>(arrow_array.get()), out_types.get(), &c_chunk);
+		arrow_to_duckdb_data_chunk(connection, reinterpret_cast<duckdb_arrow_array>(arrow_array.get()), out_types.get(),
+		                           &c_chunk);
 		if (duckdb_append_data_chunk(appender, out_chunk.get()) != DuckDBSuccess) {
 			return ADBC_STATUS_INTERNAL;
 		}
@@ -1079,15 +1137,17 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 
 		wrapper->ingestion_stream.release = nullptr;
-		char **out_names = nullptr;
+		OutNamesWrapper out_names_wrapper(nullptr, 0);
 		idx_t out_column_count;
 		duckdb_arrow_converted_schema out_types;
-		auto arrow_schema = new ArrowSchema();
-		duckdb_arrow_schema c_arrow_schema = reinterpret_cast<duckdb_arrow_schema>(arrow_schema);
+		ArrowSchemaWrapper arrow_schema;
+		auto c_arrow_schema = reinterpret_cast<duckdb_arrow_schema>(arrow_schema.get());
 
-		stream.get_schema(&stream, arrow_schema);
+		stream.get_schema(&stream, arrow_schema.get());
 		try {
-			arrow_to_duckdb_schema(wrapper->connection, c_arrow_schema, &out_types, &out_names, &out_column_count);
+			auto c_out_name = out_names_wrapper.get();
+			arrow_to_duckdb_schema(wrapper->connection, c_arrow_schema, &out_types, &c_out_name, &out_column_count);
+			out_names_wrapper.SetColumnCount(out_column_count);
 		} catch (...) {
 			return ADBC_STATUS_INTERNAL;
 		}
@@ -1103,16 +1163,16 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		auto prepared_statement_params =
 		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
-		auto arrow_array = new ArrowArray();
-		auto out_chunk =
-		    duckdb_create_data_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
-		stream.get_next(&stream, arrow_array);
-		while (arrow_array->release) {
+		ArrowArrayWrapper arrow_array;
+		DataChunkWrapper out_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
+		stream.get_next(&stream, arrow_array.get());
+		while (arrow_array.get()->release) {
 			// This is a valid arrow array, let's make it into a data chunk
-			arrow_to_duckdb_data_chunk(wrapper->connection, *reinterpret_cast<duckdb_arrow_array *>(&arrow_array),
-			                           out_types, &out_chunk);
-			stream.get_next(&stream, arrow_array);
-			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk);
+			auto c_out_chunk = out_chunk.get();
+			arrow_to_duckdb_data_chunk(wrapper->connection, reinterpret_cast<duckdb_arrow_array>(arrow_array.get()),
+			                           out_types, &c_out_chunk);
+
+			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk.get());
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
 				return ADBC_STATUS_INVALID_ARGUMENT;
@@ -1141,6 +1201,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				SetError(error, duckdb_result_error(&wrapper->result));
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
+			// Recreate wrappers for next iteration
+			arrow_array = ArrowArrayWrapper();
+			out_chunk = DataChunkWrapper(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
+			stream.get_next(&stream, arrow_array.get());
 		}
 	} else {
 		auto res = duckdb_execute_prepared(wrapper->statement, &wrapper->result);
