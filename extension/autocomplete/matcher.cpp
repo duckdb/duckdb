@@ -365,8 +365,12 @@ public:
 			return "CATALOG_NAME";
 		case SuggestionState::SUGGEST_SCHEMA_NAME:
 			return "SCHEMA_NAME";
+		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
+			return "RESERVED_SCHEMA_NAME";
 		case SuggestionState::SUGGEST_TABLE_NAME:
 			return "TABLE_NAME";
+		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
+			return "RESERVED_TABLE_NAME";
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			return "TYPE_NAME";
 		case SuggestionState::SUGGEST_COLUMN_NAME:
