@@ -266,8 +266,6 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		TemplatedLoopHash<HAS_RSEL, bool>(input, result, rsel, count);
-		break;
 	case PhysicalType::INT8:
 		TemplatedLoopHash<HAS_RSEL, int8_t>(input, result, rsel, count);
 		break;

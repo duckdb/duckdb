@@ -28,8 +28,6 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		CopyToStorageLoop<bool>(vdata, count, target);
-		break;
 	case PhysicalType::INT8:
 		CopyToStorageLoop<int8_t>(vdata, count, target);
 		break;
@@ -87,8 +85,6 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		ReadFromStorageLoop<bool>(source, count, result);
-		break;
 	case PhysicalType::INT8:
 		ReadFromStorageLoop<int8_t>(source, count, result);
 		break;

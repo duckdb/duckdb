@@ -86,6 +86,14 @@ PhysicalType GetTypeId() {
 }
 
 template <class T>
+bool StorageTypeCompatible(PhysicalType type) {
+	if (std::is_same<T, int8_t>()) {
+		return type == PhysicalType::INT8 || type == PhysicalType::BOOL;
+	}
+	return type == GetTypeId<T>();
+}
+
+template <class T>
 bool TypeIsNumber() {
 	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>() ||
 	       std::is_same<T, uhugeint_t>();

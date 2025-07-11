@@ -279,7 +279,7 @@ struct ConstantVector {
 	static void VerifyVectorType(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY
 #else
-		if (vector.GetType().InternalType() != GetTypeId<T>()) {
+		if (!StorageTypeCompatible<T>(vector.GetType().InternalType())) {
 			throw InternalException("Expected vector of type %s, but found vector of type %s", GetTypeId<T>(),
 			                        vector.GetType().InternalType());
 		}
