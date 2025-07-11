@@ -16,7 +16,6 @@ UnreservedKeyword <- 'ABORT'i /
 'BACKWARD'i /
 'BEFORE'i /
 'BEGIN'i /
-'BY'i /
 'CACHE'i /
 'CALL'i /
 'CALLED'i /
@@ -78,6 +77,7 @@ UnreservedKeyword <- 'ABORT'i /
 'ENCODING'i /
 'ENCRYPTED'i /
 'ENUM'i /
+'ERROR'i /
 'ESCAPE'i /
 'EVENT'i /
 'EXCLUDE'i /
@@ -147,8 +147,10 @@ UnreservedKeyword <- 'ABORT'i /
 'MACRO'i /
 'MAPPING'i /
 'MATCH'i /
+'MATCHED'i /
 'MATERIALIZED'i /
 'MAXVALUE'i /
+'MERGED'i /
 'METHOD'i /
 'MICROSECOND'i /
 'MICROSECONDS'i /
@@ -260,6 +262,7 @@ UnreservedKeyword <- 'ABORT'i /
 'SKIP'i /
 'SNAPSHOT'i /
 'SORTED'i /
+'SOURCE'i /
 'SQL'i /
 'STABLE'i /
 'STANDALONE'i /
@@ -277,6 +280,7 @@ UnreservedKeyword <- 'ABORT'i /
 'SYSTEM'i /
 'TABLES'i /
 'TABLESPACE'i /
+'TARGET'i /
 'TEMP'i /
 'TEMPLATE'i /
 'TEMPORARY'i /
@@ -484,6 +488,7 @@ TypeNameKeyword <- 'ASOF'i /
 'AT'i /
 'AUTHORIZATION'i /
 'BINARY'i /
+'BY'i /
 'COLLATION'i /
 'CONCURRENTLY'i /
 'CROSS'i /
@@ -697,6 +702,25 @@ OptVerbose <- 'VERBOSE'i?
 
 QualifiedTarget <- QualifiedName OptNameList
 OptNameList <- Parens(List(Name))?
+MergeIntoStatement <- WithClause? 'MERGE'i 'INTO'i TargetOptAlias MergeIntoUsingClause List(MergeMatch)
+MergeIntoUsingClause <- ('USING'i TableRef)*
+MergeMatch <- MatchedClause / NotMatchedClause
+MatchedClause <- 'WHEN'i 'MATCHED'i AndExpression? 'THEN'i MatchedClauseAction
+MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
+UpdateMatchClause <- 'UPDATE'i (UpdateMatchSetClause / ByNameOrPosition)
+DeleteMatchClause <- 'DELETE'i
+InsertMatchClause <- 'INSERT'i ((InsertColumnList? 'VALUES'i List(Expression)) / (ByNameOrPosition? '*'?) / DefaultValues)
+DoNothingMatchClause <- 'DO'i 'NOTHING'i
+ErrorMatchClause <- 'ERROR'i Expression?
+UpdateMatchSetClause <- 'SET'i (UpdateSetClause / '*')
+AndExpression <- 'AND'i Expression
+NotMatchedClause <- Identifier
+
+
+
+
+
+
 PragmaStatement <- 'PRAGMA'i (PragmaAssign / PragmaFunction)
 
 PragmaAssign <- SettingName '=' VariableList
@@ -1147,7 +1171,8 @@ Statement <-
 	TruncateStatement /
 	LoadStatement /
 	InstallStatement /
-	AnalyzeStatement
+	AnalyzeStatement /
+	MergeIntoStatement
 
 CatalogName <- Identifier
 SchemaName <- Identifier

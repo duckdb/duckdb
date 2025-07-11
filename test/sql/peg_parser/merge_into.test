@@ -1,0 +1,18 @@
+# name: test/sql/peg_parser/struct_identifier.test
+# description: Test lambda syntax in peg parser
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10))$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id) USING (item_id) WHEN MATCHED THEN UPDATE$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Accounts USING (     VALUES (1, 'user2', [1, 2, 3]) ) new_account(id) USING (id) WHEN MATCHED THEN UPDATE WHEN NOT MATCHED THEN INSERT$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (10)) new_accounts(item_id) USING (item_id) WHEN NOT MATCHED THEN INSERT VALUES (new_accounts.item_id, DEFAULT)$TEST_PEG_PARSER$);
+

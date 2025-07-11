@@ -46,7 +46,7 @@ void KeywordHelper::InitializeKeywordMap() {
     keyword_map["bit"] = KeywordCategory::KEYWORD_COL_NAME;
     keyword_map["boolean"] = KeywordCategory::KEYWORD_COL_NAME;
     keyword_map["both"] = KeywordCategory::KEYWORD_RESERVED;
-    keyword_map["by"] = KeywordCategory::KEYWORD_UNRESERVED;
+    keyword_map["by"] = KeywordCategory::KEYWORD_TYPE_FUNC;
     keyword_map["cache"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["call"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["called"] = KeywordCategory::KEYWORD_UNRESERVED;
@@ -135,6 +135,7 @@ void KeywordHelper::InitializeKeywordMap() {
     keyword_map["encrypted"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["end"] = KeywordCategory::KEYWORD_RESERVED;
     keyword_map["enum"] = KeywordCategory::KEYWORD_UNRESERVED;
+    keyword_map["error"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["escape"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["event"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["except"] = KeywordCategory::KEYWORD_RESERVED;
@@ -252,8 +253,10 @@ void KeywordHelper::InitializeKeywordMap() {
     keyword_map["map"] = KeywordCategory::KEYWORD_COL_NAME;
     keyword_map["mapping"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["match"] = KeywordCategory::KEYWORD_UNRESERVED;
+    keyword_map["matched"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["materialized"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["maxvalue"] = KeywordCategory::KEYWORD_UNRESERVED;
+    keyword_map["merged"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["method"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["microsecond"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["microseconds"] = KeywordCategory::KEYWORD_UNRESERVED;
@@ -411,6 +414,7 @@ void KeywordHelper::InitializeKeywordMap() {
     keyword_map["snapshot"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["some"] = KeywordCategory::KEYWORD_RESERVED;
     keyword_map["sorted"] = KeywordCategory::KEYWORD_UNRESERVED;
+    keyword_map["source"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["sql"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["stable"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["standalone"] = KeywordCategory::KEYWORD_UNRESERVED;
@@ -435,6 +439,7 @@ void KeywordHelper::InitializeKeywordMap() {
     keyword_map["tablesample"] = KeywordCategory::KEYWORD_TYPE_FUNC;
     keyword_map["tablesample"] = KeywordCategory::KEYWORD_TYPE_FUNC;
     keyword_map["tablespace"] = KeywordCategory::KEYWORD_UNRESERVED;
+    keyword_map["target"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["temp"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["template"] = KeywordCategory::KEYWORD_UNRESERVED;
     keyword_map["temporary"] = KeywordCategory::KEYWORD_UNRESERVED;

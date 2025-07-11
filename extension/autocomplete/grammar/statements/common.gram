@@ -27,7 +27,8 @@ Statement <-
 	TruncateStatement /
 	LoadStatement /
 	InstallStatement /
-	AnalyzeStatement
+	AnalyzeStatement /
+	MergeIntoStatement
 
 CatalogName <- Identifier
 SchemaName <- Identifier
