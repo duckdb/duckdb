@@ -326,23 +326,6 @@ struct float_na_equal {
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
-static bool IsVariantType(const LogicalType &type) {
-	auto &child_types = StructType::GetChildTypes(type);
-	if (child_types.size() != 2 && child_types.size() != 3) {
-		return false;
-	}
-	if (child_types[0].first != "metadata") {
-		return false;
-	}
-	if (child_types[1].first != "value") {
-		return false;
-	}
-	if (child_types.size() == 3 && child_types[2].first != "typed_value") {
-		return false;
-	}
-	return true;
-}
-
 ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
                                                     const LogicalType &type, const string &name,
                                                     optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat,
@@ -372,14 +355,6 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		schema_element.__isset.num_children = true;
 		schema_element.__isset.type = false;
 		schema_element.__isset.repetition_type = true;
-
-		if (IsVariantType(type)) {
-			schema_element.__isset.logicalType = true;
-			schema_element.logicalType.__isset.VARIANT = true;
-			schema_element.logicalType.VARIANT.specification_version = 1;
-			schema_element.logicalType.VARIANT.__isset.specification_version = true;
-		}
-
 		schema_element.name = name;
 		if (field_id && field_id->set) {
 			schema_element.__isset.field_id = true;
