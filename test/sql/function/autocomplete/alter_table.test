@@ -21,3 +21,4 @@ query II
 FROM sql_auto_complete('ALTER TABLE my_table RENAME COLUMN fi') LIMIT 1;
 ----
 first_column	35
+

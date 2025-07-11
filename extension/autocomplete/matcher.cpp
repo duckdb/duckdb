@@ -304,23 +304,22 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
-		if (suggestion_type == SuggestionState::SUGGEST_RESERVED_TABLE_NAME ||
-		    suggestion_type == SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME) {
-			// no-op
-		} else if (suggestion_type == SuggestionState::SUGGEST_TABLE_NAME) {
-			// A ColId is invalid only if it's a reserved keyword or a type/function keyword.
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+		case SuggestionState::SUGGEST_TABLE_NAME:
 			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
 				return MatchResultType::FAIL;
 			}
-		} else if (suggestion_type == SuggestionState::SUGGEST_CATALOG_NAME ||
-		           suggestion_type == SuggestionState::SUGGEST_SCHEMA_NAME) {
-			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
-				return MatchResultType::FAIL;
-			}
-		} else {
+			break;
+		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
+		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
+			break;
+		default:
 			if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
 				return MatchResultType::FAIL;
 			}
+			break;
 		}
 		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
