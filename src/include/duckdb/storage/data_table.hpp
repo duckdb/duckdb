@@ -96,6 +96,8 @@ public:
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
+	//! Returns true, if the transaction can fetch the row ID.
+	bool CanFetch(DuckTransaction &transaction, const row_t row_id);
 
 	//! Initializes appending to transaction-local storage
 	void InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,

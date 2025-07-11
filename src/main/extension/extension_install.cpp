@@ -165,7 +165,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	return InstallExtensionInternal(db, fs, local_path, extension, options, context);
 }
 
-unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
 	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	file_size = source_file->GetFileSize();
 	auto in_buffer = make_unsafe_uniq_array<data_t>(file_size);

@@ -23,7 +23,7 @@ public:
 	              CTEMaterialize materialized_cte, bool is_recurring = false)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index),
 	      correlated_columns(0), materialized_cte(materialized_cte), is_recurring(is_recurring) {
-		D_ASSERT(types.size() > 0);
+		D_ASSERT(!types.empty());
 		chunk_types = std::move(types);
 		bound_columns = std::move(colnames);
 	}

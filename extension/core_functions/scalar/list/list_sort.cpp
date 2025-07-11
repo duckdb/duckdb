@@ -67,9 +67,10 @@ ListSortBindData::~ListSortBindData() {
 }
 
 // create the key_chunk and the payload_chunk and sink them into the local_sort_state
-void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorSinkInput &sink_input, Vector *child_vector,
-                   SelectionVector &sel, idx_t offset_lists_indices, vector<LogicalType> &types, Vector &payload_vector,
-                   bool &data_to_sort, Vector &lists_indices) {
+static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorSinkInput &sink_input,
+                          Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
+                          vector<LogicalType> &types, Vector &payload_vector, bool &data_to_sort,
+                          Vector &lists_indices) {
 
 	// slice the child vector
 	Vector slice(*child_vector, sel, offset_lists_indices);

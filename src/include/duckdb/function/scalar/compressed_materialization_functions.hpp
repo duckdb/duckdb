@@ -95,8 +95,8 @@ struct InternalCompressStringUbigintFun {
 	static ScalarFunction GetFunction();
 };
 
-struct InternalCompressStringHugeintFun {
-	static constexpr const char *Name = "__internal_compress_string_hugeint";
+struct InternalCompressStringUhugeintFun {
+	static constexpr const char *Name = "__internal_compress_string_uhugeint";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
