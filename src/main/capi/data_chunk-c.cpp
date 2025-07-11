@@ -248,6 +248,14 @@ void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector sel, idx_t 
 	d_dict->Slice(*d_sel, len);
 }
 
+void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+                            idx_t src_offset, idx_t dst_offset) {
+	auto d_src = reinterpret_cast<duckdb::Vector *>(src);
+	auto d_dst = reinterpret_cast<duckdb::Vector *>(dst);
+	auto d_sel = reinterpret_cast<duckdb::SelectionVector *>(sel);
+	duckdb::VectorOperations::Copy(*d_src, *d_dst, *d_sel, src_count, src_offset, dst_offset);
+}
+
 void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {
 	auto dvector = reinterpret_cast<duckdb::Vector *>(vector);
 	auto dvalue = reinterpret_cast<duckdb::Value *>(value);

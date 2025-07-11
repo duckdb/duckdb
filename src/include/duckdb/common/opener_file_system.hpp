@@ -41,7 +41,7 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override {
 		return GetFileSystem().GetFileSize(handle);
 	}
-	time_t GetLastModifiedTime(FileHandle &handle) override {
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
 		return GetFileSystem().GetLastModifiedTime(handle);
 	}
 	string GetVersionTag(FileHandle &handle) override {

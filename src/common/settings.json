@@ -374,10 +374,11 @@
     },
     {
         "name": "enable_http_logging",
-        "description": "Enables HTTP logging",
+        "description": "(deprecated) Enables HTTP logging",
         "type": "BOOLEAN",
         "scope": "local",
-        "struct": "EnableHTTPLoggingSetting"
+        "struct": "EnableHTTPLoggingSetting",
+        "custom_implementation": true
     },
     {
         "name": "enable_http_metadata_cache",
@@ -510,10 +511,11 @@
     },
     {
         "name": "http_logging_output",
-        "description": "The file to which HTTP logging output should be saved, or empty to print to the terminal",
+        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
         "type": "VARCHAR",
         "scope": "local",
-        "struct": "HTTPLoggingOutputSetting"
+        "struct": "HTTPLoggingOutputSetting",
+        "custom_implementation": true
     },
     {
         "name": "http_proxy",
@@ -712,6 +714,13 @@
         ]
     },
     {
+        "name": "pin_threads",
+        "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
+        "type": "VARCHAR",
+        "return_type": "ThreadPinMode",
+        "scope": "global"
+    },
+    {
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
         "type": "UBIGINT",
@@ -834,6 +843,13 @@
         "custom_implementation": true
     },
     {
+        "name": "temp_file_encryption",
+        "description": "Encrypt all temporary files if database is encrypted",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "threads",
         "description": "The number of total threads used by the system.",
         "type": "BIGINT",
@@ -852,6 +868,12 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "wal_encryption",
+        "description": "Encrypt the WAL if the database is encrypted",
+        "type": "BOOLEAN",
+        "scope": "global"
     },
     {
         "name": "zstd_min_string_length",

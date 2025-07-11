@@ -206,7 +206,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		// we cannot do a full checkpoint if any transaction needs to read old data
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
-	storage_manager.CreateCheckpoint(context, options);
+
+	storage_manager.CreateCheckpoint(QueryContext(context), options);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -269,14 +270,17 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	if (!error.HasError()) {
 		error = transaction.Commit(db, commit_id, std::move(commit_state));
 	}
+
 	if (error.HasError()) {
-		// commit unsuccessful: rollback the transaction instead
+		// COMMIT not successful: ROLLBACK.
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
+
 		auto rollback_error = transaction.Rollback();
 		if (rollback_error.HasError()) {
-			throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s",
-			                     rollback_error.Message());
+			throw FatalException(
+			    "Failed to rollback transaction. Cannot continue operation.\nOriginal Error: %s\nRollback Error: %s",
+			    error.Message(), rollback_error.Message());
 		}
 	} else {
 		// check if catalog changes were made
@@ -332,7 +336,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
-		storage_manager.CreateCheckpoint(context, options);
+		storage_manager.CreateCheckpoint(QueryContext(context), options);
 	}
 	return error;
 }

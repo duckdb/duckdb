@@ -83,7 +83,7 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(optional_ptr<ClientContext> context, StorageOptions &options) {
+void StorageManager::Initialize(QueryContext context, StorageOptions &options) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
@@ -125,7 +125,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
+void SingleFileStorageManager::LoadDatabase(QueryContext context, StorageOptions &storage_options) {
 
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
@@ -144,6 +144,8 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 	options.storage_version = storage_options.storage_version;
 
 	if (storage_options.encryption) {
+		// key is given upon ATTACH
+		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 		options.encryption_options.user_key = std::move(storage_options.user_key);
@@ -183,7 +185,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		}
 		//! set the block header size for the encrypted database files
 		//! set the database to encrypted
-		//! update the storage version to 1.3.0
+		//! update the storage version to 1.4.0
 		if (storage_options.block_header_size.IsValid()) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
@@ -210,13 +212,14 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 
 		// set the block header size for the encrypted database files
 		// (also if they already exist)
+		if (storage_options.encryption) {
+			options.encryption_options.encryption_enabled = true;
+			D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 		if (storage_options.block_header_size.IsValid()) {
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
 			options.storage_version = storage_options.storage_version;
-
-			// Set encryption to true and derive encryption key
-			options.encryption_options.encryption_enabled = true;
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;
@@ -389,7 +392,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(optional_ptr<ClientContext> client_context, CheckpointOptions options) {
+void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
 	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
@@ -400,7 +403,7 @@ void SingleFileStorageManager::CreateCheckpoint(optional_ptr<ClientContext> clie
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(client_context, db, *block_manager, options.type);
+			SingleFileCheckpointWriter checkpointer(context, db, *block_manager, options.type);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

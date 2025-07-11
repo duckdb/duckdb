@@ -12,6 +12,7 @@
 
 namespace duckdb {
 
+namespace {
 struct SortedAggregateBindData : public FunctionData {
 	using Expressions = vector<unique_ptr<Expression>>;
 	using BindInfoPtr = unique_ptr<FunctionData>;
@@ -724,6 +725,8 @@ struct SortedAggregateFunction {
 		result.Verify(count);
 	}
 };
+
+} // namespace
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
                                          const vector<unique_ptr<Expression>> &groups) {

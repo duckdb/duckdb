@@ -1,5 +1,6 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -294,13 +295,11 @@ void SingleFileBlockManager::StoreSalt(MainHeader &main_header, data_ptr_t salt)
 }
 
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
-
 	//! first byte is the key derivation function used (kdf)
 	//! second byte is for the usage of AAD
 	//! third byte is for the cipher used
 	//! the subsequent byte is empty
 	//! the last 4 bytes are the key length
-
 	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
 	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
 	data_ptr_t offset = metadata;
@@ -316,7 +315,37 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	main_header.SetEncryptionMetadata(metadata);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context) {
+void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
+	//! Get the stored salt
+	uint8_t salt[MainHeader::SALT_LEN];
+	memset(salt, 0, MainHeader::SALT_LEN);
+	memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+
+	//! Check if the correct key is used to decrypt the database
+	// Derive the encryption key and add it to cache
+	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
+	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
+
+	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+	    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
+		throw IOException("Wrong encryption key used to open the database file");
+	}
+
+	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+	auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
+	catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+	catalog.SetIsEncrypted();
+
+	std::fill(user_key.begin(), user_key.end(), 0);
+	user_key.clear();
+}
+
+void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
+	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
+}
+
+void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -329,20 +358,28 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	auto &config = DBConfig::GetConfig(db.GetDatabase());
+	// Derive the encryption key and add it to cache
+	// Unused for plain databases
+	uint8_t salt[MainHeader::SALT_LEN];
+	memset(salt, 0, MainHeader::SALT_LEN);
+	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 
 	if (options.encryption_options.encryption_enabled) {
-		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-
+		//! key given with ATTACH, use the user key pointer in encryption options
 		//! we generate a random salt for each password
-		uint8_t salt[MainHeader::SALT_LEN];
 		GenerateSalt(db, salt, options);
-
-		// Derive the encryption key and add it to cache
-		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
 		options.encryption_options.user_key = nullptr;
 
+		// set the encrypted db bit to 0
+		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+
+		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+		auto &catalog = db.GetCatalog().Cast<DuckCatalog>();
+		catalog.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+		catalog.SetIsEncrypted();
 
 		//! Store all metadata in the main header
 		StoreEncryptionMetadata(main_header);
@@ -413,35 +450,24 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 
-	if (main_header.IsEncrypted() && !options.encryption_options.encryption_enabled) {
-		// Todo; look if keys are stored in DuckDB secrets
-		// then automatically derive that key
-		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
+	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
+		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
+		// database is not encrypted, but is tried to be opened with a key
 	}
 
-	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
-		// database is not encrypted, but is tried to be opened with a key
-		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
-
-	} else if (main_header.IsEncrypted()) {
-		//! Get the stored salt
-		uint8_t salt[MainHeader::SALT_LEN];
-		memset(salt, 0, MainHeader::SALT_LEN);
-		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
-
-		//! Check if the correct key is used to decrypt the database
-		// Derive the encryption key and add it to cache
-		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
-		// delete user key
-		options.encryption_options.user_key = nullptr;
-		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		if (!DecryptCanary(main_header, encryption_state, derived_key)) {
-			throw IOException("Wrong encryption key used to open the database file");
+	if (main_header.IsEncrypted()) {
+		auto &config = DBConfig::GetConfig(db.GetDatabase());
+		if (options.encryption_options.encryption_enabled) {
+			//! Encryption is set
+			//! Check if the given key upon attach is correct
+			// Derive the encryption key and add it to cache
+			CheckAndAddEncryptionKey(main_header);
+			// delete user key ptr
+			options.encryption_options.user_key = nullptr;
+		} else {
+			// if encrypted, but no encryption key given
+			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
-
-		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 	}
 
 	options.version_number = main_header.version_number;
@@ -529,7 +555,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	CheckChecksum(block, location, delta, skip_block_header);
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &block, uint64_t location,
+void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &block, uint64_t location,
                                               bool skip_block_header) const {
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	uint64_t checksum;
@@ -801,10 +827,12 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id);
+	// FIXME; maybe we should pass the block header size explicitly
+	return make_uniq<Block>(source_buffer, block_id, GetBlockHeaderSize());
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	// FIXME; maybe we should pass the block header size explicitly
 	unique_ptr<Block> result;
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
@@ -870,8 +898,12 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
+	Write(QueryContext(), buffer, block_id);
+}
+
+void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(nullptr, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
+	ChecksumAndWrite(context, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -941,7 +973,7 @@ protected:
 	}
 };
 
-void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) {
+void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
@@ -1014,8 +1046,8 @@ void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, Da
 	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
-	ChecksumAndWrite(context, header_buffer,
-	                 active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
+	auto location = active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2;
+	ChecksumAndWrite(context, header_buffer, location);
 	// switch active header to the other header
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk

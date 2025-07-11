@@ -43,7 +43,7 @@ public:
 
 private:
 	bool validate;
-	time_t last_modified;
+	timestamp_t last_modified;
 	string version_tag;
 };
 

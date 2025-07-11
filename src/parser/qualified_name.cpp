@@ -86,6 +86,32 @@ QualifiedColumnName::QualifiedColumnName(const BindingAlias &alias, string colum
     : catalog(alias.GetCatalog()), schema(alias.GetSchema()), table(alias.GetAlias()), column(std::move(column_p)) {
 }
 
+QualifiedColumnName QualifiedColumnName::Parse(string &input) {
+	auto components = QualifiedName::ParseComponents(input);
+	if (components.size() == 1) {
+		return QualifiedColumnName(components[0]);
+	} else if (components.size() == 2) {
+		return QualifiedColumnName(components[0], components[1]);
+	} else if (components.size() == 3) {
+		QualifiedColumnName qname;
+		qname.schema = components[0];
+		qname.table = components[1];
+		qname.column = components[2];
+		return qname;
+	} else if (components.size() == 4) {
+		QualifiedColumnName qname;
+		qname.catalog = components[0];
+		qname.schema = components[1];
+		qname.table = components[2];
+		qname.column = components[3];
+		return qname;
+	} else {
+		throw ParserException(
+		    "Expected at most 4 entries (catalog.schema.table.column), but found %zu entries (input: %s)",
+		    components.size(), input);
+	}
+}
+
 string QualifiedColumnName::ToString() const {
 	string result;
 	if (!catalog.empty()) {

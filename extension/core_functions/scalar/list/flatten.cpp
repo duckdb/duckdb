@@ -7,7 +7,9 @@
 
 namespace duckdb {
 
-static void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
+namespace {
+
+void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	const auto flat_list_data = FlatVector::GetData<list_entry_t>(result);
 	auto &flat_list_mask = FlatVector::Validity(result);
@@ -140,8 +142,8 @@ static void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &resu
 	}
 }
 
-static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFunction &bound_function,
+                                         vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 1);
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
@@ -185,13 +187,15 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
 	auto child_copy = list_child_stats.Copy();
 	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return child_copy.ToUnique();
 }
+
+} // namespace
 
 ScalarFunction ListFlattenFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),

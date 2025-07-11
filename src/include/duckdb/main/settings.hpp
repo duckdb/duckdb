@@ -24,7 +24,7 @@ enum class SettingScope : uint8_t {
 	GLOBAL,
 	//! Setting is from the local Setting scope
 	LOCAL,
-	//! Setting was not feteched from settings, but it was fetched from a secret instead
+	//! Setting was not fetched from settings, but it was fetched from a secret instead
 	SECRET,
 	//! The setting was not found or invalid in some other way
 	INVALID
@@ -574,7 +574,7 @@ struct EnableFSSTVectorsSetting {
 struct EnableHTTPLoggingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_logging";
-	static constexpr const char *Description = "Enables HTTP logging";
+	static constexpr const char *Description = "(deprecated) Enables HTTP logging";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -764,7 +764,7 @@ struct HTTPLoggingOutputSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_logging_output";
 	static constexpr const char *Description =
-	    "The file to which HTTP logging output should be saved, or empty to print to the terminal";
+	    "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -1070,6 +1070,17 @@ struct PerfectHtThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct PinThreadsSetting {
+	using RETURN_TYPE = ThreadPinMode;
+	static constexpr const char *Name = "pin_threads";
+	static constexpr const char *Description =
+	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct PivotFilterThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "pivot_filter_threshold";
@@ -1262,6 +1273,16 @@ struct TempDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct TempFileEncryptionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "temp_file_encryption";
+	static constexpr const char *Description = "Encrypt all temporary files if database is encrypted";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ThreadsSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "threads";
@@ -1277,6 +1298,16 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct WalEncryptionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "wal_encryption";
+	static constexpr const char *Description = "Encrypt the WAL if the database is encrypted";
+	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

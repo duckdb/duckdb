@@ -528,23 +528,6 @@ Value EnableFSSTVectorsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Enable H T T P Logging
-//===----------------------------------------------------------------------===//
-void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_http_logging = input.GetValue<bool>();
-}
-
-void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
-}
-
-Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_http_logging);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable H T T P Metadata Cache
 //===----------------------------------------------------------------------===//
 void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -698,23 +681,6 @@ void HomeDirectorySetting::ResetLocal(ClientContext &context) {
 Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.home_directory);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Logging Output
-//===----------------------------------------------------------------------===//
-void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.http_logging_output = input.GetValue<string>();
-}
-
-void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
-}
-
-Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.http_logging_output);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1046,6 +1012,23 @@ void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Pin Threads
+//===----------------------------------------------------------------------===//
+void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.pin_threads = EnumUtil::FromString<ThreadPinMode>(str_input);
+}
+
+void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.pin_threads = DBConfig().options.pin_threads;
+}
+
+Value PinThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.pin_threads)));
+}
+
+//===----------------------------------------------------------------------===//
 // Pivot Filter Threshold
 //===----------------------------------------------------------------------===//
 void PivotFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1177,6 +1160,22 @@ void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.scheduler_process_partial);
+}
+
+//===----------------------------------------------------------------------===//
+// Wal Encryption
+//===----------------------------------------------------------------------===//
+void WalEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.wal_encryption = input.GetValue<bool>();
+}
+
+void WalEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.wal_encryption = DBConfig().options.wal_encryption;
+}
+
+Value WalEncryptionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.wal_encryption);
 }
 
 //===----------------------------------------------------------------------===//

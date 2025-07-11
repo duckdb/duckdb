@@ -27,6 +27,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -35,9 +36,10 @@ on:
 
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -57,9 +59,18 @@ env:
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
 
 jobs:
+ check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+      
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
+    needs: check-draft
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -98,6 +109,15 @@ jobs:
       run: |
         test/Release/unittest.exe
 
+    - name: Test with VS2019 C++ stdlib
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        choco install wget -y --no-progress
+        wget -P test/Release https://blobs.duckdb.org/ci/msvcp140.dll
+        test/Release/unittest.exe
+        rm test/Release/msvcp140.dll
+
     - name: Tools Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
@@ -130,9 +150,9 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python scripts/amalgamation.py
-        choco install zip -y --force
-        zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
+        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
+        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
     - uses: actions/upload-artifact@v4
@@ -149,9 +169,11 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true'
+    needs: 
+      - win-release-64
+      - check-draft
+    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
     runs-on: windows-latest
-    needs: win-release-64
 
     steps:
     - uses: actions/checkout@v4
@@ -189,9 +211,11 @@ jobs:
 
  win-release-arm64:
    name: Windows (ARM64)
-   if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true'
+   needs: 
+    - win-release-64
+    - check-draft
+   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
    runs-on: windows-latest
-   needs: win-release-64
 
    steps:
      - uses: actions/checkout@v4
@@ -239,9 +263,9 @@ jobs:
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          python scripts/amalgamation.py
-         choco install zip -y --force
-         zip -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
-         zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
+         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
+         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
      - uses: actions/upload-artifact@v4
@@ -253,9 +277,11 @@ jobs:
 
  mingw:
      name: MinGW (64 Bit)
-     runs-on: windows-latest
+     needs: 
+      - win-release-64
+      - check-draft
      if: ${{ inputs.skip_tests != 'true' }}
-     needs: win-release-64
+     runs-on: windows-latest
      steps:
        - uses: actions/checkout@v4
          with:
@@ -299,8 +325,10 @@ jobs:
  win-extensions-64:
    # Builds extensions for windows_amd64
    name: Windows Extensions (64-bit)
+   needs: 
+    - win-release-64
+    - check-draft
    runs-on: windows-latest
-   needs: win-release-64
    steps:
      - name: Keep \n line endings
        shell: bash

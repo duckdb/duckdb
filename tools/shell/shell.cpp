@@ -2367,6 +2367,7 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** the database fails to open, print an error message and exit.
 */
 void ShellState::OpenDB(int flags) {
+
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
 			if (zDbFilename.empty()) {
@@ -3856,7 +3857,7 @@ bool ShellState::ReadFromFile(const string &file) {
 		utf8_printf(stderr, "Error: cannot open \"%s\"\n", file.c_str());
 		rc = 1;
 	} else {
-		rc = ProcessInput();
+		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	}
 	in = inSaved;
@@ -4391,7 +4392,7 @@ static bool _all_whitespace(const char *z) {
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
-int ShellState::RunOneSqlLine(char *zSql) {
+int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	int rc;
 	char *zErrMsg = nullptr;
 
@@ -4400,7 +4401,7 @@ int ShellState::RunOneSqlLine(char *zSql) {
 		resolve_backslashes(zSql);
 	}
 #ifndef SHELL_USE_LOCAL_GETLINE
-	if (zSql && *zSql && *zSql != '\3') {
+	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
 	}
 #endif
@@ -4431,7 +4432,7 @@ int ShellState::RunOneSqlLine(char *zSql) {
 **
 ** Return the number of errors.
 */
-int ShellState::ProcessInput() {
+int ShellState::ProcessInput(InputMode mode) {
 	char *zLine = nullptr; /* A single input line */
 	char *zSql = nullptr;  /* Accumulated SQL text */
 	idx_t nLine;           /* Length of current line */
@@ -4486,7 +4487,7 @@ int ShellState::ProcessInput() {
 			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
-				if (zLine && *zLine && *zLine != '\3')
+				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3')
 					shell_add_history(zLine);
 #endif
 				rc = DoMetaCommand(zLine);
@@ -4520,7 +4521,7 @@ int ShellState::ProcessInput() {
 			nSql += nLine;
 		}
 		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && sqlite3_complete(zSql)) {
-			errCnt += RunOneSqlLine(zSql);
+			errCnt += RunOneSqlLine(mode, zSql);
 			nSql = 0;
 			if (outCount) {
 				ResetOutput();
@@ -4536,7 +4537,7 @@ int ShellState::ProcessInput() {
 		}
 	}
 	if (nSql && !_all_whitespace(zSql)) {
-		errCnt += RunOneSqlLine(zSql);
+		errCnt += RunOneSqlLine(mode, zSql);
 	}
 	free(zSql);
 	free(zLine);
@@ -4641,7 +4642,7 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 		if (stdin_is_interactive && is_duckdb_rc) {
 			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
 		}
-		rc = ProcessInput();
+		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
@@ -4707,7 +4708,7 @@ static const char zOptions[] =
 static void usage(int showDetail) {
 	utf8_printf(stderr,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
-	            "FILENAME is the name of an DuckDB database. A new database is created\n"
+	            "FILENAME is the name of a DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
 	            program_name);
 	if (showDetail) {
@@ -5160,7 +5161,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;
-			rc = data.ProcessInput();
+			rc = data.ProcessInput(InputMode::STANDARD);
 			if (zHistory) {
 				shell_stifle_history(2000);
 				shell_write_history(zHistory);
@@ -5168,7 +5169,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			}
 		} else {
 			data.in = stdin;
-			rc = data.ProcessInput();
+			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
 	data.SetTableName(0);

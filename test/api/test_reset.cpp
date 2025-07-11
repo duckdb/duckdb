@@ -54,6 +54,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
+	    {"wal_encryption", {Value(false)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
@@ -116,11 +117,11 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},
-	    {"http_logging_output", {"my_cool_outputfile"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
-	    {"enable_external_file_cache", {false}}};
+	    {"enable_external_file_cache", {false}},
+	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -159,6 +160,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_community_extensions",    // cant change this while db is running
 	    "allow_unredacted_secrets",      // cant change this while db is running
 	    "disable_database_invalidation", // cant change this while db is running
+	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "streaming_buffer_size",
 	    "log_query_path",
@@ -174,6 +176,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "default_block_size",
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
+	    "http_logging_output",
 	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
