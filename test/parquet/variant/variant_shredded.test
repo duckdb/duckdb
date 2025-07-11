@@ -84,6 +84,7 @@ from 'data/parquet-testing/variant_shredded_string.parquet';
 ----
 1	"iceberg"
 
+# FIXME: this is actually a Timestamp Nanos - positive (with timezone)
 # Timestamp Micros - positive (with timezone)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_positive.parquet';
@@ -126,7 +127,7 @@ from 'data/parquet-testing/variant_shredded_int16_negative.parquet';
 ----
 1	-1234
 
-# Timestamp Micros - positive (with timezone) (again ??)
+# Timestamp Micros - positive (with timezone)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_positive2.parquet';
 ----
@@ -162,7 +163,8 @@ from 'data/parquet-testing/variant_shredded_int32_negative.parquet';
 ----
 1	-12345
 
-# Timestamp Micros - negative (with timezone) (again ??)
+# FIXME: this is actually a Timestamp Nanos - negative (with timezone)
+# Timestamp Micros - negative (with timezone)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_negative2.parquet';
 ----
