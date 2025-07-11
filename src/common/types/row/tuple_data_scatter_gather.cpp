@@ -162,6 +162,9 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	switch (type) {
 	case PhysicalType::VARCHAR: {
 		// Only non-inlined strings are stored in the heap
+#ifdef DUCKDB_SMALLER_BINARY
+		ComputeStringHeapSizesInternal(heap_sizes, source_vector_data, append_sel, append_count);
+#else
 		if (source_validity.AllValid()) {
 			if (append_sel.IsSet()) {
 				if (source_sel.IsSet()) {
@@ -199,6 +202,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 				}
 			}
 		}
+#endif
 		break;
 	}
 	case PhysicalType::STRUCT: {
