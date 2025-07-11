@@ -355,7 +355,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	auto denom_multiplier = 1.0 + static_cast<double>(unused_edge_tdoms.size());
 
 	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
-	// structures. When that's the case, merge all remaining subgraphs.
+	// structures. When that's the case, merge all remaining subgraphs as if they are connected by a cross product
 	if (subgraphs.size() > 1) {
 		auto final_subgraph = subgraphs.at(0);
 		for (auto merge_with = subgraphs.begin() + 1; merge_with != subgraphs.end(); merge_with++) {
@@ -367,6 +367,23 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			final_subgraph.denom *= merge_with->denom;
 		}
 	}
+	if (!subgraphs.empty()) {
+		// Some relations are connected by cross products and will not end up in a subgraph
+		// Check and make sure all relations were considered, if not, they are connected to the graph by cross products
+		auto &returning_subgraph = subgraphs.at(0);
+		if (returning_subgraph.relations->count != set.count) {
+			for (idx_t rel_index = 0; rel_index < set.count; rel_index++) {
+				auto relation_id = set.relations[rel_index];
+				auto &rel = set_manager.GetJoinRelation(relation_id);
+				if (!JoinRelationSet::IsSubset(*returning_subgraph.relations, rel)) {
+					returning_subgraph.numerator_relations =
+					    &set_manager.Union(*returning_subgraph.numerator_relations, rel);
+					returning_subgraph.relations = &set_manager.Union(*returning_subgraph.relations, rel);
+				}
+			}
+		}
+	}
+
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
 	if (subgraphs.empty() || subgraphs.at(0).denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
@@ -377,7 +394,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
-
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}
