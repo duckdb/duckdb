@@ -32,6 +32,15 @@ void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Col
 	}
 }
 
+static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_value) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("value", LogicalType::BLOB);
+	if (typed_value) {
+		children.emplace_back("typed_value", typed_value->Type());
+	}
+	return LogicalType::STRUCT(std::move(children));
+}
+
 idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
@@ -43,10 +52,11 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	std::fill_n(define_out, num_values, MaxDefine());
 
 	optional_idx read_count;
-	Vector value_intermediate(LogicalType::BLOB, num_values);
+
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	if (typed_value_reader) {
-	}
+	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
+	auto &group_entries = StructVector::GetEntries(intermediate_group);
+	auto &value_intermediate = *group_entries[0];
 
 	auto metadata_values = child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
 	auto value_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
@@ -64,10 +74,9 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	vector<VariantValue> conversion_result;
 	if (typed_value_reader) {
-		Vector typed_value_intermediate(typed_value_reader->Type(), num_values);
-		(void)typed_value_reader->Read(num_values, define_out, repeat_out, typed_value_intermediate);
-		conversion_result = VariantShreddedConversion::Convert(metadata_intermediate, value_intermediate,
-		                                                       typed_value_intermediate, 0, num_values, num_values);
+		(void)typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
+		conversion_result =
+		    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
 	} else {
 		conversion_result.resize(num_values);
 		auto &value_validity = FlatVector::Validity(value_intermediate);
