@@ -5,7 +5,7 @@
 require autocomplete
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10))$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id) USING (item_id)$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id) USING (item_id) WHEN MATCHED THEN UPDATE$TEST_PEG_PARSER$);
