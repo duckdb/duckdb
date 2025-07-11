@@ -420,17 +420,19 @@ COPY (
 statement ok
 SET threads=4;
 
+# we creating a build side of approximately:
+# uncompressed: 1_200_000 * 400 * 16 = ~8 GB
+# uncompressed: 1_200_000 * 400 * 1 = ~0.5 GB
+# this memory limit tests if the build side compresses well
 statement ok
-SET memory_limit='1.5GB';
+SET memory_limit='1.0GB';
 
 statement ok
 SET temp_directory=NULL
 
 # join, this should take many GBs of memory, but all the NULLs get compressed to UTINYINT so it should fit
 statement ok
-COPY (
-	SELECT *
-	FROM read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(2)], union_by_name=true) build
-	JOIN read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(3)]) probe
-	USING (pk)
-) TO '__TEST_DIR__/many_nulls_output.parquet' (ROW_GROUP_SIZE_BYTES '64mb');
+SELECT ANY_VALUE(COLUMNS(*))
+FROM read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(2)], union_by_name=true) build
+JOIN read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(3)]) probe
+USING (pk)
