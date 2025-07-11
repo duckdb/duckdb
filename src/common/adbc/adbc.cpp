@@ -1307,6 +1307,23 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					WHERE column_name LIKE '%s'
 					GROUP BY table_catalog, table_schema, table_name
 				),
+				column_constraints AS (
+					SELECT
+						table_catalog,
+						table_schema,
+						table_name,
+						constraint_name,
+						constraint_type,
+						LIST(column_name) as column_names
+					FROM information_schema.constraint_column_usage
+					WHERE column_name LIKE '%s'
+					GROUP BY
+						table_catalog,
+						table_schema,
+						table_name,
+						constraint_name,
+						constraint_type
+				),
 				constraints AS (
 					SELECT
 						table_catalog,
@@ -1316,11 +1333,11 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 							{
 								constraint_name: constraint_name,
 								constraint_type: constraint_type,
-								constraint_column_names: []::VARCHAR[],
+								constraint_column_names: column_names,
 								constraint_column_usage: []::STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[],
 							}
 						) table_constraints
-					FROM information_schema.table_constraints
+					FROM column_constraints
 					GROUP BY table_catalog, table_schema, table_name
 				),
 				tables AS (
@@ -1365,8 +1382,8 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
-		                                   column_name_filter, table_name_filter, table_type_condition,
-		                                   db_schema_filter, catalog_filter);
+		                                   column_name_filter, column_name_filter, table_name_filter,
+		                                   table_type_condition, db_schema_filter, catalog_filter);
 		break;
 	default:
 		SetError(error, "Invalid value of Depth");
