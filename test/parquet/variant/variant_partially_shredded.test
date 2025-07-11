@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-set variant_legacy_encoding=true;
-
 query II nosort result
 from 'data/parquet-testing/variant_partial_shredded0.parquet';
 ----

@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-set variant_legacy_encoding=true;
-
 # Array
 query II
 from 'data/parquet-testing/variant_shredded_array1.parquet';

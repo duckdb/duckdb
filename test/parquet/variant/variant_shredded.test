@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-set variant_legacy_encoding=true;
-
 # Timestamp NS - positive (no timezone)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_nanos_ntz_positive.parquet';
@@ -168,7 +165,7 @@ from 'data/parquet-testing/variant_shredded_int32_negative.parquet';
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_negative2.parquet';
 ----
-1	"1957-11-07 12:33:54.123457+00"
+1	"1957-11-07 12:33:54.123456+00"
 
 # int8 - negative
 query II
