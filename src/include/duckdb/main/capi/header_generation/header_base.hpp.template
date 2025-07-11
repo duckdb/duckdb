@@ -292,7 +292,7 @@ typedef struct {
 	int32_t micros;
 } duckdb_time_struct;
 
-//! TIMES_NS is stored as nanoseconds since 00:00:00.
+//! TIME_NS is stored as nanoseconds since 00:00:00.
 typedef struct {
 	int64_t nanos;
 } duckdb_time_ns;

@@ -132,7 +132,6 @@ typedef struct {
 	duckdb_value (*duckdb_create_double)(double input);
 	duckdb_value (*duckdb_create_date)(duckdb_date input);
 	duckdb_value (*duckdb_create_time)(duckdb_time input);
-	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_value (*duckdb_create_time_tz_value)(duckdb_time_tz value);
 	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
@@ -156,7 +155,6 @@ typedef struct {
 	double (*duckdb_get_double)(duckdb_value val);
 	duckdb_date (*duckdb_get_date)(duckdb_value val);
 	duckdb_time (*duckdb_get_time)(duckdb_value val);
-	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
 	duckdb_time_tz (*duckdb_get_time_tz)(duckdb_value val);
 	duckdb_timestamp (*duckdb_get_timestamp)(duckdb_value val);
 	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
@@ -504,6 +502,8 @@ typedef struct {
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
+	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
+	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
 	// API to create and manipulate vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
@@ -633,7 +633,6 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_create_double = duckdb_create_double;
 	result.duckdb_create_date = duckdb_create_date;
 	result.duckdb_create_time = duckdb_create_time;
-	result.duckdb_create_time_ns = duckdb_create_time_ns;
 	result.duckdb_create_time_tz_value = duckdb_create_time_tz_value;
 	result.duckdb_create_timestamp = duckdb_create_timestamp;
 	result.duckdb_create_interval = duckdb_create_interval;
@@ -657,7 +656,6 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_double = duckdb_get_double;
 	result.duckdb_get_date = duckdb_get_date;
 	result.duckdb_get_time = duckdb_get_time;
-	result.duckdb_get_time_ns = duckdb_get_time_ns;
 	result.duckdb_get_time_tz = duckdb_get_time_tz;
 	result.duckdb_get_timestamp = duckdb_get_timestamp;
 	result.duckdb_get_interval = duckdb_get_interval;
@@ -952,6 +950,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;
+	result.duckdb_create_time_ns = duckdb_create_time_ns;
+	result.duckdb_get_time_ns = duckdb_get_time_ns;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;
