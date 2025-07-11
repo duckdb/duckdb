@@ -1414,11 +1414,20 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
+LogicalType LogicalType::Copy() const {
+	LogicalType copy = *this;
+	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		copy.type_info_ = type_info_->Copy();
+	}
+	return copy;
+}
 
 LogicalType LogicalType::DeepCopy() const {
 	LogicalType copy = *this;
-	if (type_info_) {
-		copy.type_info_ = type_info_->Copy();
+	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		copy.type_info_ = type_info_->DeepCopy();
 	}
 	return copy;
 }

@@ -85,18 +85,6 @@ struct RowOperations {
 	                   data_ptr_t heap_ptr = nullptr);
 
 	//===--------------------------------------------------------------------===//
-	// Comparison Operators
-	//===--------------------------------------------------------------------===//
-	//! Compare a block of key data against the row values to produce an updated selection that matches
-	//! and a second (optional) selection of non-matching values.
-	//! Returns the number of matches remaining in the selection.
-	using Predicates = vector<ExpressionType>;
-
-	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout, Vector &rows,
-	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
-	                   idx_t &no_match_count);
-
-	//===--------------------------------------------------------------------===//
 	// Heap Operators
 	//===--------------------------------------------------------------------===//
 	//! Compute the entry sizes of a vector with variable size type (used before building heap buffer space).

@@ -23,7 +23,8 @@ namespace duckdb {
 
 PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
-                                                       idx_t estimated_cardinality)
+                                                       idx_t estimated_cardinality,
+                                                       TupleDataValidityType distinct_validity)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types),
                        estimated_cardinality),
       aggregates(std::move(expressions)) {
@@ -32,7 +33,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_pl
 	if (!distinct_collection_info) {
 		return;
 	}
-	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info);
+	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info, distinct_validity);
 }
 
 //===--------------------------------------------------------------------===//

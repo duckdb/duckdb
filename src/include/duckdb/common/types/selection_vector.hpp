@@ -93,7 +93,10 @@ public:
 		sel_vector[j] = tmp;
 	}
 	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
-		return sel_vector ? sel_vector[idx] : idx;
+		return sel_vector ? get_index_unsafe(idx) : idx;
+	}
+	inline idx_t get_index_unsafe(idx_t idx) const { // NOLINT: allow casing for legacy reasons
+		return sel_vector[idx];
 	}
 	sel_t *data() { // NOLINT: allow casing for legacy reasons
 		return sel_vector;

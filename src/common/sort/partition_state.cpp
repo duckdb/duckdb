@@ -100,13 +100,13 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types_ptr->Initialize(payload_types);
+			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types_ptr->Initialize(types);
+			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}
