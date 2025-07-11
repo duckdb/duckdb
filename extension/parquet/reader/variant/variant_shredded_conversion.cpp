@@ -341,19 +341,8 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	auto &entries = StructVector::GetEntries(typed_value);
 	D_ASSERT(entries.size() == fields.size());
 
-	//! Process all fields to get the shredded field values
 	vector<ShreddedVariantField> shredded_fields;
 	shredded_fields.reserve(fields.size());
-
-	for (idx_t i = 0; i < fields.size(); i++) {
-		auto &field = fields[i];
-		auto &field_name = field.first;
-		auto &field_vec = *entries[i];
-
-		shredded_fields.emplace_back(field_name);
-		auto &shredded_field = shredded_fields.back();
-		shredded_field.values = Convert(metadata, field_vec, offset, length, total_size);
-	}
 
 	//! 'value'
 	UnifiedVectorFormat value_format;
@@ -371,36 +360,105 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	typed_value.ToUnifiedFormat(total_size, typed_format);
 	auto &typed_validity = typed_format.validity;
 
-	//! TODO: if the 'typed_value' (typed_validity) is NULL for this object, the row is not an object
-	//! and the binary 'value' can be of any type
-
+	//! FIXME: a lot of duplication here that could be cleaned up
 	vector<VariantValue> ret(length);
-	for (idx_t i = 0; i < length; i++) {
-		ret[i] = VariantValue(VariantValueType::OBJECT);
-		auto index = value_format.sel->get_index(i + offset);
+	if (typed_validity.AllValid()) {
+		//! Process all fields to get the shredded field values
+		for (idx_t i = 0; i < fields.size(); i++) {
+			auto &field = fields[i];
+			auto &field_name = field.first;
+			auto &field_vec = *entries[i];
 
-		for (idx_t field_index = 0; field_index < shredded_fields.size(); field_index++) {
-			auto &shredded_field = shredded_fields[field_index];
-			auto &field_value = shredded_field.values[i];
-
-			if (field_value.value_type == VariantValueType::INVALID) {
-				//! This field is missing from the value, skip it
-				continue;
-			}
-			ret[i].AddChild(shredded_field.field_name, std::move(field_value));
+			shredded_fields.emplace_back(field_name);
+			auto &shredded_field = shredded_fields.back();
+			shredded_field.values = Convert(metadata, field_vec, offset, length, total_size);
 		}
 
-		if (validity.RowIsValid(index)) {
-			//! Object is partially shredded, decode the object and merge the values
-			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
-			VariantMetadata variant_metadata(metadata_value);
-			auto binary_value = value_data[index].GetData();
-			auto unshredded = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
-			if (unshredded.value_type != VariantValueType::OBJECT) {
-				throw InvalidInputException("Partially shredded objects have to encode Object Variants in the 'value'");
+		for (idx_t i = 0; i < length; i++) {
+			ret[i] = VariantValue(VariantValueType::OBJECT);
+			auto index = value_format.sel->get_index(i + offset);
+
+			for (idx_t field_index = 0; field_index < shredded_fields.size(); field_index++) {
+				auto &shredded_field = shredded_fields[field_index];
+				auto &field_value = shredded_field.values[i];
+
+				if (field_value.value_type == VariantValueType::INVALID) {
+					//! This field is missing from the value, skip it
+					continue;
+				}
+				ret[i].AddChild(shredded_field.field_name, std::move(field_value));
 			}
-			for (auto &item : unshredded.object_children) {
-				ret[i].AddChild(item.first, std::move(item.second));
+
+			if (validity.RowIsValid(index)) {
+				//! Object is partially shredded, decode the object and merge the values
+				auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+				VariantMetadata variant_metadata(metadata_value);
+				auto binary_value = value_data[index].GetData();
+				auto unshredded = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+				if (unshredded.value_type != VariantValueType::OBJECT) {
+					throw InvalidInputException(
+					    "Partially shredded objects have to encode Object Variants in the 'value'");
+				}
+				for (auto &item : unshredded.object_children) {
+					ret[i].AddChild(item.first, std::move(item.second));
+				}
+			}
+		}
+	} else {
+		//! Process all fields to get the shredded field values
+		for (idx_t i = 0; i < fields.size(); i++) {
+			auto &field = fields[i];
+			auto &field_name = field.first;
+			auto &field_vec = *entries[i];
+
+			shredded_fields.emplace_back(field_name);
+			auto &shredded_field = shredded_fields.back();
+			shredded_field.values = Convert(metadata, field_vec, offset, length, total_size);
+		}
+
+		//! For some of the rows, the value is not an object
+		for (idx_t i = 0; i < length; i++) {
+			auto typed_index = typed_format.sel->get_index(i + offset);
+			auto value_index = value_format.sel->get_index(i + offset);
+			if (typed_validity.RowIsValid(typed_index)) {
+				ret[i] = VariantValue(VariantValueType::OBJECT);
+
+				for (idx_t field_index = 0; field_index < shredded_fields.size(); field_index++) {
+					auto &shredded_field = shredded_fields[field_index];
+					auto &field_value = shredded_field.values[i];
+
+					if (field_value.value_type == VariantValueType::INVALID) {
+						//! This field is missing from the value, skip it
+						continue;
+					}
+					ret[i].AddChild(shredded_field.field_name, std::move(field_value));
+				}
+
+				if (validity.RowIsValid(value_index)) {
+					//! Object is partially shredded, decode the object and merge the values
+					auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+					VariantMetadata variant_metadata(metadata_value);
+					auto binary_value = value_data[value_index].GetData();
+					auto unshredded = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+					if (unshredded.value_type != VariantValueType::OBJECT) {
+						throw InvalidInputException(
+						    "Partially shredded objects have to encode Object Variants in the 'value'");
+					}
+					for (auto &item : unshredded.object_children) {
+						ret[i].AddChild(item.first, std::move(item.second));
+					}
+				}
+			} else {
+				//! The value on this row is not an object, and guaranteed to be present
+				D_ASSERT(validity.RowIsValid(value_index));
+				auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+				VariantMetadata variant_metadata(metadata_value);
+				auto binary_value = value_data[value_index].GetData();
+				ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+				if (ret[i].value_type == VariantValueType::OBJECT) {
+					throw InvalidInputException(
+					    "When 'typed_value' for a shredded Object is NULL, 'value' can not contain an Object value");
+				}
 			}
 		}
 	}
@@ -434,6 +492,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 		//! We can be sure that none of the values are binary encoded
 		for (idx_t i = 0; i < length; i++) {
 			auto index = list_format.sel->get_index(i + offset);
+			//! FIXME: next 4 lines duplicated below
 			auto entry = list_data[index];
 			Vector child_metadata(metadata.GetValue(i));
 			ret[i] = VariantValue(VariantValueType::ARRAY);
@@ -443,6 +502,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 		for (idx_t i = 0; i < length; i++) {
 			auto index = list_format.sel->get_index(i + offset);
 			if (validity.RowIsValid(index)) {
+				//! FIXME: next 4 lines duplicate
 				auto entry = list_data[index];
 				Vector child_metadata(metadata.GetValue(i));
 				ret[i] = VariantValue(VariantValueType::ARRAY);
