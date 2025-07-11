@@ -39,6 +39,8 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	}
 	schema->release = nullptr;
 	auto holder = static_cast<DuckDBArrowSchemaHolder *>(schema->private_data);
+	schema->private_data = nullptr;
+
 	delete holder;
 }
 
