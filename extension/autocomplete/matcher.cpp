@@ -304,8 +304,7 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
-		if (suggestion_type == SuggestionState::SUGGEST_COLLABEL ||
-		    suggestion_type == SuggestionState::SUGGEST_RESERVED_TABLE_NAME ||
+		if (suggestion_type == SuggestionState::SUGGEST_RESERVED_TABLE_NAME ||
 		    suggestion_type == SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME) {
 			// no-op
 		} else if (suggestion_type == SuggestionState::SUGGEST_TABLE_NAME) {
@@ -332,7 +331,6 @@ public:
 
 	bool SupportsStringLiteral() const {
 		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_COLLABEL:
 		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
 		case SuggestionState::SUGGEST_TABLE_NAME:
 		case SuggestionState::SUGGEST_FILE_NAME:
@@ -536,7 +534,6 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
-	Matcher &ColLabel() const;
 	Matcher &ReservedTableName() const;
 	Matcher &ReservedSchemaName() const;
 
@@ -581,10 +578,6 @@ Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
 
 Matcher &MatcherFactory::Variable() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
-}
-
-Matcher &MatcherFactory::ColLabel() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLLABEL));
 }
 
 Matcher &MatcherFactory::ReservedTableName() const {
@@ -1144,7 +1137,6 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride(".", 0, '\0');
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
-	AddRuleOverride("ColLabel", ColLabel());
 	AddRuleOverride("ReservedTableName", ReservedTableName());
 	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
 	AddRuleOverride("Identifier", Variable());

@@ -458,8 +458,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
 		case SuggestionState::SUGGEST_VARIABLE:
-		case SuggestionState::SUGGEST_COLLABEL:
-			// variables and collabel have no suggestions available
+			// variables have no suggestions available
 			break;
 		case SuggestionState::SUGGEST_KEYWORD:
 			new_suggestions.emplace_back(suggestion.keyword);
