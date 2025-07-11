@@ -72,11 +72,13 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 				auto value = Value::TIMESTAMPTZ(micros_tz_ts);
 				value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 
-				if (StringUtil::Contains(value_str, "+")) {
-					//! Don't attempt this for NaN/Inf timestamps
-					auto parts = StringUtil::Split(value_str, '+');
-					value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
-				}
+				//! FIXME: we don't support Timestamp(unit=nanos) with timezone in Parquet, to have equivalent results
+				//! between unshredded and shredded values, we shouldn't support it for unshredded values
+				// if (StringUtil::Contains(value_str, "+")) {
+				//	//! Don't attempt this for NaN/Inf timestamps
+				//	auto parts = StringUtil::Split(value_str, '+');
+				//	value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
+				//}
 			} else {
 				value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			}

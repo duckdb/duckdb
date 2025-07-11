@@ -83,11 +83,11 @@ template <>
 VariantValue ConvertShreddedValue<timestamp_t>::ConvertTimezone(timestamp_t val) {
 	return VariantValue(Value::TIMESTAMP(val), LogicalTypeId::TIMESTAMP_TZ);
 }
-//! timestamptz(9)
-template <>
-VariantValue ConvertShreddedValue<timestamp_ns_t>::ConvertTimezone(timestamp_ns_t val) {
-	return VariantValue(Value::TIMESTAMPNS(val), LogicalTypeId::TIMESTAMP_TZ);
-}
+////! timestamptz(9)
+// template <>
+// VariantValue ConvertShreddedValue<timestamp_ns_t>::ConvertTimezone(timestamp_ns_t val) {
+//	return VariantValue(Value::TIMESTAMPNS(val), LogicalTypeId::TIMESTAMP_TZ);
+//}
 //! timestamptz(6)
 template <>
 VariantValue ConvertShreddedValue<timestamp_t>::Convert(timestamp_t val) {
@@ -308,6 +308,7 @@ public:
 
 } // namespace
 
+template <bool IS_REQUIRED>
 static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &value, idx_t offset, idx_t length,
                                                   idx_t total_size) {
 	UnifiedVectorFormat value_format;
@@ -320,14 +321,26 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
 
 	vector<VariantValue> ret(length);
-	for (idx_t i = 0; i < length; i++) {
-		auto index = value_format.sel->get_index(i + offset);
+	if (IS_REQUIRED) {
+		for (idx_t i = 0; i < length; i++) {
+			auto index = value_format.sel->get_index(i + offset);
 
-		D_ASSERT(validity.RowIsValid(index));
-		auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
-		VariantMetadata variant_metadata(metadata_value);
-		auto binary_value = value_data[index].GetData();
-		ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+			D_ASSERT(validity.RowIsValid(index));
+			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+			VariantMetadata variant_metadata(metadata_value);
+			auto binary_value = value_data[index].GetData();
+			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+		}
+	} else {
+		for (idx_t i = 0; i < length; i++) {
+			auto index = value_format.sel->get_index(i + offset);
+			if (validity.RowIsValid(index)) {
+				auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+				VariantMetadata variant_metadata(metadata_value);
+				auto binary_value = value_data[index].GetData();
+				ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+			}
+		}
 	}
 	return ret;
 }
@@ -403,7 +416,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 
 		shredded_fields.emplace_back(field_name);
 		auto &shredded_field = shredded_fields.back();
-		shredded_field.values = Convert(metadata, field_vec, offset, length, total_size);
+		shredded_field.values = Convert(metadata, field_vec, offset, length, total_size, true);
 	}
 
 	vector<VariantValue> ret(length);
@@ -456,33 +469,34 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 	typed_value.ToUnifiedFormat(total_size, list_format);
 	auto list_data = list_format.GetData<list_entry_t>(list_format);
 	auto &validity = list_format.validity;
+	auto &value_validity = value_format.validity;
 
 	vector<VariantValue> ret(length);
 	if (validity.AllValid()) {
 		//! We can be sure that none of the values are binary encoded
 		for (idx_t i = 0; i < length; i++) {
-			auto index = list_format.sel->get_index(i + offset);
+			auto typed_index = list_format.sel->get_index(i + offset);
 			//! FIXME: next 4 lines duplicated below
-			auto entry = list_data[index];
+			auto entry = list_data[typed_index];
 			Vector child_metadata(metadata.GetValue(i));
 			ret[i] = VariantValue(VariantValueType::ARRAY);
 			ret[i].array_items = Convert(child_metadata, child, entry.offset, entry.length, list_size);
 		}
 	} else {
 		for (idx_t i = 0; i < length; i++) {
-			auto index = list_format.sel->get_index(i + offset);
-			if (validity.RowIsValid(index)) {
+			auto typed_index = list_format.sel->get_index(i + offset);
+			auto value_index = value_format.sel->get_index(i + offset);
+			if (validity.RowIsValid(typed_index)) {
 				//! FIXME: next 4 lines duplicate
-				auto entry = list_data[index];
+				auto entry = list_data[typed_index];
 				Vector child_metadata(metadata.GetValue(i));
 				ret[i] = VariantValue(VariantValueType::ARRAY);
 				ret[i].array_items = Convert(child_metadata, child, entry.offset, entry.length, list_size);
-			} else {
-				auto index = value_format.sel->get_index(i + offset);
+			} else if (value_validity.RowIsValid(value_index)) {
 				auto metadata_value = metadata_data[metadata_format.sel->get_index(i)];
 				VariantMetadata variant_metadata(metadata_value);
-				ret[i] =
-				    VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(value_data[index].GetData()));
+				ret[i] = VariantBinaryDecoder::Decode(variant_metadata,
+				                                      const_data_ptr_cast(value_data[value_index].GetData()));
 			}
 		}
 	}
@@ -490,7 +504,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 }
 
 vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector &group, idx_t offset, idx_t length,
-                                                        idx_t total_size) {
+                                                        idx_t total_size, bool is_field) {
 	D_ASSERT(group.GetType().id() == LogicalTypeId::STRUCT);
 
 	auto &group_entries = StructVector::GetEntries(group);
@@ -527,8 +541,12 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 			return ConvertShreddedLeaf(metadata, *value, *typed_value, offset, length, total_size);
 		}
 	} else {
-		//! Only 'value' is present, we can assume this to be 'required', so it can't contain NULLs
-		return ConvertBinaryEncoding(metadata, *value, offset, length, total_size);
+		if (is_field) {
+			return ConvertBinaryEncoding<false>(metadata, *value, offset, length, total_size);
+		} else {
+			//! Only 'value' is present, we can assume this to be 'required', so it can't contain NULLs
+			return ConvertBinaryEncoding<true>(metadata, *value, offset, length, total_size);
+		}
 	}
 }
 

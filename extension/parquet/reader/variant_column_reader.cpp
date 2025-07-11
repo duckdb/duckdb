@@ -66,32 +66,14 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	}
 
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);
-	auto value_intermediate_data = FlatVector::GetData<string_t>(value_intermediate);
-
 	auto &result_validity = FlatVector::Validity(result);
-	auto &metadata_validity = FlatVector::Validity(metadata_intermediate);
 
 	vector<VariantValue> conversion_result;
 	if (typed_value_reader) {
 		(void)typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
-		conversion_result =
-		    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
-	} else {
-		conversion_result.resize(num_values);
-		auto &value_validity = FlatVector::Validity(value_intermediate);
-		for (idx_t i = 0; i < num_values; i++) {
-			if (!metadata_validity.RowIsValid(i)) {
-				throw InvalidInputException("The Variant 'metadata' can not be NULL");
-			}
-			if (!value_validity.RowIsValid(i)) {
-				throw InvalidInputException("The unshredded Variant 'value' can not be NULL");
-			}
-			VariantMetadata variant_metadata(metadata_intermediate_data[i]);
-			auto value_data = reinterpret_cast<const_data_ptr_t>(value_intermediate_data[i].GetData());
-			conversion_result[i] = VariantBinaryDecoder::Decode(variant_metadata, value_data);
-		}
 	}
+	conversion_result =
+	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
 
 	for (idx_t i = 0; i < conversion_result.size(); i++) {
 		auto &variant = conversion_result[i];

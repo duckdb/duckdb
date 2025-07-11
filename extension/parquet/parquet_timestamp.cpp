@@ -94,11 +94,15 @@ timestamp_ns_t ParquetTimestampNsToTimestampNs(const int64_t &raw_ns) {
 }
 
 timestamp_t ParquetTimestampNsToTimestamp(const int64_t &raw_ts) {
-	timestamp_t input(raw_ts);
+	timestamp_ns_t input(raw_ts);
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	return Timestamp::FromEpochNanoSeconds(raw_ts);
+	date_t out_date;
+	dtime_t out_time;
+	int32_t out_nanos;
+	Timestamp::Convert(input, out_date, out_time, out_nanos);
+	return Timestamp::FromDatetime(out_date, out_time);
 }
 
 date_t ParquetIntToDate(const int32_t &raw_date) {
