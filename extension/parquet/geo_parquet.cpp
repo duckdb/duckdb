@@ -243,6 +243,18 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					const auto encoding_str = yyjson_get_str(encoding_val);
 					if (strcmp(encoding_str, "WKB") == 0) {
 						column.geometry_encoding = GeoParquetColumnEncoding::WKB;
+					} else if (strcmp(encoding_str, "point") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::POINT;
+					} else if (strcmp(encoding_str, "linestring") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::LINESTRING;
+					} else if (strcmp(encoding_str, "polygon") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::POLYGON;
+					} else if (strcmp(encoding_str, "multipoint") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTIPOINT;
+					} else if (strcmp(encoding_str, "multilinestring") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTILINESTRING;
+					} else if (strcmp(encoding_str, "multipolygon") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTIPOLYGON;
 					} else {
 						throw InvalidInputException("Geoparquet column '%s' has an unsupported encoding", column_name);
 					}
