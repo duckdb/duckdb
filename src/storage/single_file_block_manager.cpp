@@ -358,6 +358,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	auto &config = DBConfig::GetConfig(db.GetDatabase());
 	// Derive the encryption key and add it to cache
 	// Unused for plain databases
 	uint8_t salt[MainHeader::SALT_LEN];
@@ -455,6 +456,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	if (main_header.IsEncrypted()) {
+		auto &config = DBConfig::GetConfig(db.GetDatabase());
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 			//! Check if the given key upon attach is correct
@@ -825,10 +827,12 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id);
+	// FIXME; maybe we should pass the block header size explicitly
+	return make_uniq<Block>(source_buffer, block_id, GetBlockHeaderSize());
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	// FIXME; maybe we should pass the block header size explicitly
 	unique_ptr<Block> result;
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);

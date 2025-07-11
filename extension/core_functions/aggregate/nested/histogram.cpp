@@ -7,6 +7,7 @@
 
 namespace duckdb {
 
+namespace {
 template <class MAP_TYPE>
 struct HistogramFunction {
 	template <class STATE>
@@ -58,8 +59,8 @@ struct StringMapType {
 };
 
 template <class OP, class T, class MAP_TYPE>
-static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
-                                    Vector &state_vector, idx_t count) {
+void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
+                             idx_t count) {
 
 	D_ASSERT(input_count == 1);
 
@@ -88,8 +89,7 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 }
 
 template <class OP, class T, class MAP_TYPE>
-static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
-                                      idx_t offset) {
+void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
 	UnifiedVectorFormat sdata;
@@ -138,7 +138,7 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 }
 
 template <class OP, class T, class MAP_TYPE>
-static AggregateFunction GetHistogramFunction(const LogicalType &type) {
+AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 	using HIST_FUNC = HistogramFunction<MAP_TYPE>;
 
@@ -218,6 +218,8 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->return_type);
 	return make_uniq<VariableReturnBindData>(function.return_type);
 }
+
+} // namespace
 
 AggregateFunctionSet HistogramFun::GetFunctions() {
 	AggregateFunctionSet fun;

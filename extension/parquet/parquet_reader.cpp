@@ -62,9 +62,9 @@ static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file
 	return should_prefetch && can_prefetch;
 }
 
-void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
-                        const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
-                        bool &footer_encrypted) {
+static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
+                               const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
+                               bool &footer_encrypted) {
 	if (memcmp(buffer + 4, "PAR1", 4) == 0) {
 		footer_encrypted = false;
 		if (encryption_config) {
@@ -628,7 +628,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	}
 }
 
-ParquetColumnSchema FileRowNumberSchema() {
+static ParquetColumnSchema FileRowNumberSchema() {
 	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
 	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
 }
@@ -880,7 +880,7 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 	}
 }
 
-idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
+static idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
 	idx_t row_group_offset = 0;
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	for (idx_t i = 0; i < group_idx; i++) {

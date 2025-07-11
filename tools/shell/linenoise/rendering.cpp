@@ -332,7 +332,7 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 }
 
 // insert a token of length 1 of the specified type
-void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken> &tokens) {
+static void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken> &tokens) {
 	vector<highlightToken> new_tokens;
 	new_tokens.reserve(tokens.size() + 1);
 	idx_t i;
@@ -717,7 +717,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	}
 }
 
-bool IsCompletionCharacter(char c) {
+static bool IsCompletionCharacter(char c) {
 	if (c >= 'A' && c <= 'Z') {
 		return true;
 	}
