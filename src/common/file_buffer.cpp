@@ -33,10 +33,11 @@ void FileBuffer::Init() {
 	internal_size = 0;
 }
 
-FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
+FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, idx_t block_header_size)
+    : allocator(source.allocator), type(type_p) {
 	// take over the structures of the source buffer
-	buffer = source.buffer;
-	size = source.size;
+	buffer = source.internal_buffer + block_header_size;
+	size = source.internal_size - block_header_size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
 
@@ -62,6 +63,7 @@ void FileBuffer::ReallocBuffer(idx_t new_size) {
 	if (!new_buffer) {
 		throw std::bad_alloc();
 	}
+
 	internal_buffer = new_buffer;
 	internal_size = new_size;
 

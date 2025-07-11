@@ -76,8 +76,6 @@ public:
 	virtual idx_t GetBlockAllocSize() const = 0;
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
-	//! Returns the block header size for buffer-managed blocks.
-	virtual idx_t GetTemporaryBlockHeaderSize() const = 0;
 	//! Returns the maximum available memory for a given query.
 	virtual idx_t GetQueryMaxMemory() const = 0;
 
@@ -110,6 +108,8 @@ public:
 	virtual void SetTemporaryDirectory(const string &new_dir);
 	//! Returns true, if the path to the temporary file directory is not empty.
 	virtual bool HasTemporaryDirectory() const;
+	//! Returns true if there are files found in the temporary directory
+	virtual bool HasFilesInTemporaryDirectory() const;
 
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size,
