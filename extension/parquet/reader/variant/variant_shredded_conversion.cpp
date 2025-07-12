@@ -315,7 +315,7 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 
 	vector<VariantValue> ret(length);
 	if (IS_REQUIRED) {
-		D_ASSERT(validity.AllValid());
+		D_ASSERT(validity.CountValid(length) == length);
 		for (idx_t i = 0; i < length; i++) {
 			auto index = value_format.sel->get_index(i + offset);
 
