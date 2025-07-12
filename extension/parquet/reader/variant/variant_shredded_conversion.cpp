@@ -315,6 +315,7 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 
 	vector<VariantValue> ret(length);
 	if (IS_REQUIRED) {
+		D_ASSERT(validity.AllValid());
 		for (idx_t i = 0; i < length; i++) {
 			auto index = value_format.sel->get_index(i + offset);
 
@@ -325,6 +326,9 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
 		}
 	} else {
+		//! Even though 'typed_value' is not present, 'value' is allowed to contain NULLs because we're scanning an
+		//! Object's shredded field When 'value' is null for a row, that means the Object does not contain this field
+		//! for that row.
 		for (idx_t i = 0; i < length; i++) {
 			auto index = value_format.sel->get_index(i + offset);
 			if (validity.RowIsValid(index)) {
