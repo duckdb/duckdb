@@ -37,6 +37,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
+#include "duckdb/optimizer/unified_string_dictionary_optimizer.hpp"
+
 namespace duckdb {
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
@@ -271,6 +273,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
+	});
+
+	// enables usd and insert usd insertion operator into the query plan
+	RunOptimizer(OptimizerType::UNIFIED_STRING_DICTIONARY, [&]() {
+		UnifiedStringDictionaryOptimizer usd_optimizer(this, plan);
+		plan = usd_optimizer.CheckIfUnifiedStringDictionaryRequired(std::move(plan));
 	});
 }
 

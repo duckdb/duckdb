@@ -203,6 +203,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 	LogQueryInternal(lock, query);
 	active_query->query = query;
+	UnifiedStringDictionary = make_uniq<UnifiedStringsDictionary>(0ull);
 
 	query_progress.Initialize();
 	// Notify any registered state of query begin
@@ -314,6 +315,11 @@ Logger &ClientContext::GetLogger() const {
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
+}
+
+UnifiedStringsDictionary &ClientContext::GetUnifiedStringDictionary() {
+	D_ASSERT(active_query);
+	return *(UnifiedStringDictionary);
 }
 
 connection_t ClientContext::GetConnectionId() const {

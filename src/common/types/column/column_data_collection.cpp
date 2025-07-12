@@ -360,7 +360,9 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
+		return (input.IsInlined() || (string_t::IsInUnifiedStringDictionary(input.GetTaggedPointer())))
+		           ? input
+		           : meta_data.segment.heap->AddBlob(input);
 	}
 };
 
@@ -638,7 +640,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 					continue;
 				}
 				const auto &entry = source_entries[source_idx];
-				if (entry.IsInlined()) {
+				if (entry.IsInlined() || (string_t::IsInUnifiedStringDictionary(entry.GetTaggedPointer()))) {
 					continue;
 				}
 				if (heap_size + entry.GetSize() > block_size) {
@@ -693,7 +695,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 				}
 				const auto &source_entry = source_entries[source_idx];
 				auto &target_entry = target_entries[target_idx];
-				if (source_entry.IsInlined()) {
+				if (source_entry.IsInlined() ||
+				    string_t::IsInUnifiedStringDictionary(source_entry.GetTaggedPointer())) {
 					target_entry = source_entry;
 				} else {
 					D_ASSERT(base_heap_ptr != nullptr);

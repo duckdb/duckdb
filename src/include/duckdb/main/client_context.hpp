@@ -29,6 +29,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/common/unified_string_dictionary.hpp"
 
 namespace duckdb {
 
@@ -89,6 +90,8 @@ public:
 	unique_ptr<ClientData> client_data;
 	//! Data for the currently running transaction
 	TransactionContext transaction;
+
+	unique_ptr<UnifiedStringsDictionary> UnifiedStringDictionary;
 
 public:
 	MetaTransaction &ActiveTransaction() {
@@ -207,6 +210,8 @@ public:
 
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();
+
+	UnifiedStringsDictionary &GetUnifiedStringDictionary();
 
 	connection_t GetConnectionId() const;
 

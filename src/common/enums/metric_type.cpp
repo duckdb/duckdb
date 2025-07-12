@@ -41,6 +41,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_SUM_REWRITER,
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
         MetricsType::OPTIMIZER_CTE_INLINING,
+        MetricsType::OPTIMIZER_UNIFIED_STRING_DICTIONARY,
     };
 }
 
@@ -115,6 +116,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
         case OptimizerType::CTE_INLINING:
             return MetricsType::OPTIMIZER_CTE_INLINING;
+        case OptimizerType::UNIFIED_STRING_DICTIONARY:
+            return MetricsType::OPTIMIZER_UNIFIED_STRING_DICTIONARY;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -178,6 +181,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::LATE_MATERIALIZATION;
         case MetricsType::OPTIMIZER_CTE_INLINING:
             return OptimizerType::CTE_INLINING;
+        case MetricsType::OPTIMIZER_UNIFIED_STRING_DICTIONARY:
+            return OptimizerType::UNIFIED_STRING_DICTIONARY;
     default:
             return OptimizerType::INVALID;
     };
@@ -213,6 +218,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_SUM_REWRITER:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
         case MetricsType::OPTIMIZER_CTE_INLINING:
+        case MetricsType::OPTIMIZER_UNIFIED_STRING_DICTIONARY:
             return true;
         default:
             return false;

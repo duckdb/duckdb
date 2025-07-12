@@ -1,0 +1,42 @@
+# name: test/common/UnifiedStringDictionary/fill_unified_string_dictionary.test
+# description: fill up the unified string dictionary with 25k strings
+# group: [UnifiedStringDictionary]
+
+# varchars
+statement ok
+CREATE TABLE t1 AS
+SELECT
+  CAST(i AS VARCHAR) AS id,
+  'col1thisisalongstring' || (i % 2500) AS v1,
+  'col2thisisalongstring' || ((i + 1) % 2500) AS v2,
+  'col3thisisalongstring' || ((i + 2) % 2500) AS v3,
+  'col4thisisalongstring' || ((i + 3) % 2500) AS v4,
+  'col5thisisalongstring' || ((i + 4) % 2500) AS v5
+FROM range(300000) tbl(i);
+
+statement ok
+checkpoint;
+
+statement ok
+CREATE TABLE t2 AS
+SELECT
+  CAST(i AS VARCHAR) AS id,
+  'col6thisisalongstring' || (i % 2500) AS v1,
+  'col7thisisalongstring' || ((i + 1) % 2500) AS v2,
+  'col8thisisalongstring' || ((i + 2) % 2500) AS v3,
+  'col9thisisalongstring' || ((i + 3) % 2500) AS v4,
+  'col10thisisalongstring' || ((i + 4) % 2500) AS v5
+FROM range(300000) tbl(i);
+
+statement ok
+pragma disabled_optimizers='compressed_materialization';
+
+statement ok
+SELECT * FROM t1 JOIN t2 ON t1.id = t2.id;
+
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP TABLE t2

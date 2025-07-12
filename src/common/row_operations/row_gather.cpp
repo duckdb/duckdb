@@ -74,7 +74,8 @@ static void GatherVarchar(Vector &rows, const SelectionVector &row_sel, Vector &
 				col_mask.Initialize(build_size);
 			}
 			col_mask.SetInvalid(col_idx);
-		} else if (base_heap_ptr && Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
+		} else if (base_heap_ptr && Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH &&
+		           !string_t::IsInUnifiedStringDictionary(char_ptr_cast(data[col_idx].GetTaggedPointer()))) {
 			//	Not inline, so unswizzle the copied pointer the pointer
 			auto heap_ptr_ptr = row + heap_offset;
 			auto heap_row_ptr = base_heap_ptr + Load<idx_t>(heap_ptr_ptr);

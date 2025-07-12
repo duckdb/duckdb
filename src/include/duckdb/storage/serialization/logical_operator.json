@@ -1068,5 +1068,23 @@
         "type": "string"
       }
     ]
+  },
+  {
+    "class": "LogicalUnifiedStringDictionaryInsertion",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_UNIFIED_STRING_DICTIONARY_INSERTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "insert_to_usd",
+        "type": "vector<bool>"
+      },
+      {
+        "id": 201,
+        "name": "insert_flat_vectors",
+        "type": "bool"
+      }
+    ],
+    "constructor": ["insert_to_usd", "insert_flat_vectors"]
   }
 ]

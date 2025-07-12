@@ -32,7 +32,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 #ifdef D_ASSERT_IS_ENABLED
 	source.VerifyCharacters();
 #endif
-	if (source.IsInlined()) {
+	if (source.IsInlined() || string_t::IsInUnifiedStringDictionary(source.GetTaggedPointer())) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
 		FastMemcpy(heap_location, source.GetData(), source.GetSize());
@@ -111,7 +111,10 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
 }
 
 static idx_t StringHeapSize(const string_t &val) {
-	return val.IsInlined() ? 0 : val.GetSize();
+	if (val.IsInlined() || string_t::IsInUnifiedStringDictionary(val.GetTaggedPointer())) {
+		return 0;
+	}
+	return val.GetSize();
 }
 
 void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,

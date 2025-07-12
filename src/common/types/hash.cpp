@@ -4,7 +4,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
-
+#include "duckdb/common/unified_string_dictionary.hpp"
 #include <functional>
 #include <cmath>
 
@@ -134,11 +134,12 @@ hash_t Hash(string_t val) {
 		D_ASSERT(h == Hash(val.GetData(), val.GetSize()));
 
 		return h;
+	} else if (string_t::IsInUnifiedStringDictionary(val.GetTaggedPointer())) {
+		return UnifiedStringsDictionary::LoadHash(val);
 	}
 	// Required for DUCKDB_DEBUG_NO_INLINE
 	return HashBytes<string_t::INLINE_LENGTH >= sizeof(hash_t)>(const_data_ptr_cast(val.GetData()), val.GetSize());
 }
-
 template <>
 hash_t Hash(char *val) {
 	return Hash<const char *>(val);
