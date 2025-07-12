@@ -1,0 +1,23 @@
+# name: test/issues/general/test_18163.test
+# description: Issue 18163 - Deterministic query return undeterministic results
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t90(c0 VARCHAR);
+
+statement ok
+INSERT INTO t90(c0) VALUES ('1'), ('2'), ('3'), ('4'), ('5'), ('6'), (0.4501927109298812), (0.55577448732208);
+
+statement ok
+CREATE VIEW v0(c0) AS SELECT TAN('1944920781') FROM t90 GROUP BY t90.c0;
+
+loop i 0 15
+
+query T
+SELECT '' FROM v0 HAVING STDDEV_SAMP(0.8716885601427876);
+----
+
+endloop
