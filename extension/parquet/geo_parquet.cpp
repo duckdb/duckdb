@@ -96,7 +96,7 @@ GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &co
 	// Initialize the input and result chunks
 	// The input chunk should be empty, as we always reference the input vector
 	input_chunk.InitializeEmpty({wkb_type});
-	result_chunk.Initialize(context, {type_type, flag_type, bbox_type});
+	result_chunk.Initialize(BufferAllocator::Get(context), {type_type, flag_type, bbox_type});
 }
 
 void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count) {

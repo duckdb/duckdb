@@ -369,7 +369,7 @@ public:
 			}
 		}
 		lstate.scan_chunk.Destroy();
-		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+		lstate.scan_chunk.Initialize(BufferAllocator::Get(context), intermediate_chunk_types);
 
 		auto &executor = lstate.executor;
 		executor.ClearExpressions();
