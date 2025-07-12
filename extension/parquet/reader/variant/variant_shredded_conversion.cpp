@@ -327,7 +327,8 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 		}
 	} else {
 		//! Even though 'typed_value' is not present, 'value' is allowed to contain NULLs because we're scanning an
-		//! Object's shredded field When 'value' is null for a row, that means the Object does not contain this field
+		//! Object's shredded field.
+		//! When 'value' is null for a row, that means the Object does not contain this field
 		//! for that row.
 		for (idx_t i = 0; i < length; i++) {
 			auto index = value_format.sel->get_index(i + offset);
