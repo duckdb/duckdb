@@ -1163,6 +1163,22 @@ Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Variant Legacy Encoding
+//===----------------------------------------------------------------------===//
+void VariantLegacyEncodingSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.variant_legacy_encoding = input.GetValue<bool>();
+}
+
+void VariantLegacyEncodingSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.variant_legacy_encoding = DBConfig().options.variant_legacy_encoding;
+}
+
+Value VariantLegacyEncodingSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.variant_legacy_encoding);
+}
+
+//===----------------------------------------------------------------------===//
 // Wal Encryption
 //===----------------------------------------------------------------------===//
 void WalEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
