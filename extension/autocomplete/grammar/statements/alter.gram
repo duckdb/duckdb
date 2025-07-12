@@ -1,0 +1,41 @@
+AlterStatement <- 'ALTER'i AlterOptions
+
+
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt
+
+AlterTableStmt <- 'TABLE'i IfExists? BaseTableName AlterTableOptions
+
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
+
+AddConstraint <- 'ADD'i TopLevelConstraint
+AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
+DropColumn <- 'DROP'i 'COLUMN'i? IfExists? NestedColumnName DropBehavior?
+AlterColumn <- 'ALTER'i 'COLUMN'i? NestedColumnName AlterColumnEntry
+RenameColumn <- 'RENAME'i 'COLUMN'i? NestedColumnName 'TO'i Identifier
+NestedColumnName <- (Identifier '.')* ColumnName
+RenameAlter <- 'RENAME'i 'TO'i Identifier
+SetPartitionedBy <- 'SET'i 'PARTITIONED'i 'BY'i Parens(List(Expression))
+ResetPartitionedBy <- 'RESET'i 'PARTITIONED'i 'BY'i
+SetSortedBy <- 'SET'i 'SORTED'i 'BY'i OrderByExpressions
+ResetSortedBy <- 'RESET'i 'SORTED'i 'BY'i
+
+AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
+
+AddOrDropDefault <- AddDefault / DropDefault
+AddDefault <- 'SET'i 'DEFAULT'i Expression
+DropDefault <- 'DROP'i 'DEFAULT'i
+
+ChangeNullability <- ('DROP'i / 'SET'i) 'NOT'i 'NULL'i
+
+AlterType <- SetData? 'TYPE'i Type? UsingExpression?
+SetData <- 'SET'i 'DATA'i?
+UsingExpression <- 'USING'i Expression
+
+AlterViewStmt <- 'VIEW'i IfExists? BaseTableName RenameAlter
+
+AlterSequenceStmt <- 'SEQUENCE'i IfExists? QualifiedSequenceName AlterSequenceOptions
+
+QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
+
+AlterSequenceOptions <- RenameAlter / SetSequenceOption
+SetSequenceOption <- List(SequenceOption)

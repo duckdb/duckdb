@@ -6,7 +6,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "tokenizer.hpp"
@@ -303,9 +303,23 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		auto category = KeywordHelper::KeywordCategoryType(token_text);
-		if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
-			return MatchResultType::FAIL;
+		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+		case SuggestionState::SUGGEST_TABLE_NAME:
+			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
+				return MatchResultType::FAIL;
+			}
+			break;
+		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
+		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
+			break;
+		default:
+			if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
+				return MatchResultType::FAIL;
+			}
+			break;
 		}
 		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
@@ -316,6 +330,7 @@ public:
 
 	bool SupportsStringLiteral() const {
 		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
 		case SuggestionState::SUGGEST_TABLE_NAME:
 		case SuggestionState::SUGGEST_FILE_NAME:
 			return true;
@@ -347,8 +362,12 @@ public:
 			return "CATALOG_NAME";
 		case SuggestionState::SUGGEST_SCHEMA_NAME:
 			return "SCHEMA_NAME";
+		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
+			return "RESERVED_SCHEMA_NAME";
 		case SuggestionState::SUGGEST_TABLE_NAME:
 			return "TABLE_NAME";
+		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
+			return "RESERVED_TABLE_NAME";
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			return "TYPE_NAME";
 		case SuggestionState::SUGGEST_COLUMN_NAME:
@@ -514,6 +533,8 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &ReservedTableName() const;
+	Matcher &ReservedSchemaName() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -556,6 +577,14 @@ Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
 
 Matcher &MatcherFactory::Variable() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
+}
+
+Matcher &MatcherFactory::ReservedTableName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_RESERVED_TABLE_NAME));
+}
+
+Matcher &MatcherFactory::ReservedSchemaName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME));
 }
 
 Matcher &MatcherFactory::CatalogName() const {
@@ -1107,13 +1136,14 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride(".", 0, '\0');
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
+	AddRuleOverride("ReservedTableName", ReservedTableName());
+	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
-	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("TableFunctionName", TableFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
