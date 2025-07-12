@@ -1,5 +1,13 @@
 #include "reader/variant/variant_shredded_conversion.hpp"
 #include "column_reader.hpp"
+#include "utf8proc_wrapper.hpp"
+
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
