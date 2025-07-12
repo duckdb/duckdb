@@ -45,43 +45,15 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		case LogicalTypeId::TIMESTAMP: {
-			string value_str;
-			if (primitive_value_type == LogicalTypeId::TIMESTAMP_TZ) {
-				timestamp_tz_t micros_tz(primitive_value.GetValue<timestamp_t>());
-				auto value = Value::TIMESTAMPTZ(micros_tz);
-				value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-			} else {
-				value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-			}
+			auto value_str = primitive_value.ToString();
+			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+		}
+		case LogicalTypeId::TIMESTAMP_TZ: {
+			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		case LogicalTypeId::TIMESTAMP_NS: {
-			string value_str;
-			if (primitive_value_type == LogicalTypeId::TIMESTAMP_TZ) {
-				auto nanos_ts = primitive_value.GetValue<timestamp_ns_t>();
-
-				//! Convert the nanos timestamp to a micros timestamp
-				date_t out_date;
-				dtime_t out_time;
-				int32_t out_nanos;
-				Timestamp::Convert(nanos_ts, out_date, out_time, out_nanos);
-				auto micros_ts = Timestamp::FromDatetime(out_date, out_time);
-
-				//! Turn the micros timestamp into a micros_tz timestamp and serialize it
-				timestamp_tz_t micros_tz_ts(micros_ts.value);
-				auto value = Value::TIMESTAMPTZ(micros_tz_ts);
-				value_str = value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-
-				//! FIXME: we don't support Timestamp(unit=nanos) with timezone in Parquet, to have equivalent results
-				//! between unshredded and shredded values, we shouldn't support it for unshredded values
-				// if (StringUtil::Contains(value_str, "+")) {
-				//	//! Don't attempt this for NaN/Inf timestamps
-				//	auto parts = StringUtil::Split(value_str, '+');
-				//	value_str = StringUtil::Format("%s%s+%s", parts[0], to_string(out_nanos), parts[1]);
-				//}
-			} else {
-				value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-			}
+			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		default:

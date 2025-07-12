@@ -9,9 +9,6 @@ struct ConvertShreddedValue {
 	static VariantValue ConvertDecimal(T val, uint8_t width, uint8_t scale) {
 		throw InternalException("ConvertShreddedValue::ConvertDecimal not implemented for type");
 	}
-	static VariantValue ConvertTimezone(T val) {
-		throw InternalException("ConvertShreddedValue::ConvertTimezone not implemented for type");
-	}
 	static VariantValue ConvertBlob(T val) {
 		throw InternalException("ConvertShreddedValue::ConvertBlob not implemented for type");
 	}
@@ -80,20 +77,20 @@ VariantValue ConvertShreddedValue<dtime_t>::Convert(dtime_t val) {
 }
 //! timestamptz(6)
 template <>
-VariantValue ConvertShreddedValue<timestamp_t>::ConvertTimezone(timestamp_t val) {
-	return VariantValue(Value::TIMESTAMP(val), LogicalTypeId::TIMESTAMP_TZ);
+VariantValue ConvertShreddedValue<timestamp_tz_t>::Convert(timestamp_tz_t val) {
+	return VariantValue(Value::TIMESTAMPTZ(val));
 }
 ////! timestamptz(9)
 // template <>
-// VariantValue ConvertShreddedValue<timestamp_ns_t>::ConvertTimezone(timestamp_ns_t val) {
-//	return VariantValue(Value::TIMESTAMPNS(val), LogicalTypeId::TIMESTAMP_TZ);
+// VariantValue ConvertShreddedValue<timestamp_ns_tz_t>::Convert(timestamp_ns_tz_t val) {
+//	return VariantValue(Value::TIMESTAMPNS_TZ(val));
 //}
-//! timestamptz(6)
+//! timestampntz(6)
 template <>
 VariantValue ConvertShreddedValue<timestamp_t>::Convert(timestamp_t val) {
 	return VariantValue(Value::TIMESTAMP(val));
 }
-//! timestamptz(9)
+//! timestampntz(9)
 template <>
 VariantValue ConvertShreddedValue<timestamp_ns_t>::Convert(timestamp_ns_t val) {
 	return VariantValue(Value::TIMESTAMPNS(val));
@@ -149,8 +146,6 @@ vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &b
 			auto index = typed_format.sel->get_index(i + offset);
 			if (TYPE_ID == LogicalTypeId::DECIMAL) {
 				ret[i] = OP::ConvertDecimal(data[index], width, scale);
-			} else if (TYPE_ID == LogicalTypeId::TIMESTAMP_TZ) {
-				ret[i] = OP::ConvertTimezone(data[index]);
 			} else if (TYPE_ID == LogicalTypeId::BLOB) {
 				ret[i] = OP::ConvertBlob(data[index]);
 			} else {
@@ -166,8 +161,6 @@ vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &b
 				D_ASSERT(!value_validity.RowIsValid(value_index));
 				if (TYPE_ID == LogicalTypeId::DECIMAL) {
 					ret[i] = OP::ConvertDecimal(data[typed_index], width, scale);
-				} else if (TYPE_ID == LogicalTypeId::TIMESTAMP_TZ) {
-					ret[i] = OP::ConvertTimezone(data[typed_index]);
 				} else if (TYPE_ID == LogicalTypeId::BLOB) {
 					ret[i] = OP::ConvertBlob(data[typed_index]);
 				} else {
@@ -260,7 +253,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 	}
 	//! timestamptz(6) (timestamptz(9) not implemented in DuckDB)
 	case LogicalTypeId::TIMESTAMP_TZ: {
-		return ConvertTypedValues<timestamp_t, ConvertShreddedValue<timestamp_t>, LogicalTypeId::TIMESTAMP_TZ>(
+		return ConvertTypedValues<timestamp_tz_t, ConvertShreddedValue<timestamp_tz_t>, LogicalTypeId::TIMESTAMP_TZ>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
 	//! timestampntz(6)
@@ -358,7 +351,7 @@ static VariantValue ConvertPartiallyShreddedObject(vector<ShreddedVariantField> 
 		auto &shredded_field = shredded_fields[field_index];
 		auto &field_value = shredded_field.values[i];
 
-		if (field_value.value_type == VariantValueType::INVALID) {
+		if (field_value.IsMissing()) {
 			//! This field is missing from the value, skip it
 			continue;
 		}

@@ -10,19 +10,15 @@ using namespace duckdb_yyjson;
 
 namespace duckdb {
 
-enum class VariantValueType : uint8_t { PRIMITIVE, OBJECT, ARRAY, INVALID };
+enum class VariantValueType : uint8_t { PRIMITIVE, OBJECT, ARRAY, MISSING };
 
 struct VariantValue {
 public:
-	VariantValue() : value_type(VariantValueType::INVALID) {
+	VariantValue() : value_type(VariantValueType::MISSING) {
 	}
 	explicit VariantValue(VariantValueType type) : value_type(type) {
 	}
-	explicit VariantValue(Value &&val, LogicalTypeId type_id = LogicalTypeId::ANY)
-	    : value_type(VariantValueType::PRIMITIVE), primitive_value(std::move(val)), primitive_value_type(type_id) {
-		if (type_id == LogicalTypeId::ANY) {
-			primitive_value_type = primitive_value.type().id();
-		}
+	explicit VariantValue(Value &&val) : value_type(VariantValueType::PRIMITIVE), primitive_value(std::move(val)) {
 	}
 	// Delete copy constructor and copy assignment operator
 	VariantValue(const VariantValue &) = delete;
@@ -35,6 +31,9 @@ public:
 public:
 	bool IsNull() const {
 		return value_type == VariantValueType::PRIMITIVE && primitive_value.IsNull();
+	}
+	bool IsMissing() const {
+		return value_type == VariantValueType::MISSING;
 	}
 
 public:
@@ -50,7 +49,6 @@ public:
 	map<string, VariantValue> object_children;
 	vector<VariantValue> array_items;
 	Value primitive_value;
-	LogicalTypeId primitive_value_type;
 };
 
 } // namespace duckdb
