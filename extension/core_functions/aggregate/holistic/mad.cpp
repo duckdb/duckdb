@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct FrameSet {
 	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
 	}
@@ -326,6 +328,8 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return BindMAD(context, function, arguments);
 }
+
+} // namespace
 
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");

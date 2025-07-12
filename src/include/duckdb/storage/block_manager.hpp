@@ -11,11 +11,12 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
+
 class BlockHandle;
 class BufferHandle;
 class BufferManager;
@@ -60,14 +61,15 @@ public:
 	virtual void Read(Block &block) = 0;
 	//! Read the content of the block from disk
 	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
-	//! Writes the block to disk
+	//! Writes the block to disk.
 	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
-	//! Writes the block to disk
+	virtual void Write(QueryContext context, FileBuffer &block, block_id_t block_id);
+	//! Writes the block to disk.
 	void Write(Block &block) {
 		Write(block, block.id);
 	}
 	//! Write the header; should be the final step of a checkpoint
-	virtual void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) = 0;
+	virtual void WriteHeader(QueryContext context, DatabaseHeader header) = 0;
 
 	//! Returns the number of total blocks
 	virtual idx_t TotalBlocks() = 0;
@@ -88,9 +90,10 @@ public:
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
-	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block,
-	                                            BufferHandle old_handle);
-	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
+	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
+	                                            shared_ptr<BlockHandle> old_block, BufferHandle old_handle);
+	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
+	                                            shared_ptr<BlockHandle> old_block);
 
 	void UnregisterBlock(BlockHandle &block);
 	//! UnregisterBlock, only accepts non-temporary block ids

@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ArgMinMaxStateBase {
 	ArgMinMaxStateBase() : is_initialized(false), arg_null(false) {
 	}
@@ -346,7 +348,7 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 }
 #endif
 
-static const vector<LogicalType> ArgMaxByTypes() {
+const vector<LogicalType> ArgMaxByTypes() {
 	vector<LogicalType> types = {LogicalType::INTEGER,   LogicalType::BIGINT,       LogicalType::HUGEINT,
 	                             LogicalType::DOUBLE,    LogicalType::VARCHAR,      LogicalType::DATE,
 	                             LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
@@ -417,7 +419,7 @@ void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) 
 }
 
 template <class OP>
-static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const LogicalType &type) {
+AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 #ifndef DUCKDB_SMALLER_BINARY
 	switch (type.InternalType()) {
@@ -436,8 +438,8 @@ static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type,
 }
 
 template <class OP>
-static unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateFunction &function,
+                                              vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	auto by_type = arguments[1]->return_type;
 
@@ -485,7 +487,7 @@ void AddGenericArgMinMaxFunction(AggregateFunctionSet &fun) {
 }
 
 template <class COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
-static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
+void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	using GENERIC_VECTOR_OP = VectorArgMinMaxBase<LessThan, IGNORE_NULL, ORDER_TYPE, GenericArgMinMaxState<ORDER_TYPE>>;
 #ifndef DUCKDB_SMALLER_BINARY
 	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
@@ -543,8 +545,8 @@ public:
 // Operation
 //------------------------------------------------------------------------------
 template <class STATE>
-static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
-                             idx_t count) {
+void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
+                      idx_t count) {
 
 	auto &val_vector = inputs[0];
 	auto &arg_vector = inputs[1];
@@ -604,7 +606,7 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 // Bind
 //------------------------------------------------------------------------------
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
-static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
@@ -618,7 +620,7 @@ static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 }
 
 template <class VAL_TYPE, class COMPARATOR>
-static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -644,7 +646,7 @@ static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunctio
 }
 
 template <class COMPARATOR>
-static void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -689,13 +691,15 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 }
 
 template <class COMPARATOR>
-static void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
+void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	AggregateFunction function({LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalType::BIGINT},
 	                           LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
 	                           nullptr, ArgMinMaxNBind<COMPARATOR>);
 
 	return set.AddFunction(function);
 }
+
+} // namespace
 
 //------------------------------------------------------------------------------
 // Function Registration

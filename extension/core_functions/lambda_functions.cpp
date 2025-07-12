@@ -181,9 +181,9 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 	return inconstant_info;
 }
 
-void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
-                       const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
-                       LambdaExecuteInfo &info) {
+static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
+                              const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
+                              LambdaExecuteInfo &info) {
 
 	info.input_chunk.SetCardinality(elem_cnt);
 	info.lambda_chunk.SetCardinality(elem_cnt);
@@ -272,7 +272,7 @@ LogicalType LambdaFunctions::BindBinaryChildren(const vector<LogicalType> &funct
 }
 
 template <class FUNCTION_FUNCTOR>
-void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	bool result_is_null = false;
 	LambdaFunctions::LambdaInfo info(args, state, result, result_is_null);
