@@ -70,7 +70,11 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	vector<VariantValue> conversion_result;
 	if (typed_value_reader) {
-		(void)typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
+		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
+		if (typed_values != value_values) {
+			throw InvalidInputException(
+			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
+		}
 	}
 	conversion_result =
 	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
