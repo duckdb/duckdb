@@ -350,6 +350,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		}
 		return row_group_stats;
+	} else if (schema.schema_type == ParquetColumnSchemaType::VARIANT) {
+		//! FIXME: there are situations where VARIANT columns can have stats
+		return nullptr;
 	}
 
 	// Otherwise, its a standard column with stats
