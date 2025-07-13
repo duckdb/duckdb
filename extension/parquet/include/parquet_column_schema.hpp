@@ -11,7 +11,9 @@
 #include "parquet_types.h"
 
 namespace duckdb {
-class ParquetReader;
+
+using duckdb_parquet::FileMetaData;
+struct ParquetOptions;
 
 enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, GEOMETRY, EXPRESSION, VARIANT };
 
@@ -49,8 +51,8 @@ struct ParquetColumnSchema {
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
 	vector<ParquetColumnSchema> children;
 
-	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p,
-	                                 const vector<duckdb_parquet::ColumnChunk> &columns) const;
+	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,
+	                                 idx_t row_group_idx_p, const vector<duckdb_parquet::ColumnChunk> &columns) const;
 };
 
 } // namespace duckdb

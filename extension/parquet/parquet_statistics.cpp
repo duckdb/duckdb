@@ -405,8 +405,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		} else if (parquet_stats.__isset.min) {
 			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min);
-		} else {
-			return nullptr;
 		}
 		if (parquet_stats.__isset.max_value) {
 			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
@@ -414,8 +412,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		} else if (parquet_stats.__isset.max) {
 			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max);
-		} else {
-			return nullptr;
 		}
 		StringStats::SetContainsUnicode(string_stats);
 		StringStats::ResetMaxStringLength(string_stats);
@@ -432,6 +428,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
+			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
 		}
 	}
 	return row_group_stats;

@@ -104,6 +104,10 @@ public:
 		SetAuxiliaryData(std::move(source_buffer.aux_data));
 	}
 
+	virtual optional_ptr<Allocator> GetAllocator() const {
+		return data.GetAllocator();
+	}
+
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
@@ -182,6 +186,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
+	explicit VectorStringBuffer(Allocator &allocator);
 	explicit VectorStringBuffer(VectorBufferType type);
 
 public:

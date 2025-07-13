@@ -276,7 +276,9 @@ struct LogicalType {
 		return type_info_;
 	}
 
-	//! DeepCopy() will make a unique copy of any ExtraTypeInfo as well
+	//! Copies the logical type, making a new ExtraTypeInfo
+	LogicalType Copy() const;
+	//! DeepCopy() will make a unique copy of any nested ExtraTypeInfo as well
 	LogicalType DeepCopy() const;
 
 	inline void CopyAuxInfo(const LogicalType &other) {

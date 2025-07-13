@@ -134,8 +134,11 @@ struct ParquetUnionData : public BaseUnionData {
 	}
 	~ParquetUnionData() override;
 
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+
 	ParquetOptions options;
 	shared_ptr<ParquetFileMetadataCache> metadata;
+	unique_ptr<ParquetColumnSchema> root_schema;
 };
 
 class ParquetReader : public BaseFileReader {
@@ -189,6 +192,7 @@ public:
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
+	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
 
