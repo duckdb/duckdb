@@ -117,9 +117,6 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		return false;
 	}
 	idx_t perfect_hash_bits = 0;
-	if (op.group_stats.empty()) {
-		op.group_stats.resize(op.groups.size());
-	}
 	for (idx_t group_idx = 0; group_idx < op.groups.size(); group_idx++) {
 		auto &group = op.groups[group_idx];
 		auto &stats = op.group_stats[group_idx];
@@ -249,12 +246,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		}
 	}
 
+	// Check if all groups are valid
+	if (op.group_stats.empty()) {
+		op.group_stats.resize(op.groups.size());
+	}
+	auto group_validity = TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
+	for (const auto &stats : op.group_stats) {
+		if (stats && !stats->CanHaveNull()) {
+			continue;
+		}
+		group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
+		break;
+	}
+
 	if (op.groups.empty() && op.grouping_sets.size() <= 1) {
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		if (can_use_simple_aggregation) {
-			auto &group_by =
-			    Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions), op.estimated_cardinality);
+			auto &group_by = Make<PhysicalUngroupedAggregate>(op.types, std::move(op.expressions),
+			                                                  op.estimated_cardinality, op.distinct_validity);
 			group_by.children.push_back(plan);
 			return group_by;
 		}
@@ -286,7 +296,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
-	                                             op.estimated_cardinality);
+	                                             op.estimated_cardinality, group_validity, op.distinct_validity);
 	group_by.children.push_back(plan);
 	return group_by;
 }
