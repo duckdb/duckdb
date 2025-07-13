@@ -22,6 +22,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
@@ -1824,7 +1825,8 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		original_sel.set_index(offset++, verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
-	vector.Slice(inverted_vector, original_sel, count);
+	vector.Dictionary(inverted_vector, verify_count, original_sel, count);
+	DictionaryVector::SetDictionaryId(vector, UUID::ToString(UUID::GenerateRandomUUID()));
 	vector.Verify(count);
 }
 
