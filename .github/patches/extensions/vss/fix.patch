@@ -176,7 +176,7 @@ index a05f1a6..573593e 100644
  #include "hnsw/hnsw.hpp"
  #include "hnsw/hnsw_index.hpp"
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 1a8d93b..58917b7 100644
+index 1a8d93b..6a2b646 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
 +++ b/src/hnsw/hnsw_optimize_join.cpp
 @@ -34,9 +34,9 @@ class PhysicalHNSWIndexJoin final : public PhysicalOperator {
@@ -190,6 +190,15 @@ index 1a8d93b..58917b7 100644
 +	    : PhysicalOperator(physical_plan, TYPE, types_p, estimated_cardinality), table(table_p), hnsw_index(hnsw_index_p),
  	      limit(limit_p) {
  	}
+ 
+@@ -129,7 +129,7 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
+ 	const auto rhs_vector_ptr = FlatVector::GetData<float>(rhs_vector_child);
+ 
+ 	// We mimic the window row_number() operator here and output the row number in each batch, basically.
+-	const auto row_number_vector = FlatVector::GetData<idx_t>(chunk.data[MATCH_COLUMN_OFFSET]);
++	const auto row_number_vector = FlatVector::GetData<int64_t>(chunk.data[MATCH_COLUMN_OFFSET]);
+ 
+ 	hnsw_index.ResetMultiScan(*state.index_state);
  
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
 index d5aded4..73fa183 100644
