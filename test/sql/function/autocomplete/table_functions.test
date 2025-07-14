@@ -7,4 +7,9 @@ require autocomplete
 query II
 FROM sql_auto_complete('call histo') LIMIT 1;
 ----
-histogram	7
+histogram	5
+
+query II
+FROM sql_auto_complete('call histogram_') LIMIT 1;
+----
+histogram_values	5

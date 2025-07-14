@@ -1141,9 +1141,8 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
-template <class T>
-vector<reference<T>> Catalog::GetAllEntries(ClientContext &context, CatalogType catalog_type) {
-	vector<reference<T>> result;
+vector<reference<CatalogEntry>> Catalog::GetAllEntries(ClientContext &context, CatalogType catalog_type) {
+	vector<reference<CatalogEntry>> result;
 	auto schemas = GetAllSchemas(context);
 	for (const auto &schema_ref : schemas) {
 		auto &schema = schema_ref.get();
@@ -1151,18 +1150,6 @@ vector<reference<T>> Catalog::GetAllEntries(ClientContext &context, CatalogType 
 								[&](CatalogEntry &entry) { result.push_back(entry); });
 	}
 	return result;
-}
-
-vector<reference<PragmaFunctionCatalogEntry>> Catalog::GetAllPragmaFunctions(ClientContext &context) {
-	return GetAllEntries<PragmaFunctionCatalogEntry>(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
-}
-
-vector<reference<ScalarFunctionCatalogEntry>> Catalog::GetAllScalarFunctions(ClientContext &context) {
-	return GetAllEntries<ScalarFunctionCatalogEntry>(context, CatalogType::SCALAR_FUNCTION_ENTRY);
-}
-
-vector<reference<TableFunctionCatalogEntry>> Catalog::GetAllTableFunctions(ClientContext &context) {
-	return GetAllEntries<TableFunctionCatalogEntry>(context, CatalogType::TABLE_FUNCTION_ENTRY);
 }
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {

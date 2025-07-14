@@ -226,7 +226,7 @@ static bool KnownExtension(const string &fname) {
 
 static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
-	auto all_pragmas = Catalog::GetAllPragmaFunctions(context);
+	auto all_pragmas = Catalog::GetAllEntries(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
 	for (const auto &pragma : all_pragmas) {
 		AutoCompleteCandidate candidate(pragma.get().name, 0);
 		suggestions.push_back(std::move(candidate));
@@ -247,7 +247,7 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 
 static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
-	auto scalar_functions = Catalog::GetAllScalarFunctions(context);
+	auto scalar_functions = Catalog::GetAllEntries(context, CatalogType::SCALAR_FUNCTION_ENTRY);
 	for (const auto &scalar_function : scalar_functions) {
 		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
 		suggestions.push_back(std::move(candidate));
@@ -258,9 +258,9 @@ static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &co
 
 static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
-	auto table_functions = Catalog::GetAllTableFunctions(context);
-	for (const auto &scalar_function : table_functions) {
-		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
+	auto table_functions = Catalog::GetAllEntries(context, CatalogType::TABLE_FUNCTION_ENTRY);
+	for (const auto &table_function : table_functions) {
+		AutoCompleteCandidate candidate(table_function.get().name, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 
