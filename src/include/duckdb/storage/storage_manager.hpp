@@ -71,7 +71,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(optional_ptr<ClientContext> context, StorageOptions &options);
+	void Initialize(QueryContext context, StorageOptions &options);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -99,8 +99,7 @@ public:
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
-	virtual void CreateCheckpoint(optional_ptr<ClientContext> client_context,
-	                              CheckpointOptions options = CheckpointOptions()) = 0;
+	virtual void CreateCheckpoint(QueryContext context, CheckpointOptions options = CheckpointOptions()) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
@@ -118,7 +117,7 @@ public:
 	}
 
 protected:
-	virtual void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &options) = 0;
+	virtual void LoadDatabase(QueryContext context, StorageOptions &options) = 0;
 
 protected:
 	//! The attached database managed by this storage manager.
@@ -163,13 +162,13 @@ public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
-	void CreateCheckpoint(optional_ptr<ClientContext> client_context, CheckpointOptions options) override;
+	void CreateCheckpoint(QueryContext context, CheckpointOptions options) override;
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 	BlockManager &GetBlockManager() override;
 
 protected:
-	void LoadDatabase(optional_ptr<ClientContext> context, StorageOptions &options) override;
+	void LoadDatabase(QueryContext context, StorageOptions &options) override;
 };
 } // namespace duckdb

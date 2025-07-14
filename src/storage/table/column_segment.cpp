@@ -223,7 +223,8 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//
-void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id_p) {
+void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager,
+                                        block_id_t block_id_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
 
@@ -231,20 +232,21 @@ void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager
 	offset = 0;
 
 	if (block_id == INVALID_BLOCK) {
-		// constant block: no need to write anything to disk besides the stats
-		// set up the compression function to constant
+		// Constant block: no need to write anything to disk besides the stats.
+		// Set the compression function to constant.
 		D_ASSERT(stats.statistics.IsConstant());
 		auto &config = DBConfig::GetConfig(db);
 		function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
-		// reset the block buffer
+		// Reset the block buffer.
 		block.reset();
-	} else {
-		D_ASSERT(!stats.statistics.IsConstant());
-		// non-constant block: write the block to disk
-		// the data for the block already exists in-memory of our block
-		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-		block = block_manager->ConvertToPersistent(block_id, std::move(block));
+		return;
 	}
+
+	// Non-constant block: write the block to disk.
+	// The data for the block already exists in-memory of our block.
+	// Instead of copying the data, we alter the metadata so that the buffer points to an on-disk block.
+	D_ASSERT(!stats.statistics.IsConstant());
+	block = block_manager->ConvertToPersistent(context, block_id, std::move(block));
 }
 
 void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {

@@ -96,7 +96,7 @@ GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &co
 	// Initialize the input and result chunks
 	// The input chunk should be empty, as we always reference the input vector
 	input_chunk.InitializeEmpty({wkb_type});
-	result_chunk.Initialize(context, {type_type, flag_type, bbox_type});
+	result_chunk.Initialize(BufferAllocator::Get(context), {type_type, flag_type, bbox_type});
 }
 
 void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count) {
@@ -243,6 +243,18 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					const auto encoding_str = yyjson_get_str(encoding_val);
 					if (strcmp(encoding_str, "WKB") == 0) {
 						column.geometry_encoding = GeoParquetColumnEncoding::WKB;
+					} else if (strcmp(encoding_str, "point") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::POINT;
+					} else if (strcmp(encoding_str, "linestring") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::LINESTRING;
+					} else if (strcmp(encoding_str, "polygon") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::POLYGON;
+					} else if (strcmp(encoding_str, "multipoint") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTIPOINT;
+					} else if (strcmp(encoding_str, "multilinestring") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTILINESTRING;
+					} else if (strcmp(encoding_str, "multipolygon") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTIPOLYGON;
 					} else {
 						throw InvalidInputException("Geoparquet column '%s' has an unsupported encoding", column_name);
 					}

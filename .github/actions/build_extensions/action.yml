@@ -114,7 +114,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-        echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> docker_env.txt
+        echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> $GITHUB_ENV
 
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'

@@ -79,6 +79,8 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct AddPropagateStatistics {
 	template <class T, class OP>
 	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
@@ -134,7 +136,7 @@ struct DecimalArithmeticBindData : public FunctionData {
 };
 
 template <class OP, class PROPAGATE, class BASEOP>
-static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
@@ -261,8 +263,8 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	return std::move(bind_data);
 }
 
-static void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                       const ScalarFunction &function) {
+void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                const ScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
 	serializer.WriteProperty(101, "return_type", function.return_type);
@@ -297,6 +299,8 @@ unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
 }
+
+} // namespace
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	D_ASSERT(type.IsNumeric());
@@ -479,6 +483,8 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct NegateOperator {
 	template <class T>
 	static bool CanNegate(T input) {
@@ -572,7 +578,7 @@ struct NegatePropagateStatistics {
 	}
 };
 
-static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
@@ -612,6 +618,8 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	stats.CopyValidity(istats);
 	return stats.ToUnique();
 }
+
+} // namespace
 
 ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
@@ -755,6 +763,8 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct MultiplyPropagateStatistics {
 	template <class T, class OP>
 	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
@@ -862,6 +872,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	return std::move(bind_data);
 }
 
+} // namespace
+
 ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	ScalarFunctionSet multiply("*");
 	for (auto &type : LogicalType::Numeric()) {
@@ -932,6 +944,8 @@ interval_t DivideOperator::Operation(interval_t left, double right) {
 	return result;
 }
 
+namespace {
+
 struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
@@ -985,12 +999,12 @@ struct BinaryNumericDivideHugeintWrapper {
 };
 
 template <class TA, class TB, class TC, class OP, class ZWRAPPER = BinaryZeroIsNullWrapper>
-static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
+void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result, input.size());
 }
 
 template <class OP>
-static scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
+scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT8:
 		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP, BinaryNumericDivideWrapper>;
@@ -1033,6 +1047,7 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarF
 	return nullptr;
 }
 
+} // namespace
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
@@ -1068,8 +1083,8 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 // % [modulo]
 //===--------------------------------------------------------------------===//
 template <class OP>
-unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindDecimalArithmetic<true>(context, bound_function, arguments);
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {

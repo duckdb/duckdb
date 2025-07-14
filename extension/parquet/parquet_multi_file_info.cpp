@@ -33,10 +33,15 @@ struct ParquetReadBindData : public TableFunctionData {
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
+	    : row_group_index(0), batch_index(0), op(op_p) {
+	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
 	idx_t batch_index;
+	//! (Optional) pointer to physical operator performing the scan
+	optional_ptr<const PhysicalOperator> op;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -252,14 +257,14 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	return bind_data;
 }
 
-vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
 	vector<column_t> result;
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX);
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
 	return result;
 }
 
-vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
+static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	vector<PartitionStatistics> result;
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE && bind_data.initial_reader) {
@@ -391,6 +396,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "binary_as_string") {
 		options.binary_as_string = BooleanValue::Get(val);
+		return true;
+	}
+	if (key == "variant_legacy_encoding") {
+		options.variant_legacy_encoding = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "file_row_number") {
@@ -532,13 +541,14 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	} else {
 		result->options = std::move(parquet_options);
 		result->metadata = std::move(metadata);
+		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
-                                                                                 MultiFileGlobalState &) {
-	return make_uniq<ParquetReadGlobalState>();
+                                                                                 MultiFileGlobalState &global_state) {
+	return make_uniq<ParquetReadGlobalState>(global_state.op);
 }
 
 unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
@@ -568,7 +578,9 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 
 void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                          LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
+	local_state.scan_state.op = gstate.op;
 	Scan(context, local_state.scan_state, chunk);
 }
 

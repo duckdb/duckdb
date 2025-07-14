@@ -10,6 +10,8 @@ namespace duckdb {
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 
+namespace {
+
 struct ValuePositionComparator {
 	// Return true if the positional Values definitely match.
 	// Default to the same as the final value
@@ -194,6 +196,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		throw InternalException("Unimplemented type for value comparison");
 	}
 }
+
+} // namespace
 
 bool ValueOperations::Equals(const Value &left, const Value &right) {
 	if (left.IsNull() || right.IsNull()) {

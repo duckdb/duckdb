@@ -10,9 +10,9 @@
 namespace duckdb {
 
 template <class T>
-bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
-                        T *result_data, ValidityMask &result_mask, const LogicalType &result_type, idx_t count,
-                        VectorTryCastData &vector_cast_data, const SelectionVector *sel) {
+static bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
+                               T *result_data, ValidityMask &result_mask, const LogicalType &result_type, idx_t count,
+                               VectorTryCastData &vector_cast_data, const SelectionVector *sel) {
 	for (idx_t i = 0; i < count; i++) {
 		idx_t source_idx = i;
 		if (sel) {
@@ -34,7 +34,7 @@ bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, 
 }
 
 template <class T>
-bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
@@ -261,7 +261,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 //===--------------------------------------------------------------------===//
 // string -> map casting
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParameters &parameters) {
+static unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<MapBoundCastData>();
 	auto result = make_uniq<MapCastLocalState>();
 
@@ -432,7 +432,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 }
 
 template <class T>
-bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 
 	switch (source.GetVectorType()) {
