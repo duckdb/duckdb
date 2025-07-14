@@ -117,7 +117,9 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, Buff
 
 void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
 	auto block_size = partial_block_manager.GetBlockManager().GetBlockSize();
-	D_ASSERT(segment_size <= block_size);
+	if (segment_size > block_size) {
+		throw InternalException("segment size exceeds block size in ColumnCheckpointState::FlushSegmentInternal");
+	}
 
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START

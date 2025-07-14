@@ -31,16 +31,20 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 
 #ifndef DEBUG
 	// In debug mode, we always apply compressed materialization to joins regardless of cardinalities,
-	// so that it is well-tested. In release mode, we require build cardinality > JOIN_BUILD_CARDINALITY_THRESHOLD,
-	// and we require join_cardinality / build_cardinality < JOIN_CARDINALITY_RATIO_THRESHOLD,
-	// so that we don't end up doing many more decompressions than compressions and hurting performance
+	// so that it is well-tested. In release mode, we use the thresholds defined in the header
 	const auto build_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
 	                                                                     : right_child.EstimateCardinality(context);
-	const auto join_cardinality =
-	    join.has_estimated_cardinality ? join.estimated_cardinality : join.EstimateCardinality(context);
-	const double ratio = static_cast<double>(join_cardinality) / static_cast<double>(build_cardinality);
-	if (build_cardinality < JOIN_BUILD_CARDINALITY_THRESHOLD || ratio > JOIN_CARDINALITY_RATIO_THRESHOLD) {
+	if (build_cardinality < JOIN_BUILD_CARDINALITY_THRESHOLD) {
 		return;
+	}
+
+	if (right_child.types.size() < JOIN_BUILD_COLUMN_COUNT_THRESHOLD) {
+		const auto join_cardinality =
+		    join.has_estimated_cardinality ? join.estimated_cardinality : join.EstimateCardinality(context);
+		const double ratio = static_cast<double>(join_cardinality) / static_cast<double>(build_cardinality);
+		if (ratio > JOIN_CARDINALITY_RATIO_THRESHOLD) {
+			return;
+		}
 	}
 #endif
 

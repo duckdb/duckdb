@@ -215,6 +215,25 @@ std::ostream& operator<<(std::ostream& out, const FieldRepetitionType::type& val
 std::string to_string(const FieldRepetitionType::type& val);
 
 /**
+ * Edge interpolation algorithm for Geography logical type
+ */
+struct EdgeInterpolationAlgorithm {
+  enum type {
+    SPHERICAL = 0,
+    VINCENTY = 1,
+    THOMAS = 2,
+    ANDOYER = 3,
+    KARNEY = 4
+  };
+};
+
+extern const std::map<int, const char*> _EdgeInterpolationAlgorithm_VALUES_TO_NAMES;
+
+std::ostream& operator<<(std::ostream& out, const EdgeInterpolationAlgorithm::type& val);
+
+std::string to_string(const EdgeInterpolationAlgorithm::type& val);
+
+/**
  * Encodings supported by Parquet.  Not all encodings are valid for all types.  These
  * enums are also used to specify the encoding of definition and repetition levels.
  * See the accompanying doc for the details of the more complicated encodings.
@@ -352,6 +371,10 @@ std::string to_string(const BoundaryOrder::type& val);
 
 class SizeStatistics;
 
+class BoundingBox;
+
+class GeospatialStatistics;
+
 class Statistics;
 
 class StringType;
@@ -389,6 +412,12 @@ class IntType;
 class JsonType;
 
 class BsonType;
+
+class VariantType;
+
+class GeometryType;
+
+class GeographyType;
 
 class LogicalType;
 
@@ -534,6 +563,105 @@ class SizeStatistics : public virtual ::apache::thrift::TBase {
 void swap(SizeStatistics &a, SizeStatistics &b);
 
 std::ostream& operator<<(std::ostream& out, const SizeStatistics& obj);
+
+typedef struct _BoundingBox__isset {
+  _BoundingBox__isset() : zmin(false), zmax(false), mmin(false), mmax(false) {}
+  bool zmin :1;
+  bool zmax :1;
+  bool mmin :1;
+  bool mmax :1;
+} _BoundingBox__isset;
+
+/**
+ * Bounding box for GEOMETRY or GEOGRAPHY type in the representation of min/max
+ * value pair of coordinates from each axis.
+ */
+class BoundingBox : public virtual ::apache::thrift::TBase {
+ public:
+
+  BoundingBox(const BoundingBox&) noexcept;
+  BoundingBox& operator=(const BoundingBox&) noexcept;
+  BoundingBox() noexcept;
+
+  virtual ~BoundingBox() noexcept;
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
+  double zmin;
+  double zmax;
+  double mmin;
+  double mmax;
+
+  _BoundingBox__isset __isset;
+
+  void __set_xmin(const double val);
+
+  void __set_xmax(const double val);
+
+  void __set_ymin(const double val);
+
+  void __set_ymax(const double val);
+
+  void __set_zmin(const double val);
+
+  void __set_zmax(const double val);
+
+  void __set_mmin(const double val);
+
+  void __set_mmax(const double val);
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(BoundingBox &a, BoundingBox &b);
+
+std::ostream& operator<<(std::ostream& out, const BoundingBox& obj);
+
+typedef struct _GeospatialStatistics__isset {
+  _GeospatialStatistics__isset() : bbox(false), geospatial_types(false) {}
+  bool bbox :1;
+  bool geospatial_types :1;
+} _GeospatialStatistics__isset;
+
+/**
+ * Statistics specific to Geometry and Geography logical types
+ */
+class GeospatialStatistics : public virtual ::apache::thrift::TBase {
+ public:
+
+  GeospatialStatistics(const GeospatialStatistics&);
+  GeospatialStatistics& operator=(const GeospatialStatistics&);
+  GeospatialStatistics() noexcept;
+
+  virtual ~GeospatialStatistics() noexcept;
+  /**
+   * A bounding box of geospatial instances
+   */
+  BoundingBox bbox;
+  /**
+   * Geospatial type codes of all instances, or an empty list if not known
+   */
+  duckdb::vector<int32_t>  geospatial_types;
+
+  _GeospatialStatistics__isset __isset;
+
+  void __set_bbox(const BoundingBox& val);
+
+  void __set_geospatial_types(const duckdb::vector<int32_t> & val);
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(GeospatialStatistics &a, GeospatialStatistics &b);
+
+std::ostream& operator<<(std::ostream& out, const GeospatialStatistics& obj);
 
 typedef struct _Statistics__isset {
   _Statistics__isset() : max(false), min(false), null_count(false), distinct_count(false), max_value(false), min_value(false), is_max_value_exact(false), is_min_value_exact(false) {}
@@ -1090,8 +1218,137 @@ void swap(BsonType &a, BsonType &b);
 
 std::ostream& operator<<(std::ostream& out, const BsonType& obj);
 
+typedef struct _VariantType__isset {
+  _VariantType__isset() : specification_version(false) {}
+  bool specification_version :1;
+} _VariantType__isset;
+
+/**
+ * Embedded Variant logical type annotation
+ */
+class VariantType : public virtual ::apache::thrift::TBase {
+ public:
+
+  VariantType(const VariantType&) noexcept;
+  VariantType& operator=(const VariantType&) noexcept;
+  VariantType() noexcept;
+
+  virtual ~VariantType() noexcept;
+  int8_t specification_version;
+
+  _VariantType__isset __isset;
+
+  void __set_specification_version(const int8_t val);
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(VariantType &a, VariantType &b);
+
+std::ostream& operator<<(std::ostream& out, const VariantType& obj);
+
+typedef struct _GeometryType__isset {
+  _GeometryType__isset() : crs(false) {}
+  bool crs :1;
+} _GeometryType__isset;
+
+/**
+ * Embedded Geometry logical type annotation
+ * 
+ * Geospatial features in the Well-Known Binary (WKB) format and edges interpolation
+ * is always linear/planar.
+ * 
+ * A custom CRS can be set by the crs field. If unset, it defaults to "OGC:CRS84",
+ * which means that the geometries must be stored in longitude, latitude based on
+ * the WGS84 datum.
+ * 
+ * Allowed for physical type: BYTE_ARRAY.
+ * 
+ * See Geospatial.md for details.
+ */
+class GeometryType : public virtual ::apache::thrift::TBase {
+ public:
+
+  GeometryType(const GeometryType&);
+  GeometryType& operator=(const GeometryType&);
+  GeometryType() noexcept;
+
+  virtual ~GeometryType() noexcept;
+  std::string crs;
+
+  _GeometryType__isset __isset;
+
+  void __set_crs(const std::string& val);
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(GeometryType &a, GeometryType &b);
+
+std::ostream& operator<<(std::ostream& out, const GeometryType& obj);
+
+typedef struct _GeographyType__isset {
+  _GeographyType__isset() : crs(false), algorithm(false) {}
+  bool crs :1;
+  bool algorithm :1;
+} _GeographyType__isset;
+
+/**
+ * Embedded Geography logical type annotation
+ * 
+ * Geospatial features in the WKB format with an explicit (non-linear/non-planar)
+ * edges interpolation algorithm.
+ * 
+ * A custom geographic CRS can be set by the crs field, where longitudes are
+ * bound by [-180, 180] and latitudes are bound by [-90, 90]. If unset, the CRS
+ * defaults to "OGC:CRS84".
+ * 
+ * An optional algorithm can be set to correctly interpret edges interpolation
+ * of the geometries. If unset, the algorithm defaults to SPHERICAL.
+ * 
+ * Allowed for physical type: BYTE_ARRAY.
+ * 
+ * See Geospatial.md for details.
+ */
+class GeographyType : public virtual ::apache::thrift::TBase {
+ public:
+
+  GeographyType(const GeographyType&);
+  GeographyType& operator=(const GeographyType&);
+  GeographyType() noexcept;
+
+  virtual ~GeographyType() noexcept;
+  std::string crs;
+  /**
+   * 
+   * @see EdgeInterpolationAlgorithm
+   */
+  EdgeInterpolationAlgorithm::type algorithm;
+
+  _GeographyType__isset __isset;
+
+  void __set_crs(const std::string& val);
+
+  void __set_algorithm(const EdgeInterpolationAlgorithm::type val);
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
+
+  virtual void printTo(std::ostream& out) const;
+};
+
+void swap(GeographyType &a, GeographyType &b);
+
+std::ostream& operator<<(std::ostream& out, const GeographyType& obj);
+
 typedef struct _LogicalType__isset {
-  _LogicalType__isset() : STRING(false), MAP(false), LIST(false), ENUM(false), DECIMAL(false), DATE(false), TIME(false), TIMESTAMP(false), INTEGER(false), UNKNOWN(false), JSON(false), BSON(false), UUID(false), FLOAT16(false) {}
+  _LogicalType__isset() : STRING(false), MAP(false), LIST(false), ENUM(false), DECIMAL(false), DATE(false), TIME(false), TIMESTAMP(false), INTEGER(false), UNKNOWN(false), JSON(false), BSON(false), UUID(false), FLOAT16(false), VARIANT(false), GEOMETRY(false), GEOGRAPHY(false) {}
   bool STRING :1;
   bool MAP :1;
   bool LIST :1;
@@ -1106,6 +1363,9 @@ typedef struct _LogicalType__isset {
   bool BSON :1;
   bool UUID :1;
   bool FLOAT16 :1;
+  bool VARIANT :1;
+  bool GEOMETRY :1;
+  bool GEOGRAPHY :1;
 } _LogicalType__isset;
 
 /**
@@ -1118,8 +1378,8 @@ typedef struct _LogicalType__isset {
 class LogicalType : public virtual ::apache::thrift::TBase {
  public:
 
-  LogicalType(const LogicalType&) noexcept;
-  LogicalType& operator=(const LogicalType&) noexcept;
+  LogicalType(const LogicalType&);
+  LogicalType& operator=(const LogicalType&);
   LogicalType() noexcept;
 
   virtual ~LogicalType() noexcept;
@@ -1137,6 +1397,9 @@ class LogicalType : public virtual ::apache::thrift::TBase {
   BsonType BSON;
   UUIDType UUID;
   Float16Type FLOAT16;
+  VariantType VARIANT;
+  GeometryType GEOMETRY;
+  GeographyType GEOGRAPHY;
 
   _LogicalType__isset __isset;
 
@@ -1167,6 +1430,12 @@ class LogicalType : public virtual ::apache::thrift::TBase {
   void __set_UUID(const UUIDType& val);
 
   void __set_FLOAT16(const Float16Type& val);
+
+  void __set_VARIANT(const VariantType& val);
+
+  void __set_GEOMETRY(const GeometryType& val);
+
+  void __set_GEOGRAPHY(const GeographyType& val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
@@ -1959,7 +2228,7 @@ void swap(PageEncodingStats &a, PageEncodingStats &b);
 std::ostream& operator<<(std::ostream& out, const PageEncodingStats& obj);
 
 typedef struct _ColumnMetaData__isset {
-  _ColumnMetaData__isset() : key_value_metadata(false), index_page_offset(false), dictionary_page_offset(false), statistics(false), encoding_stats(false), bloom_filter_offset(false), bloom_filter_length(false), size_statistics(false) {}
+  _ColumnMetaData__isset() : key_value_metadata(false), index_page_offset(false), dictionary_page_offset(false), statistics(false), encoding_stats(false), bloom_filter_offset(false), bloom_filter_length(false), size_statistics(false), geospatial_statistics(false) {}
   bool key_value_metadata :1;
   bool index_page_offset :1;
   bool dictionary_page_offset :1;
@@ -1968,6 +2237,7 @@ typedef struct _ColumnMetaData__isset {
   bool bloom_filter_offset :1;
   bool bloom_filter_length :1;
   bool size_statistics :1;
+  bool geospatial_statistics :1;
 } _ColumnMetaData__isset;
 
 /**
@@ -2060,6 +2330,10 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
    * filter pushdown.
    */
   SizeStatistics size_statistics;
+  /**
+   * Optional statistics specific for Geometry and Geography logical types
+   */
+  GeospatialStatistics geospatial_statistics;
 
   _ColumnMetaData__isset __isset;
 
@@ -2094,6 +2368,8 @@ class ColumnMetaData : public virtual ::apache::thrift::TBase {
   void __set_bloom_filter_length(const int32_t val);
 
   void __set_size_statistics(const SizeStatistics& val);
+
+  void __set_geospatial_statistics(const GeospatialStatistics& val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;
@@ -2433,6 +2709,7 @@ class ColumnOrder : public virtual ::apache::thrift::TBase {
    *   UINT64 - unsigned comparison
    *   DECIMAL - signed comparison of the represented value
    *   DATE - signed comparison
+   *   FLOAT16 - signed comparison of the represented value (*)
    *   TIME_MILLIS - signed comparison
    *   TIME_MICROS - signed comparison
    *   TIMESTAMP_MILLIS - signed comparison
@@ -2443,6 +2720,9 @@ class ColumnOrder : public virtual ::apache::thrift::TBase {
    *   ENUM - unsigned byte-wise comparison
    *   LIST - undefined
    *   MAP - undefined
+   *   VARIANT - undefined
+   *   GEOMETRY - undefined
+   *   GEOGRAPHY - undefined
    * 
    * In the absence of logical types, the sort order is determined by the physical type:
    *   BOOLEAN - false, true

@@ -7,7 +7,7 @@
 namespace duckdb {
 
 template <class T>
-string_t IntToVarInt(Vector &result, T int_value) {
+static string_t IntToVarInt(Vector &result, T int_value) {
 	// Determine if the number is negative
 	bool is_negative = int_value < 0;
 	// Determine the number of data bytes
@@ -179,7 +179,7 @@ bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Ve
 }
 
 template <class T>
-bool DoubleToVarInt(T double_value, string_t &result_value, Vector &result) {
+static bool DoubleToVarInt(T double_value, string_t &result_value, Vector &result) {
 	// Check if we can cast it
 	if (!std::isfinite(double_value)) {
 		// We can't cast inf -inf nan
