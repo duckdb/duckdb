@@ -387,7 +387,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 
 		// 6. Cleanup
 		for (idx_t i = 0; i < out_col_count; i++) {
-			free(out_names[i]);
+			delete out_names[i];
 		}
 		delete[] out_names;
 		duckdb_destroy_arrow_converted_schema(&converted_schema);
@@ -401,7 +401,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 			duckdb_destroy_data_chunk(&chunk);
 		}
 		duckdb_destroy_logical_type(&type);
-		free(names[0]);
+		delete names[0];
 		duckdb_destroy_arrow_schema(&out_schema);
 		duckdb_destroy_result(&result);
 	}
@@ -437,7 +437,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		}
 		delete arrow_schema;
 		duckdb_destroy_logical_type(&type);
-		free(names[0]);
+		delete names[0];
 
 		// Test duckdb_data_chunk_to_arrow
 		duckdb_data_chunk chunk = nullptr;
