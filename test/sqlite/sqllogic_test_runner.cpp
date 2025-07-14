@@ -1025,7 +1025,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto env_var = token.parameters[0];
 			const char *env_actual = std::getenv(env_var.c_str());
 			string default_local_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
-			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO") {
+			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO" &&
+			    config->options.autoload_known_extensions) {
 				// Overriding LOCAL_EXTENSION_REPO here is a hacky
 				// More proper solution is wrapping std::getenv in a duckdb::test_getenv, and having a way to inject env
 				// variables
