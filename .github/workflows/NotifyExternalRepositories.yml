@@ -111,6 +111,6 @@ jobs:
       - name: Call /dispatch
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
-          URL=$( printf "$API_URL_TEMPLATE" "duckdb-python" "on_nightly_build" )
+          URL=$( printf "$API_URL_TEMPLATE" "duckdb-python" "on_external_dispatch" )
           DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "force_version": "${{ inputs.override-git-describe }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
