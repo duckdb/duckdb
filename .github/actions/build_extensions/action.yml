@@ -151,7 +151,6 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
         # TODO we should no longer override this but we should probably check that it is what we expect
@@ -177,7 +176,7 @@ runs:
       if: ${{ inputs.run_tests == '1' && inputs.no_static_linking == '0' }}
       shell: bash
       run: |
-        ${{ inputs.unittest_script }}
+        ${{ inputs.unittest_script }} '--autoloading none'
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -210,13 +209,12 @@ runs:
       if: ${{ inputs.run_autoload_tests == '1' }}
       shell: bash
       env:
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
         DUCKDB_TEST_DESCRIPTION: 'Extension autoloading tests. All `require` calls are ignored and auto-loading is tested. Use require no_extension_autoloading in the test to skip tests.'
       run: |
         cd  ${{ inputs.build_dir}}
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
         python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
-        ${{ inputs.unittest_script }} '-f test.list'
+        ${{ inputs.unittest_script }} '-f test.list --autoloading available'
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
 
