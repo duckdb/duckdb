@@ -3488,14 +3488,6 @@ Note that the bind data is read-only.
 DUCKDB_C_API void *duckdb_scalar_function_get_bind_data(duckdb_function_info info);
 
 /*!
-Retrieves the client context of the bind info of a scalar function.
-
-* @param info The bind info object of the scalar function.
-* @param out_context The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
-*/
-	DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connection,
-														   duckdb_client_context *out_context);
-/*!
 Report that an error has occurred while executing the scalar function.
 
 * @param info The info object.
