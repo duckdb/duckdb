@@ -18,6 +18,7 @@
 #include "tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -256,6 +257,18 @@ static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &co
 	return suggestions;
 }
 
+static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto table_functions = Catalog::GetAllTableFunctions(context);
+	for (const auto &scalar_function : table_functions) {
+		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
+		candidate.extra_char = '(';
+		suggestions.push_back(std::move(candidate));
+	}
+
+	return suggestions;
+}
+
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
 	auto &config = DBConfig::GetConfig(context);
@@ -374,6 +387,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestScalarFunctionName(context);
 			break;
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			new_suggestions = SuggestTableFunctionName(context);
 			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:
 			new_suggestions = SuggestPragmaName(context);

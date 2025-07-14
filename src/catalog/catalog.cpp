@@ -1141,30 +1141,30 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
-vector<reference<PragmaFunctionCatalogEntry>> Catalog::GetAllPragmaFunctions(ClientContext &context) {
-	vector<reference<PragmaFunctionCatalogEntry>> result;
+template <class T>
+vector<reference<T>> Catalog::GetAllEntries(ClientContext &context, CatalogType catalog_type) {
+	vector<reference<T>> result;
 	auto schemas = GetAllSchemas(context);
 	for (const auto &schema : schemas) {
 		auto &duck_schema = schema.get().Cast<DuckSchemaEntry>();
-		auto &pragma_function_set = duck_schema.GetCatalogSet(CatalogType::PRAGMA_FUNCTION_ENTRY);
-	 	auto system_transaction = CatalogTransaction::GetSystemTransaction(context.db->GetDatabase(context));
-		auto pragma_entries = pragma_function_set.GetEntries<PragmaFunctionCatalogEntry>(system_transaction);
-		result.insert(result.end(), pragma_entries.begin(), pragma_entries.end());
+		auto &catalog_set = duck_schema.GetCatalogSet(catalog_type);
+		auto system_transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+		auto entries = catalog_set.GetEntries<T>(system_transaction);
+		result.insert(result.end(), entries.begin(), entries.end());
 	}
 	return result;
 }
 
+vector<reference<PragmaFunctionCatalogEntry>> Catalog::GetAllPragmaFunctions(ClientContext &context) {
+	return GetAllEntries<PragmaFunctionCatalogEntry>(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
+}
+
 vector<reference<ScalarFunctionCatalogEntry>> Catalog::GetAllScalarFunctions(ClientContext &context) {
-	vector<reference<ScalarFunctionCatalogEntry>> result;
-	auto schemas = GetAllSchemas(context);
-	for (const auto &schema : schemas) {
-		auto &duck_schema = schema.get().Cast<DuckSchemaEntry>();
-		auto &scalar_function_set = duck_schema.GetCatalogSet(CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto system_transaction = CatalogTransaction::GetSystemTransaction(context.db->GetDatabase(context));
-		auto pragma_entries = scalar_function_set.GetEntries<ScalarFunctionCatalogEntry>(system_transaction);
-		result.insert(result.end(), pragma_entries.begin(), pragma_entries.end());
-	}
-	return result;
+	return GetAllEntries<ScalarFunctionCatalogEntry>(context, CatalogType::SCALAR_FUNCTION_ENTRY);
+}
+
+vector<reference<TableFunctionCatalogEntry>> Catalog::GetAllTableFunctions(ClientContext &context) {
+	return GetAllEntries<TableFunctionCatalogEntry>(context, CatalogType::TABLE_FUNCTION_ENTRY);
 }
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {

@@ -369,9 +369,14 @@ public:
 	                                                                   const string &catalog_name);
 	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context);
 
+	template <class T>
+	static vector<reference<T>> GetAllEntries(ClientContext &context, CatalogType catalog_type);
+
 	DUCKDB_API static vector<reference<PragmaFunctionCatalogEntry>> GetAllPragmaFunctions(ClientContext &context);
 
 	DUCKDB_API static vector<reference<ScalarFunctionCatalogEntry>> GetAllScalarFunctions(ClientContext &context);
+
+	DUCKDB_API static vector<reference<TableFunctionCatalogEntry>> GetAllTableFunctions(ClientContext &context);
 
 	virtual void Verify();
 
