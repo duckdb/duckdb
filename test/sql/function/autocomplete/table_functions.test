@@ -7,4 +7,4 @@ require autocomplete
 query II
 FROM sql_auto_complete('call histo') LIMIT 1;
 ----
-histogram(	7
+histogram	7

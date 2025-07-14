@@ -1145,12 +1145,10 @@ template <class T>
 vector<reference<T>> Catalog::GetAllEntries(ClientContext &context, CatalogType catalog_type) {
 	vector<reference<T>> result;
 	auto schemas = GetAllSchemas(context);
-	for (const auto &schema : schemas) {
-		auto &duck_schema = schema.get().Cast<DuckSchemaEntry>();
-		auto &catalog_set = duck_schema.GetCatalogSet(catalog_type);
-		auto system_transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-		auto entries = catalog_set.GetEntries<T>(system_transaction);
-		result.insert(result.end(), entries.begin(), entries.end());
+	for (const auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(context, catalog_type,
+								[&](CatalogEntry &entry) { result.push_back(entry); });
 	}
 	return result;
 }

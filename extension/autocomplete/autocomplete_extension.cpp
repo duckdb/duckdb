@@ -250,7 +250,6 @@ static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &co
 	auto scalar_functions = Catalog::GetAllScalarFunctions(context);
 	for (const auto &scalar_function : scalar_functions) {
 		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
-		candidate.extra_char = '(';
 		suggestions.push_back(std::move(candidate));
 	}
 
@@ -262,7 +261,6 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 	auto table_functions = Catalog::GetAllTableFunctions(context);
 	for (const auto &scalar_function : table_functions) {
 		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
-		candidate.extra_char = '(';
 		suggestions.push_back(std::move(candidate));
 	}
 
