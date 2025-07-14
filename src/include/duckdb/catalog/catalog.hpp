@@ -368,6 +368,8 @@ public:
 	                                                                   const string &catalog_name);
 	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context);
 
+	DUCKDB_API static vector<reference<PragmaFunctionCatalogEntry>> GetAllPragmaFunctions(ClientContext &context);
+
 	virtual void Verify();
 
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);

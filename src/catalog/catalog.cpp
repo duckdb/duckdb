@@ -38,6 +38,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include <algorithm>
 
@@ -1139,6 +1140,20 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 
 	return result;
 }
+
+vector<reference<PragmaFunctionCatalogEntry>> Catalog::GetAllPragmaFunctions(ClientContext &context) {
+	vector<reference<PragmaFunctionCatalogEntry>> result;
+	auto schemas = GetAllSchemas(context);
+	for (const auto &schema : schemas) {
+		auto &duck_schema = schema.get().Cast<DuckSchemaEntry>();
+		auto &pragma_function_set = duck_schema.GetCatalogSet(CatalogType::PRAGMA_FUNCTION_ENTRY);
+	 	auto system_transaction = CatalogTransaction::GetSystemTransaction(context.db->GetDatabase(context));
+		auto pragma_entries = pragma_function_set.GetEntries<PragmaFunctionCatalogEntry>(system_transaction);
+		result.insert(result.end(), pragma_entries.begin(), pragma_entries.end());
+	}
+	return result;
+}
+
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {

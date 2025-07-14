@@ -16,6 +16,7 @@
 #include "duckdb/catalog/default/builtin_types/types.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "tokenizer.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -220,6 +221,18 @@ static bool KnownExtension(const string &fname) {
 	return false;
 }
 
+
+static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context, string &prefix) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_pragmas = Catalog::GetAllPragmaFunctions(context);
+	for (auto &pragma : all_pragmas) {
+		auto pragma_name = pragma.get().name;
+		AutoCompleteCandidate candidate(pragma.get().name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	return suggestions;
+}
+
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
 	auto &config = DBConfig::GetConfig(context);
@@ -336,9 +349,11 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			break;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:
+			new_suggestions = SuggestPragmaName(context, tokenizer.last_word);
+			break;
 		case SuggestionState::SUGGEST_SETTING_NAME:
-			// TODO:
 			break;
 		default:
 			throw InternalException("Unrecognized suggestion state");
