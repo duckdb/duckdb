@@ -222,7 +222,7 @@ static bool KnownExtension(const string &fname) {
 }
 
 
-static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context, string &prefix) {
+static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllPragmaFunctions(context);
 	for (auto &pragma : all_pragmas) {
@@ -351,7 +351,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
 			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:
-			new_suggestions = SuggestPragmaName(context, tokenizer.last_word);
+			new_suggestions = SuggestPragmaName(context);
 			break;
 		case SuggestionState::SUGGEST_SETTING_NAME:
 			break;
