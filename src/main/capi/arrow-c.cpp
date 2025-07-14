@@ -129,6 +129,11 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
 		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);
+		// We need to make sure that our chunk will hold ze ownership
+		array_state->owned_data = duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
+		array_state->owned_data->arrow_array = *arrow_array_cpp;
+		// We set it to nullptr to effectively transfer ze ownership
+		arrow_array_cpp->release = nullptr;
 
 		switch (array_physical_type) {
 		case duckdb::ArrowArrayPhysicalType::DEFAULT:
