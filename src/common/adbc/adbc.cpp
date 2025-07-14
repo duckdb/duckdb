@@ -549,7 +549,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 
 	auto client_properties = duckdb_client_property(result_wrapper);
 
-	auto res = duckdb_to_arrow_schema(&client_properties, &types[0], names, count,
+	auto res = duckdb_to_arrow_schema(client_properties, &types[0], names, count,
 	                                  reinterpret_cast<duckdb_arrow_schema *>(&out));
 	duckdb_destroy_client_properties(&client_properties);
 	for (auto &type : types) {
@@ -575,7 +575,7 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	auto client_properties = duckdb_client_property(result_wrapper);
 
 	auto conversion_success =
-	    duckdb_data_chunk_to_arrow(&client_properties, duckdb_chunk, reinterpret_cast<duckdb_arrow_array *>(&out));
+	    duckdb_data_chunk_to_arrow(client_properties, duckdb_chunk, reinterpret_cast<duckdb_arrow_array *>(&out));
 	duckdb_destroy_client_properties(&client_properties);
 	duckdb_destroy_data_chunk(&duckdb_chunk);
 
@@ -800,7 +800,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	duckdb_client_properties client_properties;
 	duckdb_connection_get_client_properties(wrapper->connection, &client_properties);
 
-	auto res = duckdb_to_arrow_schema(&client_properties, &types[0], names, count,
+	auto res = duckdb_to_arrow_schema(client_properties, &types[0], names, count,
 	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i];

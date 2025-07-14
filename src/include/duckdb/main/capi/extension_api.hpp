@@ -474,10 +474,10 @@ typedef struct {
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
 	// New arrow interface functions
 
-	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties *client_properties, duckdb_logical_type *types,
+	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties client_properties, duckdb_logical_type *types,
 	                                            char **names, idx_t column_count, duckdb_arrow_schema *out_schema);
-	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties *client_properties,
-	                                                duckdb_data_chunk chunk, duckdb_arrow_array *out_arrow_array);
+	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
+	                                                duckdb_arrow_array *out_arrow_array);
 	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, duckdb_arrow_schema schema,
 	                                            duckdb_arrow_converted_schema *out_types, char ***out_names,
 	                                            idx_t *out_column_count);

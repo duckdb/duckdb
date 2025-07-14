@@ -7,7 +7,7 @@
             "return_type": "duckdb_error_data",
             "params": [
                 {
-                    "type": "duckdb_client_properties *",
+                    "type": "duckdb_client_properties",
                     "name": "client_properties"
                 },
                 {
@@ -44,7 +44,7 @@
             "return_type": "duckdb_error_data",
             "params": [
                 {
-                    "type": "duckdb_client_properties *",
+                    "type": "duckdb_client_properties",
                     "name": "client_properties"
                 },
                 {

@@ -16,7 +16,7 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
-duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_properties, duckdb_logical_type *types,
+duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_properties, duckdb_logical_type *types,
                                          char **names, idx_t column_count, duckdb_arrow_schema *out_schema) {
 
 	if (!types || !names || !out_schema || !client_properties) {
@@ -28,7 +28,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_proper
 		schema_names.emplace_back(names[i]);
 		schema_types.emplace_back(*reinterpret_cast<duckdb::LogicalType *>(types[i]));
 	}
-	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(*client_properties);
+	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(client_properties);
 	try {
 		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(*out_schema), schema_types, schema_names,
 		                              client_properties_wrapper->properties);
@@ -42,14 +42,14 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_proper
 	return nullptr;
 }
 
-duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_properties, duckdb_data_chunk chunk,
+duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
                                              duckdb_arrow_array *out_arrow_array) {
 	if (!client_properties || !out_arrow_array || !chunk) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
-	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(*client_properties);
+	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(client_properties);
 	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
 	    *client_properties_wrapper->properties.client_context, dchunk->GetTypes());
 
