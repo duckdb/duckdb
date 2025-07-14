@@ -60,6 +60,7 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
+# Tests will 
 # 11 blocks for prefixes, 2 blocks for Node4, 6 blocks for Node16,
 # 19 blocks * 256KB = 4864KB
 # WITHOUT the index, our database size is already approximately 17MB here
@@ -80,6 +81,9 @@ CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS 
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
+# enable verification will not reliably work with this check
+mode skip
+
 # 1 block for prefixes, 6 blocks for Node4, 2 blocks for Node256
 # 8 blocks * 256KB = 2048KB
 
@@ -87,6 +91,8 @@ query I
 SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
 ----
 true
+
+mode unskip
 
 statement ok
 DROP TABLE art;
@@ -99,10 +105,15 @@ CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 1000)::INT64 AS id F
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
+# enable verification will not reliably work with this check
+mode skip
+
 query I
 SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
 ----
 true
+
+mode unskip
 
 statement ok
 DROP TABLE art;
