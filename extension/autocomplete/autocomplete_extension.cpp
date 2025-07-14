@@ -226,7 +226,6 @@ static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllPragmaFunctions(context);
 	for (auto &pragma : all_pragmas) {
-		auto pragma_name = pragma.get().name;
 		AutoCompleteCandidate candidate(pragma.get().name, 0);
 		suggestions.push_back(std::move(candidate));
 	}
