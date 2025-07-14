@@ -871,6 +871,23 @@ Destroys the client context and deallocates its memory.
 DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
 
 /*!
+Retrieves the client context of the table function bind info.
+
+* @param info The bind info.
+* @param out_context The client context of the connection. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_table_function_get_client_context(duckdb_bind_info info,
+													   duckdb_client_context *out_context);
+
+/*!
+Retrieves the client context of the scalar function bind info.
+
+* @param info The bind info.
+* @param out_context The client context of the connection. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_scalar_function_get_client_context(duckdb_bind_info info,
+													   duckdb_client_context *out_context);
+/*!
 Returns the version of the linked DuckDB, with a version postfix for dev versions
 
 Usually used for developing C extensions that must return this for a compatibility check.
@@ -3476,8 +3493,8 @@ Retrieves the client context of the bind info of a scalar function.
 * @param info The bind info object of the scalar function.
 * @param out_context The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
 */
-DUCKDB_C_API void duckdb_scalar_function_get_client_context(duckdb_bind_info info, duckdb_client_context *out_context);
-
+	DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connection,
+														   duckdb_client_context *out_context);
 /*!
 Report that an error has occurred while executing the scalar function.
 
