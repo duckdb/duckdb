@@ -372,6 +372,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			break;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 			new_suggestions = SuggestScalarFunctionName(context);
+			break;
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
 			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:
