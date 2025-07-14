@@ -223,7 +223,6 @@ static bool KnownExtension(const string &fname) {
 	return false;
 }
 
-
 static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllEntries(context, CatalogType::PRAGMA_FUNCTION_ENTRY);

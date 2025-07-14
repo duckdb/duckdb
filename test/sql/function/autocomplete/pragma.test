@@ -1,4 +1,4 @@
-# name: test/sql/function/autocomplete/select.test
+# name: test/sql/function/autocomplete/pragma.test
 # description: Test sql_auto_complete
 # group: [autocomplete]
 

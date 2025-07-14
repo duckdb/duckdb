@@ -1145,8 +1145,7 @@ vector<reference<CatalogEntry>> Catalog::GetAllEntries(ClientContext &context, C
 	auto schemas = GetAllSchemas(context);
 	for (const auto &schema_ref : schemas) {
 		auto &schema = schema_ref.get();
-		schema.Scan(context, catalog_type,
-								[&](CatalogEntry &entry) { result.push_back(entry); });
+		schema.Scan(context, catalog_type, [&](CatalogEntry &entry) { result.push_back(entry); });
 	}
 	return result;
 }
