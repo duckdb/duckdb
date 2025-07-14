@@ -21,7 +21,7 @@ public:
 	using Types = vector<LogicalType>;
 	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
-	HashedSortGroup(ClientContext &context, const Orders &partitions, const Orders &orders, const Types &payload_types,
+	HashedSortGroup(ClientContext &context, const Orders &partitions, const Orders &orders, const Types &input_types,
 	                idx_t group_idx);
 
 	const idx_t group_idx;
@@ -29,7 +29,6 @@ public:
 	//	Sink
 	unique_ptr<Sort> sort;
 	unique_ptr<GlobalSinkState> sort_global;
-	atomic<idx_t> count;
 
 	//	Source
 	atomic<idx_t> tasks_completed;

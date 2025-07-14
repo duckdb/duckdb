@@ -8,10 +8,10 @@ namespace duckdb {
 // HashedSortGroup
 //===--------------------------------------------------------------------===//
 HashedSortGroup::HashedSortGroup(ClientContext &context, const Orders &partitions, const Orders &orders,
-                                 const Types &payload_types, idx_t group_idx)
-    : group_idx(group_idx), count(0), tasks_completed(0) {
+                                 const Types &input_types, idx_t group_idx)
+    : group_idx(group_idx), tasks_completed(0) {
 	vector<idx_t> projection_map;
-	sort = make_uniq<Sort>(context, orders, payload_types, projection_map);
+	sort = make_uniq<Sort>(context, orders, input_types, projection_map);
 	sort_global = sort->GetGlobalSinkState(context);
 }
 
@@ -64,13 +64,13 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &context,
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types_ptr->Initialize(payload_types);
+			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			auto new_group = make_uniq<HashedSortGroup>(context, partitions, orders, payload_types, idx_t(0));
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types_ptr->Initialize(types);
+			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			Rehash(estimated_cardinality);
 		}
 	}
@@ -264,7 +264,6 @@ void HashedSortLocalSinkState::Sink(DataChunk &input_chunk) {
 		auto &hash_group = *gstate.hash_groups[0];
 		OperatorSinkInput input {*hash_group.sort_global, *sort_local, interrupt};
 		hash_group.sort->Sink(context, input_chunk, input);
-		hash_group.count += input_chunk.size();
 		return;
 	}
 

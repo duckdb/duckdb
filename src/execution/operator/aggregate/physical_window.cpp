@@ -9,6 +9,7 @@
 #include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -493,6 +494,9 @@ void WindowGlobalSourceState::CreateTaskList() {
 
 	for (idx_t group_idx = 0; group_idx < window_hash_groups.size(); ++group_idx) {
 		auto &window_hash_group = window_hash_groups[group_idx];
+		if (!window_hash_group) {
+			continue;
+		}
 		partition_blocks.emplace_back(window_hash_group->rows->ChunkCount(), group_idx);
 	}
 	std::sort(partition_blocks.begin(), partition_blocks.end(), std::greater<PartitionBlock>());
@@ -523,9 +527,9 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 
 	//	How big is the partition?
 	auto &gpart = *gstate.global_partition;
-	layout.Initialize(gpart.payload_types);
+	layout.Initialize(gpart.payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	if (hash_bin < gpart.hash_groups.size() && gpart.hash_groups[hash_bin]) {
-		count = gpart.hash_groups[hash_bin]->count;
+		count = gpart.hash_groups[hash_bin]->sorted->Count();
 	} else if (gpart.unsorted && !hash_bin) {
 		count = gpart.count;
 	} else {
@@ -601,10 +605,18 @@ void WindowHashGroup::ComputeMasks(WindowGlobalSinkState &gstate, ValidityMask &
 	D_ASSERT(count > 0);
 
 	//	Collection scanning
+	auto &orders = gstate.global_partition->orders;
+	vector<column_t> scan_ids;
+	for (const auto &order : orders) {
+		auto &expr = *order.expression;
+		D_ASSERT(expr.GetExpressionClass() == ExpressionClass::BOUND_REF);
+		auto &ref = expr.Cast<BoundReferenceExpression>();
+		scan_ids.emplace_back(ref.index);
+	}
 	auto &collection = *rows;
 	ColumnDataScanState state;
 	DataChunk scanned;
-	collection.InitializeScan(state);
+	collection.InitializeScan(state, scan_ids);
 	collection.InitializeScanChunk(state, scanned);
 
 	//	Shifted buffer for the next values
@@ -623,15 +635,15 @@ void WindowHashGroup::ComputeMasks(WindowGlobalSinkState &gstate, ValidityMask &
 	partition_mask.SetValidUnsafe(0);
 
 	//	Set up the order data structures
-	auto &orders = gstate.global_partition->orders;
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
 		order_mask.second.SetValidUnsafe(0);
 		D_ASSERT(order_mask.first >= partitions.size());
-		auto order_type = PrefixStructType(orders, order_mask.first, orders.size());
+		auto order_type = PrefixStructType(orders, order_mask.first, partitions.size());
 		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
-		keys.InitializeEmpty(types);
+		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
+		keys.Initialize(collection.GetAllocator(), types);
 	}
 
 	//	Read the first chunk
@@ -702,7 +714,12 @@ void WindowHashGroup::ComputeMasks(WindowGlobalSinkState &gstate, ValidityMask &
 		const auto remaining = prev_count - n;
 		if (remaining) {
 			for (auto &order_mask : order_masks) {
+				// If there are no order columns, then all the partition elements are peers and we are done
+				if (partitions.size() == order_mask.first) {
+					continue;
+				}
 				auto &prefix = prefixes[order_mask.first];
+				prefix.Reset();
 				auto &order_prev = prefix.data[0];
 				auto &order_curr = prefix.data[1];
 				ReferenceStructColumns(*prev, order_prev, partitions.size());
