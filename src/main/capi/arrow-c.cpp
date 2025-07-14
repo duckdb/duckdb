@@ -32,9 +32,12 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties *client_proper
 	try {
 		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(*out_schema), schema_types, schema_names,
 		                              client_properties_wrapper->properties);
+	} catch (const duckdb::Exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (const std::exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (...) {
-		// TODO : catch actual exception
-		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 	}
 	return nullptr;
 }
@@ -53,9 +56,12 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties *client_pr
 	try {
 		ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_arrow_array),
 		                             client_properties_wrapper->properties, extension_type_cast);
+	} catch (const duckdb::Exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (const std::exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (...) {
-		// TODO : catch actual exception
-		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Something went wrong with the conversion");
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 	}
 	return nullptr;
 }
@@ -64,16 +70,13 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
                                          duckdb_arrow_converted_schema *out_types, char ***out_names,
                                          idx_t *out_column_count) {
 	duckdb::vector<std::string> names;
-	duckdb::vector<LogicalType> return_types;
-	duckdb::ArrowSchemaWrapper schema_wrapper;
-	schema_wrapper.arrow_schema = *reinterpret_cast<ArrowSchema *>(schema);
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto arrow_table = new duckdb::ArrowTableType();
 	*out_types = reinterpret_cast<duckdb_arrow_converted_schema>(arrow_table);
-
 	try {
+		duckdb::vector<LogicalType> return_types;
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                   schema_wrapper, names, return_types);
+		                                                   *reinterpret_cast<ArrowSchema *>(schema), names, return_types);
 		QueryResult::DeduplicateColumns(names);
 	} catch (const duckdb::Exception &ex) {
 		delete arrow_table;

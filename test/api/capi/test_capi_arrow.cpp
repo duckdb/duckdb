@@ -402,10 +402,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		}
 		duckdb_destroy_logical_type(&type);
 		free(names[0]);
-		if (arrow_schema->release) {
-			arrow_schema->release(arrow_schema);
-		}
-		delete arrow_schema;
+		duckdb_destroy_arrow_schema(&out_schema);
 		duckdb_destroy_result(&result);
 	}
 }

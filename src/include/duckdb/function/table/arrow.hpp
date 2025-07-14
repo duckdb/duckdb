@@ -234,7 +234,7 @@ public:
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 	static void PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
-	                                   const ArrowSchemaWrapper &schema_p, vector<string> &names,
+	                                   const ArrowSchema &arrow_schema, vector<string> &names,
 	                                   vector<LogicalType> &return_types);
 
 protected:

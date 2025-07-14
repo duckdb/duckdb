@@ -19,10 +19,10 @@
 namespace duckdb {
 
 void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
-                                                const ArrowSchemaWrapper &schema_p, vector<string> &names,
+                                                const ArrowSchema &arrow_schema, vector<string> &names,
                                                 vector<LogicalType> &return_types) {
-	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(schema_p.arrow_schema.n_children); col_idx++) {
-		auto &schema = *schema_p.arrow_schema.children[col_idx];
+	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(arrow_schema.n_children); col_idx++) {
+		auto &schema = *arrow_schema.children[col_idx];
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
@@ -69,7 +69,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
-	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root, names, return_types);
+	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root.arrow_schema, names, return_types);
 	QueryResult::DeduplicateColumns(names);
 	res->all_types = return_types;
 	if (return_types.empty()) {
