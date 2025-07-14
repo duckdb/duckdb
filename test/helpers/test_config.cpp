@@ -170,9 +170,9 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 
 TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoLoadingMode() {
 	string res = StringUtil::Lower(GetOptionOrDefault("autoloading", string("default")));
-	if (res == "none") {
+	if (res == "none" || res == "default") {
 		return TestConfiguration::ExtensionAutoLoadingMode::NONE;
-	} else if (res == "available" || res == "default") {
+	} else if (res == "available") {
 		return TestConfiguration::ExtensionAutoLoadingMode::AVAILABLE;
 	} else if (res == "all") {
 		return TestConfiguration::ExtensionAutoLoadingMode::ALL;
