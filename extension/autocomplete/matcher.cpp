@@ -1114,7 +1114,6 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("FunctionName", ScalarFunctionName());
-	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("TableFunctionName", TableFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
