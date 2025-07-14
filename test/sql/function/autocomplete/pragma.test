@@ -21,3 +21,9 @@ query II
 FROM sql_auto_complete('PRAGMA disable_che') LIMIT 1;
 ----
 disable_checkpoint_on_shutdown	7
+
+# main keywords
+query II
+FROM sql_auto_complete('PRAGMA thre') LIMIT 1;
+----
+threads	7

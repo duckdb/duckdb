@@ -232,6 +232,17 @@ static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	return suggestions;
 }
 
+static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) {
+	auto &db_config = DBConfig::GetConfig(context);
+	const auto &options = db_config.GetOptions();
+	vector<AutoCompleteCandidate> suggestions;
+	for (const auto &option : options) {
+		AutoCompleteCandidate candidate(option.name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	return suggestions;
+}
+
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
 	auto &config = DBConfig::GetConfig(context);
@@ -353,6 +364,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestPragmaName(context);
 			break;
 		case SuggestionState::SUGGEST_SETTING_NAME:
+			new_suggestions = SuggestSettingName(context);
 			break;
 		default:
 			throw InternalException("Unrecognized suggestion state");
