@@ -27,7 +27,7 @@
 #include <cstring> // strlen() on Solaris
 namespace duckdb {
 
-UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
+UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr), physical_type(PhysicalType::INVALID) {
 }
 
 UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept : sel(nullptr), data(nullptr) {
@@ -36,6 +36,7 @@ UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept :
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	std::swap(physical_type, other.physical_type);
 	if (refers_to_self) {
 		sel = &owned_sel;
 	}
@@ -47,6 +48,7 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	std::swap(physical_type, other.physical_type);
 	if (refers_to_self) {
 		sel = &owned_sel;
 	}
@@ -1157,6 +1159,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
+	format.physical_type = GetType().InternalType();
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);

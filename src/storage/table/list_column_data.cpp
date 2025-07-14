@@ -235,6 +235,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	UnifiedVectorFormat vdata;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = data_ptr_cast(append_offsets.get());
+	vdata.physical_type = PhysicalType::UINT64;
 
 	// append the child vector
 	if (child_count > 0) {

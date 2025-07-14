@@ -39,13 +39,32 @@ struct UnifiedVectorFormat {
 	data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
+	PhysicalType physical_type;
 
 	template <class T>
-	static inline const T *GetData(const UnifiedVectorFormat &format) {
+	void VerifyVectorType() const {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(StorageTypeCompatible<T>(physical_type));
+#else
+		if (!StorageTypeCompatible<T>(physical_type)) {
+			throw InternalException("Expected unified vector format of type %s, but found type %s", GetTypeId<T>(),
+			                        physical_type);
+		}
+#endif
+	}
+
+	template <class T>
+	static inline const T *GetDataUnsafe(const UnifiedVectorFormat &format) {
 		return reinterpret_cast<const T *>(format.data);
 	}
 	template <class T>
+	static inline const T *GetData(const UnifiedVectorFormat &format) {
+		format.VerifyVectorType<T>();
+		return GetDataUnsafe<T>(format);
+	}
+	template <class T>
 	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
+		format.VerifyVectorType<T>();
 		return reinterpret_cast<T *>(format.data);
 	}
 };
