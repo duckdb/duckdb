@@ -2,7 +2,7 @@
 # description: Test compatibility of ART indexes for different duckdb versions
 # group: [storage]
 
-# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb.\
+# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb.
 require 64bit
 
 # The database is written with a vector size of 2048.
