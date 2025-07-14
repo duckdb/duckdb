@@ -1154,6 +1154,18 @@ vector<reference<PragmaFunctionCatalogEntry>> Catalog::GetAllPragmaFunctions(Cli
 	return result;
 }
 
+vector<reference<ScalarFunctionCatalogEntry>> Catalog::GetAllScalarFunctions(ClientContext &context) {
+	vector<reference<ScalarFunctionCatalogEntry>> result;
+	auto schemas = GetAllSchemas(context);
+	for (const auto &schema : schemas) {
+		auto &duck_schema = schema.get().Cast<DuckSchemaEntry>();
+		auto &scalar_function_set = duck_schema.GetCatalogSet(CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto system_transaction = CatalogTransaction::GetSystemTransaction(context.db->GetDatabase(context));
+		auto pragma_entries = scalar_function_set.GetEntries<ScalarFunctionCatalogEntry>(system_transaction);
+		result.insert(result.end(), pragma_entries.begin(), pragma_entries.end());
+	}
+	return result;
+}
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {

@@ -17,6 +17,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -225,7 +226,7 @@ static bool KnownExtension(const string &fname) {
 static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllPragmaFunctions(context);
-	for (auto &pragma : all_pragmas) {
+	for (const auto &pragma : all_pragmas) {
 		AutoCompleteCandidate candidate(pragma.get().name, 0);
 		suggestions.push_back(std::move(candidate));
 	}
@@ -240,6 +241,18 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 		AutoCompleteCandidate candidate(option.name, 0);
 		suggestions.push_back(std::move(candidate));
 	}
+	return suggestions;
+}
+
+static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto scalar_functions = Catalog::GetAllScalarFunctions(context);
+	for (const auto &scalar_function : scalar_functions) {
+		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
+		candidate.extra_char = '(';
+		suggestions.push_back(std::move(candidate));
+	}
+
 	return suggestions;
 }
 
@@ -358,6 +371,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
 			break;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+			new_suggestions = SuggestScalarFunctionName(context);
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
 			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:

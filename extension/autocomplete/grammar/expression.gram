@@ -1,10 +1,12 @@
-ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?) WithinGroupClause? FilterClause? ExportClause? OverClause?
-FunctionIdentifier <- CatalogQualification? SchemaQualification? FunctionName
+ColumnReference <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableQualification? ColumnName)
+FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
+FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)
+
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 ExportClause <- 'EXPORT_STATE'i
 WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'i? Expression)
+IgnoreNulls <- ('IGNORE'i 'NULLS'i) / ('RESPECT'i 'NULLS'i)
 
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'i

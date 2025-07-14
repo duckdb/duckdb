@@ -50,6 +50,7 @@ class AggregateFunctionCatalogEntry;
 class CollateCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
+class ScalarFunctionCatalogEntry;
 class ViewCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
@@ -369,6 +370,8 @@ public:
 	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context);
 
 	DUCKDB_API static vector<reference<PragmaFunctionCatalogEntry>> GetAllPragmaFunctions(ClientContext &context);
+
+	DUCKDB_API static vector<reference<ScalarFunctionCatalogEntry>> GetAllScalarFunctions(ClientContext &context);
 
 	virtual void Verify();
 
