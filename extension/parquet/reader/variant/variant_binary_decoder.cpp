@@ -244,12 +244,8 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		timestamp_ns_t nanos_ts;
 		nanos_ts.value = Load<int64_t>(data);
 
-		//! Convert the nanos timestamp to a micros timestamp
-		date_t out_date;
-		dtime_t out_time;
-		int32_t out_nanos;
-		Timestamp::Convert(nanos_ts, out_date, out_time, out_nanos);
-		auto micros_ts = Timestamp::FromDatetime(out_date, out_time);
+		//! Convert the nanos timestamp to a micros timestamp (not lossless)
+		auto micros_ts = Timestamp::FromEpochNanoSeconds(nanos_ts.value);
 		return VariantValue(Value::TIMESTAMPTZ(timestamp_tz_t(micros_ts)));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
