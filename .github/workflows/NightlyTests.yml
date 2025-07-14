@@ -550,8 +550,8 @@ jobs:
        run: |
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
-  block-sizes:
-    name: Block Sizes
+  block-sizes-default-storage:
+    name: Block Sizes with Default Storage
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
@@ -573,25 +573,58 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
-      - name: Build with standard vector size
+      - name: Build
         shell: bash
         run: BLOCK_ALLOC_SIZE=16384 make relassert
 
-      - name: Fast and storage tests
+      - name: Fast Tests
         shell: bash
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
 
-      - name: Build with vector size of 512
-        shell: bash
-        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && BLOCK_ALLOC_SIZE=16384 STANDARD_VECTOR_SIZE=512 make relassert
-
-      - name: Fast and storage tests
+      - name: Storage Test
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
           python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
+
+  block-sizes-latest-storage:
+    name: Block Sizes with Latest Storage
+    runs-on: ubuntu-24.04
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "json;parquet"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: BLOCK_ALLOC_SIZE=16384 make relassert
+
+      - name: Fast Tests
+        if: (success() || failure()) && steps.build.conclusion == 'success'
+        shell: bash
+        run: |
+          ./build/relassert/test/unittest --test-config test/configs/latest_storage.json
+
+      - name: Storage Tests
+        if: (success() || failure()) && steps.build.conclusion == 'success'
+        shell: bash
+        run: |
+          ./build/relassert/test/unittest --test-config test/configs/latest_storage.json "test/sql/storage/*"
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
