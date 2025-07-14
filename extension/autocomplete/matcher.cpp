@@ -1110,10 +1110,10 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());
-	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
+	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("TableFunctionName", TableFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
