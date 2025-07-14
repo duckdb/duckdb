@@ -66,7 +66,6 @@ concurrency:
 env:
   PAT_USER: ${{ secrets.PAT_USERNAME }}
   PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-  API_URL_TEMPLATE: https://api.github.com/repos/duckdb/%s/actions/workflows/%s.yml/dispatches
 
 jobs:
   notify-odbc-run:
@@ -111,6 +110,6 @@ jobs:
       - name: Call /dispatch
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
-          URL=$( printf "$API_URL_TEMPLATE" "duckdb-python" "on_external_dispatch" )
-          DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "force_version": "${{ inputs.override-git-describe }}"}}'
+          export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/on_external_dispatch.yml/dispatches
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "force_version": "${{ inputs.override-git-describe }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
