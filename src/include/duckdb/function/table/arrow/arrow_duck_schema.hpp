@@ -120,9 +120,11 @@ struct ArrowTableType {
 public:
 	void AddColumn(idx_t index, shared_ptr<ArrowType> type);
 	const arrow_column_map_t &GetColumns() const;
+	vector<LogicalType> &GetTypes();
 
 private:
 	arrow_column_map_t arrow_convert_data;
+	vector<LogicalType> types;
 };
 
 } // namespace duckdb

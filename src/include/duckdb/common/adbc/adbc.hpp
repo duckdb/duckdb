@@ -110,7 +110,11 @@ public:
 			duckdb_appender_destroy(&appender);
 		}
 	}
-	operator duckdb_appender() const {
+
+	duckdb_appender get() const {
+		return appender;
+	}
+	explicit operator duckdb_appender() const {
 		return appender;
 	}
 	bool valid() const {
@@ -138,9 +142,9 @@ private:
 
 class DataChunkWrapper {
 public:
-	DataChunkWrapper(duckdb_logical_type *types, idx_t count) {
-		chunk = duckdb_create_data_chunk(types, count);
+	DataChunkWrapper() : chunk(nullptr) {
 	}
+
 	~DataChunkWrapper() {
 		if (chunk) {
 			duckdb_destroy_data_chunk(&chunk);
@@ -149,9 +153,7 @@ public:
 	explicit operator duckdb_data_chunk() const {
 		return chunk;
 	}
-	duckdb_data_chunk get() const {
-		return chunk;
-	}
+
 	DataChunkWrapper(const DataChunkWrapper &) = delete;
 	DataChunkWrapper &operator=(const DataChunkWrapper &) = delete;
 	DataChunkWrapper(DataChunkWrapper &&other) noexcept : chunk(other.chunk) {
@@ -168,7 +170,6 @@ public:
 		return *this;
 	}
 
-private:
 	duckdb_data_chunk chunk;
 };
 
@@ -188,7 +189,7 @@ public:
 	explicit operator duckdb_arrow_converted_schema() const {
 		return schema;
 	}
-	duckdb_arrow_converted_schema get() {
+	duckdb_arrow_converted_schema get() const {
 		return schema;
 	}
 	void set(duckdb_arrow_converted_schema s) {
@@ -225,7 +226,7 @@ public:
 			delete[] names;
 		}
 	}
-	char **get() {
+	char **get() const {
 		return names;
 	}
 	OutNamesWrapper(const OutNamesWrapper &) = delete;

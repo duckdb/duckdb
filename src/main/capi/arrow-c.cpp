@@ -112,12 +112,19 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckd
 	}
 	auto arrow_array_cpp = reinterpret_cast<ArrowArray *>(arrow_array);
 	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
-	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*out_chunk);
 	auto conn = reinterpret_cast<Connection *>(connection);
+	auto &type_vector = arrow_table->GetTypes();
+	std::vector<duckdb::LogicalType *> types_ptr(type_vector.size());
+	for (idx_t i = 0; i < type_vector.size(); i++) {
+		types_ptr[i] = &type_vector[i];
+	}
 
+	*out_chunk = duckdb_create_data_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), types_ptr.size());
 	auto &arrow_types = arrow_table->GetColumns();
 	auto output_size =
 	    duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array_cpp->length));
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*out_chunk);
+
 	dchunk->SetCardinality(output_size);
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array_cpp;

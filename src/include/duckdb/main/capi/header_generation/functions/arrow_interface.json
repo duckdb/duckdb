@@ -34,7 +34,7 @@
                     "types": "The DuckDB Logical Types for each column in the schema.",
                     "names": "The names for each column in the schema.",
                     "column_count": "The number of columns that exist in the schema.",
-                    "out_schema": "The resulting arrow schema."
+                    "out_schema": "The resulting arrow schema. Must be destroyed with `duckdb_destroy_arrow_schema`."
                 },
                 "return_value": "The error data."
             }
@@ -61,7 +61,7 @@
                 "param_comments": {
                     "client_properties": "The client properties to extract the Arrow settings from.",
                     "chunk": "The DuckDB data chunk to convert.",
-                    "out_arrow_array": "The output Arrow structure that will hold the converted data."
+                    "out_arrow_array": "The output Arrow structure that will hold the converted data. Must be destroyed with `duckdb_arrow_array`"
                 },
                 "return_value": "The error data."
             }
@@ -96,8 +96,8 @@
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
               "schema": "The input Arrow schema.",
-              "out_types": "The Arrow converted schema with extra information about the Arrow Types",
-              "out_names": "The resulting column names array.",
+              "out_types": "The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`.",
+              "out_names": "The resulting column names array. Must be appropriately deleted.",
               "out_column_count": "The number of columns extracted from the Arrow schema."
             },
             "return_value": "The error data."
@@ -125,12 +125,12 @@
             }
           ],
           "comment": {
-            "description": "Transforms an Arrow array into a DuckDB data chunk.\n\n",
+            "description": "Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow data. \n However, arrow_array must still be destroyed with `duckdb_destroy_arrow_array` \n\n",
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
               "arrow_array": "The input Arrow array.",
-              "converted_schema" : "The Arrow converted schema with extra information about the Arrow Types",
-              "out_chunk": "The resulting DuckDB data chunk."
+              "converted_schema" : "The Arrow converted schema with extra information about the Arrow Types.",
+              "out_chunk": "The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk."
             },
             "return_value": "The error data."
           }

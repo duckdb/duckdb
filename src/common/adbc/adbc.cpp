@@ -680,29 +680,22 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		if (duckdb_query(connection, create_table.str().c_str(), nullptr) == DuckDBError) {
 			return ADBC_STATUS_INTERNAL;
 		}
-	} else {
-		for (idx_t i = 0; i < out_column_count; i++) {
-			types[i] = columns.at(i)->GetDuckType(true);
-			types_ptr[i] = &types[i];
-		}
 	}
-
 	AppenderWrapper appender(connection, schema, table_name);
 	if (!appender.valid()) {
 		return ADBC_STATUS_INTERNAL;
 	}
 	ArrowArrayWrapper arrow_array;
-	DataChunkWrapper out_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
+
 	input->get_next(input, arrow_array.get());
 	while (arrow_array.get()->release) {
-		auto c_chunk = out_chunk.get();
+		DataChunkWrapper out_chunk;
 		arrow_to_duckdb_data_chunk(connection, reinterpret_cast<duckdb_arrow_array>(arrow_array.get()), out_types.get(),
-		                           &c_chunk);
-		if (duckdb_append_data_chunk(appender, out_chunk.get()) != DuckDBSuccess) {
+		                           &out_chunk.chunk);
+		if (duckdb_append_data_chunk(appender.get(), out_chunk.chunk) != DuckDBSuccess) {
 			return ADBC_STATUS_INTERNAL;
 		}
 		arrow_array = ArrowArrayWrapper();
-		out_chunk = DataChunkWrapper(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
 		input->get_next(input, arrow_array.get());
 	}
 	return ADBC_STATUS_OK;
@@ -824,32 +817,6 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	return ADBC_STATUS_OK;
 }
 
-AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::unique_ptr<duckdb::QueryResult> &result,
-                                     ArrowArrayStream *input, AdbcError *error) {
-
-	auto cconn = reinterpret_cast<duckdb::Connection *>(connection);
-
-	try {
-		auto arrow_scan =
-		    cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(input)),
-		                                        duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(stream_produce)),
-		                                        duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(stream_schema))});
-		result = arrow_scan->Execute();
-		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
-		// double-releasing it
-		input->release = nullptr;
-	} catch (std::exception &ex) {
-		if (error) {
-			::duckdb::ErrorData parsed_error(ex);
-			error->message = strdup(parsed_error.RawMessage().c_str());
-		}
-		return ADBC_STATUS_INTERNAL;
-	} catch (...) {
-		return ADBC_STATUS_INTERNAL;
-	}
-	return ADBC_STATUS_OK;
-}
-
 static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *statement, AdbcError *error) {
 	// See ADBC_INGEST_OPTION_TARGET_TABLE
 	D_ASSERT(statement->ingestion_stream.release);
@@ -917,15 +884,18 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
 		ArrowArrayWrapper arrow_array;
-		DataChunkWrapper out_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
+
 		stream.get_next(&stream, arrow_array.get());
 		while (arrow_array.get()->release) {
 			// This is a valid arrow array, let's make it into a data chunk
-			auto c_out_chunk = out_chunk.get();
+			DataChunkWrapper out_chunk;
 			arrow_to_duckdb_data_chunk(wrapper->connection, reinterpret_cast<duckdb_arrow_array>(arrow_array.get()),
-			                           out_types, &c_out_chunk);
-
-			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk.get());
+			                           out_types, &out_chunk.chunk);
+			if (!out_chunk.chunk) {
+				SetError(error, "Please provide a non-empty chunk to be bound");
+				return ADBC_STATUS_INVALID_ARGUMENT;
+			}
+			auto chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk.chunk);
 			if (chunk->size() == 0) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
 				return ADBC_STATUS_INVALID_ARGUMENT;
@@ -956,7 +926,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			}
 			// Recreate wrappers for next iteration
 			arrow_array = ArrowArrayWrapper();
-			out_chunk = DataChunkWrapper(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), out_column_count);
 			stream.get_next(&stream, arrow_array.get());
 		}
 	} else {
