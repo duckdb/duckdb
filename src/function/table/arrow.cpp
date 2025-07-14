@@ -69,7 +69,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
-	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root.arrow_schema, names, return_types);
+	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root.arrow_schema, names,
+	                       return_types);
 	QueryResult::DeduplicateColumns(names);
 	res->all_types = return_types;
 	if (return_types.empty()) {

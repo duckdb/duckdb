@@ -30,7 +30,9 @@ public:
 	}
 	~ArrowSchemaWrapper() {
 		if (schema) {
-			// If a destroy function is needed, call it here
+			if (schema->release) {
+				schema->release(schema);
+			}
 			delete schema;
 		}
 	}
@@ -1006,8 +1008,6 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 		free(wrapper->db_schema);
 		wrapper->db_schema = nullptr;
 	}
-	// free(statement->private_data);
-	// statement->private_data = nullptr;
 	return ADBC_STATUS_OK;
 }
 
@@ -1099,7 +1099,6 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 
 	// Take the input stream from the statement
 	auto stream = statement->ingestion_stream;
-	statement->ingestion_stream.release = nullptr;
 
 	// Ingest into a table from the bound stream
 	return Ingest(statement->connection, statement->ingestion_table_name, statement->db_schema, &stream, error,
@@ -1133,7 +1132,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 
-		wrapper->ingestion_stream.release = nullptr;
 		OutNamesWrapper out_names_wrapper(nullptr, 0);
 		idx_t out_column_count;
 		duckdb_arrow_converted_schema out_types;

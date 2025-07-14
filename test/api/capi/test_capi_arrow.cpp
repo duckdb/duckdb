@@ -416,17 +416,21 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		err = duckdb_to_arrow_schema(nullptr, &type, names, 1, &out_schema);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
-		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), nullptr, names, 1, &out_schema);
+		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), nullptr, names, 1,
+		                             &out_schema);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
-		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), &type, nullptr, 1, &out_schema);
+		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), &type, nullptr, 1,
+		                             &out_schema);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
-		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), &type, names, 1, nullptr);
+		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), &type, names, 1,
+		                             nullptr);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
 		// Zero columns
-		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), &type, names, 0, &out_schema);
+		err = duckdb_to_arrow_schema(reinterpret_cast<duckdb_client_properties *>(tester.connection), &type, names, 0,
+		                             &out_schema);
 		REQUIRE(err == nullptr); // zero columns is allowed, but produces an empty schema
 		if (arrow_schema->release) {
 			arrow_schema->release(arrow_schema);

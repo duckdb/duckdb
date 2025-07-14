@@ -80,7 +80,8 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_ar
 	try {
 		duckdb::vector<LogicalType> return_types;
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                   *reinterpret_cast<ArrowSchema *>(schema), names, return_types);
+		                                                   *reinterpret_cast<ArrowSchema *>(schema), names,
+		                                                   return_types);
 		QueryResult::DeduplicateColumns(names);
 	} catch (const duckdb::Exception &ex) {
 		delete arrow_table;
