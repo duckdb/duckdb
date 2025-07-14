@@ -105,8 +105,8 @@ void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<Fi
 
 bool VirtualFileSystem::ListFilesExtended(const string &directory,
                                           const std::function<void(OpenFileInfo &info)> &callback,
-                                          optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory).ListFiles(directory, callback, opener);
+                                          optional_ptr<FileOpener> opener, const bool &stop) {
+	return FindFileSystem(directory).ListFiles(directory, callback, opener, stop);
 }
 
 void VirtualFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
@@ -135,6 +135,10 @@ string VirtualFileSystem::PathSeparator(const string &path) {
 
 vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *opener) {
 	return FindFileSystem(path).Glob(path, opener);
+}
+
+vector<OpenFileInfo> VirtualFileSystem::GlobHive(const string &path, optional_ptr<HiveFilterParams> hive_params, FileOpener *opener, idx_t max_files) {
+	return FindFileSystem(path).GlobHive(path, hive_params, opener, max_files);
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {

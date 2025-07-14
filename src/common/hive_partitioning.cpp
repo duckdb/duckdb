@@ -102,12 +102,12 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 			// get parameter or newline - not a partition
 			candidate_partition = false;
 		}
-		if (filename[c] == '\\' || filename[c] == '/') {
+		if (filename[c] == '\\' || filename[c] == '/' || c == filename.size() - 1) {
 			// separator
 			if (candidate_partition && equality_sign > partition_start) {
 				// we found a partition with an equality sign
 				string key = filename.substr(partition_start, equality_sign - partition_start);
-				string value = filename.substr(equality_sign + 1, c - equality_sign - 1);
+				string value = filename.substr(equality_sign + 1, c - equality_sign - 1 + (c == filename.size() - 1 ? 1 : 0));
 				result.insert(make_pair(std::move(key), std::move(value)));
 			}
 			partition_start = c + 1;
@@ -147,11 +147,24 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 	return value;
 }
 
+HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFilePushdownInfo &info, const MultiFileOptions &options) {
+	HivePartitioningFilterInfo filter_info;
+	for (idx_t i = 0; i < info.column_ids.size(); i++) {
+		if (IsVirtualColumn(info.column_ids[i])) {
+			continue;
+		}
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
+	}
+	filter_info.hive_enabled = options.hive_partitioning;
+	filter_info.filename_enabled = options.filename;
+	return filter_info;
+ }
+
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
                                               vector<unique_ptr<Expression>> &filters,
-                                              const HivePartitioningFilterInfo &filter_info,
+											  const MultiFileOptions &options,
                                               MultiFilePushdownInfo &info) {
 
 	vector<OpenFileInfo> pruned_files;
@@ -159,6 +172,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	vector<unique_ptr<Expression>> pruned_filters;
 	unordered_set<idx_t> filters_applied_to_files;
 	auto table_index = info.table_index;
+
+	auto filter_info = GetFilterInfo(info, options);
 
 	if ((!filter_info.filename_enabled && !filter_info.hive_enabled) || filters.empty()) {
 		return;

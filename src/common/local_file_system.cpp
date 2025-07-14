@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -691,7 +692,7 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
-                                        optional_ptr<FileOpener> opener) {
+                                        optional_ptr<FileOpener> opener, const bool &stop) {
 	auto normalized_dir = NormalizeLocalPath(directory);
 	auto dir = opendir(normalized_dir);
 	if (!dir) {
@@ -734,6 +735,9 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 
 		// invoke callback
 		callback(info);
+		if (stop) {
+			break;
+		}
 	}
 	return true;
 }
@@ -1311,9 +1315,16 @@ static bool IsSymbolicLink(const string &path) {
 }
 
 static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
-                                     bool match_directory, bool join_path) {
-
+                                     bool match_directory, bool join_path, idx_t max_files, idx_t &files_added, optional_ptr<HiveFilterParams> hive_filter_params) {
+	if (files_added >= max_files) {
+		return;
+	}
+	bool should_stop = false;
 	fs.ListFiles(path, [&](OpenFileInfo &info) {
+		if (files_added >= max_files) {
+			should_stop = true;
+			return;
+		}
 		if (join_path) {
 			info.path = fs.JoinPath(path, info.path);
 		}
@@ -1323,18 +1334,38 @@ static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<
 		bool is_directory = FileSystem::IsDirectory(info);
 		bool return_file = is_directory == match_directory;
 		if (is_directory) {
+			if (hive_filter_params) {
+				vector<OpenFileInfo> temp_vector{info};
+				// TODO: this is a hack to apply the filters to the file list, we should find a better way to do this
+				vector<unique_ptr<Expression>> filters_copy;
+				for (auto &filter : hive_filter_params->filters) {
+					filters_copy.push_back(filter->Copy());
+				}
+				HivePartitioning::ApplyFiltersToFileList(hive_filter_params->context, temp_vector, filters_copy, hive_filter_params->options, hive_filter_params->info);
+				if (temp_vector.empty()) {
+					return;
+				}
+			}
 			if (return_file) {
 				result.push_back(info);
 			}
-			RecursiveGlobDirectories(fs, info.path, result, match_directory, true);
+			RecursiveGlobDirectories(fs, info.path, result, match_directory, true, max_files, files_added, hive_filter_params);
+			if (max_files == 1) {
+				should_stop = true;
+				return;
+			}
 		} else if (return_file) {
 			result.push_back(std::move(info));
 		}
-	});
+	}, nullptr, should_stop);
 }
 
 static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<OpenFileInfo> &result, bool join_path) {
+                              vector<OpenFileInfo> &result, bool join_path, idx_t max_files, idx_t &files_added) {
+	if (files_added >= max_files) {
+		return;
+	}
+	bool should_stop = false;
 	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
@@ -1345,8 +1376,15 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 				info.path = fs.JoinPath(path, info.path);
 			}
 			result.push_back(std::move(info));
+			if (!is_directory) {
+				files_added++;
+				if (files_added >= max_files) {
+					should_stop = true;
+					return;
+				}
+			}
 		}
-	});
+	}, nullptr, should_stop);
 }
 
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
@@ -1411,6 +1449,10 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 }
 
 vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+	return GlobHive(path, nullptr, opener, 0);
+}
+
+vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, optional_ptr<HiveFilterParams> hive_params, FileOpener *opener, idx_t max_files) {
 	if (path.empty()) {
 		return vector<OpenFileInfo>();
 	}
@@ -1454,7 +1496,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 			splits[0] = home_directory;
 			D_ASSERT(path[0] == '~');
 			if (!HasGlob(path)) {
-				return Glob(home_directory + path.substr(1));
+				return GlobHive(home_directory + path.substr(1));
 			}
 		}
 	}
@@ -1492,7 +1534,9 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		start_index = 0;
 	}
 
-	for (idx_t i = start_index ? 1 : 0; i < splits.size(); i++) {
+	idx_t files_added = 0;
+
+	for (idx_t i = start_index ? 1 : 0; i < splits.size() && files_added < max_files; i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories
@@ -1508,6 +1552,12 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 						const string filename = JoinPath(prev_directory.path, splits[i]);
 						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
 							result.push_back(filename);
+							if (FileExists(filename, opener)) {
+								files_added++;
+								if (files_added >= max_files) {
+									break;
+								}
+							}
 						}
 					}
 				} else {
@@ -1522,21 +1572,27 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 					result = previous_directories;
 				}
 				if (previous_directories.empty()) {
-					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
+					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false, max_files, files_added, hive_params);
 				} else {
 					for (auto &prev_dir : previous_directories) {
-						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
+						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true, max_files, files_added, hive_params);
+						if (files_added >= max_files) {
+							break;
+						}
 					}
 				}
 			} else {
 				if (previous_directories.empty()) {
 					// no previous directories: list in the current path
-					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
+					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false, max_files, files_added);
 				} else {
 					// previous directories
 					// we iterate over each of the previous directories, and apply the glob of the current directory
 					for (auto &prev_directory : previous_directories) {
-						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
+						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true, max_files, files_added);
+						if (files_added >= max_files) {
+							break;
+						}
 					}
 				}
 			}
@@ -1547,12 +1603,28 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 			return FetchFileWithoutGlob(path, opener, absolute_path);
 		}
 		if (is_last_chunk) {
+			// Apply hive filtering if parameters are provided
+			if (hive_params) {
+				// TODO: Call HivePartitioning::ApplyFiltersToFileList(hive_params->context, result, hive_params->filters, hive_params->options, hive_params->info);
+			}
 			return result;
 		}
 		previous_directories = std::move(result);
 	}
+	if (max_files > 0) {
+		// Filter previous directories to only include files
+		vector<OpenFileInfo> filtered_result;
+		for (auto &file : previous_directories) {
+			if (FileExists(file.path, opener)) {
+				filtered_result.push_back(file);
+			}
+		}
+		return filtered_result;
+	}
 	return vector<OpenFileInfo>();
 }
+
+
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {
 	return make_uniq<LocalFileSystem>();

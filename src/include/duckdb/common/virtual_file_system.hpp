@@ -49,7 +49,7 @@ public:
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-
+	vector<OpenFileInfo> GlobHive(const string &path = "", optional_ptr<HiveFilterParams> hive_params = nullptr, FileOpener *opener = nullptr, idx_t max_files = 0) override;
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 
 	void UnregisterSubSystem(const string &name) override;
@@ -74,7 +74,7 @@ protected:
 	}
 
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	                       optional_ptr<FileOpener> opener) override;
+	                       optional_ptr<FileOpener> opener, const bool &stop) override;
 
 	bool SupportsListFilesExtended() const override {
 		return true;

@@ -37,7 +37,7 @@ public:
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              const HivePartitioningFilterInfo &filter_info,
+											      const MultiFileOptions &options,
 	                                              MultiFilePushdownInfo &info);
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
@@ -46,6 +46,8 @@ public:
 	DUCKDB_API static string Escape(const string &input);
 	//! Unescape a hive partition key or value encoded using URL encoding
 	DUCKDB_API static string Unescape(const string &input);
+
+	DUCKDB_API static HivePartitioningFilterInfo GetFilterInfo(const MultiFilePushdownInfo &info, const MultiFileOptions &options);
 };
 
 struct HivePartitionKey {

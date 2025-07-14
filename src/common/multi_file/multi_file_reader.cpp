@@ -15,6 +15,7 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/union_by_name.hpp"
 #include <algorithm>
+#include <chrono>
 
 namespace duckdb {
 
@@ -237,6 +238,9 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
 		// verify that all files have the same hive partitioning scheme
 		for (const auto &file : files.Files()) {
+			if (options.hive_lazy_listing) {
+				break;
+			}
 			auto file_partitions = HivePartitioning::Parse(file.path);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
@@ -685,20 +689,24 @@ bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, 
 		return false;
 	}
 
-	for (const auto &file : files.Files()) {
-		auto new_partitions = HivePartitioning::Parse(file.path);
-		if (new_partitions.size() != partitions.size()) {
-			// partition count mismatch
-			return false;
-		}
-		for (auto &part : new_partitions) {
-			auto entry = partitions.find(part.first);
-			if (entry == partitions.end()) {
-				// differing partitions between files
+	// TODO: This could be done at the globbing function, to avoid eagerly opening files here
+	if (!hive_lazy_listing) {
+		for (const auto &file : files.Files()) {
+			auto new_partitions = HivePartitioning::Parse(file.path);
+			if (new_partitions.size() != partitions.size()) {
+				// partition count mismatch
 				return false;
+			}
+			for (auto &part : new_partitions) {
+				auto entry = partitions.find(part.first);
+				if (entry == partitions.end()) {
+					// differing partitions between files
+					return false;
+				}
 			}
 		}
 	}
+
 	return true;
 }
 void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
@@ -737,6 +745,10 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 					entry->second = LogicalType::VARCHAR;
 				}
 			}
+		}
+
+		if (hive_lazy_listing) {
+			break;
 		}
 	}
 	for (auto &entry : detected_types) {
