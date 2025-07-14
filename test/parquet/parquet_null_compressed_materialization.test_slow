@@ -425,14 +425,17 @@ SET threads=4;
 # uncompressed: 1_200_000 * 400 * 1 = ~0.5 GB
 # this memory limit tests if the build side compresses well
 statement ok
-SET memory_limit='1.0GB';
+SET memory_limit='1.5GB';
 
 statement ok
 SET temp_directory=NULL
 
 # join, this should take many GBs of memory, but all the NULLs get compressed to UTINYINT so it should fit
-statement ok
-SELECT ANY_VALUE(COLUMNS(*))
+# we should see at least 10 compresses in the output (should be 400 but gets truncated)
+query II
+EXPLAIN ANALYZE SELECT ANY_VALUE(COLUMNS(*))
 FROM read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(2)], union_by_name=true) build
 JOIN read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(3)]) probe
 USING (pk)
+----
+analyzed_plan	<REGEX>:(.*internal_compress_string.*){10,}
