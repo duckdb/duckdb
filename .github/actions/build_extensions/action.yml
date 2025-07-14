@@ -86,7 +86,7 @@ inputs:
     default: ''
   unittest_script:
     description: 'Script/program to execute the unittests'
-    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+    default: './build/release/test/unittest'
   cmake_flags:
     description: 'Flags to be passed to cmake'
     default: ''
@@ -214,7 +214,7 @@ runs:
         cd  ${{ inputs.build_dir}}
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
         python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
-        ${{ inputs.unittest_script }} '-f test.list' --autoloading available
+        ${{ inputs.unittest_script }} -f test.list --autoloading available
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
 
