@@ -30,12 +30,16 @@ public:
 	const QueryErrorContext &GetErrorContext() const;
 	const optional_ptr<BoundAtClause> GetAtClause() const;
 
+	bool ShouldThrowOnUnsupportedAtClause() const;
+	void SetThrowOnUnsupportedAtClause(bool throw_on_unsupported_at_clause);
+
 	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, const string &schema_name);
 
 private:
 	CatalogType catalog_type;
 	const string &name;
 	optional_ptr<BoundAtClause> at_clause;
+	bool throw_on_unsupported_at_clause = true;
 	QueryErrorContext error_context;
 };
 

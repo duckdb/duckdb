@@ -13,6 +13,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/enums/on_timetravel_not_supported.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/map.hpp"
@@ -392,14 +393,17 @@ public:
 
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
-	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
-	                                          const EntryLookupInfo &lookup_info);
+	CatalogEntryLookup TryLookupEntryInternal(
+	    CatalogTransaction transaction, const string &schema, const EntryLookupInfo &lookup_info,
+	    OnTimetravelNotSupported on_timetravel_unsupported = OnTimetravelNotSupported::THROW_EXCEPTION);
 	//! Calls LookupEntryInternal on the schema, trying other schemas if the schema is invalid. Sets
 	//! CatalogEntryLookup->error depending on if_not_found when no entry is found
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
 	                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
-	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
-	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	static CatalogEntryLookup
+	TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
+	               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+	               OnTimetravelNotSupported on_timetravel_unsupported = OnTimetravelNotSupported::THROW_EXCEPTION);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
 	                                         const string &schema, const EntryLookupInfo &lookup_info,
 	                                         OnEntryNotFound if_not_found);
