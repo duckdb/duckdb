@@ -252,7 +252,7 @@ ScalarFunctionSet BitCountFun::GetFunctions() {
 	                                     ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::TINYINT,
 	                                     ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>));
-	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
+	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::UBIGINT,
 	                                     ScalarFunction::UnaryFunction<string_t, idx_t, BitStringBitCntOperator>));
 	return functions;
 }

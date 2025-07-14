@@ -1476,7 +1476,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
                                                   const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                                   const vector<TupleDataGatherFunction> &child_functions) {
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto list_entries = FlatVector::GetDataUnsafe<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source

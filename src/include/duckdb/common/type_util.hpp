@@ -14,6 +14,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/types/double_na_equal.hpp"
 
 namespace duckdb {
 
@@ -62,9 +63,9 @@ PhysicalType GetTypeId() {
 		return PhysicalType::INT64;
 	} else if (std::is_same<T, timestamp_tz_t>()) {
 		return PhysicalType::INT64;
-	} else if (std::is_same<T, float>()) {
+	} else if (std::is_same<T, float>() || std::is_same<T, float_na_equal>()) {
 		return PhysicalType::FLOAT;
-	} else if (std::is_same<T, double>()) {
+	} else if (std::is_same<T, double>() || std::is_same<T, double_na_equal>()) {
 		return PhysicalType::DOUBLE;
 	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>()) {
 		return PhysicalType::VARCHAR;
