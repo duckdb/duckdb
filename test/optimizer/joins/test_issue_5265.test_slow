@@ -2,6 +2,8 @@
 # description: Verify expected cardinality of multiple cross products
 # group: [joins]
 
+require tpch
+
 statement ok
 call dbgen(sf=0.1);
 
