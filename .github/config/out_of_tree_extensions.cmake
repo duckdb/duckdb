@@ -47,7 +47,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
-            GIT_TAG 8a68c313e7dbd22962db0de1bec466f8d1f8b0ca
+            GIT_TAG dc66aa879c5e6a8cf60b2e9856e04e88a2e0c315
             )
 endif()
 
@@ -153,7 +153,7 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-vss
-        GIT_TAG ccfa7c9c1f1f540fa7f433a93d32bed772aa44f4
+        GIT_TAG bfb2cbad7d5e5658b0a3193454b3919832b31d11
         TEST_DIR test/sql
     )
 
