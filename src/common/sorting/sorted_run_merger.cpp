@@ -300,11 +300,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 			                              EnumUtil::ToString(iterator_state_type));
 		}
 	}
-	const auto sort_key_logical_type =
-	    sort_key_type == SortKeyType::NO_PAYLOAD_FIXED_8 || sort_key_type == SortKeyType::PAYLOAD_FIXED_16
-	        ? LogicalType::BIGINT
-	        : LogicalType::BLOB;
-	key.Initialize(gstate.context, {sort_key_logical_type});
+	key.Initialize(gstate.context, {gstate.merger.key_layout->GetTypes()[0]});
 	decoded_key.Initialize(gstate.context, {gstate.merger.decode_sort_key.return_type});
 }
 
@@ -677,10 +673,9 @@ void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate
 	}
 }
 
-template <class SORT_KEY>
-void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
-                      data_ptr_t *const payload_ptrs) {
-	using PHYSICAL_TYPE = typename SORT_KEY::PHYSICAL_TYPE;
+template <class SORT_KEY, class PHYSICAL_TYPE>
+void TemplatedGetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
+                               data_ptr_t *const payload_ptrs) {
 	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
 	for (idx_t i = 0; i < count; i++) {
 		auto &merged_partition_key = merged_partition_keys[i];
@@ -690,6 +685,20 @@ void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, 
 		}
 	}
 	key.SetCardinality(count);
+}
+
+template <class SORT_KEY>
+void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
+                      data_ptr_t *const payload_ptrs) {
+	const auto type_id = key.data[0].GetType().id();
+	switch (type_id) {
+	case LogicalTypeId::BLOB:
+		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(merged_partition_keys, count, key, payload_ptrs);
+	case LogicalTypeId::BIGINT:
+		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(merged_partition_keys, count, key, payload_ptrs);
+	default:
+		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
+	}
 }
 
 template <SortKeyType SORT_KEY_TYPE>
