@@ -865,20 +865,20 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 
 		idx_t out_column_count;
-		duckdb_arrow_converted_schema out_types;
+		ConvertedSchemaWrapper out_types;
 		duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
 		stream.get_schema(&stream, &arrow_schema_wrapper.arrow_schema);
 		try {
-			char **names;
+			char **names = nullptr;
 			arrow_to_duckdb_schema(wrapper->connection,
-			                       *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema), &out_types,
+			                       *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema), out_types.GetPtr(),
 			                       &names, &out_column_count);
 			OutNamesWrapper out_names_wrapper(names, out_column_count);
 		} catch (...) {
 			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
 		}
-		auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types);
+		auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types.GetPtr());
 		auto &columns = d_converted_schema.GetColumns();
 		std::vector<duckdb::LogicalType> types(out_column_count);
 		std::vector<duckdb::LogicalType *> types_ptr(out_column_count);
@@ -898,7 +898,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			// This is a valid arrow array, let's make it into a data chunk
 			DataChunkWrapper out_chunk;
 			arrow_to_duckdb_data_chunk(wrapper->connection,
-			                           *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array), out_types,
+			                           *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array), out_types.Get(),
 			                           &out_chunk.chunk);
 			if (!out_chunk.chunk) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
