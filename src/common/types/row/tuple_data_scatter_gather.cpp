@@ -319,7 +319,7 @@ void TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(Vector &heap_siz
                                                                 const UnifiedVectorFormat &list_data) {
 	// Parent list data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -353,7 +353,7 @@ void TupleDataCollection::StringWithinCollectionComputeHeapSizes(Vector &heap_si
                                                                  const UnifiedVectorFormat &list_data) {
 	// Parent list data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Source
@@ -401,7 +401,7 @@ void TupleDataCollection::StructWithinCollectionComputeHeapSizes(Vector &heap_si
                                                                  const UnifiedVectorFormat &list_data) {
 	// Parent list data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -467,13 +467,13 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
                                                                      const UnifiedVectorFormat &list_data) {
 	// Parent list data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Source
 	const auto &child_list_data = source_format.unified;
 	const auto child_list_sel = *child_list_data.sel;
-	const auto child_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_list_data);
+	const auto child_list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(child_list_data);
 	const auto &child_list_validity = child_list_data.validity;
 
 	// Target
@@ -925,7 +925,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 	// Source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
-	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
+	const auto data = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(source_data);
 	const auto &validity = source_data.validity;
 
 	// Target
@@ -975,7 +975,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 	// The Array vector has fake list_entry_t's set by this point, so this is fine
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
-	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
+	const auto data = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(source_data);
 	const auto &validity = source_data.validity;
 
 	// Target
@@ -1024,7 +1024,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const Tupl
                                                       const vector<TupleDataScatterFunction> &) {
 	// Parent list data
 	const auto &list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Source
@@ -1082,7 +1082,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
                                                    const vector<TupleDataScatterFunction> &child_functions) {
 	// Parent list data
 	const auto &list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Source
@@ -1145,13 +1145,13 @@ static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
                                                        const vector<TupleDataScatterFunction> &child_functions) {
 	// Parent list data
 	const auto &list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Source
 	const auto &child_list_data = child_list_format.unified;
 	const auto &child_list_sel = *child_list_data.sel;
-	const auto child_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_list_data);
+	const auto child_list_entries = UnifiedVectorFormat::GetDataUnsafe<list_entry_t>(child_list_data);
 	const auto &child_list_validity = child_list_data.validity;
 
 	// Target
@@ -1534,7 +1534,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
-	const auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
+	const auto target_list_entries = FlatVector::GetDataUnsafe<list_entry_t>(target);
 	auto &target_list_validity = FlatVector::Validity(target);
 
 	// Precompute mask indexes
@@ -1592,7 +1592,7 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
                                          const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                          const vector<TupleDataGatherFunction> &) {
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto list_entries = FlatVector::GetDataUnsafe<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
@@ -1644,7 +1644,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
                                                   const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                                   const vector<TupleDataGatherFunction> &child_functions) {
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto list_entries = FlatVector::GetDataUnsafe<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
@@ -1696,21 +1696,21 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
                                                       optional_ptr<Vector> list_vector,
                                                       const vector<TupleDataGatherFunction> &child_functions) {
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto list_entries = FlatVector::GetDataUnsafe<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
 	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Target
-	const auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
+	const auto target_list_entries = FlatVector::GetDataUnsafe<list_entry_t>(target);
 	auto &target_validity = FlatVector::Validity(target);
 	const auto child_list_size_before = ListVector::GetListSize(target);
 
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
 	Vector combined_list_vector(LogicalType::HUGEINT);
 	FlatVector::SetValidity(combined_list_vector, list_validity); // Has same validity as list parent
-	const auto combined_list_entries = FlatVector::GetData<list_entry_t>(combined_list_vector);
+	const auto combined_list_entries = FlatVector::GetDataUnsafe<list_entry_t>(combined_list_vector);
 
 	uint64_t target_offset = list_size_before;
 	uint64_t target_child_offset = child_list_size_before;

@@ -1,3 +1,30 @@
+diff --git a/src/spatial/geometry/geometry_type.hpp b/src/spatial/geometry/geometry_type.hpp
+index dd2217f..a1acdd8 100644
+--- a/src/spatial/geometry/geometry_type.hpp
++++ b/src/spatial/geometry/geometry_type.hpp
+@@ -5,7 +5,7 @@
+ #include "spatial/geometry/bbox.hpp"
+ #include "spatial/geometry/geometry_properties.hpp"
+ #include "spatial/util/cursor.hpp"
+-
++#include "duckdb/common/type_util.hpp"
+ #include <spatial/util/math.hpp>
+ 
+ namespace duckdb {
+@@ -148,6 +148,12 @@ public:
+ 	}
+ };
+ 
++
++template <>
++inline PhysicalType GetTypeId<geometry_t>() {
++	return PhysicalType::VARCHAR;
++}
++
+ static_assert(sizeof(geometry_t) == sizeof(string_t), "geometry_t should be the same size as string_t");
+ 
+ } // namespace duckdb
+\ No newline at end of file
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
 index 8589edb..da1d595 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
@@ -1236,7 +1263,7 @@ index a3d57a8..db50a43 100644
  
  } // namespace duckdb
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index a4ff26e..5f3ba89 100644
+index a4ff26e..a4e18ff 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
 @@ -14,6 +14,7 @@
@@ -1822,6 +1849,15 @@ index a4ff26e..5f3ba89 100644
  				func.AddVariant([](ScalarFunctionVariantBuilder &variant) {
  					variant.AddParameter("geom", GeoTypes::GEOMETRY());
  					variant.SetReturnType(LogicalType::INTEGER);
+@@ -6490,7 +6491,7 @@ struct ST_NPoints {
+ 	static void ExecuteGeometry(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+-		UnaryExecutor::Execute<string_t, int32_t>(args.data[0], result, args.size(), [&](const string_t &blob) {
++		UnaryExecutor::Execute<string_t, uint32_t>(args.data[0], result, args.size(), [&](const string_t &blob) {
+ 			sgl::geometry geom;
+ 			lstate.Deserialize(blob, geom);
+ 			return sgl::ops::vertex_count(&geom);
 @@ -6510,10 +6511,10 @@ struct ST_NPoints {
  	//------------------------------------------------------------------------------------------------------------------
  	// Register

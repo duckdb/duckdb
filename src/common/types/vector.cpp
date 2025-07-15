@@ -28,7 +28,7 @@
 #include <cstring> // strlen() on Solaris
 namespace duckdb {
 
-UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
+UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr), physical_type(PhysicalType::INVALID) {
 }
 
 UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept : sel(nullptr), data(nullptr) {
@@ -37,6 +37,7 @@ UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept :
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	std::swap(physical_type, other.physical_type);
 	if (refers_to_self) {
 		sel = &owned_sel;
 	}
@@ -48,6 +49,7 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	std::swap(physical_type, other.physical_type);
 	if (refers_to_self) {
 		sel = &owned_sel;
 	}
@@ -587,7 +589,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
-			return Value::Numeric(vector->GetType(), start + increment * NumericCast<int64_t>(index));
+			return Value::Numeric(vector->GetType(),
+			                      static_cast<int64_t>(start + static_cast<uint64_t>(increment) * index));
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
@@ -837,7 +840,8 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(start + increment * UnsafeNumericCast<int64_t>(i)) + (i == count - 1 ? "" : ", ");
+			retval += to_string(static_cast<int64_t>(start + static_cast<uint64_t>(increment) * i)) +
+			          (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}
@@ -1160,6 +1164,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
+	format.physical_type = GetType().InternalType();
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
