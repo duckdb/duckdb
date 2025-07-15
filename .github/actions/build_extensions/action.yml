@@ -211,6 +211,7 @@ runs:
       shell: bash
       env:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
+        DUCKDB_TEST_DESCRIPTION: 'Extension autoloading tests. All `require` calls are ignored and auto-loading is tested. Use require no_extension_autoloading in the test to skip tests.'
       run: |
         cd  ${{ inputs.build_dir}}
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list

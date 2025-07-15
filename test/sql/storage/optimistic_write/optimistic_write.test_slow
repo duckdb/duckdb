@@ -2,8 +2,6 @@
 # description: Test large appends within individual transactions
 # group: [optimistic_write]
 
-require noforcestorage
-
 foreach skip_checkpoint true false
 
 load __TEST_DIR__/optimistic_write_${skip_checkpoint}.db

@@ -25,6 +25,7 @@ public:
 	SQLLogicTestRunner(string dbpath);
 	~SQLLogicTestRunner();
 
+	string file_name;
 	string dbpath;
 	vector<string> loaded_databases;
 	duckdb::unique_ptr<DuckDB> db;
