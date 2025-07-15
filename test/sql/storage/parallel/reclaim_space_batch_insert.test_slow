@@ -24,7 +24,7 @@ INSERT INTO integers2 SELECT * FROM integers;
 <REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
-CREATE TABLE block_count (count INT, block_size INT);
+CREATE TABLE block_count (count INT);
 
 loop i 0 10
 
