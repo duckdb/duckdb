@@ -81,8 +81,8 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
-	ScalarFunction fun("json_merge_patch", {LogicalType::JSON()}, LogicalType::JSON(), MergePatchFunction, nullptr,
-	                   nullptr, nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_merge_patch", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
+	                   MergePatchFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::JSON();
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
