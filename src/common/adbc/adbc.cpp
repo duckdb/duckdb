@@ -70,6 +70,26 @@ struct DuckDBAdbcStatementWrapper {
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
 	bool temporary_table = false;
 	uint64_t plan_length;
+
+	~DuckDBAdbcStatementWrapper() {
+		if (statement) {
+			duckdb_destroy_prepare(&statement);
+			statement = nullptr;
+		}
+		if (ingestion_stream.release) {
+			ingestion_stream.release(&ingestion_stream);
+			ingestion_stream.release = nullptr;
+		}
+		if (ingestion_table_name) {
+			free(ingestion_table_name);
+			ingestion_table_name = nullptr;
+		}
+		if (db_schema) {
+			free(db_schema);
+			db_schema = nullptr;
+		}
+		duckdb_destroy_result(&result);
+	}
 };
 
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
@@ -1215,9 +1235,9 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								constraint_type VARCHAR,
 								constraint_column_names VARCHAR[],
 								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
-							)[]
-						)[]
-					)[] catalog_db_schemas
+							)[],
+						)[],
+					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				WHERE catalog_name LIKE '%s'
@@ -1269,7 +1289,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								constraint_type VARCHAR,
 								constraint_column_names VARCHAR[],
 								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
-							)[]
+							)[],
 						)[],
 					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
 				FROM

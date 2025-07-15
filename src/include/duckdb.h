@@ -4552,7 +4552,7 @@ DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properti
 Transforms an Arrow Schema into a DuckDB Schema.
 
 * @param connection The connection to get the transformation settings from.
-* @param schema The input Arrow schema.
+* @param schema The input Arrow schema. Must be destroyed with `duckdb_destroy_arrow_schema`.
 * @param out_types The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with
 `duckdb_destroy_arrow_converted_schema`.
 * @param out_names The resulting column names array. Must be appropriately deleted.
@@ -4568,7 +4568,8 @@ Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain o
  However, arrow_array must still be destroyed with `duckdb_destroy_arrow_array`
 
 * @param connection The connection to get the transformation settings from.
-* @param arrow_array The input Arrow array.
+* @param arrow_array The input Arrow array. Even though data ownership is passed on to DuckDB's DataChunk, the
+underlying object must be destroyed with 'duckdb_arrow_array'.
 * @param converted_schema The Arrow converted schema with extra information about the Arrow Types.
 * @param out_chunk The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk.
 * @return The error data.

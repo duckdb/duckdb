@@ -259,7 +259,6 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
                                const ValidityMask *parent_mask, int64_t parent_offset) {
 
 	auto &array_info = arrow_type.GetTypeInfo<ArrowArrayInfo>();
-	// auto &scan_state = array_state.state;
 	auto array_size = array_info.FixedSize();
 	auto child_count = array_size * size;
 	auto child_offset = GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset) * array_size;
