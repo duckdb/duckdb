@@ -23,7 +23,7 @@
                     "name": "column_count"
                 },
                 {
-                    "type": "arrow_schema &",
+                    "type": "arrow_schema *",
                     "name": "out_schema"
                 }
             ],
@@ -34,7 +34,7 @@
                     "types": "The DuckDB Logical Types for each column in the schema.",
                     "names": "The names for each column in the schema.",
                     "column_count": "The number of columns that exist in the schema.",
-                    "out_schema": "The resulting arrow schema. Must be destroyed with `out_schema.release(&out_schema)`."
+                    "out_schema": "The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`."
                 },
                 "return_value": "The error data."
             }
@@ -52,7 +52,7 @@
                     "name": "chunk"
                 },
                 {
-                    "type": "arrow_array &",
+                    "type": "arrow_array *",
                     "name": "out_arrow_array"
                 }
             ],
@@ -61,7 +61,7 @@
                 "param_comments": {
                     "client_properties": "The client properties to extract the Arrow settings from.",
                     "chunk": "The DuckDB data chunk to convert.",
-                    "out_arrow_array": "The output Arrow structure that will hold the converted data. Must be released with `out_arrow_array.release(&out_arrow_array)`"
+                    "out_arrow_array": "The output Arrow structure that will hold the converted data. Must be released with `out_arrow_array->release(out_arrow_array)`"
                 },
                 "return_value": "The error data."
             }
@@ -75,7 +75,7 @@
                 "name": "connection"
             },
             {
-              "type": "arrow_schema &",
+              "type": "arrow_schema *",
               "name": "schema"
             },
             {
@@ -95,7 +95,7 @@
             "description": "Transforms an Arrow Schema into a DuckDB Schema.\n\n",
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
-              "schema": "The input Arrow schema. Must be released with `schema.release(&schema)`.",
+              "schema": "The input Arrow schema. Must be released with `schema->release(schema)`.",
               "out_types": "The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`.",
               "out_names": "The resulting column names array. Must be appropriately deleted.",
               "out_column_count": "The number of columns extracted from the Arrow schema."
@@ -112,7 +112,7 @@
                 "name": "connection"
             },
             {
-              "type": "arrow_array &",
+              "type": "arrow_array *",
               "name": "arrow_array"
             },
             {

@@ -4580,12 +4580,12 @@ Transforms a DuckDB Schema into an Arrow Schema
 * @param types The DuckDB Logical Types for each column in the schema.
 * @param names The names for each column in the schema.
 * @param column_count The number of columns that exist in the schema.
-* @param out_schema The resulting arrow schema. Must be destroyed with `out_schema.release(&out_schema)`.
+* @param out_schema The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`.
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_properties,
                                                       duckdb_logical_type *types, char **names, idx_t column_count,
-                                                      arrow_schema &out_schema);
+                                                      arrow_schema *out_schema);
 
 /*!
 Transforms a DuckDB data chunk into an Arrow array.
@@ -4593,24 +4593,24 @@ Transforms a DuckDB data chunk into an Arrow array.
 * @param client_properties The client properties to extract the Arrow settings from.
 * @param chunk The DuckDB data chunk to convert.
 * @param out_arrow_array The output Arrow structure that will hold the converted data. Must be released with
-`out_arrow_array.release(&out_arrow_array)`
+`out_arrow_array->release(out_arrow_array)`
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties,
-                                                          duckdb_data_chunk chunk, arrow_array &out_arrow_array);
+                                                          duckdb_data_chunk chunk, arrow_array *out_arrow_array);
 
 /*!
 Transforms an Arrow Schema into a DuckDB Schema.
 
 * @param connection The connection to get the transformation settings from.
-* @param schema The input Arrow schema. Must be released with `schema.release(&schema)`.
+* @param schema The input Arrow schema. Must be released with `schema->release(schema)`.
 * @param out_types The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with
 `duckdb_destroy_arrow_converted_schema`.
 * @param out_names The resulting column names array. Must be appropriately deleted.
 * @param out_column_count The number of columns extracted from the Arrow schema.
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_schema &schema,
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_schema *schema,
                                                       duckdb_arrow_converted_schema *out_types, char ***out_names,
                                                       idx_t *out_column_count);
 
@@ -4625,7 +4625,7 @@ does not need to be released and won't have ownership of the data.
 * @param out_chunk The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk.
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, arrow_array &arrow_array,
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, arrow_array *arrow_array,
                                                           duckdb_arrow_converted_schema converted_schema,
                                                           duckdb_data_chunk *out_chunk);
 

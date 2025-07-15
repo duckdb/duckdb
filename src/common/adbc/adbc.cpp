@@ -553,7 +553,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto client_properties = duckdb_client_property(&result_wrapper->result);
 
 	auto res =
-	    duckdb_to_arrow_schema(client_properties, &types[0], names, count, *reinterpret_cast<arrow_schema *>(out));
+	    duckdb_to_arrow_schema(client_properties, &types[0], names, count, reinterpret_cast<arrow_schema *>(out));
 	duckdb_destroy_client_properties(&client_properties);
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
@@ -578,7 +578,7 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	auto client_properties = duckdb_client_property(&result_wrapper->result);
 
 	auto conversion_success =
-	    duckdb_data_chunk_to_arrow(client_properties, duckdb_chunk, *reinterpret_cast<arrow_array *>(out));
+	    duckdb_data_chunk_to_arrow(client_properties, duckdb_chunk, reinterpret_cast<arrow_array *>(out));
 	duckdb_destroy_client_properties(&client_properties);
 	duckdb_destroy_data_chunk(&duckdb_chunk);
 
@@ -651,7 +651,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 
 	input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
 	try {
-		arrow_to_duckdb_schema(connection, *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema),
+		arrow_to_duckdb_schema(connection, reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema),
 		                       out_types.GetPtr(), &out_names, &out_column_count);
 	} catch (...) {
 		return ADBC_STATUS_INTERNAL;
@@ -694,7 +694,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	input->get_next(input, &arrow_array_wrapper.arrow_array);
 	while (arrow_array_wrapper.arrow_array.release) {
 		DataChunkWrapper out_chunk;
-		arrow_to_duckdb_data_chunk(connection, *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array),
+		arrow_to_duckdb_data_chunk(connection, reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array),
 		                           out_types.Get(), &out_chunk.chunk);
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
 			return ADBC_STATUS_INTERNAL;
@@ -807,7 +807,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	duckdb_connection_get_client_properties(wrapper->connection, &client_properties);
 
 	auto res =
-	    duckdb_to_arrow_schema(client_properties, &types[0], names, count, *reinterpret_cast<arrow_schema *>(schema));
+	    duckdb_to_arrow_schema(client_properties, &types[0], names, count, reinterpret_cast<arrow_schema *>(schema));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i];
 	}
@@ -871,8 +871,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		try {
 			char **names = nullptr;
 			arrow_to_duckdb_schema(wrapper->connection,
-			                       *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema), out_types.GetPtr(),
-			                       &names, &out_column_count);
+			                       reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema),
+			                       out_types.GetPtr(), &names, &out_column_count);
 			OutNamesWrapper out_names_wrapper(names, out_column_count);
 		} catch (...) {
 			free(stream_wrapper);
@@ -898,8 +898,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			// This is a valid arrow array, let's make it into a data chunk
 			DataChunkWrapper out_chunk;
 			arrow_to_duckdb_data_chunk(wrapper->connection,
-			                           *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array), out_types.Get(),
-			                           &out_chunk.chunk);
+			                           reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array),
+			                           out_types.Get(), &out_chunk.chunk);
 			if (!out_chunk.chunk) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
 				free(stream_wrapper);

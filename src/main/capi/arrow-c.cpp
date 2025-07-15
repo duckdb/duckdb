@@ -17,7 +17,7 @@ using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
 duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_properties, duckdb_logical_type *types,
-                                         char **names, idx_t column_count, arrow_schema &out_schema) {
+                                         char **names, idx_t column_count, arrow_schema *out_schema) {
 
 	if (!types || !names || !client_properties) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
@@ -30,7 +30,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_propert
 	}
 	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(client_properties);
 	try {
-		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(&out_schema), schema_types, schema_names,
+		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(out_schema), schema_types, schema_names,
 		                              client_properties_wrapper->properties);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
@@ -43,7 +43,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_propert
 }
 
 duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
-                                             arrow_array &out_arrow_array) {
+                                             arrow_array *out_arrow_array) {
 	if (!client_properties || !chunk) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
@@ -54,7 +54,7 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_pro
 	    *client_properties_wrapper->properties.client_context, dchunk->GetTypes());
 
 	try {
-		ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(&out_arrow_array),
+		ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(out_arrow_array),
 		                             client_properties_wrapper->properties, extension_type_cast);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
@@ -66,7 +66,7 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_pro
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_schema &schema,
+duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_schema *schema,
                                          duckdb_arrow_converted_schema *out_types, char ***out_names,
                                          idx_t *out_column_count) {
 	if (!connection || !out_types || !out_names || !out_column_count) {
@@ -80,7 +80,7 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_sch
 	try {
 		duckdb::vector<LogicalType> return_types;
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                   *reinterpret_cast<ArrowSchema *>(&schema), names,
+		                                                   *reinterpret_cast<ArrowSchema *>(schema), names,
 		                                                   return_types);
 		QueryResult::DeduplicateColumns(names);
 	} catch (const duckdb::Exception &ex) {
@@ -103,14 +103,14 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_sch
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, arrow_array &arrow_array,
+duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, arrow_array *arrow_array,
                                              duckdb_arrow_converted_schema converted_schema,
                                              duckdb_data_chunk *out_chunk) {
 	if (!connection || !converted_schema || !out_chunk) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
-	auto arrow_array_cpp = reinterpret_cast<ArrowArray *>(&arrow_array);
+	auto arrow_array_cpp = reinterpret_cast<ArrowArray *>(arrow_array);
 	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto &type_vector = arrow_table->GetTypes();
