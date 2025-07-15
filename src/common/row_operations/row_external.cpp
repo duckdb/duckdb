@@ -1,10 +1,3 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/types/row_operations/row_external.cpp
-//
-//
-//===----------------------------------------------------------------------===//
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row/row_layout.hpp"
 

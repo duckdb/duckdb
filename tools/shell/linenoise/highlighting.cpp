@@ -103,7 +103,7 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 	}
 }
 
-vector<highlightToken> GetParseTokens(char *buf, size_t len) {
+static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
 
@@ -130,7 +130,7 @@ vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	return tokens;
 }
 
-vector<highlightToken> GetDotCommandTokens(char *buf, size_t len) {
+static vector<highlightToken> GetDotCommandTokens(char *buf, size_t len) {
 	vector<highlightToken> tokens;
 
 	// identifier token for the dot command itself

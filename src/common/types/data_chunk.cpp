@@ -54,13 +54,19 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 
 	capacity = capacity_p;
 	for (idx_t i = 0; i < types.size(); i++) {
+		// We copy the type here so we don't create another reference to the same shared_ptr<ExtraTypeInfo>
+		// Otherwise, threads will constantly increment/decrement the atomic ref count to the same shared_ptr
+		// This is necessary to avoid heavy contention on the atomic on many-core machines
+		// Note that for nested types, there will still be contention on the atomic(s) one level down,
+		// because this is a shallow copy (only copies ExtraTypeInfo to depth=1)
+		auto copied_type = types[i].Copy();
 		if (!initialize[i]) {
-			data.emplace_back(types[i], nullptr);
+			data.emplace_back(copied_type, nullptr);
 			vector_caches.emplace_back();
 			continue;
 		}
 
-		VectorCache cache(allocator, types[i], capacity);
+		VectorCache cache(allocator, copied_type, capacity);
 		data.emplace_back(cache);
 		vector_caches.push_back(std::move(cache));
 	}

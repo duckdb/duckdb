@@ -40,9 +40,6 @@ public:
 
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
-	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
-	                                                          idx_t position, idx_t size,
-	                                                          unique_ptr<FileBuffer> reusable_buffer);
 
 	//! Registers a transient memory buffer.
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) final;
@@ -59,7 +56,6 @@ public:
 	idx_t GetBlockAllocSize() const final;
 	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
-	idx_t GetTemporaryBlockHeaderSize() const final;
 	idx_t GetQueryMaxMemory() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
@@ -108,6 +104,7 @@ public:
 	DUCKDB_API void ReserveMemory(idx_t size) final;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
 	bool HasTemporaryDirectory() const final;
+	bool HasFilesInTemporaryDirectory() const final;
 
 protected:
 	//! Helper

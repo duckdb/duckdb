@@ -22,6 +22,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
@@ -412,7 +413,9 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		}
 
 		// Copy the data buffer to a resized buffer.
-		auto new_data = Allocator::DefaultAllocator().Allocate(target_size);
+		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
+		auto new_data = stored_allocator ? stored_allocator->Allocate(target_size)
+		                                 : Allocator::DefaultAllocator().Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
@@ -630,6 +633,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::DATE(reinterpret_cast<date_t *>(data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(reinterpret_cast<dtime_t *>(data)[index]);
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(reinterpret_cast<dtime_ns_t *>(data)[index]);
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(reinterpret_cast<dtime_tz_t *>(data)[index]);
 	case LogicalTypeId::BIGINT:
@@ -1820,7 +1825,8 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		original_sel.set_index(offset++, verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
-	vector.Slice(inverted_vector, original_sel, count);
+	vector.Dictionary(inverted_vector, verify_count, original_sel, count);
+	DictionaryVector::SetDictionaryId(vector, UUID::ToString(UUID::GenerateRandomUUID()));
 	vector.Verify(count);
 }
 
@@ -2073,7 +2079,12 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		auto stored_allocator = vector.buffer ? vector.buffer->GetAllocator() : nullptr;
+		if (stored_allocator) {
+			vector.auxiliary = make_buffer<VectorStringBuffer>(*stored_allocator);
+		} else {
+			vector.auxiliary = make_buffer<VectorStringBuffer>();
+		}
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	return vector.auxiliary.get()->Cast<VectorStringBuffer>();

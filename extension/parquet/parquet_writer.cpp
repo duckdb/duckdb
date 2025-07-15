@@ -304,7 +304,7 @@ uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t 
 	}
 }
 
-void VerifyUniqueNames(const vector<string> &names) {
+static void VerifyUniqueNames(const vector<string> &names) {
 #ifdef DEBUG
 	unordered_set<string> name_set;
 	name_set.reserve(names.size());
@@ -692,7 +692,7 @@ struct NullStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
-unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
+static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<NullStatsUnifier>();
@@ -708,6 +708,8 @@ unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 		return make_uniq<NumericStatsUnifier<int64_t>>();
 	case LogicalTypeId::TIME:
 		return make_uniq<NumericStatsUnifier<dtime_t>>();
+	case LogicalTypeId::TIME_NS:
+		return make_uniq<NumericStatsUnifier<dtime_ns_t>>();
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP:
 		return make_uniq<NumericStatsUnifier<timestamp_t>>();
@@ -755,8 +757,8 @@ unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	}
 }
 
-void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
-                     string base_name = string()) {
+static void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+                            string base_name = string()) {
 	if (!base_name.empty()) {
 		base_name += ".";
 	}

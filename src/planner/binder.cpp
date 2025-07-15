@@ -195,6 +195,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<CopyDatabaseStatement>());
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
+	case StatementType::MERGE_INTO_STATEMENT:
+		return BindWithCTE(statement.Cast<MergeIntoStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -289,6 +291,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
+		break;
+	case TableReferenceType::BOUND_TABLE_REF:
+		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:

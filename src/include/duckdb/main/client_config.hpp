@@ -97,9 +97,9 @@ struct ClientConfig {
 	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
 	//! The amount of rows we can keep open before we close and flush them during a partitioned write
 	idx_t partitioned_write_max_open_files = idx_t(100);
-	//! The number of rows we need on either table to choose a nested loop join
+	//! The maximum number of rows on either table to choose a nested loop join
 	idx_t nested_loop_join_threshold = 5;
-	//! The number of rows we need on either table to choose a merge join over an IE join
+	//! The maximum number of rows on either table to choose a merge join over an IE join
 	idx_t merge_join_threshold = 1000;
 	//! The maximum number of rows to use the nested loop join implementation
 	idx_t asof_loop_join_threshold = 64;

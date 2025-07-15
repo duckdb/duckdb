@@ -34,7 +34,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		auto &current_operator = pipeline.operators[i].get();
 
 		auto chunk = make_uniq<DataChunk>();
-		chunk->Initialize(Allocator::Get(context.client), prev_operator.GetTypes());
+		chunk->Initialize(BufferAllocator::Get(context.client), prev_operator.GetTypes());
 		intermediate_chunks.push_back(std::move(chunk));
 
 		auto op_state = current_operator.GetOperatorState(context);
@@ -540,7 +540,7 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 	auto &last_op = pipeline.operators.empty() ? *pipeline.source : pipeline.operators.back().get();
-	chunk.Initialize(Allocator::DefaultAllocator(), last_op.GetTypes());
+	chunk.Initialize(BufferAllocator::Get(context.client), last_op.GetTypes());
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator &op) {

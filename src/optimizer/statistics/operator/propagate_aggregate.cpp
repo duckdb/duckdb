@@ -1,9 +1,11 @@
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
@@ -113,10 +115,40 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		statistics_map[aggregate_binding] = std::move(stats);
 	}
 
+	// check whether all inputs to the aggregate functions are valid
+	TupleDataValidityType distinct_validity = TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
+	for (const auto &aggr_ref : aggr.expressions) {
+		if (distinct_validity == TupleDataValidityType::CAN_HAVE_NULL_VALUES) {
+			break;
+		}
+		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+			// Bail if it's not a bound aggregate
+			distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
+			break;
+		}
+		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
+		for (const auto &child : aggr_expr.children) {
+			if (child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				// Bail if bound aggregate child is not a colref
+				distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
+				break;
+			}
+			const auto &col_ref = child->Cast<BoundColumnRefExpression>();
+			auto it = statistics_map.find(col_ref.binding);
+			if (it == statistics_map.end() || !it->second || it->second->CanHaveNull()) {
+				// Bail if no stats or if there can be a NULL
+				distinct_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES;
+				break;
+			}
+		}
+	}
+	aggr.distinct_validity = distinct_validity;
+
 	// after we propagate statistics - try to directly execute aggregates using statistics
 	TryExecuteAggregates(aggr, node_ptr);
 
-	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique group)
+	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique
+	// group)
 	return std::move(node_stats);
 }
 

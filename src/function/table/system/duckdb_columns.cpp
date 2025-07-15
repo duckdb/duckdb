@@ -80,7 +80,7 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	return nullptr;
 }
 
-unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -302,7 +302,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 	}
 }
 
-void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBColumnsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

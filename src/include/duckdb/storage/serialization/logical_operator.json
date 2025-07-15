@@ -37,7 +37,10 @@
         "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["table_index", "expressions"]
+    "constructor": [
+      "table_index",
+      "expressions"
+    ]
   },
   {
     "class": "LogicalFilter",
@@ -95,9 +98,19 @@
         "id": 206,
         "name": "grouping_functions",
         "type": "vector<unsafe_vector<idx_t>>"
+      },
+      {
+        "id": 207,
+        "name": "distinct_validity",
+        "type": "TupleDataValidityType",
+        "default": "TupleDataValidityType::CAN_HAVE_NULL_VALUES"
       }
     ],
-    "constructor": ["group_index", "aggregate_index", "expressions"]
+    "constructor": [
+      "group_index",
+      "aggregate_index",
+      "expressions"
+    ]
   },
   {
     "class": "LogicalWindow",
@@ -115,7 +128,9 @@
         "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["window_index"]
+    "constructor": [
+      "window_index"
+    ]
   },
   {
     "class": "LogicalUnnest",
@@ -133,7 +148,9 @@
         "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["unnest_index"]
+    "constructor": [
+      "unnest_index"
+    ]
   },
   {
     "class": "LogicalLimit",
@@ -151,7 +168,10 @@
         "type": "BoundLimitNode"
       }
     ],
-    "constructor": ["limit_val", "offset_val"]
+    "constructor": [
+      "limit_val",
+      "offset_val"
+    ]
   },
   {
     "class": "LogicalOrder",
@@ -170,7 +190,9 @@
         "property": "projection_map"
       }
     ],
-    "constructor": ["orders"]
+    "constructor": [
+      "orders"
+    ]
   },
   {
     "class": "LogicalTopN",
@@ -193,7 +215,11 @@
         "type": "idx_t"
       }
     ],
-    "constructor": ["orders", "limit", "offset"]
+    "constructor": [
+      "orders",
+      "limit",
+      "offset"
+    ]
   },
   {
     "class": "LogicalDistinct",
@@ -216,7 +242,10 @@
         "type": "BoundOrderModifier*"
       }
     ],
-    "constructor": ["distinct_targets", "distinct_type"]
+    "constructor": [
+      "distinct_targets",
+      "distinct_type"
+    ]
   },
   {
     "class": "LogicalSample",
@@ -251,7 +280,11 @@
         "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
-    "constructor": ["table_index", "chunk_types", "collection"]
+    "constructor": [
+      "table_index",
+      "chunk_types",
+      "collection"
+    ]
   },
   {
     "class": "LogicalDelimGet",
@@ -269,7 +302,10 @@
         "type": "vector<LogicalType>"
       }
     ],
-    "constructor": ["table_index", "chunk_types"]
+    "constructor": [
+      "table_index",
+      "chunk_types"
+    ]
   },
   {
     "class": "LogicalExpressionGet",
@@ -292,7 +328,11 @@
         "type": "vector<vector<Expression*>>"
       }
     ],
-    "constructor": ["table_index", "expr_types", "expressions"]
+    "constructor": [
+      "table_index",
+      "expr_types",
+      "expressions"
+    ]
   },
   {
     "class": "LogicalDummyScan",
@@ -305,7 +345,9 @@
         "type": "idx_t"
       }
     ],
-    "constructor": ["table_index"]
+    "constructor": [
+      "table_index"
+    ]
   },
   {
     "class": "LogicalEmptyResult",
@@ -353,18 +395,29 @@
         "id": 204,
         "name": "materialized_cte",
         "type": "CTEMaterialize"
-      }, {
+      },
+      {
         "id": 205,
         "name": "is_recurring",
         "type": "bool"
       }
     ],
-    "constructor": ["table_index", "cte_index", "chunk_types", "bound_columns", "materialized_cte"]
+    "constructor": [
+      "table_index",
+      "cte_index",
+      "chunk_types",
+      "bound_columns",
+      "materialized_cte"
+    ]
   },
   {
     "class": "LogicalComparisonJoin",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_ASOF_JOIN", "LOGICAL_COMPARISON_JOIN", "LOGICAL_DELIM_JOIN"],
+    "enum": [
+      "LOGICAL_ASOF_JOIN",
+      "LOGICAL_COMPARISON_JOIN",
+      "LOGICAL_DELIM_JOIN"
+    ],
     "members": [
       {
         "id": 200,
@@ -413,7 +466,10 @@
         "type": "Expression*"
       }
     ],
-    "constructor": ["join_type", "type"]
+    "constructor": [
+      "join_type",
+      "type"
+    ]
   },
   {
     "class": "LogicalAnyJoin",
@@ -446,7 +502,9 @@
         "type": "Expression*"
       }
     ],
-    "constructor": ["join_type"]
+    "constructor": [
+      "join_type"
+    ]
   },
   {
     "class": "LogicalCrossProduct",
@@ -465,7 +523,11 @@
   {
     "class": "LogicalSetOperation",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_UNION", "LOGICAL_EXCEPT", "LOGICAL_INTERSECT"],
+    "enum": [
+      "LOGICAL_UNION",
+      "LOGICAL_EXCEPT",
+      "LOGICAL_INTERSECT"
+    ],
     "members": [
       {
         "id": 200,
@@ -490,7 +552,13 @@
         "default": "true"
       }
     ],
-    "constructor": ["table_index", "column_count", "type", "setop_all", "allow_out_of_order"]
+    "constructor": [
+      "table_index",
+      "column_count",
+      "type",
+      "setop_all",
+      "allow_out_of_order"
+    ]
   },
   {
     "class": "LogicalRecursiveCTE",
@@ -664,7 +732,10 @@
         "default": "false"
       }
     ],
-    "constructor": ["$ClientContext", "table_info"]
+    "constructor": [
+      "$ClientContext",
+      "table_info"
+    ]
   },
   {
     "class": "LogicalDelete",
@@ -693,7 +764,10 @@
         "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["$ClientContext", "table_info&"]
+    "constructor": [
+      "$ClientContext",
+      "table_info&"
+    ]
   },
   {
     "class": "LogicalUpdate",
@@ -737,7 +811,84 @@
         "type": "bool"
       }
     ],
+    "constructor": [
+      "$ClientContext",
+      "table_info&"
+    ]
+  },
+  {
+    "class": "LogicalMergeInto",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_MERGE_INTO",
+    "members": [
+      {
+        "id": 200,
+        "name": "table_info",
+        "type": "CreateInfo*",
+        "serialize_property": "table.GetInfo()"
+      },
+      {
+        "id": 201,
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "bound_defaults",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 203,
+        "name": "row_id_start",
+        "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "source_marker",
+        "type": "optional_idx"
+      },
+      {
+        "id": 205,
+        "name": "actions",
+        "type": "map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>"
+      }
+    ],
     "constructor": ["$ClientContext", "table_info&"]
+  },
+  {
+    "class": "BoundMergeIntoAction",
+    "members": [
+      {
+        "id": 200,
+        "name": "action_type",
+        "type": "MergeActionType"
+      },
+      {
+        "id": 201,
+        "name": "condition",
+        "type": "Expression*"
+      },
+      {
+        "id": 202,
+        "name": "columns",
+        "type": "vector<PhysicalIndex>"
+      },
+      {
+        "id": 203,
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 204,
+        "name": "column_index_map",
+        "type": "IndexVector<idx_t, PhysicalIndex>"
+      },
+      {
+        "id": 205,
+        "name": "update_is_del_and_insert",
+        "type": "bool"
+      }
+    ]
   },
   {
     "class": "LogicalCreateTable",
@@ -751,12 +902,21 @@
         "serialize_property": "info->base"
       }
     ],
-    "constructor": ["$ClientContext", "info"]
+    "constructor": [
+      "$ClientContext",
+      "info"
+    ]
   },
   {
     "class": "LogicalCreate",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_CREATE_SEQUENCE", "LOGICAL_CREATE_VIEW", "LOGICAL_CREATE_SCHEMA", "LOGICAL_CREATE_MACRO", "LOGICAL_CREATE_TYPE"],
+    "enum": [
+      "LOGICAL_CREATE_SEQUENCE",
+      "LOGICAL_CREATE_VIEW",
+      "LOGICAL_CREATE_SCHEMA",
+      "LOGICAL_CREATE_MACRO",
+      "LOGICAL_CREATE_TYPE"
+    ],
     "members": [
       {
         "id": 200,
@@ -764,7 +924,11 @@
         "type": "CreateInfo*"
       }
     ],
-    "constructor": ["type", "$ClientContext", "info"]
+    "constructor": [
+      "type",
+      "$ClientContext",
+      "info"
+    ]
   },
   {
     "class": "LogicalExplain",
@@ -792,7 +956,9 @@
         "type": "string"
       }
     ],
-    "constructor": ["explain_type"]
+    "constructor": [
+      "explain_type"
+    ]
   },
   {
     "class": "LogicalSet",
@@ -815,7 +981,11 @@
         "type": "SetScope"
       }
     ],
-    "constructor": ["name", "value", "scope"]
+    "constructor": [
+      "name",
+      "value",
+      "scope"
+    ]
   },
   {
     "class": "LogicalReset",
@@ -833,12 +1003,22 @@
         "type": "SetScope"
       }
     ],
-    "constructor": ["name", "scope"]
+    "constructor": [
+      "name",
+      "scope"
+    ]
   },
   {
     "class": "LogicalSimple",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_ALTER", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
+    "enum": [
+      "LOGICAL_ALTER",
+      "LOGICAL_LOAD",
+      "LOGICAL_ATTACH",
+      "LOGICAL_TRANSACTION",
+      "LOGICAL_DROP",
+      "LOGICAL_DETACH"
+    ],
     "members": [
       {
         "id": 200,
@@ -846,7 +1026,10 @@
         "type": "ParseInfo*"
       }
     ],
-    "constructor": ["type", "info"]
+    "constructor": [
+      "type",
+      "info"
+    ]
   },
   {
     "class": "LogicalPivot",
@@ -883,7 +1066,9 @@
         "base": "ParseInfo"
       }
     ],
-    "constructor": ["info"]
+    "constructor": [
+      "info"
+    ]
   },
   {
     "class": "LogicalCopyToFile",
@@ -914,7 +1099,12 @@
         "base": "ParseInfo"
       }
     ],
-    "constructor": ["$ClientContext", "info", "unbound_expressions", "alter_table_info"]
+    "constructor": [
+      "$ClientContext",
+      "info",
+      "unbound_expressions",
+      "alter_table_info"
+    ]
   },
   {
     "class": "LogicalExtensionOperator",
@@ -946,7 +1136,11 @@
         "base": "ParseInfo"
       }
     ],
-    "constructor": ["$ClientContext", "copy_info", "exported_tables"]
+    "constructor": [
+      "$ClientContext",
+      "copy_info",
+      "exported_tables"
+    ]
   },
   {
     "class": "FilenamePattern",
@@ -977,7 +1171,12 @@
         "serialize_property": "SerializeSegments()"
       }
     ],
-    "constructor": ["base", "pos", "uuid", "segments"]
+    "constructor": [
+      "base",
+      "pos",
+      "uuid",
+      "segments"
+    ]
   },
   {
     "class": "FileNameSegment",

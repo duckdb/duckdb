@@ -1106,6 +1106,55 @@ void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) 
 }
 
 //===----------------------------------------------------------------------===//
+// Enable H T T P Logging
+//===----------------------------------------------------------------------===//
+void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_http_logging = input.GetValue<bool>();
+
+	// NOTE: this is a deprecated setting: we mimick the old behaviour by setting the log storage output to STDOUT and
+	// enabling logging for http only. Note that this behaviour is slightly wonky in that it sets all sorts of logging
+	// config
+	auto &log_manager = LogManager::Get(context);
+	if (config.enable_http_logging) {
+		log_manager.SetEnableLogging(true);
+		log_manager.SetLogLevel(HTTPLogType::LEVEL);
+		unordered_set<string> enabled_log_types = {HTTPLogType::NAME};
+		log_manager.SetEnabledLogTypes(enabled_log_types);
+		log_manager.SetLogStorage(*context.db, LogConfig::STDOUT_STORAGE_NAME);
+	} else {
+		log_manager.SetEnableLogging(false);
+	}
+}
+
+void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
+}
+
+Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.enable_http_logging);
+}
+
+//===----------------------------------------------------------------------===//
+// H T T P Logging Output
+//===----------------------------------------------------------------------===//
+void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	throw NotImplementedException("This setting is deprecated and can no longer be used. Check out the DuckDB docs on "
+	                              "logging for more information");
+}
+
+void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
+	throw NotImplementedException("This setting is deprecated and can no longer be used. Check out the DuckDB docs on "
+	                              "logging for more information");
+}
+
+Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.http_logging_output);
+}
+
+//===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
 bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1497,6 +1546,49 @@ void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value TempDirectorySetting::GetSetting(const ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	return Value(buffer_manager.GetTemporaryDirectory());
+}
+
+//===----------------------------------------------------------------------===//
+// Temporary File Encryption
+//===----------------------------------------------------------------------===//
+void TempFileEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto setting = input.GetValue<bool>();
+	if (config.options.temp_file_encryption == setting) {
+		// setting is the current setting
+		return;
+	}
+
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		if (buffer_manager.HasFilesInTemporaryDirectory()) {
+			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
+			                          "while there are existing temporary files is disabled.");
+		}
+	}
+
+	config.options.temp_file_encryption = setting;
+}
+
+void TempFileEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (config.options.temp_file_encryption == true) {
+		// setting is the current setting
+		return;
+	}
+
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		if (buffer_manager.HasFilesInTemporaryDirectory()) {
+			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
+			                          "while there are existing temporary files is disabled.");
+		}
+	}
+
+	config.options.temp_file_encryption = true;
+}
+
+Value TempFileEncryptionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.temp_file_encryption);
 }
 
 //===----------------------------------------------------------------------===//
