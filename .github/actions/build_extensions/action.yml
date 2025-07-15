@@ -199,6 +199,7 @@ runs:
         cd  ${{ inputs.build_dir}}
         rm -rf duckdb_unittest_tempdir/*
         mv build/release/extension build/extension_tmp
+        mv build/release/repository build/repository_tmp
         rm -rf build/release
         VCPKG_TOOLCHAIN_PATH="" make
 
@@ -214,7 +215,9 @@ runs:
         python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
         ${{ inputs.unittest_script }} -f test.list --autoloading available
         rm -rf build/release/extension
+        rm -rf build/release/repository
         mv build/extension_tmp build/release/extension
+        mv build/repository_tmp build/release/repository
 
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
