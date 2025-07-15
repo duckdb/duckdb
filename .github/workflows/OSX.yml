@@ -273,8 +273,6 @@ jobs:
         shell: bash
         env:
           EXTENSION_TESTS_ONLY: 1
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
           rm -rf build/release
           make
