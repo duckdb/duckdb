@@ -769,7 +769,6 @@ inline int count_digits(uint64_t n) {
 }
 #endif
 
-#if FMT_USE_INT128
 inline int count_digits(uint128_t n) {
   int count = 1;
   for (;;) {
@@ -784,7 +783,6 @@ inline int count_digits(uint128_t n) {
     count += 4;
   }
 }
-#endif
 
 // Counts the number of digits in n. BITS = log2(radix).
 template <unsigned BITS, typename UInt> inline int count_digits(UInt n) {
