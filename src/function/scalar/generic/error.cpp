@@ -4,12 +4,7 @@
 
 namespace duckdb {
 
-struct ErrorOperator {
-	template <class TA, class TR>
-	static inline TR Operation(const TA &input) {
-		throw InvalidInputException(input.GetString());
-	}
-};
+namespace {
 
 static void ErrorFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnifiedVectorFormat vdata;
@@ -25,6 +20,8 @@ static void ErrorFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		throw InvalidInputException(strings[idx].GetString());
 	}
 }
+
+} // namespace
 
 ScalarFunction ErrorFun::GetFunction() {
 	auto fun = ScalarFunction("error", {LogicalType::VARCHAR}, LogicalType::SQLNULL, ErrorFunction);

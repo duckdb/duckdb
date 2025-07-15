@@ -653,13 +653,13 @@
     },
     {
         "name": "merge_join_threshold",
-        "description": "The number of rows we need on either table to choose a merge join",
+        "description": "The maximum number of rows on either table to choose a merge join",
         "type": "UBIGINT",
         "scope": "local"
     },
     {
         "name": "nested_loop_join_threshold",
-        "description": "The number of rows we need on either table to choose a nested loop join",
+        "description": "The maximum number of rows on either table to choose a nested loop join",
         "type": "UBIGINT",
         "scope": "local"
     },
@@ -843,6 +843,13 @@
         "custom_implementation": true
     },
     {
+        "name": "temp_file_encryption",
+        "description": "Encrypt all temporary files if database is encrypted",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "threads",
         "description": "The number of total threads used by the system.",
         "type": "BIGINT",
@@ -861,6 +868,12 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "variant_legacy_encoding",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global"
     },
     {
         "name": "wal_encryption",

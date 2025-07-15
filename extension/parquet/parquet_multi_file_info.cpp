@@ -257,14 +257,14 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	return bind_data;
 }
 
-vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
 	vector<column_t> result;
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX);
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
 	return result;
 }
 
-vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
+static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	vector<PartitionStatistics> result;
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE && bind_data.initial_reader) {
@@ -396,6 +396,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "binary_as_string") {
 		options.binary_as_string = BooleanValue::Get(val);
+		return true;
+	}
+	if (key == "variant_legacy_encoding") {
+		options.variant_legacy_encoding = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "file_row_number") {
@@ -537,6 +541,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	} else {
 		result->options = std::move(parquet_options);
 		result->metadata = std::move(metadata);
+		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);
 }

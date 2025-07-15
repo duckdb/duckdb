@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct CurrentQueryIdData : FunctionData {
 	explicit CurrentQueryIdData(Value query_id_p) : query_id(std::move(query_id_p)) {
 	}
@@ -31,11 +33,13 @@ unique_ptr<FunctionData> CurrentQueryIdBind(ClientContext &context, ScalarFuncti
 	return make_uniq<CurrentQueryIdData>(query_id);
 }
 
-static void CurrentQueryIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void CurrentQueryIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<CurrentQueryIdData>();
 	result.Reference(info.query_id);
 }
+
+} // namespace
 
 ScalarFunction CurrentQueryId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentQueryIdFunction, CurrentQueryIdBind, nullptr, nullptr,

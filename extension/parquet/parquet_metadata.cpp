@@ -62,28 +62,28 @@ public:
 };
 
 template <class T>
-string ConvertParquetElementToString(T &&entry) {
+static string ConvertParquetElementToString(T &&entry) {
 	duckdb::stringstream ss;
 	ss << entry;
 	return ss.str();
 }
 
 template <class T>
-string PrintParquetElementToString(T &&entry) {
+static string PrintParquetElementToString(T &&entry) {
 	duckdb::stringstream ss;
 	entry.printTo(ss);
 	return ss.str();
 }
 
 template <class T>
-Value ParquetElementString(T &&value, bool is_set) {
+static Value ParquetElementString(T &&value, bool is_set) {
 	if (!is_set) {
 		return Value();
 	}
 	return Value(ConvertParquetElementToString(value));
 }
 
-Value ParquetElementStringVal(const string &value, bool is_set) {
+static Value ParquetElementStringVal(const string &value, bool is_set) {
 	if (!is_set) {
 		return Value();
 	}
@@ -91,7 +91,7 @@ Value ParquetElementStringVal(const string &value, bool is_set) {
 }
 
 template <class T>
-Value ParquetElementInteger(T &&value, bool is_iset) {
+static Value ParquetElementInteger(T &&value, bool is_iset) {
 	if (!is_iset) {
 		return Value();
 	}
@@ -99,14 +99,14 @@ Value ParquetElementInteger(T &&value, bool is_iset) {
 }
 
 template <class T>
-Value ParquetElementBigint(T &&value, bool is_iset) {
+static Value ParquetElementBigint(T &&value, bool is_iset) {
 	if (!is_iset) {
 		return Value();
 	}
 	return Value::BIGINT(value);
 }
 
-Value ParquetElementBoolean(bool value, bool is_iset) {
+static Value ParquetElementBoolean(bool value, bool is_iset) {
 	if (!is_iset) {
 		return Value();
 	}
@@ -202,8 +202,8 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::BOOLEAN);
 }
 
-Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
-                          const std::string &stats) {
+static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
+                                 const std::string &stats) {
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}
@@ -407,7 +407,7 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
-Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
+static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
 	if (!is_set) {
 		return Value();
 	}
@@ -673,7 +673,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 		throw InvalidInputException("Column %s not found in %s", column_name, file.path);
 	}
 
-	auto &allocator = Allocator::DefaultAllocator();
+	auto &allocator = BufferAllocator::Get(context);
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
@@ -711,8 +711,8 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 // Bind
 //===--------------------------------------------------------------------===//
 template <ParquetMetadataOperatorType TYPE>
-unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<ParquetMetaDataBindData>();
 
 	switch (TYPE) {
@@ -752,7 +752,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 }
 
 template <ParquetMetadataOperatorType TYPE>
-unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ParquetMetaDataBindData>();
 
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
@@ -789,7 +789,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 }
 
 template <ParquetMetadataOperatorType TYPE>
-void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+static void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ParquetMetaDataOperatorData>();
 	auto &bind_data = data_p.bind_data->Cast<ParquetMetaDataBindData>();
 
