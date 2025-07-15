@@ -40,11 +40,11 @@ void WindowIndexTreeLocalState::BuildLeaves() {
 		auto &indices = payload_chunk.data[0];
 		if (index_tree.mst32) {
 			auto &sorted = index_tree.mst32->LowestLevel();
-			auto data = FlatVector::GetData<uint32_t>(indices);
+			auto data = FlatVector::GetDataUnsafe<uint32_t>(indices);
 			std::copy(data, data + count, sorted.data() + row_idx);
 		} else {
 			auto &sorted = index_tree.mst64->LowestLevel();
-			auto data = FlatVector::GetData<uint64_t>(indices);
+			auto data = FlatVector::GetDataUnsafe<uint64_t>(indices);
 			std::copy(data, data + count, sorted.data() + row_idx);
 		}
 		row_idx += count;

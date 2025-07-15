@@ -74,7 +74,7 @@ static void BuildTokens(WindowTokenTree &token_tree, vector<T> &tokens) {
 			if (!payload_chunk.size()) {
 				break;
 			}
-			row_idx = FlatVector::GetData<T>(payload_chunk.data[0]);
+			row_idx = FlatVector::GetDataUnsafe<T>(payload_chunk.data[0]);
 			i = 0;
 		}
 
