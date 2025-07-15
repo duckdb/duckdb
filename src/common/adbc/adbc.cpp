@@ -652,7 +652,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
 	try {
 		arrow_to_duckdb_schema(connection, *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema),
-		                       out_types.get_ptr(), &out_names, &out_column_count);
+		                       out_types.GetPtr(), &out_names, &out_column_count);
 	} catch (...) {
 		return ADBC_STATUS_INTERNAL;
 	}
@@ -660,7 +660,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 
 	std::vector<duckdb::LogicalType> types(out_column_count);
 	std::vector<duckdb::LogicalType *> types_ptr(out_column_count);
-	auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types.get());
+	auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types.Get());
 	auto columns = d_converted_schema.GetColumns();
 	if (ingestion_mode == IngestionMode::CREATE) {
 		// We must construct the create table SQL query
@@ -686,7 +686,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		}
 	}
 	AppenderWrapper appender(connection, schema, table_name);
-	if (!appender.valid()) {
+	if (!appender.Valid()) {
 		return ADBC_STATUS_INTERNAL;
 	}
 	duckdb::ArrowArrayWrapper arrow_array_wrapper;
@@ -695,8 +695,8 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	while (arrow_array_wrapper.arrow_array.release) {
 		DataChunkWrapper out_chunk;
 		arrow_to_duckdb_data_chunk(connection, *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array),
-		                           out_types.get(), &out_chunk.chunk);
-		if (duckdb_append_data_chunk(appender.get(), out_chunk.chunk) != DuckDBSuccess) {
+		                           out_types.Get(), &out_chunk.chunk);
+		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
 			return ADBC_STATUS_INTERNAL;
 		}
 		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
@@ -864,17 +864,16 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 
-		OutNamesWrapper out_names_wrapper(nullptr, 0);
 		idx_t out_column_count;
 		duckdb_arrow_converted_schema out_types;
 		duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
 		stream.get_schema(&stream, &arrow_schema_wrapper.arrow_schema);
 		try {
-			auto c_out_name = out_names_wrapper.get();
+			char **names;
 			arrow_to_duckdb_schema(wrapper->connection,
 			                       *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema), &out_types,
-			                       &c_out_name, &out_column_count);
-			out_names_wrapper.SetColumnCount(out_column_count);
+			                       &names, &out_column_count);
+			OutNamesWrapper out_names_wrapper(names, out_column_count);
 		} catch (...) {
 			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;

@@ -16,7 +16,6 @@
 
 namespace duckdb_adbc {
 
-// RAII wrappers for C-API resources used in Ingest
 class AppenderWrapper {
 public:
 	AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
@@ -30,29 +29,11 @@ public:
 		}
 	}
 
-	duckdb_appender get() const {
+	duckdb_appender Get() const {
 		return appender;
 	}
-	explicit operator duckdb_appender() const {
-		return appender;
-	}
-	bool valid() const {
+	bool Valid() const {
 		return appender != nullptr;
-	}
-	AppenderWrapper(const AppenderWrapper &) = delete;
-	AppenderWrapper &operator=(const AppenderWrapper &) = delete;
-	AppenderWrapper(AppenderWrapper &&other) noexcept : appender(other.appender) {
-		other.appender = nullptr;
-	}
-	AppenderWrapper &operator=(AppenderWrapper &&other) noexcept {
-		if (this != &other) {
-			if (appender) {
-				duckdb_appender_destroy(&appender);
-			}
-			appender = other.appender;
-			other.appender = nullptr;
-		}
-		return *this;
 	}
 
 private:
@@ -69,24 +50,9 @@ public:
 			duckdb_destroy_data_chunk(&chunk);
 		}
 	}
+
 	explicit operator duckdb_data_chunk() const {
 		return chunk;
-	}
-
-	DataChunkWrapper(const DataChunkWrapper &) = delete;
-	DataChunkWrapper &operator=(const DataChunkWrapper &) = delete;
-	DataChunkWrapper(DataChunkWrapper &&other) noexcept : chunk(other.chunk) {
-		other.chunk = nullptr;
-	}
-	DataChunkWrapper &operator=(DataChunkWrapper &&other) noexcept {
-		if (this != &other) {
-			if (chunk) {
-				duckdb_destroy_data_chunk(&chunk);
-			}
-			chunk = other.chunk;
-			other.chunk = nullptr;
-		}
-		return *this;
 	}
 
 	duckdb_data_chunk chunk;
@@ -101,33 +67,15 @@ public:
 			duckdb_destroy_arrow_converted_schema(&schema);
 		}
 	}
-	duckdb_arrow_converted_schema *get_ptr() {
+	duckdb_arrow_converted_schema *GetPtr() {
 		return &schema;
 	}
 
 	explicit operator duckdb_arrow_converted_schema() const {
 		return schema;
 	}
-	duckdb_arrow_converted_schema get() const {
+	duckdb_arrow_converted_schema Get() const {
 		return schema;
-	}
-	void set(duckdb_arrow_converted_schema s) {
-		schema = s;
-	}
-	ConvertedSchemaWrapper(const ConvertedSchemaWrapper &) = delete;
-	ConvertedSchemaWrapper &operator=(const ConvertedSchemaWrapper &) = delete;
-	ConvertedSchemaWrapper(ConvertedSchemaWrapper &&other) noexcept : schema(other.schema) {
-		other.schema = nullptr;
-	}
-	ConvertedSchemaWrapper &operator=(ConvertedSchemaWrapper &&other) noexcept {
-		if (this != &other) {
-			if (schema) {
-				duckdb_destroy_arrow_converted_schema(&schema);
-			}
-			schema = other.schema;
-			other.schema = nullptr;
-		}
-		return *this;
 	}
 
 private:
@@ -147,30 +95,6 @@ public:
 	}
 	char **get() const {
 		return names;
-	}
-	OutNamesWrapper(const OutNamesWrapper &) = delete;
-	OutNamesWrapper &operator=(const OutNamesWrapper &) = delete;
-	OutNamesWrapper(OutNamesWrapper &&other) noexcept : names(other.names), count(other.count) {
-		other.names = nullptr;
-		other.count = 0;
-	}
-	OutNamesWrapper &operator=(OutNamesWrapper &&other) noexcept {
-		if (this != &other) {
-			if (names) {
-				for (idx_t i = 0; i < count; i++) {
-					delete[] names[i];
-				}
-				delete[] names;
-			}
-			names = other.names;
-			count = other.count;
-			other.names = nullptr;
-			other.count = 0;
-		}
-		return *this;
-	}
-	void SetColumnCount(idx_t count_p) {
-		count = count_p;
 	}
 
 private:
@@ -254,4 +178,3 @@ void InitializeADBCError(AdbcError *error);
 
 //! This method should only be called when the string is guaranteed to not be NULL
 void SetError(struct AdbcError *error, const std::string &message);
-// void SetError(struct AdbcError *error, const char *message);
