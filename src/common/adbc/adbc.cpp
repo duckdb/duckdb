@@ -878,7 +878,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
 		}
-		auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types.GetPtr());
+		auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(*out_types.GetPtr());
 		auto &columns = d_converted_schema.GetColumns();
 		std::vector<duckdb::LogicalType> types(out_column_count);
 		std::vector<duckdb::LogicalType *> types_ptr(out_column_count);
