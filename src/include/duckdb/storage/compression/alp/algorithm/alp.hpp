@@ -128,7 +128,8 @@ struct AlpCompression {
 	 */
 	static T DecodeValue(int64_t encoded_value, AlpEncodingIndices encoding_indices) {
 		//! The cast to T is needed to prevent a signed integer overflow
-		T decoded_value = static_cast<T>(encoded_value) * AlpConstants::FACT_ARR[encoding_indices.factor] *
+		T decoded_value = static_cast<T>(encoded_value) *
+		                  static_cast<T>(AlpConstants::FACT_ARR[encoding_indices.factor]) *
 		                  AlpTypedConstants<T>::FRAC_ARR[encoding_indices.exponent];
 		return decoded_value;
 	}
