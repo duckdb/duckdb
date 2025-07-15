@@ -700,6 +700,57 @@ typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info,
 //===--------------------------------------------------------------------===//
 // Arrow-related types
 //===--------------------------------------------------------------------===//
+struct arrow_schema {
+	//! Array type description
+	const char *format;
+	const char *name;
+	const char *metadata;
+	int64_t flags;
+	int64_t n_children;
+	struct arrow_schema **children;
+	struct arrow_schema *dictionary;
+
+	//! Release callback
+	void (*release)(struct arrow_schema *);
+	//! Opaque producer-specific data
+	void *private_data;
+
+	//! Initialize all fields
+	void Init() {
+		flags = 0;
+		n_children = 0;
+		release = nullptr;
+		private_data = nullptr;
+	}
+};
+
+struct arrow_array {
+	//! Array data description
+	int64_t length;
+	int64_t null_count;
+	int64_t offset;
+	int64_t n_buffers;
+	int64_t n_children;
+	const void **buffers;
+	struct arrow_array **children;
+	struct arrow_array *dictionary;
+
+	//! Release callback
+	void (*release)(struct arrow_array *);
+	//! Opaque producer-specific data
+	void *private_data;
+
+	//! Initialize all fields
+	void Init() {
+		length = 0;
+		null_count = 0;
+		offset = 0;
+		n_buffers = 0;
+		n_children = 0;
+		release = nullptr;
+		private_data = nullptr;
+	}
+};
 
 //! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
 typedef struct _duckdb_arrow {

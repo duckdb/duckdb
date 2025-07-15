@@ -71,7 +71,7 @@ struct DuckDBAdbcStatementWrapper {
 	uint64_t plan_length;
 };
 
-struct DuckDBAdbcStreamWrapper{
+struct DuckDBAdbcStreamWrapper {
 	duckdb_result result;
 };
 
@@ -552,8 +552,8 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 
 	auto client_properties = duckdb_client_property(&result_wrapper->result);
 
-	auto res = duckdb_to_arrow_schema(client_properties, &types[0], names, count,
-	                                  reinterpret_cast<duckdb_arrow_schema *>(&out));
+	auto res =
+	    duckdb_to_arrow_schema(client_properties, &types[0], names, count, *reinterpret_cast<arrow_schema *>(out));
 	duckdb_destroy_client_properties(&client_properties);
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
@@ -578,7 +578,7 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	auto client_properties = duckdb_client_property(&result_wrapper->result);
 
 	auto conversion_success =
-	    duckdb_data_chunk_to_arrow(client_properties, duckdb_chunk, reinterpret_cast<duckdb_arrow_array *>(&out));
+	    duckdb_data_chunk_to_arrow(client_properties, duckdb_chunk, *reinterpret_cast<arrow_array *>(out));
 	duckdb_destroy_client_properties(&client_properties);
 	duckdb_destroy_data_chunk(&duckdb_chunk);
 
@@ -644,15 +644,15 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
-	duckdb::ArrowSchemaWrapper arrow_schema;
-	duckdb_arrow_schema c_arrow_schema = reinterpret_cast<duckdb_arrow_schema>(&arrow_schema.arrow_schema);
+	duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
 	ConvertedSchemaWrapper out_types;
 	char **out_names = nullptr;
 	idx_t out_column_count;
 
-	input->get_schema(input, &arrow_schema.arrow_schema);
+	input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
 	try {
-		arrow_to_duckdb_schema(connection, c_arrow_schema, out_types.get_ptr(), &out_names, &out_column_count);
+		arrow_to_duckdb_schema(connection, *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema),
+		                       out_types.get_ptr(), &out_names, &out_column_count);
 	} catch (...) {
 		return ADBC_STATUS_INTERNAL;
 	}
@@ -689,18 +689,18 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	if (!appender.valid()) {
 		return ADBC_STATUS_INTERNAL;
 	}
-	duckdb::ArrowArrayWrapper arrow_array;
+	duckdb::ArrowArrayWrapper arrow_array_wrapper;
 
-	input->get_next(input, &arrow_array.arrow_array);
-	while (arrow_array.arrow_array.release) {
+	input->get_next(input, &arrow_array_wrapper.arrow_array);
+	while (arrow_array_wrapper.arrow_array.release) {
 		DataChunkWrapper out_chunk;
-		arrow_to_duckdb_data_chunk(connection, reinterpret_cast<duckdb_arrow_array>(&arrow_array.arrow_array), out_types.get(),
-		                           &out_chunk.chunk);
+		arrow_to_duckdb_data_chunk(connection, *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array),
+		                           out_types.get(), &out_chunk.chunk);
 		if (duckdb_append_data_chunk(appender.get(), out_chunk.chunk) != DuckDBSuccess) {
 			return ADBC_STATUS_INTERNAL;
 		}
-		arrow_array = duckdb::ArrowArrayWrapper();
-		input->get_next(input, &arrow_array.arrow_array);
+		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
+		input->get_next(input, &arrow_array_wrapper.arrow_array);
 	}
 	return ADBC_STATUS_OK;
 }
@@ -806,8 +806,8 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	duckdb_client_properties client_properties;
 	duckdb_connection_get_client_properties(wrapper->connection, &client_properties);
 
-	auto res = duckdb_to_arrow_schema(client_properties, &types[0], names, count,
-	                                  reinterpret_cast<duckdb_arrow_schema *>(&schema));
+	auto res =
+	    duckdb_to_arrow_schema(client_properties, &types[0], names, count, *reinterpret_cast<arrow_schema *>(schema));
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i];
 	}
@@ -867,13 +867,13 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		OutNamesWrapper out_names_wrapper(nullptr, 0);
 		idx_t out_column_count;
 		duckdb_arrow_converted_schema out_types;
-		duckdb::ArrowSchemaWrapper arrow_schema;
-		auto c_arrow_schema = reinterpret_cast<duckdb_arrow_schema>(&arrow_schema.arrow_schema);
-
-		stream.get_schema(&stream, &arrow_schema.arrow_schema);
+		duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
+		stream.get_schema(&stream, &arrow_schema_wrapper.arrow_schema);
 		try {
 			auto c_out_name = out_names_wrapper.get();
-			arrow_to_duckdb_schema(wrapper->connection, c_arrow_schema, &out_types, &c_out_name, &out_column_count);
+			arrow_to_duckdb_schema(wrapper->connection,
+			                       *reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema), &out_types,
+			                       &c_out_name, &out_column_count);
 			out_names_wrapper.SetColumnCount(out_column_count);
 		} catch (...) {
 			free(stream_wrapper);
@@ -891,15 +891,16 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		auto prepared_statement_params =
 		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
-		duckdb::ArrowArrayWrapper arrow_array;
+		duckdb::ArrowArrayWrapper arrow_array_wrapper;
 
-		stream.get_next(&stream, &arrow_array.arrow_array);
+		stream.get_next(&stream, &arrow_array_wrapper.arrow_array);
 
-		while (arrow_array.arrow_array.release) {
+		while (arrow_array_wrapper.arrow_array.release) {
 			// This is a valid arrow array, let's make it into a data chunk
 			DataChunkWrapper out_chunk;
-			arrow_to_duckdb_data_chunk(wrapper->connection, reinterpret_cast<duckdb_arrow_array>(&arrow_array.arrow_array),
-			                           out_types, &out_chunk.chunk);
+			arrow_to_duckdb_data_chunk(wrapper->connection,
+			                           *reinterpret_cast<arrow_array *>(&arrow_array_wrapper.arrow_array), out_types,
+			                           &out_chunk.chunk);
 			if (!out_chunk.chunk) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
 				free(stream_wrapper);
@@ -940,8 +941,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			// Recreate wrappers for next iteration
-			arrow_array = duckdb::ArrowArrayWrapper();
-			stream.get_next(&stream, &arrow_array.arrow_array);
+			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
+			stream.get_next(&stream, &arrow_array_wrapper.arrow_array);
 		}
 	} else {
 		auto res = duckdb_execute_prepared(wrapper->statement, &stream_wrapper->result);
