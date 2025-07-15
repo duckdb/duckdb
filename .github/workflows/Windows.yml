@@ -354,7 +354,7 @@ jobs:
          treat_warn_as_error: 0
          run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+         unittest_script: ./build/release/test/Release/unittest.exe
          build_complete_extensions_set: ${{ github.event_name != 'pull_request' && 1 || 0 }}
 
      - uses: actions/upload-artifact@v4
