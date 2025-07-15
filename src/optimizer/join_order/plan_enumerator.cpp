@@ -60,7 +60,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 	// drive by test to make sure we have an accurate amount of
 	// subsets, and that each neighbor is in a correct amount
 	// of those subsets.
-	D_ASSERT(ret.size() == std::pow(2, neighbors.size()) - 1);
+	D_ASSERT(ret.size() == static_cast<size_t>(std::pow(2, neighbors.size())) - 1);
 	for (auto &n : neighbors) {
 		idx_t count = 0;
 		for (auto &set : ret) {
@@ -68,7 +68,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 				count += 1;
 			}
 		}
-		D_ASSERT(count == std::pow(2, neighbors.size() - 1));
+		D_ASSERT(count == static_cast<size_t>(std::pow(2, neighbors.size()) - 1));
 	}
 #endif
 	return ret;

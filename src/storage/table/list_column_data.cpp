@@ -57,7 +57,7 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
-	Vector result(type, 1);
+	Vector result(LogicalType::UBIGINT, 1);
 	segment->FetchRow(fetch_state, UnsafeNumericCast<row_t>(row_idx), result, 0U);
 
 	// initialize the child scan with the required offset
@@ -235,6 +235,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	UnifiedVectorFormat vdata;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = data_ptr_cast(append_offsets.get());
+	vdata.physical_type = PhysicalType::UINT64;
 
 	// append the child vector
 	if (child_count > 0) {

@@ -82,6 +82,8 @@ struct SortKeyVectorData {
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
 			input.ToUnifiedFormat(size, format);
+		} else {
+			format.physical_type = input.GetType().InternalType();
 		}
 		this->size = size;
 

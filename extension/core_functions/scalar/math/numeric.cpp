@@ -244,7 +244,7 @@ struct BitStringBitCntOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		TR count = Bit::BitCount(input);
-		return count;
+		return UnsafeNumericCast<TR>(count);
 	}
 };
 
@@ -262,7 +262,7 @@ ScalarFunctionSet BitCountFun::GetFunctions() {
 	functions.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::TINYINT,
 	                                     ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                     ScalarFunction::UnaryFunction<string_t, idx_t, BitStringBitCntOperator>));
+	                                     ScalarFunction::UnaryFunction<string_t, int64_t, BitStringBitCntOperator>));
 	return functions;
 }
 

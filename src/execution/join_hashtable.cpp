@@ -306,7 +306,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		}
 
 		// Linear probing for collisions: Move to the next entry in the HT
-		auto hashes_unified = UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v);
+		auto hashes_unified = uses_unified ? UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v) : nullptr;
 		auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 		auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
 
@@ -321,7 +321,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 
 			// Get original hash from unified vector format to extract the salt if hashes_dense was populated that way
 			hash_t hash;
-			if (uses_unified) {
+			if (hashes_unified) {
 				const auto uvf_index = hashes_unified_v.sel->get_index(row_index);
 				hash = hashes_unified[uvf_index];
 			} else {

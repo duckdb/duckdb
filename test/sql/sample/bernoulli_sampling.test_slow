@@ -1,4 +1,4 @@
-# name: test/sql/sample/bernoulli_sampling.test
+# name: test/sql/sample/bernoulli_sampling.test_slow
 # description: Test reservoir sample crash on large data sets
 # group: [sample]
 
