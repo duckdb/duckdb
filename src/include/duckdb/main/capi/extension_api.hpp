@@ -482,13 +482,11 @@ typedef struct {
 	// API to create and manipulate expressions
 
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
-	void (*duckdb_destroy_base_expression)(duckdb_base_expression *expr);
-	duckdb_expression_class (*duckdb_base_expression_get_class)(duckdb_base_expression expr);
-	duckdb_base_expression (*duckdb_expression_get_base_expression)(duckdb_expression expr);
-	duckdb_logical_type (*duckdb_expression_get_return_type)(duckdb_expression expr);
-	duckdb_value (*duckdb_constant_expression_get_value)(duckdb_expression expr);
-	idx_t (*duckdb_bind_get_argument_count)(duckdb_bind_info info);
-	duckdb_expression (*duckdb_bind_get_argument)(duckdb_bind_info info, idx_t index);
+	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
+	bool (*duckdb_is_constant_expression)(duckdb_expression expr);
+	duckdb_value (*duckdb_constant_expression_value)(duckdb_expression expr);
+	idx_t (*duckdb_bind_argument_count)(duckdb_bind_info info);
+	duckdb_expression (*duckdb_bind_argument_at)(duckdb_bind_info info, idx_t index);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
@@ -946,13 +944,11 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_error_data_message = duckdb_error_data_message;
 	result.duckdb_error_data_has_error = duckdb_error_data_has_error;
 	result.duckdb_destroy_expression = duckdb_destroy_expression;
-	result.duckdb_destroy_base_expression = duckdb_destroy_base_expression;
-	result.duckdb_base_expression_get_class = duckdb_base_expression_get_class;
-	result.duckdb_expression_get_base_expression = duckdb_expression_get_base_expression;
-	result.duckdb_expression_get_return_type = duckdb_expression_get_return_type;
-	result.duckdb_constant_expression_get_value = duckdb_constant_expression_get_value;
-	result.duckdb_bind_get_argument_count = duckdb_bind_get_argument_count;
-	result.duckdb_bind_get_argument = duckdb_bind_get_argument;
+	result.duckdb_expression_return_type = duckdb_expression_return_type;
+	result.duckdb_is_constant_expression = duckdb_is_constant_expression;
+	result.duckdb_constant_expression_value = duckdb_constant_expression_value;
+	result.duckdb_bind_argument_count = duckdb_bind_argument_count;
+	result.duckdb_bind_argument_at = duckdb_bind_argument_at;
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;

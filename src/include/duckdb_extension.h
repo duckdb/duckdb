@@ -555,13 +555,11 @@ typedef struct {
 // API to create and manipulate expressions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
-	void (*duckdb_destroy_base_expression)(duckdb_base_expression *expr);
-	duckdb_expression_class (*duckdb_base_expression_get_class)(duckdb_base_expression expr);
-	duckdb_base_expression (*duckdb_expression_get_base_expression)(duckdb_expression expr);
-	duckdb_logical_type (*duckdb_expression_get_return_type)(duckdb_expression expr);
-	duckdb_value (*duckdb_constant_expression_get_value)(duckdb_expression expr);
-	idx_t (*duckdb_bind_get_argument_count)(duckdb_bind_info info);
-	duckdb_expression (*duckdb_bind_get_argument)(duckdb_bind_info info, idx_t index);
+	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
+	bool (*duckdb_is_constant_expression)(duckdb_expression expr);
+	duckdb_value (*duckdb_constant_expression_value)(duckdb_expression expr);
+	idx_t (*duckdb_bind_argument_count)(duckdb_bind_info info);
+	duckdb_expression (*duckdb_bind_argument_at)(duckdb_bind_info info, idx_t index);
 #endif
 
 // New functions around the client context
@@ -1040,14 +1038,12 @@ typedef struct {
 #define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
 
 // Version unstable_new_expression_functions
-#define duckdb_destroy_expression             duckdb_ext_api.duckdb_destroy_expression
-#define duckdb_destroy_base_expression        duckdb_ext_api.duckdb_destroy_base_expression
-#define duckdb_base_expression_get_class      duckdb_ext_api.duckdb_base_expression_get_class
-#define duckdb_expression_get_base_expression duckdb_ext_api.duckdb_expression_get_base_expression
-#define duckdb_expression_get_return_type     duckdb_ext_api.duckdb_expression_get_return_type
-#define duckdb_constant_expression_get_value  duckdb_ext_api.duckdb_constant_expression_get_value
-#define duckdb_bind_get_argument_count        duckdb_ext_api.duckdb_bind_get_argument_count
-#define duckdb_bind_get_argument              duckdb_ext_api.duckdb_bind_get_argument
+#define duckdb_destroy_expression        duckdb_ext_api.duckdb_destroy_expression
+#define duckdb_expression_return_type    duckdb_ext_api.duckdb_expression_return_type
+#define duckdb_is_constant_expression    duckdb_ext_api.duckdb_is_constant_expression
+#define duckdb_constant_expression_value duckdb_ext_api.duckdb_constant_expression_value
+#define duckdb_bind_argument_count       duckdb_ext_api.duckdb_bind_argument_count
+#define duckdb_bind_argument_at          duckdb_ext_api.duckdb_bind_argument_at
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context

@@ -19,57 +19,7 @@
       }
     },
     {
-      "name": "duckdb_destroy_base_expression",
-      "return_type": "void",
-      "params": [
-        {
-          "type": "duckdb_base_expression *",
-          "name": "expr"
-        }
-      ],
-      "comment": {
-        "description": "Destroys the base expression and de-allocates its memory.\n\n",
-        "param_comments": {
-          "expr": "A pointer to the base expression."
-        }
-      }
-    },
-    {
-      "name": "duckdb_base_expression_get_class",
-      "return_type": "duckdb_expression_class",
-      "params": [
-        {
-          "type": "duckdb_base_expression",
-          "name": "expr"
-        }
-      ],
-      "comment": {
-        "description": "Returns the expression class of the base expression.\n\n",
-        "param_comments": {
-          "expr": "The base expression."
-        },
-        "return_value": "The expression class of the base expression."
-      }
-    },
-    {
-      "name": "duckdb_expression_get_base_expression",
-      "return_type": "duckdb_base_expression",
-      "params": [
-        {
-          "type": "duckdb_expression",
-          "name": "expr"
-        }
-      ],
-      "comment": {
-        "description": "Returns the base expression of an expression.\n\n",
-        "param_comments": {
-          "expr": "The expression."
-        },
-        "return_value": "The base expression. Must be destroyed with `duckdb_destroy_base_expression."
-      }
-    },
-    {
-      "name": "duckdb_expression_get_return_type",
+      "name": "duckdb_expression_return_type",
       "return_type": "duckdb_logical_type",
       "params": [
         {
@@ -86,7 +36,24 @@
       }
     },
     {
-      "name": "duckdb_constant_expression_get_value",
+      "name": "duckdb_is_constant_expression",
+      "return_type": "bool",
+      "params": [
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns whether the expression is a constant expression or not.\n\n",
+        "param_comments": {
+          "expr": "The expression."
+        },
+        "return_value": "True, if the expression is a constant expression, else false."
+      }
+    },
+    {
+      "name": "duckdb_constant_expression_value",
       "return_type": "duckdb_value",
       "params": [
         {
@@ -103,7 +70,7 @@
       }
     },
     {
-      "name": "duckdb_bind_get_argument_count",
+      "name": "duckdb_bind_argument_count",
       "return_type": "idx_t",
       "params": [
         {
@@ -119,9 +86,8 @@
         "return_value": "The number of input arguments."
       }
     },
-
     {
-      "name": "duckdb_bind_get_argument",
+      "name": "duckdb_bind_argument_at",
       "return_type": "duckdb_expression",
       "params": [
         {

@@ -3,12 +3,10 @@
   "description": "API to create and manipulate expressions",
   "entries": [
     "duckdb_destroy_expression",
-    "duckdb_destroy_base_expression",
-    "duckdb_base_expression_get_class",
-    "duckdb_expression_get_base_expression",
-    "duckdb_expression_get_return_type",
-    "duckdb_constant_expression_get_value",
-    "duckdb_bind_get_argument_count",
-    "duckdb_bind_get_argument"
+    "duckdb_expression_return_type",
+    "duckdb_is_constant_expression",
+    "duckdb_constant_expression_value",
+    "duckdb_bind_argument_count",
+    "duckdb_bind_argument_at"
   ]
 }

@@ -243,50 +243,6 @@ typedef enum duckdb_error_type {
 //! An enum over DuckDB's different cast modes.
 typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
-//! An enum over DuckDB's expression classes.
-typedef enum duckdb_expression_class {
-	DUCKDB_EXPR_CLASS_INVALID = 0,
-	DUCKDB_EXPR_CLASS_AGGREGATE = 1,
-	DUCKDB_EXPR_CLASS_CASE = 2,
-	DUCKDB_EXPR_CLASS_CAST = 3,
-	DUCKDB_EXPR_CLASS_COLUMN_REF = 4,
-	DUCKDB_EXPR_CLASS_COMPARISON = 5,
-	DUCKDB_EXPR_CLASS_CONJUNCTION = 6,
-	DUCKDB_EXPR_CLASS_CONSTANT = 7,
-	DUCKDB_EXPR_CLASS_DEFAULT = 8,
-	DUCKDB_EXPR_CLASS_FUNCTION = 9,
-	DUCKDB_EXPR_CLASS_OPERATOR = 10,
-	DUCKDB_EXPR_CLASS_STAR = 11,
-	DUCKDB_EXPR_CLASS_SUBQUERY = 12,
-	DUCKDB_EXPR_CLASS_WINDOW = 13,
-	DUCKDB_EXPR_CLASS_PARAMETER = 14,
-	DUCKDB_EXPR_CLASS_COLLATE = 15,
-	DUCKDB_EXPR_CLASS_LAMBDA = 16,
-	DUCKDB_EXPR_CLASS_POSITIONAL_REFERENCE = 17,
-	DUCKDB_EXPR_CLASS_BETWEEN = 18,
-	DUCKDB_EXPR_CLASS_LAMBDA_REF = 19,
-	DUCKDB_EXPR_CLASS_BOUND_AGGREGATE = 20,
-	DUCKDB_EXPR_CLASS_BOUND_CASE = 21,
-	DUCKDB_EXPR_CLASS_BOUND_CAST = 22,
-	DUCKDB_EXPR_CLASS_BOUND_COLUMN_REF = 23,
-	DUCKDB_EXPR_CLASS_BOUND_COMPARISON = 24,
-	DUCKDB_EXPR_CLASS_BOUND_CONJUNCTION = 25,
-	DUCKDB_EXPR_CLASS_BOUND_CONSTANT = 26,
-	DUCKDB_EXPR_CLASS_BOUND_DEFAULT = 27,
-	DUCKDB_EXPR_CLASS_BOUND_FUNCTION = 28,
-	DUCKDB_EXPR_CLASS_BOUND_OPERATOR = 29,
-	DUCKDB_EXPR_CLASS_BOUND_PARAMETER = 30,
-	DUCKDB_EXPR_CLASS_BOUND_REF = 31,
-	DUCKDB_EXPR_CLASS_BOUND_SUBQUERY = 32,
-	DUCKDB_EXPR_CLASS_BOUND_WINDOW = 33,
-	DUCKDB_EXPR_CLASS_BOUND_BETWEEN = 34,
-	DUCKDB_EXPR_CLASS_BOUND_UNNEST = 35,
-	DUCKDB_EXPR_CLASS_BOUND_LAMBDA = 36,
-	DUCKDB_EXPR_CLASS_BOUND_LAMBDA_REF = 37,
-	DUCKDB_EXPR_CLASS_BOUND_EXPRESSION = 38,
-	DUCKDB_EXPR_CLASS_BOUND_EXPANDED = 39
-} duckdb_expression_class;
-
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -607,12 +563,6 @@ typedef struct _duckdb_profiling_info {
 typedef struct _duckdb_error_data {
 	void *internal_ptr;
 } * duckdb_error_data;
-
-//! Holds a base expression.
-//! Must be destroyed with `duckdb_destroy_base_expression`.
-typedef struct _duckdb_base_expression {
-	void *internal_ptr;
-} * duckdb_base_expression;
 
 //! Holds a bound expression.
 //! Must be destroyed with `duckdb_destroy_expression`.
@@ -4957,35 +4907,20 @@ Destroys the expression and de-allocates its memory.
 DUCKDB_C_API void duckdb_destroy_expression(duckdb_expression *expr);
 
 /*!
-Destroys the base expression and de-allocates its memory.
-
-* @param expr A pointer to the base expression.
-*/
-DUCKDB_C_API void duckdb_destroy_base_expression(duckdb_base_expression *expr);
-
-/*!
-Returns the expression class of the base expression.
-
-* @param expr The base expression.
-* @return The expression class of the base expression.
-*/
-DUCKDB_C_API duckdb_expression_class duckdb_base_expression_get_class(duckdb_base_expression expr);
-
-/*!
-Returns the base expression of an expression.
-
-* @param expr The expression.
-* @return The base expression. Must be destroyed with `duckdb_destroy_base_expression.
-*/
-DUCKDB_C_API duckdb_base_expression duckdb_expression_get_base_expression(duckdb_expression expr);
-
-/*!
 Returns the return type of an expression.
 
 * @param expr The expression.
 * @return The return type. Must be destroyed with `duckdb_destroy_logical_type`.
 */
-DUCKDB_C_API duckdb_logical_type duckdb_expression_get_return_type(duckdb_expression expr);
+DUCKDB_C_API duckdb_logical_type duckdb_expression_return_type(duckdb_expression expr);
+
+/*!
+Returns whether the expression is a constant expression or not.
+
+* @param expr The expression.
+* @return True, if the expression is a constant expression, else false.
+*/
+DUCKDB_C_API bool duckdb_is_constant_expression(duckdb_expression expr);
 
 /*!
 Returns the value of a constant expression.
@@ -4993,7 +4928,7 @@ Returns the value of a constant expression.
 * @param expr The expression. The expression class of the expression must be DUCKDB_EXPR_CLASS_CONSTANT.
 * @return The constant value. Must be destroyed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_constant_expression_get_value(duckdb_expression expr);
+DUCKDB_C_API duckdb_value duckdb_constant_expression_value(duckdb_expression expr);
 
 /*!
 Returns the number of input arguments of the scalar function.
@@ -5001,7 +4936,7 @@ Returns the number of input arguments of the scalar function.
 * @param info The bind info.
 * @return The number of input arguments.
 */
-DUCKDB_C_API idx_t duckdb_bind_get_argument_count(duckdb_bind_info info);
+DUCKDB_C_API idx_t duckdb_bind_argument_count(duckdb_bind_info info);
 
 /*!
 Returns the input argument at index of the scalar function.
@@ -5010,7 +4945,7 @@ Returns the input argument at index of the scalar function.
 * @param index The argument index.
 * @return The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
 */
-DUCKDB_C_API duckdb_expression duckdb_bind_get_argument(duckdb_bind_info info, idx_t index);
+DUCKDB_C_API duckdb_expression duckdb_bind_argument_at(duckdb_bind_info info, idx_t index);
 
 #endif
 
