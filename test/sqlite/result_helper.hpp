@@ -38,6 +38,7 @@ public:
 	                   string rvalue_str, idx_t current_row, idx_t current_column, vector<string> &values,
 	                   idx_t expected_column_count, bool row_wise, vector<string> &result_values);
 	bool SkipErrorMessage(const string &message);
+	bool SkipLoggingSameError(const string &file_name);
 
 	vector<string> LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count, string &error);
 };
