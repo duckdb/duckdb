@@ -21,8 +21,7 @@ public:
 	using Types = vector<LogicalType>;
 	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
-	HashedSortGroup(ClientContext &context, const Orders &partitions, const Orders &orders, const Types &input_types,
-	                idx_t group_idx);
+	HashedSortGroup(ClientContext &context, const Orders &orders, const Types &input_types, idx_t group_idx);
 
 	const idx_t group_idx;
 
@@ -78,10 +77,14 @@ public:
 	// OVER(...) (sorting)
 	Orders partitions;
 	Orders orders;
-	const Types payload_types;
+	Types payload_types;
 	vector<HashGroupPtr> hash_groups;
-	//	Reverse lookup from hash bins to non-empty hash groups
-	vector<size_t> bin_groups;
+	// Input columns in the sorted output
+	vector<column_t> scan_ids;
+	// Key columns in the sorted output
+	vector<column_t> sort_ids;
+	// Key columns that must be computed
+	vector<unique_ptr<Expression>> sort_exprs;
 
 	// OVER() (no sorting)
 	unique_ptr<ColumnDataCollection> unsorted;
@@ -110,8 +113,10 @@ public:
 	Allocator &allocator;
 
 	//! Shared expression evaluation
-	ExpressionExecutor executor;
+	ExpressionExecutor hash_exec;
+	ExpressionExecutor sort_exec;
 	DataChunk group_chunk;
+	DataChunk sort_chunk;
 	DataChunk payload_chunk;
 	size_t sort_col_count;
 
