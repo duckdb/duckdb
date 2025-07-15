@@ -114,12 +114,14 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	if (analyze_state.total_values_count == 0) {
 		return DConstants::INVALID_INDEX;
 	}
-	double factor_of_sampling = 1 / ((double)analyze_state.rowgroup_sample.size() / analyze_state.total_values_count);
+	double factor_of_sampling = 1 / (static_cast<double>(analyze_state.rowgroup_sample.size()) /
+	                                 static_cast<double>(analyze_state.total_values_count));
 
 	// Finding which is the best dictionary for the sample
 	double estimated_bits_per_value =
 	    alp::AlpRDCompression<T, true>::FindBestDictionary(analyze_state.rowgroup_sample, analyze_state.state);
-	double estimated_compressed_bits = estimated_bits_per_value * analyze_state.rowgroup_sample.size();
+	double estimated_compressed_bits =
+	    estimated_bits_per_value * static_cast<double>(analyze_state.rowgroup_sample.size());
 	double estimed_compressed_bytes = estimated_compressed_bits / 8;
 
 	//! Overhead per segment: [Pointer to metadata + right bitwidth + left bitwidth + n dict elems] + Dictionary Size
