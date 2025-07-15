@@ -103,6 +103,7 @@ public:
 				if (input_data.release) {
 					input_data.release(&input_data);
 				}
+				input_data.release = nullptr;
 				return;
 			}
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
@@ -118,6 +119,7 @@ public:
 		if (input_data.release) {
 			input_data.release(&input_data);
 		}
+		input_data.release = nullptr;
 	}
 
 	AdbcError adbc_error;
@@ -144,7 +146,7 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
@@ -159,7 +161,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data, "", true);
@@ -174,15 +176,15 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Since this is temporary and has a schema, it will fail in an internal code path
 	db.CreateTable("my_table", input_data, "my_schema", true);
 
 	// We released it in the error, hence we create it again
-	input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
 
-	db.CreateTable("my_table", input_data, "my_schema");
+	db.CreateTable("my_table", input_data_2, "my_schema");
 
 	// we can check it works
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
@@ -195,7 +197,7 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA \"my_schema\";");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create table with name requiring quoting
 	db.CreateTable("my_table", input_data, "my_schema");
@@ -218,7 +220,7 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
+	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("lineitem", input_data);
@@ -232,7 +234,7 @@ TEST_CASE("ADBC - Pivot", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
+	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
 
 	db.CreateTable("flights", input_data);
 
@@ -335,11 +337,11 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 		arrow_stream.release(&arrow_stream);
 	}
 
-	input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
 
 	StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error);
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_2, &adbc_error)));
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
@@ -768,7 +770,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	// Now lets insert with Auto-Commit Off
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_2 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -778,7 +780,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_2, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
@@ -815,7 +817,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Lets do a rollback
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_3 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -825,7 +827,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_3, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -865,7 +867,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Let's change the Auto commit config mid-transaction
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_4 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -874,7 +876,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_4, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -902,7 +904,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_5 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -911,7 +913,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_5, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -1105,7 +1107,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42 as value");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 	ArrowArrayStream arrow_stream;
@@ -1164,7 +1166,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_catalog_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1198,7 +1200,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1259,7 +1261,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_table_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1436,7 +1438,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_column_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1717,7 +1719,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_all_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1995,7 +1997,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_errors");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
