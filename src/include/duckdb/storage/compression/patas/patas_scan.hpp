@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/compression/chimp/chimp.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
 #include "duckdb/storage/compression/patas/shared.hpp"
 
 #include "duckdb/common/limits.hpp"
