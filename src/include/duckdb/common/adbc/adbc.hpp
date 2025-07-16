@@ -60,23 +60,60 @@ public:
 
 class ArrowSchemaADBCWrapper {
 public:
-	ArrowSchemaADBCWrapper() : schema(nullptr) {
+	ArrowSchemaADBCWrapper() {
+		schema = duckdb_create_arrow_schema();
+		reinterpret_cast<ArrowSchema *>(schema)->release = nullptr;
 	}
-	// ArrowSchemaADBCWrapper(ArrowSchema & arrow_schema) : {
-	// 	schema
-	// }
-	//
-	// ~ArrowSchemaADBCWrapper() {
-	// 	if (chunk) {
-	// 		duckdb_destroy_data_chunk(&chunk);
-	// 	}
-	// }
 
-	// explicit operator duckdb_data_chunk() const {
-	// 	return chunk;
-	// }
+	explicit ArrowSchemaADBCWrapper(ArrowSchema &arrow_schema) : ArrowSchemaADBCWrapper() {
+		*reinterpret_cast<ArrowSchema *>(schema) = arrow_schema;
+		// pass ownership
+		arrow_schema.release = nullptr;
+	}
+
+	ArrowSchema *Get() const {
+		return reinterpret_cast<ArrowSchema *>(schema);
+	}
+
+	~ArrowSchemaADBCWrapper() {
+		if (schema) {
+			duckdb_destroy_arrow_schema(&schema);
+		}
+	}
 
 	duckdb_arrow_schema schema;
+};
+
+class ArrowArrayADBCWrapper {
+public:
+	ArrowArrayADBCWrapper() {
+		array = duckdb_create_arrow_array();
+		reinterpret_cast<ArrowArray *>(array)->release = nullptr;
+	}
+
+	explicit ArrowArrayADBCWrapper(ArrowArray &arrow_array) : ArrowArrayADBCWrapper() {
+		*reinterpret_cast<ArrowArray *>(array) = arrow_array;
+		// pass ownership
+		arrow_array.release = nullptr;
+	}
+	ArrowArray *Get() const {
+		return reinterpret_cast<ArrowArray *>(array);
+	}
+	bool Valid() const {
+		return reinterpret_cast<ArrowArray *>(array)->release;
+	}
+	void Reset() {
+		duckdb_destroy_arrow_array(&array);
+		array = duckdb_create_arrow_array();
+		reinterpret_cast<ArrowArray *>(array)->release = nullptr;
+	}
+	~ArrowArrayADBCWrapper() {
+		if (array) {
+			duckdb_destroy_arrow_array(&array);
+		}
+	}
+
+	duckdb_arrow_array array;
 };
 
 class ConvertedSchemaWrapper {
