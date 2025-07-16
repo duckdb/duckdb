@@ -147,10 +147,9 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
-#ifdef DEBUG
 	auto &this_type = GetType();
 	auto &other_type = other.GetType();
-
+#ifdef DEBUG
 	auto type_is_same = other_type == this_type;
 	bool this_is_nested = this_type.IsNested();
 	bool other_is_nested = other_type.IsNested();
@@ -163,7 +162,7 @@ void Vector::Reinterpret(const Vector &other) {
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
 	AssignSharedPointer(buffer, other.buffer);
-	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(GetType(), nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
