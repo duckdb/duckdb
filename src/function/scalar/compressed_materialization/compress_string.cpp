@@ -98,6 +98,9 @@ scalar_function_t GetStringCompressFunctionSwitch(const LogicalType &result_type
 		return GetStringCompressFunction<uint64_t>(result_type);
 	case LogicalTypeId::UHUGEINT:
 		return GetStringCompressFunction<uhugeint_t>(result_type);
+	case LogicalTypeId::HUGEINT:
+		// Never generated, only for backwards compatibility
+		return GetStringCompressFunction<hugeint_t>(result_type);
 	default:
 		throw InternalException("Unexpected type in GetStringCompressFunctionSwitch");
 	}
@@ -270,6 +273,11 @@ ScalarFunction InternalCompressStringUintegerFun::GetFunction() {
 
 ScalarFunction InternalCompressStringUbigintFun::GetFunction() {
 	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunction InternalCompressStringHugeintFun::GetFunction() {
+	// We never generate this, but it's needed for backwards compatibility
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::HUGEINT));
 }
 
 ScalarFunction InternalCompressStringUhugeintFun::GetFunction() {

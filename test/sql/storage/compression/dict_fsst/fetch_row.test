@@ -2,19 +2,13 @@
 # description: Test storage with Dictionary compression
 # group: [dict_fsst]
 
-require block_size 262144
-
-# load the DB from disk
 load __TEST_DIR__/test_dictionary_fetchrow.db readwrite v1.3.0
 
 statement ok
-PRAGMA force_compression = 'dict_fsst'
+PRAGMA force_compression = 'dict_fsst';
 
 statement ok
-CREATE TABLE test (
-	a INTEGER,
-	b VARCHAR
-);
+CREATE TABLE test (a INTEGER, b VARCHAR);
 
 statement ok
 INSERT INTO test (a, b)
@@ -40,7 +34,7 @@ SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VA
 DICT_FSST
 
 query I
-select distinct b from test order by a % 5;
+SELECT DISTINCT b FROM test ORDER BY a % 5;
 ----
 aaaa
 bbbb
@@ -49,10 +43,10 @@ this is not an inlined string
 NULL
 
 statement ok
-pragma verify_fetch_row;
+PRAGMA verify_fetch_row;
 
 query I
-select distinct b from test order by a % 5;
+SELECT DISTINCT b FROM test ORDER BY a % 5;
 ----
 aaaa
 bbbb
