@@ -2269,6 +2269,7 @@ typedef struct PGMergeIntoStmt {
 	PGList *usingClause;         /* optional using clause for more tables */
 	PGList *matchActions;        /* list of match actions */
 	PGWithClause *withClause;    /* WITH clause */
+	PGList *returningList;       /* return-values list (of PGTargetEntry) */
 } PGMergeIntoStmt;
 
 typedef enum {
