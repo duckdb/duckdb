@@ -305,181 +305,175 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	// FIXME: needs test for scanning a fixed size list
 	// this likely requires nanoarrow to create the array to scan
 }
-//
-// TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
-// 	CAPITester tester;
-// 	REQUIRE(tester.OpenDatabase(nullptr));
-//
-// 	SECTION("roundtrip: duckdb table -> arrow -> duckdb chunk, validate correctness") {
-// 		// 1. Create and populate table
-// 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE big_table(i INTEGER);"));
-// 		REQUIRE_NO_FAIL(tester.Query("INSERT INTO big_table SELECT i FROM range(10000) tbl(i);"));
-//
-// 		// 2. Query the table and fetch all results as data chunks
-// 		duckdb_result result;
-// 		REQUIRE(duckdb_query(tester.connection, "SELECT i FROM big_table ORDER BY i", &result) == DuckDBSuccess);
-// 		idx_t chunk_count = duckdb_result_chunk_count(result);
-// 		idx_t total_rows = 0;
-// 		std::vector<ArrowArray> arrow_arrays;
-// 		std::vector<duckdb_data_chunk> duckdb_chunks;
-// 		std::vector<int32_t> all_duckdb_values;
-// 		std::vector<int32_t> all_arrow_values;
-//
-// 		// 3. For each chunk, convert to Arrow Array and collect values
-// 		for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx++) {
-// 			duckdb_data_chunk chunk = duckdb_result_get_chunk(result, chunk_idx);
-// 			duckdb_chunks.push_back(chunk); // for later roundtrip
-// 			idx_t chunk_size = duckdb_data_chunk_get_size(chunk);
-// 			total_rows += chunk_size;
-// 			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
-// 			auto data = static_cast<int32_t *>(duckdb_vector_get_data(vec));
-// 			for (idx_t i = 0; i < chunk_size; i++) {
-// 				all_duckdb_values.push_back(data[i]);
-// 			}
-//
-// 			ArrowArray duckdb_arrow_array;
-// 			duckdb_client_properties client_properties;
-// 			duckdb_connection_get_client_properties(tester.connection, &client_properties);
-// 			duckdb_error_data err = duckdb_data_chunk_to_arrow(client_properties, chunk,
-// 			                                                   reinterpret_cast<arrow_array *>(&duckdb_arrow_array));
-// 			duckdb_destroy_client_properties(&client_properties);
-// 			REQUIRE(err == nullptr);
-// 			arrow_arrays.push_back(duckdb_arrow_array);
-// 		}
-// 		REQUIRE(total_rows == 10000);
-// 		REQUIRE(all_duckdb_values.size() == 10000);
-//
-// 		// 4. Prepare Arrow schema for roundtrip
-// 		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
-// 		duckdb_logical_type types[1] = {type};
-// 		char *names[1] = {strdup("i")};
-// 		ArrowSchemaWrapper arrow_schema_wrapper;
-// 		duckdb_client_properties client_properties;
-// 		duckdb_connection_get_client_properties(tester.connection, &client_properties);
-// 		duckdb_error_data err = duckdb_to_arrow_schema(
-// 		    client_properties, types, names, 1, reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema));
-// 		duckdb_destroy_client_properties(&client_properties);
-// 		REQUIRE(err == nullptr);
-// 		duckdb_arrow_converted_schema converted_schema = nullptr;
-// 		// Convert schema (simulate real use)
-// 		char **out_names = nullptr;
-// 		idx_t out_col_count = 0;
-// 		err = arrow_to_duckdb_schema(tester.connection,
-// 		                             reinterpret_cast<arrow_schema *>(&arrow_schema_wrapper.arrow_schema),
-// 		                             &converted_schema, &out_names, &out_col_count);
-// 		REQUIRE(err == nullptr);
-// 		REQUIRE(out_col_count == 1);
-// 		// 5. For each Arrow array, convert back to DuckDB chunk and validate
-// 		for (size_t idx = 0, offset = 0; idx < arrow_arrays.size(); idx++) {
-// 			ArrowArray *duckdb_arrow_array = &arrow_arrays[idx];
-// 			// Prepare output chunk
-// 			duckdb_data_chunk out_chunk;
-// 			// Convert Arrow array to DuckDB chunk
-// 			err = arrow_to_duckdb_data_chunk(tester.connection, reinterpret_cast<arrow_array *>(duckdb_arrow_array),
-// 			                                 converted_schema, &out_chunk);
-// 			REQUIRE(err == nullptr);
-// 			idx_t chunk_size = duckdb_data_chunk_get_size(out_chunk);
-// 			auto vec = duckdb_data_chunk_get_vector(out_chunk, 0);
-// 			auto data = static_cast<int32_t *>(duckdb_vector_get_data(vec));
-// 			for (idx_t i = 0; i < chunk_size; i++, offset++) {
-// 				REQUIRE(data[i] == all_duckdb_values[offset]);
-// 				all_arrow_values.push_back(data[i]);
-// 			}
-// 			duckdb_destroy_data_chunk(&out_chunk);
-// 		}
-// 		REQUIRE(all_arrow_values.size() == 10000);
-// 		REQUIRE(all_arrow_values == all_duckdb_values);
-//
-// 		// 6. Cleanup
-// 		for (idx_t i = 0; i < out_col_count; i++) {
-// 			delete[] out_names[i];
-// 		}
-// 		delete[] out_names;
-// 		duckdb_destroy_arrow_converted_schema(&converted_schema);
-// 		for (auto arrow_array : arrow_arrays) {
-// 			if (arrow_array.release) {
-// 				arrow_array.release(&arrow_array);
-// 			}
-// 		}
-// 		for (auto chunk : duckdb_chunks) {
-// 			duckdb_destroy_data_chunk(&chunk);
-// 		}
-// 		duckdb_destroy_logical_type(&type);
-// 		free(names[0]);
-// 		duckdb_destroy_result(&result);
-// 	}
-//
-// 	SECTION("C-API Arrow Tess Null pointer inputs") {
-// 		duckdb_error_data err;
-// 		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
-// 		char *names[1] = {strdup("i")};
-// 		// Test duckdb_to_arrow_schema
-// 		ArrowSchema duckdb_arrow_schema;
-// 		auto out_schema = reinterpret_cast<arrow_schema *>(&duckdb_arrow_schema);
-// 		err = duckdb_to_arrow_schema(nullptr, &type, names, 1, out_schema);
-// 		duckdb_client_properties client_properties;
-// 		duckdb_connection_get_client_properties(tester.connection, &client_properties);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = duckdb_to_arrow_schema(client_properties, nullptr, names, 1, out_schema);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = duckdb_to_arrow_schema(client_properties, &type, nullptr, 1, out_schema);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		// Zero columns
-// 		err = duckdb_to_arrow_schema(client_properties, &type, names, 0, out_schema);
-// 		REQUIRE(err == nullptr); // zero columns is allowed, but produces an empty schema
-// 		if (duckdb_arrow_schema.release) {
-// 			duckdb_arrow_schema.release(&duckdb_arrow_schema);
-// 		}
-// 		duckdb_destroy_logical_type(&type);
-// 		free(names[0]);
-//
-// 		// Test duckdb_data_chunk_to_arrow
-// 		ArrowArray duckdb_arrow_array;
-// 		auto out_arrow = reinterpret_cast<arrow_array *>(&duckdb_arrow_array);
-//
-// 		duckdb_destroy_error_data(&err);
-// 		err = duckdb_data_chunk_to_arrow(client_properties, nullptr, out_arrow);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = duckdb_data_chunk_to_arrow(nullptr, nullptr, out_arrow);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-//
-// 		// Test arrow_to_duckdb_schema
-// 		ArrowSchema schema;
-// 		auto arrow_schema_ptr = reinterpret_cast<arrow_schema *>(&schema);
-// 		duckdb_arrow_converted_schema converted_schema = nullptr;
-// 		char **out_names = nullptr;
-// 		idx_t out_col_count = 0;
-// 		err = arrow_to_duckdb_schema(nullptr, arrow_schema_ptr, &converted_schema, &out_names, &out_col_count);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = arrow_to_duckdb_schema(tester.connection, arrow_schema_ptr, nullptr, &out_names, &out_col_count);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = arrow_to_duckdb_schema(tester.connection, arrow_schema_ptr, &converted_schema, nullptr, &out_col_count);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = arrow_to_duckdb_schema(tester.connection, arrow_schema_ptr, &converted_schema, &out_names, nullptr);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-//
-// 		// Test arrow_to_duckdb_data_chunk
-// 		ArrowArray arr;
-// 		auto arr_ptr = reinterpret_cast<arrow_array *>(&arr);
-// 		duckdb_data_chunk out_chunk = nullptr;
-// 		err = arrow_to_duckdb_data_chunk(nullptr, arr_ptr, converted_schema, &out_chunk);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = arrow_to_duckdb_data_chunk(tester.connection, arr_ptr, nullptr, &out_chunk);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		err = arrow_to_duckdb_data_chunk(tester.connection, arr_ptr, converted_schema, nullptr);
-// 		REQUIRE(err != nullptr);
-// 		duckdb_destroy_error_data(&err);
-// 		duckdb_destroy_client_properties(&client_properties);
-// 	}
-// }
+
+TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	SECTION("roundtrip: duckdb table -> arrow -> duckdb chunk, validate correctness") {
+		// 1. Create and populate table
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE big_table(i INTEGER);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO big_table SELECT i FROM range(10000) tbl(i);"));
+
+		// 2. Query the table and fetch all results as data chunks
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT i FROM big_table ORDER BY i", &result) == DuckDBSuccess);
+		idx_t chunk_count = duckdb_result_chunk_count(result);
+		idx_t total_rows = 0;
+		std::vector<ArrowArray> arrow_arrays;
+		std::vector<duckdb_data_chunk> duckdb_chunks;
+		std::vector<int32_t> all_duckdb_values;
+		std::vector<int32_t> all_arrow_values;
+
+		// 3. For each chunk, convert to Arrow Array and collect values
+		for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx++) {
+			duckdb_data_chunk chunk = duckdb_result_get_chunk(result, chunk_idx);
+			duckdb_chunks.push_back(chunk); // for later roundtrip
+			idx_t chunk_size = duckdb_data_chunk_get_size(chunk);
+			total_rows += chunk_size;
+			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+			auto data = static_cast<int32_t *>(duckdb_vector_get_data(vec));
+			for (idx_t i = 0; i < chunk_size; i++) {
+				all_duckdb_values.push_back(data[i]);
+			}
+
+			ArrowArray duckdb_arrow_array;
+			duckdb_client_properties client_properties;
+			duckdb_connection_get_client_properties(tester.connection, &client_properties);
+			duckdb_error_data err = duckdb_data_chunk_to_arrow(client_properties, chunk, &duckdb_arrow_array);
+			duckdb_destroy_client_properties(&client_properties);
+			REQUIRE(err == nullptr);
+			arrow_arrays.push_back(duckdb_arrow_array);
+		}
+		REQUIRE(total_rows == 10000);
+		REQUIRE(all_duckdb_values.size() == 10000);
+
+		// 4. Prepare Arrow schema for roundtrip
+		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		duckdb_logical_type types[1] = {type};
+		char *names[1] = {strdup("i")};
+		ArrowSchemaWrapper arrow_schema_wrapper;
+		duckdb_client_properties client_properties;
+		duckdb_connection_get_client_properties(tester.connection, &client_properties);
+		duckdb_error_data err = duckdb_to_arrow_schema(
+		    client_properties, types, names, 1, &arrow_schema_wrapper.arrow_schema);
+		duckdb_destroy_client_properties(&client_properties);
+		REQUIRE(err == nullptr);
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		// Convert schema (simulate real use)
+		char **out_names = nullptr;
+		idx_t out_col_count = 0;
+		err = arrow_to_duckdb_schema(tester.connection, &arrow_schema_wrapper.arrow_schema,
+		                             &converted_schema, &out_names, &out_col_count);
+		REQUIRE(err == nullptr);
+		REQUIRE(out_col_count == 1);
+		// 5. For each Arrow array, convert back to DuckDB chunk and validate
+		for (size_t idx = 0, offset = 0; idx < arrow_arrays.size(); idx++) {
+			ArrowArray *duckdb_arrow_array = &arrow_arrays[idx];
+			// Prepare output chunk
+			duckdb_data_chunk out_chunk;
+			// Convert Arrow array to DuckDB chunk
+			err = arrow_to_duckdb_data_chunk(tester.connection, duckdb_arrow_array,
+			                                 converted_schema, &out_chunk);
+			REQUIRE(err == nullptr);
+			idx_t chunk_size = duckdb_data_chunk_get_size(out_chunk);
+			auto vec = duckdb_data_chunk_get_vector(out_chunk, 0);
+			auto data = static_cast<int32_t *>(duckdb_vector_get_data(vec));
+			for (idx_t i = 0; i < chunk_size; i++, offset++) {
+				REQUIRE(data[i] == all_duckdb_values[offset]);
+				all_arrow_values.push_back(data[i]);
+			}
+			duckdb_destroy_data_chunk(&out_chunk);
+		}
+		REQUIRE(all_arrow_values.size() == 10000);
+		REQUIRE(all_arrow_values == all_duckdb_values);
+
+		// 6. Cleanup
+		for (idx_t i = 0; i < out_col_count; i++) {
+			delete[] out_names[i];
+		}
+		delete[] out_names;
+		duckdb_destroy_arrow_converted_schema(&converted_schema);
+		for (auto arrow_array : arrow_arrays) {
+			if (arrow_array.release) {
+				arrow_array.release(&arrow_array);
+			}
+		}
+		for (auto chunk : duckdb_chunks) {
+			duckdb_destroy_data_chunk(&chunk);
+		}
+		duckdb_destroy_logical_type(&type);
+		free(names[0]);
+		duckdb_destroy_result(&result);
+	}
+
+	SECTION("C-API Arrow Tess Null pointer inputs") {
+		duckdb_error_data err;
+		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		char *names[1] = {strdup("i")};
+		// Test duckdb_to_arrow_schema
+		ArrowSchema duckdb_arrow_schema;
+		err = duckdb_to_arrow_schema(nullptr, &type, names, 1, &duckdb_arrow_schema);
+		duckdb_client_properties client_properties;
+		duckdb_connection_get_client_properties(tester.connection, &client_properties);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_to_arrow_schema(client_properties, nullptr, names, 1, &duckdb_arrow_schema);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_to_arrow_schema(client_properties, &type, nullptr, 1, &duckdb_arrow_schema);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		// Zero columns
+		err = duckdb_to_arrow_schema(client_properties, &type, names, 0, &duckdb_arrow_schema);
+		REQUIRE(err == nullptr); // zero columns is allowed, but produces an empty schema
+		if (duckdb_arrow_schema.release) {
+			duckdb_arrow_schema.release(&duckdb_arrow_schema);
+		}
+		duckdb_destroy_logical_type(&type);
+		free(names[0]);
+
+		// Test duckdb_data_chunk_to_arrow
+		ArrowArray duckdb_arrow_array;
+
+		duckdb_destroy_error_data(&err);
+		err = duckdb_data_chunk_to_arrow(client_properties, nullptr, &duckdb_arrow_array);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_data_chunk_to_arrow(nullptr, nullptr, &duckdb_arrow_array);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+
+		// Test arrow_to_duckdb_schema
+		ArrowSchema schema;
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		char **out_names = nullptr;
+		idx_t out_col_count = 0;
+		err = arrow_to_duckdb_schema(nullptr, &schema, &converted_schema, &out_names, &out_col_count);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = arrow_to_duckdb_schema(tester.connection, &schema, nullptr, &out_names, &out_col_count);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = arrow_to_duckdb_schema(tester.connection, &schema, &converted_schema, nullptr, &out_col_count);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = arrow_to_duckdb_schema(tester.connection, &schema, &converted_schema, &out_names, nullptr);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+
+		// Test arrow_to_duckdb_data_chunk
+		ArrowArray arr;
+		duckdb_data_chunk out_chunk = nullptr;
+		err = arrow_to_duckdb_data_chunk(nullptr, &arr, converted_schema, &out_chunk);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = arrow_to_duckdb_data_chunk(tester.connection, &arr, nullptr, &out_chunk);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = arrow_to_duckdb_data_chunk(tester.connection, &arr, converted_schema, nullptr);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		duckdb_destroy_client_properties(&client_properties);
+	}
+}
