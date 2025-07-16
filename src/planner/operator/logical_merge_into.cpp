@@ -26,7 +26,7 @@ vector<idx_t> LogicalMergeInto::GetTableIndex() const {
 
 vector<ColumnBinding> LogicalMergeInto::GetColumnBindings() {
 	if (return_chunk) {
-		return GenerateColumnBindings(table_index, table.GetTypes().size());
+		return GenerateColumnBindings(table_index, table.GetTypes().size() + 1);
 	}
 	return {ColumnBinding(0, 0)};
 }
@@ -34,6 +34,7 @@ vector<ColumnBinding> LogicalMergeInto::GetColumnBindings() {
 void LogicalMergeInto::ResolveTypes() {
 	if (return_chunk) {
 		types = table.GetTypes();
+		types.push_back(LogicalType::VARCHAR);
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}

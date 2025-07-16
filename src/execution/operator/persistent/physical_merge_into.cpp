@@ -435,8 +435,14 @@ public:
 			}
 			local_states.push_back(std::move(local_state));
 		}
+		vector<LogicalType> scan_types;
+		for (idx_t c = 0; c < op.types.size() - 1; c++) {
+			scan_types.emplace_back(op.types[c]);
+		}
+		scan_chunk.Initialize(context.client, scan_types);
 	}
 
+	DataChunk scan_chunk;
 	vector<unique_ptr<LocalSourceState>> local_states;
 	idx_t index = 0;
 };
@@ -471,7 +477,32 @@ SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk
 		auto &child_lstate = *lstate.local_states[lstate.index];
 		OperatorSourceInput source_input {child_gstate, child_lstate, input.interrupt_state};
 
-		auto result = action.op->GetData(context, chunk, source_input);
+		auto result = action.op->GetData(context, lstate.scan_chunk, source_input);
+		if (lstate.scan_chunk.size() > 0) {
+			// construct the result chunk
+			for (idx_t c = 0; c < lstate.scan_chunk.ColumnCount(); c++) {
+				chunk.data[c].Reference(lstate.scan_chunk.data[c]);
+			}
+			// set the merge action
+			string merge_action_name;
+			switch (action.action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				merge_action_name = "UPDATE";
+				break;
+			case MergeActionType::MERGE_INSERT:
+				merge_action_name = "INSERT";
+				break;
+			case MergeActionType::MERGE_DELETE:
+				merge_action_name = "DELETE";
+				break;
+			default:
+				throw InternalException("Unsupported merge action for RETURNING");
+			}
+			Value merge_action(merge_action_name);
+			chunk.data.back().Reference(merge_action);
+			chunk.SetCardinality(lstate.scan_chunk.size());
+		}
+
 		if (result != SourceResultType::FINISHED) {
 			return result;
 		}

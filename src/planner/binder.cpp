@@ -547,10 +547,10 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const string &alias, idx_t update_table_index,
-                                     unique_ptr<LogicalOperator> child_operator) {
+                                     unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 
 	vector<LogicalType> types;
-	vector<std::string> names;
+	vector<string> names;
 
 	auto binder = Binder::CreateBinder(context);
 
@@ -565,7 +565,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table,
+	                                  std::move(virtual_columns));
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

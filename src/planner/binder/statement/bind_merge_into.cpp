@@ -310,8 +310,12 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	if (!stmt.returning_list.empty()) {
 		auto merge_table_index = merge_into->table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(merge_into);
+
+		// add the merge_action virtual column
+		virtual_column_map_t virtual_columns;
+		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
 		return BindReturning(std::move(stmt.returning_list), table, table_alias, merge_table_index,
-		                     std::move(index_as_logicaloperator));
+		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
 	}
 
 	BoundStatement result;
