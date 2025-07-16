@@ -93,11 +93,13 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, ArrowSche
 	}
 	const idx_t column_count = names.size();
 	*out_column_count = column_count;
-	*out_names = new char *[column_count];
+	*out_names = new char *[column_count + 1];
 	for (idx_t i = 0; i < column_count; i++) {
 		(*out_names)[i] = new char[names[i].size() + 1];
 		std::strcpy((*out_names)[i], names[i].c_str());
 	}
+	// null-terminate the list
+	(*out_names)[column_count] = nullptr;
 	return nullptr;
 }
 
