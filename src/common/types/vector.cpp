@@ -147,10 +147,9 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
-#ifdef DEBUG
 	auto &this_type = GetType();
 	auto &other_type = other.GetType();
-
+#ifdef DEBUG
 	auto type_is_same = other_type == this_type;
 	bool this_is_nested = this_type.IsNested();
 	bool other_is_nested = other_type.IsNested();
@@ -163,7 +162,7 @@ void Vector::Reinterpret(const Vector &other) {
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
 	AssignSharedPointer(buffer, other.buffer);
-	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(GetType(), nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
@@ -590,7 +589,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
 			return Value::Numeric(vector->GetType(),
-			                      static_cast<int64_t>(start + static_cast<uint64_t>(increment) * index));
+			                      start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
@@ -840,7 +839,7 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(static_cast<int64_t>(start + static_cast<uint64_t>(increment) * i)) +
+			retval += to_string(start + static_cast<int64_t>(static_cast<uint64_t>(increment) * i)) +
 			          (i == count - 1 ? "" : ", ");
 		}
 		break;
