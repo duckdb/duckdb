@@ -1,5 +1,6 @@
 #include "reader/variant_column_reader.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
+#include "reader/variant/variant_shredded_conversion.hpp"
 
 namespace duckdb {
 
@@ -31,52 +32,68 @@ void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Col
 	}
 }
 
-idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	if (child_readers.size() != 2) {
-		throw NotImplementedException("Shredded Variant columns are not supported yet");
+static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_value) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("value", LogicalType::BLOB);
+	if (typed_value) {
+		children.emplace_back("typed_value", typed_value->Type());
 	}
+	return LogicalType::STRUCT(std::move(children));
+}
 
+idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
 	}
+	optional_ptr<ColumnReader> typed_value_reader = child_readers.size() == 3 ? child_readers[2].get() : nullptr;
 
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand
 	std::fill_n(define_out, num_values, MaxDefine());
 
 	optional_idx read_count;
-	Vector value_intermediate(LogicalType::BLOB, num_values);
+
 	Vector metadata_intermediate(LogicalType::BLOB, num_values);
+	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
+	auto &group_entries = StructVector::GetEntries(intermediate_group);
+	auto &value_intermediate = *group_entries[0];
+
 	auto metadata_values = child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
 	auto value_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
 	if (metadata_values != value_values) {
 		throw InvalidInputException(
-		    "The unshredded Variant column did not contain the same amount of values for 'metadata' and 'value'");
+		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	VariantBinaryDecoder decoder(context);
-
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto metadata_intermediate_data = FlatVector::GetData<string_t>(metadata_intermediate);
-	auto value_intermediate_data = FlatVector::GetData<string_t>(value_intermediate);
+	auto &result_validity = FlatVector::Validity(result);
 
-	auto metadata_validity = FlatVector::Validity(metadata_intermediate);
-	auto value_validity = FlatVector::Validity(value_intermediate);
-	for (idx_t i = 0; i < num_values; i++) {
-		if (!metadata_validity.RowIsValid(i) || !value_validity.RowIsValid(i)) {
-			throw InvalidInputException("The Variant 'metadata' and 'value' columns can not produce NULL values");
+	vector<VariantValue> conversion_result;
+	if (typed_value_reader) {
+		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
+		if (typed_values != value_values) {
+			throw InvalidInputException(
+			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
-		VariantMetadata variant_metadata(metadata_intermediate_data[i]);
-		auto value_data = reinterpret_cast<const_data_ptr_t>(value_intermediate_data[i].GetData());
+	}
+	conversion_result =
+	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
 
-		VariantDecodeResult decode_result;
-		decode_result.doc = yyjson_mut_doc_new(nullptr);
-
-		auto val = decoder.Decode(decode_result.doc, variant_metadata, value_data);
+	for (idx_t i = 0; i < conversion_result.size(); i++) {
+		auto &variant = conversion_result[i];
+		if (variant.IsNull()) {
+			result_validity.SetInvalid(i);
+			continue;
+		}
 
 		//! Write the result to a string
+		VariantDecodeResult decode_result;
+		decode_result.doc = yyjson_mut_doc_new(nullptr);
+		auto json_val = variant.ToJSON(context, decode_result.doc);
+
 		size_t len;
-		decode_result.data = yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
+		decode_result.data =
+		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
 		if (!decode_result.data) {
 			throw InvalidInputException("Could not serialize the JSON to string, yyjson failed");
 		}
