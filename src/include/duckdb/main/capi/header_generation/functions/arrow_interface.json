@@ -23,7 +23,7 @@
                     "name": "column_count"
                 },
                 {
-                    "type": "duckdb_arrow_schema *",
+                    "type": "ArrowSchema *",
                     "name": "out_schema"
                 }
             ],
@@ -34,7 +34,7 @@
                     "types": "The DuckDB Logical Types for each column in the schema.",
                     "names": "The names for each column in the schema.",
                     "column_count": "The number of columns that exist in the schema.",
-                    "out_schema": "The resulting arrow schema. Must be destroyed with `duckdb_destroy_arrow_schema`."
+                    "out_schema": "The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`."
                 },
                 "return_value": "The error data."
             }
@@ -52,7 +52,7 @@
                     "name": "chunk"
                 },
                 {
-                    "type": "duckdb_arrow_array *",
+                    "type": "ArrowArray *",
                     "name": "out_arrow_array"
                 }
             ],
@@ -61,7 +61,7 @@
                 "param_comments": {
                     "client_properties": "The client properties to extract the Arrow settings from.",
                     "chunk": "The DuckDB data chunk to convert.",
-                    "out_arrow_array": "The output Arrow structure that will hold the converted data. Must be destroyed with `duckdb_arrow_array`"
+                    "out_arrow_array": "The output Arrow structure that will hold the converted data. Must be released with `out_arrow_array->release(out_arrow_array)`"
                 },
                 "return_value": "The error data."
             }
@@ -75,7 +75,7 @@
                 "name": "connection"
             },
             {
-              "type": "duckdb_arrow_schema",
+              "type": "ArrowSchema *",
               "name": "schema"
             },
             {
@@ -95,7 +95,7 @@
             "description": "Transforms an Arrow Schema into a DuckDB Schema.\n\n",
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
-              "schema": "The input Arrow schema. Must be destroyed with `duckdb_destroy_arrow_schema`.",
+              "schema": "The input Arrow schema. Must be released with `schema->release(schema)`.",
               "out_types": "The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`.",
               "out_names": "The resulting column names array. Must be appropriately deleted.",
               "out_column_count": "The number of columns extracted from the Arrow schema."
@@ -112,7 +112,7 @@
                 "name": "connection"
             },
             {
-              "type": "duckdb_arrow_array",
+              "type": "ArrowArray *",
               "name": "arrow_array"
             },
             {
@@ -128,28 +128,12 @@
             "description": "Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow data. \n However, arrow_array must still be destroyed with `duckdb_destroy_arrow_array` \n\n",
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
-              "arrow_array": "The input Arrow array. Even though data ownership is passed on to DuckDB's DataChunk, the underlying object must be destroyed with 'duckdb_arrow_array'.",
+              "arrow_array": "The input Arrow array. Data ownership is passed on to DuckDB's DataChunk, the underlying object does not need to be released and won't have ownership of the data.",
               "converted_schema" : "The Arrow converted schema with extra information about the Arrow Types.",
               "out_chunk": "The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk."
             },
             "return_value": "The error data."
           }
-        },
-        {
-            "name": "duckdb_destroy_arrow_schema",
-            "return_type": "void",
-            "params": [
-                {
-                    "type": "duckdb_arrow_schema *",
-                    "name": "arrow_schema"
-                }
-            ],
-            "comment": {
-                "description": "Destroys the arrow schema and de-allocates all memory allocated for that schema.\n\n",
-                "param_comments": {
-                    "arrow_schema": "The arrow schema to destroy."
-                }
-            }
         },
         {
             "name": "duckdb_destroy_arrow_converted_schema",
@@ -165,46 +149,6 @@
                 "param_comments": {
                     "arrow_converted_schema": "The arrow converted schema to destroy."
                 }
-            }
-        },
-        {
-            "name": "duckdb_destroy_arrow_array",
-            "return_type": "void",
-            "params": [
-                {
-                    "type": "duckdb_arrow_array *",
-                    "name": "arrow_array"
-                }
-            ],
-            "comment": {
-                "description": "Destroys the arrow array and de-allocates all memory allocated for that arrow array.\n\n",
-                "param_comments": {
-                    "arrow_array": "The arrow_array to destroy."
-                }
-            }
-        },
-        {
-            "name": "duckdb_create_arrow_array",
-            "return_type": "duckdb_arrow_array",
-            "params": [
-            ],
-            "comment": {
-                "description": "Creates an empty  arrow array.\nThe result must be destroyed with `duckdb_destroy_arrow_array`.\n\n",
-                "param_comments": {
-                },
-                "return_value": "The arrow array."
-            }
-        },
-        {
-            "name": "duckdb_create_arrow_schema",
-            "return_type": "duckdb_arrow_schema",
-            "params": [
-            ],
-            "comment": {
-                "description": "Creates an empty arrow schema.\nThe result must be destroyed with `duckdb_destroy_arrow_schema`.\n\n",
-                "param_comments": {
-                },
-                "return_value": "The arrow schema."
             }
         },
         {

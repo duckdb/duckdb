@@ -701,6 +701,12 @@ typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info,
 // Arrow-related types
 //===--------------------------------------------------------------------===//
 
+//! Forward declare Arrow structs
+
+struct ArrowArray;
+
+struct ArrowSchema;
+
 //! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
 typedef struct _duckdb_arrow {
 	void *internal_ptr;

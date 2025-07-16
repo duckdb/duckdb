@@ -6,10 +6,6 @@
         "duckdb_data_chunk_to_arrow",
         "arrow_to_duckdb_schema",
         "arrow_to_duckdb_data_chunk",
-        "duckdb_destroy_arrow_schema",
-        "duckdb_destroy_arrow_converted_schema",
-        "duckdb_destroy_arrow_array",
-        "duckdb_create_arrow_schema",
-        "duckdb_create_arrow_array"
+        "duckdb_destroy_arrow_converted_schema"
     ]
 }
