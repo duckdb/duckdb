@@ -30,6 +30,7 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	config->options.autoinstall_known_extensions = false;
 	config->options.allow_unsigned_extensions = true;
 	local_extension_repo = "";
+	autoinstall_is_checked = false;
 
 	switch (autoloading_mode) {
 	case TestConfiguration::ExtensionAutoLoadingMode::NONE: {
@@ -52,6 +53,7 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	if (env_var) {
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
+		config->options.autoinstall_known_extensions = true;
 	} else if (config->options.autoload_known_extensions) {
 		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	}
@@ -610,7 +612,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		perform_install = true;
 		perform_load = true;
-	} else if (autoinstall_is_checked) {
+	} else if (autoloading_mode != TestConfiguration::ExtensionAutoLoadingMode::NONE && autoinstall_is_checked) {
 		perform_install = true;
 	}
 	if (perform_install) {
