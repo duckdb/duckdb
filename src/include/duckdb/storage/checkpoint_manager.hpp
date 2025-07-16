@@ -33,6 +33,7 @@ public:
 	//! The database
 	AttachedDatabase &db;
 
+	virtual void CreateCheckpoint() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
 	virtual MetadataWriter &GetMetadataWriter() = 0;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
@@ -100,9 +101,7 @@ public:
 	SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
 	                           CheckpointType checkpoint_type);
 
-	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
-	//! connection is available because right now the checkpointing cannot be done online. (TODO)
-	void CreateCheckpoint();
+	void CreateCheckpoint() override;
 
 	MetadataWriter &GetMetadataWriter() override;
 	MetadataManager &GetMetadataManager() override;
@@ -132,6 +131,26 @@ private:
 	CheckpointType checkpoint_type;
 	//! Block usage count for verification purposes
 	unordered_map<block_id_t, idx_t> verify_block_usage_count;
+};
+
+class InMemoryCheckpointer final : public CheckpointWriter {
+public:
+	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db);
+
+	void CreateCheckpoint() override;
+
+	MetadataWriter &GetMetadataWriter() override;
+	MetadataManager &GetMetadataManager() override;
+	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
+	optional_ptr<ClientContext> GetClientContext() const {
+		return context;
+	}
+
+public:
+	void WriteTable(TableCatalogEntry &table, Serializer &serializer) override;
+
+private:
+	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

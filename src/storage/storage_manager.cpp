@@ -19,7 +19,7 @@ namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(std::move(path_p)), read_only(read_only) {
+    : db(db), path(std::move(path_p)), read_only(read_only), in_memory_change_size(0) {
 
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
@@ -48,7 +48,7 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	return wal->GetWALSize();
+	return InMemory() ? in_memory_change_size.load() : wal->GetWALSize();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -62,7 +62,7 @@ void StorageManager::ResetWAL() {
 	wal->Delete();
 }
 
-string StorageManager::GetWALPath() {
+string StorageManager::GetWALPath() const {
 	// we append the ".wal" **before** a question mark in case of GET parameters
 	// but only if we are not in a windows long path (which starts with \\?\)
 	std::size_t question_mark_pos = std::string::npos;
@@ -78,7 +78,7 @@ string StorageManager::GetWALPath() {
 	return wal_path;
 }
 
-bool StorageManager::InMemory() {
+bool StorageManager::InMemory() const {
 	D_ASSERT(!path.empty());
 	return path == IN_MEMORY_PATH;
 }
@@ -126,11 +126,11 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 }
 
 void SingleFileStorageManager::LoadDatabase(QueryContext context, StorageOptions &storage_options) {
-
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
+		load_complete = true;
 		return;
 	}
 
@@ -392,8 +392,16 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
+unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
+                                                                              CheckpointOptions options) const {
+	if (InMemory()) {
+		return make_uniq<InMemoryCheckpointer>(context, db);
+	}
+	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options.type);
+}
+
 void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
-	if (InMemory() || read_only || !load_complete) {
+	if (read_only || !load_complete) {
 		return;
 	}
 	if (db.GetStorageExtension()) {
@@ -403,14 +411,14 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(context, db, *block_manager, options.type);
-			checkpointer.CreateCheckpoint();
+			auto checkpointer = CreateCheckpointWriter(context, options);
+			checkpointer->CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
-	if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
+	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		ResetWAL();
 	}
 

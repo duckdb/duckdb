@@ -31,6 +31,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -598,6 +599,52 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
+}
+
+//===--------------------------------------------------------------------===//
+// In-Memory Checkpoint Writer
+//===--------------------------------------------------------------------===//
+InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db)
+    : CheckpointWriter(db), context(context.GetClientContext()) {
+}
+
+void InMemoryCheckpointer::CreateCheckpoint() {
+	vector<reference<SchemaCatalogEntry>> schemas;
+	// we scan the set of committed schemas
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	vector<reference<TableCatalogEntry>> tables;
+	for (const auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<TableCatalogEntry>());
+			}
+		});
+	}
+
+	for (auto &table : tables) {
+		MemoryStream write_stream;
+		BinarySerializer serializer(write_stream);
+
+		WriteTable(table, serializer);
+	}
+}
+
+MetadataWriter &InMemoryCheckpointer::GetMetadataWriter() {
+	throw InternalException("Unsupported method GetMetadataWriter for InMemoryCheckpointer");
+}
+MetadataManager &InMemoryCheckpointer::GetMetadataManager() {
+	throw InternalException("Unsupported method GetMetadataManager for InMemoryCheckpointer");
+}
+unique_ptr<TableDataWriter> InMemoryCheckpointer::GetTableDataWriter(TableCatalogEntry &table) {
+	throw InternalException("Unsupported method GetTableDataWriter for InMemoryCheckpointer");
+}
+
+void InMemoryCheckpointer::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
+	InMemoryTableDataWriter data_writer(*this, table);
+	table.GetStorage().Checkpoint(data_writer, serializer);
 }
 
 } // namespace duckdb

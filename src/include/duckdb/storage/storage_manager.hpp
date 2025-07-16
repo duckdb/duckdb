@@ -74,7 +74,7 @@ public:
 	void Initialize(QueryContext context, StorageOptions &options);
 
 	DatabaseInstance &GetDatabase();
-	AttachedDatabase &GetAttached() {
+	AttachedDatabase &GetAttached() const {
 		return db;
 	}
 
@@ -93,8 +93,8 @@ public:
 		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
-	string GetWALPath();
-	bool InMemory();
+	string GetWALPath() const;
+	bool InMemory() const;
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
@@ -115,6 +115,9 @@ public:
 		D_ASSERT(HasStorageVersion());
 		return storage_version.GetIndex();
 	}
+	void AddInMemoryChange(idx_t size) {
+		in_memory_change_size += size;
+	}
 
 protected:
 	virtual void LoadDatabase(QueryContext context, StorageOptions &options) = 0;
@@ -133,6 +136,8 @@ protected:
 	bool load_complete = false;
 	//! The serialization compatibility version when reading and writing from this database
 	optional_idx storage_version;
+	//! Estimated size of changes for determining automatic checkpointing on in-memory databases
+	atomic<idx_t> in_memory_change_size;
 
 public:
 	template <class TARGET>
@@ -170,5 +175,7 @@ public:
 
 protected:
 	void LoadDatabase(QueryContext context, StorageOptions &options) override;
+
+	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options) const;
 };
 } // namespace duckdb
