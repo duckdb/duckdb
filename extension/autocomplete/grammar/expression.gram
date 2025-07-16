@@ -1,6 +1,8 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?) WithinGroupClause? FilterClause? ExportClause? OverClause?
+
 FunctionIdentifier <- CatalogQualification? SchemaQualification? FunctionName
+
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 ExportClause <- 'EXPORT_STATE'i
 WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)

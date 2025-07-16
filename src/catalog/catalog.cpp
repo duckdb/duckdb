@@ -1140,6 +1140,16 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
+vector<reference<CatalogEntry>> Catalog::GetAllEntries(ClientContext &context, CatalogType catalog_type) {
+	vector<reference<CatalogEntry>> result;
+	auto schemas = GetAllSchemas(context);
+	for (const auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(context, catalog_type, [&](CatalogEntry &entry) { result.push_back(entry); });
+	}
+	return result;
+}
+
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		CatalogEntryRetriever retriever(transaction.GetContext());
