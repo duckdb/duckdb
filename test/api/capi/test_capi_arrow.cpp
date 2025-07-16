@@ -355,16 +355,16 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		ArrowSchemaWrapper arrow_schema_wrapper;
 		duckdb_client_properties client_properties;
 		duckdb_connection_get_client_properties(tester.connection, &client_properties);
-		duckdb_error_data err = duckdb_to_arrow_schema(
-		    client_properties, types, names, 1, &arrow_schema_wrapper.arrow_schema);
+		duckdb_error_data err =
+		    duckdb_to_arrow_schema(client_properties, types, names, 1, &arrow_schema_wrapper.arrow_schema);
 		duckdb_destroy_client_properties(&client_properties);
 		REQUIRE(err == nullptr);
 		duckdb_arrow_converted_schema converted_schema = nullptr;
 		// Convert schema (simulate real use)
 		char **out_names = nullptr;
 		idx_t out_col_count = 0;
-		err = arrow_to_duckdb_schema(tester.connection, &arrow_schema_wrapper.arrow_schema,
-		                             &converted_schema, &out_names, &out_col_count);
+		err = arrow_to_duckdb_schema(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema,
+		                             &out_names, &out_col_count);
 		REQUIRE(err == nullptr);
 		REQUIRE(out_col_count == 1);
 		// 5. For each Arrow array, convert back to DuckDB chunk and validate
@@ -373,8 +373,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 			// Prepare output chunk
 			duckdb_data_chunk out_chunk;
 			// Convert Arrow array to DuckDB chunk
-			err = arrow_to_duckdb_data_chunk(tester.connection, duckdb_arrow_array,
-			                                 converted_schema, &out_chunk);
+			err = arrow_to_duckdb_data_chunk(tester.connection, duckdb_arrow_array, converted_schema, &out_chunk);
 			REQUIRE(err == nullptr);
 			idx_t chunk_size = duckdb_data_chunk_get_size(out_chunk);
 			auto vec = duckdb_data_chunk_get_vector(out_chunk, 0);
