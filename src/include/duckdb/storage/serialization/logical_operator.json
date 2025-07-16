@@ -851,6 +851,11 @@
         "id": 205,
         "name": "actions",
         "type": "map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>"
+      },
+      {
+        "id": 206,
+        "name": "return_chunk",
+        "type": "bool"
       }
     ],
     "constructor": ["$ClientContext", "table_info&"]
@@ -886,11 +891,6 @@
       {
         "id": 205,
         "name": "update_is_del_and_insert",
-        "type": "bool"
-      },
-      {
-        "id": 206,
-        "name": "return_chunk",
         "type": "bool"
       }
     ]
