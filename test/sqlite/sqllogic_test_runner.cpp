@@ -604,6 +604,10 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			return RequireResult::MISSING;
 		}
 	} else if (excluded_from_autoloading) {
+		if (autoloading_mode == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+			// This is needed to still support LOCAL_EXTENSION_REPO
+			return RequireResult::MISSING;
+		}
 		perform_install = true;
 		perform_load = true;
 	} else if (autoinstall_is_checked) {
