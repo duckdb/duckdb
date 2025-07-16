@@ -53,6 +53,9 @@ public:
 
 	map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>> actions;
 
+	//! keep track of optional returningList if statement contains a RETURNING keyword
+	vector<unique_ptr<ParsedExpression>> returning_list;
+
 	//! CTEs
 	CommonTableExpressionMap cte_map;
 

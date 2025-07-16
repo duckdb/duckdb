@@ -249,6 +249,7 @@ void LogicalAggregate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", groups);
 	serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
 	serializer.WritePropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", grouping_functions);
+	serializer.WritePropertyWithDefault<TupleDataValidityType>(207, "distinct_validity", distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 }
 
 unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserializer) {
@@ -260,6 +261,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", result->grouping_sets);
 	deserializer.ReadPropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", result->grouping_functions);
+	deserializer.ReadPropertyWithExplicitDefault<TupleDataValidityType>(207, "distinct_validity", result->distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	return std::move(result);
 }
 
@@ -614,6 +616,7 @@ void LogicalMergeInto::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(203, "row_id_start", row_id_start);
 	serializer.WriteProperty<optional_idx>(204, "source_marker", source_marker);
 	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", actions);
+	serializer.WritePropertyWithDefault<bool>(206, "return_chunk", return_chunk);
 }
 
 unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserializer) {
@@ -624,6 +627,7 @@ unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<idx_t>(203, "row_id_start", result->row_id_start);
 	deserializer.ReadProperty<optional_idx>(204, "source_marker", result->source_marker);
 	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", result->actions);
+	deserializer.ReadPropertyWithDefault<bool>(206, "return_chunk", result->return_chunk);
 	return std::move(result);
 }
 

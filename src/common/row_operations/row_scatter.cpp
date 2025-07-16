@@ -1,9 +1,3 @@
-//===--------------------------------------------------------------------===//
-// row_scatter.cpp
-// Description: This file contains the implementation of the row scattering
-//              operators
-//===--------------------------------------------------------------------===//
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"

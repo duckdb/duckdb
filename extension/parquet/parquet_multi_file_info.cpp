@@ -398,6 +398,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 		options.binary_as_string = BooleanValue::Get(val);
 		return true;
 	}
+	if (key == "variant_legacy_encoding") {
+		options.variant_legacy_encoding = BooleanValue::Get(val);
+		return true;
+	}
 	if (key == "file_row_number") {
 		options.file_row_number = BooleanValue::Get(val);
 		return true;
@@ -537,6 +541,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	} else {
 		result->options = std::move(parquet_options);
 		result->metadata = std::move(metadata);
+		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);
 }

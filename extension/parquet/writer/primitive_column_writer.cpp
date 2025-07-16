@@ -113,7 +113,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
 		write_info.temp_writer = make_uniq<MemoryStream>(
-		    Allocator::Get(writer.GetContext()),
+		    BufferAllocator::Get(writer.GetContext()),
 		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
@@ -129,8 +129,9 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	NextPage(state);
 }
 
-void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,
-                                        idx_t max_value, idx_t offset, idx_t count, optional_idx null_count) {
+void PrimitiveColumnWriter::WriteLevels(Allocator &allocator, WriteStream &temp_writer,
+                                        const unsafe_vector<uint16_t> &levels, idx_t max_value, idx_t offset,
+                                        idx_t count, optional_idx null_count) {
 	if (levels.empty() || count == 0) {
 		return;
 	}
@@ -140,7 +141,7 @@ void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_v
 	RleBpEncoder rle_encoder(bit_width);
 
 	// have to write to an intermediate stream first because we need to know the size
-	MemoryStream intermediate_stream(Allocator::DefaultAllocator());
+	MemoryStream intermediate_stream(allocator);
 
 	rle_encoder.BeginWrite();
 	if (null_count.IsValid() && null_count.GetIndex() == 0) {
@@ -175,10 +176,11 @@ void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
 	auto &temp_writer = *write_info.temp_writer;
 
 	// write the repetition levels
-	WriteLevels(temp_writer, state.repetition_levels, MaxRepeat(), page_info.offset, page_info.row_count);
+	auto &allocator = BufferAllocator::Get(writer.GetContext());
+	WriteLevels(allocator, temp_writer, state.repetition_levels, MaxRepeat(), page_info.offset, page_info.row_count);
 
 	// write the definition levels
-	WriteLevels(temp_writer, state.definition_levels, MaxDefine(), page_info.offset, page_info.row_count,
+	WriteLevels(allocator, temp_writer, state.definition_levels, MaxDefine(), page_info.offset, page_info.row_count,
 	            state.null_count + state.parent_null_count);
 }
 

@@ -47,7 +47,7 @@ public:
 			for (auto &param : op.parameters) {
 				input_types.push_back(param.type());
 			}
-			input_chunk.Initialize(context, input_types);
+			input_chunk.Initialize(BufferAllocator::Get(context), input_types);
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
 				input_chunk.data[c].Reference(op.parameters[c]);
 			}
