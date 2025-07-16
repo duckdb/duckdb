@@ -42,7 +42,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_propert
 }
 
 duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
-                                            struct ArrowArray *out_arrow_array) {
+                                             struct ArrowArray *out_arrow_array) {
 	if (!client_properties || !chunk || !out_arrow_array) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
