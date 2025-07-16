@@ -358,7 +358,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-	auto &config = DBConfig::GetConfig(db.GetDatabase());
 	// Derive the encryption key and add it to cache
 	// Unused for plain databases
 	uint8_t salt[MainHeader::SALT_LEN];
@@ -456,7 +455,6 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	if (main_header.IsEncrypted()) {
-		auto &config = DBConfig::GetConfig(db.GetDatabase());
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 			//! Check if the given key upon attach is correct

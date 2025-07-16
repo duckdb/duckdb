@@ -228,6 +228,11 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
 	result.serialize = CMIntegralSerialize;
 	result.deserialize = CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>;
+#if defined(D_ASSERT_IS_ENABLED)
+	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; // Can only throw runtime error when assertions are enabled
+#else
+	result.errors = FunctionErrors::CANNOT_ERROR;
+#endif
 	return result;
 }
 
