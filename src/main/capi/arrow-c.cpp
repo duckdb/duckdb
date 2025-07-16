@@ -17,9 +17,9 @@ using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
 duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_properties, duckdb_logical_type *types,
-                                         char **names, idx_t column_count, arrow_schema *out_schema) {
+                                         char **names, idx_t column_count, duckdb_arrow_schema *out_schema) {
 
-	if (!types || !names || !client_properties) {
+	if (!types || !names || !out_schema || !client_properties) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
 	}
 	duckdb::vector<LogicalType> schema_types;
@@ -30,7 +30,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_propert
 	}
 	auto client_properties_wrapper = reinterpret_cast<CClientPropertiesWrapper *>(client_properties);
 	try {
-		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(out_schema), schema_types, schema_names,
+		ArrowConverter::ToArrowSchema(reinterpret_cast<ArrowSchema *>(*out_schema), schema_types, schema_names,
 		                              client_properties_wrapper->properties);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
@@ -43,8 +43,8 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_propert
 }
 
 duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
-                                             arrow_array *out_arrow_array) {
-	if (!client_properties || !chunk) {
+                                             duckdb_arrow_array *out_arrow_array) {
+	if (!client_properties || !out_arrow_array || !chunk) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
@@ -54,7 +54,7 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_pro
 	    *client_properties_wrapper->properties.client_context, dchunk->GetTypes());
 
 	try {
-		ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(out_arrow_array),
+		ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_arrow_array),
 		                             client_properties_wrapper->properties, extension_type_cast);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
@@ -66,10 +66,10 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_pro
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_schema *schema,
+duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, duckdb_arrow_schema schema,
                                          duckdb_arrow_converted_schema *out_types, char ***out_names,
                                          idx_t *out_column_count) {
-	if (!connection || !out_types || !out_names || !out_column_count) {
+	if (!connection || !schema || !out_types || !out_names || !out_column_count) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
@@ -103,10 +103,10 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, arrow_sch
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, arrow_array *arrow_array,
+duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, duckdb_arrow_array arrow_array,
                                              duckdb_arrow_converted_schema converted_schema,
                                              duckdb_data_chunk *out_chunk) {
-	if (!connection || !converted_schema || !out_chunk) {
+	if (!connection || !arrow_array || !converted_schema || !out_chunk) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
@@ -157,6 +157,16 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, arrow
 	}
 	return nullptr;
 }
+void duckdb_destroy_arrow_schema(duckdb_arrow_schema *arrow_schema) {
+	if (arrow_schema && *arrow_schema) {
+		auto schema = reinterpret_cast<ArrowSchema *>(*arrow_schema);
+		if (schema->release) {
+			schema->release(schema);
+		}
+		delete schema;
+		*arrow_schema = nullptr;
+	}
+}
 
 void duckdb_destroy_arrow_converted_schema(duckdb_arrow_converted_schema *arrow_converted_schema) {
 	if (arrow_converted_schema && *arrow_converted_schema) {
@@ -164,6 +174,27 @@ void duckdb_destroy_arrow_converted_schema(duckdb_arrow_converted_schema *arrow_
 		delete converted_schema;
 		*arrow_converted_schema = nullptr;
 	}
+}
+
+void duckdb_destroy_arrow_array(duckdb_arrow_array *arrow_array) {
+	if (arrow_array && *arrow_array) {
+		auto array = reinterpret_cast<ArrowArray *>(*arrow_array);
+		if (array->release) {
+			array->release(array);
+		}
+		delete array;
+		*arrow_array = nullptr;
+	}
+}
+
+duckdb_arrow_array duckdb_create_arrow_array() {
+	auto result = new ArrowArray();
+	return reinterpret_cast<duckdb_arrow_array>(result);
+}
+
+duckdb_arrow_schema duckdb_create_arrow_schema() {
+	auto result = new ArrowSchema();
+	return reinterpret_cast<duckdb_arrow_schema>(result);
 }
 
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {

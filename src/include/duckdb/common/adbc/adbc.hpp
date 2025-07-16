@@ -58,6 +58,27 @@ public:
 	duckdb_data_chunk chunk;
 };
 
+class ArrowSchemaADBCWrapper {
+public:
+	ArrowSchemaADBCWrapper() : schema(nullptr) {
+	}
+	// ArrowSchemaADBCWrapper(ArrowSchema & arrow_schema) : {
+	// 	schema
+	// }
+	//
+	// ~ArrowSchemaADBCWrapper() {
+	// 	if (chunk) {
+	// 		duckdb_destroy_data_chunk(&chunk);
+	// 	}
+	// }
+
+	// explicit operator duckdb_data_chunk() const {
+	// 	return chunk;
+	// }
+
+	duckdb_arrow_schema schema;
+};
+
 class ConvertedSchemaWrapper {
 public:
 	ConvertedSchemaWrapper() : schema(nullptr) {
