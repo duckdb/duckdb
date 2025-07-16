@@ -20,6 +20,8 @@ FORCE_32_BIT_FLAG ?=
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
+PYTHON ?= python3
+
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
@@ -393,7 +395,7 @@ unittest_release: release
 	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
@@ -430,7 +432,7 @@ benchmark:
 
 amaldebug:
 	mkdir -p ./build/amaldebug && \
-	python3 scripts/amalgamation.py && \
+	$(PYTHON) scripts/amalgamation.py && \
 	cd build/amaldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
@@ -439,45 +441,45 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
 
 tidy-check-diff:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
 	cd ../../ && \
-	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -fix
+	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	python3 scripts/amalgamation.py --compile
+	$(PYTHON) scripts/amalgamation.py --compile
 
 format-check:
-	python3 scripts/format.py --all --check
+	$(PYTHON) scripts/format.py --all --check
 
 format-check-silent:
-	python3 scripts/format.py --all --check --silent
+	$(PYTHON) scripts/format.py --all --check --silent
 
 format-fix:
 	rm -rf src/amalgamation/*
-	python3 scripts/format.py --all --fix --noconfirm
+	$(PYTHON) scripts/format.py --all --fix --noconfirm
 
 format-head:
-	python3 scripts/format.py HEAD --fix --noconfirm
+	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
 
 format-changes:
-	python3 scripts/format.py HEAD --fix --noconfirm
+	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
 
 format-main:
-	python3 scripts/format.py main --fix --noconfirm
+	$(PYTHON) scripts/format.py main --fix --noconfirm
 
 format-feature:
-	python3 scripts/format.py feature --fix --noconfirm
+	$(PYTHON) scripts/format.py feature --fix --noconfirm
 
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
@@ -507,16 +509,19 @@ clangd:
 coverage-check:
 	./scripts/coverage_check.sh
 
+generate-files-deps:
+	pip install cxxheaderparser pcpp
+
 generate-files:
-	python3 scripts/generate_c_api.py
-	python3 scripts/generate_functions.py
-	python3 scripts/generate_settings.py
-	python3 scripts/generate_serialization.py
-	python3 scripts/generate_storage_info.py
-	python3 scripts/generate_enum_util.py
-	python3 scripts/generate_metric_enums.py
-	python3 scripts/generate_builtin_types.py
-	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
+	$(PYTHON) scripts/generate_c_api.py
+	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_settings.py
+	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_storage_info.py
+	$(PYTHON) scripts/generate_enum_util.py
+	$(PYTHON) scripts/generate_metric_enums.py
+	$(PYTHON) scripts/generate_builtin_types.py
+	-@$(PYTHON) tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
