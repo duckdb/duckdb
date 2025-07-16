@@ -50,6 +50,7 @@ main_table1
 query I
 SHOW TABLES FROM db1
 ----
+db1_schema_table1
 db1_table1
 
 query I
@@ -71,6 +72,7 @@ db1_schema_table1
 query I
 SHOW TABLES FROM DB1
 ----
+db1_schema_table1
 db1_table1
 
 query I
@@ -105,7 +107,7 @@ db_quo"ted_table1
 statement error
 SHOW TABLES FROM nonexistent_db
 ----
-Catalog Error: SHOW TABLES FROM: No catalog + schema named "nonexistent_db" found
+Catalog Error: SHOW TABLES FROM: No catalog + schema named "db.nonexistent_db" found
 
 # Test non-existent schema
 statement error

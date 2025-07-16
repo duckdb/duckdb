@@ -159,39 +159,27 @@ unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
 		auto catalog_name = ref.catalog_name;
 		auto schema_name = ref.schema_name;
 
-		// First, try to resolve as a schema name
-		auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
-		if (schema_entry) {
-			// We found a schema - update the catalog if it's empty
-			if (catalog_name.empty()) {
-				auto &client_data = ClientData::Get(context);
-				auto &default_entry = client_data.catalog_search_path->GetDefault();
-				catalog_name = default_entry.catalog;
+		// Check for unqualified name, promote schema to catalog if unambiguous, and set schema_name to empty if so
+		Binder::BindSchemaOrCatalog(catalog_name, schema_name);
+
+		// If fully qualified, check if the schema exists
+		if (!catalog_name.empty() && !schema_name.empty()) {
+			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
+				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
+				                       schema_name);
 			}
-		} else {
-			// Schema not found - check if this is a catalog instead (only if catalog_name is empty)
-			if (catalog_name.empty()) {
-				auto catalog = Catalog::GetCatalogEntry(context, schema_name);
-				if (catalog) {
-					auto schema =
-					    catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
-					if (schema) {
-						// Found a catalog - treat schema_name as catalog and use the catalog's default schema
-						catalog_name = std::move(schema_name);
-						schema_name = schema->name;
-					} else {
-						throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s\" found.",
-						                       schema_name);
-					}
-				} else {
-					throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s\" found.", schema_name);
-				}
-			} else {
+		} else if (catalog_name.empty() && !schema_name.empty()) {
+			// We have a schema name, use default catalog
+			auto &client_data = ClientData::Get(context);
+			auto &default_entry = client_data.catalog_search_path->GetDefault();
+			catalog_name = default_entry.catalog;
+			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
 				                       schema_name);
 			}
 		}
-
 		sql = PragmaShowTables(catalog_name, schema_name);
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
