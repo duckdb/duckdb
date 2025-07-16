@@ -546,13 +546,13 @@ typedef struct {
 // New arrow interface functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties client_properties, duckdb_logical_type *types,
-	                                            char **names, idx_t column_count, ArrowSchema *out_schema);
+	                                            char **names, idx_t column_count, struct ArrowSchema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
-	                                                ArrowArray *out_arrow_array);
-	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, ArrowSchema *schema,
+	                                                struct ArrowArray *out_arrow_array);
+	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, struct ArrowSchema *schema,
 	                                            duckdb_arrow_converted_schema *out_types, char ***out_names,
 	                                            idx_t *out_column_count);
-	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_connection connection, ArrowArray *arrow_array,
+	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_connection connection, struct ArrowArray *arrow_array,
 	                                                duckdb_arrow_converted_schema converted_schema,
 	                                                duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);

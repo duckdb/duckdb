@@ -23,7 +23,7 @@
                     "name": "column_count"
                 },
                 {
-                    "type": "ArrowSchema *",
+                    "type": "struct ArrowSchema *",
                     "name": "out_schema"
                 }
             ],
@@ -52,7 +52,7 @@
                     "name": "chunk"
                 },
                 {
-                    "type": "ArrowArray *",
+                    "type": "struct ArrowArray *",
                     "name": "out_arrow_array"
                 }
             ],
@@ -75,7 +75,7 @@
                 "name": "connection"
             },
             {
-              "type": "ArrowSchema *",
+              "type": "struct ArrowSchema *",
               "name": "schema"
             },
             {
@@ -112,7 +112,7 @@
                 "name": "connection"
             },
             {
-              "type": "ArrowArray *",
+              "type": "struct ArrowArray *",
               "name": "arrow_array"
             },
             {

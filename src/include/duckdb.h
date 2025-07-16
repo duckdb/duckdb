@@ -4540,7 +4540,7 @@ Transforms a DuckDB Schema into an Arrow Schema
 */
 DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_properties,
                                                       duckdb_logical_type *types, char **names, idx_t column_count,
-                                                      ArrowSchema *out_schema);
+                                                      struct ArrowSchema *out_schema);
 
 /*!
 Transforms a DuckDB data chunk into an Arrow array.
@@ -4552,7 +4552,7 @@ Transforms a DuckDB data chunk into an Arrow array.
 * @return The error data.
 */
 DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties,
-                                                          duckdb_data_chunk chunk, ArrowArray *out_arrow_array);
+                                                          duckdb_data_chunk chunk, struct ArrowArray *out_arrow_array);
 
 /*!
 Transforms an Arrow Schema into a DuckDB Schema.
@@ -4565,7 +4565,7 @@ Transforms an Arrow Schema into a DuckDB Schema.
 * @param out_column_count The number of columns extracted from the Arrow schema.
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, ArrowSchema *schema,
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct ArrowSchema *schema,
                                                       duckdb_arrow_converted_schema *out_types, char ***out_names,
                                                       idx_t *out_column_count);
 
@@ -4580,7 +4580,7 @@ does not need to be released and won't have ownership of the data.
 * @param out_chunk The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk.
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, ArrowArray *arrow_array,
+DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struct ArrowArray *arrow_array,
                                                           duckdb_arrow_converted_schema converted_schema,
                                                           duckdb_data_chunk *out_chunk);
 
