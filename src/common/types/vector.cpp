@@ -590,7 +590,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
 			return Value::Numeric(vector->GetType(),
-			                      static_cast<int64_t>(start + static_cast<uint64_t>(increment) * index));
+			                      start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
@@ -840,7 +840,7 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(static_cast<int64_t>(start + static_cast<uint64_t>(increment) * i)) +
+			retval += to_string(start + static_cast<int64_t>(static_cast<uint64_t>(increment) * i)) +
 			          (i == count - 1 ? "" : ", ");
 		}
 		break;

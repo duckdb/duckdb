@@ -1439,26 +1439,6 @@ double DatePart::JulianDayOperator::Operation(date_t input) {
 }
 
 template <>
-double DatePart::JulianDayOperator::Operation(interval_t input) {
-	throw NotImplementedException("interval units \"julian\" not recognized");
-}
-
-template <>
-double DatePart::JulianDayOperator::Operation(dtime_t input) {
-	throw NotImplementedException("\"time\" units \"julian\" not recognized");
-}
-
-template <>
-double DatePart::JulianDayOperator::Operation(dtime_ns_t input) {
-	return JulianDayOperator::Operation<dtime_t, double>(input.time());
-}
-
-template <>
-double DatePart::JulianDayOperator::Operation(dtime_tz_t input) {
-	return JulianDayOperator::Operation<dtime_t, double>(input.time());
-}
-
-template <>
 void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const dtime_t &input,
                                          const idx_t idx, const part_mask_t mask) {
 	int64_t *part_data;
