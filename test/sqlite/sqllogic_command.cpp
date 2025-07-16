@@ -30,7 +30,17 @@ static Connection *GetConnection(DuckDB &db,
 	if (entry == named_connection_map.end()) {
 		// not found: create a new connection
 		auto con = make_uniq<Connection>(db);
+
+		auto &test_config = TestConfiguration::Get();
+		auto init_cmd = test_config.OnConnectionCommand();
+		if (!init_cmd.empty()) {
+			auto res = con->Query(init_cmd);
+			if (res->HasError()) {
+				FAIL("Startup queries provided via on_init failed: " + res->GetError());
+			}
+		}
 		auto res = con.get();
+
 		named_connection_map[con_name] = std::move(con);
 		return res;
 	}
@@ -47,9 +57,20 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 	if (connection_name.empty()) {
 		if (context.is_parallel) {
 			D_ASSERT(context.con);
+
+			auto &test_config = TestConfiguration::Get();
+			auto init_cmd = test_config.OnConnectionCommand();
+			if (!init_cmd.empty()) {
+				auto res = context.con->Query(init_cmd);
+				if (res->HasError()) {
+					FAIL("Startup queries provided via on_init failed: " + res->GetError());
+				}
+			}
+
 			return context.con;
 		}
 		D_ASSERT(!context.con);
+
 		return runner.con.get();
 	} else {
 		if (context.is_parallel) {
