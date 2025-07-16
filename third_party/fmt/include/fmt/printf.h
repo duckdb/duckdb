@@ -92,6 +92,15 @@ template <typename T, typename Context> class arg_converter {
   To Cast(From x) {
     return duckdb::Cast::Operation<From, To>(x);
   }
+  template <typename To, typename From>
+  typename std::enable_if<std::is_constructible<To, From>::value, To>::type UnsafeCast(From x) {
+    return static_cast<To>(x);
+  }
+
+  template <typename To, typename From>
+  typename std::enable_if<!std::is_constructible<To, From>::value, To>::type UnsafeCast(From x) {
+    return static_cast<To>(x.lower);
+  }
 
  public:
   arg_converter(basic_format_arg<Context>& arg, char_type type)
@@ -115,7 +124,7 @@ template <typename T, typename Context> class arg_converter {
         arg_ = internal::make_arg<Context>(Cast<int>(Cast<target_type>(value)));
       } else {
         using unsigned_type = typename make_unsigned_or_bool<target_type>::type;
-        arg_ = internal::make_arg<Context>(Cast<unsigned>(Cast<unsigned_type>(value)));
+        arg_ = internal::make_arg<Context>(Cast<unsigned>(UnsafeCast<unsigned_type>(value)));
       }
     } else {
       if (is_signed) {
@@ -128,7 +137,7 @@ template <typename T, typename Context> class arg_converter {
           arg_ = internal::make_arg<Context>(Cast<int64_t>(value));
         }
       } else {
-        arg_ = internal::make_arg<Context>(Cast<typename make_unsigned_or_bool<U>::type>(value));
+        arg_ = internal::make_arg<Context>(UnsafeCast<typename make_unsigned_or_bool<U>::type>(value));
       }
     }
   }
