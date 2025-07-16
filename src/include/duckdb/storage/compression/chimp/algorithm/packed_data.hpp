@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/chimp/packed_data.hpp
+// duckdb/storage/compression/chimp/algorithm/packed_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
