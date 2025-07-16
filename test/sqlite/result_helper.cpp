@@ -12,6 +12,8 @@
 #include <thread>
 
 namespace duckdb {
+// we need this shared among all types of result checks
+static std::set<std::string> reported_files;
 
 bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
                                         duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
@@ -29,7 +31,11 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			runner.finished_processing_file = true;
 			return true;
 		}
-		logger.UnexpectedFailure(result);
+		// here we don't have a file name and can probably repeat some queries in different test cases
+		// we distinguish them by combiation of the sql_query and the error
+		if (!SkipLoggingSameError(context.sql_query + ": " + result.GetError())) {
+			logger.UnexpectedFailure(result);
+		}
 		return false;
 	}
 	idx_t row_count = result.RowCount();
@@ -289,7 +295,11 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
-					if (!SkipErrorMessage(result.GetError())) {
+					// don't log the same test failure many times:
+					// e.g. log only the first failure in
+					// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
+					// test/fuzzer/pedro/concurrent_catalog_usage.test`
+					if (!SkipErrorMessage(result.GetError()) && !SkipLoggingSameError(statement.file_name)) {
 						logger.ExpectedErrorMismatch(statement.expected_error, result);
 						return false;
 					}
@@ -304,7 +314,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError())) {
+		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError()) &&
+		    SkipLoggingSameError(statement.file_name)) {
 			runner.finished_processing_file = true;
 			return true;
 		}
@@ -367,6 +378,14 @@ bool TestResultHelper::SkipErrorMessage(const string &message) {
 			return true;
 		}
 	}
+	return false;
+}
+
+bool TestResultHelper::SkipLoggingSameError(const string &file_name) {
+	if (reported_files.count(file_name) > 0) {
+		return true;
+	}
+	reported_files.insert(file_name);
 	return false;
 }
 
