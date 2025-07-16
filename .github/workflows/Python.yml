@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      CIBW_BUILD: 'cp310-*'
+      CIBW_BUILD: cp310-manylinux_x86_64
       CIBW_ARCHS: 'x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       # FIXME: add this back to CIBW_TEST_COMMAND '&& USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
