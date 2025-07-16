@@ -207,6 +207,8 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		high_comparison_type =
 		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
+	// FIXME: add another if...else... to match rewritten BETWEEN,
+	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.
 
 	// We cannot use an index scan.
 	if (equal_value.IsNull() && low_value.IsNull() && high_value.IsNull()) {
@@ -968,16 +970,11 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
-	if (!deleted_leaf) {
-		if (manager.AddHit(i, row_ids[0]) || manager.AddSecondHit(i, row_ids[1])) {
-			conflict_idx = i;
+	if (deleted_leaf) {
+		auto deleted_row_id = deleted_leaf->GetRowId();
+		if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
+			return;
 		}
-		return;
-	}
-
-	auto deleted_row_id = deleted_leaf->GetRowId();
-	if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
-		return;
 	}
 
 	if (manager.AddHit(i, row_ids[0]) || manager.AddSecondHit(i, row_ids[1])) {

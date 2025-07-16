@@ -11,7 +11,7 @@ CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i);
 CREATE INDEX i_index ON integers USING ART(i);
 
 run
-SELECT COUNT(j) FROM integers WHERE i >= 0 AND i < 150200;
+SELECT COUNT(j) FROM integers WHERE i < 1500200;
 
 result I
-150200
+1500200
