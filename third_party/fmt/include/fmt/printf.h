@@ -121,10 +121,10 @@ template <typename T, typename Context> class arg_converter {
     if (const_check(sizeof(target_type) <= sizeof(int))) {
       // Extra casts are used to silence warnings.
       if (is_signed) {
-        arg_ = internal::make_arg<Context>(Cast<int>(Cast<target_type>(value)));
+        arg_ = internal::make_arg<Context>(UnsafeCast<int32_t>(UnsafeCast<target_type>(value)));
       } else {
         using unsigned_type = typename make_unsigned_or_bool<target_type>::type;
-        arg_ = internal::make_arg<Context>(Cast<unsigned>(UnsafeCast<unsigned_type>(value)));
+        arg_ = internal::make_arg<Context>(UnsafeCast<uint32_t>(UnsafeCast<unsigned_type>(value)));
       }
     } else {
       if (is_signed) {
@@ -134,7 +134,7 @@ template <typename T, typename Context> class arg_converter {
         if (sizeof(target_type) > sizeof(int64_t)) {
           arg_ = internal::make_arg<Context>(Cast<int128_t>(value));
         } else {
-          arg_ = internal::make_arg<Context>(Cast<int64_t>(value));
+          arg_ = internal::make_arg<Context>(UnsafeCast<int64_t>(value));
         }
       } else {
         arg_ = internal::make_arg<Context>(UnsafeCast<typename make_unsigned_or_bool<U>::type>(value));
