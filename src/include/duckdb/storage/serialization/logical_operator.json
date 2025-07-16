@@ -887,6 +887,11 @@
         "id": 205,
         "name": "update_is_del_and_insert",
         "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "return_chunk",
+        "type": "bool"
       }
     ]
   },

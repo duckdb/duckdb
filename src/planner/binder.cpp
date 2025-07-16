@@ -547,7 +547,7 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const string &alias, idx_t update_table_index,
-                                     unique_ptr<LogicalOperator> child_operator, BoundStatement result) {
+                                     unique_ptr<LogicalOperator> child_operator) {
 
 	vector<LogicalType> types;
 	vector<std::string> names;
@@ -571,6 +571,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
 	vector<unique_ptr<ParsedExpression>> new_returning_list;
+	BoundStatement result;
 	binder->ExpandStarExpressions(returning_list, new_returning_list);
 	for (auto &returning_expr : new_returning_list) {
 		VerifyNotExcluded(*returning_expr);

@@ -19,7 +19,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 	for (auto &constraint : op.bound_constraints) {
 		bound_constraints.push_back(constraint->Copy());
 	}
-
+	auto cardinality = op.EstimateCardinality(context);
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
 		vector<unique_ptr<Expression>> defaults;
@@ -28,14 +28,15 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		}
 		result->op = planner.Make<PhysicalUpdate>(op.types, op.table, op.table.GetStorage(), std::move(action.columns),
 		                                          std::move(action.expressions), std::move(defaults),
-		                                          std::move(bound_constraints), 1ULL, false);
+		                                          std::move(bound_constraints), cardinality, op.return_chunk);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
 		break;
 	}
 	case MergeActionType::MERGE_DELETE: {
-		result->op = planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(),
-		                                          std::move(bound_constraints), op.row_id_start, 1ULL, false);
+		result->op =
+		    planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(), std::move(bound_constraints),
+		                                 op.row_id_start, cardinality, op.return_chunk);
 		break;
 	}
 	case MergeActionType::MERGE_INSERT: {
@@ -47,8 +48,8 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 
 		result->op = planner.Make<PhysicalInsert>(
 		    op.types, op.table, std::move(bound_constraints), std::move(set_expressions), std::move(set_columns),
-		    std::move(set_types), 1ULL, false, true, OnConflictAction::THROW, nullptr, nullptr,
-		    std::move(on_conflict_filter), std::move(columns_to_fetch), false);
+		    std::move(set_types), cardinality, op.return_chunk, !op.return_chunk, OnConflictAction::THROW, nullptr,
+		    nullptr, std::move(on_conflict_filter), std::move(columns_to_fetch), false);
 		// transform expressions if required
 		if (!action.column_index_map.empty()) {
 			vector<unique_ptr<Expression>> new_expressions;
@@ -100,10 +101,10 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 		actions.emplace(entry.first, std::move(planned_actions));
 	}
 
-	bool parallel = append_count <= 1;
+	bool parallel = append_count <= 1 && !op.return_chunk;
 
-	auto &result =
-	    planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker, parallel);
+	auto &result = planner.Make<PhysicalMergeInto>(op.types, std::move(actions), op.row_id_start, op.source_marker,
+	                                               parallel, op.return_chunk);
 	result.children.push_back(plan);
 	return result;
 }
