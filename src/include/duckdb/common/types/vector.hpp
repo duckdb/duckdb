@@ -16,6 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
 
@@ -38,13 +39,32 @@ struct UnifiedVectorFormat {
 	data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
+	PhysicalType physical_type;
 
 	template <class T>
-	static inline const T *GetData(const UnifiedVectorFormat &format) {
+	void VerifyVectorType() const {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(StorageTypeCompatible<T>(physical_type));
+#else
+		if (!StorageTypeCompatible<T>(physical_type)) {
+			throw InternalException("Expected unified vector format of type %s, but found type %s", GetTypeId<T>(),
+			                        physical_type);
+		}
+#endif
+	}
+
+	template <class T>
+	static inline const T *GetDataUnsafe(const UnifiedVectorFormat &format) {
 		return reinterpret_cast<const T *>(format.data);
 	}
 	template <class T>
+	static inline const T *GetData(const UnifiedVectorFormat &format) {
+		format.VerifyVectorType<T>();
+		return GetDataUnsafe<T>(format);
+	}
+	template <class T>
 	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
+		format.VerifyVectorType<T>();
 		return reinterpret_cast<T *>(format.data);
 	}
 };
@@ -219,7 +239,7 @@ public:
 	inline const LogicalType &GetType() const {
 		return type;
 	}
-	inline data_ptr_t GetData() {
+	inline data_ptr_t GetData() const {
 		return data;
 	}
 
@@ -274,6 +294,18 @@ public:
 };
 
 struct ConstantVector {
+	template <class T>
+	static void VerifyVectorType(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(StorageTypeCompatible<T>(vector.GetType().InternalType()));
+#else
+		if (!StorageTypeCompatible<T>(vector.GetType().InternalType())) {
+			throw InternalException("Expected vector of type %s, but found vector of type %s", GetTypeId<T>(),
+			                        vector.GetType().InternalType());
+		}
+#endif
+	}
+
 	static inline const_data_ptr_t GetData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -285,12 +317,22 @@ struct ConstantVector {
 		return vector.data;
 	}
 	template <class T>
+	static inline const T *GetDataUnsafe(const Vector &vector) {
+		return reinterpret_cast<const T *>(GetData(vector));
+	}
+	template <class T>
+	static inline T *GetDataUnsafe(Vector &vector) {
+		return reinterpret_cast<T *>(GetData(vector));
+	}
+	template <class T>
 	static inline const T *GetData(const Vector &vector) {
-		return (const T *)ConstantVector::GetData(vector);
+		VerifyVectorType<T>(vector);
+		return GetDataUnsafe<T>(vector);
 	}
 	template <class T>
 	static inline T *GetData(Vector &vector) {
-		return (T *)ConstantVector::GetData(vector);
+		VerifyVectorType<T>(vector);
+		return GetDataUnsafe<T>(vector);
 	}
 	static inline bool IsNull(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -371,6 +413,14 @@ struct FlatVector {
 	template <class T>
 	static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
+	}
+	template <class T>
+	static inline const T *GetDataUnsafe(const Vector &vector) {
+		return ConstantVector::GetDataUnsafe<T>(vector);
+	}
+	template <class T>
+	static inline T *GetDataUnsafe(Vector &vector) {
+		return ConstantVector::GetDataUnsafe<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);

@@ -34,3 +34,18 @@ query II
 EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
 ----
 physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+statement ok
+SET prefer_range_joins=true
+
+query II
+EXPLAIN 
+SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high AND bigtbl.i IS NOT DISTINCT FROM high - low)
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+# Execute to trigger the switch case
+query I
+SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high AND bigtbl.i IS NOT DISTINCT FROM high - low)
+----
+2

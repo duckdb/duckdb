@@ -175,13 +175,20 @@ void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vect
 
 	auto result_data = ConstantVector::GetData<INPUT_TYPE>(result);
 	auto str_data = ConstantVector::GetData<INPUT_TYPE>(str_vector);
-	auto begin_data = ConstantVector::GetData<INDEX_TYPE>(begin_vector);
-	auto end_data = ConstantVector::GetData<INDEX_TYPE>(end_vector);
 	auto step_data = step_vector ? ConstantVector::GetData<INDEX_TYPE>(*step_vector) : nullptr;
 
 	auto str = str_data[0];
-	auto begin = begin_is_empty ? 0 : begin_data[0];
-	auto end = end_is_empty ? OP::ValueLength(str) : end_data[0];
+	INDEX_TYPE begin, end;
+	if (begin_is_empty) {
+		begin = 0;
+	} else {
+		begin = *ConstantVector::GetData<INDEX_TYPE>(begin_vector);
+	}
+	if (end_is_empty) {
+		end = OP::ValueLength(str);
+	} else {
+		end = *ConstantVector::GetData<INDEX_TYPE>(end_vector);
+	}
 	auto step = step_data ? step_data[0] : 1;
 
 	if (step < 0) {
