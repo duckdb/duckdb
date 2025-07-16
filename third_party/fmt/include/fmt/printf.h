@@ -14,6 +14,7 @@
 #include "fmt/ostream.h"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #ifdef min
 #undef min
@@ -88,14 +89,8 @@ template <typename T, typename Context> class arg_converter {
   }
 
   template <typename To, typename From>
-  typename std::enable_if<std::is_constructible<To, From>::value, To>::type Cast(From x) {
-    return static_cast<To>(x);
-  }
-
-  // workaround for casting (u)int128 to long/long long which may not be implemented
-  template <typename To, typename From>
-  typename std::enable_if<!std::is_constructible<To, From>::value, To>::type Cast(From x) {
-    return static_cast<To>(x.lower);
+  To Cast(From x) {
+    return duckdb::Cast::Operation<From, To>(x);
   }
 
  public:
