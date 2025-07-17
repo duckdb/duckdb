@@ -28,7 +28,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duc
 		schema_names.emplace_back(names[i]);
 		schema_types.emplace_back(*reinterpret_cast<duckdb::LogicalType *>(types[i]));
 	}
-	auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
+	const auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
 	try {
 		ArrowConverter::ToArrowSchema(out_schema, schema_types, schema_names, arrow_options_wrapper->properties);
 	} catch (const duckdb::Exception &ex) {
@@ -99,14 +99,11 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto &types = arrow_table->GetTypes();
 
-	auto result = duckdb::make_uniq<duckdb::DataChunk>();
+	auto dchunk = duckdb::make_uniq<duckdb::DataChunk>();
 	auto output_size = duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array->length));
-	result->Initialize(duckdb::Allocator::DefaultAllocator(), types, output_size);
-	*out_chunk = reinterpret_cast<duckdb_data_chunk>(result.release());
+	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, output_size);
 
 	auto &arrow_types = arrow_table->GetColumns();
-	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*out_chunk);
-
 	dchunk->SetCardinality(output_size);
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array;
@@ -123,7 +120,6 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 		array_state->owned_data->arrow_array = *arrow_array;
 		// We set it to nullptr to effectively transfer ze ownership
 		arrow_array->release = nullptr;
-
 		switch (array_physical_type) {
 		case duckdb::ArrowArrayPhysicalType::DEFAULT:
 			try {
@@ -146,6 +142,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 			                                "Only Default Physical Types are currently supported");
 		}
 	}
+	*out_chunk = reinterpret_cast<duckdb_data_chunk>(dchunk.release());
 	return nullptr;
 }
 
