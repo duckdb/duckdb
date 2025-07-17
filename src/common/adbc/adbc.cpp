@@ -1423,6 +1423,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								constraint_name: constraint_name,
 								constraint_type: constraint_type,
 								constraint_column_names: column_names,
+								-- TODO: USAGE_SCHEMA isn't implemented yet
 								constraint_column_usage: []::STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[],
 							}
 						) table_constraints

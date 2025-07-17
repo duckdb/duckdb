@@ -1273,7 +1273,21 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
@@ -1459,7 +1473,21 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
@@ -1537,7 +1565,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                     }
                 ]
             })";
-		return; // Unclear why this fails randomly, to be investigated
 		string expected[3];
 		expected[0] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_1, "\n", ""), "\t", ""), " ", "");
@@ -2147,7 +2174,87 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			db.Query("Drop table result;");
 		}
 	}
-	//  Now lets test some errors
+	// 6. Test constraints
+	//
+	// Available constraints: https://duckdb.org/docs/stable/sql/constraints.html
+	{
+		ADBCTestDatabase db("test_constraints");
+		// Create table 'foreign_table'
+		db.Query("CREATE TABLE foreign_table (id INTEGER PRIMARY KEY)");
+		// Create table 'my_table' with constraints
+		db.Query("CREATE TABLE my_table ("                         //
+		         "primary_key INTEGER PRIMARY KEY, "               //
+		         "not_null INTEGER NOT NULL, "                     //
+		         "custom_check INTEGER CHECK (custom_check > 0), " //
+		         "unique_value INTEGER UNIQUE, "                   //
+		         "foreign_id INTEGER REFERENCES foreign_table(id)" //
+		         ")");
+
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "my_table", nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_tables: list_sort(
+								list_transform(
+									catalog_db_schema.db_schema_tables,
+									lambda db_schema_table: {
+										table_name: db_schema_table.table_name,
+										table_constraints: list_sort(db_schema_table.table_constraints)
+									}
+								)
+							)
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_constraints'
+        )";
+		auto res = db.Query(select_catalog_db_schemas);
+		REQUIRE((res->RowCount() == 1));
+		// clang-format off
+		std::string expected = "["
+			"{"
+				"'db_schema_tables': ["
+					"{"
+						"'table_name': my_table, "
+						"'table_constraints': [{"
+							"'constraint_name': my_table_custom_check_check, "
+							"'constraint_type': CHECK, "
+							"'constraint_column_names': [custom_check], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_foreign_id_id_fkey, "
+							"'constraint_type': FOREIGN KEY, "
+							"'constraint_column_names': [foreign_id], "
+							"'constraint_column_usage': []" // TODO: USAGE_SCHEMA isn't implemented yet
+						"}, {"
+							"'constraint_name': my_table_primary_key_pkey, "
+							"'constraint_type': PRIMARY KEY, "
+							"'constraint_column_names': [primary_key], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_unique_value_key, "
+							"'constraint_type': UNIQUE, "
+							"'constraint_column_names': [unique_value], "
+							"'constraint_column_usage': []"
+						"}]"
+					"}"
+				"]"
+			"}"
+		"]";
+		// clang-format on
+		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		db.Query("DROP TABLE result;");
+	}
+	// Now lets test some errors
 	{
 		ADBCTestDatabase db("test_errors");
 		// Create Arrow Result
