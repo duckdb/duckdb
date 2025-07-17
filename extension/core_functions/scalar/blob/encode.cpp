@@ -1,5 +1,6 @@
 #include "core_functions/scalar/blob_functions.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
@@ -13,31 +14,20 @@ void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 enum class DecodeErrorBehavior : uint8_t {
-	ABORT = 1,  // raise error
-	STRICT = 2, // return null
-	REPLACE = 3 // replace invalid characters with '?'
+	STRICT = 1, // raise an error
+	REPLACE = 2 // replace invalid characters with '?'
 };
 
-bool TryGetDecodeErrorBehavior(const string &specifier_p, DecodeErrorBehavior &result) {
-	auto specifier = StringUtil::Lower(specifier_p);
-	if (specifier == "abort" || specifier == "a") {
-		result = DecodeErrorBehavior::ABORT;
-	} else if (specifier == "strict" || specifier == "s") {
-		result = DecodeErrorBehavior::STRICT;
-	} else if (specifier == "replace" || specifier == "r") {
-		result = DecodeErrorBehavior::REPLACE;
+DecodeErrorBehavior GetDecodeErrorBehavior(const string_t &specifier_p) {
+	auto size = specifier_p.GetSize();
+	auto data = specifier_p.GetData();
+	if (StringUtil::CIEquals(data, size, "strict", 6)) {
+		return DecodeErrorBehavior::STRICT;
+	} else if (StringUtil::CIEquals(data, size, "replace", 7)) {
+		return DecodeErrorBehavior::REPLACE;
 	} else {
-		return false;
+		throw ConversionException("decode error behavior specifier \"%s\" not recognized", specifier_p.GetString());
 	}
-	return true;
-}
-
-DecodeErrorBehavior GetDecodeErrorBehavior(const string &specifier) {
-	DecodeErrorBehavior result;
-	if (!TryGetDecodeErrorBehavior(specifier, result)) {
-		throw ConversionException("decode error behavior specifier \"%s\" not recognized", specifier);
-	}
-	return result;
 }
 
 struct UnaryBlobDecodeOperator {
@@ -47,7 +37,10 @@ struct UnaryBlobDecodeOperator {
 		auto input_length = input.GetSize();
 		if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
 			throw ConversionException(
-			    "Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters");
+			    "Failure in decode: could not convert blob to UTF8 string, the blob "
+			    "contained invalid UTF8 characters. Use try(decode(STRING)) if you'd prefer to return null and "
+			    "continue when invalid UTF8 is encountered, or specify decode(STRING, 'replace') to replace "
+			    "invalid characters with '?'");
 		}
 		return input;
 	}
@@ -61,32 +54,27 @@ void UnaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	BinaryExecutor::ExecuteWithNulls<string_t, string_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(),
-	    [&](string_t input, string_t error_option, ValidityMask &mask, idx_t idx) {
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](string_t input, string_t error_option) {
 		    auto input_data = input.GetDataWriteable();
 		    auto input_length = input.GetSize();
-		    auto const error_behavior = GetDecodeErrorBehavior(error_option.GetData());
+
+		    if (Utf8Proc::Analyze(input_data, input_length) != UnicodeType::INVALID) {
+			    return input;
+		    }
+		    auto const error_behavior = GetDecodeErrorBehavior(error_option);
+
 		    switch (error_behavior) {
-		    case DecodeErrorBehavior::ABORT:
-			    if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
-				    throw ConversionException("Failure in decode: could not convert blob to UTF8 string, the blob "
-				                              "contained invalid UTF8 characters");
-			    }
+		    case DecodeErrorBehavior::REPLACE:
+			    Utf8Proc::MakeValid(input_data, input_length);
 			    return input;
 
 		    case DecodeErrorBehavior::STRICT:
-			    if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
-				    mask.SetInvalid(idx);
-				    return StringVector::EmptyString(result, input_length);
-			    } else {
-				    return input;
-			    }
-		    case DecodeErrorBehavior::REPLACE:
-			    if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
-				    Utf8Proc::MakeValid(input_data, input_length);
-			    }
-			    return input;
+			    throw ConversionException(
+			        "Failure in decode: could not convert blob to UTF8 string, the blob "
+			        "contained invalid UTF8 characters. Use try(decode(BLOB)) if you'd prefer to return null and "
+			        "continue when invalid UTF8 is encountered, or specify decode(BLOB, 'replace') to replace "
+			        "invalid characters with '?'");
 		    }
 	    });
 	StringVector::AddHeapReference(result, args.data[0]);
