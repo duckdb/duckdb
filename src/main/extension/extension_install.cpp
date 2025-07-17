@@ -90,17 +90,6 @@ vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) 
 			continue;
 		}
 
-		// Check if directory starts with "~/"
-		if (dir.length() >= 2 && dir[0] == '~' && dir[1] == fs.PathSeparator("")[0]) {
-			string home_directory = fs.GetHomeDirectory();
-			if (!fs.DirectoryExists(home_directory)) {
-				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-				                  "home_directory='/path/to/dir' option.",
-				                  home_directory);
-			}
-			// Replace ~ with home directory
-			dir = home_directory + dir.substr(1);
-		}
 		default_folders.push_back(dir);
 	}
 
@@ -158,6 +147,12 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	string extension_directory = extension_directories[0]; // Use first/primary directory
 	{
 		if (!fs.DirectoryExists(extension_directory)) {
+			string home_directory = fs.GetHomeDirectory();
+			if (extension_directory.rfind(home_directory, 0) == 0 && !fs.DirectoryExists(home_directory)) {
+				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+				                  "home_directory='/path/to/dir' option.",
+				                  home_directory);
+			}
 			fs.CreateDirectoriesRecursive(extension_directory);
 		}
 	}
