@@ -86,7 +86,7 @@ inputs:
     default: ''
   unittest_script:
     description: 'Script/program to execute the unittests'
-    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+    default: './build/release/test/unittest'
   cmake_flags:
     description: 'Flags to be passed to cmake'
     default: ''
@@ -151,7 +151,6 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
         # TODO we should no longer override this but we should probably check that it is what we expect
@@ -177,7 +176,7 @@ runs:
       if: ${{ inputs.run_tests == '1' && inputs.no_static_linking == '0' }}
       shell: bash
       run: |
-        ${{ inputs.unittest_script }}
+        ${{ inputs.unittest_script }} --autoloading none
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -194,14 +193,13 @@ runs:
       shell: bash
       env:
         EXTENSION_TESTS_ONLY: 1
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
         GEN: ${{ inputs.ninja == '1' && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
       run: |
         cd  ${{ inputs.build_dir}}
         rm -rf duckdb_unittest_tempdir/*
         mv build/release/extension build/extension_tmp
+        mv build/release/repository build/repository_tmp
         rm -rf build/release
         VCPKG_TOOLCHAIN_PATH="" make
 
@@ -210,15 +208,16 @@ runs:
       if: ${{ inputs.run_autoload_tests == '1' }}
       shell: bash
       env:
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
         DUCKDB_TEST_DESCRIPTION: 'Extension autoloading tests. All `require` calls are ignored and auto-loading is tested. Use require no_extension_autoloading in the test to skip tests.'
       run: |
         cd  ${{ inputs.build_dir}}
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
         python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
-        ${{ inputs.unittest_script }} '-f test.list'
         rm -rf build/release/extension
+        rm -rf build/release/repository
         mv build/extension_tmp build/release/extension
+        mv build/repository_tmp build/release/repository
+        ${{ inputs.unittest_script }} -f test.list --autoloading available
 
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}

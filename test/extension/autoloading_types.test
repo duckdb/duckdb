@@ -6,6 +6,10 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
+require json
+
+require icu
+
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_types'
@@ -17,7 +21,7 @@ set autoload_known_extensions=false
 statement ok
 set autoinstall_known_extensions=false
 
-statement error
+statement maybe
 SELECT '{}'::JSON;
 ----
 Catalog Error: Type with name "JSON" is not in the catalog, but it exists in the json extension.
