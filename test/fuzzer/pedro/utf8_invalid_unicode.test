@@ -13,17 +13,11 @@ SELECT decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR ILIKE '1';
 ----
 <REGEX>:Conversion Error.*Failure in decode.*blob to UTF8.*
 
-# invalid utf8, unicode value too high, abort mode
-statement error
-SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB, 'abort')::VARCHAR);
-----
-<REGEX>:Conversion Error.*Failure in decode.*blob to UTF8.*
-
 # invalid utf8, strict mode
-query I
+statement error
 SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB, 'strict')::VARCHAR);
 ----
-NULL
+<REGEX>:Conversion Error.*Failure in decode.*blob to UTF8.*
 
 # invalid utf8, replace mode
 query I
