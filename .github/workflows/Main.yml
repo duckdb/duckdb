@@ -276,7 +276,7 @@ jobs:
 
  linux-httpfs:
     name: Linux HTTPFS
-    needs: force-storage
+    needs: linux-configs
     runs-on: ubuntu-22.04
     env:
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
