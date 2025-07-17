@@ -4,29 +4,69 @@
 
 require no_alternative_verify
 
+load __TEST_DIR__/nullif_map_issue.db
+
 statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/issue5232.db' as issue5232 (STORAGE_VERSION 'latest');
+SET default_block_size = 262144;
+
+statement ok
+SET storage_compatibility_version = 'latest';
+
+statement ok
+SET max_memory = '1234kb';
+
+statement ok
+ATTACH '__TEST_DIR__/issue5232.db' AS issue5232 (STORAGE_VERSION 'latest');
 
 statement ok
 USE issue5232;
 
 statement ok
-SET storage_compatibility_version='latest';
-
-statement ok
-SET max_memory='1234kb';
-
-statement ok
-CREATE TABLE tbl(map MAP(VARCHAR, VARCHAR));;
+CREATE TABLE tbl(map MAP(VARCHAR, VARCHAR));
 
 statement ok
 INSERT INTO tbl VALUES(MAP([], []));
 
-# should not segv
 statement error
 INSERT INTO tbl VALUES(MAP(['key1', 'key2'], ['🦆🦆🦆🦆🦆🦆', 'goose']));
 ----
 TransactionContext Error: Failed to commit: could not allocate block
+
+statement ok
+USE nullif_map_issue;
+
+statement ok
+DETACH issue5232;
+
+# Now try with 16kB blocks.
+# The base table has a size of 32768 bytes (2 blocks): 32kB < 1234kB,
+# so we expect the test to succeed.
+
+restart
+
+statement ok
+SET default_block_size = 16384;
+
+statement ok
+SET storage_compatibility_version = 'latest';
+
+statement ok
+SET max_memory = '1234kb';
+
+statement ok
+ATTACH '__TEST_DIR__/issue5232_small.db' (STORAGE_VERSION 'latest');
+
+statement ok
+USE issue5232_small;
+
+statement ok
+CREATE TABLE tbl(map MAP(VARCHAR, VARCHAR));
+
+statement ok
+INSERT INTO tbl VALUES(MAP([], []));
+
+statement ok
+INSERT INTO tbl VALUES(MAP(['key1', 'key2'], ['🦆🦆🦆🦆🦆🦆', 'goose']));

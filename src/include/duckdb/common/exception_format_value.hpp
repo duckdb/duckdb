@@ -49,6 +49,7 @@ enum class ExceptionFormatValueType : uint8_t {
 struct ExceptionFormatValue {
 	DUCKDB_API ExceptionFormatValue(double dbl_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(int64_t int_val);    // NOLINT
+	DUCKDB_API ExceptionFormatValue(idx_t uint_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(string str_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val);   // NOLINT
 	DUCKDB_API ExceptionFormatValue(uhugeint_t uhg_val); // NOLINT
@@ -56,7 +57,7 @@ struct ExceptionFormatValue {
 	ExceptionFormatValueType type;
 
 	double dbl_val = 0;
-	int64_t int_val = 0;
+	hugeint_t int_val = 0;
 	string str_val;
 
 public:
@@ -85,6 +86,8 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
+template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(idx_t value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(hugeint_t value);
 template <>
