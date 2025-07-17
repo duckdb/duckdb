@@ -72,11 +72,11 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct Ar
 	}
 	duckdb::vector<std::string> names;
 	const auto conn = reinterpret_cast<Connection *>(connection);
-	auto arrow_table = duckdb::make_uniq<duckdb::ArrowTableType>();
+	auto arrow_table = duckdb::make_uniq<duckdb::ArrowTableSchema>();
 	try {
 		duckdb::vector<LogicalType> return_types;
-		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                   *schema);
+		duckdb::ArrowTableFunction::PopulateArrowTableSchema(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
+		                                                     *schema);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
@@ -95,7 +95,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
-	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
+	auto arrow_table = reinterpret_cast<duckdb::ArrowTableSchema *>(converted_schema);
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto &types = arrow_table->GetTypes();
 
@@ -151,7 +151,7 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 
 void duckdb_destroy_arrow_converted_schema(duckdb_arrow_converted_schema *arrow_converted_schema) {
 	if (arrow_converted_schema && *arrow_converted_schema) {
-		auto converted_schema = reinterpret_cast<duckdb::ArrowTableType *>(*arrow_converted_schema);
+		auto converted_schema = reinterpret_cast<duckdb::ArrowTableSchema *>(*arrow_converted_schema);
 		delete converted_schema;
 		*arrow_converted_schema = nullptr;
 	}

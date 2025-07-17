@@ -654,7 +654,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		return ADBC_STATUS_INTERNAL;
 	}
 
-	auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types.Get());
+	auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableSchema *>(out_types.Get());
 	auto types = d_converted_schema.GetTypes();
 	auto names = d_converted_schema.GetNames();
 

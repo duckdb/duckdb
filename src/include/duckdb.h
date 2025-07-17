@@ -723,7 +723,7 @@ typedef struct _duckdb_arrow_schema {
 	void *internal_ptr;
 } * duckdb_arrow_schema;
 
-//! Holds an arrow converted schema (i.e., duckdb::ArrowTableType).
+//! Holds an arrow converted schema (i.e., duckdb::ArrowTableSchema).
 //! Must be destroyed with `duckdb_destroy_arrow_converted_schema`
 typedef struct _duckdb_arrow_converted_schema {
 	void *internal_ptr;

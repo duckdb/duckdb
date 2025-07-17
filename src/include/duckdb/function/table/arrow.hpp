@@ -65,7 +65,7 @@ public:
 	//! The (optional) dependency of this function (used in Python for example)
 	shared_ptr<DependencyItem> dependency;
 	//! Arrow table data
-	ArrowTableType arrow_table;
+	ArrowTableSchema arrow_table;
 	//! Whether projection pushdown is enabled on the scan
 	bool projection_pushdown_enabled = true;
 };
@@ -233,7 +233,8 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-	static void PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table, const ArrowSchema &arrow_schema);
+	static void PopulateArrowTableSchema(DBConfig &config, ArrowTableSchema &arrow_table,
+	                                     const ArrowSchema &arrow_schema);
 
 protected:
 	//! Defines Maximum Number of Threads

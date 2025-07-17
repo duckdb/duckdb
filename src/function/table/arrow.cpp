@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
-                                                const ArrowSchema &arrow_schema) {
+void ArrowTableFunction::PopulateArrowTableSchema(DBConfig &config, ArrowTableSchema &arrow_table,
+                                                  const ArrowSchema &arrow_schema) {
 	vector<string> names;
 	// We first gather the column names and deduplicate them
 	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(arrow_schema.n_children); col_idx++) {
@@ -78,7 +78,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
-	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root.arrow_schema);
+	PopulateArrowTableSchema(DBConfig::GetConfig(context), res->arrow_table, data.schema_root.arrow_schema);
 	names = res->arrow_table.GetNames();
 	return_types = res->arrow_table.GetTypes();
 	res->all_types = return_types;

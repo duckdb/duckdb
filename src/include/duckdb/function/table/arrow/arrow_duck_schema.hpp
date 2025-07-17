@@ -116,7 +116,7 @@ protected:
 
 using arrow_column_map_t = unordered_map<idx_t, shared_ptr<ArrowType>>;
 
-struct ArrowTableType {
+struct ArrowTableSchema {
 public:
 	void AddColumn(idx_t index, shared_ptr<ArrowType> type, const string &name);
 	const arrow_column_map_t &GetColumns() const;
