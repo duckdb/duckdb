@@ -12,6 +12,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
@@ -21,6 +22,7 @@ on:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'

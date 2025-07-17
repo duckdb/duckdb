@@ -2,8 +2,6 @@
 # description: Test physical operator logging
 # group: [logging]
 
-require noforcestorage
-
 require parquet
 
 statement ok
