@@ -14,6 +14,7 @@
 #include "fmt/ostream.h"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #ifdef min
 #undef min
@@ -88,13 +89,16 @@ template <typename T, typename Context> class arg_converter {
   }
 
   template <typename To, typename From>
-  typename std::enable_if<std::is_constructible<To, From>::value, To>::type Cast(From x) {
+  To Cast(From x) {
+    return duckdb::Cast::Operation<From, To>(x);
+  }
+  template <typename To, typename From>
+  typename std::enable_if<std::is_constructible<To, From>::value, To>::type UnsafeCast(From x) {
     return static_cast<To>(x);
   }
 
-  // workaround for casting (u)int128 to long/long long which may not be implemented
   template <typename To, typename From>
-  typename std::enable_if<!std::is_constructible<To, From>::value, To>::type Cast(From x) {
+  typename std::enable_if<!std::is_constructible<To, From>::value, To>::type UnsafeCast(From x) {
     return static_cast<To>(x.lower);
   }
 
@@ -117,10 +121,10 @@ template <typename T, typename Context> class arg_converter {
     if (const_check(sizeof(target_type) <= sizeof(int))) {
       // Extra casts are used to silence warnings.
       if (is_signed) {
-        arg_ = internal::make_arg<Context>(Cast<int>(Cast<target_type>(value)));
+        arg_ = internal::make_arg<Context>(UnsafeCast<int32_t>(UnsafeCast<target_type>(value)));
       } else {
         using unsigned_type = typename make_unsigned_or_bool<target_type>::type;
-        arg_ = internal::make_arg<Context>(Cast<unsigned>(Cast<unsigned_type>(value)));
+        arg_ = internal::make_arg<Context>(UnsafeCast<uint32_t>(UnsafeCast<unsigned_type>(value)));
       }
     } else {
       if (is_signed) {
@@ -130,10 +134,10 @@ template <typename T, typename Context> class arg_converter {
         if (sizeof(target_type) > sizeof(int64_t)) {
           arg_ = internal::make_arg<Context>(Cast<int128_t>(value));
         } else {
-          arg_ = internal::make_arg<Context>(Cast<int64_t>(value));
+          arg_ = internal::make_arg<Context>(UnsafeCast<int64_t>(value));
         }
       } else {
-        arg_ = internal::make_arg<Context>(Cast<typename make_unsigned_or_bool<U>::type>(value));
+        arg_ = internal::make_arg<Context>(UnsafeCast<typename make_unsigned_or_bool<U>::type>(value));
       }
     }
   }
