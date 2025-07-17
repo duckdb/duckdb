@@ -3,6 +3,7 @@ import pytest
 import sys
 import datetime
 import os
+import numpy as np
 
 if sys.version_info < (3, 9):
     pytest.skip(
@@ -275,6 +276,69 @@ def test_read(duck_conn):
                 datetime.datetime(2006, 2, 15, 4, 46, 27),
             ],
         }
+
+
+def test_large_chunk(tmp_path):
+    num_chunks = 3
+    chunk_size = 10_000
+
+    # Create data for each chunk
+    chunks_col1 = [pyarrow.array(np.random.randint(0, 100, chunk_size)) for _ in range(num_chunks)]
+    chunks_col2 = [pyarrow.array(np.random.rand(chunk_size)) for _ in range(num_chunks)]
+    chunks_col3 = [
+        pyarrow.array([f"str_{i}" for i in range(j * chunk_size, (j + 1) * chunk_size)]) for j in range(num_chunks)
+    ]
+
+    # Create chunked arrays
+    col1 = pyarrow.chunked_array(chunks_col1)
+    col2 = pyarrow.chunked_array(chunks_col2)
+    col3 = pyarrow.chunked_array(chunks_col3)
+
+    # Create the table
+    table = pyarrow.table([col1, col2, col3], names=["ints", "floats", "strings"])
+
+    db = os.path.join(tmp_path, "tmp.db")
+    if os.path.exists(db):
+        os.remove(db)
+    db_kwargs = {"path": f"{db}"}
+    with adbc_driver_manager.connect(
+        driver=driver_path,
+        entrypoint="duckdb_adbc_init",
+        db_kwargs=db_kwargs,
+        autocommit=True,
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.adbc_ingest("ingest", table, "create")
+            cur.execute("SELECT count(*) from ingest")
+            assert cur.fetch_arrow_table().to_pydict() == {'count_star()': [30_000]}
+
+
+def test_dictionary_data(tmp_path):
+    # Sample data: strings with repeated values (ideal for dictionary encoding)
+    data = ['apple', 'banana', 'apple', 'orange', 'banana', 'banana']
+
+    # Create a dictionary-encoded Arrow array
+    dict_type = pyarrow.dictionary(index_type=pyarrow.int32(), value_type=pyarrow.string())
+    dict_array = pyarrow.array(data, type=dict_type)
+
+    # Wrap in a table
+    table = pyarrow.table({'fruits': dict_array})
+    db = os.path.join(tmp_path, "tmp.db")
+    if os.path.exists(db):
+        os.remove(db)
+    db_kwargs = {"path": f"{db}"}
+    with adbc_driver_manager.connect(
+        driver=driver_path,
+        entrypoint="duckdb_adbc_init",
+        db_kwargs=db_kwargs,
+        autocommit=True,
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.adbc_ingest("ingest", table, "create")
+            cur.execute("from ingest")
+            assert cur.fetch_arrow_table().to_pydict() == {
+                'fruits': ['apple', 'banana', 'apple', 'orange', 'banana', 'banana']
+            }
 
 
 def sorted_get_objects(catalogs):

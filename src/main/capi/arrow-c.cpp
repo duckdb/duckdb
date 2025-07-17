@@ -115,26 +115,33 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 		array_state->owned_data->arrow_array = *arrow_array;
 		// We set it to nullptr to effectively transfer ze ownership
 		arrow_array->release = nullptr;
-		switch (array_physical_type) {
-		case duckdb::ArrowArrayPhysicalType::DEFAULT:
-			try {
-				duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
-				                                                 parent_array.offset, -1);
+		try {
+			switch (array_physical_type) {
+				case duckdb::ArrowArrayPhysicalType::DICTIONARY_ENCODED:
+					duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(dchunk->data[i], *array, 0, *array_state,
+																			 dchunk->size(), *arrow_type);
+					break;
+					// case duckdb::ArrowArrayPhysicalType::RUN_END_ENCODED:
+					// 	duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(dchunk->data[i], *array, 0, *array_state,
+					// 		                                                     dchunk->size(), *arrow_type);
+					// 	break;
+				case duckdb::ArrowArrayPhysicalType::DEFAULT:
+					duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
+																	 parent_array.offset, -1);
 
-				duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
-				                                                     dchunk->size(), *arrow_type);
-			} catch (const duckdb::Exception &ex) {
-				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
-			} catch (const std::exception &ex) {
-				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
-			} catch (...) {
-				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
+					duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
+																		 dchunk->size(), *arrow_type);
+					break;
+				default:
+					return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
+													"Only Default Physical Types are currently supported");
 			}
-
-			break;
-		default:
-			return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
-			                                "Only Default Physical Types are currently supported");
+		} 	 catch (const duckdb::Exception &ex) {
+			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+		} catch (const std::exception &ex) {
+			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+		} catch (...) {
+			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 		}
 	}
 	*out_chunk = reinterpret_cast<duckdb_data_chunk>(dchunk.release());
