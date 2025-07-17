@@ -540,7 +540,6 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 		if (typed_value.name != "typed_value") {
 			return false;
 		}
-		throw NotImplementedException("Shredded Variants are not supported yet");
 	} else if (children.size() != 2) {
 		return false;
 	}
@@ -607,7 +606,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
-		const bool is_variant = parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas);
+		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
+		if (!is_variant) {
+			is_variant = parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas);
+		}
+
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
 			auto &p_ele = file_meta_data->schema[this_idx - 1];

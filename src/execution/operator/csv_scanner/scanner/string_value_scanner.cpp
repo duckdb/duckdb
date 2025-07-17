@@ -105,7 +105,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	for (auto &col : parse_chunk.data) {
-		vector_ptr.push_back(FlatVector::GetData<string_t>(col));
+		vector_ptr.push_back(FlatVector::GetData(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
 	}
 

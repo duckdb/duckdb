@@ -74,7 +74,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 		// construct a dummy projection and update
 		LogicalProjection proj(proj_index, std::move(expressions));
 		LogicalUpdate update(table);
-		update.return_chunk = false;
+		update.return_chunk = merge_into.return_chunk;
 		update.columns = std::move(result->columns);
 		update.expressions = std::move(result->expressions);
 		update.bound_defaults = std::move(merge_into.bound_defaults);
@@ -171,9 +171,9 @@ void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &sour
 }
 
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
-
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
+	string table_alias = stmt.target->alias;
 	auto bound_table = target_binder->Bind(*stmt.target);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only merge into base tables!");
@@ -235,8 +235,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto &get = root->children[inverted ? 0 : 1]->Cast<LogicalGet>();
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
-
 	merge_into->table_index = GenerateTableIndex();
+	if (!stmt.returning_list.empty()) {
+		merge_into->return_chunk = true;
+	}
 
 	// bind table constraints/default values in case these are referenced
 	auto &catalog_name = table.ParentCatalog().GetName();
@@ -305,10 +307,21 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	merge_into->AddChild(std::move(proj));
 
+	if (!stmt.returning_list.empty()) {
+		auto merge_table_index = merge_into->table_index;
+		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(merge_into);
+
+		// add the merge_action virtual column
+		virtual_column_map_t virtual_columns;
+		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
+		return BindReturning(std::move(stmt.returning_list), table, table_alias, merge_table_index,
+		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
+	}
+
 	BoundStatement result;
+	result.plan = std::move(merge_into);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
-	result.plan = std::move(merge_into);
 
 	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;

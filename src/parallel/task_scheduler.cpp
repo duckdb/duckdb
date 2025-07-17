@@ -419,7 +419,7 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 	/* Other oses most likely use tpidr_el0 instead */
 	uintptr_t c;
 	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
-	return (idx_t)(c & (1 << 3) - 1);
+	return (idx_t)(c & ((1 << 3) - 1));
 #else
 #ifndef DUCKDB_NO_THREADS
 	// fallback to thread id

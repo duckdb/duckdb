@@ -106,7 +106,6 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
-	BoundStatement result;
 	unique_ptr<LogicalOperator> root;
 
 	// visit the table reference
@@ -184,9 +183,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
-		                     std::move(update_as_logicaloperator), std::move(result));
+		                     std::move(update_as_logicaloperator));
 	}
 
+	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = std::move(update);

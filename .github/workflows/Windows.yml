@@ -114,9 +114,10 @@ jobs:
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
         choco install wget -y --no-progress
-        wget -P test/Release https://blobs.duckdb.org/ci/msvcp140.dll
-        test/Release/unittest.exe
-        rm test/Release/msvcp140.dll
+        wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
+        ls ./test/Release
+        ./test/Release/unittest.exe
+        rm ./test/Release/msvcp140.dll
 
     - name: Tools Test
       shell: bash

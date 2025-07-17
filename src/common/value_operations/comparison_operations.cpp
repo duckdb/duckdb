@@ -65,36 +65,9 @@ inline bool ValuePositionComparator::Final<duckdb::NotEquals>(const Value &lhs, 
 	return ValueOperations::NotDistinctFrom(lhs, rhs);
 }
 
-// Non-strict inequalities must use strict comparisons for Definite
-template <>
-bool ValuePositionComparator::Definite<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Definite<duckdb::GreaterThan>(lhs, rhs);
-}
-
 template <>
 bool ValuePositionComparator::Final<duckdb::GreaterThan>(const Value &lhs, const Value &rhs) {
 	return ValueOperations::DistinctGreaterThan(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Final<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Final<duckdb::GreaterThan>(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Definite<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Definite<duckdb::GreaterThan>(rhs, lhs);
-}
-
-template <>
-bool ValuePositionComparator::Final<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Final<duckdb::GreaterThan>(rhs, lhs);
-}
-
-// Strict inequalities just use strict for both Definite and Final
-template <>
-bool ValuePositionComparator::Final<duckdb::LessThan>(const Value &lhs, const Value &rhs) {
-	return ValuePositionComparator::Final<duckdb::GreaterThan>(rhs, lhs);
 }
 
 template <class OP>

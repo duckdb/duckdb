@@ -49,6 +49,9 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
 	}
+	if (type.InternalType() == PhysicalType::LIST) {
+		return Vector(LogicalType::UBIGINT, true, false);
+	}
 	return Vector(type, true, false);
 }
 

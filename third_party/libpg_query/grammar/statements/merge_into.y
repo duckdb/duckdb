@@ -9,6 +9,7 @@ MergeIntoStmt: opt_with_clause
 			USING table_ref
 			join_qual
 			merge_match_list
+			returning_clause
 				{
 					PGMergeIntoStmt *n = makeNode(PGMergeIntoStmt);
 					n->targetTable = $4;
@@ -19,6 +20,7 @@ MergeIntoStmt: opt_with_clause
 						n->joinCondition = $7; /* ON clause */
 					n->matchActions = $8;
 					n->withClause = $1;
+					n->returningList = $9;
 					$$ = (PGNode *)n;
 				}
 		;
