@@ -535,7 +535,8 @@ UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))
 
 ColumnReference <- DottedIdentifier / (CatalogQualification? SchemaQualification? TableQualification? ColumnName)
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
-FunctionIdentifier <- CatalogQualification? SchemaQualification? (FuncName / DottedIdentifier)
+
+FunctionIdentifier <- CatalogQualification? SchemaQualification? FunctionName
 
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 ExportClause <- 'EXPORT_STATE'i
@@ -1187,6 +1188,7 @@ ColumnName <- Identifier
 IndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
+FunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
@@ -1286,7 +1288,7 @@ CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefiniti
 
 MacroOrFunction <- 'MACRO'i / 'FUNCTION'i
 
-MacroDefinition <- Parens(MacroParameters?) 'AS'i (ScalarMacroDefinition / TableMacroDefinition)
+MacroDefinition <- Parens(MacroParameters?) 'AS'i (TableMacroDefinition / ScalarMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
 MacroParameter <- NamedParameter / TypeFuncName

@@ -39,6 +39,7 @@ ColumnName <- Identifier
 IndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
+FunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
