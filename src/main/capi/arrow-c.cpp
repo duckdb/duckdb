@@ -100,18 +100,13 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 	auto &types = arrow_table->GetTypes();
 
 	auto dchunk = duckdb::make_uniq<duckdb::DataChunk>();
-	auto output_size = duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array->length));
-	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, output_size);
+	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, duckdb::NumericCast<idx_t>(arrow_array->length));
 
 	auto &arrow_types = arrow_table->GetColumns();
-	dchunk->SetCardinality(output_size);
+	dchunk->SetCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array;
 		auto &array = parent_array.children[i];
-		if (array->length > STANDARD_VECTOR_SIZE) {
-			return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
-			                                "We only support Arrow chunks of up to 2048 rows");
-		}
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
 		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);

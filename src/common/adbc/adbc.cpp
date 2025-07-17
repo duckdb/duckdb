@@ -896,6 +896,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			if (res_conv) {
 				SetError(error, duckdb_error_data_message(res_conv));
 				duckdb_destroy_error_data(&res_conv);
+				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
 			if (!out_chunk.chunk) {
 				SetError(error, "Please provide a non-empty chunk to be bound");
