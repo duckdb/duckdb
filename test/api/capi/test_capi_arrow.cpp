@@ -385,6 +385,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		REQUIRE(all_arrow_values == all_duckdb_values);
 
 		// 6. Cleanup
+		free((void *) names[0]);
 		duckdb_destroy_arrow_converted_schema(&converted_schema);
 		for (auto arrow_array : arrow_arrays) {
 			if (arrow_array.release) {
@@ -457,5 +458,6 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
 		duckdb_destroy_arrow_options(&arrow_options);
+		free((void *) names[0]);
 	}
 }
