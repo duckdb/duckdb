@@ -314,10 +314,8 @@ def test_large_chunk(tmp_path):
 
 
 def test_dictionary_data(tmp_path):
-    # Sample data: strings with repeated values (ideal for dictionary encoding)
     data = ['apple', 'banana', 'apple', 'orange', 'banana', 'banana']
 
-    # Create a dictionary-encoded Arrow array
     dict_type = pyarrow.dictionary(index_type=pyarrow.int32(), value_type=pyarrow.string())
     dict_array = pyarrow.array(data, type=dict_type)
 
@@ -338,6 +336,32 @@ def test_dictionary_data(tmp_path):
             cur.execute("from ingest")
             assert cur.fetch_arrow_table().to_pydict() == {
                 'fruits': ['apple', 'banana', 'apple', 'orange', 'banana', 'banana']
+            }
+
+
+def test_ree_data(tmp_path):
+    run_ends = pyarrow.array([3, 5, 6], type=pyarrow.int32())  # positions: [0-2], [3-4], [5]
+    values = pyarrow.array(["apple", "banana", "orange"], type=pyarrow.string())
+
+    ree_array = pyarrow.RunEndEncodedArray.from_arrays(run_ends, values)
+
+    table = pyarrow.table({"fruits": ree_array})
+
+    db = os.path.join(tmp_path, "tmp.db")
+    if os.path.exists(db):
+        os.remove(db)
+    db_kwargs = {"path": f"{db}"}
+    with adbc_driver_manager.connect(
+        driver=driver_path,
+        entrypoint="duckdb_adbc_init",
+        db_kwargs=db_kwargs,
+        autocommit=True,
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.adbc_ingest("ingest", table, "create")
+            cur.execute("from ingest")
+            assert cur.fetch_arrow_table().to_pydict() == {
+                'fruits': ['apple', 'apple', 'apple', 'banana', 'banana', 'orange']
             }
 
 

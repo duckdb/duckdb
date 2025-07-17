@@ -117,26 +117,26 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 		arrow_array->release = nullptr;
 		try {
 			switch (array_physical_type) {
-				case duckdb::ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-					duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(dchunk->data[i], *array, 0, *array_state,
-																			 dchunk->size(), *arrow_type);
-					break;
-					// case duckdb::ArrowArrayPhysicalType::RUN_END_ENCODED:
-					// 	duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(dchunk->data[i], *array, 0, *array_state,
-					// 		                                                     dchunk->size(), *arrow_type);
-					// 	break;
-				case duckdb::ArrowArrayPhysicalType::DEFAULT:
-					duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
-																	 parent_array.offset, -1);
+			case duckdb::ArrowArrayPhysicalType::DICTIONARY_ENCODED:
+				duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(dchunk->data[i], *array, 0, *array_state,
+				                                                               dchunk->size(), *arrow_type);
+				break;
+			case duckdb::ArrowArrayPhysicalType::RUN_END_ENCODED:
+				duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(
+				    dchunk->data[i], *array, 0, *array_state, dchunk->size(), *arrow_type);
+				break;
+			case duckdb::ArrowArrayPhysicalType::DEFAULT:
+				duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
+				                                                 parent_array.offset, -1);
 
-					duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
-																		 dchunk->size(), *arrow_type);
-					break;
-				default:
-					return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
-													"Only Default Physical Types are currently supported");
+				duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
+				                                                     dchunk->size(), *arrow_type);
+				break;
+			default:
+				return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,
+				                                "Only Default Physical Types are currently supported");
 			}
-		} 	 catch (const duckdb::Exception &ex) {
+		} catch (const duckdb::Exception &ex) {
 			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 		} catch (const std::exception &ex) {
 			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
