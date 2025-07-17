@@ -703,7 +703,7 @@ OptVerbose <- 'VERBOSE'i?
 
 QualifiedTarget <- QualifiedName OptNameList
 OptNameList <- Parens(List(Name))?
-MergeIntoStatement <- WithClause? 'MERGE'i 'INTO'i TargetOptAlias MergeIntoUsingClause MergeMatch*
+MergeIntoStatement <- WithClause? 'MERGE'i 'INTO'i TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
 MergeIntoUsingClause <- 'USING'i TableRef JoinQualifier
 MergeMatch <- MatchedClause / NotMatchedClause
 MatchedClause <- 'WHEN'i 'MATCHED'i AndExpression? 'THEN'i MatchedClauseAction

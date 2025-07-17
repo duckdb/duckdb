@@ -676,7 +676,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"OptVerbose <- 'VERBOSE'i?\n"
 	"QualifiedTarget <- QualifiedName OptNameList\n"
 	"OptNameList <- Parens(List(Name))?\n"
-	"MergeIntoStatement <- WithClause? 'MERGE'i 'INTO'i TargetOptAlias MergeIntoUsingClause MergeMatch*\n"
+	"MergeIntoStatement <- WithClause? 'MERGE'i 'INTO'i TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?\n"
 	"MergeIntoUsingClause <- 'USING'i TableRef JoinQualifier\n"
 	"MergeMatch <- MatchedClause / NotMatchedClause\n"
 	"MatchedClause <- 'WHEN'i 'MATCHED'i AndExpression? 'THEN'i MatchedClauseAction\n"
